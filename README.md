@@ -15,13 +15,13 @@
 1. [About The Project](#span-aligncenter-about-the-project-)
 2. [Features](#span-aligncenter-features-span)
 3. [Getting Started](#span-aligncenter-getting-started-span)
-   * [Prerequisites](#prerequisites)
-   * [Installation](#installation)
+    * [Prerequisites](#prerequisites)
+    * [Installation](#installation)
 4. [Roadmap](#span-aligncenter-roadmap-span)
 5. [Contributing](#span-aligncenter-contributing-span)
 6. [Acknowledgments](#span-aligncenter-acknowledgments-span)
-   * [Prerequisites](#contributors-)
-   * [Dependencies](#dependencies-)
+    * [Prerequisites](#contributors-)
+    * [Dependencies](#dependencies-)
 7. [License](#span-aligncenter-license-span)
 
 # <span align="center">📝 About The Project 📝
@@ -133,8 +133,8 @@ Getting Prowl up and running is super easy!
 ### Installation
 
 1. Clone the repo
-2. Open `.sln` with your editor ([Visual Studio Version 17.8.0+](https://visualstudio.microsoft.com/vs/preview/), VSCode, Rider, etc.)
-3. run `UpdateSubmodules.bat` (on Windows) or `UpdateSubmodules.sh` (on Linux)
+2. Open `.sln` with your editor ([Visual Studio Version 17.8.0+](https://visualstudio.microsoft.com/vs/preview/), [VSCode](https://code.visualstudio.com/), [Rider]((https://www.jetbrains.com/rider/)), etc.)
+3. Run `UpdateSubmodules.bat` (on Windows) or `UpdateSubmodules.sh` (on Linux)
 4. That's it! 😄 🎉
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
