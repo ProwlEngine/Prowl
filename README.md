@@ -15,13 +15,13 @@
 1. [About The Project](#span-aligncenter-about-the-project-)
 2. [Features](#span-aligncenter-features-span)
 3. [Getting Started](#span-aligncenter-getting-started-span)
-    * [Prerequisites](#prerequisites)
-    * [Installation](#installation)
+   * [Prerequisites](#prerequisites)
+   * [Installation](#installation)
 4. [Roadmap](#span-aligncenter-roadmap-span)
 5. [Contributing](#span-aligncenter-contributing-span)
 6. [Acknowledgments](#span-aligncenter-acknowledgments-span)
-    * [Prerequisites](#contributors-)
-    * [Dependencies](#dependencies-)
+   * [Prerequisites](#contributors-)
+   * [Dependencies](#dependencies-)
 7. [License](#span-aligncenter-license-span)
 
 # <span align="center">📝 About The Project 📝
