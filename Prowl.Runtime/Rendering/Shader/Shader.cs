@@ -9,34 +9,11 @@ using Veldrid;
 
 namespace Prowl.Runtime;
 
-
-public enum ShaderPropertyType
-{
-    Float,
-    Vector2,
-    Vector3,
-    Vector4,
-    Color,
-    Matrix,
-    Texture2D,
-    Texture3D
-}
-
-
-public struct SerializedShaderProperty
-{
-    public string name;
-    public string displayName;
-    public ShaderPropertyType propertyType;
-    public object defaultProperty;
-}
-
-
 public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 {
     [SerializeField, HideInInspector]
-    private readonly SerializedShaderProperty[] _properties;
-    public IEnumerable<SerializedShaderProperty> Properties => _properties;
+    private readonly ShaderProperty[] _properties;
+    public IEnumerable<ShaderProperty> Properties => _properties;
 
 
     [SerializeField, HideInInspector]
@@ -50,7 +27,7 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     internal Shader() : base("New Shader") { }
 
-    public Shader(string name, SerializedShaderProperty[] properties, ShaderPass[] passes) : base(name)
+    public Shader(string name, ShaderProperty[] properties, ShaderPass[] passes) : base(name)
     {
         this._properties = properties;
         this._passes = passes;
@@ -128,9 +105,9 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
         builder.Append("Properties\n{\n");
 
-        foreach (SerializedShaderProperty property in Properties)
+        foreach (ShaderProperty property in Properties)
         {
-            builder.Append($"\t{property.name}(\"{property.displayName}\", {property.propertyType})\n");
+            builder.Append($"\t{property.Name}(\"{property.DisplayName}\", {property.PropertyType})\n");
         }
 
         builder.Append("}\n\n");

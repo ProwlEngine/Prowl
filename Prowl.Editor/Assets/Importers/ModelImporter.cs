@@ -265,10 +265,10 @@ public class ModelImporter : ScriptedImporter
                 if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
                     LoadTextureIntoMesh("_AlbedoTex", ctx, file, mat);
                 else
-                    mat.SetProperty("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
+                    mat.SetProperty("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
             }
             else
-                mat.SetProperty("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
+                mat.SetProperty("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
 
             // Normal Texture
             if (m.HasTextureNormal)
@@ -277,10 +277,10 @@ public class ModelImporter : ScriptedImporter
                 if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
                     LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
                 else
-                    mat.SetProperty("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")).Res);
+                    mat.SetProperty("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
             }
             else
-                mat.SetProperty("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")).Res);
+                mat.SetProperty("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
 
             //AO, Roughness, Metallic Texture
             if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface))
@@ -289,10 +289,10 @@ public class ModelImporter : ScriptedImporter
                 if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
                     LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
                 else
-                    mat.SetProperty("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")).Res);
+                    mat.SetProperty("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
             }
             else
-                mat.SetProperty("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")).Res);
+                mat.SetProperty("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
 
             // Emissive Texture
             if (m.HasTextureEmissive)
@@ -304,10 +304,10 @@ public class ModelImporter : ScriptedImporter
                     LoadTextureIntoMesh("_EmissiveTex", ctx, file, mat);
                 }
                 else
-                    mat.SetProperty("_EmissiveTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
+                    mat.SetProperty("_EmissiveTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
             }
             else
-                mat.SetProperty("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
+                mat.SetProperty("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
 
             name ??= "StandardMat";
             mat.Name = name;
@@ -589,7 +589,7 @@ public class ModelImporter : ScriptedImporter
         if (AssetDatabase.TryGetGuid(file, out var guid))
         {
             // We have this texture as an asset, Juse use the asset we dont need to load it
-            mat.SetProperty(name, new AssetRef<Texture2D>(guid).Res);
+            mat.SetProperty(name, new AssetRef<Texture2D>(guid));
         }
         else
         {

@@ -42,7 +42,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     }
 
     [SerializeField]
-    internal List<SerializedShaderProperty> _serializedProperties;
+    internal List<ShaderProperty> _serializedProperties;
 
     [NonSerialized]
     private Dictionary<string, int> _propertyLookup;
@@ -90,38 +90,13 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public void SetColorArray(string name, Color[] values) => _properties.SetColorArray(name, values);
     public void SetMatrixArray(string name, Matrix4x4F[] values) => _properties.SetMatrixArray(name, values);
 
-
-    public void SetProperty(string name, double value)
-        => SetPropertyInternal(name, value);
-
-    public void SetProperty(string name, Vector2 value)
-        => SetPropertyInternal(name, value);
-
-    public void SetProperty(string name, Vector3 value)
-        => SetPropertyInternal(name, value);
-
-    public void SetProperty(string name, Vector4 value)
-        => SetPropertyInternal(name, value);
-
-    public void SetProperty(string name, Color value)
-        => SetPropertyInternal(name, value);
-
-    public void SetProperty(string name, Matrix4x4 value)
-        => SetPropertyInternal(name, value);
-
-    public void SetProperty(string name, AssetRef<Texture2D> value)
-        => SetPropertyInternal(name, value);
-
-    public void SetProperty(string name, AssetRef<Texture3D> value)
-        => SetPropertyInternal(name, value);
-
-    private void SetPropertyInternal(string name, object? value)
+    public void SetProperty(string name, ShaderProperty value)
     {
         if (_propertyLookup.TryGetValue(name, out int val))
         {
-            SerializedShaderProperty prop = _serializedProperties[val];
+            ShaderProperty prop = _serializedProperties[val];
 
-            prop.defaultProperty = value;
+            prop.Set(value);
 
             UpdatePropertyState(prop);
 
@@ -132,45 +107,45 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     public void SyncPropertyBlock()
     {
-        foreach (SerializedShaderProperty prop in _serializedProperties)
+        foreach (ShaderProperty prop in _serializedProperties)
             UpdatePropertyState(prop);
     }
 
 
-    private void UpdatePropertyState(SerializedShaderProperty property)
+    private void UpdatePropertyState(ShaderProperty property)
     {
-        switch (property.propertyType)
+        switch (property.PropertyType)
         {
             case ShaderPropertyType.Texture2D:
-                _properties.SetTexture(property.name, ((AssetRef<Texture2D>)property.defaultProperty).Res);
+                _properties.SetTexture(property.Name, property.Texture2DValue.Res);
                 break;
 
             case ShaderPropertyType.Texture3D:
-                _properties.SetTexture(property.name, ((AssetRef<Texture3D>)property.defaultProperty).Res);
+                _properties.SetTexture(property.Name, property.Texture3DValue.Res);
                 break;
 
             case ShaderPropertyType.Float:
-                _properties.SetFloat(property.name, (float)property.defaultProperty);
+                _properties.SetFloat(property.Name, (float)property);
                 break;
 
             case ShaderPropertyType.Vector2:
-                _properties.SetVector(property.name, (Vector2)property.defaultProperty);
+                _properties.SetVector(property.Name, (Vector2)property);
                 break;
 
             case ShaderPropertyType.Vector3:
-                _properties.SetVector(property.name, (Vector3)property.defaultProperty);
+                _properties.SetVector(property.Name, (Vector3)property);
                 break;
 
             case ShaderPropertyType.Vector4:
-                _properties.SetVector(property.name, (Vector4)property.defaultProperty);
+                _properties.SetVector(property.Name, (Vector4)property);
                 break;
 
             case ShaderPropertyType.Color:
-                _properties.SetColor(property.name, (Color)property.defaultProperty);
+                _properties.SetColor(property.Name, (Color)property);
                 break;
 
             case ShaderPropertyType.Matrix:
-                _properties.SetMatrix(property.name, ((Matrix4x4)property.defaultProperty).ToFloat());
+                _properties.SetMatrix(property.Name, ((Matrix4x4)property).ToFloat());
                 break;
         }
     }
@@ -186,10 +161,10 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         _serializedProperties.Clear();
         _propertyLookup.Clear();
 
-        foreach (SerializedShaderProperty prop in shader.Res.Properties)
+        foreach (ShaderProperty prop in shader.Res.Properties)
         {
             _serializedProperties.Add(prop);
-            _propertyLookup.Add(prop.name, _serializedProperties.Count - 1);
+            _propertyLookup.Add(prop.Name, _serializedProperties.Count - 1);
         }
     }
 
@@ -200,8 +175,8 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     {
         _propertyLookup ??= [];
 
-        foreach (SerializedShaderProperty prop in Shader.Res.Properties)
-            _propertyLookup.Add(prop.name, _serializedProperties.Count - 1);
+        foreach (ShaderProperty prop in _serializedProperties)
+            _propertyLookup.Add(prop.Name, _serializedProperties.Count - 1);
 
         SyncPropertyBlock();
     }
