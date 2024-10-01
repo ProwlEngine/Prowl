@@ -63,7 +63,7 @@ public static partial class ShaderParser
 
         string name = "";
 
-        List<SerializedShaderProperty>? properties = null;
+        List<ShaderProperty>? properties = null;
         ParsedPass? globalDefaults = null;
         List<ParsedPass> parsedPasses = [];
 
@@ -74,7 +74,7 @@ public static partial class ShaderParser
             tokenizer.MoveNext();
 
             if (tokenizer.Token.ToString() != "Shader")
-                throw new ParseException($"Expected top-level 'Shader' declaration, found '{tokenizer.Token}'");
+                throw new ParseException("shader", $"expected top-level 'Shader' declaration, found '{tokenizer.Token}'");
 
             tokenizer.MoveNext(); // Move to string
 
@@ -104,7 +104,7 @@ public static partial class ShaderParser
                         break;
 
                     default:
-                        throw new ParseException($"Unknown shader token: {tokenizer.Token}");
+                        throw new ParseException("shader", $"unknown shader token: {tokenizer.Token}");
                 }
             }
         }
@@ -167,7 +167,7 @@ public static partial class ShaderParser
             passes[i] = new ShaderPass(parsedPass.Name, passDesc, variants);
         }
 
-        shader = new Runtime.Shader(name, [.. (properties ?? [])], passes);
+        shader = new Runtime.Shader(name, [.. properties ?? []], passes);
 
         return true;
     }
@@ -276,32 +276,51 @@ public static partial class ShaderParser
     }
 
 
-    private static List<SerializedShaderProperty> ParseProperties(Tokenizer<ShaderToken> tokenizer)
+    private static List<ShaderProperty> ParseProperties(Tokenizer<ShaderToken> tokenizer)
     {
-        List<SerializedShaderProperty> properties = [];
+        List<ShaderProperty> properties = [];
 
-        ExpectToken(tokenizer, ShaderToken.OpenCurlBrace);
+        ExpectToken("properties", tokenizer, ShaderToken.OpenCurlBrace);
 
         while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseCurlBrace)
         {
-        ParseProperty:
+            if (tokenizer.TokenType == ShaderToken.Equals)
+            {
+                if (properties.Count == 0)
+                    throw new ParseException("properties", tokenizer, ShaderToken.Identifier);
 
-            SerializedShaderProperty property;
+                ShaderProperty last = properties[^1];
 
-            property.name = tokenizer.Token.ToString();
+                ShaderProperty def = ParseDefault(tokenizer, last.PropertyType);
 
-            ExpectToken(tokenizer, ShaderToken.OpenParen);
+                def.Name = last.Name;
+                def.DisplayName = last.DisplayName;
 
-            ExpectToken(tokenizer, ShaderToken.Identifier);
-            property.displayName = tokenizer.ParseQuotedStringValue();
+                Debug.Log($"Parsing default {def.Name}");
 
-            ExpectToken(tokenizer, ShaderToken.Comma);
-            ExpectToken(tokenizer, ShaderToken.Identifier);
-            property.propertyType = EnumParse<ShaderPropertyType>(tokenizer.Token.ToString(), "property type");
+                properties[^1] = def;
 
-            ExpectToken(tokenizer, ShaderToken.CloseParen);
+                tokenizer.MoveNext();
 
-            property.defaultProperty = property.propertyType switch
+                if (tokenizer.TokenType == ShaderToken.CloseCurlBrace)
+                    break;
+            }
+
+            string name = tokenizer.Token.ToString();
+
+            ExpectToken("property", tokenizer, ShaderToken.OpenParen);
+
+            ExpectToken("property", tokenizer, ShaderToken.Identifier);
+            string displayName = tokenizer.ParseQuotedStringValue();
+
+            ExpectToken("property", tokenizer, ShaderToken.Comma);
+            ExpectToken("property", tokenizer, ShaderToken.Identifier);
+
+            ShaderPropertyType type = EnumParse<ShaderPropertyType>(tokenizer.Token.ToString(), "property type");
+
+            ExpectToken("property", tokenizer, ShaderToken.CloseParen);
+
+            ShaderProperty property = type switch
             {
                 ShaderPropertyType.Float => 0,
                 ShaderPropertyType.Vector2 => Vector2.zero,
@@ -311,35 +330,25 @@ public static partial class ShaderParser
                 ShaderPropertyType.Matrix => Matrix4x4.Identity,
                 ShaderPropertyType.Texture2D => new AssetRef<Texture2D>(Texture2D.EmptyWhite),
                 ShaderPropertyType.Texture3D => new AssetRef<Texture3D>(Texture3D.EmptyWhite),
-                _ => throw new Exception($"Invalid property type: {property.propertyType}")
+                _ => throw new Exception($"Invalid property type") // Should never execute unless EnumParse() breaks.
             };
 
-            properties.Add(property);
+            property.Name = name;
+            property.DisplayName = displayName;
 
-            if (tokenizer.MoveNext())
-            {
-                if (tokenizer.TokenType == ShaderToken.Equals)
-                {
-                    property.defaultProperty = ParseDefault(tokenizer, property.propertyType);
-                    properties[^1] = property;
-                }
-                else if (tokenizer.TokenType == ShaderToken.CloseCurlBrace)
-                    break;
-                else
-                    goto ParseProperty;
-            }
+            properties.Add(property);
         }
 
         return properties;
     }
 
 
-    private static object? ParseDefault(Tokenizer<ShaderToken> tokenizer, ShaderPropertyType type)
+    private static ShaderProperty ParseDefault(Tokenizer<ShaderToken> tokenizer, ShaderPropertyType type)
     {
         switch (type)
         {
             case ShaderPropertyType.Float:
-                ExpectToken(tokenizer, ShaderToken.Identifier);
+                ExpectToken("property", tokenizer, ShaderToken.Identifier);
                 return DoubleParse(tokenizer.Token, "decimal value");
 
             case ShaderPropertyType.Vector2:
@@ -356,15 +365,18 @@ public static partial class ShaderParser
                 return new Vector4(v4[0], v4[1], v4[2], v4[3]);
 
             case ShaderPropertyType.Matrix:
-                throw new ParseException("Matrix properties are only assignable programatically and cannot be assigned defaults");
+                throw new ParseException("property", "matrix properties are only assignable programatically and cannot be assigned defaults");
 
             case ShaderPropertyType.Texture2D:
+                ExpectToken("property", tokenizer, ShaderToken.Identifier);
+                return Texture2DParse(tokenizer.ParseQuotedStringValue());
+
             case ShaderPropertyType.Texture3D:
-                ExpectToken(tokenizer, ShaderToken.Identifier);
-                return TextureParse(tokenizer.ParseQuotedStringValue());
+                ExpectToken("property", tokenizer, ShaderToken.Identifier);
+                return Texture3DParse(tokenizer.ParseQuotedStringValue());
         }
 
-        return null;
+        throw new Exception($"Invalid property type");
     }
 
 
@@ -372,7 +384,7 @@ public static partial class ShaderParser
     {
         ParsedPass parsedGlobal = new();
 
-        ExpectToken(tokenizer, ShaderToken.OpenCurlBrace);
+        ExpectToken("global defaults", tokenizer, ShaderToken.OpenCurlBrace);
 
         while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseCurlBrace)
         {
@@ -395,7 +407,7 @@ public static partial class ShaderParser
 
                 case "Cull":
                     EnsureUndef(parsedGlobal.Description.CullingMode, "'Cull' in Global block");
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("cull", tokenizer, ShaderToken.Identifier);
                     parsedGlobal.Description.CullingMode = EnumParse<FaceCullMode>(tokenizer.Token.ToString(), "Cull");
                     break;
 
@@ -408,7 +420,7 @@ public static partial class ShaderParser
                     break;
 
                 default:
-                    throw new ParseException($"Unknown global token: {tokenizer.Token}");
+                    throw new ParseException("global defaults", $"unknown global token: {tokenizer.Token}");
             }
         }
 
@@ -425,11 +437,11 @@ public static partial class ShaderParser
         if (tokenizer.MoveNext() && tokenizer.TokenType == ShaderToken.Identifier)
         {
             pass.Name = tokenizer.ParseQuotedStringValue();
-            ExpectToken(tokenizer, ShaderToken.OpenCurlBrace);
+            ExpectToken("pass", tokenizer, ShaderToken.OpenCurlBrace);
         }
         else if (tokenizer.TokenType != ShaderToken.OpenCurlBrace)
         {
-            throw new ParseException($"Expected {ShaderToken.OpenCurlBrace} or {ShaderToken.Identifier}, but got {tokenizer.TokenType}");
+            throw new ParseException("pass", $"{ShaderToken.OpenCurlBrace} or {ShaderToken.Identifier}", tokenizer.TokenType);
         }
 
         while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseCurlBrace)
@@ -453,7 +465,7 @@ public static partial class ShaderParser
 
                 case "Cull":
                     EnsureUndef(pass.Description.CullingMode, "'Cull' in pass");
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("cull", tokenizer, ShaderToken.Identifier);
                     pass.Description.CullingMode = EnumParse<FaceCullMode>(tokenizer.Token.ToString(), "Cull");
                     break;
 
@@ -471,12 +483,12 @@ public static partial class ShaderParser
                     break;
 
                 default:
-                    throw new ParseException($"Unknown pass token: {tokenizer.Token}");
+                    throw new ParseException("pass", $"unknown pass token: {tokenizer.Token}");
             }
         }
 
         if (pass.Program == null)
-            throw new ParseException("Pass does not contain a program");
+            throw new ParseException("pass", "pass does not contain a program");
 
         return pass;
     }
@@ -485,18 +497,18 @@ public static partial class ShaderParser
     private static Dictionary<string, string> ParseTags(Tokenizer<ShaderToken> tokenizer)
     {
         var tags = new Dictionary<string, string>();
-        ExpectToken(tokenizer, ShaderToken.OpenCurlBrace);
+        ExpectToken("tags", tokenizer, ShaderToken.OpenCurlBrace);
 
         //while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
         while (true)
         {
-            ExpectToken(tokenizer, ShaderToken.Identifier);
-            var key = tokenizer.ParseQuotedStringValue();
+            ExpectToken("tags", tokenizer, ShaderToken.Identifier);
+            string key = tokenizer.ParseQuotedStringValue();
 
-            ExpectToken(tokenizer, ShaderToken.Equals);
-            ExpectToken(tokenizer, ShaderToken.Identifier);
+            ExpectToken("tags", tokenizer, ShaderToken.Equals);
+            ExpectToken("tags", tokenizer, ShaderToken.Identifier);
 
-            var value = tokenizer.ParseQuotedStringValue();
+            string value = tokenizer.ParseQuotedStringValue();
             tags[key] = value;
 
             // Next token should either be a comma or a closing brace
@@ -509,7 +521,7 @@ public static partial class ShaderParser
             if (tokenizer.TokenType == ShaderToken.CloseCurlBrace)
                 break;
 
-            throw new ParseException($"Expected comma or closing brace, but got {tokenizer.TokenType}");
+            throw new ParseException("tags", $"{ShaderToken.Comma} or {ShaderToken.CloseCurlBrace}", tokenizer.TokenType);
         }
 
         return tags;
@@ -518,7 +530,7 @@ public static partial class ShaderParser
 
     private static BlendAttachmentDescription ParseBlend(Tokenizer<ShaderToken> tokenizer)
     {
-        var blend = BlendAttachmentDescription.AdditiveBlend;
+        BlendAttachmentDescription blend = BlendAttachmentDescription.AdditiveBlend;
         blend.BlendEnabled = true;
 
         if (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.OpenCurlBrace)
@@ -532,7 +544,7 @@ public static partial class ShaderParser
             else if (preset.Equals("Override", StringComparison.OrdinalIgnoreCase))
                 blend = BlendAttachmentDescription.OverrideBlend;
             else
-                throw new ParseException("Unknown blend preset: " + preset);
+                throw new ParseException("blend state", "unknown blend preset: " + preset);
 
             return blend;
         }
@@ -544,9 +556,9 @@ public static partial class ShaderParser
             switch (key)
             {
                 case "Src":
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("blend state", tokenizer, ShaderToken.Identifier);
                     target = tokenizer.Token.ToString();
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("blend state", tokenizer, ShaderToken.Identifier);
 
                     if (target.Equals("Color", StringComparison.OrdinalIgnoreCase))
                         blend.SourceColorFactor = EnumParse<BlendFactor>(tokenizer.Token.ToString(), "Src");
@@ -555,9 +567,9 @@ public static partial class ShaderParser
                     break;
 
                 case "Dest":
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("blend state", tokenizer, ShaderToken.Identifier);
                     target = tokenizer.Token.ToString();
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("blend state", tokenizer, ShaderToken.Identifier);
 
                     if (target.Equals("Color", StringComparison.OrdinalIgnoreCase))
                         blend.DestinationColorFactor = EnumParse<BlendFactor>(tokenizer.Token.ToString(), "Dest");
@@ -566,9 +578,9 @@ public static partial class ShaderParser
                     break;
 
                 case "Mode":
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("blend state", tokenizer, ShaderToken.Identifier);
                     target = tokenizer.Token.ToString();
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("blend state", tokenizer, ShaderToken.Identifier);
 
                     if (target.Equals("Color", StringComparison.OrdinalIgnoreCase))
                         blend.ColorFunction = EnumParse<BlendFunction>(tokenizer.Token.ToString(), "Mode");
@@ -577,8 +589,8 @@ public static partial class ShaderParser
                     break;
 
                 case "Mask":
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
-                    var mask = tokenizer.Token.ToString();
+                    ExpectToken("blend state", tokenizer, ShaderToken.Identifier);
+                    string mask = tokenizer.Token.ToString();
                     if (mask.Equals("None", StringComparison.OrdinalIgnoreCase))
                     {
                         blend.ColorWriteMask = ColorWriteMask.None;
@@ -591,12 +603,12 @@ public static partial class ShaderParser
                         if (mask.Contains('A')) blend.ColorWriteMask |= ColorWriteMask.Alpha;
 
                         if (blend.ColorWriteMask == 0)
-                            throw new ParseException("Invalid color write mask: " + mask);
+                            throw new ParseException("blend state", "Invalid color write mask: " + mask);
                     }
                     break;
 
                 default:
-                    throw new ParseException($"Unknown blend key: {key}");
+                    throw new ParseException("blend state", $"unknown blend key: {key}");
             }
         }
 
@@ -615,11 +627,11 @@ public static partial class ShaderParser
                 "DepthLessEqual" => DepthStencilStateDescription.DepthOnlyLessEqual,
                 "DepthGreaterEqualRead" => DepthStencilStateDescription.DepthOnlyGreaterEqualRead,
                 "DepthLessEqualRead" => DepthStencilStateDescription.DepthOnlyLessEqualRead,
-                _ => throw new ParseException($"Unknown blend preset: {tokenizer.Token}"),
+                _ => throw new ParseException("depth stencil", $"unknown blend preset: {tokenizer.Token}"),
             };
         }
 
-        var depthStencil = DepthStencilStateDescription.DepthOnlyLessEqual;
+        DepthStencilStateDescription depthStencil = DepthStencilStateDescription.DepthOnlyLessEqual;
 
         // Open brace was detected, parse depth stencil settings
         while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseCurlBrace)
@@ -627,12 +639,12 @@ public static partial class ShaderParser
             switch (tokenizer.Token)
             {
                 case "DepthWrite":
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.DepthWriteEnabled = ConvertToBoolean(tokenizer.Token.ToString());
                     break;
 
                 case "DepthTest":
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
 
                     if (tokenizer.Token.Equals("Off", StringComparison.OrdinalIgnoreCase))
                         depthStencil.DepthTestEnabled = false;
@@ -643,64 +655,64 @@ public static partial class ShaderParser
 
                 case "Ref":
                     depthStencil.StencilTestEnabled = true;
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilReference = ByteParse(tokenizer.Token, "Ref");
                     break;
 
                 case "ReadMask":
                     depthStencil.StencilTestEnabled = true;
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilReadMask = ByteParse(tokenizer.Token, "ReadMask");
                     break;
 
                 case "WriteMask":
                     depthStencil.StencilTestEnabled = true;
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilWriteMask = ByteParse(tokenizer.Token, "WriteMask");
                     break;
 
                 case "Comparison":
                     depthStencil.StencilTestEnabled = true;
 
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilFront.Comparison = EnumParse<ComparisonKind>(tokenizer.Token, "Comparison");
 
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilBack.Comparison = EnumParse<ComparisonKind>(tokenizer.Token, "Comparison");
                     break;
 
                 case "Pass":
                     depthStencil.StencilTestEnabled = true;
 
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilFront.Pass = EnumParse<StencilOperation>(tokenizer.Token, "Pass");
 
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilBack.Pass = EnumParse<StencilOperation>(tokenizer.Token, "Pass");
                     break;
 
                 case "Fail":
                     depthStencil.StencilTestEnabled = true;
 
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilFront.Fail = EnumParse<StencilOperation>(tokenizer.Token, "Fail");
 
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilBack.Fail = EnumParse<StencilOperation>(tokenizer.Token, "Fail");
                     break;
 
                 case "ZFail":
                     depthStencil.StencilTestEnabled = true;
 
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilFront.DepthFail = EnumParse<StencilOperation>(tokenizer.Token, "ZFail");
 
-                    ExpectToken(tokenizer, ShaderToken.Identifier);
+                    ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
                     depthStencil.StencilBack.DepthFail = EnumParse<StencilOperation>(tokenizer.Token, "ZFail");
                     break;
 
                 default:
-                    throw new ParseException($"Unknown depth stencil key: {tokenizer.Token}");
+                    throw new ParseException("depth stencil", $"unknown depth stencil key: {tokenizer.Token}");
             }
         }
 
@@ -711,7 +723,7 @@ public static partial class ShaderParser
     private static Dictionary<string, HashSet<string>> ParseKeywords(Tokenizer<ShaderToken> tokenizer)
     {
         Dictionary<string, HashSet<string>> keywords = new();
-        ExpectToken(tokenizer, ShaderToken.OpenCurlBrace);
+        ExpectToken("keywords", tokenizer, ShaderToken.OpenCurlBrace);
 
         while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseCurlBrace)
         {
@@ -719,7 +731,7 @@ public static partial class ShaderParser
 
             HashSet<string> values = [];
 
-            ExpectToken(tokenizer, ShaderToken.OpenSquareBrace);
+            ExpectToken("keyword", tokenizer, ShaderToken.OpenSquareBrace);
 
             while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseSquareBrace)
                 values.Add(tokenizer.Token.ToString());
@@ -743,7 +755,7 @@ public static partial class ShaderParser
             if (!entrypointsList.Exists(x => x.Stage == stage))
                 entrypointsList.Add(new EntryPoint(stage, name));
             else
-                throw new ParseException($"Duplicate entrypoints defined for {idType}.");
+                throw new ParseException("entrypoint", $"duplicate entrypoints defined for {idType}.");
         }
 
         using StringReader sr = new(program);
@@ -787,7 +799,7 @@ public static partial class ShaderParser
 
                     case "target":
                         if (shaderModel != null)
-                            throw new ParseException($"Duplicate shader model targets defined.");
+                            throw new ParseException("target", "duplicate shader model targets defined.");
 
                         try
                         {
@@ -805,7 +817,7 @@ public static partial class ShaderParser
                         }
                         catch
                         {
-                            throw new ParseException($"Invalid shader model: {linesSplit[2]}");
+                            throw new ParseException("shader model", $"invalid shader model: {linesSplit[2]}");
                         }
                         break;
                 }
@@ -829,12 +841,12 @@ public static partial class ShaderParser
     }
 
 
-    private static void ExpectToken(Tokenizer<ShaderToken> tokenizer, ShaderToken expectedType)
+    private static void ExpectToken(string type, Tokenizer<ShaderToken> tokenizer, ShaderToken expectedType)
     {
         tokenizer.MoveNext();
 
         if (tokenizer.TokenType != expectedType)
-            throw new ParseException($"Expected {expectedType}, but got {tokenizer.TokenType}");
+            throw new ParseException(type, expectedType, tokenizer.TokenType);
     }
 
 
@@ -858,7 +870,7 @@ public static partial class ShaderParser
     private static void EnsureUndef(object? value, string property)
     {
         if (value != null)
-            throw new ParseException($"Redefinition of {property}");
+            throw new ParseException(property, $"redefinition of {property}");
     }
 
 
@@ -870,31 +882,47 @@ public static partial class ShaderParser
         List<string> values = [.. Enum.GetNames<T>()];
         values.AddRange(extraValues);
 
-        throw new ParseException($"Error parsing {fieldName}. Possible values: [{string.Join(", ", values)}]");
+        throw new ParseException(fieldName, $"unknown value (possible values: [{string.Join(", ", values)}])");
     }
 
 
     private static byte ByteParse(ReadOnlySpan<char> text, string fieldName)
     {
-        if (byte.TryParse(text, out byte value))
-            return value;
-
-        throw new ParseException($"Error parsing {fieldName}.");
+        try
+        {
+            return byte.Parse(text);
+        }
+        catch (FormatException)
+        {
+            throw new ParseException(fieldName, "incorrect format");
+        }
+        catch (OverflowException)
+        {
+            throw new ParseException(fieldName, "value is too large");
+        }
     }
 
 
     private static double DoubleParse(ReadOnlySpan<char> text, string fieldName)
     {
-        if (double.TryParse(text, out double value))
-            return value;
-
-        throw new ParseException($"Error parsing {fieldName}.");
+        try
+        {
+            return double.Parse(text);
+        }
+        catch (FormatException)
+        {
+            throw new ParseException(fieldName, "incorrect format");
+        }
+        catch (OverflowException)
+        {
+            throw new ParseException(fieldName, "value is too large");
+        }
     }
 
 
     private static double[] VectorParse(Tokenizer<ShaderToken> tokenizer, int dimensions)
     {
-        ExpectToken(tokenizer, ShaderToken.OpenParen);
+        ExpectToken("vector", tokenizer, ShaderToken.OpenParen);
 
         double[] vector = new double[dimensions];
         int count = 0;
@@ -904,29 +932,41 @@ public static partial class ShaderParser
             vector[count] = DoubleParse(tokenizer.Token, "vector element");
 
             if (count != dimensions - 1)
-                ExpectToken(tokenizer, ShaderToken.Comma);
+                ExpectToken("vector", tokenizer, ShaderToken.Comma);
 
             if (count >= dimensions)
-                throw new ParseException($"Error parsing vector: expected {dimensions} dimensions, found {count}+.");
+                throw new ParseException("vector", dimensions, $"{count}+");
 
             count++;
         }
 
         if (count < dimensions - 1)
-            throw new ParseException($"Error parsing vector: expected {dimensions} dimensions, found {count}.");
+            throw new ParseException("vector", dimensions, $"{count}+");
 
         return vector;
     }
 
 
-    private static Runtime.Texture TextureParse(string texture, bool dim2D = true)
+    private static AssetRef<Texture2D> Texture2DParse(string texture)
     {
         return texture switch
         {
-            "white" => dim2D ? Texture2D.EmptyWhite : Texture3D.EmptyWhite,
-            "gray" or "grey" => dim2D ? Texture2D.EmptyWhite : Texture3D.EmptyWhite,
-            "clear" => dim2D ? Texture2D.Empty : Texture3D.Empty,
-            _ => throw new ParseException($"Unknown texture default: {texture}")
+            "white" => Texture2D.EmptyWhite,
+            "gray" or "grey" => Texture2D.EmptyWhite,
+            "clear" => Texture2D.Empty,
+            _ => throw new ParseException("texture 2d", $"unknown texture default: {texture}")
+        };
+    }
+
+
+    private static AssetRef<Texture3D> Texture3DParse(string texture)
+    {
+        return texture switch
+        {
+            "white" => Texture3D.EmptyWhite,
+            "gray" or "grey" => Texture3D.EmptyWhite,
+            "clear" => Texture3D.Empty,
+            _ => throw new ParseException("texture 3d", $"unknown texture default: {texture}")
         };
     }
 
@@ -964,5 +1004,11 @@ public struct EntryPoint(ShaderStages stages, string name)
 
 internal class ParseException : Exception
 {
-    public ParseException(string message) : base(message) { }
+    public ParseException(string type, object message) :
+        base($"Error parsing {type}: {message}")
+    { }
+
+    public ParseException(string type, object expected, object found) :
+        base($"Error parsing {type}: expected {expected}, found {found}.")
+    { }
 }
