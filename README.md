@@ -1,4 +1,4 @@
-<img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="100%" alt="prowl-logo">
+<img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="100%" alt="Prowl logo image">
 
 ![Github top languages](https://img.shields.io/github/languages/top/michaelsakharov/prowl)
 [![GitHub version](https://img.shields.io/github/v/release/michaelsakharov/prowl?include_prereleases&style=flat-square)](https://github.com/michaelsakharov/prowl/releases)
@@ -46,7 +46,7 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
     - C# Scripting
     - GameObject & Component structure
     - A Powerful Custom UI Library
-        - Same Library for In-game and Editor UI
+        - Same Library for in-game and Editor UI
         - 3D Drawing in UI used for Gizmo's
         - Immediate Mode with retained properties
     - .NET 8
@@ -59,12 +59,12 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
             - Supports Moving Platforms
         - A ton of physical constraints (All of Bepu's constraints)
     - Unity-like Coroutines
-    - Playtest directly in Editor
+    - Playtest directly in the Editor
     - ScriptableObjects
     - Projects & Project Settings
     - Unity-like Serializer to create In-Memory Graphs
-        - Graph -> Custom Text Format
-        - Graph -> Binary
+        - Graph → Custom Text Format
+        - Graph → Binary
     - Fully 64-bit using Doubles
     - Large World Coordinates Support
         - Camera Relative Rendering
@@ -75,7 +75,7 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
     - Prefabs
     - Build System - Build to Standalone Application
         - Packed Asset files
-        - Less than 15mb builds - currently working on removing 10mb, Almost done!
+        - Less than 15 MB builds (currently working on removing 10 MB, almost done!)
         - Only exports used assets
         - Supports Windows, Mac & Linux
     - Navmesh and AI Agents (Recast & Detour)
@@ -110,7 +110,7 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
     - Meta Files & Reference by GUID
     - Import Caching
     - Support for Custom Importers
-    - Supports many major file formats via ImageMagick, Assimp, etc
+    - Supports many major file formats via ImageMagick, Assimp, etc.
     - Sub-Assets, Assets stored inside other assets
     - Dependency Tracking
 
