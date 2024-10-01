@@ -9,7 +9,7 @@ using System.Text;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// A structure encapsulating two single precision floating point values and provides hardware accelerated methods.
+/// A structure encapsulating two double precision floating point values.
 /// </summary>
 public struct Vector2 : IEquatable<Vector2>, IFormattable
 {
