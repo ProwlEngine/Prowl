@@ -166,15 +166,13 @@ public static partial class Graphics
         if (!IsOpenGL)
             return projectionMatrix;
 
-        // Create a scaling matrix to flip the Y axis
         Matrix4x4 flipYMatrix = new Matrix4x4(
             -1, 0, 0, 0,
-            0, 1, 0, 0,  // Flipping Y axis
+            0, 1, 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1
         );
 
-        // Apply the Y flip to the projection matrix
         return flipYMatrix * projectionMatrix;
     }
 }
