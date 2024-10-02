@@ -48,33 +48,33 @@ public sealed partial class ShaderPipeline : IDisposable
     public readonly ShaderSetDescription shaderSet;
     public readonly ResourceLayout resourceLayout;
 
-    private readonly Dictionary<string, uint> semanticLookup;
-    private readonly Dictionary<string, uint> bufferLookup;
+    private readonly Dictionary<string, uint> _semanticLookup;
+    private readonly Dictionary<string, uint> _bufferLookup;
 
-    private readonly byte bufferCount;
+    private readonly byte _bufferCount;
 
     public ShaderUniform[] Uniforms => shader.Uniforms;
 
-    private GraphicsPipelineDescription description;
+    private GraphicsPipelineDescription _description;
 
-    private static readonly int pipelineCount = 20; // 20 possible combinations (5 topologies, 2 fill modes, 2 scissor modes)
-    private readonly Pipeline[] pipelines;
+    private static readonly int s_pipelineCount = 20; // 20 possible combinations (5 topologies, 2 fill modes, 2 scissor modes)
+    private readonly Pipeline[] _pipelines;
 
 
     public Pipeline GetPipeline(PolygonFillMode fill, PrimitiveTopology topology, bool scissor)
     {
         int index = (int)topology * 4 + (int)fill * 2 + (scissor ? 0 : 1);
 
-        if (pipelines[index] == null)
+        if (_pipelines[index] == null)
         {
-            description.RasterizerState.ScissorTestEnabled = scissor;
-            description.RasterizerState.FillMode = fill;
-            description.PrimitiveTopology = topology;
+            _description.RasterizerState.ScissorTestEnabled = scissor;
+            _description.RasterizerState.FillMode = fill;
+            _description.PrimitiveTopology = topology;
 
-            pipelines[index] = Graphics.Factory.CreateGraphicsPipeline(description);
+            _pipelines[index] = Graphics.Factory.CreateGraphicsPipeline(_description);
         }
 
-        return pipelines[index];
+        return _pipelines[index];
     }
 
 
@@ -87,7 +87,7 @@ public sealed partial class ShaderPipeline : IDisposable
         // Create shader set description
         Veldrid.Shader[] shaders = new Veldrid.Shader[shaderDescriptions.Length];
 
-        semanticLookup = new();
+        _semanticLookup = new();
 
         for (int shaderIndex = 0; shaderIndex < shaders.Length; shaderIndex++)
             shaders[shaderIndex] = Graphics.Factory.CreateShader(shaderDescriptions[shaderIndex]);
@@ -102,13 +102,13 @@ public sealed partial class ShaderPipeline : IDisposable
             vertexLayouts[inputIndex] = new VertexLayoutDescription(
                 new VertexElementDescription("in_var_" + input.semantic, input.format, VertexElementSemantic.TextureCoordinate));
 
-            semanticLookup[input.semantic] = (uint)inputIndex;
+            _semanticLookup[input.semantic] = (uint)inputIndex;
         }
 
         shaderSet = new ShaderSetDescription(vertexLayouts, shaders);
 
         // Create resource layout and uniform lookups
-        bufferLookup = new();
+        _bufferLookup = new();
 
         ResourceLayoutDescription layoutDescription = new ResourceLayoutDescription(
             new ResourceLayoutElementDescription[Uniforms.Length]);
@@ -124,13 +124,13 @@ public sealed partial class ShaderPipeline : IDisposable
             if (uniform.kind != ResourceKind.UniformBuffer)
                 continue;
 
-            bufferLookup[uniform.name] = Pack(uniformIndex, bufferCount);
-            bufferCount++;
+            _bufferLookup[uniform.name] = Pack(uniformIndex, _bufferCount);
+            _bufferCount++;
         }
 
         resourceLayout = Graphics.Factory.CreateResourceLayout(layoutDescription);
 
-        pipelines = new Pipeline[pipelineCount];
+        _pipelines = new Pipeline[s_pipelineCount];
 
         RasterizerStateDescription rasterizerState = new(
             description.pass.CullMode,
@@ -140,7 +140,7 @@ public sealed partial class ShaderPipeline : IDisposable
             false
         );
 
-        this.description = new(
+        this._description = new(
             description.pass.Blend,
             description.pass.DepthStencilState,
             rasterizerState,
@@ -179,9 +179,9 @@ public sealed partial class ShaderPipeline : IDisposable
 
     public BindableResourceSet CreateResources()
     {
-        DeviceBuffer[] boundBuffers = new DeviceBuffer[bufferCount];
+        DeviceBuffer[] boundBuffers = new DeviceBuffer[_bufferCount];
         BindableResource[] boundResources = new BindableResource[Uniforms.Length];
-        byte[][] intermediateBuffers = new byte[bufferCount][];
+        byte[][] intermediateBuffers = new byte[_bufferCount][];
 
         for (int i = 0, b = 0; i < Uniforms.Length; i++)
         {
@@ -208,7 +208,7 @@ public sealed partial class ShaderPipeline : IDisposable
         uniform = 0;
         buffer = 0;
 
-        if (bufferLookup.TryGetValue(name, out uint packed))
+        if (_bufferLookup.TryGetValue(name, out uint packed))
         {
             Unpack(packed, out uniform, out buffer);
             return true;
@@ -227,7 +227,7 @@ public sealed partial class ShaderPipeline : IDisposable
 
     public void BindVertexBuffer(CommandList list, string semantic, DeviceBuffer buffer, uint offset = 0)
     {
-        if (semanticLookup.TryGetValue(semantic, out uint location))
+        if (_semanticLookup.TryGetValue(semantic, out uint location))
             list.SetVertexBuffer(location, buffer, offset);
     }
 
@@ -237,8 +237,8 @@ public sealed partial class ShaderPipeline : IDisposable
         for (int i = 0; i < shaderSet.Shaders.Length; i++)
             shaderSet.Shaders[i]?.Dispose();
 
-        for (int i = 0; i < pipelines.Length; i++)
-            pipelines[i]?.Dispose();
+        for (int i = 0; i < _pipelines.Length; i++)
+            _pipelines[i]?.Dispose();
 
         resourceLayout?.Dispose();
     }
