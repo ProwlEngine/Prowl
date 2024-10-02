@@ -1,7 +1,7 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Assimp;
+using AssimpSharp;
 
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
@@ -17,16 +17,16 @@ using Texture2D = Prowl.Runtime.Texture2D;
 
 namespace Prowl.Editor.Assets;
 
-[Importer("ModelIcon.png", typeof(GameObject), ".obj", ".blend", ".dae", ".fbx", ".gltf", ".ply", ".pmx", ".stl")]
+[Importer("ModelIcon.png", typeof(GameObject), ".obj", ".stl", ".ply")]
 public class ModelImporter : ScriptedImporter
 {
-    public static readonly string[] Supported = [".obj", ".blend", ".dae", ".fbx", ".gltf", ".ply", ".pmx", ".stl"];
+    public static readonly string[] Supported = [".obj", ".stl", ".ply"];
 
     public bool GenerateColliders;
     public bool GenerateNormals = true;
     public bool GenerateSmoothNormals;
     public bool CalculateTangentSpace = true;
-    public bool MakeLeftHanded = true;
+    public bool MakeLeftHanded = false;
     public bool FlipUVs;
     public bool CullEmpty;
     public bool OptimizeGraph;
@@ -46,193 +46,326 @@ public class ModelImporter : ScriptedImporter
 
     public override void Import(SerializedAsset ctx, FileInfo assetPath)
     {
+        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+
         // Just confirm the format, We should have todo this but technically someone could call ImportTexture manually skipping the existing format check
         if (!Supported.Contains(assetPath.Extension))
             Failed("Format Not Supported: " + assetPath.Extension);
 
-        using (var importer = new AssimpContext())
+        AssimpSharp.Importer imp = new AssimpSharp.Importer();
+        AiPostProcessSteps steps = AiPostProcessSteps.LimitBoneWeights | AiPostProcessSteps.GenUVCoords;
+        steps |= AiPostProcessSteps.Triangulate;
+        if (GenerateNormals && GenerateSmoothNormals) steps |= AiPostProcessSteps.GenSmoothNormals;
+        else if (GenerateNormals) steps |= AiPostProcessSteps.GenNormals;
+        //if (CalculateTangentSpace) steps |= AiPostProcessSteps.CalculateTangentSpace;
+        if (MakeLeftHanded) steps |= AiPostProcessSteps.MakeLeftHanded;
+        if (FlipUVs) steps |= AiPostProcessSteps.FlipUVs;
+        //if (OptimizeGraph) steps |= AiPostProcessSteps.OptimizeGraph;
+        //if (OptimizeMeshes) steps |= AiPostProcessSteps.OptimizeMeshes;
+        if (FlipWindingOrder) steps |= AiPostProcessSteps.FlipWindingOrder;
+        //if (WeldVertices) steps |= AiPostProcessSteps.JoinIdenticalVertices;
+        //if (GlobalScale) steps |= AiPostProcessSteps.GlobalScale;
+        var scene = imp.ReadFile(assetPath.FullName, steps);
+        if (scene == null) Failed("Assimp returned null object.");
+
+        DirectoryInfo? parentDir = assetPath.Directory;
+
+        if (!scene.HasMeshes) Failed("Model has no Meshes.");
+
+        double scale = UnitScale;
+
+        // FBX's are usually in cm, so scale them to meters
+        if (assetPath.Extension.Equals(".fbx", StringComparison.OrdinalIgnoreCase))
+            scale *= 0.01;
+
+        // Create the object tree, We need to do this first so we can get the bone names
+        List<(GameObject, AiNode)> GOs = [];
+        GetNodes(Path.GetFileNameWithoutExtension(assetPath.Name), scene.RootNode, ref GOs, scale);
+
+        List<AssetRef<Material>> mats = [];
+        if (scene.HasMaterials)
+            LoadMaterials(ctx, scene, parentDir, mats);
+
+        // Animations
+        List<AssetRef<AnimationClip>> anims = [];
+        if (scene.HasAnimations)
+            anims = LoadAnimations(ctx, scene, scale);
+
+        List<MeshMaterialBinding> meshMats = [];
+        if (scene.HasMeshes)
+            LoadMeshes(ctx, assetPath, scene, scale, mats, meshMats);
+
+        // Create Meshes
+        foreach (var goNode in GOs)
         {
-            importer.SetConfig(new Assimp.Configs.VertexBoneWeightLimitConfig(4));
-            var steps = PostProcessSteps.LimitBoneWeights | PostProcessSteps.GenerateUVCoords;
-            steps |= PostProcessSteps.Triangulate;
-            if (GenerateNormals && GenerateSmoothNormals) steps |= PostProcessSteps.GenerateSmoothNormals;
-            else if (GenerateNormals) steps |= PostProcessSteps.GenerateNormals;
-            if (CalculateTangentSpace) steps |= PostProcessSteps.CalculateTangentSpace;
-            if (MakeLeftHanded) steps |= PostProcessSteps.MakeLeftHanded;
-            if (FlipUVs) steps |= PostProcessSteps.FlipUVs;
-            if (OptimizeGraph) steps |= PostProcessSteps.OptimizeGraph;
-            if (OptimizeMeshes) steps |= PostProcessSteps.OptimizeMeshes;
-            if (FlipWindingOrder) steps |= PostProcessSteps.FlipWindingOrder;
-            if (WeldVertices) steps |= PostProcessSteps.JoinIdenticalVertices;
-            if (GlobalScale) steps |= PostProcessSteps.GlobalScale;
-            var scene = importer.ImportFile(assetPath.FullName, steps);
-            if (scene == null) Failed("Assimp returned null object.");
-
-            DirectoryInfo? parentDir = assetPath.Directory;
-
-            if (!scene.HasMeshes) Failed("Model has no Meshes.");
-
-            double scale = UnitScale;
-
-            // FBX's are usually in cm, so scale them to meters
-            if (assetPath.Extension.Equals(".fbx", StringComparison.OrdinalIgnoreCase))
-                scale *= 0.01;
-
-            // Create the object tree, We need to do this first so we can get the bone names
-            List<(GameObject, Node)> GOs = [];
-            GetNodes(Path.GetFileNameWithoutExtension(assetPath.Name), scene.RootNode, ref GOs, scale);
-
-            //if (scene.HasTextures) {
-            //    // Embedded textures, Extract them first
-            //    foreach (var t in scene.Textures) {
-            //        if (t.IsCompressed) {
-            //            // Export it as whatever format it already is to a file
-            //            var format = ImageMagick.MagickFormat.Png;
-            //            switch (t.CompressedFormatHint) {
-            //                case "png":
-            //                    format = ImageMagick.MagickFormat.Png;
-            //                    break;
-            //                case "tga":
-            //                    format = ImageMagick.MagickFormat.Tga;
-            //                    break;
-            //                case "dds":
-            //                    format = ImageMagick.MagickFormat.Dds;
-            //                    break;
-            //                case "jpg":
-            //                    format = ImageMagick.MagickFormat.Jpg;
-            //                    break;
-            //                case "bmp":
-            //                    format = ImageMagick.MagickFormat.Bmp;
-            //                    break;
-            //                default:
-            //                    Debug.LogWarning($"Unknown texture format '{t.CompressedFormatHint}'");
-            //                    break;
-            //            }
-            //            ImageMagick.MagickImage img = new ImageMagick.MagickImage(t.CompressedData, new ImageMagick.MagickReadSettings() { Format = format });
-            //            var file = new FileInfo(Path.Combine(subAssetPath.FullName, $"{t.Filename}.{t.CompressedFormatHint}"));
-            //            img.Write(file.FullName, format);
-            //            AssetDatabase.Refresh(file);
-            //            //AssetDatabase.LastLoadedAssetID; the textures guid
-            //        } else {
-            //            // Export it as a png
-            //            byte[] data = new byte[t.NonCompressedData.Length * 4];
-            //            for (int i = 0; i < t.NonCompressedData.Length; i++) {
-            //                data[i * 4 + 0] = t.NonCompressedData[i].R;
-            //                data[i * 4 + 1] = t.NonCompressedData[i].G;
-            //                data[i * 4 + 2] = t.NonCompressedData[i].B;
-            //                data[i * 4 + 3] = t.NonCompressedData[i].A;
-            //            }
-            //
-            //            ImageMagick.MagickImage img = new ImageMagick.MagickImage(data);
-            //            var file = new FileInfo(Path.Combine(subAssetPath.FullName, $"{t.Filename}.png"));
-            //            img.Write(file.FullName, ImageMagick.MagickFormat.Png);
-            //            AssetDatabase.Refresh(file);
-            //            //AssetDatabase.LastLoadedAssetID; the textures guid
-            //        }
-            //    }
-            //}
-
-            List<AssetRef<Material>> mats = [];
-            if (scene.HasMaterials)
-                LoadMaterials(ctx, scene, parentDir, mats);
-
-            // Animations
-            List<AssetRef<AnimationClip>> anims = [];
-            if (scene.HasAnimations)
-                anims = LoadAnimations(ctx, scene, scale);
-
-            List<MeshMaterialBinding> meshMats = [];
-            if (scene.HasMeshes)
-                LoadMeshes(ctx, assetPath, scene, scale, mats, meshMats);
-
-            // Create Meshes
-            foreach (var goNode in GOs)
+            var node = goNode.Item2;
+            var go = goNode.Item1;
+            // Set Mesh
+            if (node.HasMeshes)
             {
-                var node = goNode.Item2;
-                var go = goNode.Item1;
-                // Set Mesh
-                if (node.HasMeshes)
+                if (node.NumMeshes == 1)
                 {
-                    if (node.MeshIndices.Count == 1)
+                    var uMeshAndMat = meshMats[node.Meshes[0]];
+                    AddMeshComponent(GOs, go, uMeshAndMat);
+                }
+                else
+                {
+                    foreach (var mIdx in node.Meshes)
                     {
-                        var uMeshAndMat = meshMats[node.MeshIndices[0]];
-                        AddMeshComponent(GOs, go, uMeshAndMat);
-                    }
-                    else
-                    {
-                        foreach (var mIdx in node.MeshIndices)
-                        {
-                            var uMeshAndMat = meshMats[mIdx];
-                            GameObject uSubOb = GameObject.CreateSilently();
-                            //uSubOb.AddComponent<Transform>();
-                            uSubOb.Name = uMeshAndMat.MeshName;
-                            AddMeshComponent(GOs, uSubOb, uMeshAndMat);
-                            uSubOb.SetParent(go, false);
-                        }
+                        var uMeshAndMat = meshMats[mIdx];
+                        GameObject uSubOb = GameObject.CreateSilently();
+                        //uSubOb.AddComponent<Transform>();
+                        uSubOb.Name = uMeshAndMat.MeshName;
+                        AddMeshComponent(GOs, uSubOb, uMeshAndMat);
+                        uSubOb.SetParent(go, false);
                     }
                 }
             }
-
-            GameObject rootNode = GOs[0].Item1;
-            if (Mathf.ApproximatelyEquals(UnitScale, 1f))
-                rootNode.Transform.localScale = Vector3.one * UnitScale;
-
-            // Add Animation Component with all the animations assigned
-            if (anims.Count > 0)
-            {
-                var anim = rootNode.AddComponent<Runtime.Animation>();
-                foreach (var a in anims)
-                    anim.Clips.Add(a);
-                anim.DefaultClip = anims[0];
-            }
-
-            if (CullEmpty)
-            {
-                // Remove Empty GameObjects
-                List<(GameObject, Node)> GOsToRemove = [];
-                foreach (var go in GOs)
-                {
-                    if (go.Item1.GetComponentsInChildren<MonoBehaviour>().Count() == 0)
-                        GOsToRemove.Add(go);
-                }
-                foreach (var go in GOsToRemove)
-                {
-                    if (!go.Item1.IsDestroyed)
-                        go.Item1.DestroyImmediate();
-                    GOs.Remove(go);
-                }
-            }
-
-            ctx.SetMainObject(rootNode);
         }
 
-        void AddMeshComponent(List<(GameObject, Node)> GOs, GameObject go, MeshMaterialBinding uMeshAndMat)
+        GameObject rootNode = GOs[0].Item1;
+        if (Mathf.ApproximatelyEquals(UnitScale, 1f))
+            rootNode.Transform.localScale = Vector3.one * UnitScale;
+
+        // Add Animation Component with all the animations assigned
+        if (anims.Count > 0)
         {
-            if (uMeshAndMat.AMesh.HasBones)
-            {
-                var mr = go.AddComponent<SkinnedMeshRenderer>();
-                mr.Mesh = uMeshAndMat.Mesh;
-                mr.Material = uMeshAndMat.Material;
-                mr.Bones = new Transform[uMeshAndMat.AMesh.Bones.Count];
-                for (int i = 0; i < uMeshAndMat.AMesh.Bones.Count; i++)
-                    mr.Bones[i] = GOs[0].Item1.Transform.DeepFind(uMeshAndMat.AMesh.Bones[i].Name)!.gameObject.Transform;
-            }
-            else
-            {
-                var mr = go.AddComponent<MeshRenderer>();
-                mr.Mesh = uMeshAndMat.Mesh;
-                mr.Material = uMeshAndMat.Material;
-            }
+            var anim = rootNode.AddComponent<Runtime.Animation>();
+            foreach (var a in anims)
+                anim.Clips.Add(a);
+            anim.DefaultClip = anims[0];
+        }
 
-            if (GenerateColliders)
+        if (CullEmpty)
+        {
+            // Remove Empty GameObjects
+            List<(GameObject, AiNode)> GOsToRemove = [];
+            foreach (var go in GOs)
             {
-                //var mc = go.AddComponent<MeshCollider>();
-                //mc.mesh = uMeshAndMat.Mesh;
+                if (go.Item1.GetComponentsInChildren<MonoBehaviour>().Count() == 0)
+                    GOsToRemove.Add(go);
+            }
+            foreach (var go in GOsToRemove)
+            {
+                if (!go.Item1.IsDestroyed)
+                    go.Item1.DestroyImmediate();
+                GOs.Remove(go);
             }
         }
+
+        ctx.SetMainObject(rootNode);
+
+        sw.Stop();
+        Console.WriteLine($"Imported Model in {sw.ElapsedMilliseconds}ms");
     }
 
-    private void LoadMaterials(SerializedAsset ctx, Assimp.Scene? scene, DirectoryInfo? parentDir, List<AssetRef<Material>> mats)
+    void AddMeshComponent(List<(GameObject, AiNode)> GOs, GameObject go, MeshMaterialBinding uMeshAndMat)
+    {
+        if (uMeshAndMat.AMesh.HasBones)
+        {
+            var mr = go.AddComponent<SkinnedMeshRenderer>();
+            mr.Mesh = uMeshAndMat.Mesh;
+            mr.Material = uMeshAndMat.Material;
+            mr.Bones = new Transform[uMeshAndMat.AMesh.Bones.Count];
+            for (int i = 0; i < uMeshAndMat.AMesh.Bones.Count; i++)
+                mr.Bones[i] = GOs[0].Item1.Transform.DeepFind(uMeshAndMat.AMesh.Bones[i].Name)!.gameObject.Transform;
+        }
+        else
+        {
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.Mesh = uMeshAndMat.Mesh;
+            mr.Material = uMeshAndMat.Material;
+        }
+
+        if (GenerateColliders)
+        {
+            //var mc = go.AddComponent<MeshCollider>();
+            //mc.mesh = uMeshAndMat.Mesh;
+        }
+
+        //using (var importer = new AssimpContext())
+        //{
+        //    importer.SetConfig(new Assimp.Configs.VertexBoneWeightLimitConfig(4));
+        //    var steps = PostProcessSteps.LimitBoneWeights | PostProcessSteps.GenerateUVCoords;
+        //    steps |= PostProcessSteps.Triangulate;
+        //    if (GenerateNormals && GenerateSmoothNormals) steps |= PostProcessSteps.GenerateSmoothNormals;
+        //    else if (GenerateNormals) steps |= PostProcessSteps.GenerateNormals;
+        //    if (CalculateTangentSpace) steps |= PostProcessSteps.CalculateTangentSpace;
+        //    if (MakeLeftHanded) steps |= PostProcessSteps.MakeLeftHanded;
+        //    if (FlipUVs) steps |= PostProcessSteps.FlipUVs;
+        //    if (OptimizeGraph) steps |= PostProcessSteps.OptimizeGraph;
+        //    if (OptimizeMeshes) steps |= PostProcessSteps.OptimizeMeshes;
+        //    if (FlipWindingOrder) steps |= PostProcessSteps.FlipWindingOrder;
+        //    if (WeldVertices) steps |= PostProcessSteps.JoinIdenticalVertices;
+        //    if (GlobalScale) steps |= PostProcessSteps.GlobalScale;
+        //    var scene = importer.ImportFile(assetPath.FullName, steps);
+        //    if (scene == null) Failed("Assimp returned null object.");
+        //
+        //    DirectoryInfo? parentDir = assetPath.Directory;
+        //
+        //    if (!scene.HasMeshes) Failed("Model has no Meshes.");
+        //
+        //    double scale = UnitScale;
+        //
+        //    // FBX's are usually in cm, so scale them to meters
+        //    if (assetPath.Extension.Equals(".fbx", StringComparison.OrdinalIgnoreCase))
+        //        scale *= 0.01;
+        //
+        //    // Create the object tree, We need to do this first so we can get the bone names
+        //    List<(GameObject, Node)> GOs = [];
+        //    GetNodes(Path.GetFileNameWithoutExtension(assetPath.Name), scene.RootNode, ref GOs, scale);
+        //
+        //    //if (scene.HasTextures) {
+        //    //    // Embedded textures, Extract them first
+        //    //    foreach (var t in scene.Textures) {
+        //    //        if (t.IsCompressed) {
+        //    //            // Export it as whatever format it already is to a file
+        //    //            var format = ImageMagick.MagickFormat.Png;
+        //    //            switch (t.CompressedFormatHint) {
+        //    //                case "png":
+        //    //                    format = ImageMagick.MagickFormat.Png;
+        //    //                    break;
+        //    //                case "tga":
+        //    //                    format = ImageMagick.MagickFormat.Tga;
+        //    //                    break;
+        //    //                case "dds":
+        //    //                    format = ImageMagick.MagickFormat.Dds;
+        //    //                    break;
+        //    //                case "jpg":
+        //    //                    format = ImageMagick.MagickFormat.Jpg;
+        //    //                    break;
+        //    //                case "bmp":
+        //    //                    format = ImageMagick.MagickFormat.Bmp;
+        //    //                    break;
+        //    //                default:
+        //    //                    Debug.LogWarning($"Unknown texture format '{t.CompressedFormatHint}'");
+        //    //                    break;
+        //    //            }
+        //    //            ImageMagick.MagickImage img = new ImageMagick.MagickImage(t.CompressedData, new ImageMagick.MagickReadSettings() { Format = format });
+        //    //            var file = new FileInfo(Path.Combine(subAssetPath.FullName, $"{t.Filename}.{t.CompressedFormatHint}"));
+        //    //            img.Write(file.FullName, format);
+        //    //            AssetDatabase.Refresh(file);
+        //    //            //AssetDatabase.LastLoadedAssetID; the textures guid
+        //    //        } else {
+        //    //            // Export it as a png
+        //    //            byte[] data = new byte[t.NonCompressedData.Length * 4];
+        //    //            for (int i = 0; i < t.NonCompressedData.Length; i++) {
+        //    //                data[i * 4 + 0] = t.NonCompressedData[i].R;
+        //    //                data[i * 4 + 1] = t.NonCompressedData[i].G;
+        //    //                data[i * 4 + 2] = t.NonCompressedData[i].B;
+        //    //                data[i * 4 + 3] = t.NonCompressedData[i].A;
+        //    //            }
+        //    //
+        //    //            ImageMagick.MagickImage img = new ImageMagick.MagickImage(data);
+        //    //            var file = new FileInfo(Path.Combine(subAssetPath.FullName, $"{t.Filename}.png"));
+        //    //            img.Write(file.FullName, ImageMagick.MagickFormat.Png);
+        //    //            AssetDatabase.Refresh(file);
+        //    //            //AssetDatabase.LastLoadedAssetID; the textures guid
+        //    //        }
+        //    //    }
+        //    //}
+        //
+        //    List<AssetRef<Material>> mats = [];
+        //    if (scene.HasMaterials)
+        //        LoadMaterials(ctx, scene, parentDir, mats);
+        //
+        //    // Animations
+        //    List<AssetRef<AnimationClip>> anims = [];
+        //    if (scene.HasAnimations)
+        //        anims = LoadAnimations(ctx, scene, scale);
+        //
+        //    List<MeshMaterialBinding> meshMats = [];
+        //    if (scene.HasMeshes)
+        //        LoadMeshes(ctx, assetPath, scene, scale, mats, meshMats);
+        //
+        //    // Create Meshes
+        //    foreach (var goNode in GOs)
+        //    {
+        //        var node = goNode.Item2;
+        //        var go = goNode.Item1;
+        //        // Set Mesh
+        //        if (node.HasMeshes)
+        //        {
+        //            if (node.MeshIndices.Count == 1)
+        //            {
+        //                var uMeshAndMat = meshMats[node.MeshIndices[0]];
+        //                AddMeshComponent(GOs, go, uMeshAndMat);
+        //            }
+        //            else
+        //            {
+        //                foreach (var mIdx in node.MeshIndices)
+        //                {
+        //                    var uMeshAndMat = meshMats[mIdx];
+        //                    GameObject uSubOb = GameObject.CreateSilently();
+        //                    //uSubOb.AddComponent<Transform>();
+        //                    uSubOb.Name = uMeshAndMat.MeshName;
+        //                    AddMeshComponent(GOs, uSubOb, uMeshAndMat);
+        //                    uSubOb.SetParent(go, false);
+        //                }
+        //            }
+        //        }
+        //    }
+        //
+        //    GameObject rootNode = GOs[0].Item1;
+        //    if (Mathf.ApproximatelyEquals(UnitScale, 1f))
+        //        rootNode.Transform.localScale = Vector3.one * UnitScale;
+        //
+        //    // Add Animation Component with all the animations assigned
+        //    if (anims.Count > 0)
+        //    {
+        //        var anim = rootNode.AddComponent<Runtime.Animation>();
+        //        foreach (var a in anims)
+        //            anim.Clips.Add(a);
+        //        anim.DefaultClip = anims[0];
+        //    }
+        //
+        //    if (CullEmpty)
+        //    {
+        //        // Remove Empty GameObjects
+        //        List<(GameObject, Node)> GOsToRemove = [];
+        //        foreach (var go in GOs)
+        //        {
+        //            if (go.Item1.GetComponentsInChildren<MonoBehaviour>().Count() == 0)
+        //                GOsToRemove.Add(go);
+        //        }
+        //        foreach (var go in GOsToRemove)
+        //        {
+        //            if (!go.Item1.IsDestroyed)
+        //                go.Item1.DestroyImmediate();
+        //            GOs.Remove(go);
+        //        }
+        //    }
+        //
+        //    ctx.SetMainObject(rootNode);
+        //}
+        //
+        //void AddMeshComponent(List<(GameObject, Node)> GOs, GameObject go, MeshMaterialBinding uMeshAndMat)
+        //{
+        //    if (uMeshAndMat.AMesh.HasBones)
+        //    {
+        //        var mr = go.AddComponent<SkinnedMeshRenderer>();
+        //        mr.Mesh = uMeshAndMat.Mesh;
+        //        mr.Material = uMeshAndMat.Material;
+        //        mr.Bones = new Transform[uMeshAndMat.AMesh.Bones.Count];
+        //        for (int i = 0; i < uMeshAndMat.AMesh.Bones.Count; i++)
+        //            mr.Bones[i] = GOs[0].Item1.Transform.DeepFind(uMeshAndMat.AMesh.Bones[i].Name)!.gameObject.Transform;
+        //    }
+        //    else
+        //    {
+        //        var mr = go.AddComponent<MeshRenderer>();
+        //        mr.Mesh = uMeshAndMat.Mesh;
+        //        mr.Material = uMeshAndMat.Material;
+        //    }
+        //
+        //    if (GenerateColliders)
+        //    {
+        //        //var mc = go.AddComponent<MeshCollider>();
+        //        //mc.mesh = uMeshAndMat.Mesh;
+        //    }
+        //}
+    }
+
+    private void LoadMaterials(SerializedAsset ctx, AiScene? scene, DirectoryInfo? parentDir, List<AssetRef<Material>> mats)
     {
         foreach (var m in scene.Materials)
         {
@@ -241,7 +374,7 @@ public class ModelImporter : ScriptedImporter
 
             // Albedo
             if (m.HasColorDiffuse)
-                mat.SetProperty("_MainColor", new Color(m.ColorDiffuse.R, m.ColorDiffuse.G, m.ColorDiffuse.B, m.ColorDiffuse.A));
+                mat.SetProperty("_MainColor", new Color(m.ColorDiffuse.Value.X, m.ColorDiffuse.Value.Y, m.ColorDiffuse.Value.Z, m.ColorDiffuse.Value.W));
             else
                 mat.SetProperty("_MainColor", Color.white);
 
@@ -249,7 +382,7 @@ public class ModelImporter : ScriptedImporter
             if (m.HasColorEmissive)
             {
                 mat.SetProperty("_EmissionIntensity", 1f);
-                mat.SetProperty("_EmissiveColor", new Color(m.ColorEmissive.R, m.ColorEmissive.G, m.ColorEmissive.B, m.ColorEmissive.A));
+                mat.SetProperty("_EmissiveColor", new Color(m.ColorEmissive.Value.X, m.ColorEmissive.Value.Y, m.ColorEmissive.Value.Z, m.ColorEmissive.Value.W));
             }
             else
             {
@@ -265,10 +398,10 @@ public class ModelImporter : ScriptedImporter
                 if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
                     LoadTextureIntoMesh("_AlbedoTex", ctx, file, mat);
                 else
-                    mat.SetProperty("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
+                    mat.SetProperty("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
             }
             else
-                mat.SetProperty("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
+                mat.SetProperty("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
 
             // Normal Texture
             if (m.HasTextureNormal)
@@ -277,22 +410,22 @@ public class ModelImporter : ScriptedImporter
                 if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
                     LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
                 else
-                    mat.SetProperty("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
+                    mat.SetProperty("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")).Res);
             }
             else
-                mat.SetProperty("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
+                mat.SetProperty("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")).Res);
 
             //AO, Roughness, Metallic Texture
-            if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface))
+            if (m.HasTextureUnknown)
             {
-                name ??= "Mat_" + Path.GetFileNameWithoutExtension(surface.FilePath);
-                if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
+                name ??= "Mat_" + Path.GetFileNameWithoutExtension(m.TextureUnknown.FilePath);
+                if (FindTextureFromPath(m.TextureUnknown.FilePath, parentDir, out var file))
                     LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
                 else
-                    mat.SetProperty("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
+                    mat.SetProperty("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")).Res);
             }
             else
-                mat.SetProperty("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
+                mat.SetProperty("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")).Res);
 
             // Emissive Texture
             if (m.HasTextureEmissive)
@@ -304,10 +437,10 @@ public class ModelImporter : ScriptedImporter
                     LoadTextureIntoMesh("_EmissiveTex", ctx, file, mat);
                 }
                 else
-                    mat.SetProperty("_EmissiveTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
+                    mat.SetProperty("_EmissiveTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
             }
             else
-                mat.SetProperty("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
+                mat.SetProperty("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
 
             name ??= "StandardMat";
             mat.Name = name;
@@ -315,11 +448,12 @@ public class ModelImporter : ScriptedImporter
         }
     }
 
-    private void LoadMeshes(SerializedAsset ctx, FileInfo assetPath, Assimp.Scene? scene, double scale, List<AssetRef<Material>> mats, List<MeshMaterialBinding> meshMats)
+    private void LoadMeshes(SerializedAsset ctx, FileInfo assetPath, AiScene? scene, double scale, List<AssetRef<Material>> mats, List<MeshMaterialBinding> meshMats)
     {
         foreach (var m in scene.Meshes)
         {
-            if (m.PrimitiveType != PrimitiveType.Triangle)
+            //if (!m.PrimitiveType.HasFlag(AiPrimitiveType.Triangle))
+            if (m.PrimitiveType != AiPrimitiveType.Triangle)
             {
                 Debug.Log($"{assetPath.Name} 's mesh '{m.Name}' is not of Triangle Primitive, Skipping...");
                 continue;
@@ -349,7 +483,7 @@ public class ModelImporter : ScriptedImporter
                 mesh.Normals = normals;
             }
 
-            if (m.HasTangentBasis)
+            if (m.HasTangents)
             {
                 System.Numerics.Vector3[] tangents = new System.Numerics.Vector3[vertexCount];
                 for (var i = 0; i < tangents.Length; i++)
@@ -361,7 +495,7 @@ public class ModelImporter : ScriptedImporter
             {
                 System.Numerics.Vector2[] texCoords1 = new System.Numerics.Vector2[vertexCount];
                 for (var i = 0; i < texCoords1.Length; i++)
-                    texCoords1[i] = new System.Numerics.Vector2(m.TextureCoordinateChannels[0][i].X, m.TextureCoordinateChannels[0][i].Y);
+                    texCoords1[i] = new System.Numerics.Vector2(m.TextureCoordinateChannels[0][i][0], m.TextureCoordinateChannels[0][i][1]);
                 mesh.UV = texCoords1;
             }
 
@@ -369,7 +503,7 @@ public class ModelImporter : ScriptedImporter
             {
                 System.Numerics.Vector2[] texCoords2 = new System.Numerics.Vector2[vertexCount];
                 for (var i = 0; i < texCoords2.Length; i++)
-                    texCoords2[i] = new System.Numerics.Vector2(m.TextureCoordinateChannels[1][i].X, m.TextureCoordinateChannels[1][i].Y);
+                    texCoords2[i] = new System.Numerics.Vector2(m.TextureCoordinateChannels[1][i][0], m.TextureCoordinateChannels[1][i][1]);
                 mesh.UV2 = texCoords2;
             }
 
@@ -377,7 +511,7 @@ public class ModelImporter : ScriptedImporter
             {
                 Color32[] colors = new Color32[vertexCount];
                 for (var i = 0; i < colors.Length; i++)
-                    colors[i] = new Color(m.VertexColorChannels[0][i].R, m.VertexColorChannels[0][i].G, m.VertexColorChannels[0][i].B, m.VertexColorChannels[0][i].A);
+                    colors[i] = new Color(m.VertexColorChannels[0][i].X, m.VertexColorChannels[0][i].Y, m.VertexColorChannels[0][i].Z, m.VertexColorChannels[0][i].W);
                 mesh.Colors = colors;
             }
 
@@ -391,85 +525,85 @@ public class ModelImporter : ScriptedImporter
 
             mesh.RecalculateBounds();
 
-            if (m.HasBones)
-            {
-                mesh.bindPoses = new System.Numerics.Matrix4x4[m.Bones.Count];
-                mesh.BoneIndices = new System.Numerics.Vector4[vertexCount];
-                mesh.BoneWeights = new System.Numerics.Vector4[vertexCount];
-                for (var i = 0; i < m.Bones.Count; i++)
-                {
-                    var bone = m.Bones[i];
-
-                    var offsetMatrix = bone.OffsetMatrix;
-                    System.Numerics.Matrix4x4 bindPose = new System.Numerics.Matrix4x4(
-                        offsetMatrix.A1, offsetMatrix.B1, offsetMatrix.C1, offsetMatrix.D1,
-                        offsetMatrix.A2, offsetMatrix.B2, offsetMatrix.C2, offsetMatrix.D2,
-                        offsetMatrix.A3, offsetMatrix.B3, offsetMatrix.C3, offsetMatrix.D3,
-                        offsetMatrix.A4, offsetMatrix.B4, offsetMatrix.C4, offsetMatrix.D4
-                    );
-
-                    // Adjust translation by scale
-                    bindPose.Translation *= (float)scale;
-
-                    mesh.bindPoses[i] = bindPose;
-
-                    if (!bone.HasVertexWeights) continue;
-                    byte boneIndex = (byte)(i + 1);
-
-                    // foreach weight
-                    for (int j = 0; j < bone.VertexWeightCount; j++)
-                    {
-                        var weight = bone.VertexWeights[j];
-                        var b = mesh.BoneIndices[weight.VertexID];
-                        var w = mesh.BoneWeights[weight.VertexID];
-                        if (b.X == 0 || weight.Weight > w.X)
-                        {
-                            b.X = boneIndex;
-                            w.X = weight.Weight;
-                        }
-                        else if (b.Y == 0 || weight.Weight > w.Y)
-                        {
-                            b.Y = boneIndex;
-                            w.Y = weight.Weight;
-                        }
-                        else if (b.Z == 0 || weight.Weight > w.Z)
-                        {
-                            b.Z = boneIndex;
-                            w.Z = weight.Weight;
-                        }
-                        else if (b.W == 0 || weight.Weight > w.W)
-                        {
-                            b.W = boneIndex;
-                            w.W = weight.Weight;
-                        }
-                        else
-                        {
-                            Debug.LogWarning($"Vertex {weight.VertexID} has more than 4 bone weights, Skipping...");
-                        }
-                        mesh.BoneIndices[weight.VertexID] = b;
-                        mesh.BoneWeights[weight.VertexID] = w;
-                    }
-                }
-
-                for (int i = 0; i < vertices.Length; i++)
-                {
-                    var w = mesh.BoneWeights[i];
-                    var totalWeight = w.X + w.Y + w.Z + w.W;
-                    if (totalWeight == 0) continue;
-                    w.X /= totalWeight;
-                    w.Y /= totalWeight;
-                    w.Z /= totalWeight;
-                    w.W /= totalWeight;
-                    mesh.BoneWeights[i] = w;
-                }
-            }
+            //if (m.HasBones)
+            //{
+            //    mesh.bindPoses = new System.Numerics.Matrix4x4[m.Bones.Count];
+            //    mesh.BoneIndices = new System.Numerics.Vector4[vertexCount];
+            //    mesh.BoneWeights = new System.Numerics.Vector4[vertexCount];
+            //    for (var i = 0; i < m.Bones.Count; i++)
+            //    {
+            //        var bone = m.Bones[i];
+            //
+            //        var offsetMatrix = bone.OffsetMatrix;
+            //        System.Numerics.Matrix4x4 bindPose = new System.Numerics.Matrix4x4(
+            //            offsetMatrix.A1, offsetMatrix.B1, offsetMatrix.C1, offsetMatrix.D1,
+            //            offsetMatrix.A2, offsetMatrix.B2, offsetMatrix.C2, offsetMatrix.D2,
+            //            offsetMatrix.A3, offsetMatrix.B3, offsetMatrix.C3, offsetMatrix.D3,
+            //            offsetMatrix.A4, offsetMatrix.B4, offsetMatrix.C4, offsetMatrix.D4
+            //        );
+            //
+            //        // Adjust translation by scale
+            //        bindPose.Translation *= (float)scale;
+            //
+            //        mesh.bindPoses[i] = bindPose;
+            //
+            //        if (!bone.HasVertexWeights) continue;
+            //        byte boneIndex = (byte)(i + 1);
+            //
+            //        // foreach weight
+            //        for (int j = 0; j < bone.VertexWeightCount; j++)
+            //        {
+            //            var weight = bone.VertexWeights[j];
+            //            var b = mesh.BoneIndices[weight.VertexID];
+            //            var w = mesh.BoneWeights[weight.VertexID];
+            //            if (b.X == 0 || weight.Weight > w.X)
+            //            {
+            //                b.X = boneIndex;
+            //                w.X = weight.Weight;
+            //            }
+            //            else if (b.Y == 0 || weight.Weight > w.Y)
+            //            {
+            //                b.Y = boneIndex;
+            //                w.Y = weight.Weight;
+            //            }
+            //            else if (b.Z == 0 || weight.Weight > w.Z)
+            //            {
+            //                b.Z = boneIndex;
+            //                w.Z = weight.Weight;
+            //            }
+            //            else if (b.W == 0 || weight.Weight > w.W)
+            //            {
+            //                b.W = boneIndex;
+            //                w.W = weight.Weight;
+            //            }
+            //            else
+            //            {
+            //                Debug.LogWarning($"Vertex {weight.VertexID} has more than 4 bone weights, Skipping...");
+            //            }
+            //            mesh.BoneIndices[weight.VertexID] = b;
+            //            mesh.BoneWeights[weight.VertexID] = w;
+            //        }
+            //    }
+            //
+            //    for (int i = 0; i < vertices.Length; i++)
+            //    {
+            //        var w = mesh.BoneWeights[i];
+            //        var totalWeight = w.X + w.Y + w.Z + w.W;
+            //        if (totalWeight == 0) continue;
+            //        w.X /= totalWeight;
+            //        w.Y /= totalWeight;
+            //        w.Z /= totalWeight;
+            //        w.W /= totalWeight;
+            //        mesh.BoneWeights[i] = w;
+            //    }
+            //}
 
 
             meshMats.Add(new MeshMaterialBinding(m.Name, m, ctx.AddSubObject(mesh), mats[m.MaterialIndex]));
         }
     }
 
-    private static List<AssetRef<AnimationClip>> LoadAnimations(SerializedAsset ctx, Assimp.Scene? scene, double scale)
+    private static List<AssetRef<AnimationClip>> LoadAnimations(SerializedAsset ctx, AiScene? scene, double scale)
     {
         List<AssetRef<AnimationClip>> anims = [];
         foreach (var anim in scene.Animations)
@@ -483,14 +617,14 @@ public class ModelImporter : ScriptedImporter
 
             foreach (var channel in anim.NodeAnimationChannels)
             {
-                Node boneNode = scene.RootNode.FindNode(channel.NodeName);
+                AiNode boneNode = scene.RootNode.FindNode(channel.NodeName);
 
                 var animBone = new AnimBone();
                 animBone.BoneName = boneNode.Name;
 
                 // construct full path from RootNode to this bone
                 // RootNode -> Parent -> Parent -> ... -> Parent -> Bone
-                Node target = boneNode;
+                AiNode target = boneNode;
                 string path = target.Name;
                 //while (target.Parent != null)
                 //{
@@ -589,7 +723,7 @@ public class ModelImporter : ScriptedImporter
         if (AssetDatabase.TryGetGuid(file, out var guid))
         {
             // We have this texture as an asset, Juse use the asset we dont need to load it
-            mat.SetProperty(name, new AssetRef<Texture2D>(guid));
+            mat.SetProperty(name, new AssetRef<Texture2D>(guid).Res);
         }
         else
         {
@@ -607,7 +741,7 @@ public class ModelImporter : ScriptedImporter
         }
     }
 
-    GameObject GetNodes(string? name, Node node, ref List<(GameObject, Node)> GOs, double scale)
+    GameObject GetNodes(string? name, AiNode node, ref List<(GameObject, AiNode)> GOs, double scale)
     {
         GameObject uOb = GameObject.CreateSilently();
         GOs.Add((uOb, node));
@@ -635,12 +769,12 @@ public class ModelImporter : ScriptedImporter
     {
         private readonly string meshName;
         private readonly AssetRef<Mesh> mesh;
-        private readonly Assimp.Mesh aMesh;
+        private readonly AiMesh aMesh;
         private readonly AssetRef<Material> material;
 
         private MeshMaterialBinding() { }
 
-        public MeshMaterialBinding(string meshName, Assimp.Mesh aMesh, AssetRef<Mesh> mesh, AssetRef<Material> material)
+        public MeshMaterialBinding(string meshName, AiMesh aMesh, AssetRef<Mesh> mesh, AssetRef<Material> material)
         {
             this.meshName = meshName;
             this.mesh = mesh;
@@ -649,7 +783,7 @@ public class ModelImporter : ScriptedImporter
         }
 
         public AssetRef<Mesh> Mesh { get => mesh; }
-        public Assimp.Mesh AMesh { get => aMesh; }
+        public AiMesh AMesh { get => aMesh; }
         public AssetRef<Material> Material { get => material; }
         public string MeshName { get => meshName; }
     }
