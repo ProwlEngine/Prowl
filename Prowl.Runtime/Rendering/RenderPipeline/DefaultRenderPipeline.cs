@@ -147,7 +147,7 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.SetFloat("_PrimaryGridSize", 1 / (float)data.GridSizes.x * gridScale * 2);
             buffer.SetFloat("_SecondaryGridSize", 1 / (float)data.GridSizes.y * gridScale * 2);
             buffer.SetFloat("_Falloff", 15.0f);
-            buffer.SetFloat("_MaxDist", System.Math.Min(camera.FarClip, gridScale));
+            buffer.SetFloat("_MaxDist", Math.Min(camera.FarClip, gridScale));
 
             buffer.SetMaterial(s_gridMaterial, 0);
             buffer.DrawSingle(s_quadMesh);
