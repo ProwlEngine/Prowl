@@ -101,6 +101,10 @@ public class Project
         }
 
         Active = project;
+
+        project.ProjectDirectory.LastAccessTime = DateTime.Now;
+        project.ProjectDirectory.Refresh();
+
         Program.RegisterReloadOfExternalAssemblies();
 
         CreateTempDirectories(project);
