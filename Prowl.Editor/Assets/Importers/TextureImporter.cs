@@ -38,18 +38,9 @@ public class TextureImporter : ScriptedImporter
     }
 }
 
-public class ScriptedEditor
-{
-    public Gui gui => Gui.ActiveGUI;
-
-    public object target { get; internal set; }
-    public virtual void OnEnable() { }
-    public virtual void OnInspectorGUI() { }
-    public virtual void OnDisable() { }
-}
 
 [CustomEditor(typeof(TextureImporter))]
-public class TextureEditor : ScriptedEditor
+public class TextureImporterEditor : ScriptedEditor
 {
     public override void OnInspectorGUI()
     {
