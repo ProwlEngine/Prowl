@@ -43,7 +43,7 @@ public static class UIDrawListRenderer
     // Max active texture sets before the cache is cleared.
     // If for some reason we're rendering 500+ textures caching isn't solving anything anyways.
     private static readonly int s_texturesBeforeClear = 500;
-    private static readonly Dictionary<TextureView, ResourceSet> s_textureSets = [];
+    private static readonly Dictionary<Texture, ResourceSet> s_textureSets = [];
 
 
 
@@ -54,7 +54,7 @@ public static class UIDrawListRenderer
 
         CreateDeviceResources(outputDescription, handling);
 
-        GetResourceSet(Font.DefaultFont.Texture.TextureView);
+        GetResourceSet(Font.DefaultFont.Texture);
     }
 
 
@@ -137,14 +137,14 @@ public static class UIDrawListRenderer
     }
 
 
-    public static ResourceSet GetResourceSet(TextureView textureView)
+    public static ResourceSet GetResourceSet(Texture texture)
     {
-        if (!s_textureSets.TryGetValue(textureView, out ResourceSet resourceSet))
+        if (!s_textureSets.TryGetValue(texture, out ResourceSet resourceSet))
         {
-            resourceSet = Runtime.Graphics.Factory.CreateResourceSet(new ResourceSetDescription(s_textureLayout, textureView));
-            resourceSet.Name = $"UI {textureView.Name} Resource Set";
+            resourceSet = Runtime.Graphics.Factory.CreateResourceSet(new ResourceSetDescription(s_textureLayout, texture.InternalTexture));
+            resourceSet.Name = $"UI {texture.Name} Resource Set";
 
-            s_textureSets.Add(textureView, resourceSet);
+            s_textureSets.Add(texture, resourceSet);
         }
 
         return resourceSet;
@@ -158,7 +158,7 @@ public static class UIDrawListRenderer
 
         s_textureSets.Clear();
 
-        GetResourceSet(Font.DefaultFont.Texture.TextureView);
+        GetResourceSet(Font.DefaultFont.Texture);
     }
 
 
@@ -171,11 +171,11 @@ public static class UIDrawListRenderer
         name += Runtime.Graphics.Device.BackendType switch
         {
             GraphicsBackend.Direct3D11 => ".hlsl",
-            GraphicsBackend.Vulkan     => ".spv",
-            GraphicsBackend.OpenGL     => ".glsl",
-            GraphicsBackend.OpenGLES   => ".glsles",
-            GraphicsBackend.Metal      => ".metal",
-            _                          => throw new NotImplementedException()
+            GraphicsBackend.Vulkan => ".spv",
+            GraphicsBackend.OpenGL => ".glsl",
+            GraphicsBackend.OpenGLES => ".glsles",
+            GraphicsBackend.Metal => ".metal",
+            _ => throw new NotImplementedException()
         };
 
         using Stream s = s_assembly.GetManifestResourceStream(name);
@@ -256,7 +256,7 @@ public static class UIDrawListRenderer
                     continue;
 
                 if (pcmd.Texture != null)
-                    cl.SetGraphicsResourceSet(1, GetResourceSet(pcmd.Texture.TextureView));
+                    cl.SetGraphicsResourceSet(1, GetResourceSet(pcmd.Texture));
 
                 cl.SetScissorRect(
                     0,
