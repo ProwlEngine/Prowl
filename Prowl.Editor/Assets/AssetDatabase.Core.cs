@@ -395,7 +395,7 @@ public static partial class AssetDatabase
         meta.dependencies = dependencies.ToList();
         meta.Save();
 
-        Debug.Log($"Reimported {Path.GetRelativePath(Project.Active.ProjectPath, assetFile.FullName)}!");
+        Debug.Log($"Reimported {Path.GetRelativePath(Project.Active.ProjectPath, assetFile.FullName)}.");
         return true;
     }
 
