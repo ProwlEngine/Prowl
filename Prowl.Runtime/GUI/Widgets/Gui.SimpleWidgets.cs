@@ -19,49 +19,57 @@ public partial class Gui
         }
     }
 
-    public bool Combo(string ID, string popupName, ref int ItemIndex, string[] Items, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null, string? label = null)
+    public bool Combo(string ID,
+        string popupName,
+        ref int itemIndex,
+        string[] items,
+        Offset x, Offset y,
+        Size width, Size height,
+        WidgetStyle? inputstyle = null,
+        WidgetStyle? popupstyle = null,
+        string? label = null)
     {
-        ItemIndex = Math.Clamp(ItemIndex, 0, Items.Length - 1);
+        itemIndex = Math.Clamp(itemIndex, 0, items.Length - 1);
 
-        var style = inputstyle ?? new(30);
-        var g = ActiveGUI;
+        WidgetStyle style = inputstyle ?? new(30);
+        Gui g = ActiveGUI;
         using (g.Node(ID).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
         {
             Interactable interact = g.GetInteractable();
 
-            var col = g.ActiveID == interact.ID ? style.ActiveColor :
+            Color col = g.ActiveID == interact.ID ? style.ActiveColor :
                 g.HoveredID == interact.ID ? style.HoveredColor : style.BGColor;
 
             g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.Roundness);
             g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, style.BorderColor, style.BorderThickness, style.Roundness);
 
             if (label == null)
-                g.Draw2D.DrawText(Items[ItemIndex], g.CurrentNode.LayoutData.InnerRect, false);
+                g.Draw2D.DrawText(items[itemIndex], g.CurrentNode.LayoutData.InnerRect, false);
             else
                 g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.InnerRect, false);
 
-            var popupWidth = g.CurrentNode.LayoutData.Rect.width;
+            double popupWidth = g.CurrentNode.LayoutData.Rect.width;
             if (interact.TakeFocus())
                 g.OpenPopup(popupName, g.CurrentNode.LayoutData.Rect.BottomLeft);
 
             y.PixelOffset = 1;
-            var NewIndex = ItemIndex;
-            var popupHolder = g.CurrentNode;
-            if (g.BeginPopup(popupName, out var popupNode, inputstyle: style))
+            int NewIndex = itemIndex;
+            LayoutNode popupHolder = g.CurrentNode;
+            if (g.BeginPopup(popupName, out LayoutNode? popupNode, inputstyle: popupstyle ?? style))
             {
                 int longestText = 0;
-                for (var Index = 0; Index < Items.Length; ++Index)
+                for (var Index = 0; Index < items.Length; ++Index)
                 {
-                    var textSize = Font.DefaultFont.CalcTextSize(Items[Index], 0);
+                    var textSize = Font.DefaultFont.CalcTextSize(items[Index], 0);
                     if (textSize.x > longestText)
                         longestText = (int)textSize.x;
                 }
 
                 popupWidth = Math.Max(popupWidth, longestText + 20);
 
-                using (popupNode.Width(popupWidth).Height(Items.Length * style.ItemSize).MaxHeight(250).Scroll().Layout(LayoutType.Column).Clip().Enter())
+                using (popupNode.Width(popupWidth).Height(items.Length * style.ItemSize).MaxHeight(250).Scroll().Layout(LayoutType.Column).Clip().Enter())
                 {
-                    for (var Index = 0; Index < Items.Length; ++Index)
+                    for (var Index = 0; Index < items.Length; ++Index)
                     {
                         using (g.Node(popupName + "_Item_" + Index).ExpandWidth().Height(style.ItemSize).Enter())
                         {
@@ -73,15 +81,15 @@ public partial class Gui
                             else if (g.IsNodeHovered())
                                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.HoveredColor, style.Roundness);
 
-                            g.Draw2D.DrawText(Items[Index], g.CurrentNode.LayoutData.Rect);
+                            g.Draw2D.DrawText(items[Index], g.CurrentNode.LayoutData.Rect);
                         }
                     }
                 }
             }
 
-            if (ItemIndex != NewIndex)
+            if (itemIndex != NewIndex)
             {
-                ItemIndex = NewIndex;
+                itemIndex = NewIndex;
                 return true;
             }
 

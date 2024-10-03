@@ -58,10 +58,10 @@ public class GameObjectEditor : ScriptedEditor
 
         var invisStyle = GetInputStyle() with { BGColor = new Color(0, 0, 0, 0), BorderColor = new Color(0, 0, 0, 0) };
         int tagIndex = go.tagIndex;
-        gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, invisStyle, FontAwesome6.Tag);
+        gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, invisStyle, null, FontAwesome6.Tag);
         go.tagIndex = (byte)tagIndex;
         int layerIndex = go.layerIndex;
-        gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize)), 0, ItemSize, ItemSize, invisStyle, FontAwesome6.LayerGroup);
+        gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize)), 0, ItemSize, ItemSize, invisStyle, null, FontAwesome6.LayerGroup);
         go.layerIndex = (byte)layerIndex;
 
         var btnRoundness = (float)EditorStylePrefs.Instance.ButtonRoundness;
