@@ -1,4 +1,4 @@
-﻿Shader "Default/TestShader"
+﻿Shader "Default/DefaultUnlit"
 
 Properties
 {
@@ -6,7 +6,7 @@ Properties
     _MainColor("Main Color", Color)
 }
 
-Pass "TestShader"
+Pass "Unlit"
 {
     Tags { "RenderOrder" = "Opaque" }
 
