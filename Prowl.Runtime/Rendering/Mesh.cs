@@ -362,8 +362,11 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public void RecalculateNormals()
     {
-        if (_vertices == null || _vertices.Length < 3) return;
-        if (_indices32 == null || _indices32.Length < 3) return;
+        if (_vertices == null || _vertices.Length < 3)
+            return;
+
+        if (_indices32 == null || _indices32.Length < 3)
+            return;
 
         var normals = new Vector3F[_vertices.Length];
 
@@ -391,9 +394,14 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public void RecalculateTangents()
     {
-        if (_vertices == null || _vertices.Length < 3) return;
-        if (_indices32 == null || _indices32.Length < 3) return;
-        if (_uv == null) return;
+        if (_vertices == null || _vertices.Length < 3)
+            return;
+
+        if (_indices32 == null || _indices32.Length < 3)
+            return;
+
+        if (_uv == null)
+            return;
 
         var tangents = new Vector3F[_vertices.Length];
 
@@ -716,131 +724,36 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             writer.Write((byte)_indexFormat);
             writer.Write((byte)_topology);
 
-            writer.Write(_vertices.Length);
-            foreach (var vertex in _vertices)
-            {
-                writer.Write(vertex.X);
-                writer.Write(vertex.Y);
-                writer.Write(vertex.Z);
-            }
+            WriteArray(writer, _vertices);
+            WriteArray(writer, _normals);
+            WriteArray(writer, _tangents);
+            WriteArray(writer, _colors);
+            WriteArray(writer, _uv);
+            WriteArray(writer, _uv2);
+            WriteArray(writer, _indices32);
+            WriteArray(writer, _boneIndices);
+            WriteArray(writer, _boneWeights);
 
-            writer.Write(_normals?.Length ?? 0);
-            if (_normals != null)
-            {
-                foreach (var normal in _normals)
-                {
-                    writer.Write(normal.X);
-                    writer.Write(normal.Y);
-                    writer.Write(normal.Z);
-                }
-            }
-
-            writer.Write(_tangents?.Length ?? 0);
-            if (_tangents != null)
-            {
-                foreach (var tangent in _tangents)
-                {
-                    writer.Write(tangent.X);
-                    writer.Write(tangent.Y);
-                    writer.Write(tangent.Z);
-                }
-            }
-
-            writer.Write(_colors?.Length ?? 0);
-            if (_colors != null)
-            {
-                foreach (var color in _colors)
-                {
-                    writer.Write(color.r);
-                    writer.Write(color.g);
-                    writer.Write(color.b);
-                    writer.Write(color.a);
-                }
-            }
-
-            writer.Write(_uv?.Length ?? 0);
-            if (_uv != null)
-            {
-                foreach (var uv in _uv)
-                {
-                    writer.Write(uv.X);
-                    writer.Write(uv.Y);
-                }
-            }
-
-            writer.Write(_uv2?.Length ?? 0);
-            if (_uv2 != null)
-            {
-                foreach (var uv in _uv2)
-                {
-                    writer.Write(uv.X);
-                    writer.Write(uv.Y);
-                }
-            }
-
-            writer.Write(_indices32?.Length ?? 0);
-            if (_indices32 != null)
-            {
-                foreach (var index in _indices32)
-                    writer.Write(index);
-            }
-
-            writer.Write(_boneIndices?.Length ?? 0);
-            if (_boneIndices != null)
-            {
-                foreach (var boneIndex in _boneIndices)
-                {
-                    writer.Write(boneIndex.X);
-                    writer.Write(boneIndex.Y);
-                    writer.Write(boneIndex.Z);
-                    writer.Write(boneIndex.W);
-                }
-            }
-
-            writer.Write(_boneWeights?.Length ?? 0);
-            if (_boneWeights != null)
-            {
-                foreach (var boneWeight in _boneWeights)
-                {
-                    writer.Write(boneWeight.X);
-                    writer.Write(boneWeight.Y);
-                    writer.Write(boneWeight.Z);
-                    writer.Write(boneWeight.W);
-                }
-            }
-
-            writer.Write(bindPoses?.Length ?? 0);
-            if (bindPoses != null)
-            {
-                foreach (var bindPose in bindPoses)
-                {
-                    writer.Write(bindPose.M11);
-                    writer.Write(bindPose.M12);
-                    writer.Write(bindPose.M13);
-                    writer.Write(bindPose.M14);
-
-                    writer.Write(bindPose.M21);
-                    writer.Write(bindPose.M22);
-                    writer.Write(bindPose.M23);
-                    writer.Write(bindPose.M24);
-
-                    writer.Write(bindPose.M31);
-                    writer.Write(bindPose.M32);
-                    writer.Write(bindPose.M33);
-                    writer.Write(bindPose.M34);
-
-                    writer.Write(bindPose.M41);
-                    writer.Write(bindPose.M42);
-                    writer.Write(bindPose.M43);
-                    writer.Write(bindPose.M44);
-                }
-            }
-
+            WriteArray(writer, bindPoses);
 
             compoundTag.Add("MeshData", new SerializedProperty(memoryStream.ToArray()));
         }
 
         return compoundTag;
+    }
+
+    private static unsafe void WriteArray<T>(BinaryWriter writer, T[]? data) where T : unmanaged
+    {
+        if (data == null)
+        {
+            writer.Write(0);
+            return;
+        }
+
+        writer.Write(data.Length);
+
+        fixed (T* dataPtr = data)
+            writer.Write(new Span<byte>(dataPtr, sizeof(T) * data.Length));
     }
 
     public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
@@ -851,110 +764,38 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             _indexFormat = (IndexFormat)reader.ReadByte();
             _topology = (PrimitiveTopology)reader.ReadByte();
 
-            var vertexCount = reader.ReadInt32();
-            _vertices = new Vector3F[vertexCount];
-            for (int i = 0; i < vertexCount; i++)
-                _vertices[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            _vertices = ReadArray<Vector3F>(reader);
+            _normals = ReadArray<Vector3F>(reader);
+            _tangents = ReadArray<Vector3F>(reader);
+            _colors = ReadArray<Color32>(reader);
+            _uv = ReadArray<Vector2F>(reader);
+            _uv2 = ReadArray<Vector2F>(reader);
+            _indices32 = ReadArray<uint>(reader);
+            _boneIndices = ReadArray<Vector4F>(reader);
+            _boneWeights = ReadArray<Vector4F>(reader);
 
-            var normalCount = reader.ReadInt32();
-            if (normalCount > 0)
-            {
-                _normals = new Vector3F[normalCount];
-                for (int i = 0; i < normalCount; i++)
-                    _normals[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            }
-
-            var tangentCount = reader.ReadInt32();
-            if (tangentCount > 0)
-            {
-                _tangents = new Vector3F[tangentCount];
-                for (int i = 0; i < tangentCount; i++)
-                    _tangents[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            }
-
-            var colorCount = reader.ReadInt32();
-            if (colorCount > 0)
-            {
-                _colors = new Color32[colorCount];
-                for (int i = 0; i < colorCount; i++)
-                    _colors[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
-            }
-
-            var uvCount = reader.ReadInt32();
-            if (uvCount > 0)
-            {
-                _uv = new Vector2F[uvCount];
-                for (int i = 0; i < uvCount; i++)
-                    _uv[i] = new Vector2F(reader.ReadSingle(), reader.ReadSingle());
-            }
-
-            var uv2Count = reader.ReadInt32();
-            if (uv2Count > 0)
-            {
-                _uv2 = new Vector2F[uv2Count];
-                for (int i = 0; i < uv2Count; i++)
-                    _uv2[i] = new Vector2F(reader.ReadSingle(), reader.ReadSingle());
-            }
-
-            var indexCount = reader.ReadInt32();
-            if (indexCount > 0)
-            {
-                _indices32 = new uint[indexCount];
-                for (int i = 0; i < indexCount; i++)
-                    _indices32[i] = reader.ReadUInt32();
-            }
-
-            var boneIndexCount = reader.ReadInt32();
-            if (boneIndexCount > 0)
-            {
-                _boneIndices = new Vector4F[boneIndexCount];
-                for (int i = 0; i < boneIndexCount; i++)
-                {
-                    //boneIndices[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
-                    _boneIndices[i] = new Vector4F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-                }
-            }
-
-            var boneWeightCount = reader.ReadInt32();
-            if (boneWeightCount > 0)
-            {
-                _boneWeights = new Vector4F[boneWeightCount];
-                for (int i = 0; i < boneWeightCount; i++)
-                    _boneWeights[i] = new Vector4F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            }
-
-            var bindPosesCount = reader.ReadInt32();
-            if (bindPosesCount > 0)
-            {
-                bindPoses = new Matrix4x4F[bindPosesCount];
-                for (int i = 0; i < bindPosesCount; i++)
-                {
-                    bindPoses[i] = new Matrix4x4F()
-                    {
-                        M11 = reader.ReadSingle(),
-                        M12 = reader.ReadSingle(),
-                        M13 = reader.ReadSingle(),
-                        M14 = reader.ReadSingle(),
-
-                        M21 = reader.ReadSingle(),
-                        M22 = reader.ReadSingle(),
-                        M23 = reader.ReadSingle(),
-                        M24 = reader.ReadSingle(),
-
-                        M31 = reader.ReadSingle(),
-                        M32 = reader.ReadSingle(),
-                        M33 = reader.ReadSingle(),
-                        M34 = reader.ReadSingle(),
-
-                        M41 = reader.ReadSingle(),
-                        M42 = reader.ReadSingle(),
-                        M43 = reader.ReadSingle(),
-                        M44 = reader.ReadSingle()
-                    };
-                }
-            }
+            bindPoses = ReadArray<Matrix4x4F>(reader);
 
             _changed = true;
         }
+    }
+
+    private static unsafe T[] ReadArray<T>(BinaryReader reader) where T : unmanaged
+    {
+        int count = reader.ReadInt32();
+
+        if (count == 0)
+            return [];
+
+        int size = sizeof(T) * count;
+        byte[] bytes = reader.ReadBytes(size);
+
+        T[] vals = new T[count];
+
+        fixed (byte* bytesPtr = bytes)
+        fixed (T* valsPtr = vals)
+            Buffer.MemoryCopy(bytesPtr, valsPtr, size, size);
+
+        return vals;
     }
 }
