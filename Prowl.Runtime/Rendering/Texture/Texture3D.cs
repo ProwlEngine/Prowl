@@ -21,9 +21,7 @@ public sealed class Texture3D : Texture
     /// <summary>The depth of this <see cref="Texture3D"/>.</summary>
     public uint Depth => InternalTexture.Depth;
 
-    public static readonly Texture3D EmptyWhite = CreateDefaultTex(1, 1, 1, [Color.white]);
-
-    public static readonly Texture3D Empty = CreateDefaultTex(1, 1, 1, [Color.clear]);
+    public static readonly Texture3D White = CreateDefaultTex(1, 1, 1, [Color.white]);
     public static readonly Texture3D EmptyRW = CreateDefaultTex(1, 1, 1, [Color.black], TextureUsage.Storage);
 
 

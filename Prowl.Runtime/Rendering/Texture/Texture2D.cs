@@ -18,39 +18,33 @@ public sealed class Texture2D : Texture
     /// <summary>The height of this <see cref="Texture2D"/>.</summary>
     public uint Height => InternalTexture.Height;
 
-    public static readonly Texture2D EmptyWhite = CreateDefaultTex(1, 1, [Color.white]);
+    public static readonly AssetRef<Texture2D> White = LoadDefault("Defaults/default_white.png");
+    public static readonly AssetRef<Texture2D> Black = LoadDefault("Defaults/default_black.png");
+    public static readonly AssetRef<Texture2D> Gray = LoadDefault("Defaults/default_gray.png");
+    public static readonly AssetRef<Texture2D> Normal = LoadDefault("Defaults/default_normal.png");
+    public static readonly AssetRef<Texture2D> Red = LoadDefault("Defaults/default_red.png");
+    public static readonly AssetRef<Texture2D> Surface = LoadDefault("Defaults/default_surface.png");
+    public static readonly AssetRef<Texture2D> Grid = LoadDefault("Defaults/grid.png");
 
-    public static readonly Texture2D Empty = CreateDefaultTex(1, 1, [Color.clear]);
-    public static readonly Texture2D EmptyRW = CreateDefaultTex(1, 1, [Color.black], TextureUsage.Storage);
-
-    public static Texture2D Checker => CreateDefaultTex(4, 4, [
-        Color.white,
-        Color.gray,
-        Color.white,
-        Color.black,
-        Color.gray,
-        Color.white,
-        Color.gray,
-        Color.white,
-        Color.white,
-        Color.gray,
-        Color.white,
-        Color.gray,
-        Color.gray,
-        Color.white,
-        Color.gray,
-        Color.white
-    ]);
+    public static readonly AssetRef<Texture2D> EmptyRW = CreateDefault(1, 1, [Color.black], TextureUsage.Storage);
 
 
-    private static Texture2D CreateDefaultTex(uint sizeX, uint sizeY, Color32[] colors, TextureUsage usage = TextureUsage.Sampled)
+    private static Texture2D CreateDefault(uint sizeX, uint sizeY, Color32[] colors, TextureUsage usage = TextureUsage.Sampled)
     {
-        Texture2D texture = new Texture2D(sizeX, sizeY, 0, PixelFormat.R8_G8_B8_A8_UNorm, usage);
-        texture.Name = "Default Created Texture";
+        Texture2D texture = new Texture2D(sizeX, sizeY, 0, PixelFormat.R8_G8_B8_A8_UNorm, usage)
+        {
+            Name = "Default Created Texture"
+        };
 
         texture.Sampler.SetFilter(FilterType.Point, FilterType.Point, FilterType.Point);
         texture.SetData(new Span<Color32>(colors));
         return texture;
+    }
+
+
+    private static AssetRef<Texture2D> LoadDefault(string name)
+    {
+        return Application.AssetProvider.LoadAsset<Texture2D>(name);
     }
 
 
