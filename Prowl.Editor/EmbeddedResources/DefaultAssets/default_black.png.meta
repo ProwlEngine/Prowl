@@ -2,14 +2,14 @@
   "$id": 1,
   "$type": "Prowl.Editor.Assets.MetaFile",
   "version": 1,
-  "guid": "39011d7e-7079-45b7-be4b-ae4e2041962b",
+  "guid": "ee6df7f7-fca9-4715-a8c1-c9f81dae5f61",
   "assetNames": [
-    "default_gray18"
+    "default_black"
   ],
   "assetTypes": [
     "Prowl.Runtime.Texture2D"
   ],
-  "lastModified": 5250261254779815060L,
+  "lastModified": 5250321246147024980L,
   "importer": {
     "$id": 2,
     "$type": "Prowl.Editor.Assets.TextureImporter",
