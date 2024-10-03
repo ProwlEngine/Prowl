@@ -58,9 +58,9 @@ public partial class Gui
             if (g.BeginPopup(popupName, out LayoutNode? popupNode, inputstyle: popupstyle ?? style))
             {
                 int longestText = 0;
-                for (var Index = 0; Index < items.Length; ++Index)
+                for (int i = 0; i < items.Length; ++i)
                 {
-                    var textSize = Font.DefaultFont.CalcTextSize(items[Index], 0);
+                    Vector2 textSize = Font.DefaultFont.CalcTextSize(items[i], 0);
                     if (textSize.x > longestText)
                         longestText = (int)textSize.x;
                 }
@@ -69,19 +69,19 @@ public partial class Gui
 
                 using (popupNode.Width(popupWidth).Height(items.Length * style.ItemSize).MaxHeight(250).Scroll().Layout(LayoutType.Column).Clip().Enter())
                 {
-                    for (var Index = 0; Index < items.Length; ++Index)
+                    for (int i = 0; i < items.Length; ++i)
                     {
-                        using (g.Node(popupName + "_Item_" + Index).ExpandWidth().Height(style.ItemSize).Enter())
+                        using (g.Node(popupName + "_Item_" + i).ExpandWidth().Height(style.ItemSize).Enter())
                         {
                             if (g.IsNodePressed())
                             {
-                                NewIndex = Index;
+                                NewIndex = i;
                                 g.ClosePopup(popupHolder);
                             }
                             else if (g.IsNodeHovered())
                                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.HoveredColor, style.Roundness);
 
-                            g.Draw2D.DrawText(items[Index], g.CurrentNode.LayoutData.Rect);
+                            g.Draw2D.DrawText(items[i], g.CurrentNode.LayoutData.Rect);
                         }
                     }
                 }
@@ -100,14 +100,14 @@ public partial class Gui
 
     public bool Checkbox(string ID, ref bool value, Offset x, Offset y, out LayoutNode node, WidgetStyle? inputstyle = null)
     {
-        var style = inputstyle ?? new(30);
+        WidgetStyle style = inputstyle ?? new(30);
         x.PixelOffset += 2;
         y.PixelOffset += 2;
         using ((node = Node(ID)).Left(x).Top(y).Scale(style.ItemSize - 4).Enter())
         {
             Interactable interact = GetInteractable();
 
-            var col = ActiveID == interact.ID ? style.ActiveColor :
+            Color col = ActiveID == interact.ID ? style.ActiveColor :
                 HoveredID == interact.ID ? style.HoveredColor : style.BGColor;
 
             Draw2D.DrawRectFilled(CurrentNode.LayoutData.Rect, col, style.Roundness);
@@ -115,7 +115,7 @@ public partial class Gui
 
             if (value)
             {
-                var check = CurrentNode.LayoutData.Rect;
+                Rect check = CurrentNode.LayoutData.Rect;
                 check.Expand(-4);
                 Draw2D.DrawRectFilled(check, style.ActiveColor, style.Roundness);
             }
@@ -145,14 +145,14 @@ public partial class Gui
     {
         if (PreviousInteractableIsHovered() && tip != "")
         {
-            var oldZ = ActiveGUI.CurrentZIndex;
+            int oldZ = ActiveGUI.CurrentZIndex;
             ActiveGUI.SetZIndex(500000);
 
-            var pos = topleft ?? PointerPos;
+            Vector2 pos = topleft ?? PointerPos;
             var style = new WidgetStyle(30);
             var margin = new Vector2(10);
             var padding = new Vector2(5);
-            var size = Font.DefaultFont.CalcTextSize(tip, 0, wrapWidth) + padding * 2 - new Vector2(0, 5);
+            Vector2 size = Font.DefaultFont.CalcTextSize(tip, 0, wrapWidth) + padding * 2 - new Vector2(0, 5);
             var offset = new Vector2(0);
 
             switch (align)
@@ -235,15 +235,15 @@ public partial class Gui
 
     public bool BeginPopup(string id, out LayoutNode? node, bool invisible = false, WidgetStyle? inputstyle = null)
     {
-        var style = inputstyle ?? new(30);
+        WidgetStyle style = inputstyle ?? new(30);
         node = null;
-        var show = GetNodeStorage<bool>("Popup");
+        bool show = GetNodeStorage<bool>("Popup");
         show &= GetNodeStorage<int>("Popup_ID") == id.GetHashCode();
         // If this node is showing a Popup and the Popup ID is the same as this ID
         if (show)
         {
-            var pos = GetNodeStorage<Vector2>("PU_POS_" + id);
-            var parentNode = CurrentNode;
+            Vector2 pos = GetNodeStorage<Vector2>("PU_POS_" + id);
+            LayoutNode parentNode = CurrentNode;
             // Append to Root
             using ((node = rootNode.AppendNode("PU_" + id)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
             {
@@ -251,7 +251,7 @@ public partial class Gui
                 BlockInteractables(CurrentNode.LayoutData.Rect);
 
                 // Clamp node position so that its always in screen bounds
-                var rect = CurrentNode.LayoutData.Rect;
+                Rect rect = CurrentNode.LayoutData.Rect;
                 if (pos.x + rect.width > ScreenRect.width)
                 {
                     CurrentNode.Left(ScreenRect.width - rect.width);
