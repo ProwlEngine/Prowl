@@ -260,10 +260,10 @@ public static class UIDrawListRenderer
 
                 cl.SetScissorRect(
                     0,
-                    (uint)pcmd.ClipRect.x,
-                    (uint)pcmd.ClipRect.y,
-                    (uint)(pcmd.ClipRect.z - pcmd.ClipRect.x),
-                    (uint)(pcmd.ClipRect.w - pcmd.ClipRect.y));
+                    (uint)clipRect.x,
+                    (uint)clipRect.y,
+                    (uint)(clipRect.z - clipRect.x),
+                    (uint)(clipRect.w - clipRect.y));
 
                 cl.DrawIndexed(pcmd.ElemCount, 1, idxOffset, 0, 0);
 
