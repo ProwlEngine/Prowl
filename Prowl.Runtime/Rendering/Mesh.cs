@@ -40,30 +40,30 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     /// <summary> The format of the indices for this mesh </summary>
     public IndexFormat IndexFormat
     {
-        get => indexFormat;
+        get => _indexFormat;
         set
         {
-            if (isWritable == false || indexFormat == value) return;
+            if (isWritable == false || _indexFormat == value) return;
 
-            changed = true;
-            indexFormat = value;
+            _changed = true;
+            _indexFormat = value;
 
             if (value == IndexFormat.UInt16)
-                indices32 = [];
+                _indices32 = [];
             else
-                indices16 = [];
+                _indices16 = [];
         }
     }
 
     /// <summary> The mesh's primitive type </summary>
     public PrimitiveTopology Topology
     {
-        get => topology;
+        get => _topology;
         set
         {
             if (isWritable == false) return;
-            changed = true;
-            topology = value;
+            _changed = true;
+            _topology = value;
         }
     }
 
@@ -74,117 +74,117 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     /// </summary>
     public Vector3F[] Vertices
     {
-        get => vertices ?? [];
+        get => _vertices ?? [];
         set
         {
             if (isWritable == false)
                 return;
-            var needsReset = vertices == null || vertices.Length != value.Length;
-            vertices = value;
-            changed = true;
+            var needsReset = _vertices == null || _vertices.Length != value.Length;
+            _vertices = value;
+            _changed = true;
             if (needsReset)
             {
-                normals = null;
-                tangents = null;
-                colors = null;
-                uv = null;
-                uv2 = null;
-                indices32 = null;
+                _normals = null;
+                _tangents = null;
+                _colors = null;
+                _uv = null;
+                _uv2 = null;
+                _indices32 = null;
             }
         }
     }
 
     public Vector3F[] Normals
     {
-        get => ReadVertexData(normals ?? []);
-        set => WriteVertexData(ref normals, value, value.Length);
+        get => ReadVertexData(_normals ?? []);
+        set => WriteVertexData(ref _normals, value, value.Length);
     }
 
     public Vector3F[] Tangents
     {
-        get => ReadVertexData(tangents ?? []);
-        set => WriteVertexData(ref tangents, value, value.Length);
+        get => ReadVertexData(_tangents ?? []);
+        set => WriteVertexData(ref _tangents, value, value.Length);
     }
 
     public Color32[] Colors
     {
-        get => ReadVertexData(colors ?? []);
-        set => WriteVertexData(ref colors, value, value.Length);
+        get => ReadVertexData(_colors ?? []);
+        set => WriteVertexData(ref _colors, value, value.Length);
     }
 
     public Vector2F[] UV
     {
-        get => ReadVertexData(uv ?? []);
-        set => WriteVertexData(ref uv, value, value.Length);
+        get => ReadVertexData(_uv ?? []);
+        set => WriteVertexData(ref _uv, value, value.Length);
     }
 
     public Vector2F[] UV2
     {
-        get => ReadVertexData(uv2 ?? []);
-        set => WriteVertexData(ref uv2, value, value.Length);
+        get => ReadVertexData(_uv2 ?? []);
+        set => WriteVertexData(ref _uv2, value, value.Length);
     }
 
     public uint[] Indices32
     {
-        get => ReadVertexData(indices32 ?? []);
-        set => WriteVertexData(ref indices32, value, value.Length, false);
+        get => ReadVertexData(_indices32 ?? []);
+        set => WriteVertexData(ref _indices32, value, value.Length, false);
     }
 
     public ushort[] Indices16
     {
-        get => ReadVertexData(indices16 ?? []);
-        set => WriteVertexData(ref indices16, value, value.Length, false);
+        get => ReadVertexData(_indices16 ?? []);
+        set => WriteVertexData(ref _indices16, value, value.Length, false);
     }
 
     public Vector4F[] BoneIndices
     {
-        get => ReadVertexData(boneIndices ?? []);
-        set => WriteVertexData(ref boneIndices, value, value.Length);
+        get => ReadVertexData(_boneIndices ?? []);
+        set => WriteVertexData(ref _boneIndices, value, value.Length);
     }
 
     public Vector4F[] BoneWeights
     {
-        get => ReadVertexData(boneWeights ?? []);
-        set => WriteVertexData(ref boneWeights, value, value.Length);
+        get => ReadVertexData(_boneWeights ?? []);
+        set => WriteVertexData(ref _boneWeights, value, value.Length);
     }
 
-    public int VertexCount => vertices?.Length ?? 0;
-    public int IndexCount => IndexFormat == IndexFormat.UInt16 ? indices16.Length : indices32.Length;
+    public int VertexCount => _vertices?.Length ?? 0;
+    public int IndexCount => IndexFormat == IndexFormat.UInt16 ? _indices16.Length : _indices32.Length;
 
-    public DeviceBuffer VertexBuffer => vertexBuffer;
-    public DeviceBuffer IndexBuffer => indexBuffer;
+    public DeviceBuffer VertexBuffer => _vertexBuffer;
+    public DeviceBuffer IndexBuffer => _indexBuffer;
 
-    public bool HasNormals => (normals?.Length ?? 0) > 0;
-    public bool HasTangents => (tangents?.Length ?? 0) > 0;
-    public bool HasColors => (colors?.Length ?? 0) > 0;
-    public bool HasUV => (uv?.Length ?? 0) > 0;
-    public bool HasUV2 => (uv2?.Length ?? 0) > 0;
+    public bool HasNormals => (_normals?.Length ?? 0) > 0;
+    public bool HasTangents => (_tangents?.Length ?? 0) > 0;
+    public bool HasColors => (_colors?.Length ?? 0) > 0;
+    public bool HasUV => (_uv?.Length ?? 0) > 0;
+    public bool HasUV2 => (_uv2?.Length ?? 0) > 0;
 
-    public bool HasBoneIndices => (boneIndices?.Length ?? 0) > 0;
-    public bool HasBoneWeights => (boneWeights?.Length ?? 0) > 0;
+    public bool HasBoneIndices => (_boneIndices?.Length ?? 0) > 0;
+    public bool HasBoneWeights => (_boneWeights?.Length ?? 0) > 0;
 
     public Matrix4x4F[]? bindPoses;
 
-    bool changed = true;
-    Vector3F[]? vertices;
-    Vector3F[]? normals;
-    Vector3F[]? tangents;
-    Color32[]? colors;
-    Vector2F[]? uv;
-    Vector2F[]? uv2;
+    private bool _changed;
+    private Vector3F[]? _vertices;
+    private Vector3F[]? _normals;
+    private Vector3F[]? _tangents;
+    private Color32[]? _colors;
+    private Vector2F[]? _uv;
+    private Vector2F[]? _uv2;
 
-    uint[]? indices32;
-    ushort[]? indices16;
+    private uint[]? _indices32;
+    private ushort[]? _indices16;
 
-    Vector4F[]? boneIndices;
-    Vector4F[]? boneWeights;
+    private Vector4F[]? _boneIndices;
+    private Vector4F[]? _boneWeights;
 
-    IndexFormat indexFormat = IndexFormat.UInt16;
-    PrimitiveTopology topology = PrimitiveTopology.TriangleList;
+    private IndexFormat _indexFormat = IndexFormat.UInt16;
+    private PrimitiveTopology _topology = PrimitiveTopology.TriangleList;
 
 
-    DeviceBuffer vertexBuffer;
-    DeviceBuffer indexBuffer;
+    private DeviceBuffer _vertexBuffer;
+    private DeviceBuffer _indexBuffer;
 
     public int UVStart { get; private set; }
     public int UV2Start { get; private set; }
@@ -204,50 +204,53 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         { "COLOR0", VertexElementFormat.Byte4_Norm }
     };
 
-    public Mesh() { }
+    public Mesh()
+    {
+        _changed = true;
+    }
 
     public void Clear()
     {
-        vertices = null;
-        normals = null;
-        colors = null;
-        uv = null;
-        uv2 = null;
-        indices16 = null;
-        indices32 = null;
-        tangents = null;
-        boneIndices = null;
-        boneWeights = null;
+        _vertices = null;
+        _normals = null;
+        _colors = null;
+        _uv = null;
+        _uv2 = null;
+        _indices16 = null;
+        _indices32 = null;
+        _tangents = null;
+        _boneIndices = null;
+        _boneWeights = null;
 
-        changed = true;
+        _changed = true;
 
         DeleteGPUBuffers();
     }
 
     public void Upload()
     {
-        if (changed == false)
+        if (_changed == false && _indexBuffer != null && _vertexBuffer != null)
             return;
 
-        changed = false;
+        _changed = false;
 
         DeleteGPUBuffers();
 
-        if (vertices == null || vertices.Length == 0)
+        if (_vertices == null || _vertices.Length == 0)
             throw new InvalidOperationException($"Mesh has no vertices");
 
-        if (indexFormat == IndexFormat.UInt16)
+        if (_indexFormat == IndexFormat.UInt16)
         {
-            if (indices16 == null || indices16.Length == 0)
+            if (_indices16 == null || _indices16.Length == 0)
                 throw new InvalidOperationException($"Mesh has no indices");
         }
-        else if (indices32 == null || indices32.Length == 0)
+        else if (_indices32 == null || _indices32.Length == 0)
         {
             throw new InvalidOperationException($"Mesh has no indices");
         }
 
-        int indexLength = indexFormat == IndexFormat.UInt16 ? indices16.Length : indices32.Length;
-        switch (topology)
+        int indexLength = _indexFormat == IndexFormat.UInt16 ? _indices16.Length : _indices32.Length;
+        switch (_topology)
         {
             case PrimitiveTopology.TriangleList:
                 if (indexLength % 3 != 0)
@@ -272,34 +275,34 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         RecalculateBufferOffsets();
 
         // Vertex buffer upload
-        vertexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)BufferLength, BufferUsage.VertexBuffer));
+        _vertexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)BufferLength, BufferUsage.VertexBuffer));
 
-        Graphics.Device.UpdateBuffer(vertexBuffer, 0, vertices);
+        Graphics.Device.UpdateBuffer(_vertexBuffer, 0, _vertices);
 
         if (HasUV)
-            Graphics.Device.UpdateBuffer(vertexBuffer, (uint)UVStart, uv);
+            Graphics.Device.UpdateBuffer(_vertexBuffer, (uint)UVStart, _uv);
 
         if (HasUV2)
-            Graphics.Device.UpdateBuffer(vertexBuffer, (uint)UV2Start, uv2);
+            Graphics.Device.UpdateBuffer(_vertexBuffer, (uint)UV2Start, _uv2);
 
         if (HasNormals)
-            Graphics.Device.UpdateBuffer(vertexBuffer, (uint)NormalsStart, normals);
+            Graphics.Device.UpdateBuffer(_vertexBuffer, (uint)NormalsStart, _normals);
 
         if (HasColors)
-            Graphics.Device.UpdateBuffer(vertexBuffer, (uint)ColorsStart, colors);
+            Graphics.Device.UpdateBuffer(_vertexBuffer, (uint)ColorsStart, _colors);
 
         if (HasTangents)
-            Graphics.Device.UpdateBuffer(vertexBuffer, (uint)TangentsStart, tangents);
+            Graphics.Device.UpdateBuffer(_vertexBuffer, (uint)TangentsStart, _tangents);
 
-        if (indexFormat == IndexFormat.UInt16)
+        if (_indexFormat == IndexFormat.UInt16)
         {
-            indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices16.Length * sizeof(ushort), BufferUsage.IndexBuffer));
-            Graphics.Device.UpdateBuffer(indexBuffer, 0, indices16);
+            _indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)_indices16.Length * sizeof(ushort), BufferUsage.IndexBuffer));
+            Graphics.Device.UpdateBuffer(_indexBuffer, 0, _indices16);
         }
-        else if (indexFormat == IndexFormat.UInt32)
+        else if (_indexFormat == IndexFormat.UInt32)
         {
-            indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices32.Length * sizeof(uint), BufferUsage.IndexBuffer));
-            Graphics.Device.UpdateBuffer(indexBuffer, 0, indices32);
+            _indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)_indices32.Length * sizeof(uint), BufferUsage.IndexBuffer));
+            Graphics.Device.UpdateBuffer(_indexBuffer, 0, _indices32);
         }
     }
 
@@ -328,22 +331,22 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     {
         if (isWritable == false)
             throw new InvalidOperationException("Mesh is not writable");
-        if ((value == null || length == 0 || length != (vertices?.Length ?? 0)) && mustMatchLength)
+        if ((value == null || length == 0 || length != (_vertices?.Length ?? 0)) && mustMatchLength)
             throw new ArgumentException("Array length should match vertices length");
-        changed = true;
+        _changed = true;
         target = value;
     }
 
     public void RecalculateBounds()
     {
-        ArgumentNullException.ThrowIfNull(vertices);
+        ArgumentNullException.ThrowIfNull(_vertices);
 
-        if (vertices.Length < 1)
+        if (_vertices.Length < 1)
             throw new ArgumentException();
 
         var minVec = Vector3F.One * 99999f;
         var maxVec = Vector3F.One * -99999f;
-        foreach (var ptVector in vertices)
+        foreach (var ptVector in _vertices)
         {
             minVec.X = (minVec.X < ptVector.X) ? minVec.X : ptVector.X;
             minVec.Y = (minVec.Y < ptVector.Y) ? minVec.Y : ptVector.Y;
@@ -359,20 +362,20 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public void RecalculateNormals()
     {
-        if (vertices == null || vertices.Length < 3) return;
-        if (indices32 == null || indices32.Length < 3) return;
+        if (_vertices == null || _vertices.Length < 3) return;
+        if (_indices32 == null || _indices32.Length < 3) return;
 
-        var normals = new Vector3F[vertices.Length];
+        var normals = new Vector3F[_vertices.Length];
 
-        for (int i = 0; i < indices32.Length; i += 3)
+        for (int i = 0; i < _indices32.Length; i += 3)
         {
-            uint ai = indices32[i];
-            uint bi = indices32[i + 1];
-            uint ci = indices32[i + 2];
+            uint ai = _indices32[i];
+            uint bi = _indices32[i + 1];
+            uint ci = _indices32[i + 2];
 
             Vector3F n = Vector3F.Normalize(Vector3F.Cross(
-                vertices[bi] - vertices[ai],
-                vertices[ci] - vertices[ai]
+                _vertices[bi] - _vertices[ai],
+                _vertices[ci] - _vertices[ai]
             ));
 
             normals[ai] += n;
@@ -380,7 +383,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             normals[ci] += n;
         }
 
-        for (int i = 0; i < vertices.Length; i++)
+        for (int i = 0; i < _vertices.Length; i++)
             normals[i] = -Vector3F.Normalize(normals[i]);
 
         Normals = normals;
@@ -388,23 +391,23 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public void RecalculateTangents()
     {
-        if (vertices == null || vertices.Length < 3) return;
-        if (indices32 == null || indices32.Length < 3) return;
-        if (uv == null) return;
+        if (_vertices == null || _vertices.Length < 3) return;
+        if (_indices32 == null || _indices32.Length < 3) return;
+        if (_uv == null) return;
 
-        var tangents = new Vector3F[vertices.Length];
+        var tangents = new Vector3F[_vertices.Length];
 
-        for (int i = 0; i < indices32.Length; i += 3)
+        for (int i = 0; i < _indices32.Length; i += 3)
         {
-            uint ai = indices32[i];
-            uint bi = indices32[i + 1];
-            uint ci = indices32[i + 2];
+            uint ai = _indices32[i];
+            uint bi = _indices32[i + 1];
+            uint ci = _indices32[i + 2];
 
-            Vector3F edge1 = vertices[bi] - vertices[ai];
-            Vector3F edge2 = vertices[ci] - vertices[ai];
+            Vector3F edge1 = _vertices[bi] - _vertices[ai];
+            Vector3F edge2 = _vertices[ci] - _vertices[ai];
 
-            Vector2F deltaUV1 = uv[bi] - uv[ai];
-            Vector2F deltaUV2 = uv[ci] - uv[ai];
+            Vector2F deltaUV1 = _uv[bi] - _uv[ai];
+            Vector2F deltaUV2 = _uv[ci] - _uv[ai];
 
             float f = 1.0f / (deltaUV1.X * deltaUV2.Y - deltaUV2.X * deltaUV1.Y);
 
@@ -418,7 +421,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             tangents[ci] += tangent;
         }
 
-        for (int i = 0; i < vertices.Length; i++)
+        for (int i = 0; i < _vertices.Length; i++)
             tangents[i] = Vector3F.Normalize(tangents[i]);
 
         Tangents = tangents;
@@ -432,7 +435,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         const int vec3Size = floatSize * 3;
         const int byte4Size = 4;
 
-        int vertLen = vertices.Length;
+        int vertLen = _vertices.Length;
 
         UVStart = vertLen * vec3Size;                                                 // Where vertices end
         UV2Start = UVStart + (HasUV ? vertLen * vec2Size : 0);                        // Where UV0 ends
@@ -446,10 +449,10 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     private void DeleteGPUBuffers()
     {
-        vertexBuffer?.Dispose();
-        vertexBuffer = null;
-        indexBuffer?.Dispose();
-        indexBuffer = null;
+        _vertexBuffer?.Dispose();
+        _vertexBuffer = null;
+        _indexBuffer?.Dispose();
+        _indexBuffer = null;
     }
 
     public static Mesh CreateQuad(Vector2 scale)
@@ -710,21 +713,21 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         using (MemoryStream memoryStream = new MemoryStream())
         using (BinaryWriter writer = new BinaryWriter(memoryStream))
         {
-            writer.Write((byte)indexFormat);
-            writer.Write((byte)topology);
+            writer.Write((byte)_indexFormat);
+            writer.Write((byte)_topology);
 
-            writer.Write(vertices.Length);
-            foreach (var vertex in vertices)
+            writer.Write(_vertices.Length);
+            foreach (var vertex in _vertices)
             {
                 writer.Write(vertex.X);
                 writer.Write(vertex.Y);
                 writer.Write(vertex.Z);
             }
 
-            writer.Write(normals?.Length ?? 0);
-            if (normals != null)
+            writer.Write(_normals?.Length ?? 0);
+            if (_normals != null)
             {
-                foreach (var normal in normals)
+                foreach (var normal in _normals)
                 {
                     writer.Write(normal.X);
                     writer.Write(normal.Y);
@@ -732,10 +735,10 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
                 }
             }
 
-            writer.Write(tangents?.Length ?? 0);
-            if (tangents != null)
+            writer.Write(_tangents?.Length ?? 0);
+            if (_tangents != null)
             {
-                foreach (var tangent in tangents)
+                foreach (var tangent in _tangents)
                 {
                     writer.Write(tangent.X);
                     writer.Write(tangent.Y);
@@ -743,10 +746,10 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
                 }
             }
 
-            writer.Write(colors?.Length ?? 0);
-            if (colors != null)
+            writer.Write(_colors?.Length ?? 0);
+            if (_colors != null)
             {
-                foreach (var color in colors)
+                foreach (var color in _colors)
                 {
                     writer.Write(color.r);
                     writer.Write(color.g);
@@ -755,42 +758,38 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
                 }
             }
 
-            writer.Write(uv?.Length ?? 0);
-            if (uv != null)
+            writer.Write(_uv?.Length ?? 0);
+            if (_uv != null)
             {
-                foreach (var uv in uv)
+                foreach (var uv in _uv)
                 {
                     writer.Write(uv.X);
                     writer.Write(uv.Y);
                 }
             }
 
-            writer.Write(uv2?.Length ?? 0);
-            if (uv2 != null)
+            writer.Write(_uv2?.Length ?? 0);
+            if (_uv2 != null)
             {
-                foreach (var uv in uv2)
+                foreach (var uv in _uv2)
                 {
                     writer.Write(uv.X);
                     writer.Write(uv.Y);
                 }
             }
 
-            writer.Write(indices32?.Length ?? 0);
-            if (indices32 != null)
+            writer.Write(_indices32?.Length ?? 0);
+            if (_indices32 != null)
             {
-                foreach (var index in indices32)
+                foreach (var index in _indices32)
                     writer.Write(index);
             }
 
-            writer.Write(boneIndices?.Length ?? 0);
-            if (boneIndices != null)
+            writer.Write(_boneIndices?.Length ?? 0);
+            if (_boneIndices != null)
             {
-                foreach (var boneIndex in boneIndices)
+                foreach (var boneIndex in _boneIndices)
                 {
-                    //writer.Write(boneIndex.red);
-                    //writer.Write(boneIndex.green);
-                    //writer.Write(boneIndex.blue);
-                    //writer.Write(boneIndex.alpha);
                     writer.Write(boneIndex.X);
                     writer.Write(boneIndex.Y);
                     writer.Write(boneIndex.Z);
@@ -798,10 +797,10 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
                 }
             }
 
-            writer.Write(boneWeights?.Length ?? 0);
-            if (boneWeights != null)
+            writer.Write(_boneWeights?.Length ?? 0);
+            if (_boneWeights != null)
             {
-                foreach (var boneWeight in boneWeights)
+                foreach (var boneWeight in _boneWeights)
                 {
                     writer.Write(boneWeight.X);
                     writer.Write(boneWeight.Y);
@@ -849,79 +848,79 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         using (MemoryStream memoryStream = new MemoryStream(value["MeshData"].ByteArrayValue))
         using (BinaryReader reader = new BinaryReader(memoryStream))
         {
-            indexFormat = (IndexFormat)reader.ReadByte();
-            topology = (PrimitiveTopology)reader.ReadByte();
+            _indexFormat = (IndexFormat)reader.ReadByte();
+            _topology = (PrimitiveTopology)reader.ReadByte();
 
             var vertexCount = reader.ReadInt32();
-            vertices = new Vector3F[vertexCount];
+            _vertices = new Vector3F[vertexCount];
             for (int i = 0; i < vertexCount; i++)
-                vertices[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                _vertices[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
 
             var normalCount = reader.ReadInt32();
             if (normalCount > 0)
             {
-                normals = new Vector3F[normalCount];
+                _normals = new Vector3F[normalCount];
                 for (int i = 0; i < normalCount; i++)
-                    normals[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                    _normals[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
             }
 
             var tangentCount = reader.ReadInt32();
             if (tangentCount > 0)
             {
-                tangents = new Vector3F[tangentCount];
+                _tangents = new Vector3F[tangentCount];
                 for (int i = 0; i < tangentCount; i++)
-                    tangents[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                    _tangents[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
             }
 
             var colorCount = reader.ReadInt32();
             if (colorCount > 0)
             {
-                colors = new Color32[colorCount];
+                _colors = new Color32[colorCount];
                 for (int i = 0; i < colorCount; i++)
-                    colors[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
+                    _colors[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
             }
 
             var uvCount = reader.ReadInt32();
             if (uvCount > 0)
             {
-                uv = new Vector2F[uvCount];
+                _uv = new Vector2F[uvCount];
                 for (int i = 0; i < uvCount; i++)
-                    uv[i] = new Vector2F(reader.ReadSingle(), reader.ReadSingle());
+                    _uv[i] = new Vector2F(reader.ReadSingle(), reader.ReadSingle());
             }
 
             var uv2Count = reader.ReadInt32();
             if (uv2Count > 0)
             {
-                uv2 = new Vector2F[uv2Count];
+                _uv2 = new Vector2F[uv2Count];
                 for (int i = 0; i < uv2Count; i++)
-                    uv2[i] = new Vector2F(reader.ReadSingle(), reader.ReadSingle());
+                    _uv2[i] = new Vector2F(reader.ReadSingle(), reader.ReadSingle());
             }
 
             var indexCount = reader.ReadInt32();
             if (indexCount > 0)
             {
-                indices32 = new uint[indexCount];
+                _indices32 = new uint[indexCount];
                 for (int i = 0; i < indexCount; i++)
-                    indices32[i] = reader.ReadUInt32();
+                    _indices32[i] = reader.ReadUInt32();
             }
 
             var boneIndexCount = reader.ReadInt32();
             if (boneIndexCount > 0)
             {
-                boneIndices = new Vector4F[boneIndexCount];
+                _boneIndices = new Vector4F[boneIndexCount];
                 for (int i = 0; i < boneIndexCount; i++)
                 {
                     //boneIndices[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
-                    boneIndices[i] = new Vector4F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                    _boneIndices[i] = new Vector4F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 }
             }
 
             var boneWeightCount = reader.ReadInt32();
             if (boneWeightCount > 0)
             {
-                boneWeights = new Vector4F[boneWeightCount];
+                _boneWeights = new Vector4F[boneWeightCount];
                 for (int i = 0; i < boneWeightCount; i++)
-                    boneWeights[i] = new Vector4F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                    _boneWeights[i] = new Vector4F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
             }
 
             var bindPosesCount = reader.ReadInt32();
@@ -955,7 +954,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
                 }
             }
 
-            changed = true;
+            _changed = true;
         }
     }
 }
