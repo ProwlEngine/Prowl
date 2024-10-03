@@ -27,6 +27,9 @@ public struct RenderBatch
 {
     public Material material;
     public List<int> renderIndices;
+
+    public static implicit operator RenderBatch(KeyValuePair<Material, List<int>> pair)
+        => Unsafe.As<KeyValuePair<Material, List<int>>, RenderBatch>(ref pair); // Less safe but also easier
 }
 
 
@@ -76,7 +79,7 @@ public abstract class RenderPipeline : EngineObject
 
     public static IEnumerable<RenderBatch> EnumerateBatches()
     {
-        return s_batchedRenderables.Select(x => Unsafe.As<KeyValuePair<Material, List<int>>, RenderBatch>(ref x));
+        return s_batchedRenderables.Select(x => (RenderBatch)x);
     }
 
 
