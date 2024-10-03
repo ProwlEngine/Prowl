@@ -272,7 +272,7 @@ public class Project
 
         BoundedLog($"Exit Code: '{exitCode}'");
 
-        BoundedLog($"{(exitCode == 0 ? "Successfully" : "Failed to")} compile external assembly!");
+        BoundedLog($"{(exitCode == 0 ? "Successfully" : "Failed to")} compile external assembly.");
         return exitCode == 0;
     }
 
@@ -294,13 +294,13 @@ public class Project
 
     private static void GenerateCSProjectFiles(Project project, DirectoryInfo output)
     {
-        if (!HasProject) throw new Exception("No Project Loaded, Cannot generate CS Project Files!");
+        if (!HasProject) throw new Exception("No Project Loaded, Cannot generate CS Project Files.");
 
         Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
         Assembly gameEngineAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Runtime")
-            ?? throw new Exception("Failed to find Prowl.Runtime Assembly!");
+            ?? throw new Exception("Failed to find Prowl.Runtime Assembly.");
         Assembly gameEditorAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Editor")
-            ?? throw new Exception("Failed to find Prowl.Editor Assembly!");
+            ?? throw new Exception("Failed to find Prowl.Editor Assembly.");
 
         // Get all references by Prowl.Runtime
         var references = gameEngineAssembly.GetReferencedAssemblies().Select(Assembly.Load).ToList();

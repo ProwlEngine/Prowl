@@ -45,7 +45,7 @@ public struct Color : IEquatable<Color>
                 1 => g,
                 2 => b,
                 3 => a,
-                _ => throw new IndexOutOfRangeException("Invalid Color index!")
+                _ => throw new IndexOutOfRangeException("Invalid Color index.")
             };
 
         }
@@ -57,7 +57,7 @@ public struct Color : IEquatable<Color>
                 1 => g = value,
                 2 => b = value,
                 3 => a = value,
-                _ => throw new IndexOutOfRangeException("Invalid Color index!")
+                _ => throw new IndexOutOfRangeException("Invalid Color index.")
             };
         }
     }

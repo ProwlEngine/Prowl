@@ -77,7 +77,7 @@ public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiv
         {
             if (nodes.Where(n => n.GetType() == type).Count() >= attrib.max)
             {
-                Debug.LogError($"Only {attrib.max} nodes of type {type} are allowed in the graph!");
+                Debug.LogError($"Only {attrib.max} nodes of type {type} are allowed in the graph.");
                 return null;
             }
         }
@@ -126,7 +126,7 @@ public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiv
         {
             if (attrib.Requires(node.GetType()))
             {
-                Debug.LogError($"Cannot remove node of type {node.GetType()} from graph!");
+                Debug.LogError($"Cannot remove node of type {node.GetType()} from graph.");
                 return;
             }
         }

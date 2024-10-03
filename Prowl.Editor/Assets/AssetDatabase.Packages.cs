@@ -77,7 +77,7 @@ public static partial class AssetDatabase
             var asset = LoadAsset(assetGuid);
             if (asset == null)
             {
-                Debug.LogError($"Failed to load asset {assetGuid}!");
+                Debug.LogError($"Failed to load asset {assetGuid}.");
                 continue;
             }
 
@@ -373,8 +373,8 @@ public static partial class AssetDatabase
             switch (level)
             {
                 case LogLevel.Debug or LogLevel.Verbose or LogLevel.Minimal: Debug.Log(data); break;
-                case LogLevel.Warning:                                       Debug.LogWarning(data); break;
-                case LogLevel.Error:                                         Debug.LogError(data); break;
+                case LogLevel.Warning: Debug.LogWarning(data); break;
+                case LogLevel.Error: Debug.LogError(data); break;
             }
         }
 
@@ -389,8 +389,8 @@ public static partial class AssetDatabase
             switch (level)
             {
                 case LogLevel.Debug or LogLevel.Verbose or LogLevel.Minimal: Debug.Log(data); break;
-                case LogLevel.Warning:                                       Debug.LogWarning(data); break;
-                case LogLevel.Error:                                         Debug.LogError(data); break;
+                case LogLevel.Warning: Debug.LogWarning(data); break;
+                case LogLevel.Error: Debug.LogError(data); break;
             }
             return Task.CompletedTask;
         }

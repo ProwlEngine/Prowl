@@ -487,8 +487,8 @@ public static partial class AssetDatabase
         if (!File.Exists(serializedAssetPath.FullName))
             if (!Reimport(asset))
             {
-                Debug.LogError($"Failed to import {serializedAssetPath.FullName}!");
-                throw new Exception($"Failed to import {serializedAssetPath.FullName}");
+                Debug.LogError($"Failed to import {serializedAssetPath.FullName}.");
+                throw new Exception($"Failed to import {serializedAssetPath.FullName}.");
             }
         try
         {
@@ -506,7 +506,7 @@ public static partial class AssetDatabase
         }
         catch (Exception e)
         {
-            Debug.LogException(new Exception($"Failed to load serialized asset {serializedAssetPath.FullName}!", e));
+            Debug.LogException(new Exception($"Failed to load serialized asset {serializedAssetPath.FullName}.", e));
             return null; // Failed file might be in use?
         }
     }

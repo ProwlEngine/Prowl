@@ -597,7 +597,7 @@ public class ModelImporter : ScriptedImporter
             Debug.LogError($"Failed to load texture for model at path '{file.FullName}'");
             //// Ok so the texture isnt loaded, lets make sure it exists
             //if (!file.Exists)
-            //    throw new FileNotFoundException($"Texture file for model was not found!", file.FullName);
+            //    throw new FileNotFoundException($"Texture file for model was not found.", file.FullName);
             //
             //// Ok so we dont have it in the asset database but the file does infact exist
             //// so lets load it in as a sub asset to this object

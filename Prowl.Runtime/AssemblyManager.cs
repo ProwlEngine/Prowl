@@ -74,7 +74,7 @@ public static class AssemblyManager
         {
             if (i >= MAX_GC_ATTEMPTS)
             {
-                Debug.LogError($"Failed to unload external assemblies!");
+                Debug.LogError($"Failed to unload external assemblies.");
                 _externalAssemblyLoadContext = externalAssemblyLoadContextRef.Target as ExternalAssemblyLoadContext1;
                 return;
             }
@@ -83,7 +83,7 @@ public static class AssemblyManager
             GC.WaitForPendingFinalizers();
         }
 
-        Debug.LogSuccess($"Successfully unloaded external assemblies!");
+        Debug.LogSuccess($"Successfully unloaded external assemblies.");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

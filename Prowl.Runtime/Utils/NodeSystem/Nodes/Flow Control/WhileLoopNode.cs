@@ -24,7 +24,7 @@ public class WhileLoopNode : InOutFlowNode
 
             if (i > 1000)
             {
-                Error = "Max Loop Count (1000) hit!";
+                Error = "Max Loop Count (1000) hit.";
                 Debug.LogWarning("A While Loop node has reached its Loop Limit: " + Error);
                 break;
             }

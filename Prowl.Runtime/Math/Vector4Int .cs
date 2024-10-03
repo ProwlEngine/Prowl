@@ -42,7 +42,7 @@ public struct Vector4Int : IEquatable<Vector4Int>, IFormattable
                 case 2: return z;
                 case 3: return w;
                 default:
-                    throw new IndexOutOfRangeException("Invalid Vector2 index!");
+                    throw new IndexOutOfRangeException("Invalid Vector2 index.");
             }
         }
 
@@ -56,7 +56,7 @@ public struct Vector4Int : IEquatable<Vector4Int>, IFormattable
                 case 3: w = value; break;
 
                 default:
-                    throw new IndexOutOfRangeException("Invalid Vector2 index!");
+                    throw new IndexOutOfRangeException("Invalid Vector2 index.");
             }
         }
     }

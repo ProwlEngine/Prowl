@@ -106,7 +106,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
             13 => M24,
             14 => M34,
             15 => M44,
-            _ => throw new IndexOutOfRangeException("Invalid matrix index!"),
+            _ => throw new IndexOutOfRangeException("Invalid matrix index."),
         };
 
         set
@@ -131,7 +131,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
                 case 15: M44 = value; break;
 
                 default:
-                    throw new IndexOutOfRangeException("Invalid matrix index!");
+                    throw new IndexOutOfRangeException("Invalid matrix index.");
             }
         }
     }

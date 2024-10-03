@@ -159,7 +159,7 @@ public class AudioClipEditor : ScriptedEditor
 
             if (audioClip.Data == null)
             {
-                gui.TextNode("err", "Audio Data is Null!").ExpandWidth().Height(ItemSize);
+                gui.TextNode("err", "Audio Data is Null.").ExpandWidth().Height(ItemSize);
                 return;
             }
 

@@ -53,7 +53,7 @@ public class Desktop_Player : ProjectBuilder
         BoundedLog($"Compiling project assembly to {output.FullName}...");
         if (!Project.Compile(Project.Active.Assembly_Proj.FullName, output, configuration == Configuration.Release))
         {
-            Debug.LogError($"Failed to compile Project assembly!");
+            Debug.LogError($"Failed to compile Project assembly.");
             return;
         }
 
@@ -129,7 +129,7 @@ public class Desktop_Player : ProjectBuilder
             CleanupRuntimes(output);
 
         Debug.Log("**********************************************************************************************************************");
-        Debug.Log($"Successfully built project!");
+        Debug.Log($"Successfully built project.");
 
         // Open the Build folder
         AssetDatabase.OpenPath(output);

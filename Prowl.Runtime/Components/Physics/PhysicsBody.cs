@@ -158,7 +158,7 @@ public abstract class PhysicsBody : MonoBehaviour
                 if (collider.Container != null && collider.Container != this)
                 {
                     Debug.LogError("Collider is already attached to another container! Do you have a rigidbody as a child of another rigidbody?");
-                    throw new InvalidOperationException("Collider is already attached to another container!");
+                    throw new InvalidOperationException("Collider is already attached to another container.");
                 }
 
                 Vector3 localTranslation = Vector3.zero;

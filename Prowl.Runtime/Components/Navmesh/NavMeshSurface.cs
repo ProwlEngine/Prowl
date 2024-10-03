@@ -352,7 +352,7 @@ public class NavMeshSurface : MonoBehaviour
     public void RegisterAgent(NavMeshAgent agent)
     {
         ArgumentNullException.ThrowIfNull(agent);
-        if (!ready) throw new InvalidOperationException("Cannot register NavMeshAgent to a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+        if (!ready) throw new InvalidOperationException("Cannot register NavMeshAgent to a NavMeshSurface that has no NavMesh or hasn't been initialized.");
 
         agent.InternalAgent = crowd.AddAgent(ToRC(agent.Transform.position), agent.GetAgentParams());
         agents.Add(agent);
@@ -361,7 +361,7 @@ public class NavMeshSurface : MonoBehaviour
     public void UnregisterAgent(NavMeshAgent agent)
     {
         ArgumentNullException.ThrowIfNull(agent);
-        if (!ready) throw new InvalidOperationException("Cannot unregister NavMeshAgent to a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+        if (!ready) throw new InvalidOperationException("Cannot unregister NavMeshAgent to a NavMeshSurface that has no NavMesh or hasn't been initialized.");
 
         crowd.RemoveAgent(agent.InternalAgent);
         agent.InternalAgent = null;
@@ -370,7 +370,7 @@ public class NavMeshSurface : MonoBehaviour
 
     public void MoveAllToTarget(RcVec3f pos, bool adjust)
     {
-        if (!ready) throw new InvalidOperationException("Cannot set move target on a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+        if (!ready) throw new InvalidOperationException("Cannot set move target on a NavMeshSurface that has no NavMesh or hasn't been initialized.");
 
         foreach (var ag in agents)
             MoveToTarget(ag, pos, adjust);
@@ -380,7 +380,7 @@ public class NavMeshSurface : MonoBehaviour
     {
         ArgumentNullException.ThrowIfNull(agent);
         ArgumentNullException.ThrowIfNull(agent.InternalAgent);
-        if (!ready) throw new InvalidOperationException("Cannot set move target on a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+        if (!ready) throw new InvalidOperationException("Cannot set move target on a NavMeshSurface that has no NavMesh or hasn't been initialized.");
 
         RcVec3f ext = crowd.GetQueryExtents();
         IDtQueryFilter filter = crowd.GetFilter(0);

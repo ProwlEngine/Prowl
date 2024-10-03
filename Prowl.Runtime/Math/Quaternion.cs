@@ -40,7 +40,7 @@ public struct Quaternion : IEquatable<Quaternion>
                 case 2: return z;
                 case 3: return w;
                 default:
-                    throw new IndexOutOfRangeException("Invalid Quaternion index!");
+                    throw new IndexOutOfRangeException("Invalid Quaternion index.");
             }
         }
 
@@ -53,7 +53,7 @@ public struct Quaternion : IEquatable<Quaternion>
                 case 2: z = value; break;
                 case 3: w = value; break;
                 default:
-                    throw new IndexOutOfRangeException("Invalid Quaternion index!");
+                    throw new IndexOutOfRangeException("Invalid Quaternion index.");
             }
         }
     }

@@ -162,7 +162,7 @@ public abstract class MonoBehaviour : EngineObject
     }
 
     #region Behaviour
-    
+
     // Lifecycle methods
 
     /// <summary>
@@ -286,7 +286,7 @@ public abstract class MonoBehaviour : EngineObject
         var method = GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
         if (method == null)
         {
-            Debug.LogError("Coroutine '" + methodName + "' couldn't be started, the method doesn't exist!");
+            Debug.LogError("Coroutine '" + methodName + "' couldn't be started, the method doesn't exist.");
             return null;
         }
 

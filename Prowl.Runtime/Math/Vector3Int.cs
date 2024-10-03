@@ -40,7 +40,7 @@ public struct Vector3Int : IEquatable<Vector3Int>, IFormattable
                 case 1: return y;
                 case 2: return z;
                 default:
-                    throw new IndexOutOfRangeException("Invalid Vector3 index!");
+                    throw new IndexOutOfRangeException("Invalid Vector3 index.");
             }
         }
 
@@ -52,7 +52,7 @@ public struct Vector3Int : IEquatable<Vector3Int>, IFormattable
                 case 1: y = value; break;
                 case 2: z = value; break;
                 default:
-                    throw new IndexOutOfRangeException("Invalid Vector3 index!");
+                    throw new IndexOutOfRangeException("Invalid Vector3 index.");
             }
         }
     }
