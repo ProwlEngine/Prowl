@@ -251,9 +251,9 @@ public static partial class StringTagConverter
         return parser.TokenType switch
         {
             TextTokenType.BeginCompound => ReadCompoundTag(parser),
-            TextTokenType.BeginList     => ReadListTag(parser),
-            TextTokenType.BeginArray    => ReadArrayTag(parser),
-            TextTokenType.Value         => ReadValueTag(parser),
+            TextTokenType.BeginList => ReadListTag(parser),
+            TextTokenType.BeginArray => ReadArrayTag(parser),
+            TextTokenType.Value => ReadValueTag(parser),
             _ => throw new InvalidDataException(
                 $"Invalid token \"{parser.Token}\" found while reading a property at position {parser.TokenPosition}")
         };
@@ -435,8 +435,7 @@ public static partial class StringTagConverter
         private TextTokenType HandleOpenBracket()
         {
             if (_tokenizer.InputPosition + 2 < _tokenizer.Input.Length &&
-                _tokenizer.Input.Span[_tokenizer.InputPosition + 1] == ';' &&
-                _tokenizer.Input.Span[_tokenizer.InputPosition + 2] == ']')
+                _tokenizer.Input.Span[_tokenizer.InputPosition + 2] == ';')
             {
                 _tokenizer.TokenMemory = _tokenizer.Input.Slice(_tokenizer.TokenPosition, 3);
                 _tokenizer.IncrementInputPosition(3);
