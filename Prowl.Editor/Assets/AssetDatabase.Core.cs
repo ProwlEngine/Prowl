@@ -154,8 +154,8 @@ public static partial class AssetDatabase
         // Defer the Reimports untill after all Meta files are loaded/updated
         foreach (var file in toReimport)
         {
-            Reimport(new(file));
-            Debug.Log("Reimported: " + $"{ToRelativePath(new(file))}!");
+            if (Reimport(new(file)))
+                Debug.Log("Reimported: " + $"{ToRelativePath(new(file))}!");
         }
 
         if (doUnload)
