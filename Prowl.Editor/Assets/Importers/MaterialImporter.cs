@@ -35,8 +35,8 @@ public class MaterialImporter : ScriptedImporter
 [CustomEditor(typeof(MaterialImporter))]
 public class MaterialImporterEditor : ScriptedEditor
 {
-    private Material _editingMaterial;
-    private MaterialEditor _editor;
+    private Material? _editingMaterial;
+    private MaterialEditor? _editor;
 
 
     public override void OnEnable()

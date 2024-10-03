@@ -464,9 +464,11 @@ public class SceneViewWindow : EditorWindow
         double width = (vertical ? buttonSize : buttonSize * buttonCount) + 8;
         double height = (vertical ? buttonSize * buttonCount : buttonSize) + 8;
 
+        Color bgColor = new Color(0.1f, 0.1f, 0.1f, 0.5f);
+
         using (gui.Node("VpSettings").TopLeft(5).Scale(width, height).Padding(4).Layout(vertical ? LayoutType.Column : LayoutType.Row).Enter())
         {
-            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), (float)EditorStylePrefs.Instance.WindowRoundness);
+            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, bgColor, (float)EditorStylePrefs.Instance.WindowRoundness);
 
             using (gui.Node("EditorCam").Scale(buttonSize).Enter())
             {
@@ -486,7 +488,10 @@ public class SceneViewWindow : EditorWindow
             style.BGColor = Color.clear;
             style.BorderColor = Color.clear;
 
-            if (gui.Combo("GridType", "_GridTypePopup", ref gridTypeIndex, Enum.GetNames(typeof(GridType)), 0, 0, buttonSize, buttonSize, style, EditorGUI.GetInputStyle(), FontAwesome6.TableCells))
+            Gui.WidgetStyle popupStyle = style;
+            popupStyle.BGColor = bgColor;
+
+            if (gui.Combo("GridType", "_GridTypePopup", ref gridTypeIndex, Enum.GetNames(typeof(GridType)), 0, 0, buttonSize, buttonSize, style, popupStyle, FontAwesome6.TableCells))
                 SceneViewPreferences.Instance.GridType = (GridType)gridTypeIndex;
 
             using (gui.Node("GizmoMode").Scale(buttonSize).Enter())

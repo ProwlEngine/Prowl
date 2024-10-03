@@ -205,7 +205,7 @@ public class GameObjectEditor : ScriptedEditor
                         gui.SetNodeStorage(gui.CurrentNode.Parent, openedID, compOpened);
                     }
 
-                    DragnDrop.Drag((MonoBehaviour)comp, comp!.GetType());
+                    DragnDrop.Drag(comp, comp!.GetType());
 
                     var rect = gui.CurrentNode.LayoutData.InnerRect;
                     string cname = GetComponentDisplayName(cType);
@@ -255,7 +255,7 @@ public class GameObjectEditor : ScriptedEditor
                         }
                         else
                         {
-                            var editorType = CustomEditorAttribute.GetEditor(cType);
+                            var editorType = GetEditorType(cType);
                             if (editorType != null)
                             {
                                 editor = Activator.CreateInstance(editorType) as ScriptedEditor;

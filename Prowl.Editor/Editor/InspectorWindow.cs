@@ -111,7 +111,7 @@ public class InspectorWindow : EditorWindow
                             var meta = MetaFile.Load(path);
                             if (meta != null)
                             {
-                                Type? editorType = CustomEditorAttribute.GetEditor(meta.importer.GetType());
+                                Type? editorType = ScriptedEditor.GetEditorType(meta.importer.GetType());
                                 if (editorType != null)
                                 {
                                     customEditor = (path, (ScriptedEditor)Activator.CreateInstance(editorType));
@@ -152,7 +152,7 @@ public class InspectorWindow : EditorWindow
                 if (customEditor == null)
                 {
                     // Just selected a new object create the editor
-                    Type? editorType = CustomEditorAttribute.GetEditor(Selected.GetType());
+                    Type? editorType = ScriptedEditor.GetEditorType(Selected.GetType());
                     if (editorType != null)
                     {
                         customEditor = (Selected, (ScriptedEditor)Activator.CreateInstance(editorType));

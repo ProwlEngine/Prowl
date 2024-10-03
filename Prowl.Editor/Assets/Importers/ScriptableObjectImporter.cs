@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Editor.Preferences;
+using Prowl.Editor.ScriptedEditors;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
@@ -22,19 +23,24 @@ public class ScriptableObjectImporter : ScriptedImporter
 [CustomEditor(typeof(ScriptableObjectImporter))]
 public class ScriptableObjectImporterEditor : ScriptedEditor
 {
-    ScriptableObject? scriptObject;
+    private ScriptableObject? _editingObject;
+    private ScriptedEditor? _objectEditor;
+
+    public override void OnEnable()
+    {
+        SerializedProperty tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
+        _editingObject = Serializer.Deserialize<ScriptableObject>(tag);
+        _objectEditor = null; // Replace this to load a Scripta
+    }
+
 
     public override void OnInspectorGUI()
     {
-        var importer = (ScriptableObjectImporter)(target as MetaFile).importer;
-
         try
         {
             bool changed = false;
 
-            scriptObject ??= Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
-
-            object t = scriptObject;
+            object t = _editingObject;
             changed |= EditorGUI.PropertyGrid("CompPropertyGrid", ref t,
                 EditorGUI.TargetFields.Serializable | EditorGUI.TargetFields.Properties,
                 EditorGUI.PropertyGridConfig.NoHeader | EditorGUI.PropertyGridConfig.NoBorder | EditorGUI.PropertyGridConfig.NoBackground);
@@ -44,8 +50,8 @@ public class ScriptableObjectImporterEditor : ScriptedEditor
 
             if (changed)
             {
-                scriptObject.OnValidate();
-                StringTagConverter.WriteToFile(Serializer.Serialize(scriptObject), (target as MetaFile).AssetPath);
+                _editingObject.OnValidate();
+                StringTagConverter.WriteToFile(Serializer.Serialize(_editingObject), (target as MetaFile).AssetPath);
                 AssetDatabase.Reimport((target as MetaFile).AssetPath);
             }
         }
