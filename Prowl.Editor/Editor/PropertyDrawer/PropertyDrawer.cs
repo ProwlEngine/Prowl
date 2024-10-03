@@ -135,7 +135,9 @@ public class DrawerAttribute(Type type) : Attribute
                 if (gui.IsNodePressed())
                 {
                     gui.OpenPopup("Create_Interface");
-                    implementationTypes = RuntimeUtils.FindTypesImplementing(propertyType);
+
+                    // Ignore generics since we can't instantiate them
+                    implementationTypes = RuntimeUtils.FindTypesImplementing(propertyType, true);
                 }
                 else if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);

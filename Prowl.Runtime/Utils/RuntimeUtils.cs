@@ -112,22 +112,25 @@ public static class RuntimeUtils
     {
         var assemblies = AppDomain.CurrentDomain.GetAssemblies();
         foreach (var assembly in assemblies)
-        foreach (var type in assembly.GetTypes())
-            if (type.GetCustomAttributes(typeof(T), true).Length > 0)
-                yield return type;
+            foreach (var type in assembly.GetTypes())
+                if (type.GetCustomAttributes(typeof(T), true).Length > 0)
+                    yield return type;
     }
 
-    public static List<Type> FindTypesImplementing(Type propertyType)
+    public static List<Type> FindTypesImplementing(Type propertyType, bool ignoreGenerics = false)
     {
         List<Type> types = [];
         foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
         {
             foreach (Type type in asm.GetTypes())
             {
-                if (propertyType.IsAssignableFrom(type) && !type.IsAbstract && !type.IsInterface)
-                {
-                    types.Add(type);
-                }
+                if (!propertyType.IsAssignableFrom(type) || type.IsAbstract || type.IsInterface)
+                    continue;
+
+                if (ignoreGenerics && type.IsGenericType)
+                    continue;
+
+                types.Add(type);
             }
         }
         return types;
