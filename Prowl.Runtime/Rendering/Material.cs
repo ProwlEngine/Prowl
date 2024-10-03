@@ -105,6 +105,19 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     }
 
 
+    public bool GetProperty(string name, out ShaderProperty value)
+    {
+        if (_propertyLookup.TryGetValue(name, out int val))
+        {
+            value = _serializedProperties[val];
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+
     public void SyncPropertyBlock()
     {
         foreach (ShaderProperty prop in _serializedProperties)
