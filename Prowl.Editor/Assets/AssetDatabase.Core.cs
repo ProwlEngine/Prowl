@@ -155,7 +155,7 @@ public static partial class AssetDatabase
         foreach (var file in toReimport)
         {
             Reimport(new(file));
-            Debug.Log("Imported: " + $"{ToRelativePath(new(file))}!");
+            // Debug.Log("Imported: " + $"{ToRelativePath(new(file))}!");
         }
 
         if (doUnload)
@@ -330,7 +330,7 @@ public static partial class AssetDatabase
     /// <returns>True if the asset was reimported successfully, false otherwise.</returns>
     public static bool Reimport(FileInfo assetFile, bool disposeExisting = true)
     {
-        Debug.Log($"Attempting to Import {Path.GetRelativePath(Project.Active.ProjectPath, assetFile.FullName)}!");
+        Debug.Log($"Reimporting {Path.GetRelativePath(Project.Active.ProjectPath, assetFile.FullName)}!");
         ArgumentNullException.ThrowIfNull(assetFile);
 
         // Dispose if we already have it
