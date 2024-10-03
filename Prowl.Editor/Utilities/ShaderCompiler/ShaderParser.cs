@@ -328,8 +328,8 @@ public static partial class ShaderParser
                 ShaderPropertyType.Vector4 => Vector4.zero,
                 ShaderPropertyType.Color => Color.white,
                 ShaderPropertyType.Matrix => Matrix4x4.Identity,
-                ShaderPropertyType.Texture2D => new AssetRef<Texture2D>(Texture2D.EmptyWhite),
-                ShaderPropertyType.Texture3D => new AssetRef<Texture3D>(Texture3D.EmptyWhite),
+                ShaderPropertyType.Texture2D => Texture2D.White,
+                ShaderPropertyType.Texture3D => new AssetRef<Texture3D>(Texture3D.White),
                 _ => throw new Exception($"Invalid property type") // Should never execute unless EnumParse() breaks.
             };
 
@@ -951,9 +951,13 @@ public static partial class ShaderParser
     {
         return texture switch
         {
-            "white" => Texture2D.EmptyWhite,
-            "gray" or "grey" => Texture2D.EmptyWhite,
-            "clear" => Texture2D.Empty,
+            "white" => Texture2D.White,
+            "gray" or "grey" => Texture2D.Gray,
+            "grid" => Texture2D.Grid,
+            "black" => Texture2D.Black,
+            "red" => Texture2D.Red,
+            "normal" => Texture2D.Normal,
+            "surface" => Texture2D.Surface,
             _ => throw new ParseException("texture 2d", $"unknown texture default: {texture}")
         };
     }
@@ -963,9 +967,8 @@ public static partial class ShaderParser
     {
         return texture switch
         {
-            "white" => Texture3D.EmptyWhite,
-            "gray" or "grey" => Texture3D.EmptyWhite,
-            "clear" => Texture3D.Empty,
+            "white" => Texture3D.White,
+            "gray" or "grey" => Texture3D.White,
             _ => throw new ParseException("texture 3d", $"unknown texture default: {texture}")
         };
     }

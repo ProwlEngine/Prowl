@@ -31,7 +31,7 @@ public class DefaultRenderPipeline : RenderPipeline
         s_skybox ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ProceduralSky.shader"));
         s_gizmo ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Gizmo.shader"));
 
-        s_whiteTexture ??= Texture2D.EmptyWhite;
+        s_whiteTexture ??= Texture2D.White;
 
         if (s_skyDome == null)
         {
