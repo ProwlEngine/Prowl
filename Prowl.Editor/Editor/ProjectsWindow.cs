@@ -373,11 +373,13 @@ public class ProjectsWindow : EditorWindow
 
             if (!project.IsValid())
             {
-                using (gui.Node("WarningLabel").Width(35).ExpandHeight().Enter())
+                using (gui.Node("WarningLabel").Width(40).ExpandHeight().Enter())
                 {
                     Interactable warnInteract = gui.GetInteractable();
 
-                    gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.TriangleExclamation, 35, gui.CurrentNode.LayoutData.Rect, Color.yellow);
+                    Rect wrect = gui.CurrentNode.LayoutData.Rect;
+                    wrect.y += 1;
+                    gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.TriangleExclamation, 35, wrect, Color.yellow);
 
                     Vector2 warningPos = gui.CurrentNode.LayoutData.Rect.Position;
                     warningPos.y += gui.CurrentNode.LayoutData.Rect.height / 2;
@@ -399,7 +401,8 @@ public class ProjectsWindow : EditorWindow
 
                 gui.Draw2D.DrawText(Font.DefaultFont, path, 20, rect.Position + new Vector2(8, 22), Color.white * 0.5f);
 
-                gui.Draw2D.DrawText(Font.DefaultFont, GetFormattedLastModifiedTime(project.ProjectDirectory.LastAccessTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
+                if (project.IsValid())
+                    gui.Draw2D.DrawText(Font.DefaultFont, GetFormattedLastModifiedTime(project.ProjectDirectory.LastAccessTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
             }
 
             using (gui.Node("RemoveProject").Scale(20).Top(10).Enter())
