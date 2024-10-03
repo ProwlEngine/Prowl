@@ -212,7 +212,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         else
             stateChar = '_';
 
-        return string.Format("[{2}] {0}", resType.Name, stateChar);
+        return $"[{stateChar}] {resType.Name}";
     }
 
     public override bool Equals(object? obj)
