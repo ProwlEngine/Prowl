@@ -51,9 +51,6 @@ public abstract class Texture : EngineObject, ISerializable
     /// <summary>The internal <see cref="Veldrid.Texture"/> representation.</summary>
     internal Veldrid.Texture InternalTexture { get; private set; }
 
-    /// <inheritdoc cref="Veldrid.TextureView"/>
-    internal TextureView TextureView { get; private set; }
-
     private Veldrid.Texture stagingTexture = null;
 
 
@@ -76,12 +73,10 @@ public abstract class Texture : EngineObject, ISerializable
     public override void OnDispose()
     {
         InternalTexture?.Dispose();
-        TextureView?.Dispose();
 
         stagingTexture?.Dispose();
 
         InternalTexture = null;
-        TextureView = null;
         stagingTexture = null;
 
         Sampler?.Dispose();
@@ -128,21 +123,6 @@ public abstract class Texture : EngineObject, ISerializable
         InternalTexture = Graphics.Factory.CreateTexture(description);
         InternalTexture.Name = Name;
 
-        TextureViewDescription viewDescription = new()
-        {
-            ArrayLayers = description.ArrayLayers,
-            BaseArrayLayer = 0,
-            MipLevels = description.MipLevels,
-            BaseMipLevel = 0,
-            Format = description.Format,
-            Target = InternalTexture
-        };
-
-        if (description.Usage.HasFlag(TextureUsage.Sampled) || description.Usage.HasFlag(TextureUsage.Storage))
-            TextureView = Graphics.Factory.CreateTextureView(in viewDescription);
-        else
-            TextureView = null;
-
         IsMipmapped = false;
         OwnsTexture = true;
     }
@@ -154,21 +134,6 @@ public abstract class Texture : EngineObject, ISerializable
         InternalTexture = resource;
         IsMipmapped = false;
         OwnsTexture = false;
-
-        TextureViewDescription viewDescription = new()
-        {
-            ArrayLayers = resource.ArrayLayers,
-            BaseArrayLayer = 0,
-            MipLevels = resource.MipLevels,
-            BaseMipLevel = 0,
-            Format = resource.Format,
-            Target = InternalTexture
-        };
-
-        if (resource.Usage.HasFlag(TextureUsage.Sampled) || resource.Usage.HasFlag(TextureUsage.Storage))
-            TextureView = Graphics.Factory.CreateTextureView(in viewDescription);
-        else
-            TextureView = null;
     }
 
     protected unsafe void InternalSetDataPtr(void* data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel)
