@@ -22,6 +22,7 @@ public static partial class Graphics
 
     public static Vector2Int TargetResolution => new Vector2(ScreenTarget.Width, ScreenTarget.Height);
 
+    public static bool IsDX11 => Device.BackendType == GraphicsBackend.Direct3D11;
     public static bool IsOpenGL => Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES;
     public static bool IsVulkan => Device.BackendType == GraphicsBackend.Vulkan;
 
