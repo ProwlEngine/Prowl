@@ -166,6 +166,9 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     internal void SetShader(AssetRef<Shader> shader)
     {
+        if (shader == _shader)
+            return;
+
         _shader = shader;
 
         _serializedProperties ??= [];
@@ -188,8 +191,8 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     {
         _propertyLookup ??= [];
 
-        foreach (ShaderProperty prop in _serializedProperties)
-            _propertyLookup.Add(prop.Name, _serializedProperties.Count - 1);
+        for (int i = 0; i < _serializedProperties.Count; i++)
+            _propertyLookup.Add(_serializedProperties[i].Name, i);
 
         SyncPropertyBlock();
     }
