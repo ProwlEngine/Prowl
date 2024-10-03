@@ -154,8 +154,7 @@ public static partial class AssetDatabase
         // Defer the Reimports untill after all Meta files are loaded/updated
         foreach (var file in toReimport)
         {
-            if (Reimport(new(file)))
-                Debug.Log("Reimported: " + $"{ToRelativePath(new(file))}!");
+            Reimport(new(file));
         }
 
         if (doUnload)
@@ -330,7 +329,6 @@ public static partial class AssetDatabase
     /// <returns>True if the asset was reimported successfully, false otherwise.</returns>
     public static bool Reimport(FileInfo assetFile, bool disposeExisting = true)
     {
-        // Debug.Log($"Reimporting {Path.GetRelativePath(Project.Active.ProjectPath, assetFile.FullName)}!");
         ArgumentNullException.ThrowIfNull(assetFile);
 
         // Dispose if we already have it
@@ -396,6 +394,8 @@ public static partial class AssetDatabase
 
         meta.dependencies = dependencies.ToList();
         meta.Save();
+
+        Debug.Log($"Reimported {Path.GetRelativePath(Project.Active.ProjectPath, assetFile.FullName)}!");
         return true;
     }
 
