@@ -264,15 +264,16 @@ public class ProjectsWindow : EditorWindow
 
                 if (closeInteract.TakeFocus())
                 {
-                    gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, 5, CornerRounding.All);
+                    gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
                     _createTabOpen = false;
                 }
                 else if (closeInteract.IsHovered())
-                    gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Hovering, 5, CornerRounding.All);
+                    gui.Draw2D.DrawRectFilled(rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
 
-                rect.x += 1;
-                rect.y += 1; // Xmark icon is offset upwards by a single pixel in the font, so we apply a teeny tiny offset to align it.
-                gui.Draw2D.DrawText(FontAwesome6.Xmark, 30, rect);
+                Rect xrect = gui.CurrentNode.LayoutData.Rect;
+                xrect.x += 1;
+                xrect.y += 1;
+                gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.Xmark, 30, xrect, Color.white);
             }
         }
 
@@ -401,10 +402,10 @@ public class ProjectsWindow : EditorWindow
                 gui.Draw2D.DrawText(Font.DefaultFont, GetFormattedLastModifiedTime(project.ProjectDirectory.LastAccessTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
             }
 
-            using (gui.Node("RemoveProject").Scale(20).Top(9).Enter())
+            using (gui.Node("RemoveProject").Scale(20).Top(10).Enter())
             {
                 gui.CurrentNode.IgnoreLayout();
-                gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 7.5));
+                gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 10));
 
                 Interactable removeInteract = gui.GetInteractable();
 
@@ -418,7 +419,9 @@ public class ProjectsWindow : EditorWindow
                 else if (removeInteract.IsHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
 
-                gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.Xmark, 25, gui.CurrentNode.LayoutData.Rect, Color.white);
+                Rect xrect = gui.CurrentNode.LayoutData.Rect;
+                xrect.y += 1;
+                gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.Xmark, 25, xrect, Color.white);
             }
         }
     }
