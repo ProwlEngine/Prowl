@@ -12,17 +12,17 @@
 
 <span id="readme-top"></span>
 
-1. [About The Project](#span-aligncenter-about-the-project-)
-2. [Features](#span-aligncenter-features-span)
-3. [Getting Started](#span-aligncenter-getting-started-span)
+1. [About The Project](#-about-the-project-)
+2. [Features](#-features-)
+3. [Getting Started](#-getting-started-)
    * [Prerequisites](#prerequisites)
    * [Installation](#installation)
-4. [Roadmap](#span-aligncenter-roadmap-span)
-5. [Contributing](#span-aligncenter-contributing-span)
-6. [Acknowledgments](#span-aligncenter-acknowledgments-span)
+4. [Roadmap](#-roadmap-)
+5. [Contributing](#-contributing-)
+6. [Acknowledgments](#-acknowledgments-)
    * [Prerequisites](#contributors-)
    * [Dependencies](#dependencies-)
-7. [License](#span-aligncenter-license-span)
+7. [License](#-license-)
 
 # <span align="center">📝 About The Project 📝
 
