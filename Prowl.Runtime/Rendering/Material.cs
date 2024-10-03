@@ -79,7 +79,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public void SetFloat(string name, float value) => _properties.SetFloat(name, value);
     public void SetInt(string name, int value) => _properties.SetInt(name, value);
     public void SetMatrix(string name, Matrix4x4F value) => _properties.SetMatrix(name, value);
-    public void SetTexture(string name, AssetRef<Texture> value) => _properties.SetTexture(name, value);
+    public void SetTexture(string name, Texture value) => _properties.SetTexture(name, value);
 
 
     public void SetFloatArray(string name, float[] values) => _properties.SetFloatArray(name, values);

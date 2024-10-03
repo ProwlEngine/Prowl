@@ -64,21 +64,21 @@ public class BindableResourceSet
                     break;
 
                 case ResourceKind.TextureReadOnly:
-                    Veldrid.Texture texture = GetTexture(uniform.name, state, TextureUsage.Sampled, Texture2D.White, out _);
+                    Veldrid.Texture texture = GetTexture(uniform.name, state, TextureUsage.Sampled, Texture2D.White.Res, out _);
 
                     UpdateResource(texture, uniform.binding, ref recreateResourceSet);
 
                     break;
 
                 case ResourceKind.TextureReadWrite:
-                    Veldrid.Texture rwtexture = GetTexture(uniform.name, state, TextureUsage.Storage, Texture2D.EmptyRW, out _);
+                    Veldrid.Texture rwtexture = GetTexture(uniform.name, state, TextureUsage.Storage, Texture2D.EmptyRW.Res, out _);
 
                     UpdateResource(rwtexture, uniform.binding, ref recreateResourceSet);
 
                     break;
 
                 case ResourceKind.Sampler:
-                    GetTexture(SliceSampler((uniform.name)), state, TextureUsage.Sampled, Texture2D.White, out Sampler sampler);
+                    GetTexture(SliceSampler((uniform.name)), state, TextureUsage.Sampled, Texture2D.White.Res, out Sampler sampler);
 
                     UpdateResource(sampler, uniform.binding, ref recreateResourceSet);
 

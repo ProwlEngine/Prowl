@@ -231,8 +231,8 @@ public class CommandBuffer : IDisposable
     public void SetWireframe(bool wireframe)
         => _fill = wireframe ? PolygonFillMode.Wireframe : PolygonFillMode.Solid;
 
-    public void SetTexture(string name, AssetRef<Texture> texture)
-        => _bufferProperties.SetTexture(name, texture.Res);
+    public void SetTexture(string name, Texture texture)
+        => _bufferProperties.SetTexture(name, texture);
 
     public void SetTexture(string name, Veldrid.Texture texture)
         => _bufferProperties.SetRawTexture(name, texture);

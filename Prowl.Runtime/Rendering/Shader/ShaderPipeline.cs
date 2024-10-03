@@ -156,10 +156,10 @@ public sealed partial class ShaderPipeline : IDisposable
         buffer = null;
 
         if (uniform.kind == ResourceKind.TextureReadOnly)
-            return Texture2D.Empty.TextureView;
+            return Texture2D.White.Res.InternalTexture;
 
         if (uniform.kind == ResourceKind.TextureReadWrite)
-            return Texture2D.EmptyRW.TextureView;
+            return Texture2D.EmptyRW.Res.InternalTexture;
 
         if (uniform.kind == ResourceKind.Sampler)
             return Graphics.Device.PointSampler;

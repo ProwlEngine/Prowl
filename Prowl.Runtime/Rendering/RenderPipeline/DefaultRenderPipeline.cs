@@ -18,7 +18,6 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material s_skybox;
     private static Material s_gizmo;
     private static Mesh s_skyDome;
-    private static Texture2D s_whiteTexture;
 
     public static DefaultRenderPipeline Default = new();
 
@@ -30,8 +29,6 @@ public class DefaultRenderPipeline : RenderPipeline
         s_defaultMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
         s_skybox ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ProceduralSky.shader"));
         s_gizmo ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Gizmo.shader"));
-
-        s_whiteTexture ??= Texture2D.White;
 
         if (s_skyDome == null)
         {
@@ -164,7 +161,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 // The vertices have already been transformed by the gizmo system to be camera relative (if needed) so we just need to draw them
                 buffer.SetMatrix("_Matrix_VP", vp.ToFloat());
 
-                buffer.SetTexture("_MainTexture", s_whiteTexture);
+                buffer.SetTexture("_MainTexture", Texture2D.White.Res);
                 buffer.SetMaterial(s_gizmo);
                 if (wire != null) buffer.DrawSingle(wire);
                 if (solid != null) buffer.DrawSingle(solid);

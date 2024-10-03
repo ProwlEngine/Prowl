@@ -110,8 +110,8 @@ public class PropertyState
 
     public void SetMatrix(string name, Matrix4x4F value)
         => WriteData(name, value, ValueType.Float, 4, 4);
-    public void SetTexture(string name, AssetRef<Texture> value)
-        => _textures[name] = (value.Res.InternalTexture, value.Res.Sampler.InternalSampler);
+    public void SetTexture(string name, Texture value)
+        => _textures[name] = (value.InternalTexture, value.Sampler.InternalSampler);
 
     public void SetRawTexture(string name, Veldrid.Texture value, Veldrid.Sampler? sampler = null)
         => _textures[name] = (value, sampler);
