@@ -60,7 +60,7 @@ public abstract class Texture : EngineObject, ISerializable
 
     internal Texture() : base("New Texture") { }
 
-    internal Texture(TextureDescription description) : base("New Texture")
+    internal Texture(TextureDescription description) : this()
     {
         RecreateInternalTexture(description);
     }
