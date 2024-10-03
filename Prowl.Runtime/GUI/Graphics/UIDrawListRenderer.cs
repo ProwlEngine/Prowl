@@ -52,7 +52,7 @@ public static class UIDrawListRenderer
         s_initialized = true;
         s_handling = handling;
 
-        CreateDeviceResources(outputDescription, handling);
+        CreateDeviceResources(outputDescription);
 
         GetResourceSet(Font.DefaultFont.Texture);
     }
@@ -69,10 +69,8 @@ public static class UIDrawListRenderer
     }
 
 
-    private static void CreateDeviceResources(OutputDescription outputDescription, ColorSpaceHandling handling)
+    private static void CreateDeviceResources(OutputDescription outputDescription)
     {
-        s_handling = handling;
-
         ResourceFactory factory = Runtime.Graphics.Factory;
 
         EnsureBuffer(ref s_vertexBuffer, 10000, BufferUsage.VertexBuffer | BufferUsage.DynamicWrite, "UI Vertex Buffer");
