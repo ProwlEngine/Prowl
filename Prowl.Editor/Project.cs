@@ -313,7 +313,7 @@ public class Project
 
         List<FileInfo> nonEditorScripts = new();
         List<FileInfo> editorScripts = new();
-        Stack<DirectoryInfo> directoriesToProcess = new(project.AssetDirectory.GetDirectories());
+        Stack<DirectoryInfo> directoriesToProcess = new([project.AssetDirectory]);
 
         while (directoriesToProcess.Count > 0)
         {
@@ -322,11 +322,15 @@ public class Project
             foreach (DirectoryInfo subdirectory in directory.GetDirectories())
                 directoriesToProcess.Push(subdirectory);
 
+            Runtime.Debug.Log("Searching directory: " + directory.Name);
+
             if (string.Equals(directory.Name, "Editor", StringComparison.OrdinalIgnoreCase))
                 editorScripts.AddRange(directory.GetFiles("*.cs"));
             else
                 nonEditorScripts.AddRange(directory.GetFiles("*.cs"));
         }
+
+        Runtime.Debug.Log("Scripts: " + string.Join(" ", nonEditorScripts));
 
         string propertyGroupTemplate =
             @$"<PropertyGroup>
