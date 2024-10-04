@@ -43,9 +43,11 @@ public static class AssemblyManager
         try
         {
             _externalAssemblyLoadContext ??= new ExternalAssemblyLoadContext1();
-            _externalAssemblyLoadContext.LoadFromAssemblyPath(assemblyPath);
+            Assembly asm = _externalAssemblyLoadContext.LoadFromAssemblyPath(assemblyPath);
+
             if (isDependency)
                 _externalAssemblyLoadContext.AddDependency(assemblyPath);
+
             Debug.LogSuccess($"Successfully loaded external assembly from {assemblyPath}");
         }
         catch (Exception ex)
@@ -55,7 +57,7 @@ public static class AssemblyManager
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void Unload()
+    public static void Unload(Action? onFail = null)
     {
         if (_externalAssemblyLoadContext is null)
             return;
@@ -76,6 +78,7 @@ public static class AssemblyManager
             if (i >= MAX_GC_ATTEMPTS)
             {
                 Debug.LogError($"Failed to unload external assemblies.");
+                onFail?.Invoke();
                 _externalAssemblyLoadContext = externalAssemblyLoadContextRef.Target as ExternalAssemblyLoadContext1;
 
                 return;

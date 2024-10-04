@@ -11,6 +11,7 @@
         https://api.nuget.org/v3/index.json;
         https://www.myget.org/F/sixlabors/api/v3/index.json;
       </RestoreAdditionalProjectSources>
+      <ServerGarbageCollection>true</ServerGarbageCollection>
     </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -58,6 +59,7 @@
     <ItemGroup>
         <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
         <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
+        <ProjectReference Include="..\External\HeapDumper\HeapDumper.csproj" />
     </ItemGroup>
 
     <ItemGroup>

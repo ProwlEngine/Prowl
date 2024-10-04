@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Reflection;
+
 using CommandLine;
 
 using Prowl.Editor.Assets;
@@ -173,7 +175,7 @@ public static class Program
                 try
                 {
                     // Unload External Assemblies
-                    AssemblyManager.Unload();
+                    AssemblyManager.Unload(DumpHeapInfo);
 
                     Project active = Project.Active;
 
@@ -211,6 +213,56 @@ public static class Program
             {
                 Debug.LogError("Cannot reload assemblies, No project loaded.");
             }
+        }
+    }
+
+
+    private static void DumpHeapInfo()
+    {
+        Assembly[] blacklisted =
+        [
+            typeof(Application).Assembly,
+            typeof(Program).Assembly,
+            typeof(AppDomain).Assembly,
+            typeof(Veldrid.GraphicsDevice).Assembly,
+            typeof(BepuPhysics.Simulation).Assembly,
+            typeof(Veldrid.Sdl2.Sdl2Window).Assembly,
+            typeof(Veldrid.StartupUtilities.VeldridStartup).Assembly,
+            typeof(TerraFX.Interop.Vulkan.Vulkan).Assembly,
+            typeof(BepuUtilities.BoundingBox).Assembly,
+            typeof(SixLabors.ImageSharp.Image).Assembly,
+            typeof(System.Collections.Concurrent.Partitioner).Assembly,
+            typeof(System.Collections.Generic.KeyValuePair).Assembly,
+            typeof(System.IO.File).Assembly,
+            typeof(System.ComponentModel.Component).Assembly,
+            typeof(System.Reflection.Assembly).Assembly,
+            typeof(Microsoft.Extensions.DependencyModel.Library).Assembly,
+            typeof(Silk.NET.Core.PlatformException).Assembly,
+            typeof(Silk.NET.OpenAL.AL).Assembly,
+            typeof(Microsoft.Win32.SafeHandles.SafeFileHandle).Assembly,
+            typeof(CommandLine.Error).Assembly,
+            typeof(System.Linq.Enumerable).Assembly,
+            typeof(System.Diagnostics.StackTrace).Assembly,
+            typeof(System.Collections.Immutable.ImmutableArray).Assembly,
+            typeof(System.Collections.Generic.Stack<IInputHandler>).Assembly,
+            typeof(System.Net.Sockets.SocketAsyncEventArgs).Assembly,
+            typeof(NuGet.Protocol.Core.Types.DownloadResource).Assembly,
+            typeof(System.Reflection.PortableExecutable.CoffHeader).Assembly,
+            typeof(System.Buffers.ReadOnlySequence<byte>).Assembly,
+            typeof(System.IO.MemoryMappedFiles.MemoryMappedFile).Assembly,
+            typeof(Microsoft.Win32.SafeHandles.SafeMemoryMappedViewHandle).Assembly
+        ];
+
+        foreach (HeapDumper.HeapInfo heapInfo in HeapDumper.HeapDumper.DumpHeap())
+        {
+            if (heapInfo.Type == null)
+            {
+                Debug.Log(heapInfo);
+                continue;
+            }
+
+            if (!blacklisted.Contains(heapInfo.Type.Assembly))
+                Debug.Log(heapInfo.Type.FullName);
         }
     }
 }
