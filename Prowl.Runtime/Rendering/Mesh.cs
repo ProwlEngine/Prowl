@@ -730,6 +730,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             WriteArray(writer, _colors);
             WriteArray(writer, _uv);
             WriteArray(writer, _uv2);
+            WriteArray(writer, _indices16);
             WriteArray(writer, _indices32);
             WriteArray(writer, _boneIndices);
             WriteArray(writer, _boneWeights);
@@ -770,6 +771,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             _colors = ReadArray<Color32>(reader);
             _uv = ReadArray<Vector2F>(reader);
             _uv2 = ReadArray<Vector2F>(reader);
+            _indices16 = ReadArray<ushort>(reader);
             _indices32 = ReadArray<uint>(reader);
             _boneIndices = ReadArray<Vector4F>(reader);
             _boneWeights = ReadArray<Vector4F>(reader);
