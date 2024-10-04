@@ -47,6 +47,9 @@ public struct Spacing
 
     public override bool Equals(object? obj)
     {
-        throw new NotImplementedException();
+        if (obj is not Spacing value)
+            return false;
+
+        return value.Left == Left && value.Right == Right && value.Top == Top && value.Bottom == Bottom;
     }
 }
