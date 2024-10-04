@@ -4,3 +4,6 @@
 [submodule "External/Prowl.Veldrid"]
 	path = External/Prowl.Veldrid
 	url = https://github.com/ProwlEngine/Prowl.Veldrid
+[submodule "External/HeapDumper"]
+	path = External/HeapDumper
+	url = https://github.com/sinnwrig/HeapDumper
