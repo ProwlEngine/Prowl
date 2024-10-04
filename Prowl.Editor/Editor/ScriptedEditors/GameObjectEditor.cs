@@ -180,6 +180,7 @@ public class GameObjectEditor : ScriptedEditor
             // Draw Components
             HashSet<int> editorsNeeded = [];
             List<MonoBehaviour> toDelete = [];
+
             foreach (var comp in go.GetComponents<MonoBehaviour>())
             {
                 if (comp == null) continue;
@@ -207,17 +208,18 @@ public class GameObjectEditor : ScriptedEditor
 
                     DragnDrop.Drag(comp, comp!.GetType());
 
-                    var rect = gui.CurrentNode.LayoutData.InnerRect;
+                    Rect rect = gui.CurrentNode.LayoutData.InnerRect;
                     string cname = GetComponentDisplayName(cType);
-                    var textSizeY = Font.DefaultFont.CalcTextSize(cname, 20).y;
-                    var centerY = (rect.height / 2) - (textSizeY / 2);
-                    gui.Draw2D.DrawText((compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, centerY + 3));
+                    double textSizeY = Font.DefaultFont.CalcTextSize(cname, 20).y;
+                    double centerY = (rect.height / 2) - (textSizeY / 2);
+                    gui.Draw2D.DrawText(compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, centerY + 3));
                     gui.Draw2D.DrawText(cname, 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(29, centerY + 3), Color.black * 0.8f);
                     gui.Draw2D.DrawText(cname, 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, centerY + 2));
 
                     isEnabled = comp.Enabled;
-                    if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -30), 0, out var chkNode, GetInputStyle()))
+                    if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -30), 0, out LayoutNode? chkNode, GetInputStyle()))
                         comp.Enabled = isEnabled;
+
                     gui.Tooltip("Is Component Enabled?");
 
 
@@ -248,37 +250,28 @@ public class GameObjectEditor : ScriptedEditor
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, btnRoundness, 12);
 
                         // Handle Editors for this type if we have any
-                        if (compEditors.TryGetValue(comp.InstanceID, out var editor))
+                        if (compEditors.TryGetValue(comp.InstanceID, out ScriptedEditor? editor))
                         {
                             editor.OnInspectorGUI();
-                            goto EndComponent;
                         }
                         else
                         {
-                            var editorType = GetEditorType(cType);
-                            if (editorType != null)
+                            editor = CreateEditor(comp);
+                            if (editor != null)
                             {
-                                editor = Activator.CreateInstance(editorType) as ScriptedEditor;
-                                if (editor != null)
-                                {
-                                    compEditors[comp.InstanceID] = editor;
-                                    editor.target = comp;
-                                    editor.OnEnable();
-                                    editor.OnInspectorGUI();
-                                    goto EndComponent;
-                                }
+                                compEditors[comp.InstanceID] = editor;
+                                editor.OnInspectorGUI();
                             }
                         }
 
+                        // ScriptedEditor.CreateEditor should provide a fallback default instead of providing
                         // No Editor, Fallback to default Inspector
-                        object compRef = comp;
-                        if (PropertyGrid("CompPropertyGrid", ref compRef, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
-                            comp.OnValidate();
+                        // object compRef = comp;
+                        // if (PropertyGrid("CompPropertyGrid", ref compRef, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
+                        //     comp.OnValidate();
 
                         // Draw any Buttons - these should be in PropertyGrid probably
                         //EditorGui.HandleAttributeButtons(comp);
-
-                        EndComponent:;
                     }
                 }
 
@@ -288,7 +281,7 @@ public class GameObjectEditor : ScriptedEditor
             }
 
             // Handle Deletion
-            foreach (var comp in toDelete)
+            foreach (MonoBehaviour comp in toDelete)
                 go.RemoveComponent(comp);
 
             // Remove any editors that are no longer needed

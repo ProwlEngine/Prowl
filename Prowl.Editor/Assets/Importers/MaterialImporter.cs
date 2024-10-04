@@ -36,7 +36,7 @@ public class MaterialImporter : ScriptedImporter
 public class MaterialImporterEditor : ScriptedEditor
 {
     private Material? _editingMaterial;
-    private MaterialEditor? _editor;
+    private ScriptedEditor? _editor;
 
 
     public override void OnEnable()
@@ -44,7 +44,10 @@ public class MaterialImporterEditor : ScriptedEditor
         SerializedProperty tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
         _editingMaterial = Serializer.Deserialize<Material>(tag);
 
-        _editor = new MaterialEditor(_editingMaterial, OnChange);
+        _editor = CreateEditor(_editingMaterial);
+
+        if (_editor is MaterialEditor matEditor)
+            matEditor.onChange = OnChange;
     }
 
 

@@ -106,17 +106,15 @@ public class InspectorWindow : EditorWindow
                     if (relativeAssetPath != null)
                     {
                         // The selected object is a path in our asset database, load its meta data and display a custom editor for the Importer if ones found
-                        if (AssetDatabase.TryGetGuid(path, out var id))
+                        if (AssetDatabase.TryGetGuid(path, out Guid id))
                         {
                             var meta = MetaFile.Load(path);
                             if (meta != null)
                             {
-                                Type? editorType = ScriptedEditor.GetEditorType(meta.importer.GetType());
-                                if (editorType != null)
+                                ScriptedEditor? editor = ScriptedEditor.CreateEditor(meta, meta.importer.GetType(), false);
+                                if (editor != null)
                                 {
-                                    customEditor = (path, (ScriptedEditor)Activator.CreateInstance(editorType));
-                                    customEditor.Value.Item2.target = meta;
-                                    customEditor.Value.Item2.OnEnable();
+                                    customEditor = (path, editor);
                                     destroyCustomEditor = false;
                                 }
                                 else
@@ -151,27 +149,11 @@ public class InspectorWindow : EditorWindow
             {
                 if (customEditor == null)
                 {
-                    // Just selected a new object create the editor
-                    Type? editorType = ScriptedEditor.GetEditorType(Selected.GetType());
-                    if (editorType != null)
+                    ScriptedEditor? editor = ScriptedEditor.CreateEditor(Selected);
+                    if (editor != null)
                     {
-                        customEditor = (Selected, (ScriptedEditor)Activator.CreateInstance(editorType));
-                        customEditor.Value.Item2.target = Selected;
-                        customEditor.Value.Item2.OnEnable();
+                        customEditor = (Selected, editor);
                         destroyCustomEditor = false;
-                    }
-                    else
-                    {
-                        // No Editor, Just display Property Grid
-                        if (EditorGUI.PropertyGrid("Default Drawer", ref Selected, EditorGUI.TargetFields.Serializable, EditorGUI.PropertyGridConfig.NoHeader))
-                        {
-                            // Search for a function named "OnValidate()"
-                            var method = Selected.GetType().GetMethod("OnValidate", BindingFlags.Public | BindingFlags.Instance);
-                            if (method != null)
-                            {
-                                method.Invoke(Selected, null);
-                            }
-                        }
                     }
                 }
                 else if (customEditor.Value.Item1 == Selected)

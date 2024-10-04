@@ -11,16 +11,7 @@ namespace Prowl.Editor.ScriptedEditors;
 [CustomEditor(typeof(Material))]
 public class MaterialEditor : ScriptedEditor
 {
-    private Action onChange;
-
-    private MaterialEditor() { }
-
-    public MaterialEditor(Material mat, Action onChange)
-    {
-        target = mat;
-        this.onChange = onChange;
-    }
-
+    public Action onChange;
 
     public override void OnInspectorGUI()
     {

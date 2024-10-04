@@ -222,9 +222,11 @@ public class AssetsTreeWindow : EditorWindow
         EditorGuiManager.Directory = directory;
         EditorGuiManager.fromAssetBrowser = fromAssetBrowser;
         var assetsPath = MenuItem.GetMenuPath("Assets");
+
         foreach (var child in assetsPath.Children)
             if (child.Path.Equals("Create", StringComparison.OrdinalIgnoreCase))
                 return MenuItem.DrawMenu(child, false, 1);
+
         return false;
     }
 

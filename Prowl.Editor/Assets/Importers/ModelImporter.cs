@@ -658,11 +658,10 @@ public class ModelImporter : ScriptedImporter
 [CustomEditor(typeof(ModelImporter))]
 public class ModelEditor : ScriptedEditor
 {
+    private int _selectedAnim;
+    private int _selectedAnimBone;
 
-    int selectedAnim;
-    int selectedAnimBone;
-
-    int selectedTab;
+    private int _selectedTab;
 
     public override void OnInspectorGUI()
     {
@@ -677,19 +676,19 @@ public class ModelEditor : ScriptedEditor
         using (gui.Node("Tabs").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
         {
             if (EditorGUI.StyledButton("Meshes"))
-                selectedTab = 0;
+                _selectedTab = 0;
             if (EditorGUI.StyledButton("Materials"))
-                selectedTab = 1;
+                _selectedTab = 1;
             if (EditorGUI.StyledButton("Scene"))
-                selectedTab = 2;
+                _selectedTab = 2;
             if (EditorGUI.StyledButton("Animations"))
-                selectedTab = 3;
+                _selectedTab = 3;
         }
 
 
         using (gui.Node("Content").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Scroll().Enter())
         {
-            switch (selectedTab)
+            switch (_selectedTab)
             {
                 case 0:
                     Meshes(importer, serialized);
@@ -802,14 +801,14 @@ public class ModelEditor : ScriptedEditor
             {
                 if (EditorGUI.StyledButton(i + ": " + animations.ElementAt(i).Name))
                 {
-                    selectedAnim = i + 1;
+                    _selectedAnim = i + 1;
                 }
             }
         }
 
-        if (selectedAnim > 0 && selectedAnim <= animations.Count())
+        if (_selectedAnim > 0 && _selectedAnim <= animations.Count())
         {
-            var anim = animations.ElementAt(selectedAnim - 1) as AnimationClip;
+            var anim = animations.ElementAt(_selectedAnim - 1) as AnimationClip;
             gui.TextNode("aName", $"Name: {anim.Name}").ExpandWidth().Height(ItemSize);
             gui.TextNode("aDuration", $"Duration: {anim.Duration}").ExpandWidth().Height(ItemSize);
             gui.TextNode("aTPS", $"Ticks Per Second: {anim.TicksPerSecond}").ExpandWidth().Height(ItemSize);
@@ -825,14 +824,14 @@ public class ModelEditor : ScriptedEditor
                 {
                     if (EditorGUI.StyledButton(i + ": " + anim.Bones[i].BoneName))
                     {
-                        selectedAnimBone = i;
+                        _selectedAnimBone = i;
                     }
                 }
             }
 
-            if (selectedAnimBone > 0 && selectedAnimBone <= anim.Bones.Count)
+            if (_selectedAnimBone > 0 && _selectedAnimBone <= anim.Bones.Count)
             {
-                var bone = anim.Bones[selectedAnimBone - 1];
+                var bone = anim.Bones[_selectedAnimBone - 1];
                 gui.TextNode("bName", $"Bone Name: {bone.BoneName}").ExpandWidth().Height(ItemSize);
                 gui.TextNode("bPosKeys", $"Position Keys: {bone.PosX.Keys.Count}").ExpandWidth().Height(ItemSize);
                 gui.TextNode("bRotKeys", $"Rotation Keys: {bone.RotX.Keys.Count}").ExpandWidth().Height(ItemSize);
