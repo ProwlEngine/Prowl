@@ -49,7 +49,7 @@ public class ScriptedEditor
             if (attribute == null)
                 continue;
 
-            if (type != typeof(ScriptedEditor))
+            if (!type.IsAssignableTo(typeof(ScriptedEditor)))
             {
                 Debug.LogWarning($"{nameof(CustomEditorAttribute)} is not valid on type '{type}'. Attribute is only valid on types inheriting from {nameof(ScriptedEditor)}. Attribute will be ignored.");
                 continue;
