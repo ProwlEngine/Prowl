@@ -15,7 +15,6 @@ namespace Prowl.Runtime;
 
 public static class AssemblyManager
 {
-
     private static ExternalAssemblyLoadContext1? _externalAssemblyLoadContext;
     private static List<(WeakReference lifetimeDependency, MulticastDelegate @delegate)> _unloadLifetimeDelegates = new();
     private static List<Func<bool>> _unloadDelegates = new();
@@ -61,23 +60,27 @@ public static class AssemblyManager
         if (_externalAssemblyLoadContext is null)
             return;
 
-        OnAssemblyUnloadAttribute.Invoke();
+        foreach (Assembly assembly in ExternalAssemblies)
+            ClearTypeDescriptorCache(assembly);
 
-        ClearTypeDescriptorCache();
+        OnAssemblyUnloadAttribute.Invoke();
 
         InvokeUnloadDelegate();
 
         UnloadInternal(out WeakReference externalAssemblyLoadContextRef);
 
         const int MAX_GC_ATTEMPTS = 10;
+
         for (int i = 0; externalAssemblyLoadContextRef.IsAlive; i++)
         {
             if (i >= MAX_GC_ATTEMPTS)
             {
                 Debug.LogError($"Failed to unload external assemblies.");
                 _externalAssemblyLoadContext = externalAssemblyLoadContextRef.Target as ExternalAssemblyLoadContext1;
+
                 return;
             }
+
             Debug.Log($"GC Attempt ({i + 1}/{MAX_GC_ATTEMPTS})...");
             GC.Collect();
             GC.WaitForPendingFinalizers();
@@ -118,7 +121,7 @@ public static class AssemblyManager
             if (!lifetimeDependency.IsAlive)
                 continue;
 
-            bool result = (bool)@delegate.DynamicInvoke(new object?[] { lifetimeDependency.Target })!;
+            bool result = (bool)@delegate.DynamicInvoke([lifetimeDependency.Target])!;
             if (!result)
                 Debug.LogError("some unload delegate returned with failure");
         }
@@ -133,8 +136,11 @@ public static class AssemblyManager
         _unloadDelegates = new();
     }
 
-    static void ClearTypeDescriptorCache()
+    static void ClearTypeDescriptorCache(Assembly assembly)
     {
+        TypeDescriptor.Refresh(assembly);
+
+        /*
         var typeConverterAssembly = typeof(TypeConverter).Assembly;
 
         var reflectTypeDescriptionProviderType = typeConverterAssembly.GetType("System.ComponentModel.ReflectTypeDescriptionProvider");
@@ -149,6 +155,7 @@ public static class AssemblyManager
 
         var providerTableWeakTable = (Hashtable)reflectTypeDescriptorType.GetField("s_providerTable", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
         providerTableWeakTable?.Clear();
+        */
 
         // We no longer use System.Text.Json - 29/06/2024
         //var assembly = typeof(JsonSerializerOptions).Assembly;
