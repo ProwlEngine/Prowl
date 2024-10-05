@@ -15,9 +15,10 @@ namespace Prowl.Runtime;
 
 public static class AssemblyManager
 {
-    private static ExternalAssemblyLoadContext1? _externalAssemblyLoadContext;
+    private static ExternalAssemblyLoadContext? _externalAssemblyLoadContext;
     private static List<(WeakReference lifetimeDependency, MulticastDelegate @delegate)> _unloadLifetimeDelegates = new();
     private static List<Func<bool>> _unloadDelegates = new();
+
 
     public static IEnumerable<Assembly> ExternalAssemblies
     {
@@ -32,17 +33,19 @@ public static class AssemblyManager
         }
     }
 
+
     public static void Initialize()
     {
         OnAssemblyUnloadAttribute.FindAll();
         OnAssemblyLoadAttribute.FindAll();
     }
 
+
     public static void LoadExternalAssembly(string assemblyPath, bool isDependency)
     {
         try
         {
-            _externalAssemblyLoadContext ??= new ExternalAssemblyLoadContext1();
+            _externalAssemblyLoadContext ??= new ExternalAssemblyLoadContext();
             Assembly asm = _externalAssemblyLoadContext.LoadFromAssemblyPath(assemblyPath);
 
             if (isDependency)
@@ -56,14 +59,12 @@ public static class AssemblyManager
         }
     }
 
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static void Unload(Action? onFail = null)
     {
         if (_externalAssemblyLoadContext is null)
             return;
-
-        foreach (Assembly assembly in ExternalAssemblies)
-            ClearTypeDescriptorCache(assembly);
 
         OnAssemblyUnloadAttribute.Invoke();
 
@@ -79,10 +80,13 @@ public static class AssemblyManager
             {
                 Debug.LogError($"Failed to unload external assemblies.");
                 onFail?.Invoke();
-                _externalAssemblyLoadContext = externalAssemblyLoadContextRef.Target as ExternalAssemblyLoadContext1;
+                _externalAssemblyLoadContext = externalAssemblyLoadContextRef.Target as ExternalAssemblyLoadContext;
 
                 return;
             }
+
+            foreach (Assembly assembly in ExternalAssemblies)
+                TypeDescriptor.Refresh(assembly);
 
             Debug.Log($"GC Attempt ({i + 1}/{MAX_GC_ATTEMPTS})...");
             GC.Collect();
@@ -91,6 +95,7 @@ public static class AssemblyManager
 
         Debug.LogSuccess($"Successfully unloaded external assemblies.");
     }
+
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void UnloadInternal(out WeakReference externalAssemblyLoadContextRef)
@@ -103,19 +108,23 @@ public static class AssemblyManager
         // crashes after recovery and attempted unloading for the second time
         if (_externalAssemblyLoadContext != null)
             _externalAssemblyLoadContext.Unload();
+
         externalAssemblyLoadContextRef = new WeakReference(_externalAssemblyLoadContext);
         _externalAssemblyLoadContext = null;
     }
+
 
     public static void AddUnloadTask(Func<bool> @delegate)
     {
         _unloadDelegates.Add(@delegate);
     }
 
+
     public static void AddUnloadTaskWithLifetime<T>(T lifetimeDependency, Func<T, bool> @delegate)
     {
         _unloadLifetimeDelegates.Add((new WeakReference(lifetimeDependency), @delegate));
     }
+
 
     private static void InvokeUnloadDelegate()
     {
@@ -139,45 +148,19 @@ public static class AssemblyManager
         _unloadDelegates = new();
     }
 
-    static void ClearTypeDescriptorCache(Assembly assembly)
-    {
-        TypeDescriptor.Refresh(assembly);
-
-        /*
-        var typeConverterAssembly = typeof(TypeConverter).Assembly;
-
-        var reflectTypeDescriptionProviderType = typeConverterAssembly.GetType("System.ComponentModel.ReflectTypeDescriptionProvider");
-        var reflectTypeDescriptorProviderTable = reflectTypeDescriptionProviderType.GetField("s_attributeCache", BindingFlags.Static | BindingFlags.NonPublic);
-        var attributeCacheTable = (Hashtable)reflectTypeDescriptorProviderTable.GetValue(null);
-        attributeCacheTable?.Clear();
-
-        var reflectTypeDescriptorType = typeConverterAssembly.GetType("System.ComponentModel.TypeDescriptor");
-        var reflectTypeDescriptorTypeTable = reflectTypeDescriptorType.GetField("s_defaultProviders", BindingFlags.Static | BindingFlags.NonPublic);
-        var defaultProvidersTable = (Hashtable)reflectTypeDescriptorTypeTable.GetValue(null);
-        defaultProvidersTable?.Clear();
-
-        var providerTableWeakTable = (Hashtable)reflectTypeDescriptorType.GetField("s_providerTable", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-        providerTableWeakTable?.Clear();
-        */
-
-        // We no longer use System.Text.Json - 29/06/2024
-        //var assembly = typeof(JsonSerializerOptions).Assembly;
-        //var updateHandlerType = assembly.GetType("System.Text.Json.JsonSerializerOptionsUpdateHandler");
-        //var clearCacheMethod = updateHandlerType?.GetMethod("ClearCache", BindingFlags.Static | BindingFlags.Public);
-        //clearCacheMethod?.Invoke(null, new object?[] { null });
-    }
 
     public static void Dispose()
     {
         UnloadInternal(out WeakReference _);
     }
 
-    private class ExternalAssemblyLoadContext1 : AssemblyLoadContext
+
+    private class ExternalAssemblyLoadContext : AssemblyLoadContext
     {
 
         private readonly List<AssemblyDependencyResolver> _assemblyDependencyResolvers;
 
-        public ExternalAssemblyLoadContext1() : base(true)
+        public ExternalAssemblyLoadContext() : base(true)
         {
             _assemblyDependencyResolvers = new List<AssemblyDependencyResolver>();
         }
