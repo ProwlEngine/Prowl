@@ -322,15 +322,11 @@ public class Project
             foreach (DirectoryInfo subdirectory in directory.GetDirectories())
                 directoriesToProcess.Push(subdirectory);
 
-            Runtime.Debug.Log("Searching directory: " + directory.Name);
-
             if (string.Equals(directory.Name, "Editor", StringComparison.OrdinalIgnoreCase))
                 editorScripts.AddRange(directory.GetFiles("*.cs"));
             else
                 nonEditorScripts.AddRange(directory.GetFiles("*.cs"));
         }
-
-        Runtime.Debug.Log("Scripts: " + string.Join(" ", nonEditorScripts));
 
         string propertyGroupTemplate =
             @$"<PropertyGroup>
