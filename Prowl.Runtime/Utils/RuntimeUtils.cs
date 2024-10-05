@@ -13,6 +13,7 @@ namespace Prowl.Runtime;
 
 public static class RuntimeUtils
 {
+    private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
 
     public static bool IsWindows() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public static bool IsLinux() => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
@@ -151,5 +152,135 @@ public static class RuntimeUtils
             if (!System.IO.File.Exists(temp))
                 return temp;
         }
+    }
+
+
+    /// <summary>
+    /// Returns whether the specified type is a primitive, enum, string, decimal, or struct that
+    /// consists only of those types, allowing to do a deep-copy by simply assigning it.
+    /// </summary>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/ReflectionHelper.cs#L470
+    public static bool IsDeepCopyByAssignment(this TypeInfo typeInfo)
+    {
+        // Early-out for some obvious cases
+        if (typeInfo.IsArray) return false;
+        if (typeInfo.IsPrimitive) return true;
+        if (typeInfo.IsEnum) return true;
+
+        // Special cases for some well-known classes
+        Type type = typeInfo.AsType();
+        if (type == typeof(string)) return true;
+        if (type == typeof(decimal)) return true;
+
+        // Otherwise, any class is not plain old data
+        if (typeInfo.IsClass) return false;
+        if (typeInfo.IsInterface) return false;
+
+        lock (s_deepCopyByAssignmentCache)
+        {
+            // If we have no evidence so far, check the cache and iterate fields
+            bool isPlainOldData;
+            if (s_deepCopyByAssignmentCache.TryGetValue(typeInfo, out isPlainOldData))
+            {
+                return isPlainOldData;
+            }
+            else
+            {
+                isPlainOldData = true;
+                foreach (FieldInfo field in typeInfo.DeclaredFieldsDeep())
+                {
+                    if (field.IsStatic) continue;
+                    TypeInfo fieldTypeInfo = field.FieldType.GetTypeInfo();
+                    if (!IsDeepCopyByAssignment(fieldTypeInfo))
+                    {
+                        isPlainOldData = false;
+                        break;
+                    }
+                }
+
+                s_deepCopyByAssignmentCache[typeInfo] = isPlainOldData;
+                return isPlainOldData;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns a TypeInfos BaseType as a TypeInfo, or null if it was null.
+    /// </summary>
+    /// <param name="type"></param>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/Extensions/ExtMethodsTypeInfo.cs#L45
+    public static TypeInfo GetBaseTypeInfo(this TypeInfo type)
+    {
+        return type.BaseType != null ? type.BaseType.GetTypeInfo() : null;
+    }
+
+    /// <summary>
+    /// Returns a Types inheritance level. The <c>object</c>-Type has an inheritance level of
+    /// zero, each subsequent inheritance increases it by one.
+    /// </summary>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/Extensions/ExtMethodsTypeInfo.cs#L45
+    public static int GetInheritanceDepth(this TypeInfo type)
+    {
+        int level = 0;
+        while (type.BaseType != null)
+        {
+            type = type.BaseType.GetTypeInfo();
+            level++;
+        }
+        return level;
+    }
+
+    /// <summary>
+    /// Returns all fields that are declared within this Type, or any of its base Types.
+    /// Includes public, non-public, static and instance fields.
+    /// </summary>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/Extensions/ExtMethodsTypeInfo.cs#L45
+    public static IEnumerable<FieldInfo> DeclaredFieldsDeep(this TypeInfo type)
+    {
+        IEnumerable<FieldInfo> result = Enumerable.Empty<FieldInfo>();
+
+        while (type != null)
+        {
+            result = result.Concat(type.DeclaredFields);
+            type = type.GetBaseTypeInfo();
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns all properties that are declared within this Type, or any of its base Types.
+    /// Includes public, non-public, static and instance properties.
+    /// </summary>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/Extensions/ExtMethodsTypeInfo.cs#L45
+    public static IEnumerable<PropertyInfo> DeclaredPropertiesDeep(this TypeInfo type)
+    {
+        IEnumerable<PropertyInfo> result = Enumerable.Empty<PropertyInfo>();
+
+        while (type != null)
+        {
+            result = result.Concat(type.DeclaredProperties);
+            type = type.GetBaseTypeInfo();
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns all members that are declared within this Type, or any of its base Types.
+    /// Includes public, non-public, static and instance fields.
+    /// </summary>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/Extensions/ExtMethodsTypeInfo.cs#L45
+    public static IEnumerable<MemberInfo> DeclaredMembersDeep(this TypeInfo type)
+    {
+        IEnumerable<MemberInfo> result = Enumerable.Empty<MemberInfo>();
+
+        while (type != null)
+        {
+            result = result.Concat(type.DeclaredMembers);
+            type = type.GetBaseTypeInfo();
+        }
+
+        return result;
     }
 }
