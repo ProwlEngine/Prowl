@@ -9,11 +9,19 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
+using Prowl.Runtime.Utils;
+
 namespace Prowl.Runtime;
 
 public static class RuntimeUtils
 {
     private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
+
+    [OnAssemblyUnload]
+    public static void ClearCache()
+    {
+        s_deepCopyByAssignmentCache.Clear();
+    }
 
     public static bool IsWindows() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public static bool IsLinux() => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);

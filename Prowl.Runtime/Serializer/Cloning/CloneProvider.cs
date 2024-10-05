@@ -114,6 +114,8 @@ namespace Prowl.Runtime.Cloning
         /// Clears the clone providers internal mapping between source and target
         /// object graph. This is done automatically, unless the copy or clone
         /// operation has been performed with explicitly preserving the cache.
+        ///
+        /// NOTE: You must call this before the project can Recompile, as it holds references to type that can prevent assemblies from being garbage collected.
         /// </summary>
 		public void ClearCachedMapping()
 		{
