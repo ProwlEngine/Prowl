@@ -970,4 +970,23 @@ public class GameObject : EngineObject, ISerializable
             }
         }
     }
+
+    /// <summary>
+    /// Creates a deep copy of this GameObject.
+    /// </summary>
+    /// <returns>A reference to a newly created deep copy of this GameObject.</returns>
+    public GameObject Clone()
+    {
+        return this.DeepClone();
+    }
+
+    /// <summary>
+    /// Deep-copies this GameObject's data to the specified target GameObject.
+    /// </summary>
+    /// <param name="target">The target GameObject to copy to.</param>
+    public void CopyTo(GameObject target)
+    {
+        this.DeepCopyTo(target);
+    }
+
 }
