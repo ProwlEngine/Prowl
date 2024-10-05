@@ -16,22 +16,10 @@ namespace Prowl.Runtime;
 public static class AssemblyManager
 {
     private static ExternalAssemblyLoadContext? _externalAssemblyLoadContext;
-    private static List<(WeakReference lifetimeDependency, MulticastDelegate @delegate)> _unloadLifetimeDelegates = new();
-    private static List<Func<bool>> _unloadDelegates = new();
+    private static List<(WeakReference, MulticastDelegate)> _unloadLifetimeDelegates = new();
+    private static List<Action> _unloadDelegates = new();
 
-
-    public static IEnumerable<Assembly> ExternalAssemblies
-    {
-        get
-        {
-            if (_externalAssemblyLoadContext is null)
-                yield break;
-            foreach (Assembly assembly in _externalAssemblyLoadContext.Assemblies)
-            {
-                yield return assembly;
-            }
-        }
-    }
+    public static IEnumerable<Assembly> ExternalAssemblies => _externalAssemblyLoadContext?.Assemblies ?? [];
 
 
     public static void Initialize()
@@ -114,38 +102,50 @@ public static class AssemblyManager
     }
 
 
-    public static void AddUnloadTask(Func<bool> @delegate)
+    public static void AddUnloadTask(Action onUnload)
     {
-        _unloadDelegates.Add(@delegate);
+        _unloadDelegates.Add(onUnload);
     }
 
 
-    public static void AddUnloadTaskWithLifetime<T>(T lifetimeDependency, Func<T, bool> @delegate)
+    public static void AddUnloadTaskWithLifetime<T>(T lifetimeDependency, Action<T> onUnload)
     {
-        _unloadLifetimeDelegates.Add((new WeakReference(lifetimeDependency), @delegate));
+        _unloadLifetimeDelegates.Add((new WeakReference(lifetimeDependency), onUnload));
     }
 
 
     private static void InvokeUnloadDelegate()
     {
-        foreach ((WeakReference lifetimeDependency, MulticastDelegate @delegate) in _unloadLifetimeDelegates)
+        foreach ((WeakReference lifetimeDependency, MulticastDelegate unloadDelegate) in _unloadLifetimeDelegates)
         {
             if (!lifetimeDependency.IsAlive)
                 continue;
 
-            bool result = (bool)@delegate.DynamicInvoke([lifetimeDependency.Target])!;
-            if (!result)
-                Debug.LogError("some unload delegate returned with failure");
+            try
+            {
+                _ = unloadDelegate.DynamicInvoke([lifetimeDependency.Target])!;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+            }
         }
-        _unloadLifetimeDelegates = new();
 
-        foreach (Func<bool> @delegate in _unloadDelegates)
+        _unloadLifetimeDelegates.Clear();
+
+        foreach (Action unloadDelegate in _unloadDelegates)
         {
-            bool result = @delegate.Invoke();
-            if (!result)
-                Debug.LogError("some unload delegate returned with failure");
+            try
+            {
+                unloadDelegate.Invoke();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+            }
         }
-        _unloadDelegates = new();
+
+        _unloadDelegates.Clear();
     }
 
 
@@ -157,18 +157,20 @@ public static class AssemblyManager
 
     private class ExternalAssemblyLoadContext : AssemblyLoadContext
     {
-
         private readonly List<AssemblyDependencyResolver> _assemblyDependencyResolvers;
+
 
         public ExternalAssemblyLoadContext() : base(true)
         {
             _assemblyDependencyResolvers = new List<AssemblyDependencyResolver>();
         }
 
+
         public void AddDependency(string assemblyPath)
         {
             _assemblyDependencyResolvers.Add(new AssemblyDependencyResolver(assemblyPath));
         }
+
 
         protected override Assembly? Load(AssemblyName assemblyName)
         {
@@ -179,7 +181,5 @@ public static class AssemblyManager
             }
             return null;
         }
-
     }
-
 }
