@@ -154,6 +154,8 @@ public static class RuntimeUtils
         }
     }
 
+    public static bool HasAttribute<T>(this MemberInfo member) where T : Attribute => member.GetCustomAttributes(typeof(T), true).Length > 0;
+    public static IEnumerable<T> GetAttributes<T>(this MemberInfo member) where T : Attribute => member.GetCustomAttributes(typeof(T), true).Cast<T>();
 
     /// <summary>
     /// Returns whether the specified type is a primitive, enum, string, decimal, or struct that
