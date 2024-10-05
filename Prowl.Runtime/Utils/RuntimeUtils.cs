@@ -13,6 +13,7 @@ namespace Prowl.Runtime;
 
 public static class RuntimeUtils
 {
+    private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
 
     public static bool IsWindows() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public static bool IsLinux() => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
@@ -150,6 +151,56 @@ public static class RuntimeUtils
             string temp = System.IO.Path.Combine(path, $"{name} ({i}){ext}");
             if (!System.IO.File.Exists(temp))
                 return temp;
+        }
+    }
+
+
+    /// <summary>
+    /// Returns whether the specified type is a primitive, enum, string, decimal, or struct that
+    /// consists only of those types, allowing to do a deep-copy by simply assigning it.
+    /// </summary>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/ReflectionHelper.cs#L470
+    public static bool IsDeepCopyByAssignment(this TypeInfo typeInfo)
+    {
+        // Early-out for some obvious cases
+        if (typeInfo.IsArray) return false;
+        if (typeInfo.IsPrimitive) return true;
+        if (typeInfo.IsEnum) return true;
+
+        // Special cases for some well-known classes
+        Type type = typeInfo.AsType();
+        if (type == typeof(string)) return true;
+        if (type == typeof(decimal)) return true;
+
+        // Otherwise, any class is not plain old data
+        if (typeInfo.IsClass) return false;
+        if (typeInfo.IsInterface) return false;
+
+        lock (s_deepCopyByAssignmentCache)
+        {
+            // If we have no evidence so far, check the cache and iterate fields
+            bool isPlainOldData;
+            if (s_deepCopyByAssignmentCache.TryGetValue(typeInfo, out isPlainOldData))
+            {
+                return isPlainOldData;
+            }
+            else
+            {
+                isPlainOldData = true;
+                foreach (FieldInfo field in typeInfo.DeclaredFieldsDeep())
+                {
+                    if (field.IsStatic) continue;
+                    TypeInfo fieldTypeInfo = field.FieldType.GetTypeInfo();
+                    if (!IsDeepCopyByAssignment(fieldTypeInfo))
+                    {
+                        isPlainOldData = false;
+                        break;
+                    }
+                }
+
+                s_deepCopyByAssignmentCache[typeInfo] = isPlainOldData;
+                return isPlainOldData;
+            }
         }
     }
 
