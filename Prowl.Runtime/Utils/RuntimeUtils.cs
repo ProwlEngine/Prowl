@@ -152,4 +152,84 @@ public static class RuntimeUtils
                 return temp;
         }
     }
+
+    /// <summary>
+    /// Returns a TypeInfos BaseType as a TypeInfo, or null if it was null.
+    /// </summary>
+    /// <param name="type"></param>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/Extensions/ExtMethodsTypeInfo.cs#L45
+    public static TypeInfo GetBaseTypeInfo(this TypeInfo type)
+    {
+        return type.BaseType != null ? type.BaseType.GetTypeInfo() : null;
+    }
+
+    /// <summary>
+    /// Returns a Types inheritance level. The <c>object</c>-Type has an inheritance level of
+    /// zero, each subsequent inheritance increases it by one.
+    /// </summary>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/Extensions/ExtMethodsTypeInfo.cs#L45
+    public static int GetInheritanceDepth(this TypeInfo type)
+    {
+        int level = 0;
+        while (type.BaseType != null)
+        {
+            type = type.BaseType.GetTypeInfo();
+            level++;
+        }
+        return level;
+    }
+
+    /// <summary>
+    /// Returns all fields that are declared within this Type, or any of its base Types.
+    /// Includes public, non-public, static and instance fields.
+    /// </summary>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/Extensions/ExtMethodsTypeInfo.cs#L45
+    public static IEnumerable<FieldInfo> DeclaredFieldsDeep(this TypeInfo type)
+    {
+        IEnumerable<FieldInfo> result = Enumerable.Empty<FieldInfo>();
+
+        while (type != null)
+        {
+            result = result.Concat(type.DeclaredFields);
+            type = type.GetBaseTypeInfo();
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns all properties that are declared within this Type, or any of its base Types.
+    /// Includes public, non-public, static and instance properties.
+    /// </summary>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/Extensions/ExtMethodsTypeInfo.cs#L45
+    public static IEnumerable<PropertyInfo> DeclaredPropertiesDeep(this TypeInfo type)
+    {
+        IEnumerable<PropertyInfo> result = Enumerable.Empty<PropertyInfo>();
+
+        while (type != null)
+        {
+            result = result.Concat(type.DeclaredProperties);
+            type = type.GetBaseTypeInfo();
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns all members that are declared within this Type, or any of its base Types.
+    /// Includes public, non-public, static and instance fields.
+    /// </summary>
+    /// Source: https://github.com/AdamsLair/duality/blob/4156e696b381e508df409ca4741d1eae88223287/Source/Core/Duality/Utility/Extensions/ExtMethodsTypeInfo.cs#L45
+    public static IEnumerable<MemberInfo> DeclaredMembersDeep(this TypeInfo type)
+    {
+        IEnumerable<MemberInfo> result = Enumerable.Empty<MemberInfo>();
+
+        while (type != null)
+        {
+            result = result.Concat(type.DeclaredMembers);
+            type = type.GetBaseTypeInfo();
+        }
+
+        return result;
+    }
 }
