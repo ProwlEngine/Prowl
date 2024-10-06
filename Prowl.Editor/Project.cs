@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Reflection;
+using System.Xml.Linq;
 
 using Prowl.Editor.Assets;
 using Prowl.Runtime;
@@ -285,35 +286,10 @@ public class Project
 
     #region Private Methods
 
-
-    private static string GetIncludesFrom(IEnumerable<FileInfo> filePaths)
+    private static List<FileInfo> EnumerateDirectories(DirectoryInfo baseDirectory, Func<DirectoryInfo, FileInfo[]> getFiles)
     {
-        List<string> includeElements = new();
-
-        foreach (FileInfo filePath in filePaths)
-            includeElements.Add($"<Compile Include=\"{filePath.FullName}\" />");
-
-        return string.Join("\n", includeElements);
-    }
-
-    private static void GenerateCSProjectFiles(Project project, DirectoryInfo output)
-    {
-        if (!HasProject) throw new Exception("No Project Loaded, Cannot generate CS Project Files.");
-
-        Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-        Assembly gameEngineAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Runtime")
-            ?? throw new Exception("Failed to find Prowl.Runtime Assembly.");
-        Assembly gameEditorAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Editor")
-            ?? throw new Exception("Failed to find Prowl.Editor Assembly.");
-
-        // Get all references by Prowl.Runtime
-        var references = gameEngineAssembly.GetReferencedAssemblies().Select(Assembly.Load).ToList();
-
-        Runtime.Debug.Log($"Updating {project.Assembly_Proj.FullName}...");
-
-        List<FileInfo> nonEditorScripts = new();
-        List<FileInfo> editorScripts = new();
-        Stack<DirectoryInfo> directoriesToProcess = new([project.AssetDirectory]);
+        List<FileInfo> result = new();
+        Stack<DirectoryInfo> directoriesToProcess = new([baseDirectory]);
 
         while (directoriesToProcess.Count > 0)
         {
@@ -322,77 +298,306 @@ public class Project
             foreach (DirectoryInfo subdirectory in directory.GetDirectories())
                 directoriesToProcess.Push(subdirectory);
 
-            if (string.Equals(directory.Name, "Editor", StringComparison.OrdinalIgnoreCase))
-                editorScripts.AddRange(directory.GetFiles("*.cs"));
-            else
-                nonEditorScripts.AddRange(directory.GetFiles("*.cs"));
+            result.AddRange(getFiles.Invoke(directory));
         }
 
-        string propertyGroupTemplate =
-            @$"<PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
-                <ImplicitUsings>enable</ImplicitUsings>
-                <Nullable>enable</Nullable>
-                <ProjectRoot>{project.ProjectPath}</ProjectRoot>
-            </PropertyGroup>
-            <PropertyGroup Condition="" '$(Configuration)' == 'Debug' "">
-                <OutputPath>{output.FullName}</OutputPath>
-            </PropertyGroup>
-            <PropertyGroup Condition="" '$(Configuration)' == 'Release' "">
-                <OutputPath>{output.FullName}</OutputPath>
-            </PropertyGroup>";
+        return result;
+    }
 
-        string referencesXML = string.Join("\n", references.Select(assembly =>
-                $"<Reference Include=\"{assembly.GetName().Name}\">" +
-                    $"<HintPath>{assembly.Location}</HintPath>" +
-                    "<Private>false</Private>" +
-                "</Reference>"));
+    private static void GenerateCSProjectFiles(Project project, DirectoryInfo output)
+    {
+        if (!HasProject)
+            throw new Exception("No Project Loaded, Cannot generate CS Project Files.");
 
-        string gameproj =
-            @$"<Project Sdk=""Microsoft.NET.Sdk"">
-                {propertyGroupTemplate}
-                <ItemGroup>
-                    <Compile Remove=""**/*.cs"" />
-                    {GetIncludesFrom(nonEditorScripts)}
+        Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
 
-                    <Reference Include=""Prowl.Runtime"">
-                        <HintPath>{gameEngineAssembly.Location}</HintPath>
-                        <Private>false</Private>
-                    </Reference>
-                    {referencesXML}
-                </ItemGroup>
-            </Project>";
+        Assembly gameEngineAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Runtime")
+            ?? throw new Exception("Failed to find Prowl.Runtime Assembly.");
 
-        File.WriteAllText(project.Assembly_Proj.FullName, gameproj);
+        // Get all nonstandard references Prowl.Runtime has
+        List<(string, string)> runtimeRefs = gameEngineAssembly.GetReferencedAssemblies()
+            .Where(IsNotDefault)
+            .Select(Assembly.Load)
+            .Select(x => (x.GetName().Name!, x.Location))
+            .ToList();
+
+        runtimeRefs.Add((gameEngineAssembly.GetName().Name!, gameEngineAssembly.Location));
+
+        Runtime.Debug.Log($"Updating {project.Assembly_Proj.FullName}...");
+
+        List<FileInfo> gameScripts = EnumerateDirectories(project.AssetDirectory, x =>
+            !HasParentOfName(x, project.AssetDirectory, "Editor") ? x.GetFiles("*.cs") : []);
+
+        XDocument gameProjXml = new XDocument(GenerateCSProjectXML(project, output, gameScripts, runtimeRefs));
+
+        gameProjXml.Save(project.Assembly_Proj.FullName);
+
 
         Runtime.Debug.Log($"Updating {project.Editor_Assembly_Proj.FullName}...");
 
-        string editorproj =
-            @$"<Project Sdk=""Microsoft.NET.Sdk"">
-                {propertyGroupTemplate}
-                <ItemGroup>
-                    <Compile Remove=""**/*.cs"" />
-                    {GetIncludesFrom(editorScripts)}
+        Assembly gameEditorAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Editor")
+            ?? throw new Exception("Failed to find Prowl.Editor Assembly.");
 
-                    <Reference Include=""Prowl.Editor"">
-                        <HintPath>{gameEditorAssembly.Location}</HintPath>
-                        <Private>false</Private>
-                    </Reference>
-                    <Reference Include=""Prowl.Runtime"">
-                        <HintPath>{gameEngineAssembly.Location}</HintPath>
-                        <Private>false</Private>
-                    </Reference>
-                    <Reference Include=""CSharp"">
-                        <HintPath>{project.Assembly_Proj.FullName}</HintPath>
-                        <Private>false</Private>
-                    </Reference>
-                </ItemGroup>
-            </Project>";
+        List<FileInfo> editorScripts = EnumerateDirectories(project.AssetDirectory, x =>
+            HasParentOfName(x, project.AssetDirectory, "Editor") ? x.GetFiles("*.cs") : []);
 
-        File.WriteAllText(project.Editor_Assembly_Proj.FullName, editorproj);
+        XDocument editorProjXml = new XDocument(GenerateCSProjectXML(project, output, editorScripts,
+            runtimeRefs.Concat([
+                (gameEditorAssembly.GetName().Name!, gameEditorAssembly.Location),
+                ("CSharp", project.Assembly_DLL.FullName)
+            ])
+        ));
+
+        editorProjXml.Save(project.Editor_Assembly_Proj.FullName);
+
 
         Runtime.Debug.Log("Finished Updating Build Information");
     }
+
+
+    private static XElement GenerateCSProjectXML(
+        Project project,
+        DirectoryInfo outputPath,
+        IEnumerable<FileInfo> scriptPaths,
+        IEnumerable<(string, string)> references)
+    {
+        XElement propertyGroupXML = new XElement("PropertyGroup",
+            new XElement("TargetFramework", "net8.0"),
+            new XElement("ImplicitUsings", "enable"),
+            new XElement("Nullable", "enable"),
+            new XElement("ProjectRoot", project.ProjectPath)
+        );
+
+        XElement debugPropertyGroupXML = new XElement("PropertyGroup",
+            new XAttribute("Condition", "'$(Configuration)' == 'Debug'"),
+            new XElement("OutputPath", outputPath.FullName)
+        );
+
+        XElement releasePropertyGroupXML = new XElement("PropertyGroup",
+            new XAttribute("Condition", "'$(Configuration)' == 'Release'"),
+            new XElement("OutputPath", outputPath.FullName)
+        );
+
+        XElement scriptsXML = new XElement("ItemGroup",
+            new XElement("Compile", new XAttribute("Remove", "**/*.cs")),
+            scriptPaths.Select(x =>
+                new XElement("Compile", new XAttribute("Include", x.FullName))
+            )
+        );
+
+        XElement referencesXML = new XElement("ItemGroup",
+            references.Select(x => new XElement("Reference",
+                new XAttribute("Include", x.Item1),
+                new XElement("HintPath", x.Item2),
+                new XElement("Private", "false")
+            ))
+        );
+
+        XElement projectXML = new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"),
+            propertyGroupXML,
+            debugPropertyGroupXML,
+            releasePropertyGroupXML,
+            scriptsXML,
+            referencesXML
+        );
+
+        return projectXML;
+    }
+
+
+    private static bool HasParentOfName(DirectoryInfo? directory, DirectoryInfo root, string name)
+    {
+        while (directory != null && directory.FullName != root.FullName)
+        {
+            if (string.Equals(directory.Name, name, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            directory = directory.Parent;
+        }
+
+        return false;
+    }
+
+
+    // All the assembies included by the .NET SDK when building a self-contained executable
+    private static string[] s_defaultCSAssemblyNames =
+    [
+        "System.Runtime",
+        "System.IO.FileSystem.Primitives",
+        "System.Net.NetworkInformation",
+        "System.Runtime.Intrinsics",
+        "System.Security.Cryptography",
+        "System.Threading.ThreadPool",
+        "System.Diagnostics.Debug",
+        "System.Net.Sockets",
+        "System.Runtime.InteropServices.JavaScript",
+        "System.Net.Ping",
+        "System.Net.Mail",
+        "System.Diagnostics.DiagnosticSource",
+        "System.Reflection.DispatchProxy",
+        "System.Private.Xml",
+        "mscorlib",
+        "Microsoft.VisualBasic",
+        "System.IO.FileSystem",
+        "System.Net.Security",
+        "netstandard",
+        "System.Reflection.Primitives",
+        "System.Globalization",
+        "System.Runtime.InteropServices.RuntimeInformation",
+        "System.Formats.Asn1",
+        "System.Runtime.Serialization.Json",
+        "System.Diagnostics.StackTrace",
+        "System.Text.Json",
+        "System.Globalization.Extensions",
+        "System.Reflection.TypeExtensions",
+        "System.Threading.Tasks.Parallel",
+        "System.IO.FileSystem.Watcher",
+        "System.Threading.Tasks.Dataflow",
+        "System.ServiceModel.Web",
+        "System.Console",
+        "System.ComponentModel.Annotations",
+        "System.Threading.Channels",
+        "System.Net.Http",
+        "System.Reflection.Emit.Lightweight",
+        "System.Buffers",
+        "System.Security.Cryptography.X509Certificates",
+        "System.Net.Quic",
+        "System.Reflection.Extensions",
+        "System.IO.Pipes.AccessControl",
+        "System.ComponentModel.Primitives",
+        "System.Security.AccessControl",
+        "System.Text.Encoding.CodePages",
+        "System.Collections.NonGeneric",
+        "System.Net",
+        "System.Runtime.Numerics",
+        "System.Transactions",
+        "System.IO.Compression.ZipFile",
+        "System.Text.Encoding",
+        "System.Runtime.Serialization.Formatters",
+        "System.Dynamic.Runtime",
+        "System.Transactions.Local",
+        "System.Xml",
+        "System.Net.Requests",
+        "System.Security.Cryptography.Encoding",
+        "Microsoft.VisualBasic.Core",
+        "System.Security.Cryptography.Algorithms",
+        "System.Net.WebSockets.Client",
+        "System.Xml.XDocument",
+        "System.Private.Uri",
+        "System.Net.ServicePoint",
+        "System.Reflection.Emit",
+        "System.Net.Http.Json",
+        "System.Formats.Tar",
+        "System.Runtime.Serialization.Xml",
+        "System.Data.Common",
+        "System.Net.Primitives",
+        "System.Drawing.Primitives",
+        "System.Diagnostics.Tracing",
+        "System.Xml.Serialization",
+        "System.IO.UnmanagedMemoryStream",
+        "System.Diagnostics.FileVersionInfo",
+        "System.Security.Claims",
+        "System.Threading.Overlapped",
+        "System.Private.Xml.Linq",
+        "System.Data",
+        "System.Text.Encoding.Extensions",
+        "System.Threading.Timer",
+        "System.Collections",
+        "System.Linq",
+        "System.Collections.Immutable",
+        "System.Security.Principal",
+        "System.Security.Cryptography.OpenSsl",
+        "Microsoft.CSharp",
+        "System.IO.MemoryMappedFiles",
+        "System.Globalization.Calendars",
+        "System.ObjectModel",
+        "System.Security.Cryptography.Cng",
+        "System.Net.WebSockets",
+        "System.Security.Cryptography.Primitives",
+        "System.Security",
+        "System.Collections.Concurrent",
+        "System",
+        "System.ComponentModel.TypeConverter",
+        "System.ComponentModel",
+        "System.Xml.XmlSerializer",
+        "System.Diagnostics.Tools",
+        "System.Xml.XmlDocument",
+        "System.Security.SecureString",
+        "System.IO.Compression.Brotli",
+        "System.Resources.Writer",
+        "System.Diagnostics.Process",
+        "System.Linq.Queryable",
+        "System.IO.Compression.FileSystem",
+        "System.Net.NameResolution",
+        "System.Runtime.Handles",
+        "System.Resources.ResourceManager",
+        "System.Threading.Tasks.Extensions",
+        "System.ComponentModel.DataAnnotations",
+        "System.Diagnostics.TraceSource",
+        "System.Web",
+        "System.IO.Pipes",
+        "System.Text.Encodings.Web",
+        "System.IO",
+        "System.Runtime.Extensions",
+        "System.Numerics",
+        "System.ServiceProcess",
+        "System.Text.RegularExpressions",
+        "System.Runtime.CompilerServices.VisualC",
+        "System.AppContext",
+        "System.Linq.Parallel",
+        "System.ValueTuple",
+        "System.Xml.XPath.XDocument",
+        "System.ComponentModel.EventBasedAsync",
+        "System.IO.Compression",
+        "System.Reflection.Emit.ILGeneration",
+        "System.Runtime.Serialization",
+        "System.Memory",
+        "System.Runtime.InteropServices",
+        "System.Reflection",
+        "System.Diagnostics.TextWriterTraceListener",
+        "System.Runtime.CompilerServices.Unsafe",
+        "System.Collections.Specialized",
+        "System.Security.Principal.Windows",
+        "System.Net.HttpListener",
+        "System.Numerics.Vectors",
+        "System.Configuration",
+        "System.Private.DataContractSerialization",
+        "System.IO.IsolatedStorage",
+        "WindowsBase",
+        "Microsoft.Win32.Registry",
+        "System.Drawing",
+        "Microsoft.Win32.Primitives",
+        "System.Diagnostics.Contracts",
+        "System.Reflection.Metadata",
+        "System.Xml.Linq",
+        "System.Windows",
+        "System.Resources.Reader",
+        "System.Threading.Tasks",
+        "System.Threading",
+        "System.Security.Cryptography.Csp",
+        "System.IO.FileSystem.DriveInfo",
+        "System.Threading.Thread",
+        "System.Net.WebProxy",
+        "System.Net.WebHeaderCollection",
+        "System.Xml.XPath",
+        "System.Core",
+        "System.Web.HttpUtility",
+        "System.Xml.ReaderWriter",
+        "System.Runtime.Loader",
+        "System.IO.FileSystem.AccessControl",
+        "System.Linq.Expressions",
+        "System.Data.DataSetExtensions",
+        "System.Private.CoreLib",
+        "System.Net.WebClient",
+        "System.Runtime.Serialization.Primitives",
+    ];
+
+
+    private static bool IsNotDefault(AssemblyName assembly)
+    {
+        return !s_defaultCSAssemblyNames.Contains(assembly.Name);
+    }
+
 
     private static void BoundedLog(string message)
     {
