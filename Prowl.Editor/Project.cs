@@ -388,8 +388,7 @@ public class Project
         XElement referencesXML = new XElement("ItemGroup",
             references.Select(x => new XElement("Reference",
                 new XAttribute("Include", x.Item1),
-                new XElement("HintPath", x.Item2),
-                new XElement("Private", "false")
+                new XElement("HintPath", x.Item2)
             ))
         );
 
