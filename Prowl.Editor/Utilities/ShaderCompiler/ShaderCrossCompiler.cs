@@ -14,7 +14,7 @@ using Veldrid;
 
 #pragma warning disable
 
-namespace Prowl.Editor.Utilities;
+namespace Prowl.Editor;
 
 public struct ReflectedResourceInfo
 {
@@ -85,10 +85,10 @@ public static partial class ShaderCompiler
         shader.ShaderBytes = backend switch
         {
             GraphicsBackend.Direct3D11 => CompileHLSL(context, IR),
-            GraphicsBackend.Metal      => CompileMSL(context, IR),
-            GraphicsBackend.OpenGL     => CompileGLSL(context, IR, false),
-            GraphicsBackend.OpenGLES   => CompileGLSL(context, IR, true),
-            _                          => sourceSPIRV,
+            GraphicsBackend.Metal => CompileMSL(context, IR),
+            GraphicsBackend.OpenGL => CompileGLSL(context, IR, false),
+            GraphicsBackend.OpenGLES => CompileGLSL(context, IR, true),
+            _ => sourceSPIRV,
         };
 
         return shader;

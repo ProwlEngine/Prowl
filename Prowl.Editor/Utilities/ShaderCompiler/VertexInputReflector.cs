@@ -11,7 +11,7 @@ using Veldrid;
 
 #pragma warning disable
 
-namespace Prowl.Editor.Utilities;
+namespace Prowl.Editor;
 
 public static partial class VertexInputReflector
 {

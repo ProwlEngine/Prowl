@@ -11,7 +11,7 @@ using Veldrid;
 
 using Debug = Prowl.Runtime.Debug;
 
-namespace Prowl.Editor.Utilities;
+namespace Prowl.Editor;
 
 public static partial class ShaderParser
 {
