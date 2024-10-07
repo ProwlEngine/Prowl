@@ -107,7 +107,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 if (cameraRelative)
                     model.Translation -= cameraPosition;
 
-                model = Graphics.GetGPUModelMatrix(model);
+                // model = Graphics.GetGPUModelMatrix(model);
 
                 buffer.ApplyPropertyState(properties);
 

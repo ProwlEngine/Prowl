@@ -162,18 +162,11 @@ public static partial class Graphics
         return projection;
     }
 
-    public static Matrix4x4 GetGPUModelMatrix(Matrix4x4 projectionMatrix)
+    public static FrontFace GetFrontFace()
     {
-        if (!IsOpenGL)
-            return projectionMatrix;
+        if (IsOpenGL)
+            return FrontFace.CounterClockwise;
 
-        Matrix4x4 flipYMatrix = new Matrix4x4(
-            -1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1
-        );
-
-        return flipYMatrix * projectionMatrix;
+        return FrontFace.Clockwise;
     }
 }

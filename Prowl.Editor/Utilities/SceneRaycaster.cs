@@ -88,7 +88,7 @@ public static class SceneRaycaster
             renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
 
             model.Translation -= cameraPosition;
-            model = Graphics.GetGPUModelMatrix(model);
+            // model = Graphics.GetGPUModelMatrix(model);
 
             buffer.SetMatrix("_Matrix_MVP", model.ToFloat() * floatVP);
 
