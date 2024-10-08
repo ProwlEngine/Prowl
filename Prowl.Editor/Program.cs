@@ -181,20 +181,29 @@ public static class Program
 
                     DirectoryInfo temp = active.TempDirectory;
                     DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
-                    DirectoryInfo debug = new DirectoryInfo(Path.Combine(bin.FullName, "Debug"));
+                    DirectoryInfo project = new DirectoryInfo(Path.Combine(bin.FullName, "project"));
+                    DirectoryInfo editor = new DirectoryInfo(Path.Combine(bin.FullName, "editor"));
+
+                    string gameAssemblyName = Path.GetFileNameWithoutExtension(active.GameCSProject.Name);
+                    string editorAssemblyName = Path.GetFileNameWithoutExtension(active.EditorCSProject.Name);
+
+                    string gameAssemblyPath = Path.Combine(project.FullName, gameAssemblyName + ".dll");
+                    string editorAssemblyPath = Path.Combine(editor.FullName, editorAssemblyName + ".dll");
 
                     // Delete everything under Temp\Bin
                     if (bin.Exists)
                         Directory.Delete(bin.FullName, true);
+
                     bin.Create();
 
-                    // Compile the Projects
-                    Project.Compile(active.Assembly_Proj.FullName, debug);
-                    Project.Compile(active.Editor_Assembly_Proj.FullName, debug);
+                    active.CompileGameAssembly(new CSCompileOptions(), project);
+                    Assembly? gameAssembly = AssemblyManager.LoadExternalAssembly(gameAssemblyPath, true);
 
-                    // Reload the External Assemblies
-                    AssemblyManager.LoadExternalAssembly(active.Editor_Assembly_DLL.FullName, true);
-                    AssemblyManager.LoadExternalAssembly(active.Assembly_DLL.FullName, true);
+                    if (gameAssembly != null)
+                    {
+                        active.CompileEditorAssembly(new CSCompileOptions(), gameAssembly, editor);
+                        Assembly? editorAssembly = AssemblyManager.LoadExternalAssembly(editorAssemblyPath, true);
+                    }
                 }
                 catch (Exception e)
                 {

@@ -49,9 +49,9 @@ public class Desktop_Player : ProjectBuilder
         string BuildDataPath = Path.Combine(output.FullName, "GameData");
         Directory.CreateDirectory(BuildDataPath);
 
-
         BoundedLog($"Compiling project assembly to {output.FullName}...");
-        if (!Project.Compile(Project.Active.Assembly_Proj.FullName, output, configuration == Configuration.Release))
+
+        if (!Project.Active.CompileGameAssembly(new CSCompileOptions(configuration == Configuration.Release, true), output))
         {
             Debug.LogError($"Failed to compile Project assembly.");
             return;

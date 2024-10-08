@@ -42,8 +42,6 @@ public static class AssemblyManager
             _externalAssemblyLoadContext ??= new ExternalAssemblyLoadContext();
             Assembly asm = _externalAssemblyLoadContext.LoadFromAssemblyPath(assemblyPath);
 
-            asm.GetTypes();
-
             if (isDependency)
                 _externalAssemblyLoadContext.AddDependency(assemblyPath);
 
