@@ -33,7 +33,7 @@ public abstract class ProjectBuilder
         }
         catch (Exception e)
         {
-            Debug.LogError($"Failed to build project: {e.Message}");
+            Debug.LogException(new Exception($"Failed to build project", e));
         }
     }
 
