@@ -136,8 +136,13 @@ namespace Prowl.Runtime.Cloning
 				CloneFieldAttribute fieldAttrib = field.GetAttributes<CloneFieldAttribute>().FirstOrDefault();
 				if (fieldAttrib != null) flags = fieldAttrib.Flags;
 
-				if (field.HasAttribute<SerializeIgnoreAttribute>() && !flags.HasFlag(CloneFieldFlags.DontSkip))
-					continue;
+                if (!flags.HasFlag(CloneFieldFlags.DontSkip))
+                {
+                    if (field.HasAttribute<SerializeIgnoreAttribute>())
+                        continue;
+                    if (field.HasAttribute<NonSerializedAttribute>())
+                        continue;
+                }
 				if (flags.HasFlag(CloneFieldFlags.Skip))
 					continue;
 
