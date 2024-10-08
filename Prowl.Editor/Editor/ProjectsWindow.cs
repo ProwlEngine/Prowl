@@ -1,8 +1,10 @@
-﻿using Prowl.Editor.Preferences;
+﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.GUI.Layout;
 
 namespace Prowl.Editor
 {
@@ -73,9 +75,16 @@ namespace Prowl.Editor
                 var folders = new DirectoryInfo(Project.Projects_Directory).EnumerateDirectories();
                 folders = folders.OrderByDescending((x) => x.LastWriteTimeUtc);
 
-                foreach (var projectFolder in folders)
-                    if (string.IsNullOrEmpty(_searchText) || projectFolder.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
-                        DisplayProject(projectFolder.Name);
+                if (folders.Count() == 0)
+                {
+                    gui.Draw2D.DrawText("No projects found! Navigate to the 'Create' tab to start a new project", rect);
+                }
+                else
+                {
+                    foreach (var projectFolder in folders)
+                        if (string.IsNullOrEmpty(_searchText) || projectFolder.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                            DisplayProject(projectFolder.Name);
+                }
             }
 
             using (gui.Node("OpenBtn").TopLeft(Offset.Percentage(1f, -162), Offset.Percentage(1f, -60)).Scale(162, 60).Enter())
@@ -101,6 +110,8 @@ namespace Prowl.Editor
                 }
             }
         }
+
+        string? contextMenuProject = null;
         private void DisplayProject(string name)
         {
             var proj = Project.GetPath(name);
@@ -123,14 +134,63 @@ namespace Prowl.Editor
                     gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.Rect, new(0.7f, 0.7f, 0.7f, 1f), 1, 2);
                 }
                 else if (interact.IsHovered())
+                {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new(0.1f, 0.1f, 0.1f, 0.4f), 2);
+                }
+
+                using (gui.Node("ProjectOptionsBtn").Top(new Offset(8, LayoutValueType.Pixel)).Left(new Offset(rect.width - 32, LayoutValueType.Pixel)).Height(24).Width(24).Enter())
+                {
+                    rect = gui.CurrentNode.LayoutData.Rect;
+                    if (gui.IsNodePressed())
+                    {
+                        // Got to be a better way than doing this
+                        contextMenuProject = name;
+                        gui.OpenPopup("ProjectOptionsContextMenu", null, gui.CurrentNode.Parent);
+                    }
+                    else if (gui.IsNodeHovered())
+                    {
+                        gui.Draw2D.DrawRectFilled(rect, new(0.1f, 0.1f, 0.1f, 1f), 2);
+                    }
+
+                    // Text centering/alignment functions?
+                    UIDrawList.DefaultFont.CalcTextSizeA(out Vector2 textSize, 20, rect.width, rect.width, "...", 0);
+                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, "...", 20, rect.Position + new Vector2(textSize.x * 0.5f, 0), Color.white);
+                }
+
+                // Outside ProjectOptionsBtn node as it wouldn't render (or too small in size?)
+                if (contextMenuProject != null && contextMenuProject.Equals(name))
+                {
+                    DrawProjectContextMenu(proj);
+                }
                 //else if (interact.IsDoubleClicked())
                 //{
                 //    Project.Open(name);
                 //    isOpened = false;
                 //}
             }
+        }
 
+        private void DrawProjectContextMenu(DirectoryInfo proj)
+        {
+            bool closePopup = false;
+            if (gui.BeginPopup("ProjectOptionsContextMenu", out var popupHolder) && popupHolder != null)
+            {
+                using (popupHolder.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
+                {
+                    // Add options
+                    // - Delete project (with popup confirmation)
+                    if (EditorGUI.StyledButton("Show In Explorer"))
+                    {
+                        AssetDatabase.OpenPath(proj);
+                        closePopup = true;
+                    }
+                }
+            }
+            if (closePopup)
+            {
+                contextMenuProject = null;
+                gui.ClosePopup(popupHolder);
+            }
         }
 
         private string GetFormattedLastModifiedTime(DateTime lastModified)
