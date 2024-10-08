@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 namespace Prowl.Runtime;
 
 public class EngineObject : IDisposable
+[CloneBehavior(CloneBehavior.Reference)]
 {
     private static readonly Stack<EngineObject> destroyed = new Stack<EngineObject>();
 
