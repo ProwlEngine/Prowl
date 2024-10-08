@@ -62,7 +62,7 @@ public class Desktop_Player : ProjectBuilder
 
         active.GenerateGameProject(allowUnsafeBlocks, enableAOT, true, [entry.referenceAssembly], [entry.startupScript]);
 
-        CSCompileOptions options = new CSCompileOptions()
+        DotnetCompileOptions options = new DotnetCompileOptions()
         {
             isRelease = configuration == Configuration.Release,
             isSelfContained = true,

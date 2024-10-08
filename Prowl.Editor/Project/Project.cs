@@ -221,8 +221,7 @@ public class Project
                 .Concat([runtimeAssembly])
                 .Concat(additonalRefs ?? []),
             allowUnsafeBlocks,
-            publishAOT,
-            isPrivate);
+            publishAOT);
     }
 
 
@@ -230,7 +229,7 @@ public class Project
     /// Compiles the game assembly
     /// </summary>
     /// <returns>True if Compiling was sucessful</returns>
-    public bool CompileGameAssembly(CSCompileOptions options, DirectoryInfo output)
+    public bool CompileGameAssembly(DotnetCompileOptions options, DirectoryInfo output)
     {
         return ProjectCompiler.CompileCSProject(GameCSProject, output, options);
     }
@@ -260,7 +259,7 @@ public class Project
     /// Compiles the editor assembly
     /// </summary>
     /// <returns>True if Compiling was sucessful</returns>
-    public bool CompileEditorAssembly(CSCompileOptions options, DirectoryInfo output)
+    public bool CompileEditorAssembly(DotnetCompileOptions options, DirectoryInfo output)
     {
         return ProjectCompiler.CompileCSProject(EditorCSProject, output, options);
     }

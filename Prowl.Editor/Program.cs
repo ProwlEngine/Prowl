@@ -201,7 +201,7 @@ public static class Program
                     active.GenerateGameProject(allowUnsafeBlocks, enableAOT);
 
                     // Forcefully disable AOT for scripts run in the editor
-                    CSCompileOptions options = new CSCompileOptions()
+                    DotnetCompileOptions options = new DotnetCompileOptions()
                     {
                         publishAOT = false,
                         allowUnsafeBlocks = allowUnsafeBlocks
