@@ -8,6 +8,8 @@ using CommandLine;
 using Prowl.Editor.Assets;
 using Prowl.Editor.Editor.CLI;
 using Prowl.Editor.Preferences;
+using Prowl.Editor.ProjectSettings;
+
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
@@ -184,11 +186,8 @@ public static class Program
                     DirectoryInfo project = new DirectoryInfo(Path.Combine(bin.FullName, "project"));
                     DirectoryInfo editor = new DirectoryInfo(Path.Combine(bin.FullName, "editor"));
 
-                    string gameAssemblyName = Path.GetFileNameWithoutExtension(active.GameCSProject.Name);
-                    string editorAssemblyName = Path.GetFileNameWithoutExtension(active.EditorCSProject.Name);
-
-                    string gameAssemblyPath = Path.Combine(project.FullName, gameAssemblyName + ".dll");
-                    string editorAssemblyPath = Path.Combine(editor.FullName, editorAssemblyName + ".dll");
+                    string gameOutputPath = Path.Combine(project.FullName, Project.GameCSProjectName + ".dll");
+                    string editorOutputPath = Path.Combine(editor.FullName, Project.EditorCSProjectName + ".dll");
 
                     // Delete everything under Temp\Bin
                     if (bin.Exists)
@@ -196,19 +195,30 @@ public static class Program
 
                     bin.Create();
 
-                    active.CompileGameAssembly(new CSCompileOptions(), project);
-                    Assembly? gameAssembly = AssemblyManager.LoadExternalAssembly(gameAssemblyPath, true);
+                    bool allowUnsafeBlocks = BuildProjectSettings.Instance.AllowUnsafeBlocks;
+                    bool enableAOT = BuildProjectSettings.Instance.EnableAOTCompilation;
+
+                    active.GenerateGameProject(allowUnsafeBlocks, enableAOT);
+
+                    // Forcefully disable AOT for scripts run in the editor
+                    CSCompileOptions options = new CSCompileOptions()
+                    {
+                        publishAOT = false,
+                        allowUnsafeBlocks = allowUnsafeBlocks
+                    };
+
+                    active.CompileGameAssembly(options, project);
+                    Assembly? gameAssembly = AssemblyManager.LoadExternalAssembly(gameOutputPath, true);
 
                     if (gameAssembly != null)
                     {
-                        active.CompileEditorAssembly(new CSCompileOptions(), gameAssembly, editor);
-                        Assembly? editorAssembly = AssemblyManager.LoadExternalAssembly(editorAssemblyPath, true);
+                        active.CompileEditorAssembly(options, editor);
+                        Assembly? editorAssembly = AssemblyManager.LoadExternalAssembly(editorOutputPath, true);
                     }
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Error reloading assemblies: {e.Message}");
-                    Debug.LogError(e.StackTrace);
+                    Debug.LogException(new Exception("Error reloading assemblies", e));
                 }
                 finally
                 {
