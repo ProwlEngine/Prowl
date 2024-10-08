@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 
+using Prowl.Runtime.Cloning;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
@@ -14,9 +15,9 @@ namespace Prowl.Runtime;
 /// Represents the base class for all scripts that attach to GameObjects in the Prowl Game Engine.
 /// MonoBehaviour provides lifecycle methods and coroutine functionality for game object behaviors.
 /// </summary>
-public abstract class MonoBehaviour : EngineObject
 [ManuallyCloned]
 [CloneBehavior(CloneBehavior.Reference)]
+public abstract class MonoBehaviour : EngineObject, ICloneExplicit
 {
     private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
 
