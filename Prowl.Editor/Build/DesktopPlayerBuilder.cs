@@ -4,6 +4,8 @@
 using System.Reflection;
 
 using Prowl.Editor.Assets;
+using Prowl.Editor.ProjectSettings;
+
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
@@ -51,7 +53,26 @@ public class Desktop_Player : ProjectBuilder
 
         BoundedLog($"Compiling project assembly to {output.FullName}...");
 
-        if (!Project.Active.CompileGameAssembly(new CSCompileOptions(configuration == Configuration.Release, true), output))
+        Project active = Project.Active!;
+
+        bool allowUnsafeBlocks = BuildProjectSettings.Instance.AllowUnsafeBlocks;
+        bool enableAOT = BuildProjectSettings.Instance.EnableAOTCompilation;
+
+        EntrypointScript entry = EntrypointScript.Create(typeof(Desktop.DesktopPlayer));
+
+        active.GenerateGameProject(allowUnsafeBlocks, enableAOT, true, [entry.referenceAssembly], [entry.startupScript]);
+
+        CSCompileOptions options = new CSCompileOptions()
+        {
+            isRelease = configuration == Configuration.Release,
+            isSelfContained = true,
+            outputExecutable = true,
+            startupObject = entry.startupObjectName,
+            platform = Platform.Linux,
+            architecture = System.Runtime.InteropServices.Architecture.X64
+        };
+
+        if (!active.CompileGameAssembly(options, output))
         {
             Debug.LogError($"Failed to compile Project assembly.");
             return;
@@ -89,7 +110,9 @@ public class Desktop_Player : ProjectBuilder
         BoundedLog($"Preparing project settings...");
         // Find all ScriptableSingletons with the specified location
         foreach (var type in RuntimeUtils.GetTypesWithAttribute<FilePathAttribute>())
+        {
             if (Attribute.GetCustomAttribute(type, typeof(FilePathAttribute)) is FilePathAttribute attribute)
+            {
                 if (attribute.FileLocation == FilePathAttribute.Location.Setting)
                 {
                     // Use Reflection to find the CopyTo method
@@ -104,25 +127,8 @@ public class Desktop_Player : ProjectBuilder
                     string? test = BuildDataPath;
                     copyTo.Invoke(null, [test]);
                 }
-
-
-        BoundedLog($"Copying Desktop player to {output.FullName}...");
-        // Our executable folder contains "Players\Desktop" which we need to copy over the contents
-        string playerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Players", "Desktop");
-        if (!Directory.Exists(playerPath))
-        {
-            Debug.LogError($"Failed to find Desktop player at {playerPath}");
-            return;
+            }
         }
-
-        // Copy the contents of the Desktop player to the output directory, Files and Directories
-        var allDirectories = Directory.GetDirectories(playerPath, "*", SearchOption.AllDirectories);
-        foreach (var directory in allDirectories)
-            Directory.CreateDirectory(directory.Replace(playerPath, output.FullName));
-
-        var allFiles = Directory.GetFiles(playerPath, "*", SearchOption.AllDirectories);
-        foreach (var file in allFiles)
-            File.Copy(file, file.Replace(playerPath, output.FullName), true);
 
         // Strip files we dont need for our target
         if (target != Target.Universal)
