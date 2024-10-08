@@ -3,6 +3,8 @@
 
 using System;
 
+using Prowl.Runtime.Cloning;
+
 namespace Prowl.Runtime;
 
 // Taken and modified from Duality's ContentRef.cs
@@ -10,6 +12,7 @@ namespace Prowl.Runtime;
 
 public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 {
+    [CloneBehavior(CloneBehavior.Reference), CloneField(CloneFieldFlags.DontSkip)]
     private T? instance;
     private Guid assetID = Guid.Empty;
     private ushort fileID = 0;
