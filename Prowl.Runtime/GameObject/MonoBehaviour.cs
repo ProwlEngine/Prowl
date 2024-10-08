@@ -15,6 +15,8 @@ namespace Prowl.Runtime;
 /// MonoBehaviour provides lifecycle methods and coroutine functionality for game object behaviors.
 /// </summary>
 public abstract class MonoBehaviour : EngineObject
+[ManuallyCloned]
+[CloneBehavior(CloneBehavior.Reference)]
 {
     private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
 
@@ -35,6 +37,13 @@ public abstract class MonoBehaviour : EngineObject
     [HideInInspector]
     public HideFlags hideFlags;
 
+    [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
+    private bool _executeAlways = false;
+    [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
+    private bool _hasAwoken = false;
+    [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
+    private bool _hasStarted = false;
+
     /// <summary>
     /// Gets the GameObject this MonoBehaviour is attached to.
     /// </summary>
@@ -48,18 +57,15 @@ public abstract class MonoBehaviour : EngineObject
     /// <summary>
     /// Gets or sets whether this MonoBehaviour should execute in edit mode.
     /// </summary>
-    public bool ExecuteAlways { get; internal set; } = false;
-
+    public bool ExecuteAlways { get => _executeAlways; internal set => _executeAlways = value; }
     /// <summary>
     /// Gets whether the Awake method has been called.
     /// </summary>
-    public bool HasAwoken { get; internal set; } = false;
-
+    public bool HasAwoken { get => _hasAwoken; internal set => _hasAwoken = value; }
     /// <summary>
     /// Gets whether the Start method has been called.
     /// </summary>
-    public bool HasStarted { get; internal set; } = false;
-
+    public bool HasStarted { get => _hasStarted; internal set => _hasStarted = value; }
     /// <summary>
     /// Gets the tag of the GameObject this MonoBehaviour is attached to.
     /// </summary>
