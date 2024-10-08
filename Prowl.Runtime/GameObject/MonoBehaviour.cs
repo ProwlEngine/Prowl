@@ -471,6 +471,61 @@ public abstract class MonoBehaviour : EngineObject
     /// <param name="objs">Optional parameters to pass to the method.</param>
     public void SendMessage(string methodName, params object[] objs) => GameObject.SendMessage(methodName, objs);
 
+    /// <summary>
+    /// Creates a deep copy of this Component.
+    /// </summary>
+    /// <returns>A reference to a newly created deep copy of this Component.</returns>
+    public MonoBehaviour Clone()
+    {
+        return this.DeepClone();
+    }
+    /// <summary>
+    /// Deep-copies this Components data to the specified target Component. If source and 
+    /// target Component Type do not match, the operation will fail.
+    /// </summary>
+    /// <param name="target">The target Component to copy to.</param>
+    public void CopyTo(MonoBehaviour target)
+    {
+        this.DeepCopyTo(target);
+    }
+
+    void ICloneExplicit.SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
+    {
+        MonoBehaviour target = targetObj as MonoBehaviour;
+        this.OnSetupCloneTargets(targetObj, setup);
+    }
+
+    void ICloneExplicit.CopyDataTo(object targetObj, ICloneOperation operation)
+    {
+        MonoBehaviour target = targetObj as MonoBehaviour;
+        target._enabled = _enabled;
+        target._enabledInHierarchy = _enabledInHierarchy;
+        this.OnCopyDataTo(targetObj, operation);
+    }
+
+    /// <summary>
+    /// This method prepares the <see cref="CopyTo"/> operation for custom Component Types.
+    /// It uses reflection to prepare the cloning operation automatically, but you can implement
+    /// this method in order to handle certain fields and cases manually. See <see cref="ICloneExplicit.SetupCloneTargets"/>
+    /// for a more thorough explanation.
+    /// </summary>
+    protected virtual void OnSetupCloneTargets(object target, ICloneTargetSetup setup)
+    {
+        setup.HandleObject(this, target);
+    }
+
+    /// <summary>
+    /// This method performs the <see cref="CopyTo"/> operation for custom Component Types.
+    /// It uses reflection to perform the cloning operation automatically, but you can implement
+    /// this method in order to handle certain fields and cases manually. See <see cref="ICloneExplicit.CopyDataTo"/>
+    /// for a more thorough explanation.
+    /// </summary>
+    /// <param name="target">The target Component where this Components data is copied to.</param>
+    /// <param name="operation"></param>
+    protected virtual void OnCopyDataTo(object target, ICloneOperation operation)
+    {
+        operation.HandleObject(this, target);
+    }
 
     #endregion
 }
