@@ -476,7 +476,22 @@ public static partial class AssetDatabase
         if (assetGuid == Guid.Empty) throw new ArgumentException("Asset Guid cannot be empty", nameof(assetGuid));
 
         if (guidToAssetData.TryGetValue(assetGuid, out SerializedAsset? value))
-            return value;
+        {
+            // if Main or any sub asset is Null or Destroyed, Destroy it from cache
+            // Destroying a Sub Asset destroys the Main Asset as well since they act as a single entity
+            if (value.Main == null || value.Main.IsDestroyed)
+            {
+                DestroyStoredAsset(assetGuid);
+            }
+            else if (value.SubAssets.Any(x => x == null || x.IsDestroyed))
+            {
+                DestroyStoredAsset(assetGuid);
+            }
+            else
+            {
+                return value;
+            }
+        }
 
         if (!TryGetFile(assetGuid, out var asset))
             return null;
