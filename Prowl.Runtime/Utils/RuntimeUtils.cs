@@ -11,14 +11,49 @@ using System.Threading;
 
 namespace Prowl.Runtime;
 
+
+// From https://github.com/dotnet/runtime/blob/main/src/libraries/Microsoft.NETCore.Platforms/src/PortableRuntimeIdentifierGraph.json
+public enum Platform
+{
+    Android,
+    Browser,
+    FreeBSD,
+    Haiku,
+    Illumos,
+    iOS,
+    iOSSimulator,
+    Linux,
+    MacCatalyst,
+    MacOS,
+    Solaris,
+    tvOS,
+    tvOSSimulator,
+    Unix,
+    Wasi,
+    Windows,
+}
+
+
 public static class RuntimeUtils
 {
     private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
+
+    public static bool IsARM() =>
+        RuntimeInformation.OSArchitecture == Architecture.Arm ||
+        RuntimeInformation.OSArchitecture == Architecture.Arm64;
 
     public static bool IsWindows() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public static bool IsLinux() => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
     public static bool IsFreeBSD() => RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD);
     public static bool IsMac() => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+
+    public static Platform GetOSPlatform()
+        => IsWindows() ? Platform.Windows :
+            IsLinux() ? Platform.Linux :
+            IsMac() ? Platform.MacOS :
+            throw new Exception("Unable to determine OS Platform");
+
 
     public static Type? FindType(string qualifiedTypeName)
     {
