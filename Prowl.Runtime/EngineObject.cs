@@ -15,15 +15,18 @@ public class EngineObject : IDisposable
 
     static int NextID = 1;
 
+    [CloneField(CloneFieldFlags.Skip)]
     protected int _instanceID;
     public int InstanceID => _instanceID;
 
     // Asset path if we have one
     [HideInInspector]
+    [CloneField(CloneFieldFlags.Skip)]
     public Guid AssetID = Guid.Empty;
 
     // Asset path if we have one
     [HideInInspector]
+    [CloneField(CloneFieldFlags.Skip)]
     public ushort FileID = 0;
 
     [HideInInspector]
