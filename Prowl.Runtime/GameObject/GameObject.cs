@@ -55,7 +55,7 @@ public class GameObject : EngineObject, ISerializable
     /// <summary> Gets whether or not this gameobject is enabled explicitly </summary>
     public bool enabled
     {
-        get { return _enabled; }
+        get => _enabled;
         set { if (value != _enabled) { SetEnabled(value); } }
     }
 
@@ -80,7 +80,7 @@ public class GameObject : EngineObject, ISerializable
     public GameObject? parent => _parent;
 
     /// <summary> A List of all children of this GameObject </summary>
-    public List<GameObject> children = new List<GameObject>();
+    public List<GameObject> children = [];
 
     public int childCount => children.Count;
 
@@ -100,7 +100,6 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-    public SerializedProperty? PrefabMods { get; set; } = null;
 
     #endregion
 
