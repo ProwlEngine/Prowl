@@ -11,27 +11,19 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor;
 
-public struct CSCompileOptions
+public struct CSCompileOptions()
 {
-    public bool isRelease;
+    public bool isRelease = false;
+    public bool isSelfContained = false;
+    public bool allowUnsafeBlocks = false;
 
-    public Architecture? architecture;
-    public Platform? platform;
-    public bool isSelfContained;
+    public Architecture? architecture = null;
+    public Platform? platform = null;
 
 
-    public CSCompileOptions(
-        bool? isRelease = null,
-        bool? isSelfContained = null,
-        Architecture? architecture = null,
-        Platform? platform = null)
-    {
-        this.isRelease = isRelease ?? false;
-        this.isSelfContained = isSelfContained ?? false;
-
-        this.architecture = architecture;
-        this.platform = platform;
-    }
+    public bool? publishAOT = null;
+    public bool? outputExecutable = false;
+    public string? startupObject = null;
 
 
     public readonly string ConstructDotnetArgs(FileInfo project, DirectoryInfo? outputPath)
@@ -67,6 +59,21 @@ public struct CSCompileOptions
                 Architecture.Armv6 => "armv6",
                 _ => throw new Exception($"Unknown target architecture: {architecture}")
             });
+        }
+
+        if (publishAOT != null)
+        {
+            args.Add($"--property:PublishAot={(publishAOT.Value ? "true" : "false")}");
+        }
+
+        if (startupObject != null)
+        {
+            args.Add($"--property:StartupObject={startupObject}");
+        }
+
+        if (outputExecutable != null)
+        {
+            args.Add($"--property:OutputType={(outputExecutable.Value ? "Exe" : "Library")}");
         }
 
         if (platform != null)
@@ -151,18 +158,22 @@ public static class ProjectCompiler
 
 
     public static void GenerateCSProject(
-        FileInfo project,
+        string assemblyName,
+        FileInfo outputFile,
         IEnumerable<FileInfo> scriptPaths,
         IEnumerable<Assembly> references,
-        bool allowUnsafe = false)
+        bool allowUnsafe = false,
+        bool publishAOT = false)
     {
-        Runtime.Debug.Log($"Updating {project.FullName}.");
+        Runtime.Debug.Log($"Recreating csproj: {outputFile.FullName}.");
 
         XElement propertyGroupXML = new XElement("PropertyGroup",
             new XElement("TargetFramework", "net8.0"),
+            new XElement("AssemblyName", assemblyName),
             new XElement("ImplicitUsings", "enable"),
             new XElement("Nullable", "enable"),
             new XElement("AllowUnsafeBlocks", allowUnsafe),
+            new XElement("PublishAot", publishAOT),
             new XElement("DefaultItemExcludes", "**\\**")
         );
 
@@ -177,7 +188,7 @@ public static class ProjectCompiler
             references.Select(x => new XElement("Reference",
                 new XAttribute("Include", x.GetName().Name ?? "Unknown Assembly"),
                 new XElement("HintPath", x.Location),
-                new XElement("Private", "false")
+                new XElement("Private", publishAOT)
             ))
         );
 
@@ -189,7 +200,7 @@ public static class ProjectCompiler
 
         XDocument projectDocument = new XDocument(projectXML);
 
-        projectDocument.Save(project.FullName);
+        projectDocument.Save(outputFile.FullName);
     }
 
 
