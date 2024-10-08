@@ -58,7 +58,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
     <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
-    <ProjectReference Include="..\External\HeapDumper\HeapDumper.csproj" />
 
     <ProjectReference Include="..\Prowl.Players\Prowl.Desktop\Prowl.Desktop.csproj"/>
   </ItemGroup>
