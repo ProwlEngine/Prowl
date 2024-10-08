@@ -1,18 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <OutputType>Exe</OutputType>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <ApplicationIcon>EmbeddedResources/Logo.ico</ApplicationIcon>
-      <RestoreAdditionalProjectSources>
-        https://api.nuget.org/v3/index.json;
-        https://www.myget.org/F/sixlabors/api/v3/index.json;
-      </RestoreAdditionalProjectSources>
-      <ServerGarbageCollection>true</ServerGarbageCollection>
-    </PropertyGroup>
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>EmbeddedResources/Logo.ico</ApplicationIcon>
+    <RestoreAdditionalProjectSources>
+      https://api.nuget.org/v3/index.json;
+      https://www.myget.org/F/sixlabors/api/v3/index.json;
+    </RestoreAdditionalProjectSources>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <OutputPath>../Build/Editor/Debug/</OutputPath>
@@ -21,51 +21,52 @@
     <OutputPath>../Build/Editor/Release/</OutputPath>
   </PropertyGroup>
 
-    <ItemGroup>
-        <Compile Remove="EmbeddedResources\*.*" />
-        <Compile Remove="EmbeddedResources\DefaultAssets\*.*" />
-    </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="EmbeddedResources\*.*" />
+    <Compile Remove="EmbeddedResources\DefaultAssets\*.*" />
+  </ItemGroup>
 
+  <ItemGroup>
+    <None Remove="EmbeddedResources\*.*" />
+    <None Remove="EmbeddedResources\DefaultAssets\*.*" />
 
-    <ItemGroup>
-        <None Remove="EmbeddedResources\*.*" />
-        <None Remove="EmbeddedResources\DefaultAssets\*.*" />
+    <None Remove="font.ttf" />
+  </ItemGroup>
 
-        <None Remove="font.ttf" />
-    </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="EmbeddedResources\*.*">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
 
-    <ItemGroup>
-        <EmbeddedResource Include="EmbeddedResources\*.*">
-            <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-        </EmbeddedResource>
+    <EmbeddedResource Include="EmbeddedResources\DefaultAssets\*.*">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
 
-        <EmbeddedResource Include="EmbeddedResources\DefaultAssets\*.*">
-            <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-        </EmbeddedResource>
-    </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
+    <PackageReference Include="CommandLineParser" Version="2.9.1" />
+    <PackageReference Include="DirectXShaderCompiler.NET" Version="1.2.0" />
+    <PackageReference Include="NuGet.Protocol" Version="6.11.0" />
+    <PackageReference Include="NuGet.Resolver" Version="6.11.0" />
+    <PackageReference Include="NuGet.Versioning" Version="6.11.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
+    <PackageReference Include="SixLabors.ImageSharp.Textures" Version="0.0.0-alpha.0.140" />
+    <PackageReference Include="SPIRV-Cross.NET" Version="1.0.1" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
-        <PackageReference Include="CommandLineParser" Version="2.9.1" />
-        <PackageReference Include="DirectXShaderCompiler.NET" Version="1.2.0" />
-        <PackageReference Include="NuGet.Protocol" Version="6.11.0" />
-        <PackageReference Include="NuGet.Resolver" Version="6.11.0" />
-        <PackageReference Include="NuGet.Versioning" Version="6.11.0" />
-        <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
-        <PackageReference Include="SixLabors.ImageSharp.Textures" Version="0.0.0-alpha.0.140" />
-        <PackageReference Include="SPIRV-Cross.NET" Version="1.0.1" />
-    </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
+    <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
+    <ProjectReference Include="..\External\HeapDumper\HeapDumper.csproj" />
 
-    <ItemGroup>
-        <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
-        <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
-        <ProjectReference Include="..\External\HeapDumper\HeapDumper.csproj" />
-    </ItemGroup>
+    <ProjectReference Include="..\Prowl.Players\Prowl.Desktop\Prowl.Desktop.csproj"/>
+  </ItemGroup>
 
-    <ItemGroup>
-      <EmbeddedResource Update="EmbeddedResources\DefaultAssets\Gizmo.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-    </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Update="EmbeddedResources\DefaultAssets\Gizmo.shader">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
 
 </Project>
