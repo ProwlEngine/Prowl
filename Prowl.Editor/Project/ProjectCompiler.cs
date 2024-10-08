@@ -70,7 +70,7 @@ public static class ProjectCompiler
     private static XElement FindOrCreate(XElement parent, XElement node)
     {
         XElement? match = parent.Elements(node.Name)
-            .First(x => node.Attributes().All(y => x.Attribute(y.Name)?.Value == y.Value));
+            .FirstOrDefault(x => node.Attributes().All(y => x.Attribute(y.Name)?.Value == y.Value));
 
         if (match == null)
         {
@@ -155,7 +155,7 @@ public static class ProjectCompiler
 
         XElement propertyGroupXML = FindOrCreate(projectXML,
             new XElement("PropertyGroup",
-                new XAttribute("ID", "Compile")
+                new XAttribute("Label", "Compile")
             )
         );
 
@@ -172,7 +172,7 @@ public static class ProjectCompiler
 
         XElement scriptsXML = FindOrCreate(projectXML,
             new XElement("ItemGroup",
-                new XAttribute("ID", "Compile")
+                new XAttribute("Label", "Compile")
             )
         );
 
@@ -186,7 +186,7 @@ public static class ProjectCompiler
 
         XElement referencesXML = FindOrCreate(projectXML,
             new XElement("ItemGroup",
-                new XAttribute("ID", "References")
+                new XAttribute("Label", "References")
             )
         );
 
