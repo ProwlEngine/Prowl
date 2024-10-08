@@ -111,7 +111,7 @@ public class BuildWindow : EditorWindow
                 {
                     if (gui.IsNodePressed())
                     {
-                        builders[selectedBuilder].StartBuild(BuildProjectSetting.Instance.Scenes, new(path));
+                        builders[selectedBuilder].StartBuild(BuildProjectSettings.Instance.Scenes, new(path));
                     }
                     var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
                         gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;

@@ -183,13 +183,13 @@ public static class Program
 
                     DirectoryInfo temp = active.TempDirectory;
                     DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
-                    DirectoryInfo project = new DirectoryInfo(Path.Combine(bin.FullName, "project"));
+                    DirectoryInfo project = new DirectoryInfo(Path.Combine(bin.FullName, "project", "editor"));
                     DirectoryInfo editor = new DirectoryInfo(Path.Combine(bin.FullName, "editor"));
 
-                    string gameOutputPath = Path.Combine(project.FullName, Project.GameCSProjectName + ".dll");
+                    string projectOutputPath = Path.Combine(project.FullName, Project.GameCSProjectName + ".dll");
                     string editorOutputPath = Path.Combine(editor.FullName, Project.EditorCSProjectName + ".dll");
 
-                    // Delete everything under Temp\Bin
+                    // Delete everything under Temp/bin
                     if (bin.Exists)
                         Directory.Delete(bin.FullName, true);
 
@@ -198,20 +198,22 @@ public static class Program
                     bool allowUnsafeBlocks = BuildProjectSettings.Instance.AllowUnsafeBlocks;
                     bool enableAOT = BuildProjectSettings.Instance.EnableAOTCompilation;
 
-                    active.GenerateGameProject(allowUnsafeBlocks, enableAOT);
-
                     // Forcefully disable AOT for scripts run in the editor
                     DotnetCompileOptions options = new DotnetCompileOptions()
                     {
+                        isRelease = false,
+                        isSelfContained = false,
                         publishAOT = false,
-                        allowUnsafeBlocks = allowUnsafeBlocks
+                        outputExecutable = false,
                     };
 
+                    active.GenerateGameProject(allowUnsafeBlocks, enableAOT);
                     active.CompileGameAssembly(options, project);
-                    Assembly? gameAssembly = AssemblyManager.LoadExternalAssembly(gameOutputPath, true);
+                    Assembly? gameAssembly = AssemblyManager.LoadExternalAssembly(projectOutputPath, true);
 
                     if (gameAssembly != null)
                     {
+                        active.GenerateEditorProject(allowUnsafeBlocks, gameAssembly);
                         active.CompileEditorAssembly(options, editor);
                         Assembly? editorAssembly = AssemblyManager.LoadExternalAssembly(editorOutputPath, true);
                     }

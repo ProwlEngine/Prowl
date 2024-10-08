@@ -17,28 +17,22 @@
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <OutputPath>../Build/Editor/Debug/</OutputPath>
   </PropertyGroup>
+
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <OutputPath>../Build/Editor/Release/</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="EmbeddedResources\*.*" />
-    <Compile Remove="EmbeddedResources\DefaultAssets\*.*" />
+    <Compile Remove="EmbeddedResources\**\*.*" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="EmbeddedResources\*.*" />
-    <None Remove="EmbeddedResources\DefaultAssets\*.*" />
-
+    <None Remove="EmbeddedResources\**\*.*" />
     <None Remove="font.ttf" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="EmbeddedResources\*.*">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </EmbeddedResource>
-
-    <EmbeddedResource Include="EmbeddedResources\DefaultAssets\*.*">
+    <EmbeddedResource Include="EmbeddedResources\**\*.*">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>
@@ -58,14 +52,17 @@
   <ItemGroup>
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
     <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
-
-    <ProjectReference Include="..\Prowl.Players\Prowl.Desktop\Prowl.Desktop.csproj"/>
   </ItemGroup>
 
-  <ItemGroup>
-    <EmbeddedResource Update="EmbeddedResources\DefaultAssets\Gizmo.shader">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </EmbeddedResource>
+  <PropertyGroup>
+    <DefineConstants Condition="'$(ExcludeDesktopPlayer)' == 'true'">$(DefineConstants);EXCLUDE_DESKTOP_PLAYER</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(ExcludeDesktopPlayer)' == 'false'">
+    <Content Include="..\Prowl.Players\Prowl.Desktop\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Players/Desktop</TargetPath>
+    </Content>
   </ItemGroup>
 
 </Project>

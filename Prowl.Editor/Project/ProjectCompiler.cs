@@ -58,48 +58,145 @@ public static class ProjectCompiler
     }
 
 
+    private static void Override(XElement node, XElement newNode)
+    {
+        XElement? existing = node.Element(newNode.Name);
+        existing?.Remove();
+
+        node.Add(newNode);
+    }
+
+
+    private static XElement FindOrCreate(XElement parent, XElement node)
+    {
+        XElement? match = parent.Elements(node.Name)
+            .First(x => node.Attributes().All(y => x.Attribute(y.Name)?.Value == y.Value));
+
+        if (match == null)
+        {
+            parent.Add(node);
+            return node;
+        }
+
+        return match;
+    }
+
+
     public static void GenerateCSProject(
         string assemblyName,
         FileInfo outputFile,
+        DirectoryInfo projectPath,
         IEnumerable<FileInfo> scriptPaths,
         IEnumerable<Assembly> references,
         bool allowUnsafe = false,
-        bool publishAOT = false)
+        bool publishAOT = false,
+        bool isPrivate = false
+    )
+    {
+        GenerateCSProject(
+            assemblyName,
+            outputFile,
+            projectPath,
+            scriptPaths,
+            references.Select(x => (x.GetName().Name!, x.Location)),
+            allowUnsafe,
+            publishAOT,
+            isPrivate
+        );
+    }
+
+
+    public static void GenerateCSProject(
+        string assemblyName,
+        FileInfo outputFile,
+        DirectoryInfo projectPath,
+        IEnumerable<FileInfo> scriptPaths,
+        IEnumerable<Assembly> references,
+        IEnumerable<(string, string)> rawReferences,
+        bool allowUnsafe = false,
+        bool publishAOT = false,
+        bool isPrivate = false
+    )
+    {
+        GenerateCSProject(
+            assemblyName,
+            outputFile,
+            projectPath,
+            scriptPaths,
+            references.Select(x => (x.GetName().Name!, x.Location)).Concat(rawReferences),
+            allowUnsafe,
+            publishAOT,
+            isPrivate
+        );
+    }
+
+
+    public static void GenerateCSProject(
+        string assemblyName,
+        FileInfo outputFile,
+        DirectoryInfo projectPath,
+        IEnumerable<FileInfo> scriptPaths,
+        IEnumerable<(string, string)> references,
+        bool allowUnsafe = false,
+        bool publishAOT = false,
+        bool isPrivate = false)
     {
         Runtime.Debug.Log($"Recreating csproj: {outputFile.FullName}.");
 
-        XElement propertyGroupXML = new XElement("PropertyGroup",
-            new XElement("TargetFramework", "net8.0"),
-            new XElement("AssemblyName", assemblyName),
-            new XElement("ImplicitUsings", "enable"),
-            new XElement("Nullable", "enable"),
-            new XElement("AllowUnsafeBlocks", allowUnsafe),
-            new XElement("PublishAot", publishAOT),
-            new XElement("DefaultItemExcludes", "**\\**")
-        );
+        XDocument projectDocument = outputFile.Exists ? XDocument.Load(outputFile.FullName) : new XDocument();
 
-        XElement scriptsXML = new XElement("ItemGroup",
-            // new XElement("Compile", new XAttribute("Remove", "**/*.cs")),
-            scriptPaths.Select(x =>
-                new XElement("Compile", new XAttribute("Include", x.FullName))
+        XElement? projectXML = projectDocument.Element("Project");
+
+        if (projectXML == null || projectXML.Attribute("Sdk")?.Value != "Microsoft.NET.Sdk")
+        {
+            projectXML = new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"));
+            projectDocument.Add(projectXML);
+        }
+
+        XElement propertyGroupXML = FindOrCreate(projectXML,
+            new XElement("PropertyGroup",
+                new XAttribute("ID", "Compile")
             )
         );
 
-        XElement referencesXML = new XElement("ItemGroup",
+        propertyGroupXML.RemoveNodes();
+
+        propertyGroupXML.Add(new XElement("TargetFramework", "net8.0"));
+        propertyGroupXML.Add(new XElement("AssemblyName", assemblyName));
+        propertyGroupXML.Add(new XElement("ImplicitUsings", "enable"));
+        propertyGroupXML.Add(new XElement("Nullable", "enable"));
+        propertyGroupXML.Add(new XElement("AllowUnsafeBlocks", allowUnsafe));
+        propertyGroupXML.Add(new XElement("PublishAot", publishAOT));
+        propertyGroupXML.Add(new XElement("DefaultItemExcludes", "**\\**"));
+        propertyGroupXML.Add(new XElement("ProjectPath", projectPath.FullName));
+
+        XElement scriptsXML = FindOrCreate(projectXML,
+            new XElement("ItemGroup",
+                new XAttribute("ID", "Compile")
+            )
+        );
+
+        scriptsXML.RemoveAll();
+
+        scriptsXML.Add(
+            scriptPaths.Select(x =>
+                new XElement("Compile", new XAttribute("Include", $"$(ProjectPath){Path.DirectorySeparatorChar}{Path.GetRelativePath(projectPath.FullName, x.FullName)}"))
+            )
+        );
+
+        XElement referencesXML = FindOrCreate(projectXML,
+            new XElement("ItemGroup",
+                new XAttribute("ID", "References")
+            )
+        );
+
+        referencesXML.Add(
             references.Select(x => new XElement("Reference",
-                new XAttribute("Include", x.GetName().Name ?? "Unknown Assembly"),
-                new XElement("HintPath", x.Location),
-                new XElement("Private", publishAOT)
+                new XAttribute("Include", x.Item1),
+                new XElement("HintPath", $"$(ProjectPath){Path.DirectorySeparatorChar}{Path.GetRelativePath(projectPath.FullName, x.Item2)}"),
+                new XElement("Private", isPrivate)
             ))
         );
-
-        XElement projectXML = new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"),
-            propertyGroupXML,
-            scriptsXML,
-            referencesXML
-        );
-
-        XDocument projectDocument = new XDocument(projectXML);
 
         projectDocument.Save(outputFile.FullName);
     }

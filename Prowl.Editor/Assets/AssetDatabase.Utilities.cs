@@ -7,6 +7,14 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.Assets;
 
+
+public enum FileOpenType
+{
+    FileExplorer,
+    CustomEditor
+}
+
+
 public static partial class AssetDatabase
 {
 
@@ -41,11 +49,11 @@ public static partial class AssetDatabase
     /// Opens the specified file with the operating system's default program.
     /// </summary>
     /// <param name="file">The file to open.</param>
-    public static void OpenPath(FileSystemInfo file, int line = 0, int character = 0)
+    public static void OpenPath(FileSystemInfo file, int line = 0, int character = 0, FileOpenType type = FileOpenType.CustomEditor)
     {
         var prefs = Preferences.EditorPreferences.Instance;
 
-        if (!string.IsNullOrWhiteSpace(prefs.fileEditor))
+        if (!string.IsNullOrWhiteSpace(prefs.fileEditor) && type == FileOpenType.CustomEditor)
         {
             if (!string.IsNullOrWhiteSpace(prefs.fileEditorArgs))
             {

@@ -11,15 +11,12 @@ public struct DotnetCompileOptions()
 {
     public bool isRelease = false;
     public bool isSelfContained = false;
-    public bool allowUnsafeBlocks = false;
 
     public Architecture? architecture = null;
     public Platform? platform = null;
 
-
     public bool? publishAOT = null;
     public bool? outputExecutable = false;
-    public string? startupObject = null;
 
 
     public readonly string ConstructDotnetArgs(FileInfo project, DirectoryInfo? outputPath)
@@ -58,19 +55,10 @@ public struct DotnetCompileOptions()
         }
 
         if (publishAOT != null)
-        {
             args.Add($"--property:PublishAot={(publishAOT.Value ? "true" : "false")}");
-        }
-
-        if (startupObject != null)
-        {
-            args.Add($"--property:StartupObject={startupObject}");
-        }
 
         if (outputExecutable != null)
-        {
             args.Add($"--property:OutputType={(outputExecutable.Value ? "Exe" : "Library")}");
-        }
 
         if (platform != null)
         {

@@ -205,21 +205,17 @@ public class Project
 
     public void GenerateGameProject(
         bool allowUnsafeBlocks,
-        bool publishAOT,
-        bool isPrivate = false,
-        IEnumerable<Assembly>? additonalRefs = null,
-        IEnumerable<FileInfo>? additonalFiles = null)
+        bool publishAOT)
     {
         Assembly runtimeAssembly = typeof(Application).Assembly;
 
         ProjectCompiler.GenerateCSProject(
             GameCSProjectName,
             GameCSProject,
-            RecursiveGetCSFiles(AssetDirectory, false)
-                .Concat(additonalFiles ?? []),
+            ProjectDirectory,
+            RecursiveGetCSFiles(AssetDirectory, false),
             ProjectCompiler.GetNonstandardReferences(runtimeAssembly)
-                .Concat([runtimeAssembly])
-                .Concat(additonalRefs ?? []),
+                .Concat([runtimeAssembly]),
             allowUnsafeBlocks,
             publishAOT);
     }
@@ -237,20 +233,17 @@ public class Project
 
     public void GenerateEditorProject(
         bool allowUnsafeBlocks,
-        Assembly gameAssembly,
-        IEnumerable<Assembly>? additonalRefs = null,
-        IEnumerable<FileInfo>? additonalFiles = null)
+        Assembly gameAssembly)
     {
         Assembly runtimeAssembly = typeof(Application).Assembly;
 
         ProjectCompiler.GenerateCSProject(
             EditorCSProjectName,
             EditorCSProject,
-            RecursiveGetCSFiles(AssetDirectory, true)
-                .Concat(additonalFiles ?? []),
+            ProjectDirectory,
+            RecursiveGetCSFiles(AssetDirectory, true),
             ProjectCompiler.GetNonstandardReferences(runtimeAssembly)
-                .Concat([runtimeAssembly, gameAssembly, typeof(Program).Assembly])
-                .Concat(additonalRefs ?? []),
+                .Concat([runtimeAssembly, gameAssembly, typeof(Program).Assembly]),
             allowUnsafeBlocks);
     }
 
