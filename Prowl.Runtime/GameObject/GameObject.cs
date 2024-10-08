@@ -15,6 +15,7 @@ namespace Prowl.Runtime;
 /// Holds a collection of Components that contain the logic for this Object/Entity
 /// </summary>
 public class GameObject : EngineObject, ISerializable
+[CloneBehavior(CloneBehavior.Reference)]
 {
     #region Static Fields/Properties
 
@@ -986,6 +987,114 @@ public class GameObject : EngineObject, ISerializable
     public void CopyTo(GameObject target)
     {
         this.DeepCopyTo(target);
+    }
+
+    void ICloneExplicit.SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
+    {
+        GameObject target = targetObj as GameObject;
+        // Destroy additional Components in the target GameObject
+        if (target._components.Count > 0)
+        {
+            List<MonoBehaviour> removeComponentTypes = [];
+            foreach (MonoBehaviour targetComp in target._components)
+            {
+                if (!_components.Any(c => c.GetType() == targetComp.GetType()))
+                    removeComponentTypes.Add(targetComp);
+            }
+            foreach (MonoBehaviour type in removeComponentTypes)
+            {
+                target.RemoveComponent(type);
+            }
+        }
+
+            // Destroy additional child objects in the target GameObject
+            if (target.children != null)
+            {
+                int thisChildCount = children != null ? children.Count : 0;
+                for (int i = target.children.Count - 1; i >= thisChildCount; i--)
+                {
+                    target.children[i].DestroyImmediate();
+                }
+            }
+
+        // Create missing Components in the target GameObject
+        foreach (var comp in _components)
+        {
+            if (!target._components.Any(c => c.GetType() == comp.GetType()))
+            {
+                var targetComponent = target.AddComponent(comp.GetType());
+                setup.HandleObject(comp, targetComponent, CloneBehavior.ChildObject);
+            }
+        }
+
+        // Create missing child objects in the target GameObject
+        if (children != null)
+        {
+            for (int i = 0; i < children.Count; i++)
+            {
+                GameObject targetChild;
+                if (target.children != null && target.children.Count > i)
+                    targetChild = target.children[i];
+                else
+                {
+                    targetChild = new GameObject();
+                    targetChild.SetParent(target);
+                }
+
+                setup.HandleObject(children[i], targetChild, CloneBehavior.ChildObject);
+            }
+        }
+
+        // Handle referenced and child objects
+        setup.HandleObject(this._transform, target._transform, CloneBehavior.ChildObject);
+        setup.HandleObject(this._scene, target._scene, CloneBehavior.Reference);
+    }
+
+    void ICloneExplicit.CopyDataTo(object targetObj, ICloneOperation operation)
+    {
+        GameObject target = targetObj as GameObject;
+
+        // Copy plain old data
+        target.Name = Name;
+        target._enabled = _enabled;
+        target._enabledInHierarchy = _enabledInHierarchy;
+        target.tagIndex = tagIndex;
+        target.layerIndex = layerIndex;
+        target.hideFlags = hideFlags;
+        if (!operation.Context.PreserveIdentity)
+            target._instanceID = _instanceID;
+
+        target.AssetID = AssetID;
+        target.FileID = FileID;
+
+        operation.HandleObject(_transform);
+
+        // Copy Components from source to target
+        for (int i = 0; i < _components.Count; i++)
+        {
+            operation.HandleObject(_components[i]);
+        }
+
+        // Copy child objects from source to target
+        if (children != null)
+        {
+            for (int i = 0; i < children.Count; i++)
+            {
+                operation.HandleObject(children[i]);
+            }
+        }
+
+
+
+        // Copy the objects parent scene as a weak reference, i.e.
+        // by assignment, and only when the the scene is itself part of the
+        // copied object graph. That way, cloning a GameObject but not its
+        // scene will result in a clone that doesn't reference a parent scene.
+        Scene targetScene = operation.GetWeakTarget(_scene);
+        if (targetScene != null)
+        {
+            target._scene = targetScene;
+        }
     }
 
 }
