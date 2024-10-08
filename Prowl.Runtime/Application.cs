@@ -79,7 +79,7 @@ public static class Application
         IsRunning = true;
         IsPlaying = true; // Base application is not the editor, isplaying is always true
 
-        Screen.Start($"{title} - {GetBackend()}", new Vector2Int(width, height), new Vector2Int(100, 100), WindowState.Normal);
+        Screen.Start($"{title} - {GetBackend()}", new Vector2Int(width, height), new Vector2Int(100, 100), WindowState.Maximized);
     }
 
     static void AppInitialize()

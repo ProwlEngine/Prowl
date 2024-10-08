@@ -1,10 +1,14 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Xml.Linq;
+
+using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
+using Prowl.Runtime.GUI.Graphics;
 
 namespace Prowl.Editor;
 
@@ -347,9 +351,10 @@ public class ProjectsWindow : EditorWindow
             _createTabOpen = false;
     }
 
-
+    Project contextMenuProject = null;
     private void DisplayProject(Project project)
     {
+        Rect rootRect = gui.CurrentNode.LayoutData.Rect;
         using (gui.Node(project.Name).Height(40).Width(Size.Percentage(1f, -17)).Layout(LayoutType.Row).Enter())
         {
             Interactable interact = gui.GetInteractable();
@@ -405,30 +410,69 @@ public class ProjectsWindow : EditorWindow
                     gui.Draw2D.DrawText(Font.DefaultFont, GetFormattedLastModifiedTime(project.ProjectDirectory.LastAccessTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
             }
 
-            using (gui.Node("RemoveProject").Scale(20).Top(10).Enter())
+            using (gui.Node("ProjectOptionsBtn").Scale(20).Top(10).Enter())
             {
                 gui.CurrentNode.IgnoreLayout();
                 gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 10));
 
-                Interactable removeInteract = gui.GetInteractable();
+                Rect rect = gui.CurrentNode.LayoutData.Rect;
 
-                bool focused = removeInteract.TakeFocus();
+                Interactable optionsInteract = gui.GetInteractable();
 
-                if (removeInteract.TakeFocus())
+                bool focused = optionsInteract.TakeFocus();
+
+                if (optionsInteract.TakeFocus())
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
-                    ProjectCache.Instance.RemoveProject(project);
+                    gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
+                    contextMenuProject = project;
+                    gui.OpenPopup("ProjectOptionsContextMenu", null, gui.CurrentNode.Parent);
                 }
-                else if (removeInteract.IsHovered())
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
+                else if (optionsInteract.IsHovered())
+                {
+                    gui.Draw2D.DrawRectFilled(rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
+                }
 
-                Rect xrect = gui.CurrentNode.LayoutData.Rect;
-                xrect.y += 1;
-                gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.Xmark, 25, xrect, Color.white);
+                // Text centering/alignment functions?
+                // Why is this not centered :/
+                Font.DefaultFont.CalcTextSizeA(out Vector2 textSize, 20, rect.width, rect.width, "...", 0);
+                gui.Draw2D.DrawText(Font.DefaultFont, "...", 20, rect.Position + new Vector2(textSize.x * 0.5f, 0), Color.white);
+            }
+
+            // Outside ProjectOptionsBtn node as it wouldn't render (or too small in size?)
+            if (contextMenuProject != null && contextMenuProject.Equals(project))
+            {
+                DrawProjectContextMenu(project);
             }
         }
     }
 
+    private void DrawProjectContextMenu(Project project)
+    {
+        bool closePopup = false;
+        if (gui.BeginPopup("ProjectOptionsContextMenu", out var popupHolder) && popupHolder != null)
+        {
+            using (popupHolder.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
+            {
+                // Add options
+                // - Delete project (with popup confirmation)
+                if (EditorGUI.StyledButton("Show In Explorer"))
+                {
+                    AssetDatabase.OpenPath(project.ProjectDirectory);
+                    closePopup = true;
+                }
+                if(EditorGUI.StyledButton("Remove from list"))
+                {
+                    ProjectCache.Instance.RemoveProject(project);
+                    closePopup = true;
+                }
+            }
+        }
+        if (closePopup)
+        {
+            contextMenuProject = null;
+            gui.ClosePopup(popupHolder);
+        }
+    }
 
     private void DrawSidePanel()
     {
