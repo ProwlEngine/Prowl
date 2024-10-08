@@ -30,7 +30,8 @@ public static class Application
 
         Debug.Log("Initializing...");
 
-        Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Maximized, true);
+        Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, true);
+
 
         Window.Load += () => {
             SceneManager.Initialize();
