@@ -4,6 +4,7 @@
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Cloning;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.SceneManagement;
@@ -12,17 +13,17 @@ namespace Prowl.Editor;
 
 public class HierarchyWindow : EditorWindow
 {
-    double entryHeight => (float)EditorStylePrefs.Instance.ItemSize;
-    const double entryPadding = 4;
+    private static double entryHeight => (float)EditorStylePrefs.Instance.ItemSize;
+    const double EntryPadding = 4;
 
     private string _searchText = "";
-    private GameObject? m_RenamingGO;
+    private GameObject? _renamingGO;
     public static SelectHandler<WeakReference> SelectHandler { get; private set; } = new((item) => !item.IsAlive || (item.Target is EngineObject eObj && eObj.IsDestroyed), (a, b) => ReferenceEquals(a.Target, b.Target));
 
     private const float PingDuration = 3f;
-    private static float pingTimer;
-    private static WeakReference? pingedGO;
-    private bool justStartedRename;
+    private static float s_pingTimer;
+    private static WeakReference? s_pingedGO;
+    private bool _justStartedRename;
 
     public HierarchyWindow() : base()
     {
@@ -30,21 +31,21 @@ public class HierarchyWindow : EditorWindow
         SelectHandler.OnSelectObject += (obj) =>
         {
             // Reset ping timer on selection changed
-            pingTimer = 0;
-            pingedGO = null;
+            s_pingTimer = 0;
+            s_pingedGO = null;
         };
     }
 
     public static void Ping(GameObject go)
     {
-        pingTimer = PingDuration;
-        pingedGO = new WeakReference(go);
+        s_pingTimer = PingDuration;
+        s_pingedGO = new WeakReference(go);
     }
 
     protected override void Draw()
     {
-        pingTimer -= Time.deltaTimeF;
-        if (pingTimer < 0) pingTimer = 0;
+        s_pingTimer -= Time.deltaTimeF;
+        if (s_pingTimer < 0) s_pingTimer = 0;
 
         SelectHandler.StartFrame();
 
@@ -64,10 +65,10 @@ public class HierarchyWindow : EditorWindow
                 if (gui.IsNodePressed())
                     gui.OpenPopup("CreateGameObject");
 
-                var test = gui.CurrentNode;
-                if (gui.BeginPopup("CreateGameObject", out var node))
+                LayoutNode test = gui.CurrentNode;
+                if (gui.BeginPopup("CreateGameObject", out LayoutNode? node))
                 {
-                    using (node.Width(150).Layout(LayoutType.Column).Spacing(5).Padding(5).FitContentHeight().Enter())
+                    using (node!.Width(150).Layout(LayoutType.Column).Spacing(5).Padding(5).FitContentHeight().Enter())
                     {
                         DrawContextMenu(null, test);
                     }
@@ -81,7 +82,7 @@ public class HierarchyWindow : EditorWindow
         {
             //gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
 
-            var dropInteract = gui.GetInteractable();
+            Interactable dropInteract = gui.GetInteractable();
             HandleDrop(null);
 
             if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
@@ -108,12 +109,12 @@ public class HierarchyWindow : EditorWindow
                 height += entryHeight;
             }
 
-            var popupHolder = gui.CurrentNode;
-            if (gui.BeginPopup("RightClickGameObject", out var node))
+            LayoutNode popupHolder = gui.CurrentNode;
+            if (gui.BeginPopup("RightClickGameObject", out LayoutNode? node))
             {
-                using (node.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
+                using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                 {
-                    var instanceID = gui.GetGlobalStorage<int>("RightClickGameObject");
+                    int instanceID = gui.GetGlobalStorage<int>("RightClickGameObject");
                     GameObject? go = null;
                     if (instanceID != -1)
                         go = EngineObject.FindObjectByID<GameObject>(instanceID);
@@ -148,8 +149,8 @@ public class HierarchyWindow : EditorWindow
             SelectHandler.SelectIfNot(new WeakReference(parent));
             if (EditorGUI.StyledButton("Rename"))
             {
-                m_RenamingGO = parent;
-                justStartedRename = true;
+                _renamingGO = parent;
+                _justStartedRename = true;
                 closePopup = true;
             }
             if (EditorGUI.StyledButton("Duplicate"))
@@ -177,9 +178,12 @@ public class HierarchyWindow : EditorWindow
             {
                 SelectHandler.Foreach((go) =>
                 {
-                    Camera cam = SceneViewWindow.LastFocusedCamera;
-                    (go.Target as GameObject).Transform.position = cam.GameObject.Transform.position;
-                    (go.Target as GameObject).Transform.rotation = cam.GameObject.Transform.rotation;
+                    if (go.Target is GameObject g)
+                    {
+                        Camera cam = SceneViewWindow.LastFocusedCamera;
+                        g.Transform.position = cam.GameObject.Transform.position;
+                        g.Transform.rotation = cam.GameObject.Transform.rotation;
+                    }
                 });
                 closePopup = true;
             }
@@ -216,27 +220,27 @@ public class HierarchyWindow : EditorWindow
         ulong goNodeID = 0;
         double width = gui.CurrentNode.LayoutData.InnerRect.width - left;
         width = Math.Max(width, 200);
-        using (gui.Node(entity.GetHashCode().ToString()).Left(left).Top(index * (entryHeight + entryPadding)).Width(width).Height(entryHeight).Margin(2, 0).Enter())
+        using (gui.Node(entity.GetHashCode().ToString()).Left(left).Top(index * (entryHeight + EntryPadding)).Width(width).Height(entryHeight).Margin(2, 0).Enter())
         {
             goNodeID = gui.CurrentNode.ID;
             float colMult = entity.enabledInHierarchy ? 1 : 0.5f;
             bool isSelected = SelectHandler.IsSelected(new WeakReference(entity));
 
             double maxwidth = gui.CurrentNode.LayoutData.InnerRect.width;
-            var rect = gui.CurrentNode.LayoutData.InnerRect;
+            Rect rect = gui.CurrentNode.LayoutData.InnerRect;
             rect.width = maxwidth;
             rect.height = entryHeight;
 
             // Interaction
             SelectHandler.AddSelectableAtIndex(index, new WeakReference(entity));
-            var interact = gui.GetInteractable(rect);
+            Interactable interact = gui.GetInteractable(rect);
             if (interact.TakeFocus(true))
                 SelectHandler.Select(index, new WeakReference(entity));
 
             if (SelectHandler.Count == 1 && gui.IsPointerDoubleClick(MouseButton.Left) && interact.IsHovered())
             {
-                justStartedRename = true;
-                m_RenamingGO = entity;
+                _justStartedRename = true;
+                _renamingGO = entity;
             }
             else if (gui.IsPointerClick(MouseButton.Right) && interact.IsHovered())
             {
@@ -254,12 +258,12 @@ public class HierarchyWindow : EditorWindow
             HandleDrop(entity);
             DragnDrop.Drag(entity);
 
-            var col = (interact.IsHovered() ? EditorStylePrefs.Instance.Hovering : Color.white * 0.5f) * colMult;
+            Color col = (interact.IsHovered() ? EditorStylePrefs.Instance.Hovering : Color.white * 0.5f) * colMult;
             gui.Draw2D.DrawRectFilled(rect, (isSelected ? EditorStylePrefs.Instance.Highlighted : col), (float)EditorStylePrefs.Instance.ButtonRoundness);
             gui.Draw2D.DrawRectFilled(rect.Min, new Vector2(entryHeight, entryHeight), EditorStylePrefs.Instance.Borders, (float)EditorStylePrefs.Instance.ButtonRoundness, 9);
             if (isPrefab || isPartOfPrefab || !entity.enabledInHierarchy)
             {
-                var lineColor = (isPrefab ? EditorStylePrefs.Orange : EditorStylePrefs.Yellow);
+                Color lineColor = (isPrefab ? EditorStylePrefs.Orange : EditorStylePrefs.Yellow);
                 if (!entity.enabledInHierarchy)
                     lineColor = EditorStylePrefs.Instance.Warning;
                 gui.Draw2D.DrawLine(new Vector2(rect.x + entryHeight + 1, rect.y - 1), new Vector2(rect.x + entryHeight + 1, rect.y + entryHeight - 1), lineColor, 3);
@@ -273,7 +277,7 @@ public class HierarchyWindow : EditorWindow
             }
 
             // if were pinging we need to open the tree to the pinged object
-            if (pingTimer > 0 && pingedGO != null && pingedGO.Target is GameObject go)
+            if (s_pingTimer > 0 && s_pingedGO != null && s_pingedGO.Target is GameObject go)
             {
                 if (entity.IsParentOf(go)) // Set the tree open
                     gui.SetNodeStorage(entity.InstanceID.ToString(), true);
@@ -281,8 +285,8 @@ public class HierarchyWindow : EditorWindow
                 {
                     // Draw a ping effect
                     // TODO: Scroll to Rect
-                    var pingRect = rect;
-                    pingRect.Expand(MathF.Sin(pingTimer) * 6f);
+                    Rect pingRect = rect;
+                    pingRect.Expand(MathF.Sin(s_pingTimer) * 6f);
                     gui.Draw2D.DrawRect(pingRect, EditorStylePrefs.Yellow, 2f, 4f);
                 }
             }
@@ -303,25 +307,25 @@ public class HierarchyWindow : EditorWindow
             }
 
             // Name
-            var name = entity.Name;
-            if (m_RenamingGO == entity)
+            string name = entity.Name;
+            if (_renamingGO == entity)
             {
-                var inputRect = new Rect(rect.x + 33, rect.y, maxwidth - (entryHeight * 2.25), entryHeight);
+                Rect inputRect = new(rect.x + 33, rect.y, maxwidth - (entryHeight * 2.25), entryHeight);
                 gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.ButtonRoundness);
                 gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 0, maxwidth - (entryHeight * 2.25), entryHeight, EditorGUI.GetInputStyle(), true);
-                if (justStartedRename)
+                if (_justStartedRename)
                     gui.FocusPreviousInteractable();
                 if (!gui.PreviousInteractableIsFocus())
-                    m_RenamingGO = null;
+                    _renamingGO = null;
                 entity.Name = name;
-                justStartedRename = false;
+                _justStartedRename = false;
             }
             else
             {
-                var textRect = rect;
+                Rect textRect = rect;
                 textRect.width -= entryHeight;
-                var textSizeY = Font.DefaultFont.CalcTextSize(name, 20).y;
-                var centerY = rect.y + (rect.height / 2) - (textSizeY / 2);
+                double textSizeY = Font.DefaultFont.CalcTextSize(name, 20).y;
+                double centerY = rect.y + (rect.height / 2) - (textSizeY / 2);
                 gui.Draw2D.DrawText(Font.DefaultFont, name, 20, new Vector2(rect.x + 40, centerY + 3), Color.white, 0, textRect);
             }
 
@@ -338,23 +342,23 @@ public class HierarchyWindow : EditorWindow
         }
     }
 
-    private void HandleDrop(GameObject? entity)
+    private static void HandleDrop(GameObject? entity)
     {
-        if (DragnDrop.Drop<GameObject>(out var original))
+        if (DragnDrop.Drop<GameObject>(out GameObject? original))
         {
-            GameObject go = original;
             if (!SceneManager.Has(original)) // If its not already in the scene, Instantiate it
                 go = (GameObject)EngineObject.Instantiate(original, true);
             go.SetParent(entity); // null is root
+            GameObject go = original!;
             SelectHandler.SetSelection(new WeakReference(go));
         }
-        else if (DragnDrop.Drop<Prefab>(out var prefab))
+        else if (DragnDrop.Drop<Prefab>(out Prefab? prefab))
         {
-            SelectHandler.SetSelection(new WeakReference(prefab.Instantiate()));
+            SelectHandler.SetSelection(new WeakReference(prefab!.Instantiate()));
         }
-        else if (DragnDrop.Drop<Scene>(out var scene))
+        else if (DragnDrop.Drop<Scene>(out Scene? scene))
         {
-            SceneManager.LoadScene(scene);
+            SceneManager.LoadScene(scene!);
         }
     }
 
@@ -370,7 +374,7 @@ public class HierarchyWindow : EditorWindow
             newGO.Add(new WeakReference(deserialized));
         });
         SelectHandler.Clear();
-        SelectHandler.SetSelection(newGO.ToArray());
+        SelectHandler.SetSelection([.. newGO]);
     }
 
 }
