@@ -8,6 +8,7 @@ using Prowl.Editor.Preferences;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Cloning;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
@@ -349,7 +350,6 @@ public class GameObjectEditor : ScriptedEditor
         bool closePopup = false;
         if (StyledButton("Duplicate"))
         {
-            var serialized = Serializer.Serialize(comp);
             var copy = Serializer.Deserialize<MonoBehaviour>(serialized);
             go.AddComponent(copy);
             copy.OnValidate();
