@@ -29,7 +29,10 @@ public class Project
     public DirectoryInfo PackagesDirectory;
     public DirectoryInfo TempDirectory;
 
+    public static string GameCSProjectName => "CSharp";
     public FileInfo GameCSProject;
+
+    public static string EditorCSProjectName => "CSharp-Editor";
     public FileInfo EditorCSProject;
 
     public static event Action? OnProjectChanged;
@@ -75,8 +78,8 @@ public class Project
         PackagesDirectory = GetSubdirectory(@"Packages");
         TempDirectory = GetSubdirectory(@"Temp");
 
-        GameCSProject = GetFile(@"CSharp.csproj");
-        EditorCSProject = GetFile(@"CSharp-Editor.csproj");
+        GameCSProject = GetFile($"{GameCSProjectName}.csproj");
+        EditorCSProject = GetFile($"{EditorCSProjectName}.csproj");
     }
 
     /// <summary>
@@ -199,39 +202,66 @@ public class Project
         }
     }
 
+
+    public void GenerateGameProject(
+        bool allowUnsafeBlocks,
+        bool publishAOT,
+        bool isPrivate = false,
+        IEnumerable<Assembly>? additonalRefs = null,
+        IEnumerable<FileInfo>? additonalFiles = null)
+    {
+        Assembly runtimeAssembly = typeof(Application).Assembly;
+
+        ProjectCompiler.GenerateCSProject(
+            GameCSProjectName,
+            GameCSProject,
+            RecursiveGetCSFiles(AssetDirectory, false)
+                .Concat(additonalFiles ?? []),
+            ProjectCompiler.GetNonstandardReferences(runtimeAssembly)
+                .Concat([runtimeAssembly])
+                .Concat(additonalRefs ?? []),
+            allowUnsafeBlocks,
+            publishAOT,
+            isPrivate);
+    }
+
+
     /// <summary>
     /// Compiles the game assembly
     /// </summary>
     /// <returns>True if Compiling was sucessful</returns>
     public bool CompileGameAssembly(CSCompileOptions options, DirectoryInfo output)
     {
+        return ProjectCompiler.CompileCSProject(GameCSProject, output, options);
+    }
+
+
+    public void GenerateEditorProject(
+        bool allowUnsafeBlocks,
+        Assembly gameAssembly,
+        IEnumerable<Assembly>? additonalRefs = null,
+        IEnumerable<FileInfo>? additonalFiles = null)
+    {
         Assembly runtimeAssembly = typeof(Application).Assembly;
 
         ProjectCompiler.GenerateCSProject(
-            GameCSProject,
-            RecursiveGetCSFiles(AssetDirectory, false),
+            EditorCSProjectName,
+            EditorCSProject,
+            RecursiveGetCSFiles(AssetDirectory, true)
+                .Concat(additonalFiles ?? []),
             ProjectCompiler.GetNonstandardReferences(runtimeAssembly)
-                .Concat([runtimeAssembly]),
-            false);
-
-        return ProjectCompiler.CompileCSProject(GameCSProject, output, options);
+                .Concat([runtimeAssembly, gameAssembly, typeof(Program).Assembly])
+                .Concat(additonalRefs ?? []),
+            allowUnsafeBlocks);
     }
+
 
     /// <summary>
     /// Compiles the editor assembly
     /// </summary>
     /// <returns>True if Compiling was sucessful</returns>
-    public bool CompileEditorAssembly(CSCompileOptions options, Assembly gameAssembly, DirectoryInfo output)
+    public bool CompileEditorAssembly(CSCompileOptions options, DirectoryInfo output)
     {
-        Assembly runtimeAssembly = typeof(Application).Assembly;
-
-        ProjectCompiler.GenerateCSProject(
-            EditorCSProject,
-            RecursiveGetCSFiles(AssetDirectory, true),
-            ProjectCompiler.GetNonstandardReferences(runtimeAssembly)
-                .Concat([runtimeAssembly, gameAssembly, typeof(Program).Assembly]),
-            false);
-
         return ProjectCompiler.CompileCSProject(EditorCSProject, output, options);
     }
 
