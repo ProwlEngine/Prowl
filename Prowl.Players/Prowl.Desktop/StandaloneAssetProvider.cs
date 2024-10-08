@@ -3,6 +3,8 @@
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
+namespace Prowl.Desktop;
+
 public class StandaloneAssetProvider : IAssetProvider
 {
     readonly AssetBundle[] packages;
@@ -10,12 +12,12 @@ public class StandaloneAssetProvider : IAssetProvider
     public StandaloneAssetProvider()
     {
         int packageIndex = 0;
-        FileInfo firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
+        FileInfo firstPackage = new FileInfo(Path.Combine(DesktopPlayer.Data.FullName, $"Data{packageIndex++}.prowl"));
         List<AssetBundle> assetBundles = [];
         while (File.Exists(firstPackage.FullName))
         {
             assetBundles.Add(new AssetBundle(firstPackage.OpenRead(), ZipArchiveMode.Read));
-            firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
+            firstPackage = new FileInfo(Path.Combine(DesktopPlayer.Data.FullName, $"Data{packageIndex++}.prowl"));
         }
         packages = assetBundles.ToArray();
     }

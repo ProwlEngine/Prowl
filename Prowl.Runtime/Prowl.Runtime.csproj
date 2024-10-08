@@ -1,33 +1,33 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-		<TargetType>library</TargetType>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+	  <TargetType>library</TargetType>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>8600;8601;8618;8602;8603;8604;8625</NoWarn>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
 
-        <ImplicitUsings>disable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <NoWarn>8600;8601;8618;8602;8603;8604;8625</NoWarn>
-    </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <OutputPath>../Build/Runtime/Debug/</OutputPath>
+  </PropertyGroup>
 
-    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-        <OutputPath>../Build/Runtime/Debug/</OutputPath>
-    </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <OutputPath>../Build/Runtime/Release/</OutputPath>
+  </PropertyGroup>
 
-    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-        <OutputPath>../Build/Runtime/Release/</OutputPath>
-    </PropertyGroup>
+  <ItemGroup>
+    <Content Remove="C:\Users\acer1\.nuget\packages\pictime.sharpfont.dependencies\2.6.0\build\..\bin\msvc12\x64\freetype6.dll" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <Content Remove="C:\Users\acer1\.nuget\packages\pictime.sharpfont.dependencies\2.6.0\build\..\bin\msvc12\x64\freetype6.dll" />
-    </ItemGroup>
+  <ItemGroup>
+    <None Remove="EmbeddedResources\**\*.*" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <None Remove="EmbeddedResources\**\*.*" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <EmbeddedResource Include="EmbeddedResources\*.*" />
+  <ItemGroup>
+    <EmbeddedResource Include="EmbeddedResources\*.*" />
 
         <!--
         <EmbeddedResource Include="EmbeddedResources/GUI/GLSL/gui-vertex.glsl" LogicalName="gui-vertex.glsl" />
@@ -51,34 +51,34 @@
         <EmbeddedResource Include="EmbeddedResources/GUI/Metal/gui-frag.metal" LogicalName="gui-frag.metal" />
         -->
 
-        <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-vertex.*">
-          <LogicalName>%(Filename)%(Extension)</LogicalName>
-        </EmbeddedResource>
-        <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-vertex-linear.*">
-          <LogicalName>%(Filename)%(Extension)</LogicalName>
-        </EmbeddedResource>
-        <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-frag.*">
-          <LogicalName>%(Filename)%(Extension)</LogicalName>
-        </EmbeddedResource>
-    </ItemGroup>
+    <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-vertex.*">
+      <LogicalName>%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-vertex-linear.*">
+      <LogicalName>%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-frag.*">
+      <LogicalName>%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
 
-    <ItemGroup>
-        <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
-        <PackageReference Include="BepuPhysics" Version="2.5.0-beta.23" />
-        <PackageReference Include="Silk.NET.OpenAL" Version="2.21.0" />
-        <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
-        <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
-    </ItemGroup>
+  <ItemGroup>
+    <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
+    <PackageReference Include="BepuPhysics" Version="2.5.0-beta.23" />
+    <PackageReference Include="Silk.NET.OpenAL" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
+    <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Core\DotRecast.Core.csproj" />
-        <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Detour\DotRecast.Detour.csproj" />
-        <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast.Toolset\DotRecast.Recast.Toolset.csproj" />
-        <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast\DotRecast.Recast.csproj" />
+  <ItemGroup>
+    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Core\DotRecast.Core.csproj" />
+    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Detour\DotRecast.Detour.csproj" />
+    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast.Toolset\DotRecast.Recast.Toolset.csproj" />
+    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast\DotRecast.Recast.csproj" />
 
-        <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
-        <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid.SDL2\Veldrid.SDL2.csproj" />
-        <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj" />
-    </ItemGroup>
+    <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
+    <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid.SDL2\Veldrid.SDL2.csproj" />
+    <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj" />
+  </ItemGroup>
 
 </Project>

@@ -1,41 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <OutputType>Exe</OutputType>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-    </PropertyGroup>
-
-  <PropertyGroup Condition=" '$(Configuration)' == 'Debug'">
-    <OutputPath>../../Build/Players/Debug/Desktop/</OutputPath>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-    <OutputPath>../../Build/Players/Release/Desktop/</OutputPath>
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
-  <Target Name="MoveToEditorTarget" AfterTargets="AfterBuild">
-    <PropertyGroup>
-      <EditorOutputPath>$(ProjectDir)../../Build/Editor/$(Configuration)/$(TargetFramework)/Players/Desktop/</EditorOutputPath>
-    </PropertyGroup>
-
-  	  	<Message Text="Copying files from $(OutputPath) to $(EditorOutputPath)" Importance="high" />
-
-  	  	<ItemGroup>
-  	  	  	<FilesToCopy Include="$(OutputPath)**\*.*" />
-  	  	</ItemGroup>
-
-  	  	<Copy SourceFiles="@(FilesToCopy)" DestinationFolder="$(EditorOutputPath)%(RecursiveDir)" OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
-
-  	  	<Message Text="Files copied successfully." Importance="high" />
-  	</Target>
-
-  	<PropertyGroup>
-  	  	<MSBuildGlobalProperties>$(MSBuildGlobalProperties);EnableMSBuildAssemblyLogging=1;MSBuildDebugEngine=1</MSBuildGlobalProperties>
-  	</PropertyGroup>
-
-  	<ItemGroup>
-  	  	<ProjectReference Include="..\..\Prowl.Runtime\Prowl.Runtime.csproj" />
-  	</ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Prowl.Runtime\Prowl.Runtime.csproj" />
+  </ItemGroup>
 
 </Project>
