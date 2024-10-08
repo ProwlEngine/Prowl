@@ -19,10 +19,10 @@ namespace Prowl.Runtime.Cloning
 		/// will be assigned at all.
 		/// </summary>
 		Skip				= 0x2,
-		/// <summary>
-		/// The Field or Object in question won't be skipped during cloning due to secondary
-		/// hints such as a <see cref="Prowl.Runtime.DontSerializeAttribute"/> attribute on the same field.
-		/// </summary>
-		DontSkip			= 0x4
+        /// <summary>
+        /// The Field or Object in question won't be skipped during cloning due to secondary
+        /// hints such as a <see cref="Prowl.Runtime.SerializeIgnoreAttribute"/> attribute on the same field.
+        /// </summary>
+        DontSkip = 0x4
 	}
 }
