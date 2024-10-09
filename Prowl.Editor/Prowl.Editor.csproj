@@ -58,10 +58,18 @@
     <DefineConstants Condition="'$(ExcludeDesktopPlayer)' == 'true'">$(DefineConstants);EXCLUDE_DESKTOP_PLAYER</DefineConstants>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(ExcludeDesktopPlayer)' == 'false'">
-    <Content Include="..\Prowl.Players\Prowl.Desktop\**\*.*">
+  <ItemGroup Condition="'$(ExcludeDesktopPlayer)' == '' or '$(ExcludeDesktopPlayer)' == 'false'">
+    <!-- Root file copy - seperate from recursive copy since path will not resolve correctly if $(RecursiveDir) is blank -->
+    <Content Include="..\Prowl.Players\Prowl.Desktop\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>Players/Desktop</TargetPath>
+      <TargetPath>Players\Desktop\%(Filename)%(Extension)</TargetPath>
+    </Content>
+
+    <!-- Recursive file copy  -->
+    <Content Include="..\Prowl.Players\Prowl.Desktop\**\*.*"
+      Exclude="..\Prowl.Players\Prowl.Desktop\bin\**;..\Prowl.Players\Prowl.Desktop\obj\**;..\Prowl.Players\Prowl.Desktop\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Players\Desktop\%(RecursiveDir)\%(Filename)%(Extension)</TargetPath>
     </Content>
   </ItemGroup>
 
