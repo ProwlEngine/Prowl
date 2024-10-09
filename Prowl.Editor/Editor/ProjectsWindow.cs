@@ -457,10 +457,10 @@ public class ProjectsWindow : EditorWindow
                 // - Delete project (with popup confirmation)
                 if (EditorGUI.StyledButton("Show In Explorer"))
                 {
-                    AssetDatabase.OpenPath(project.ProjectDirectory);
+                    AssetDatabase.OpenPath(project.ProjectDirectory, type: FileOpenType.FileExplorer);
                     closePopup = true;
                 }
-                if(EditorGUI.StyledButton("Remove from list"))
+                if (EditorGUI.StyledButton("Remove from list"))
                 {
                     ProjectCache.Instance.RemoveProject(project);
                     closePopup = true;
