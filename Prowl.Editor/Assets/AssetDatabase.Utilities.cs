@@ -59,7 +59,7 @@ public static partial class AssetDatabase
             {
                 string args = prefs.fileEditorArgs;
 
-                args = args.Replace("${ProjectDirectory}", Project.Active.ProjectPath);
+                args = args.Replace("${ProjectDirectory}", Project.Active?.ProjectPath ?? "");
                 args = args.Replace("${File}", file.FullName);
                 args = args.Replace("${Line}", line.ToString());
                 args = args.Replace("${Character}", character.ToString());
