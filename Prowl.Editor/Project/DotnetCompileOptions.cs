@@ -19,7 +19,7 @@ public struct DotnetCompileOptions()
     public bool? outputExecutable = false;
 
 
-    public readonly string ConstructDotnetArgs(FileInfo project, DirectoryInfo? outputPath)
+    public readonly string ConstructDotnetArgs(FileInfo project, DirectoryInfo? outputPath, DirectoryInfo? tempPath)
     {
         List<string> args = ["build", project.FullName];
 
@@ -27,6 +27,11 @@ public struct DotnetCompileOptions()
         {
             args.Add("--output");
             args.Add(outputPath.FullName);
+        }
+
+        if (tempPath != null)
+        {
+            args.Add($"--property:BaseIntermediateOutputPath=\"{tempPath.FullName}\"{Path.DirectorySeparatorChar}");
         }
 
         args.Add("--configuration");

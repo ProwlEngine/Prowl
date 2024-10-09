@@ -90,7 +90,9 @@ public static class ProjectCompiler
         IEnumerable<Assembly> references,
         bool allowUnsafe = false,
         bool publishAOT = false,
-        bool isPrivate = false
+        bool isPrivate = false,
+        DirectoryInfo? outputPath = null,
+        DirectoryInfo? tempPath = null
     )
     {
         GenerateCSProject(
@@ -101,7 +103,9 @@ public static class ProjectCompiler
             references.Select(x => (x.GetName().Name!, x.Location)),
             allowUnsafe,
             publishAOT,
-            isPrivate
+            isPrivate,
+            outputPath,
+            tempPath
         );
     }
 
@@ -115,7 +119,9 @@ public static class ProjectCompiler
         IEnumerable<(string, string)> rawReferences,
         bool allowUnsafe = false,
         bool publishAOT = false,
-        bool isPrivate = false
+        bool isPrivate = false,
+        DirectoryInfo? outputPath = null,
+        DirectoryInfo? tempPath = null
     )
     {
         GenerateCSProject(
@@ -126,7 +132,9 @@ public static class ProjectCompiler
             references.Select(x => (x.GetName().Name!, x.Location)).Concat(rawReferences),
             allowUnsafe,
             publishAOT,
-            isPrivate
+            isPrivate,
+            outputPath,
+            tempPath
         );
     }
 
@@ -139,7 +147,10 @@ public static class ProjectCompiler
         IEnumerable<(string, string)> references,
         bool allowUnsafe = false,
         bool publishAOT = false,
-        bool isPrivate = false)
+        bool isPrivate = false,
+        DirectoryInfo? outputPath = null,
+        DirectoryInfo? tempPath = null
+    )
     {
         Runtime.Debug.Log($"Recreating csproj: {outputFile.FullName}.");
 
@@ -170,13 +181,19 @@ public static class ProjectCompiler
         propertyGroupXML.Add(new XElement("DefaultItemExcludes", "**\\**"));
         propertyGroupXML.Add(new XElement("ProjectPath", projectPath.FullName));
 
+        if (outputPath != null)
+            propertyGroupXML.Add(new XElement("OutputPath", outputPath.FullName));
+
+        if (tempPath != null)
+            propertyGroupXML.Add(new XElement("BaseIntermediateOutputPath", tempPath.FullName));
+
         XElement scriptsXML = FindOrCreate(projectXML,
             new XElement("ItemGroup",
                 new XAttribute("Label", "Compile")
             )
         );
 
-        scriptsXML.RemoveAll();
+        scriptsXML.RemoveNodes();
 
         scriptsXML.Add(
             scriptPaths.Select(x =>
@@ -190,10 +207,12 @@ public static class ProjectCompiler
             )
         );
 
+        referencesXML.RemoveNodes();
+
         referencesXML.Add(
             references.Select(x => new XElement("Reference",
                 new XAttribute("Include", x.Item1),
-                new XElement("HintPath", $"$(ProjectPath){Path.DirectorySeparatorChar}{Path.GetRelativePath(projectPath.FullName, x.Item2)}"),
+                new XElement("HintPath", x.Item2),
                 new XElement("Private", isPrivate)
             ))
         );
@@ -202,7 +221,7 @@ public static class ProjectCompiler
     }
 
 
-    public static bool CompileCSProject(FileInfo project, DirectoryInfo? output, DotnetCompileOptions options)
+    public static bool CompileCSProject(FileInfo project, DirectoryInfo? output, DirectoryInfo? temp, DotnetCompileOptions options)
     {
         if (!CheckForSDKInstallation("8.0"))
             return false;
@@ -212,7 +231,7 @@ public static class ProjectCompiler
         ProcessStartInfo startInfo = new()
         {
             FileName = "dotnet",
-            Arguments = options.ConstructDotnetArgs(project, output),
+            Arguments = options.ConstructDotnetArgs(project, output, temp),
             CreateNoWindow = true,
             RedirectStandardError = true,
             RedirectStandardOutput = true,

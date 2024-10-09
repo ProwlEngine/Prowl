@@ -84,7 +84,9 @@ public class Desktop_Player : ProjectBuilder
 
         DirectoryInfo temp = active.TempDirectory;
         DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
-        DirectoryInfo project = new DirectoryInfo(Path.Combine(bin.FullName, "project", "build"));
+        DirectoryInfo project = new DirectoryInfo(Path.Combine(bin.FullName, Project.GameCSProjectName, "Build"));
+
+        DirectoryInfo tmpProject = new DirectoryInfo(Path.Combine(temp.FullName, "obj", Project.GameCSProjectName));
 
         bool allowUnsafeBlocks = BuildProjectSettings.Instance.AllowUnsafeBlocks;
         bool enableAOT = BuildProjectSettings.Instance.EnableAOTCompilation;
@@ -100,7 +102,7 @@ public class Desktop_Player : ProjectBuilder
 
         projectLib = Path.Combine(project.FullName, Project.GameCSProjectName + ".dll");
 
-        if (!active.CompileGameAssembly(projectOptions, project))
+        if (!active.CompileGameAssembly(projectOptions, project, tmpProject))
         {
             Debug.LogError($"Failed to compile Project assembly.");
             return;
@@ -113,17 +115,17 @@ public class Desktop_Player : ProjectBuilder
         Project active = Project.Active!;
 
         DirectoryInfo temp = active.TempDirectory;
-        DirectoryInfo player = new DirectoryInfo(Path.Combine(temp.FullName, "player"));
+        DirectoryInfo player = new DirectoryInfo(Path.Combine(temp.FullName, "DesktopPlayer"));
 
-        string playerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Players", "Desktop");
-        if (!Directory.Exists(playerPath))
+        string playerSource = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Players", "Desktop");
+        if (!Directory.Exists(playerSource))
         {
-            Debug.LogError($"Failed to find Desktop player (at {playerPath})");
+            Debug.LogError($"Failed to find Desktop player (at {playerSource})");
             return;
         }
 
         // Copy the template desktop player to the temp directory for builds
-        CloneDirectory(playerPath, player.FullName);
+        CloneDirectory(playerSource, player.FullName);
 
         FileInfo? playerProj = player.GetFiles("*.csproj").FirstOrDefault();
 
@@ -158,7 +160,7 @@ public class Desktop_Player : ProjectBuilder
             publishAOT = enableAOT,
         };
 
-        if (!ProjectCompiler.CompileCSProject(playerProj, output, playerOptions))
+        if (!ProjectCompiler.CompileCSProject(playerProj, output, null, playerOptions))
         {
             Debug.LogError($"Failed to compile player assembly.");
             return;
@@ -185,23 +187,15 @@ public class Desktop_Player : ProjectBuilder
     }
 
 
-    static void CloneDirectory(string sourceDir, string destDir)
+    static void CloneDirectory(string sourcePath, string targetPath)
     {
-        Directory.CreateDirectory(destDir);
+        Directory.CreateDirectory(targetPath);
 
-        foreach (string file in Directory.GetFiles(sourceDir))
-        {
-            string fileName = Path.GetFileName(file);
-            string destFile = Path.Combine(destDir, fileName);
-            File.Copy(file, destFile, true);
-        }
+        foreach (string dirPath in Directory.GetDirectories(sourcePath, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(dirPath.Replace(sourcePath, targetPath));
 
-        foreach (string directory in Directory.GetDirectories(sourceDir))
-        {
-            string dirName = Path.GetFileName(directory);
-            string destSubDir = Path.Combine(destDir, dirName);
-            CloneDirectory(directory, destSubDir);
-        }
+        foreach (string newPath in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
+            File.Copy(newPath, newPath.Replace(sourcePath, targetPath), true);
     }
 
 

@@ -183,8 +183,11 @@ public static class Program
 
                     DirectoryInfo temp = active.TempDirectory;
                     DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
-                    DirectoryInfo project = new DirectoryInfo(Path.Combine(bin.FullName, "project", "editor"));
-                    DirectoryInfo editor = new DirectoryInfo(Path.Combine(bin.FullName, "editor"));
+                    DirectoryInfo project = new DirectoryInfo(Path.Combine(bin.FullName, Project.GameCSProjectName, "Editor"));
+                    DirectoryInfo editor = new DirectoryInfo(Path.Combine(bin.FullName, Project.EditorCSProjectName));
+
+                    DirectoryInfo tmpProject = new DirectoryInfo(Path.Combine(temp.FullName, "obj", Project.GameCSProjectName));
+                    DirectoryInfo tmpEditor = new DirectoryInfo(Path.Combine(temp.FullName, "obj", Project.EditorCSProjectName));
 
                     string projectOutputPath = Path.Combine(project.FullName, Project.GameCSProjectName + ".dll");
                     string editorOutputPath = Path.Combine(editor.FullName, Project.EditorCSProjectName + ".dll");
@@ -208,13 +211,13 @@ public static class Program
                     };
 
                     active.GenerateGameProject(allowUnsafeBlocks, enableAOT);
-                    active.CompileGameAssembly(options, project);
+                    active.CompileGameAssembly(options, project, tmpProject);
                     Assembly? gameAssembly = AssemblyManager.LoadExternalAssembly(projectOutputPath, true);
 
                     if (gameAssembly != null)
                     {
                         active.GenerateEditorProject(allowUnsafeBlocks, gameAssembly);
-                        active.CompileEditorAssembly(options, editor);
+                        active.CompileEditorAssembly(options, editor, tmpEditor);
                         Assembly? editorAssembly = AssemblyManager.LoadExternalAssembly(editorOutputPath, true);
                     }
                 }

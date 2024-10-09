@@ -209,6 +209,9 @@ public class Project
     {
         Assembly runtimeAssembly = typeof(Application).Assembly;
 
+        DirectoryInfo bin = new DirectoryInfo(Path.Combine(TempDirectory.FullName, "bin"));
+        DirectoryInfo tmpProject = new DirectoryInfo(Path.Combine(TempDirectory.FullName, "obj", GameCSProjectName));
+
         ProjectCompiler.GenerateCSProject(
             GameCSProjectName,
             GameCSProject,
@@ -217,7 +220,9 @@ public class Project
             ProjectCompiler.GetNonstandardReferences(runtimeAssembly)
                 .Concat([runtimeAssembly]),
             allowUnsafeBlocks,
-            publishAOT);
+            publishAOT,
+            outputPath: bin,
+            tempPath: tmpProject);
     }
 
 
@@ -225,9 +230,9 @@ public class Project
     /// Compiles the game assembly
     /// </summary>
     /// <returns>True if Compiling was sucessful</returns>
-    public bool CompileGameAssembly(DotnetCompileOptions options, DirectoryInfo output)
+    public bool CompileGameAssembly(DotnetCompileOptions options, DirectoryInfo output, DirectoryInfo temp)
     {
-        return ProjectCompiler.CompileCSProject(GameCSProject, output, options);
+        return ProjectCompiler.CompileCSProject(GameCSProject, output, temp, options);
     }
 
 
@@ -237,6 +242,9 @@ public class Project
     {
         Assembly runtimeAssembly = typeof(Application).Assembly;
 
+        DirectoryInfo bin = new DirectoryInfo(Path.Combine(TempDirectory.FullName, "bin"));
+        DirectoryInfo tmpEditor = new DirectoryInfo(Path.Combine(TempDirectory.FullName, "obj", EditorCSProjectName));
+
         ProjectCompiler.GenerateCSProject(
             EditorCSProjectName,
             EditorCSProject,
@@ -244,7 +252,9 @@ public class Project
             RecursiveGetCSFiles(AssetDirectory, true),
             ProjectCompiler.GetNonstandardReferences(runtimeAssembly)
                 .Concat([runtimeAssembly, gameAssembly, typeof(Program).Assembly]),
-            allowUnsafeBlocks);
+            allowUnsafeBlocks,
+            outputPath: bin,
+            tempPath: tmpEditor);
     }
 
 
@@ -252,9 +262,9 @@ public class Project
     /// Compiles the editor assembly
     /// </summary>
     /// <returns>True if Compiling was sucessful</returns>
-    public bool CompileEditorAssembly(DotnetCompileOptions options, DirectoryInfo output)
+    public bool CompileEditorAssembly(DotnetCompileOptions options, DirectoryInfo output, DirectoryInfo temp)
     {
-        return ProjectCompiler.CompileCSProject(EditorCSProject, output, options);
+        return ProjectCompiler.CompileCSProject(EditorCSProject, output, temp, options);
     }
 
 
