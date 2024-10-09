@@ -1,11 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <IsAotCompatible>true</IsAotCompatible>
-  </PropertyGroup>
-
   <ItemGroup>
+    <!-- Janky fix to include SDL2 binaries in the built player -->
+    <PackageReference Include="Ultz.Native.SDL" Version="2.30.1" />
+    <!-- Only for IntelliSense - all actual properties are assigned in DesktopPlayerBuilder.cs -->
     <ProjectReference Include="..\..\Prowl.Runtime\Prowl.Runtime.csproj" />
   </ItemGroup>
-
 </Project>
