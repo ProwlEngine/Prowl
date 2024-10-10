@@ -30,8 +30,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.StartupUtilities", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Prowl.Runtime.Test", "Prowl.Runtime.Test\Prowl.Runtime.Test.csproj", "{1255E3CE-2675-41C1-89B4-877DCB1EBEA0}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "HeapDumper", "HeapDumper", "{66482A69-CED8-4204-8204-7DDB36CFF981}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
