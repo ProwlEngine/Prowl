@@ -20,6 +20,7 @@ public static class Program
 {
     private static bool IsReloadingExternalAssemblies { get; set; }
     public static void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
+
     private static bool s_createdDefaultWindows;
     private static bool s_opened;
 
@@ -198,27 +199,31 @@ public static class Program
 
                     bin.Create();
 
-                    bool allowUnsafeBlocks = BuildProjectSettings.Instance.AllowUnsafeBlocks;
-                    bool enableAOT = BuildProjectSettings.Instance.EnableAOTCompilation;
-
-                    // Forcefully disable AOT for scripts run in the editor
                     DotnetCompileOptions options = new DotnetCompileOptions()
                     {
                         isRelease = false,
                         isSelfContained = false,
-                        publishAOT = false,
-                        outputExecutable = false,
+                        outputPath = project,
+                        tempPath = tmpProject
                     };
 
-                    active.GenerateGameProject(allowUnsafeBlocks, enableAOT);
-                    active.CompileGameAssembly(options, project, tmpProject);
+                    active.GenerateGameProject();
+                    active.CompileGameAssembly(options);
                     Assembly? gameAssembly = AssemblyManager.LoadExternalAssembly(projectOutputPath, true);
 
                     if (gameAssembly != null)
                     {
-                        active.GenerateEditorProject(allowUnsafeBlocks, gameAssembly);
-                        active.CompileEditorAssembly(options, editor, tmpEditor);
+                        Debug.Log($"Successfully reloaded project assemblies");
+
+                        options.outputPath = editor;
+                        options.tempPath = tmpEditor;
+
+                        active.GenerateEditorProject(gameAssembly);
+                        active.CompileEditorAssembly(options);
                         Assembly? editorAssembly = AssemblyManager.LoadExternalAssembly(editorOutputPath, true);
+
+                        if (editorAssembly != null)
+                            Debug.Log($"Successfully reloaded editor assemblies");
                     }
                 }
                 catch (Exception e)

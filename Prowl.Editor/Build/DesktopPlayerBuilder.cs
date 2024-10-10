@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 using Prowl.Editor.Assets;
 using Prowl.Editor.ProjectSettings;
@@ -15,23 +16,8 @@ namespace Prowl.Editor.Build;
 
 public class Desktop_Player : ProjectBuilder
 {
-    public enum Target
-    {
-        [Text("Win x64")] win_x64,
-        [Text("Win ARM x64")] win_arm64,
-        [Text("Win x86")] win_x86,
-
-        [Text("Linux x64")] linux_x64,
-        [Text("Linux x86")] linux_x86,
-
-        [Text("OSX")] osx,
-        [Text("OSX x64")] osx_x64,
-        [Text("OSX ARM x64")] osx_arm64,
-
-        Universal
-    }
-
-    public Target target = Target.win_x64;
+    public Platform platform = RuntimeUtils.GetOSPlatform();
+    public Architecture architecture = RuntimeInformation.OSArchitecture;
 
     public enum Configuration
     {
@@ -52,28 +38,27 @@ public class Desktop_Player : ProjectBuilder
 
     protected override void Build(AssetRef<Scene>[] scenes, DirectoryInfo output)
     {
-        output.Create();
         string buildDataPath = Path.Combine(output.FullName, "GameData");
         Directory.CreateDirectory(buildDataPath);
 
         Project.Active!.NukeTemp();
 
-        Debug.Log($"Compiling project assembly...");
+        // Debug.Log($"Compiling project assembly.");
         CompileProject(out string projectLib);
 
-        Debug.Log($"Compiling player executable...");
+        // Debug.Log($"Compiling player executable.");
         CompilePlayer(output, projectLib);
 
-        Debug.Log($"Exporting and Packing assets to {buildDataPath}...");
+        // Debug.Log($"Exporting and Packing assets to {buildDataPath}.");
         PackAssets(scenes, buildDataPath);
 
-        Debug.Log($"Packing scenes...");
+        // Debug.Log($"Packing scenes.");
         PackScenes(scenes, buildDataPath);
 
-        Debug.Log($"Preparing project settings...");
+        // Debug.Log($"Preparing project settings.");
         PackProjectSettings(buildDataPath);
 
-        Debug.Log($"Successfully built project.");
+        Debug.Log($"Successfully built project to {output}");
 
         // Open the Build folder
         AssetDatabase.OpenPath(output, type: FileOpenType.FileExplorer);
@@ -90,21 +75,21 @@ public class Desktop_Player : ProjectBuilder
 
         DirectoryInfo tmpProject = new DirectoryInfo(Path.Combine(temp.FullName, "obj", Project.GameCSProjectName));
 
-        bool allowUnsafeBlocks = BuildProjectSettings.Instance.AllowUnsafeBlocks;
-        bool enableAOT = BuildProjectSettings.Instance.EnableAOTCompilation;
+        active.GenerateGameProject();
+
+        projectLib = Path.Combine(project.FullName, Project.GameCSProjectName + ".dll");
 
         DotnetCompileOptions projectOptions = new DotnetCompileOptions()
         {
             isRelease = configuration == Configuration.Release,
             isSelfContained = false,
-            outputExecutable = false,
+            architecture = architecture,
+            platform = platform,
+            outputPath = project,
+            tempPath = tmpProject
         };
 
-        active.GenerateGameProject(allowUnsafeBlocks, enableAOT);
-
-        projectLib = Path.Combine(project.FullName, Project.GameCSProjectName + ".dll");
-
-        if (!active.CompileGameAssembly(projectOptions, project, tmpProject))
+        if (!active.CompileGameAssembly(projectOptions))
         {
             Debug.LogError($"Failed to compile Project assembly.");
             return;
@@ -139,34 +124,42 @@ public class Desktop_Player : ProjectBuilder
             return;
         }
 
-        bool enableAOT = BuildProjectSettings.Instance.EnableAOTCompilation;
+        bool publishAOT = BuildProjectSettings.Instance.EnableAOTCompilation;
 
         Assembly runtimeAssembly = typeof(Application).Assembly;
 
-        ProjectCompiler.GenerateCSProject(
-            "DesktopPlayer",
+        CSProjectOptions options = new();
+
+        options.OutputName = "DesktopPlayer";
+        options.OutputExecutable = true;
+        options.AllowUnsafeCode = true;
+        options.EnableAOTCompatibility = true;
+        options.PublishAOT = publishAOT;
+
+        options.OutputPath = bin;
+        options.IntermediateOutputPath = tmpPlayer;
+        options.ReferencesArePrivate = true;
+
+        options.AddReference(runtimeAssembly, true);
+        options.AddReference(gameLibrary);
+
+        options.GenerateCSProject(
             playerProj,
-            playerProj.Directory,
-            RecursiveGetCSFiles(playerProj.Directory),
-            ProjectCompiler.GetNonstandardReferences(runtimeAssembly)
-                .Concat([runtimeAssembly]),
-            [(Project.GameCSProjectName, gameLibrary)],
-            true,
-            enableAOT,
-            true,
-            bin,
-            tmpPlayer
+            playerProj.Directory!,
+            RecursiveGetCSFiles(playerProj.Directory!)
         );
 
         DotnetCompileOptions playerOptions = new DotnetCompileOptions()
         {
             isRelease = configuration == Configuration.Release,
             isSelfContained = true,
-            outputExecutable = true,
-            publishAOT = enableAOT,
+            architecture = architecture,
+            platform = platform,
+            outputPath = output,
+            tempPath = tmpPlayer
         };
 
-        if (!ProjectCompiler.CompileCSProject(playerProj, output, null, playerOptions))
+        if (ProjectCompiler.CompileCSProject(playerProj, playerOptions) != 0)
         {
             Debug.LogError($"Failed to compile player assembly.");
             return;
@@ -226,11 +219,11 @@ public class Desktop_Player : ProjectBuilder
     }
 
 
-    private void PackScenes(AssetRef<Scene>[] scenes, string dataPath)
+    private static void PackScenes(AssetRef<Scene>[] scenes, string dataPath)
     {
         for (int i = 0; i < scenes.Length; i++)
         {
-            BoundedLog($"Packing scene_{i}.prowl...");
+            // Debug.Log($"Packing scene_{i}.prowl.");
             AssetRef<Scene> scene = scenes[i];
             SerializedProperty tag = Serializer.Serialize(scene.Res!);
             BinaryTagConverter.WriteToFile(tag, new FileInfo(Path.Combine(dataPath, $"scene_{i}.prowl")));
