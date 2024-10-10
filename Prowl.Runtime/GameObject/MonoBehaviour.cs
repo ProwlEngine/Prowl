@@ -282,6 +282,12 @@ public abstract class MonoBehaviour : EngineObject, ICloneExplicit
     [OnAssemblyUnload]
     public static void ClearCache() => CachedExecuteAlways.Clear();
 
+    public override void OnDispose()
+    {
+        if (GameObject != null)
+            GameObject.RemoveComponent(this);
+    }
+
     /// <summary>
     /// Starts a coroutine with the specified method name.
     /// </summary>
