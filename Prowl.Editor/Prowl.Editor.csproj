@@ -47,6 +47,7 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
     <PackageReference Include="SixLabors.ImageSharp.Textures" Version="0.0.0-alpha.0.140" />
     <PackageReference Include="SPIRV-Cross.NET" Version="1.0.1" />
+    <PackageReference Include="System.Reflection.Metadata" Version="8.0.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -66,8 +67,7 @@
     </Content>
 
     <!-- Recursive file copy  -->
-    <Content Include="..\Prowl.Players\Prowl.Desktop\**\*.*"
-      Exclude="..\Prowl.Players\Prowl.Desktop\bin\**;..\Prowl.Players\Prowl.Desktop\obj\**;..\Prowl.Players\Prowl.Desktop\*.*">
+    <Content Include="..\Prowl.Players\Prowl.Desktop\**\*.*" Exclude="..\Prowl.Players\Prowl.Desktop\bin\**;..\Prowl.Players\Prowl.Desktop\obj\**;..\Prowl.Players\Prowl.Desktop\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Players\Desktop\%(RecursiveDir)\%(Filename)%(Extension)</TargetPath>
     </Content>
