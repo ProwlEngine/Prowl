@@ -241,6 +241,7 @@ public static class Serializer
     public static T? Deserialize<T>(SerializedProperty value, SerializationContext ctx) => (T?)Deserialize(value, typeof(T), ctx);
     public static object? Deserialize(SerializedProperty value, Type targetType, SerializationContext ctx)
     {
+        if (value == null) return null;
         if (value.TagType == PropertyType.Null) return null;
 
         //if (value.GetType().IsAssignableTo(targetType)) return value; - Too loose, Will prevent type 'object' from being deserialized into its actual type
