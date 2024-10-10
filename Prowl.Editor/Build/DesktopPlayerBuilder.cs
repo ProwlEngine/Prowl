@@ -56,6 +56,8 @@ public class Desktop_Player : ProjectBuilder
         string buildDataPath = Path.Combine(output.FullName, "GameData");
         Directory.CreateDirectory(buildDataPath);
 
+        Project.Active!.NukeTemp();
+
         Debug.Log($"Compiling project assembly...");
         CompileProject(out string projectLib);
 
@@ -115,7 +117,9 @@ public class Desktop_Player : ProjectBuilder
         Project active = Project.Active!;
 
         DirectoryInfo temp = active.TempDirectory;
+        DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
         DirectoryInfo player = new DirectoryInfo(Path.Combine(temp.FullName, "DesktopPlayer"));
+        DirectoryInfo tmpPlayer = new DirectoryInfo(Path.Combine(temp.FullName, "obj", "DesktopPlayer"));
 
         string playerSource = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Players", "Desktop");
         if (!Directory.Exists(playerSource))
@@ -149,7 +153,9 @@ public class Desktop_Player : ProjectBuilder
             [(Project.GameCSProjectName, gameLibrary)],
             true,
             enableAOT,
-            true
+            true,
+            bin,
+            tmpPlayer
         );
 
         DotnetCompileOptions playerOptions = new DotnetCompileOptions()
