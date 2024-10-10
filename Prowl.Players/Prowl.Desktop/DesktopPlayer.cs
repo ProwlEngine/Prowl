@@ -17,8 +17,6 @@ public static class DesktopPlayer
 
         Application.Initialize += () =>
         {
-            Physics.Initialize();
-
             FileInfo StartingScene = new FileInfo(Path.Combine(Data.FullName, "scene_0.prowl"));
 
             Debug.Log($"Starting Scene: {StartingScene.FullName}");
