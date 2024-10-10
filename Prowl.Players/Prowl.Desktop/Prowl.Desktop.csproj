@@ -1,8 +1,21 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+  <!-- For IntelliSense purposes, leave some project defaults to be removed here - these should be overwritten in an actual build -->
+  <PropertyGroup Label="RemoveFromBuild">
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>DesktopPlayer</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <!-- For IntelliSense purposes, keep a reference to the Runtime csproj - however, this reference is invalid at build and should be removed-->
+  <ItemGroup Label="RemoveFromBuild">
+    <ProjectReference Include="..\..\Prowl.Runtime\Prowl.Runtime.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Janky fix to include SDL2 binaries in the built player -->
     <PackageReference Include="Ultz.Native.SDL" Version="2.30.1" />
-    <!-- Only for IntelliSense - all actual properties are assigned in DesktopPlayerBuilder.cs -->
-    <ProjectReference Include="..\..\Prowl.Runtime\Prowl.Runtime.csproj" />
   </ItemGroup>
 </Project>

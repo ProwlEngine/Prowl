@@ -164,6 +164,9 @@ public static class ProjectCompiler
             projectDocument.Add(projectXML);
         }
 
+        foreach (XElement toRemove in projectXML.Elements().Where(x => x.Attribute("Label")?.Value == "RemoveFromBuild"))
+            toRemove.Remove();
+
         XElement propertyGroupXML = FindOrCreate(projectXML,
             new XElement("PropertyGroup",
                 new XAttribute("Label", "Compile")
