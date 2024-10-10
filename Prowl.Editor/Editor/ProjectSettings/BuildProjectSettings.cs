@@ -20,6 +20,7 @@ public class BuildProjectSettings : ScriptableSingleton<BuildProjectSettings>
     [SerializeField, HideInInspector]
     private bool _enableAOTCompilation = false;
 
+
     public override void OnValidate()
     {
         Scenes ??= []; // Ensure scenes are never null
@@ -30,7 +31,7 @@ public class BuildProjectSettings : ScriptableSingleton<BuildProjectSettings>
 
         if (requiresRecompile)
         {
-            Program.CheckReloadingAssemblies();
+            Program.RegisterReloadOfExternalAssemblies();
             _allowUnsafeBlocks = AllowUnsafeBlocks;
             _enableAOTCompilation = EnableAOTCompilation;
         }
