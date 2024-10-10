@@ -22,12 +22,12 @@ public struct DotnetCompileOptions()
 
     public string ConstructDotnetArgs(FileInfo project)
     {
-        List<string> args = ["build", project.FullName];
+        List<string> args = ["build", $"\"{project.FullName}\""];
 
         if (outputPath != null)
         {
             args.Add("--output");
-            args.Add(outputPath.FullName);
+            args.Add($"\"{outputPath.FullName}\"");
         }
 
         if (tempPath != null)
