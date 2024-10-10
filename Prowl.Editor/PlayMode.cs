@@ -22,6 +22,7 @@ public static class PlayMode
         SceneManager.StoreScene();
 
         Current = Mode.Playing;
+        Application.IsPlaying = true; // This needs to be set immediately before the scene is loaded for Prefabs to be instantiated correctly
         SceneManager.Clear();
         SceneManager.RestoreScene(); // Resets GameObjects and Components to re-trigger things like Awake() and Start()
 
@@ -49,6 +50,8 @@ public static class PlayMode
     {
         Current = Mode.Editing;
         SceneManager.Clear();
+
+        Application.IsPlaying = false; // This needs to be set immediately before the scene is loaded for Prefabs to be instantiated correctly
 
         SceneManager.RestoreScene();
         SceneManager.ClearStoredScene();
