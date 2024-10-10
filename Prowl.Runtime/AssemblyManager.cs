@@ -2,9 +2,10 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
@@ -12,6 +13,33 @@ using System.Runtime.Loader;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
+
+
+[FilePath("ProjectAssemblies.projsetting", FilePathAttribute.Location.Setting)]
+public class ProjectAssemblyReferences : ScriptableSingleton<ProjectAssemblyReferences>
+{
+    [SerializeField, HideInInspector]
+    private List<string> _assemblyNames = [];
+
+    public IEnumerable<string> AssemblyNames => _assemblyNames;
+
+
+    public void AddAssembly(string name)
+    {
+        if (!_assemblyNames.Contains(name))
+            _assemblyNames.Add(name);
+
+        Save();
+    }
+
+    public void RemoveAssembly(string name)
+    {
+        _assemblyNames.Remove(name);
+        Save();
+    }
+
+}
+
 
 public static class AssemblyManager
 {
@@ -32,6 +60,13 @@ public static class AssemblyManager
     {
         OnAssemblyUnloadAttribute.FindAll();
         OnAssemblyLoadAttribute.FindAll();
+    }
+
+
+    public static void LoadProjectAssemblies()
+    {
+        foreach (string assemblyName in ProjectAssemblyReferences.Instance.AssemblyNames)
+            Assembly.Load(assemblyName);
     }
 
 

@@ -223,6 +223,8 @@ public class Project
             publishAOT,
             outputPath: bin,
             tempPath: tmpProject);
+
+        ProjectAssemblyReferences.Instance.AddAssembly(GameCSProjectName);
     }
 
 

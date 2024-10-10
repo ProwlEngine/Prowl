@@ -1,6 +1,5 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utils;
 
 namespace Prowl.Desktop;
 
@@ -10,10 +9,11 @@ public static class DesktopPlayer
 
     public static int Main()
     {
-
-        Application.IsPlaying = true;
         Application.DataPath = Data.FullName;
 
+        Application.IsPlaying = true;
+
+        AssemblyManager.LoadProjectAssemblies();
 
         Application.Initialize += () =>
         {
