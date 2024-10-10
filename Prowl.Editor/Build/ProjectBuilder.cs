@@ -11,21 +11,22 @@ public abstract class ProjectBuilder
     {
         if (!Project.HasProject)
         {
-            Debug.LogError($"No Project Loaded...");
+            Debug.LogError($"No Project Loaded.");
             return;
         }
 
         if (!AreScenesValid(scenes))
             return;
 
-        Debug.Log($"Starting Project Build...");
-        BoundedLog($"Creating Directories...");
+        Debug.Log($"Starting Project Build.");
 
         if (output.Exists)
         {
-            BoundedLog($"Deleting existing build directory...");
+            // Debug.Log($"Deleting existing build directory.");
             output.Delete(true);
         }
+
+        output.Create();
 
         try
         {
@@ -41,15 +42,9 @@ public abstract class ProjectBuilder
 
     private bool AreScenesValid(AssetRef<Scene>[] scenes)
     {
-        if (scenes == null)
+        if (scenes == null || scenes.Length == 0)
         {
-            Debug.LogError($"Atleast 1 Scene must be assigned in the Build Project Settings Window");
-            return false;
-        }
-
-        if (scenes.Length <= 0)
-        {
-            Debug.LogError($"Atleast 1 Scene must be assigned in the Build Project Settings Window");
+            Debug.LogError($"No scenes assigned in the Build Project Settings Window");
             return false;
         }
 
@@ -62,12 +57,5 @@ public abstract class ProjectBuilder
             }
 
         return true;
-    }
-
-    protected void BoundedLog(string message)
-    {
-        Debug.Log("**********************************************************************************************************************");
-        Debug.Log(message);
-        Debug.Log("**********************************************************************************************************************");
     }
 }
