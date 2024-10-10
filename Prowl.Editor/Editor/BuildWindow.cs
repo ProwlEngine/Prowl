@@ -96,24 +96,28 @@ public class BuildWindow : EditorWindow
             EditorGUI.PropertyGrid("Builder Settings", ref builder, EditorGUI.TargetFields.Serializable | EditorGUI.TargetFields.Properties, EditorGUI.PropertyGridConfig.NoBackground);
         }
 
-        using (gui.Node("Butt's").ExpandWidth().Height(75).Enter())
+        using (gui.Node("BuildTargets").ExpandWidth().Height(75).Enter())
         {
             gui.InputField("CreateInput", ref buildName, 0x100, Gui.InputFieldFlags.None, 0, 15, 400, null, EditorGUI.GetInputStyle());
+
             string path = Path.Combine(Project.Active.ProjectPath, "Builds", buildName);
             string displayPath = path;
+
             if (displayPath.Length > 55)
                 displayPath = string.Concat("...", path.AsSpan(path.Length - 55));
+
             gui.Draw2D.DrawText(displayPath, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(0, 45), EditorStylePrefs.Instance.LesserText);
 
-            using (gui.Node("BuildButt").ExpandHeight().TopLeft(Offset.Percentage(1f, -175), Offset.Percentage(1f, -75)).Scale(175, 75).Enter())
+            using (gui.Node("BuildButton").ExpandHeight().TopLeft(Offset.Percentage(1f, -175), Offset.Percentage(1f, -75)).Scale(175, 75).Enter())
             {
-                if (!string.IsNullOrEmpty(buildName) && !Directory.Exists(path))
+                if (!string.IsNullOrEmpty(buildName))
                 {
                     if (gui.IsNodePressed())
                     {
                         builders[selectedBuilder].StartBuild(BuildProjectSettings.Instance.Scenes, new(path));
                     }
-                    var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
+
+                    Color col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
                         gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
 
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
