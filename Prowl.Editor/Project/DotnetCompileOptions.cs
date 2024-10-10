@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 using Prowl.Runtime;
@@ -15,11 +16,11 @@ public struct DotnetCompileOptions()
     public Architecture? architecture = null;
     public Platform? platform = null;
 
-    public bool? publishAOT = null;
-    public bool? outputExecutable = false;
+    public DirectoryInfo? outputPath = null;
+    public DirectoryInfo? tempPath = null;
 
 
-    public readonly string ConstructDotnetArgs(FileInfo project, DirectoryInfo? outputPath, DirectoryInfo? tempPath)
+    public string ConstructDotnetArgs(FileInfo project)
     {
         List<string> args = ["build", project.FullName];
 
@@ -58,12 +59,6 @@ public struct DotnetCompileOptions()
                 _ => throw new Exception($"Unknown target architecture: {architecture}")
             });
         }
-
-        if (publishAOT != null)
-            args.Add($"--property:PublishAot={(publishAOT.Value ? "true" : "false")}");
-
-        if (outputExecutable != null)
-            args.Add($"--property:OutputType={(outputExecutable.Value ? "Exe" : "Library")}");
 
         if (platform != null)
         {
