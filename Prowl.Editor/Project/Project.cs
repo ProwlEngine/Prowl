@@ -226,7 +226,7 @@ public class Project
         options.GenerateCSProject(
             GameCSProject,
             ProjectDirectory,
-            RecursiveGetCSFiles(AssetDirectory, false)
+            RecursiveGetCSFiles(AssetDirectory, ("Editor", false), ("bin", false), ("obj", false))
         );
 
         ProjectAssemblyReferences.Instance.AddAssembly(GameCSProjectName);
@@ -264,7 +264,7 @@ public class Project
         options.GenerateCSProject(
             EditorCSProject,
             ProjectDirectory,
-            RecursiveGetCSFiles(AssetDirectory, true)
+            RecursiveGetCSFiles(AssetDirectory, ("Editor", true), ("bin", false), ("obj", false))
         );
     }
 
@@ -279,7 +279,7 @@ public class Project
     }
 
 
-    private static List<FileInfo> RecursiveGetCSFiles(DirectoryInfo baseDirectory, bool isEditor)
+    private static List<FileInfo> RecursiveGetCSFiles(DirectoryInfo baseDirectory, params (string, bool)[] checkFolders)
     {
         List<FileInfo> result = [];
         Stack<DirectoryInfo> directoriesToProcess = new([baseDirectory]);
@@ -291,8 +291,29 @@ public class Project
             foreach (DirectoryInfo subdirectory in directory.GetDirectories())
                 directoriesToProcess.Push(subdirectory);
 
-            if (HasParent(directory, baseDirectory, "Editor") == isEditor)
-                result.AddRange(directory.GetFiles("*.cs"));
+            bool isValid = true;
+
+            foreach ((string folderName, bool include) in checkFolders)
+            {
+                bool hasParent = HasParent(directory, baseDirectory, folderName);
+
+                if (hasParent != include)
+                {
+                    isValid = false;
+                    break;
+                }
+
+                if (hasParent && include)
+                {
+                    isValid = true;
+                    break;
+                }
+            }
+
+            if (!isValid)
+                continue;
+
+            result.AddRange(directory.GetFiles("*.cs"));
         }
 
         return result;
