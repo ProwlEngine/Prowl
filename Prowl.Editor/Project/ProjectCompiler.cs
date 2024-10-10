@@ -218,7 +218,12 @@ public static class ProjectCompiler
 
         // Ignore info messages (restore, error/warn count, time elapsed, etc...)
         if (csFile == null)
+        {
+#if DEBUG
+            Runtime.Debug.Log(message); // Nearly always verbose messages
+#endif
             return;
+        }
 
         message = ParseMessageCSProj(message, out string? csprojFile);
         message = ParseFileLocations(message, out int? line, out int? column);
