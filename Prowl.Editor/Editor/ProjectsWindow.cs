@@ -8,7 +8,7 @@ using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.GUI.Layout;
 
 namespace Prowl.Editor;
 
@@ -242,9 +242,7 @@ public class ProjectsWindow : EditorWindow
         _dialogContext.OnCancel = () => _dialogContext.OnComplete = (x) => { };
 
         EditorGuiManager.Remove(_dialog);
-
         _dialog = new FileDialog(_dialogContext);
-
         EditorGuiManager.FocusWindow(_dialog);
     }
 
@@ -432,10 +430,7 @@ public class ProjectsWindow : EditorWindow
                     gui.Draw2D.DrawRectFilled(rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
                 }
 
-                // Text centering/alignment functions?
-                // Why is this not centered :/
-                Font.DefaultFont.CalcTextSizeA(out Vector2 textSize, 20, rect.width, rect.width, "...", 0);
-                gui.Draw2D.DrawText(Font.DefaultFont, "...", 20, rect.Position + new Vector2(textSize.x * 0.5f, 0), Color.white);
+                gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.Ellipsis, 20, rect, Color.white);
             }
 
             // Outside ProjectOptionsBtn node as it wouldn't render (or too small in size?)
@@ -449,7 +444,7 @@ public class ProjectsWindow : EditorWindow
     private void DrawProjectContextMenu(Project project)
     {
         bool closePopup = false;
-        if (gui.BeginPopup("ProjectOptionsContextMenu", out var popupHolder) && popupHolder != null)
+        if (gui.BeginPopup("ProjectOptionsContextMenu", out LayoutNode? popupHolder) && popupHolder != null)
         {
             using (popupHolder.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
             {
