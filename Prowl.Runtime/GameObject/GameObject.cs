@@ -289,6 +289,32 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <returns>An array of GameObjects with the given tag.</returns>
     public static GameObject[] FindGameObjectsWithTag(string otherTag) => FindObjectsOfType<GameObject>().Where(gameObject => gameObject.CompareTag(otherTag)).ToArray();
 
+
+    /// <summary>
+    /// Enumerates all GameObjects that are directly or indirectly parented to this object, i.e. its
+    /// children, grandchildren, etc.
+    /// </summary>
+    public IEnumerable<GameObject> GetChildrenDeep()
+    {
+        if (children == null) return Enumerable.Empty<GameObject>();
+
+        int startCapacity = Math.Max(children.Count * 2, 8);
+        List<GameObject> result = new(startCapacity);
+        GetChildrenDeep(result);
+        return result;
+    }
+
+    /// <summary>
+    /// Gathers all GameObjects that are directly or indirectly parented to this object, i.e. its
+    /// children, grandchildren, etc.
+    /// </summary>
+    public void GetChildrenDeep(List<GameObject> resultList)
+    {
+        if (children == null) return;
+        resultList.AddRange(children);
+        for (int i = 0; i < children.Count; i++)
+            children[i].GetChildrenDeep(resultList);
+    }
     /// <summary>
     /// Performs pre-update operations on the GameObject's components.
     /// </summary>
