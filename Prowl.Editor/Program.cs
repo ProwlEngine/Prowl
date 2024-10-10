@@ -9,6 +9,7 @@ using Prowl.Editor.Assets;
 using Prowl.Editor.Editor.CLI;
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
+using Prowl.Runtime.Cloning;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 
@@ -121,7 +122,7 @@ public static class Program
                 else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
                     EditorGuiManager.SaveScene();
 
-                Application.IsPlaying = PlayMode.Current == PlayMode.Mode.Playing;
+                Application.IsPlaying = PlayMode.Current == PlayMode.Mode.Playing || PlayMode.Current == PlayMode.Mode.Paused;
 
 
                 try
