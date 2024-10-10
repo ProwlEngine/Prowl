@@ -41,8 +41,6 @@ public class Desktop_Player : ProjectBuilder
         string buildDataPath = Path.Combine(output.FullName, "GameData");
         Directory.CreateDirectory(buildDataPath);
 
-        Project.Active!.NukeTemp();
-
         // Debug.Log($"Compiling project assembly.");
         CompileProject(out string projectLib);
 
