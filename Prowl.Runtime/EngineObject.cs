@@ -160,6 +160,7 @@ public class EngineObject : IDisposable
         if (AssetID != Guid.Empty)
         {
             compound.Add("AssetID", new SerializedProperty(AssetID.ToString()));
+
             if (FileID != 0)
                 compound.Add("FileID", new SerializedProperty(FileID));
         }
@@ -172,7 +173,11 @@ public class EngineObject : IDisposable
         if (value.TryGet("AssetID", out var assetIDTag))
         {
             AssetID = Guid.Parse(assetIDTag.StringValue);
-            FileID = value.Get("FileID").UShortValue;
+
+            if (value.TryGet("FileID", out var fileIDTag))
+                FileID = fileIDTag.UShortValue;
+            else
+                FileID = 0;
         }
     }
 }
