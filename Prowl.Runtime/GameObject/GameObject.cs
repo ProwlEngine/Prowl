@@ -315,6 +315,45 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         for (int i = 0; i < children.Count; i++)
             children[i].GetChildrenDeep(resultList);
     }
+
+    public GameObject GetChildAtIndexPath(IEnumerable<int> indexPath)
+    {
+        GameObject curObj = this;
+        foreach (int i in indexPath)
+        {
+            if (i < 0) return null;
+            if (curObj.children == null) return null;
+            if (i >= curObj.children.Count) return null;
+            curObj = curObj.children[i];
+        }
+        return curObj;
+    }
+
+    /// <summary>
+    /// Determines the index path from this GameObject to the specified child (or grandchild, etc.) of it.
+    /// </summary>
+    /// <param name="child">The child GameObject to lead to.</param>
+    /// <returns>A <see cref="List{T}"/> of indices that lead from this GameObject to the specified child GameObject.</returns>
+    /// <seealso cref="GetChildAtIndexPath"/>
+    public List<int> GetIndexPathOfChild(GameObject child)
+    {
+        List<int> path = [];
+        while (child.parent != null && child != this)
+        {
+            path.Add(child.parent.children.IndexOf(child));
+            child = child.parent;
+        }
+        path.Reverse();
+        return path;
+    }
+
+    public MonoBehaviour GetComponentAtAddress(int componentAddress)
+    {
+        if (componentAddress < 0) return null;
+        if (componentAddress >= _components.Count) return null;
+        return _components[componentAddress];
+    }
+
     /// <summary>
     /// Performs pre-update operations on the GameObject's components.
     /// </summary>
