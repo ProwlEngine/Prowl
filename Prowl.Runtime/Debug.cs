@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+
 using Veldrid;
 
 namespace Prowl.Runtime;
@@ -24,15 +25,18 @@ public enum LogSeverity
 public delegate void OnLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity);
 
 
-public record DebugStackFrame(int line, int column, string? fileName = null, MethodBase? methodBase = null)
+public record DebugStackFrame(string fileName, int? line = null, int? column = null, MethodBase? methodBase = null)
 {
     public override string ToString()
     {
+        string locSuffix = line != null ? column != null ? $"({line},{column})" : $"({line})" : "";
+
         if (methodBase != null)
-            return $"In {methodBase.DeclaringType.Name}.{methodBase.Name} at {fileName}:{line}:{column}";
+            return $"In {methodBase.DeclaringType.Name}.{methodBase.Name} at {fileName}{locSuffix}";
         else
-            return $"At {fileName}:{line}:{column}";
+            return $"At {fileName}{locSuffix}";
     }
+
 }
 
 
@@ -45,7 +49,7 @@ public record DebugStackTrace(params DebugStackFrame[] stackFrames)
         for (int i = 0; i < stackFrames.Length; i++)
         {
             StackFrame srcFrame = stackTrace.GetFrame(i);
-            stackFrames[i] = new DebugStackFrame(srcFrame.GetFileLineNumber(), srcFrame.GetFileColumnNumber(), srcFrame.GetFileName(), srcFrame.GetMethod());
+            stackFrames[i] = new DebugStackFrame(srcFrame.GetFileName(), srcFrame.GetFileLineNumber(), srcFrame.GetFileColumnNumber(), srcFrame.GetMethod());
         }
 
         return new DebugStackTrace(stackFrames);
@@ -69,34 +73,34 @@ public static class Debug
     public static event OnLog? OnLog;
 
     public static void Log(object message)
-        => Log(message.ToString(), ConsoleColor.White, LogSeverity.Normal);
+        => Log(message.ToString(), LogSeverity.Normal);
 
     public static void Log(string message)
-        => Log(message, ConsoleColor.White, LogSeverity.Normal);
+        => Log(message, LogSeverity.Normal);
 
     public static void LogWarning(object message)
-        => Log(message.ToString(), ConsoleColor.Yellow, LogSeverity.Warning);
+        => Log(message.ToString(), LogSeverity.Warning);
 
     public static void LogWarning(string message)
-        => Log(message, ConsoleColor.Yellow, LogSeverity.Warning);
+        => Log(message, LogSeverity.Warning);
 
     public static void LogError(object message)
-        => Log(message.ToString(), ConsoleColor.Red, LogSeverity.Error);
+        => Log(message.ToString(), LogSeverity.Error);
 
     public static void LogError(string message)
-        => Log(message, ConsoleColor.Red, LogSeverity.Error);
+        => Log(message, LogSeverity.Error);
 
     public static void LogSuccess(object message)
-        => Log(message.ToString(), ConsoleColor.Green, LogSeverity.Success);
+        => Log(message.ToString(), LogSeverity.Success);
 
     public static void LogSuccess(string message)
-        => Log(message, ConsoleColor.Green, LogSeverity.Success);
+        => Log(message, LogSeverity.Success);
 
     public static void LogException(Exception exception)
     {
         ConsoleColor prevColor = Console.ForegroundColor;
 
-        Console.ForegroundColor = ConsoleColor.Red;
+        Console.ForegroundColor = ConsoleColor.DarkRed;
         Console.WriteLine(exception.Message);
 
         if (exception.InnerException != null)
@@ -113,11 +117,19 @@ public static class Debug
 
     // NOTE : StackTrace is pretty fast on modern .NET, so it's nice to keep it on by default, since it gives useful line numbers for debugging purposes.
     // For reference, getting a stack trace on a modern machine takes around 15 μs at a depth of 15.
-    public static void Log(string message, ConsoleColor color, LogSeverity logSeverity, DebugStackTrace? customTrace = null)
+    public static void Log(string message, LogSeverity logSeverity, DebugStackTrace? customTrace = null)
     {
         ConsoleColor prevColor = Console.ForegroundColor;
 
-        Console.ForegroundColor = color;
+        Console.ForegroundColor = logSeverity switch
+        {
+            LogSeverity.Success => ConsoleColor.Green,
+            LogSeverity.Warning => ConsoleColor.Yellow,
+            LogSeverity.Error => ConsoleColor.Red,
+            LogSeverity.Exception => ConsoleColor.DarkRed,
+            _ => ConsoleColor.White
+        };
+
         Console.WriteLine(message);
 
         if (customTrace != null)
@@ -577,7 +589,7 @@ public class GizmoBuilder
             hasSolid ? _solid : null
             );
     }
-    
+
     public List<IconDrawCall> GetIcons()
     {
         return _icons;

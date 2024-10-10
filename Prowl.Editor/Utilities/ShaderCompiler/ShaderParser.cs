@@ -175,10 +175,10 @@ public static partial class ShaderParser
 
     private static void LogCompilationError(string message, FileIncluder includer, int line, int column)
     {
-        DebugStackFrame frame = new(line, column, includer.SourceFilePath);
+        DebugStackFrame frame = new(includer.SourceFilePath, line, column);
         DebugStackTrace trace = new(frame);
 
-        Debug.Log("Error compiling shader: " + message, ConsoleColor.Red, LogSeverity.Error, trace);
+        Debug.Log("Error compiling shader: " + message, LogSeverity.Error, trace);
     }
 
 
@@ -203,19 +203,19 @@ public static partial class ShaderParser
                     line -= global.ProgramLines;
             }
 
-            (ConsoleColor col, string prefix) = message.severity switch
+            string prefix = message.severity switch
             {
-                LogSeverity.Normal => (ConsoleColor.White, "Info"),
-                LogSeverity.Warning => (ConsoleColor.Yellow, "Warning"),
-                _ => (ConsoleColor.Red, "Error"),
+                LogSeverity.Normal => "Info",
+                LogSeverity.Warning => "Warning",
+                _ => "Error",
             };
 
             prefix += $" compiling {shaderName}: ";
 
-            DebugStackFrame frame = new(line, message.column, includer.SourceFilePath);
+            DebugStackFrame frame = new(includer.SourceFilePath, line, message.column);
             DebugStackTrace trace = new(frame);
 
-            Debug.Log(prefix + message.message, col, message.severity, trace);
+            Debug.Log(prefix + message.message, message.severity, trace);
         }
 
         return hasErrors;
