@@ -71,11 +71,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Core\DotRecast.Core.csproj" />
-    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Detour\DotRecast.Detour.csproj" />
-    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast.Toolset\DotRecast.Recast.Toolset.csproj" />
-    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast\DotRecast.Recast.csproj" />
-
     <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
     <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid.SDL2\Veldrid.SDL2.csproj" />
     <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj" />
