@@ -3,10 +3,13 @@
   <PropertyGroup Label="RemoveFromBuild">
     <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>DesktopPlayer</AssemblyName>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ImplicitUsings>true</ImplicitUsings>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <!-- For IntelliSense purposes, keep a reference to the Runtime csproj - however, this reference is invalid at build and should be removed-->
@@ -15,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Janky fix to include SDL2 binaries in the built player -->
+    <!-- Janky fix to include native SDL2 binaries in the built player -->
     <PackageReference Include="Ultz.Native.SDL" Version="2.30.1" />
   </ItemGroup>
 </Project>
