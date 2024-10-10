@@ -70,11 +70,11 @@ public static class Application
 
         Debug.Log("Initializing...");
 
-        Screen.Load += AppInitialize;
+        Screen.s_load = AppInitialize;
 
-        Screen.Update += AppUpdate;
+        Screen.s_update = AppUpdate;
 
-        Screen.Closing += AppClose;
+        Screen.s_closing = AppClose;
 
         IsRunning = true;
         IsPlaying = true; // Base application is not the editor, isplaying is always true
@@ -101,11 +101,11 @@ public static class Application
     {
         try
         {
-            AudioSystem.UpdatePool();
-
             s_appTime.Update();
 
             Time.TimeStack.Push(s_appTime);
+
+            AudioSystem.UpdatePool();
 
             Update?.Invoke();
             Render?.Invoke();
