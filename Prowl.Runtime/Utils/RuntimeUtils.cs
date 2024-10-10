@@ -48,6 +48,35 @@ public static class RuntimeUtils
         }
     }
 
+    public static PropertyInfo GetInstanceProperty(this Type type, string name)
+    {
+        PropertyInfo result = type.GetRuntimeProperties().FirstOrDefault(m => !m.IsStatic() && m.Name == name);
+        if (result == null)
+            Debug.LogError(string.Format("Unable to retrieve property '{0}' of type '{1}'.", name, type));
+        return result;
+    }
+
+    public static FieldInfo GetInstanceField(this Type type, string name)
+    {
+        FieldInfo result = type.GetRuntimeFields().FirstOrDefault(m => !m.IsStatic && m.Name == name);
+        if (result == null)
+            Debug.LogError(string.Format("Unable to retrieve field '{0}' of type '{1}'.", name, type));
+        return result;
+    }
+
+    public static bool IsPublic(this PropertyInfo property)
+    {
+        return
+            (property.CanRead && property.GetMethod.IsPublic) ||
+            (property.CanWrite && property.SetMethod.IsPublic);
+    }
+    public static bool IsStatic(this PropertyInfo property)
+    {
+        return
+            (property.CanRead && property.GetMethod.IsStatic) ||
+            (property.CanWrite && property.SetMethod.IsStatic);
+    }
+
     /// <summary>
     /// Determines whether two <see cref="MemberInfo"/> instances refer to the same member,
     /// regardless of the context in which each instance was obtained.
