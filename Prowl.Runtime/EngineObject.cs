@@ -167,7 +167,7 @@ public class EngineObject : IDisposable
 
     public static bool operator !=(EngineObject left, EngineObject right) => !(left == right);
     public override int GetHashCode() => IsDestroyed ? 0 : base.GetHashCode();
-    public override bool Equals(object obj) => this == (obj as GameObject);
+    public override bool Equals(object? obj) => this == (obj as EngineObject);
 
 
     public override string ToString() => Name;
