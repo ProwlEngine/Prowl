@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Runtime.RenderPipelines;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime.SceneManagement;
@@ -156,17 +157,27 @@ public static class SceneManager
         if (Cameras.Count == 0)
             return false;
 
-        //foreach (Camera? cam in Cameras)
-        //{
-        //    Veldrid.Framebuffer t = cam.Target.Res ?? target ?? Graphics.ScreenTarget;
-        //
-        //    uint width = t.Width;
-        //    uint height = t.Height;
-        //
-        //    Camera.CameraData data = cam.GetData(new Vector2(width, height));
-        //
-        //    cam.Pipeline.Res.Render(t, data);
-        //}
+        foreach (Camera? cam in Cameras)
+        {
+            Veldrid.Framebuffer t = Graphics.ScreenTarget;
+
+            if (cam.Target.Res != null)
+                t = cam.Target.Res.Framebuffer;
+            else if (target != null)
+                t = target.Framebuffer;
+
+            uint width = t.Width;
+            uint height = t.Height;
+
+            RenderingData data = new RenderingData
+            {
+                TargetResolution = new Vector2(width, height),
+            };
+
+            RenderPipeline pipeline = cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
+
+            pipeline.Render(t, cam, data);
+        }
 
         return true;
     }
