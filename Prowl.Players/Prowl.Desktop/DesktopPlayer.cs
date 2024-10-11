@@ -45,7 +45,7 @@ public static class DesktopPlayer
 
         };
 
-        Application.Run("Prowl Editor", 1920, 1080, new StandaloneAssetProvider(), false);
+        Application.Run("Prowl Engine", 1920, 1080, new StandaloneAssetProvider(), false);
 
         return 0;
     }
