@@ -11,7 +11,8 @@
       https://api.nuget.org/v3/index.json;
       https://www.myget.org/F/sixlabors/api/v3/index.json;
     </RestoreAdditionalProjectSources>
-    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <NoWarn>1591</NoWarn>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
