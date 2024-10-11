@@ -144,7 +144,7 @@ public class Desktop_Player : ProjectBuilder
         options.GenerateCSProject(
             playerProj,
             playerProj.Directory!,
-            RecursiveGetCSFiles(playerProj.Directory!)
+            RecursiveGetCSFiles(playerProj.Directory!, ("bin", false), ("obj", false))
         );
 
         DotnetCompileOptions playerOptions = new DotnetCompileOptions()
@@ -165,7 +165,7 @@ public class Desktop_Player : ProjectBuilder
     }
 
 
-    private static List<FileInfo> RecursiveGetCSFiles(DirectoryInfo baseDirectory)
+    private static List<FileInfo> RecursiveGetCSFiles(DirectoryInfo baseDirectory, params (string, bool)[] checkFolders)
     {
         List<FileInfo> result = [];
         Stack<DirectoryInfo> directoriesToProcess = new([baseDirectory]);
@@ -177,10 +177,46 @@ public class Desktop_Player : ProjectBuilder
             foreach (DirectoryInfo subdirectory in directory.GetDirectories())
                 directoriesToProcess.Push(subdirectory);
 
+            bool isValid = true;
+
+            foreach ((string folderName, bool include) in checkFolders)
+            {
+                bool hasParent = HasParent(directory, baseDirectory, folderName);
+
+                if (hasParent != include)
+                {
+                    isValid = false;
+                    break;
+                }
+
+                if (hasParent && include)
+                {
+                    isValid = true;
+                    break;
+                }
+            }
+
+            if (!isValid)
+                continue;
+
             result.AddRange(directory.GetFiles("*.cs"));
         }
 
         return result;
+    }
+
+
+    private static bool HasParent(DirectoryInfo? directory, DirectoryInfo root, string name)
+    {
+        while (directory != null && directory.FullName != root.FullName)
+        {
+            if (string.Equals(directory.Name, name, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            directory = directory.Parent;
+        }
+
+        return false;
     }
 
 
