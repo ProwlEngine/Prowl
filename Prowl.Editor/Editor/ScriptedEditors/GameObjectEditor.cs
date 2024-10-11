@@ -183,6 +183,8 @@ public class GameObjectEditor : ScriptedEditor
             List<MonoBehaviour> toDelete = [];
 
             foreach (var comp in go.GetComponents<MonoBehaviour>())
+            var allComps = go.GetComponents<MonoBehaviour>();
+            foreach (var comp in allComps)
             {
                 if (comp == null) continue;
                 editorsNeeded.Add(comp.InstanceID);
