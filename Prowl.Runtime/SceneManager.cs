@@ -100,6 +100,8 @@ public static class SceneManager
         for (int i = 0; i < toRemove.Count; i++)
             _gameObjects.Remove(toRemove[i]);
 
+        Physics.Dispose();
+        Physics.Initialize();
         MainScene = new();
     }
 
@@ -110,6 +112,9 @@ public static class SceneManager
         for (int i = 0; i < _gameObjects.Count; i++)
             if (_gameObjects[i].enabledInHierarchy)
                 _gameObjects[i].PreUpdate();
+
+        if (Application.IsPlaying)
+            Physics.Update();
 
         ForeachComponent((x) =>
         {

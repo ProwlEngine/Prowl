@@ -59,6 +59,7 @@ public static class Time
 
     public static double deltaTime => CurrentTime.deltaTime;
     public static float deltaTimeF => (float)deltaTime;
+    public static double fixedDeltaTime => 1.0 / (PhysicsSetting.Instance?.TargetFrameRate ?? 50);
     public static double time => CurrentTime.time;
 
     public static double smoothUnscaledDeltaTime => CurrentTime.smoothUnscaledDeltaTime;

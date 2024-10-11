@@ -81,6 +81,8 @@ public static class Program
             // Editor-specific update code
             if (Project.HasProject)
             {
+                Physics.Initialize();
+
                 if (!s_createdDefaultWindows)
                 {
                     s_createdDefaultWindows = true;
