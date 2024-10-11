@@ -20,10 +20,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Remove="C:\Users\acer1\.nuget\packages\pictime.sharpfont.dependencies\2.6.0\build\..\bin\msvc12\x64\freetype6.dll" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Remove="EmbeddedResources\**\*.*" />
   </ItemGroup>
 
