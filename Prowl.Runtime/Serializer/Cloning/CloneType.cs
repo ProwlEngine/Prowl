@@ -29,46 +29,53 @@ namespace Prowl.Runtime.Cloning
         }
 
         /// <summary>
-        /// The <see cref="System.Type"/> that is described.
+        /// [GET] The <see cref="System.Type"/> that is described.
         /// </summary>
         public TypeInfo Type { get; }
 
         /// <summary>
-        /// An array of <see cref="System.Reflection.FieldInfo">fields</see> which are cloned.
+        /// [GET] An array of <see cref="System.Reflection.FieldInfo">fields</see> which are cloned.
         /// </summary>
         public CloneField[] FieldData { get; private set; }
         /// <summary>
-        /// Specifies whether this Type can be deep-copied / cloned by assignment.
+        /// [GET] Specifies whether this Type can be deep-copied / cloned by assignment.
         /// </summary>
         public bool IsCopyByAssignment { get; }
         /// <summary>
-        /// Returns whether the encapsulated Type is an array.
+        /// [GET] Returns whether the encapsulated Type is an array.
         /// </summary>
         public bool IsArray => Type.IsArray;
         /// <summary>
-        /// Returns the elements <see cref="CloneType"/>, if this one is an array.
+        /// [GET] Returns the elements <see cref="CloneType"/>, if this one is an array.
         /// </summary>
         public CloneType ElementType { get; }
         /// <summary>
-        /// Returns whether the cached Type could be derived by others.
+        /// [GET] Returns whether the cached Type could be derived by others.
         /// </summary>
         public bool CouldBeDerived => !Type.IsValueType && !Type.IsSealed;
         /// <summary>
-        /// Specifies whether this Type requires any ownership handling, i.e. contains children or weak references.
+        /// [GET] Specifies whether this Type requires any ownership handling, i.e. contains children or weak references.
         /// </summary>
         public bool InvestigateOwnership { get; private set; }
         /// <summary>
-        /// Returns whether the cached type is handled by a <see cref="ICloneSurrogate.RequireMerge">merge surrogate</see>.
+        /// [GET] Returns whether the cached type is handled by a <see cref="ICloneSurrogate.RequireMerge">merge surrogate</see>.
         /// </summary>
         public bool IsMergeSurrogate => Surrogate != null && Surrogate.RequireMerge;
         /// <summary>
-        /// Returns the default <see cref="CloneBehavior"/> exposed by this type.
+        /// [GET] Returns the default <see cref="CloneBehavior"/> exposed by this type.
         /// </summary>
         public CloneBehavior DefaultCloneBehavior { get; }
         /// <summary>
-        /// The surrogate that will handle this types cloning operations.
+        /// [GET] The surrogate that will handle this types cloning operations.
         /// </summary>
         public ICloneSurrogate Surrogate { get; }
+        /// <summary>
+        /// [GET] When available, this property returns a compiled lambda function that assigns all plain old data fields of this Type
+        /// </summary>
+        public AssignmentFunc PrecompiledAssignmentFunc { get; private set; }
+        public SetupFunc PrecompiledSetupFunc { get; private set; }
+        public Delegate PrecompiledValueAssignmentFunc { get; private set; }
+        public Delegate PrecompiledValueSetupFunc { get; private set; }
 
         /// <summary>
         /// Creates a new CloneType based on a <see cref="System.Type"/>, gathering all the information that is necessary for cloning.
@@ -88,7 +95,7 @@ namespace Prowl.Runtime.Cloning
 				{
 					throw new NotSupportedException(
 						"Cloning multidimensional arrays is not supported in Prowl. " +
-                        "Consider skipping the referring field via [CloneField], [NonSerialized] or [SerializeIgnore] " +
+						"Consider skipping the referring field via [CloneField] or [DontSerialize] " +
 						"attribute, or use a regular array instead.");
 				}
 				ElementType = CloneProvider.GetCloneType(Type.GetElementType());
@@ -165,133 +172,228 @@ namespace Prowl.Runtime.Cloning
 				fieldData.Add(fieldEntry);
 			}
 			FieldData = [.. fieldData];
+
+			// Build precompile functions for setup and (partially) assignment
+			CompileAssignmentFunc();
+			CompileSetupFunc();
+			CompileValueAssignmentFunc();
+			CompileValueSetupFunc();
 		}
 
-        public void PerformAssignment(ref object source, ref object target, ICloneOperation operation)
-        {
-            if (Surrogate != null || Type.IsValueType || FieldData.Length == 0) return;
+		private void CompileAssignmentFunc()
+		{
+			if (Surrogate != null) return;
+			if (Type.IsValueType) return;
+			if (FieldData.Length == 0) return;
 
-            foreach (CloneField fieldData in FieldData)
-            {
-                if ((fieldData.Flags & CloneFieldFlags.IdentityRelevant) != CloneFieldFlags.None && operation.Context.PreserveIdentity)
-                    continue;
+			ParameterExpression sourceParameter = Expression.Parameter(typeof(object), "source");
+			ParameterExpression targetParameter = Expression.Parameter(typeof(object), "target");
+			ParameterExpression operationParameter = Expression.Parameter(typeof(ICloneOperation), "operation");
+			ParameterExpression sourceCastVar = Expression.Variable(Type.AsType(), "sourceCast");
+			ParameterExpression targetCastVar = Expression.Variable(Type.AsType(), "targetCast");
 
-                object sourceValue = fieldData.Field.GetValue(source);
-                object targetValue = fieldData.Field.GetValue(target);
+			List<Expression> mainBlock = CreateAssignmentFuncContent(operationParameter, sourceCastVar, targetCastVar);
 
-                if (fieldData.FieldType.IsCopyByAssignment)
-                {
-                    fieldData.Field.SetValue(target, sourceValue);
-                }
-                else if (fieldData.FieldType.Type.IsValueType)
-                {
-                    MethodInfo method = typeof(ICloneOperation).GetMethod("HandleValue").MakeGenericMethod(fieldData.Field.FieldType);
-                    method.Invoke(operation, [sourceValue, targetValue]);
-                    fieldData.Field.SetValue(target, targetValue);
-                }
-                else
-                {
-                    MethodInfo method = typeof(ICloneOperation).GetMethod("HandleObject").MakeGenericMethod(fieldData.Field.FieldType);
-                    object? result = method.Invoke(operation, [sourceValue, targetValue]);
-                    fieldData.Field.SetValue(target, result);
-                }
-            }
-        }
+			mainBlock.Insert(0, Expression.Assign(sourceCastVar, Expression.TypeAs(sourceParameter, Type.AsType())));
+			mainBlock.Insert(1, Expression.Assign(targetCastVar, Expression.TypeAs(targetParameter, Type.AsType())));
 
-        public void PerformAssignment<T>(ref T source, ref T target, ICloneOperation operation) where T : struct
-        {
-            if (Surrogate != null || FieldData.Length == 0) return;
+			Expression mainBlockExpression = Expression.Block(new[] { sourceCastVar, targetCastVar }, mainBlock);
+			PrecompiledAssignmentFunc = Expression.Lambda<AssignmentFunc>(mainBlockExpression, sourceParameter, targetParameter, operationParameter).Compile();
+		}
 
-            foreach (CloneField fieldData in FieldData)
-            {
-                if ((fieldData.Flags & CloneFieldFlags.IdentityRelevant) != CloneFieldFlags.None && operation.Context.PreserveIdentity)
-                    continue;
+		private void CompileSetupFunc()
+		{
+			if (Surrogate != null) return;
+			if (FieldData.Length == 0) return;
+			if (!InvestigateOwnership) return;
 
-                if (fieldData.FieldType.IsCopyByAssignment)
-                {
-                    object? sourceValue = fieldData.Field.GetValue(source);
-                    fieldData.Field.SetValue(target, sourceValue);
-                }
-                else if (fieldData.FieldType.Type.IsValueType)
-                {
-                    MethodInfo method = typeof(ICloneOperation).GetMethod("HandleValue").MakeGenericMethod(fieldData.Field.FieldType);
-                    object? sourceValue = fieldData.Field.GetValue(source);
-                    object? targetValue = fieldData.Field.GetValue(target);
-                    method.Invoke(operation, [sourceValue, targetValue]);
-                    fieldData.Field.SetValue(target, targetValue);
-                }
-                else
-                {
-                    MethodInfo method = typeof(ICloneOperation).GetMethod("HandleObject").MakeGenericMethod(fieldData.Field.FieldType);
-                    object? sourceValue = fieldData.Field.GetValue(source);
-                    object? targetValue = fieldData.Field.GetValue(target);
-                    object? result = method.Invoke(operation, [sourceValue, targetValue]);
-                    fieldData.Field.SetValue(target, result);
-                }
-            }
-        }
+			ParameterExpression sourceParameter = Expression.Parameter(typeof(object), "source");
+			ParameterExpression targetParameter = Expression.Parameter(typeof(object), "target");
+			ParameterExpression setupParameter = Expression.Parameter(typeof(ICloneTargetSetup), "setup");
 
-        public void PerformSetup(ref object source, ref object target, ICloneTargetSetup setup)
-        {
-            if (Surrogate != null || FieldData.Length == 0 || !InvestigateOwnership) return;
+			ParameterExpression sourceCastVar = Expression.Variable(Type.AsType(), "sourceCast");
+			ParameterExpression targetCastVar = Expression.Variable(Type.AsType(), "targetCast");
 
-            foreach (CloneField fieldData in FieldData)
-            {
-                if (fieldData.FieldType.IsCopyByAssignment || fieldData.IsAlwaysReference ||
-                    (fieldData.FieldType.Type.IsValueType && !fieldData.FieldType.InvestigateOwnership))
-                    continue;
+			List<Expression> mainBlock = CreateSetupFuncContent(setupParameter, sourceCastVar, targetCastVar);
+			if (mainBlock == null) return;
 
-                CloneBehavior behavior = fieldData.Behavior?.Behavior ?? CloneBehavior.Default;
-                TypeInfo? behaviorTarget = fieldData.Behavior?.TargetType?.GetTypeInfo();
+			mainBlock.Insert(0, Expression.Assign(sourceCastVar, Type.IsValueType ? Expression.Convert(sourceParameter, Type.AsType()) : Expression.TypeAs(sourceParameter, Type.AsType())));
+			mainBlock.Insert(1, Expression.Assign(targetCastVar, Type.IsValueType ? Expression.Convert(targetParameter, Type.AsType()) : Expression.TypeAs(targetParameter, Type.AsType())));
+			Expression mainBlockExpression = Expression.Block(new[] { sourceCastVar, targetCastVar }, mainBlock);
+			PrecompiledSetupFunc = Expression.Lambda<SetupFunc>(mainBlockExpression, sourceParameter, targetParameter, setupParameter).Compile();
+		}
 
-                object? sourceValue = fieldData.Field.GetValue(source);
-                object? targetValue = fieldData.Field.GetValue(target);
+		private void CompileValueAssignmentFunc()
+		{
+			if (Surrogate != null) return;
+			if (!Type.IsValueType) return;
+			if (FieldData.Length == 0) return;
 
-                if (fieldData.FieldType.Type.IsValueType)
-                {
-                    MethodInfo method = typeof(ICloneTargetSetup).GetMethod("HandleValue").MakeGenericMethod(fieldData.Field.FieldType);
-                    method.Invoke(setup, [sourceValue, targetValue, behavior, behaviorTarget]);
-                }
-                else
-                {
-                    MethodInfo method = typeof(ICloneTargetSetup).GetMethod("HandleObject").MakeGenericMethod(fieldData.Field.FieldType);
-                    method.Invoke(setup, [sourceValue, targetValue, behavior, behaviorTarget]);
-                }
-            }
-        }
+			ParameterExpression sourceParameter = Expression.Parameter(Type.MakeByRefType(), "source");
+			ParameterExpression targetParameter = Expression.Parameter(Type.MakeByRefType(), "target");
+			ParameterExpression operationParameter = Expression.Parameter(typeof(ICloneOperation), "operation");
 
-        public void PerformSetup<T>(ref T source, ref T target, ICloneTargetSetup setup) where T : struct
-        {
-            if (Surrogate != null || FieldData.Length == 0 || !InvestigateOwnership) return;
+			List<Expression> mainBlock = CreateAssignmentFuncContent(operationParameter, sourceParameter, targetParameter);
 
-            foreach (CloneField fieldData in FieldData)
-            {
-                if (fieldData.FieldType.IsCopyByAssignment || fieldData.IsAlwaysReference ||
-                    (fieldData.FieldType.Type.IsValueType && !fieldData.FieldType.InvestigateOwnership))
-                    continue;
+			Expression mainBlockExpression = Expression.Block(mainBlock);
+			PrecompiledValueAssignmentFunc = 
+				Expression.Lambda(
+					typeof(ValueAssignmentFunc<>).GetTypeInfo().MakeGenericType(Type.AsType()), 
+					mainBlockExpression, 
+					sourceParameter, 
+					targetParameter, 
+					operationParameter)
+				.Compile();
+		}
 
-                CloneBehavior behavior = fieldData.Behavior?.Behavior ?? CloneBehavior.Default;
-                TypeInfo? behaviorTarget = fieldData.Behavior?.TargetType?.GetTypeInfo();
+		private void CompileValueSetupFunc()
+		{
+			if (!Type.IsValueType) return;
+			if (Surrogate != null) return;
+			if (FieldData.Length == 0) return;
+			if (!InvestigateOwnership) return;
 
-                object? sourceValue = fieldData.Field.GetValue(source);
-                object? targetValue = fieldData.Field.GetValue(target);
+			ParameterExpression sourceParameter = Expression.Parameter(Type.MakeByRefType(), "source");
+			ParameterExpression targetParameter = Expression.Parameter(Type.MakeByRefType(), "target");
+			ParameterExpression setupParameter = Expression.Parameter(typeof(ICloneTargetSetup), "setup");
 
-                if (fieldData.FieldType.Type.IsValueType)
-                {
-                    MethodInfo method = typeof(ICloneTargetSetup).GetMethod("HandleValue").MakeGenericMethod(fieldData.Field.FieldType);
-                    method.Invoke(setup, [sourceValue, targetValue, behavior, behaviorTarget]);
-                }
-                else
-                {
-                    MethodInfo method = typeof(ICloneTargetSetup).GetMethod("HandleObject").MakeGenericMethod(fieldData.Field.FieldType);
-                    method.Invoke(setup, [sourceValue, targetValue, behavior, behaviorTarget]);
-                }
-            }
-        }
+			List<Expression> mainBlock = CreateSetupFuncContent(setupParameter, sourceParameter, targetParameter);
+			if (mainBlock == null) return;
 
-        public override string ToString()
+			Expression mainBlockExpression = Expression.Block(mainBlock);
+			PrecompiledValueSetupFunc = 
+				Expression.Lambda(
+					typeof(ValueSetupFunc<>).GetTypeInfo().MakeGenericType(Type.AsType()), 
+					mainBlockExpression, 
+					sourceParameter, 
+					targetParameter, 
+					setupParameter)
+				.Compile();
+		}
+
+		private List<Expression> CreateAssignmentFuncContent(Expression operation, Expression source, Expression target)
+		{
+			List<Expression> mainBlock = [];
+
+			for (int i = 0; i < FieldData.Length; i++)
+			{
+				FieldInfo field = FieldData[i].Field;
+				Expression assignment;
+
+				if (FieldData[i].FieldType.IsCopyByAssignment)
+				{
+					assignment = Expression.Assign(
+						Expression.Field(target, field), 
+						Expression.Field(source, field));
+				}
+				else if (FieldData[i].FieldType.Type.IsValueType)
+				{
+					assignment = Expression.Call(operation, 
+						s_copyHandleValue.MakeGenericMethod(field.FieldType), 
+						Expression.Field(source, field), 
+						Expression.Field(target, field));
+				}
+				else
+				{
+					assignment = Expression.Call(operation, 
+						s_copyHandleObject.MakeGenericMethod(field.FieldType), 
+						Expression.Field(source, field), 
+						Expression.Field(target, field));
+				}
+
+				if ((FieldData[i].Flags & CloneFieldFlags.IdentityRelevant) != CloneFieldFlags.None)
+				{
+					assignment = Expression.IfThen(
+						Expression.Not(Expression.Property(Expression.Property(operation, "Context"), "PreserveIdentity")),
+						assignment);
+				}
+				mainBlock.Add(assignment);
+			}
+
+			return mainBlock;
+		}
+
+		private List<Expression> CreateSetupFuncContent(Expression setup, Expression source, Expression target)
+		{
+			List<Expression> mainBlock = [];
+			bool anyContent = false;
+			for (int i = 0; i < FieldData.Length; i++)
+			{
+				// Don't need to scan "plain old data" and reference fields
+				if (FieldData[i].FieldType.IsCopyByAssignment) continue;
+				if (FieldData[i].IsAlwaysReference) continue;
+				if (FieldData[i].FieldType.Type.IsValueType && !FieldData[i].FieldType.InvestigateOwnership) continue;
+				anyContent = true;
+
+				// Call HandleObject on the fields value
+				CloneBehaviorAttribute behaviorAttribute = FieldData[i].Behavior;
+				FieldInfo field = FieldData[i].Field;
+				Expression handleObjectExpression;
+				if (FieldData[i].FieldType.Type.IsValueType)
+				{
+					if (behaviorAttribute == null)
+					{
+						handleObjectExpression = Expression.Call(setup, 
+							s_setupHandleValue.MakeGenericMethod(field.FieldType), 
+							Expression.Field(source, field), 
+							Expression.Field(target, field),
+							Expression.Constant(CloneBehavior.Default),
+							Expression.Constant(null, typeof(TypeInfo)));
+					}
+					else
+					{
+						handleObjectExpression = Expression.Call(setup, 
+							s_setupHandleValue.MakeGenericMethod(field.FieldType), 
+							Expression.Field(source, field), 
+							Expression.Field(target, field), 
+							Expression.Constant(behaviorAttribute.Behavior), 
+							Expression.Constant(behaviorAttribute.TargetType));
+					}
+				}
+				else
+				{
+					if (behaviorAttribute == null)
+					{
+						handleObjectExpression = Expression.Call(setup, 
+							s_setupHandleObject.MakeGenericMethod(field.FieldType), 
+							Expression.Field(source, field), 
+							Expression.Field(target, field),
+							Expression.Constant(CloneBehavior.Default),
+							Expression.Constant(null, typeof(TypeInfo)));
+					}
+					else if (behaviorAttribute.TargetType == null || field.FieldType.GetTypeInfo().IsAssignableFrom(behaviorAttribute.TargetType.GetTypeInfo()))
+					{
+						handleObjectExpression = Expression.Call(setup, 
+							s_setupHandleObject.MakeGenericMethod(field.FieldType), 
+							Expression.Field(source, field), 
+							Expression.Field(target, field), 
+							Expression.Constant(behaviorAttribute.Behavior),
+							Expression.Constant(null, typeof(TypeInfo)));
+					}
+					else
+					{
+						handleObjectExpression = Expression.Call(setup, 
+							s_setupHandleObject.MakeGenericMethod(field.FieldType), 
+							Expression.Field(source, field), 
+							Expression.Field(target, field), 
+							Expression.Constant(behaviorAttribute.Behavior), 
+							Expression.Constant(behaviorAttribute.TargetType));
+					}
+				}
+				mainBlock.Add(handleObjectExpression);
+			}
+			if (!anyContent) return null;
+			return mainBlock;
+		}
+
+		public override string ToString()
 		{
 			return string.Format("CloneType {0}", Type.ToString());
 		}
+
+		private static readonly MethodInfo s_setupHandleObject = typeof(ICloneTargetSetup).GetTypeInfo().DeclaredMethods.FirstOrDefault(m => m.Name == "HandleObject");
+		private static readonly MethodInfo s_setupHandleValue = typeof(ICloneTargetSetup).GetTypeInfo().DeclaredMethods.FirstOrDefault(m => m.Name == "HandleValue");
+		private static readonly MethodInfo s_copyHandleObject = typeof(ICloneOperation).GetTypeInfo().DeclaredMethods.FirstOrDefault(m => m.Name == "HandleObject");
+		private static readonly MethodInfo s_copyHandleValue = typeof(ICloneOperation).GetTypeInfo().DeclaredMethods.FirstOrDefault(m => m.Name == "HandleValue");
 	}
 }
