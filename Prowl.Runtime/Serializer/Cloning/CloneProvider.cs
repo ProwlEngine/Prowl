@@ -367,7 +367,7 @@ namespace Prowl.Runtime.Cloning
 			// If it's an object, we'll need to traverse its fields
 			else
             {
-                typeData.PrecompiledSetupFunc?.Invoke(source, target, this);
+                typeData.PerformSetup(ref source, ref target, this);
             }
         }
 
@@ -390,11 +390,8 @@ namespace Prowl.Runtime.Cloning
 		}
 
 		private void PrepareValueChildCloneGraph<T>(ref T source, ref T target, CloneType typeData) where T : struct
-		{
-            if (typeData.PrecompiledValueSetupFunc is CloneType.ValueSetupFunc<T> typedSetupFunc)
-            {
-                typedSetupFunc(ref source, ref target, this);
-            }
+        {
+            typeData.PerformSetup(ref source, ref target, this);
         }
 
 		private void PerformCopyObject(object source, object target, CloneType typeData)
@@ -506,22 +503,23 @@ namespace Prowl.Runtime.Cloning
 			// Handle structural data
 			else
 			{
-				// When available, take the shortcut for assigning all POD fields
-				if (typeData.PrecompiledAssignmentFunc != null)
-				{
-					typeData.PrecompiledAssignmentFunc(source, target, this);
-				}
-				// Otherwise, fall back to reflection. This is currently necessary for value types.
-				else
-				{
-					for (int i = 0; i < typeData.FieldData.Length; i++)
-					{
-						if ((typeData.FieldData[i].Flags & CloneFieldFlags.IdentityRelevant) != CloneFieldFlags.None && Context.PreserveIdentity)
-							continue;
-						PerformCopyField(source, target, typeData.FieldData[i].Field, typeData.FieldData[i].FieldType.IsCopyByAssignment);
-					}
-				}
-			}
+                typeData.PerformAssignment(ref source, ref target, this);
+                // When available, take the shortcut for assigning all POD fields
+                //if (typeData.PrecompiledAssignmentFunc != null)
+                //{
+                //	typeData.PrecompiledAssignmentFunc(source, target, this);
+                //}
+                //// Otherwise, fall back to reflection. This is currently necessary for value types.
+                //else
+                //{
+                //	for (int i = 0; i < typeData.FieldData.Length; i++)
+                //	{
+                //		if ((typeData.FieldData[i].Flags & CloneFieldFlags.IdentityRelevant) != CloneFieldFlags.None && Context.PreserveIdentity)
+                //			continue;
+                //		PerformCopyField(source, target, typeData.FieldData[i].Field, typeData.FieldData[i].FieldType.IsCopyByAssignment);
+                //	}
+                //}
+            }
 		}
 
 		private void PerformCopyField(object source, object target, FieldInfo field, bool isPlainOldData)
@@ -594,11 +592,8 @@ namespace Prowl.Runtime.Cloning
 		}
 
 		private void PerformCopyChildValue<T>(ref T source, ref T target, CloneType typeData) where T : struct
-		{
-            if (typeData.PrecompiledValueAssignmentFunc is CloneType.ValueAssignmentFunc<T> typedAssignmentFunc)
-            {
-                typedAssignmentFunc(ref source, ref target, this);
-            }
+        {
+            typeData.PerformAssignment(ref source, ref target, this);
         }
 
 		private void PushCloneBehavior(LocalCloneBehavior behavior)
