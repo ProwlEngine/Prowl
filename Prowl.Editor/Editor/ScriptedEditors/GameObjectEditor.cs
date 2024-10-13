@@ -352,9 +352,9 @@ public class GameObjectEditor : ScriptedEditor
         bool closePopup = false;
         if (StyledButton("Duplicate"))
         {
-            var copy = Serializer.Deserialize<MonoBehaviour>(serialized);
-            go.AddComponent(copy);
-            copy.OnValidate();
+            MonoBehaviour cloned = comp.DeepClone();
+            go.AddComponent(cloned);
+            cloned.OnValidate();
             closePopup = true;
         }
 

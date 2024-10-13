@@ -60,7 +60,7 @@ public class GameWindow : EditorWindow
 
     public void RefreshRenderTexture()
     {
-        RenderTarget?.Dispose();
+        RenderTarget?.DestroyImmediate();
 
         RenderTarget = new RenderTexture(
             (uint)GeneralPreferences.Instance.CurrentWidth,
@@ -146,12 +146,15 @@ public class GameWindow : EditorWindow
             }
 
             if (GeneralPreferences.Instance.AutoRefreshGameView || !hasFrame)
-                if (!SceneManager.Draw(RenderTarget))
-                {
+            {
+                // Needs to be reimplemented
+                //if (!SceneManager.Draw(RenderTarget))
+                //{
                     gui.Draw2D.DrawRect(innerRect, Color.red, 2);
                     gui.Draw2D.DrawText(Font.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
                     return;
-                }
+                //}
+            }
 
             hasFrame = true;
 

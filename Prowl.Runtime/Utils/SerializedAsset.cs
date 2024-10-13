@@ -57,19 +57,15 @@ public class SerializedAsset
         using var stream = File.OpenRead(path);
         using BinaryReader reader = new(stream);
         var tag = BinaryTagConverter.ReadFrom(reader);
-
-        bool prev = SceneManager.AllowGameObjectConstruction;
-        SceneManager.AllowGameObjectConstruction = false;
+         
         try
         {
             var obj = Serializer.Deserialize<SerializedAsset>(tag);
-            SceneManager.AllowGameObjectConstruction = prev; // Restore state
             return obj;
         }
-        catch
+        catch (Exception e)
         {
-            SceneManager.AllowGameObjectConstruction = prev; // Restore state
-            throw;
+            throw new Exception("Failed to deserialize asset: " + path, e);
         }
     }
 
@@ -78,18 +74,14 @@ public class SerializedAsset
         using BinaryReader reader = new(stream);
         var tag = BinaryTagConverter.ReadFrom(reader);
 
-        bool prev = SceneManager.AllowGameObjectConstruction;
-        SceneManager.AllowGameObjectConstruction = false;
         try
         {
             var obj = Serializer.Deserialize<SerializedAsset>(tag);
-            SceneManager.AllowGameObjectConstruction = prev; // Restore state
             return obj;
         }
-        catch (Exception)
+        catch (Exception e)
         {
-            SceneManager.AllowGameObjectConstruction = prev; // Restore state
-            throw;
+            throw new Exception("Failed to deserialize asset from stream", e);
         }
     }
 

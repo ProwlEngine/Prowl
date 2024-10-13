@@ -101,11 +101,10 @@ public class HierarchyWindow : EditorWindow
 
             double height = 0;
             int id = 0;
-            for (int i = 0; i < SceneManager.AllGameObjects.Count; i++)
+            for (int i = 0; i < SceneManager.Scene.RootObjects.Count(); i++)
             {
-                var go = SceneManager.AllGameObjects[i];
-                if (go.parent == null)
-                    DrawGameObject(ref id, go, 0, false);
+                GameObject go = SceneManager.Scene.RootObjects.ElementAt(i);
+                DrawGameObject(ref id, go, 0);
                 height += entryHeight;
             }
 
@@ -134,6 +133,8 @@ public class HierarchyWindow : EditorWindow
             var go = new GameObject("New GameObject");
             if (parent != null)
                 go.SetParent(parent);
+            else // SetParent adds to scene automatically so we only need to add if it doesnt have a parent
+                SceneManager.Scene.Add(go);
             go.Transform.localPosition = Vector3.zero;
             SelectHandler.SetSelection(new WeakReference(go));
             closePopup = true;
@@ -160,7 +161,7 @@ public class HierarchyWindow : EditorWindow
             }
             if (EditorGUI.StyledButton("Delete"))
             {
-                parent.Destroy();
+                parent.DestroyLater();
                 closePopup = true;
             }
 
@@ -168,7 +169,8 @@ public class HierarchyWindow : EditorWindow
             {
                 SelectHandler.Foreach((go) =>
                 {
-                    (go.Target as GameObject).Destroy();
+                    if (go.Target is GameObject g)
+                        g.DestroyLater();
                 });
                 SelectHandler.Clear();
                 closePopup = true;
@@ -346,10 +348,19 @@ public class HierarchyWindow : EditorWindow
     {
         if (DragnDrop.Drop<GameObject>(out GameObject? original))
         {
-            if (!SceneManager.Has(original)) // If its not already in the scene, Instantiate it
-                go = (GameObject)EngineObject.Instantiate(original, true);
-            go.SetParent(entity); // null is root
             GameObject go = original!;
+            if (!SceneManager.Has(original!)) // If its not already in the scene, Instantiate it
+            {
+                go = original!.DeepClone();
+                go.AssetID = original!.AssetID; // Retain Asset ID
+            }
+            if(entity != null)
+                go.SetParent(entity); // Also adds to scene
+            else
+            {
+                go.SetParent(null); // null is root - doesnt add to scene as SetParent has no idea what scene to add to
+                SceneManager.Scene.Add(go);
+            }
             SelectHandler.SetSelection(new WeakReference(go));
         }
         else if (DragnDrop.Drop<Prefab>(out Prefab? prefab))
@@ -365,13 +376,16 @@ public class HierarchyWindow : EditorWindow
     public static void DuplicateSelected()
     {
         var newGO = new List<WeakReference>();
-        SelectHandler.Foreach((go) =>
+        SelectHandler.Foreach((obj) =>
         {
-            // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
-            var serialized = Serializer.Serialize(go.Target);
-            var deserialized = Serializer.Deserialize<GameObject>(serialized);
-            deserialized.SetParent((go.Target as GameObject).parent);
-            newGO.Add(new WeakReference(deserialized));
+            var go = (obj.Target as GameObject);
+            if (go == null) return;
+            GameObject? cloned = go.DeepClone() ?? throw new Exception("Failed to clone GameObject");
+            if(go.parent != null)
+                cloned.SetParent(go.parent);
+            else // SetParent adds to scene automatically so we only need to add ourselves if it doesnt have a parent
+                SceneManager.Scene.Add(cloned);
+            newGO.Add(new WeakReference(cloned));
         });
         SelectHandler.Clear();
         SelectHandler.SetSelection([.. newGO]);

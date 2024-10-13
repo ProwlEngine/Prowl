@@ -217,11 +217,11 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
     public override void OnDispose()
     {
-        DepthBuffer?.Dispose();
+        DepthBuffer?.DestroyImmediate();
 
         if (ColorBuffers != null)
             foreach (Texture2D tex in ColorBuffers)
-                tex?.Dispose();
+                tex?.DestroyImmediate();
 
         Framebuffer?.Dispose();
 
@@ -385,7 +385,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
                 var (renderTexture, frameCreated) = pair.Value[i];
                 if (Time.frameCount - frameCreated > MaxUnusedFrames)
                 {
-                    renderTexture.Destroy();
+                    renderTexture.DestroyLater();
                     pair.Value.RemoveAt(i);
                 }
             }

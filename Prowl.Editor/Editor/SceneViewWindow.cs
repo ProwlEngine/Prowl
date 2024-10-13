@@ -4,6 +4,7 @@
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Cloning;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Widgets.Gizmo;
 using Prowl.Runtime.RenderPipelines;
@@ -35,11 +36,11 @@ public class SceneViewWindow : EditorWindow
     {
         Title = FontAwesome6.Camera + " Viewport";
 
-        var CamObject = GameObject.CreateSilently();
-        CamObject.Name = "Editor-Camera";
+        GameObject CamObject = new("Editor-Camera");
         CamObject.hideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         CamObject.Transform.position = new Vector3(0, 5, -10);
         Cam = CamObject.AddComponent<Camera>();
+        SceneManager.Scene.Add(CamObject);
         LastFocusedCamera = Cam;
 
         TransformGizmoMode mode = TransformGizmoMode.TranslateX | TransformGizmoMode.TranslateY | TransformGizmoMode.TranslateZ | TransformGizmoMode.TranslateXY | TransformGizmoMode.TranslateXZ | TransformGizmoMode.TranslateYZ | TransformGizmoMode.TranslateView;
@@ -52,7 +53,7 @@ public class SceneViewWindow : EditorWindow
 
     public void RefreshRenderTexture(int width, int height)
     {
-        RenderTarget?.Dispose();
+        RenderTarget?.DestroyImmediate();
 
         RenderTarget = new RenderTexture(
             (uint)width, (uint)height,
@@ -124,18 +125,15 @@ public class SceneViewWindow : EditorWindow
         }
 
         Debug.ClearGizmos();
-        foreach (GameObject activeGO in SceneManager.AllGameObjects)
+        foreach (GameObject activeGO in SceneManager.Scene.ActiveObjects)
         {
-            if (activeGO.enabledInHierarchy)
-            {
-                if (activeGO.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
+            if (activeGO.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
 
-                foreach (MonoBehaviour component in activeGO.GetComponents())
-                {
-                    component.DrawGizmos();
-                    if (HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)))
-                        component.DrawGizmosSelected();
-                }
+            foreach (MonoBehaviour component in activeGO.GetComponents())
+            {
+                component.DrawGizmos();
+                if (HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)))
+                    component.DrawGizmosSelected();
             }
         }
 
@@ -420,6 +418,7 @@ public class SceneViewWindow : EditorWindow
         else if (DragnDrop.Drop(out Prefab? prefab))
         {
             GameObject go = prefab.Instantiate();
+            SceneManager.Scene.Add(go);
             GameObject t = go;
 
             if (t != null)

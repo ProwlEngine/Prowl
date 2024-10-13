@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
+using Prowl.Runtime.Cloning;
 using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Runtime;
@@ -17,13 +18,6 @@ namespace Prowl.Runtime;
 [CloneBehavior(CloneBehavior.Reference)]
 public class GameObject : EngineObject, ISerializable, ICloneExplicit
 {
-    #region Static Fields/Properties
-
-    internal static event Action<GameObject>? Internal_Constructed;
-    internal static event Action<GameObject>? Internal_DestroyCommitted;
-
-    #endregion
-
     #region Private Fields/Properties
 
     private List<MonoBehaviour> _components = new();
@@ -39,6 +33,9 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     [SerializeField]
     private Transform _transform = new();
+
+    [SerializeIgnore]
+    private Scene _scene;
 
     #endregion
 
@@ -101,6 +98,16 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         }
     }
 
+    /// <summary>
+    /// The GameObjects parent <see cref="Prowl.Runtime.Scene"/>. Each GameObject can belong to
+    /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Scene.Add(GameObject)"/> and
+    /// <see cref="Prowl.Runtime.Scene.Remove(GameObject)"/> methods.
+    /// </summary>
+    public Scene Scene
+    {
+        get => _scene;
+        internal set => _scene = value;
+    }
 
     #endregion
 
@@ -166,6 +173,14 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (IsChildOrSameTransform(NewParent, this))
             return false;
 
+        Scene newScene = (NewParent != null) ? NewParent._scene : _scene;
+
+        if (newScene != _scene)
+        {
+            _scene?.Remove(this);
+            newScene?.Add(this);
+        }
+
         // Save the old position in worldspace
         Vector3 worldPosition = new Vector3();
         Quaternion worldRotation = new Quaternion();
@@ -215,28 +230,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     #region Constructors
 
-    /// <summary>
-    /// A special method to create a new GameObject without triggering the global Constructed event.
-    /// This prevents the gameobject from, for example being loaded into the scene.
-    /// </summary>
-    /// <returns>A new GameObject instance.</returns>
-    public static GameObject CreateSilently()
-    {
-        var go = new GameObject(0);
-        return go;
-    }
-
-    /// <summary>
-    /// A Special constructed used internally for the <see cref="GameObject.CreateSilently"/>() method, this prevents the GameObject from being added to the scene.
-    /// </summary>
-    /// <param name="dummy">Does nothing.</param>
-    private GameObject(int dummy) : base("New GameObject") { }
-
     /// <summary>Creates a new gameobject with tbe name 'New GameObject'.</summary>
-    public GameObject() : base("New GameObject")
-    {
-        Internal_Constructed?.Invoke(this);
-    }
+    public GameObject() : base("New GameObject") { }
 
     /// <summary>Creates a new gameobject.</summary>
     /// <param name="name">The name of the gameobject.</param>
@@ -259,6 +254,46 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                 return true;
 
         return false;
+    }
+
+    /// <summary>
+    /// Sets or alters this GameObject's <see cref="PrefabLink"/> to reference the specified <see cref="Prefab"/>.
+    /// </summary>
+    /// <param name="prefab">The Prefab that will be linked to.</param>
+    public void LinkToPrefab(AssetRef<Prefab> prefab)
+    {
+        if (prefabLink == null)
+        {
+            // Not affected by another (higher) PrefabLink
+            if (AffectedByPrefabLink == null)
+            {
+                prefabLink = new PrefabLink(this, prefab);
+                // If a nested object is already PrefabLinked, add it to the change list
+                foreach (GameObject child in GetChildrenDeep())
+                {
+                    if (child.PrefabLink != null && child.PrefabLink.ParentLink == prefabLink)
+                    {
+                        prefabLink.PushChange(child, GetType().GetInstanceField(nameof(prefabLink)), child.PrefabLink.Clone());
+                    }
+                }
+            }
+            // Already affected by another (higher) PrefabLink
+            else
+            {
+                prefabLink = new PrefabLink(this, prefab);
+                prefabLink.ParentLink.RelocateChanges(prefabLink);
+            }
+        }
+        else
+            prefabLink = prefabLink.Clone(this, prefab);
+    }
+
+    /// <summary>
+    /// Breaks this GameObject's <see cref="PrefabLink"/>
+    /// </summary>
+    public void BreakPrefabLink()
+    {
+        prefabLink = null;
     }
 
     /// <summary>
@@ -782,6 +817,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     {
         GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
         clone.SetParent(parent);
+        SceneManager.Scene.Add(clone);
         return clone;
     }
 
@@ -809,6 +845,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         clone.Transform.position = position;
         clone.Transform.rotation = rotation;
         clone.SetParent(parent, true);
+        SceneManager.Scene.Add(clone);
         return clone;
     }
 
@@ -817,21 +854,22 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     public override void OnDispose()
     {
-        // Internal_DestroyCommitted removes the child from the parent
-        // Hense why we do a while loop on the first element instead of a foreach/for
-        while (children.Count > 0)
-            children[0].Dispose();
+        for (int i = children.Count - 1; i >= 0; i--)
+            children[i].DestroyImmediate();
 
-        foreach (var component in _components)
+        for (int i = _components.Count - 1; i >= 0; i--)
         {
+            var component = _components[i];
+            if (component.IsDestroyed) continue;
             if (component.EnabledInHierarchy) component.Do(component.OnDisable);
             if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
-            component.Dispose();
+            component.DestroyImmediate();
         }
         _components.Clear();
         _componentCache.Clear();
 
-        Internal_DestroyCommitted?.Invoke(this);
+        if (_parent != null && !_parent.IsDestroyed)
+            SetParent(null);
     }
 
     /// <summary>
@@ -866,11 +904,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <returns>True if the parent is enabled or if there is no parent, false otherwise.</returns>
     private bool IsParentEnabled() => parent == null || parent.enabledInHierarchy;
-
-    /// <summary>
-    /// Marks the GameObject to not be destroyed when loading a new scene.
-    /// </summary>
-    public void DontDestroyOnLoad() => SceneManager._dontDestroyOnLoad.Add(InstanceID);
 
     /// <summary>
     /// Calls the specified method on every MonoBehaviour in this GameObject and its children.

@@ -38,7 +38,8 @@ internal class Program
 
         Application.Render += () =>
         {
-            SceneManager.Draw();
+            // Needs to be reimplemented
+            //SceneManager.Draw();
 
             Graphics.EndFrame();
         };

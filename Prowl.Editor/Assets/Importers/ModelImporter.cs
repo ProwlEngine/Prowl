@@ -163,9 +163,8 @@ public class ModelImporter : ScriptedImporter
                         foreach (var mIdx in node.MeshIndices)
                         {
                             var uMeshAndMat = meshMats[mIdx];
-                            GameObject uSubOb = GameObject.CreateSilently();
+                            GameObject uSubOb = new(uMeshAndMat.MeshName);
                             //uSubOb.AddComponent<Transform>();
-                            uSubOb.Name = uMeshAndMat.MeshName;
                             AddMeshComponent(GOs, uSubOb, uMeshAndMat);
                             uSubOb.SetParent(go, false);
                         }
@@ -609,9 +608,8 @@ public class ModelImporter : ScriptedImporter
 
     GameObject GetNodes(string? name, Node node, ref List<(GameObject, Node)> GOs, double scale)
     {
-        GameObject uOb = GameObject.CreateSilently();
+        GameObject uOb = new(name ?? node.Name);
         GOs.Add((uOb, node));
-        uOb.Name = name ?? node.Name;
 
         if (node.HasChildren)
             foreach (var cn in node.Children)

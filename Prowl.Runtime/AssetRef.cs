@@ -14,7 +14,9 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 {
     [CloneBehavior(CloneBehavior.Reference), CloneField(CloneFieldFlags.DontSkip)]
     private T? instance;
+    [CloneField(CloneFieldFlags.DontSkip)]
     private Guid assetID = Guid.Empty;
+    [CloneField(CloneFieldFlags.DontSkip)]
     private ushort fileID = 0;
 
     /// <summary>

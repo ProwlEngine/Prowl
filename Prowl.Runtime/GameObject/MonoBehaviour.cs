@@ -93,6 +93,15 @@ public abstract class MonoBehaviour : EngineObject, ICloneExplicit
     /// </summary>
     public bool EnabledInHierarchy => _enabledInHierarchy;
 
+    /// <summary>
+    /// The parent <see cref="Prowl.Runtime.Scene"/> to which this <see cref="Prowl.Runtime.MonoBehaviour"/> belongs.
+    /// 
+    /// Note that this property is derived from the components <see cref="GameObject"/>, as a
+    /// <see cref="Prowl.Runtime.MonoBehaviour"/> itself cannot be part of a <see cref="Prowl.Runtime.Scene"/> without a 
+    /// <see cref="GameObject"/>.
+    /// </summary>
+    public Scene? Scene => GameObject?.Scene ?? null;
+
     public MonoBehaviour() : base() { }
 
     /// <summary>

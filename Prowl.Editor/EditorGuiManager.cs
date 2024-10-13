@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 
 using Prowl.Editor.Assets;
@@ -301,7 +302,7 @@ public static class EditorGuiManager
     [MenuItem("File/Save Scene")]
     public static void SaveScene()
     {
-        Scene scene = SceneManager.MainScene;
+        Scene scene = SceneManager.Scene;
         if (scene.AssetID == Guid.Empty || !AssetDatabase.Contains(scene.AssetID))
         {
             SaveSceneAs();
@@ -310,11 +311,16 @@ public static class EditorGuiManager
 
         if (AssetDatabase.TryGetFile(scene.AssetID, out var file))
         {
-            AssetDatabase.Delete(file);
+            var serializedScene = Serializer.Serialize(scene);
 
-            var allGameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
-            scene = Scene.Create(allGameObjects);
-            StringTagConverter.WriteToFile(Serializer.Serialize(scene), file);
+            // We do not use AssetDatabase.Delete(file); here since that also deletes the meta file
+            // the Meta file stores the GUID and other important information about the scene asset
+            // Since were simply Saving the scene we want to keep the meta file entact
+            if (File.Exists(file.FullName))
+                file.Delete();
+
+            StringTagConverter.WriteToFile(serializedScene, file);
+
             AssetDatabase.Update();
             AssetDatabase.Ping(file);
         }
@@ -337,16 +343,16 @@ public static class EditorGuiManager
                     return;
 
                 if (File.Exists(path))
-                    AssetDatabase.Delete(file);
+                    throw new Exception("File already exists.");
+                    //AssetDatabase.Delete(file);
 
                 // If no extension (or wrong extension) add .scene
                 if (!file.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
                     file = new FileInfo(file.FullName + ".scene");
 
-                var allGameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
-                Scene scene = Scene.Create(allGameObjects);
-                var tag = Serializer.Serialize(scene);
-                StringTagConverter.WriteToFile(tag, file);
+                Scene scene = SceneManager.Scene;
+                var serializedScene = Serializer.Serialize(scene);
+                StringTagConverter.WriteToFile(serializedScene, file);
                 AssetDatabase.Update();
                 AssetDatabase.Ping(file);
             }
@@ -395,6 +401,7 @@ public static class EditorGuiManager
         go.AddComponent<DirectionalLight>();
         go.Transform.position = GetPosition();
         go.Transform.localEulerAngles = new System.Numerics.Vector3(45, 70, 0);
+        SceneManager.Scene.Add(go);
         HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
     }
 
@@ -404,6 +411,7 @@ public static class EditorGuiManager
         var go = new GameObject("Point Light");
         go.AddComponent<PointLight>();
         go.Transform.position = GetPosition();
+        SceneManager.Scene.Add(go);
         HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
     }
 
@@ -413,6 +421,7 @@ public static class EditorGuiManager
         var go = new GameObject("Spot Light");
         go.AddComponent<SpotLight>();
         go.Transform.position = GetPosition();
+        SceneManager.Scene.Add(go);
         HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
     }
 
