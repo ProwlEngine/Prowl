@@ -138,6 +138,9 @@ namespace Prowl.Runtime.Cloning
 
                 if (!flags.HasFlag(CloneFieldFlags.DontSkip))
                 {
+                    // Skip if it is private and not serialized
+                    if (!field.IsPublic && !field.HasAttribute<SerializeFieldAttribute>())
+                        continue;
                     if (field.HasAttribute<SerializeIgnoreAttribute>())
                         continue;
                     if (field.HasAttribute<NonSerializedAttribute>())
