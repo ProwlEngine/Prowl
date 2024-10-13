@@ -58,7 +58,7 @@ public static class SceneManager
         cam.Transform.position = new(0, 0, -10);
         Camera camComp = cam.AddComponent<Camera>();
         camComp.DrawOrder = -1;
-        Current.Res!.Add(go);
+        Current.Res!.Add(cam);
     }
 
     [OnAssemblyUnload]
