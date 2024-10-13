@@ -18,8 +18,7 @@ namespace Prowl.Runtime;
 /// </summary>
 public class Prefab : EngineObject
 {
-    private static readonly ApplyPrefabContext s_prefabContext = new();
-    private static readonly CloneProvider s_sharedPrefabProvider = new(s_prefabContext);
+    private static readonly CloneProvider s_sharedPrefabProvider = new();
 
     [SerializeField]
     private GameObject _objTree = null;
@@ -145,8 +144,15 @@ public sealed class PrefabLink
 {
     private struct VarMod
     {
+        public class ComponentAddress
+        {
+            public int index;
+
+            public ComponentAddress(int i) => index = i;
+        }
+
         public FieldInfo prop;
-        public Type componentType;
+        public ComponentAddress component;
         public List<int> childIndex;
         public object val;
 
@@ -161,8 +167,8 @@ public sealed class PrefabLink
             else
                 childStr = childIndex.Any() ? "(" + string.Join(", ", childIndex) + ")" : "Root";
 
-            if (componentType != null)
-                childStr += "." + componentType.Name;
+            if (component != null)
+                childStr += "." + component;
 
             if (prop != null)
                 propStr = prop.Name;
@@ -251,8 +257,8 @@ public sealed class PrefabLink
                 object target;
 
                 GameObject targetObj = _obj.GetChildAtIndexPath(_changes[i].childIndex);
-                if (_changes[i].componentType != null)
-                    target = targetObj.GetComponent(_changes[i].componentType);
+                if (_changes[i].component != null)
+                    target = targetObj.GetComponentAtAddress(_changes[i].component.index);
                 else
                     target = targetObj;
 
@@ -334,8 +340,8 @@ public sealed class PrefabLink
         {
             GameObject targetObj = _obj.GetChildAtIndexPath(_changes[i].childIndex);
             object target;
-            if (_changes[i].componentType != null)
-                target = targetObj.GetComponent(_changes[i].componentType);
+            if (_changes[i].component != null)
+                target = targetObj.GetComponentAtAddress(_changes[i].component.index);
             else
                 target = targetObj;
 
@@ -379,8 +385,8 @@ public sealed class PrefabLink
         {
             GameObject targetObj = _obj.GetChildAtIndexPath(_changes[i].childIndex);
             object target;
-            if (_changes[i].componentType != null)
-                target = targetObj.GetComponent(_changes[i].componentType);
+            if (_changes[i].component != null)
+                target = targetObj.GetComponentAtAddress(_changes[i].component.index);
             else
                 target = targetObj;
 
@@ -415,11 +421,11 @@ public sealed class PrefabLink
 
         VarMod change;
         change.childIndex = _obj.GetIndexPathOfChild(targetObj);
-        change.componentType = (targetComp != null) ? targetComp.GetType() : null; // Is EngineObject, Cannot use Null Coalescing Operator
+        change.component = (targetComp != null) ? new(targetComp.GameObject.GetComponentAddress(targetComp)) : null; // Is EngineObject, Cannot use Null Coalescing Operator
         change.prop = prop;
         change.val = value;
 
-        PopChange(change.childIndex, prop, change.componentType);
+        PopChange(change.childIndex, prop, change.component);
         _changes.Add(change);
     }
 
@@ -463,14 +469,14 @@ public sealed class PrefabLink
         PopChange(_obj.GetIndexPathOfChild(targetObj), prop);
     }
 
-    private void PopChange(IEnumerable<int> indexPath, FieldInfo prop, Type componentType = null)
+    private void PopChange(IEnumerable<int> indexPath, FieldInfo prop, VarMod.ComponentAddress component)
     {
         if (_changes == null || _changes.Count == 0) return;
         for (int i = _changes.Count - 1; i >= 0; i--)
         {
             if (_changes[i].prop == prop && _changes[i].childIndex.SequenceEqual(indexPath))
             {
-                if (componentType != null && _changes[i].componentType != componentType)
+                if (component != null && _changes[i].component.index != component.index)
                     continue;
 
                 _changes.RemoveAt(i);
@@ -510,7 +516,7 @@ public sealed class PrefabLink
     public void ClearChanges() => _changes?.Clear();
 
     /// <summary> Clears the change list for certain objects </summary>
-    public void ClearChanges(GameObject targetObj, TypeInfo cmpType, FieldInfo prop)
+    public void ClearChanges(GameObject targetObj, int? cmpAddress, FieldInfo prop)
     {
         if (_changes == null || _changes.Count == 0) return;
 
@@ -518,7 +524,7 @@ public sealed class PrefabLink
         for (int i = _changes.Count - 1; i >= 0; i--)
         {
             if (indexPath != null && !_changes[i].childIndex.SequenceEqual(indexPath)) continue;
-            if (cmpType != null && !cmpType.IsAssignableFrom(_changes[i].componentType.GetTypeInfo())) continue;
+            if (cmpAddress != null && (_changes[i].component?.index ?? int.MinValue) != cmpAddress) continue;
             if (prop != null && prop != _changes[i].prop) continue;
             _changes.RemoveAt(i);
         }
@@ -572,5 +578,3 @@ public sealed class PrefabLink
             return GetObjectHierarchyLevel(obj.parent) + 1;
     }
 }
-
-public class ApplyPrefabContext : CloneProviderContext { }

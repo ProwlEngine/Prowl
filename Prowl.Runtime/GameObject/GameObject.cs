@@ -27,6 +27,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     private bool _enabled = true;
     private bool _enabledInHierarchy = true;
     [SerializeField]
+    // DONT RENAME, GameObjectEditor finds this field by name "prefabLink" Doesn't use NameOf since its private
     private PrefabLink prefabLink = null;
 
     // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
@@ -34,6 +35,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     private GameObject? _parent;
 
     [SerializeField]
+    // DONT RENAME, GameObjectEditor finds this field by name "_transform" Doesn't use NameOf since its private
     private Transform _transform = new();
 
     [SerializeIgnore]
@@ -417,6 +419,12 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         return _components[componentAddress];
     }
 
+    public int GetComponentAddress(MonoBehaviour targetComp)
+    {
+        if (targetComp == null) return -1;
+        return _components.IndexOf(targetComp);
+    }
+
     /// <summary>
     /// Performs pre-update operations on the GameObject's components.
     /// </summary>
@@ -637,8 +645,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (type == typeof(MonoBehaviour))
         {
             // Special case for Component
-            foreach (var comp in _components)
-                yield return comp;
+            for (int i = 0; i < _components.Count; i++)
+                yield return _components[i];
         }
         else
         {
@@ -1122,44 +1130,64 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     void ICloneExplicit.SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
     {
         GameObject target = targetObj as GameObject;
-        bool isPrefabApply = setup.Context is ApplyPrefabContext;
 
-        if (!isPrefabApply)
+        // Destroy additional Components in the target GameObject
+        if (target._components.Count > 0)
         {
-            // Destroy additional Components in the target GameObject
-            if (target._components.Count > 0)
+            List<MonoBehaviour> removeComponentAddresses = null;
+            for (int i = 0; i < target._components.Count; i++)
             {
-                List<MonoBehaviour> removeComponentTypes = [];
-                foreach (MonoBehaviour targetComp in target._components)
+                if (i >= _components.Count || _components[i].GetType() != target._components[i].GetType())
                 {
-                    if (!_components.Any(c => c.GetType() == targetComp.GetType()))
-                        removeComponentTypes.Add(targetComp);
-                }
-                foreach (MonoBehaviour type in removeComponentTypes)
-                {
-                    target.RemoveComponent(type);
+                    removeComponentAddresses ??= [];
+                    removeComponentAddresses.Add(target._components[i]);
                 }
             }
-
-            // Destroy additional child objects in the target GameObject
-            if (target.children != null)
+            if (removeComponentAddresses != null)
             {
-                int thisChildCount = children != null ? children.Count : 0;
-                for (int i = target.children.Count - 1; i >= thisChildCount; i--)
+                // Remove components in reverse order to maintain correct indices
+                for (int i = removeComponentAddresses.Count - 1; i >= 0; i--)
                 {
-                    target.children[i].DestroyImmediate();
+                    target.RemoveComponent(removeComponentAddresses[i]);
                 }
             }
         }
 
-        // Create missing Components in the target GameObject
-        foreach (var comp in _components)
+        // Destroy additional child objects in the target GameObject
+        if (target.children != null)
         {
-            if (!target._components.Any(c => c.GetType() == comp.GetType()))
+            int thisChildCount = children != null ? children.Count : 0;
+            for (int i = target.children.Count - 1; i >= thisChildCount; i--)
             {
-                var targetComponent = target.AddComponent(comp.GetType());
-                setup.HandleObject(comp, targetComponent, CloneBehavior.ChildObject);
+                target.children[i].DestroyImmediate();
             }
+        }
+
+        // Create missing Components in the target GameObject
+        HashSet<MonoBehaviour> updatedComponents = [];
+        for (int i=0; i<_components.Count; i++)
+        {
+            MonoBehaviour sourceComp = _components[i];
+            Type compType = sourceComp.GetType();
+            IEnumerable<MonoBehaviour> targetComps = target.GetComponents();
+            MonoBehaviour targetComp = null;
+
+            // Find the first component of this type that hasn't been updated yet
+            for (int j = 0; j < targetComps.Count(); j++)
+            {
+                var tc = targetComps.ElementAt(j);
+                if (!updatedComponents.Contains(tc) && tc.GetType() == compType)
+                    targetComp = tc;
+            }
+
+            // If all existing components have been updated, add a new one
+            if (targetComp == null)
+                targetComp = target.AddComponent(compType);
+
+            setup.HandleObject(sourceComp, targetComp, CloneBehavior.ChildObject);
+
+            // Mark this component as updated
+            updatedComponents.Add(targetComp);
         }
 
         // Create missing child objects in the target GameObject

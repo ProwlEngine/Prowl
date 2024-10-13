@@ -99,12 +99,12 @@ public abstract class EngineObject : ICloneExplicit
     /// <param name="target">The target EngineObject to copy this EngineObject's data to</param>
     public void CopyTo(EngineObject target) => this.DeepCopyTo(target);
 
-    void ICloneExplicit.SetupCloneTargets(object target, ICloneTargetSetup setup)
+    public virtual void SetupCloneTargets(object target, ICloneTargetSetup setup)
     {
         setup.HandleObject(this, target);
         OnSetupCloneTargets(target, setup);
     }
-    void ICloneExplicit.CopyDataTo(object target, ICloneOperation operation)
+    public virtual void CopyDataTo(object target, ICloneOperation operation)
     {
         operation.HandleObject(this, target);
         OnCopyDataTo(target, operation);

@@ -11,6 +11,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
+using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 
 using static Prowl.Editor.EditorGUI;
@@ -26,6 +27,7 @@ public class GameObjectEditor : ScriptedEditor
 {
     private string _searchText = string.Empty;
     private static MenuItemInfo rootMenuItem;
+    private static FieldInfo prefabLinkInfo = typeof(GameObject).GetInstanceField("prefabLink");
     private readonly Dictionary<int, ScriptedEditor> compEditors = new();
 
     [OnAssemblyUnload]
@@ -47,7 +49,10 @@ public class GameObjectEditor : ScriptedEditor
 
         bool isEnabled = go.enabled;
         if (gui.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _, GetInputStyle()))
+        {
             go.enabled = isEnabled;
+            OnFieldChange(go, typeof(GameObject).GetInstanceField("enabled"));
+        }
         gui.Tooltip("Is Enabled");
 
         WidgetStyle style = GetInputStyle();
@@ -59,11 +64,17 @@ public class GameObjectEditor : ScriptedEditor
 
         var invisStyle = GetInputStyle() with { BGColor = new Color(0, 0, 0, 0), BorderColor = new Color(0, 0, 0, 0) };
         int tagIndex = go.tagIndex;
-        gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, invisStyle, null, FontAwesome6.Tag);
-        go.tagIndex = (byte)tagIndex;
+        if (gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, invisStyle, null, FontAwesome6.Tag))
+        {
+            go.tagIndex = (byte)tagIndex;
+            OnFieldChange(go, typeof(GameObject).GetInstanceField("tagIndex"));
+        }
         int layerIndex = go.layerIndex;
-        gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize)), 0, ItemSize, ItemSize, invisStyle, null, FontAwesome6.LayerGroup);
-        go.layerIndex = (byte)layerIndex;
+        if (gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize)), 0, ItemSize, ItemSize, invisStyle, null, FontAwesome6.LayerGroup))
+        {
+            go.layerIndex = (byte)layerIndex;
+            OnFieldChange(go, typeof(GameObject).GetInstanceField("layerIndex"));
+        }
 
         var btnRoundness = (float)EditorStylePrefs.Instance.ButtonRoundness;
 
@@ -92,7 +103,11 @@ public class GameObjectEditor : ScriptedEditor
                     if (gui.IsNodePressed())
                     {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
-                        go.PrefabLink!.ApplyPrefab();
+
+                        // Clear all changes and re-apply Prefabs
+                        //go.PrefabLink!.ApplyPrefab();
+                        go.PrefabLink.ClearChanges();
+                        PrefabLink.ApplyAllLinks([go]);
                     }
                     else if (gui.IsNodeHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f);
@@ -104,7 +119,20 @@ public class GameObjectEditor : ScriptedEditor
                 using (gui.Node("#_ApplyBtn").ExpandHeight().Margin(0, 4).Enter())
                 {
                     if (gui.IsNodePressed())
+                    {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, btnRoundness, 6);
+
+                        Prefab? prefab = go.PrefabLink!.Prefab.Res;
+                        if (prefab != null)
+                        {
+                            prefab.Inject(go);
+                            if (go.PrefabLink == null)
+                                go.LinkToPrefab(prefab);
+
+                            OnFieldChange(prefab, null);
+                            OnFieldChange(go, prefabLinkInfo);
+                        }
+                    }
                     else if (gui.IsNodeHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f, btnRoundness, 6);
                     else
@@ -161,21 +189,30 @@ public class GameObjectEditor : ScriptedEditor
                     {
                         var tpos = t.localPosition;
                         if (DrawProperty(0, "Position", ref tpos))
+                        {
                             t.localPosition = tpos;
+                            OnFieldChange(go, typeof(GameObject).GetInstanceField("_transform"));
+                        }
                     }
 
                     using (ActiveGUI.Node("RotParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
                         var tpos = t.localEulerAngles;
                         if (DrawProperty(1, "Rotation", ref tpos))
+                        {
                             t.localEulerAngles = tpos;
+                            OnFieldChange(go, typeof(GameObject).GetInstanceField("_transform"));
+                        }
                     }
 
                     using (ActiveGUI.Node("ScaleParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
                         var tpos = t.localScale;
                         if (DrawProperty(2, "Scale", ref tpos))
+                        {
                             t.localScale = tpos;
+                            OnFieldChange(go, typeof(GameObject).GetInstanceField("_transform"));
+                        }
                     }
                 }
             }
@@ -259,7 +296,6 @@ public class GameObjectEditor : ScriptedEditor
                         // Handle Editors for this type if we have any
                         if (compEditors.TryGetValue(comp.InstanceID, out ScriptedEditor? editor))
                         {
-                            editor.OnInspectorGUI();
                             editor.OnInspectorGUI(subChanges);
                         }
                         else
@@ -274,6 +310,7 @@ public class GameObjectEditor : ScriptedEditor
 
                         foreach (var change in subChanges.AllChanges)
                         {
+                            OnFieldChange(change.target, change.field);
                             // Propagate changes to the main FieldChanges
                             changes.Add(change.target, change.field);
                         }
@@ -326,6 +363,74 @@ public class GameObjectEditor : ScriptedEditor
 
             //HandleAddComponentButton(go);
 
+        }
+    }
+
+    /// <summary>
+    /// Used to push a change to the PrefabLink
+    /// If the PrefabLink itself is what's changed (They)
+    /// </summary>
+    /// <param name="o"></param>
+    /// <param name="info"></param>
+    /// <returns></returns>
+    private static void OnFieldChange(object o, FieldInfo? info)
+    {
+        if (info != null)
+        {
+            HashSet<PrefabLink> changedLinks = new HashSet<PrefabLink>();
+
+            MonoBehaviour cmp = o as MonoBehaviour;
+            GameObject obj = o as GameObject;
+            if (cmp == null && obj == null) return;
+
+            PrefabLink link = null;
+            if (obj != null) link = obj.AffectedByPrefabLink;
+            else if (cmp != null && cmp.GameObject != null) link = cmp.GameObject.AffectedByPrefabLink;
+
+            if (link == null) return;
+            if (cmp != null && !link.AffectsObject(cmp)) return;
+            if (obj != null && !link.AffectsObject(obj)) return;
+
+            // Handle property changes regarding affected prefab links change lists
+            if (PushPrefabLinkFieldChange(link, o, info))
+                changedLinks.Add(link);
+
+            foreach (PrefabLink l in changedLinks)
+            {
+                OnFieldChange(l.Obj, prefabLinkInfo);
+            }
+        }
+
+        if (o is Prefab)
+        {
+            // Prefab was modified, Update all instances
+            Prefab prefab = o as Prefab;
+            HashSet<PrefabLink> appliedLinks = PrefabLink.ApplyAllLinks(SceneManager.Scene.AllObjects, p => p.Prefab.AssetID == prefab.AssetID);
+            foreach (PrefabLink l in appliedLinks)
+                OnFieldChange(l.Obj, prefabLinkInfo);
+        }
+    }
+
+    private static bool PushPrefabLinkFieldChange(PrefabLink link, object target, FieldInfo? info)
+    {
+        if (link == null) return false;
+
+        if (info == prefabLinkInfo)
+        {
+            GameObject obj = target as GameObject;
+            if (obj == null) return false;
+
+            PrefabLink parentLink;
+            if (obj.PrefabLink == link && (parentLink = link.ParentLink) != null)
+            {
+                parentLink.PushChange(obj, info, obj.PrefabLink.Clone());
+            }
+            return false;
+        }
+        else
+        {
+            link.PushChange(target, info);
+            return true;
         }
     }
 

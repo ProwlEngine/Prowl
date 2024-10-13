@@ -15,9 +15,8 @@ namespace Prowl.Runtime;
 /// Represents the base class for all scripts that attach to GameObjects in the Prowl Game Engine.
 /// MonoBehaviour provides lifecycle methods and coroutine functionality for game object behaviors.
 /// </summary>
-[ManuallyCloned]
-[CloneBehavior(CloneBehavior.Reference)]
-public abstract class MonoBehaviour : EngineObject, ICloneExplicit
+[CloneBehavior(CloneBehavior.ChildObject)]
+public abstract class MonoBehaviour : EngineObject
 {
     private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
 
@@ -511,14 +510,19 @@ public abstract class MonoBehaviour : EngineObject, ICloneExplicit
         this.DeepCopyTo(target);
     }
 
-    void ICloneExplicit.SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
+    public override void SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
     {
+        if (this == targetObj)
+            System.Diagnostics.Debugger.Break();
         MonoBehaviour target = targetObj as MonoBehaviour;
         this.OnSetupCloneTargets(targetObj, setup);
     }
 
-    void ICloneExplicit.CopyDataTo(object targetObj, ICloneOperation operation)
+    public override void CopyDataTo(object targetObj, ICloneOperation operation)
     {
+        if (this == targetObj)
+            System.Diagnostics.Debugger.Break();
+
         MonoBehaviour target = targetObj as MonoBehaviour;
         target._enabled = _enabled;
         target._enabledInHierarchy = _enabledInHierarchy;
