@@ -26,6 +26,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     private bool _enabled = true;
     private bool _enabledInHierarchy = true;
+    [SerializeField]
+    private PrefabLink prefabLink = null;
 
     // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
@@ -82,19 +84,29 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     public int childCount => children.Count;
 
-    public bool IsPrefab => AssetID != Guid.Empty;
+    /// <summary>
+    /// The <see cref="PrefabLink"/> that connects this object to a <see cref="Prefab"/>.
+    /// </summary>
+    public PrefabLink PrefabLink
+    {
+        get => prefabLink;
+        internal set => prefabLink = value;
+    }
 
-    public bool IsPartOfPrefab
+    /// <summary>
+    /// The <see cref="PrefabLink"/> that connects this object or one or its parent GameObjects to a <see cref="Prefab"/>.
+    /// </summary>
+    /// <remarks>
+    /// This does not necessarily mean that this GameObject will be affected by the PrefabLink, since it might not be part of
+    /// the linked Prefab. It simply indicates the returned PrefabLink's potential to adjust this GameObject when being applied.
+    /// </remarks>
+    public PrefabLink AffectedByPrefabLink
     {
         get
         {
-            GameObject? parent = this;
-            while (parent != null)
-            {
-                if (parent.IsPrefab) return true;
-                parent = parent.parent;
-            }
-            return false;
+            if (prefabLink != null) return prefabLink;
+            else if (parent != null) return parent.AffectedByPrefabLink;
+            else return null;
         }
     }
 
@@ -235,9 +247,25 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     /// <summary>Creates a new gameobject.</summary>
     /// <param name="name">The name of the gameobject.</param>
-    public GameObject(string name = "New GameObject") : base(name)
+    public GameObject(string name = "New GameObject") : base(name) { }
+
+    /// <summary>
+    /// Creates a GameObject based on a specific <see cref="Duality.Resources.Prefab"/>.
+    /// </summary>
+    /// <param name="prefab">The Prefab that will be applied to this GameObject.</param>
+    /// <seealso cref="Duality.Resources.Prefab"/>
+    public GameObject(AssetRef<Prefab> prefab)
     {
-        Internal_Constructed?.Invoke(this);
+        if (!prefab.IsAvailable) return;
+        if (Application.IsEditor == false)
+        {
+            prefab.Res.CopyTo(this);
+        }
+        else
+        {
+            this.LinkToPrefab(prefab);
+            PrefabLink.Apply();
+        }
     }
 
     #endregion
@@ -952,6 +980,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         compoundTag.Add("HideFlags", new SerializedProperty((int)hideFlags));
 
         compoundTag.Add("Transform", Serializer.Serialize(_transform, ctx));
+        compoundTag.Add("PrefabLink", Serializer.Serialize(prefabLink, ctx));
 
         if (AssetID != Guid.Empty)
         {
@@ -989,6 +1018,9 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
         _transform.gameObject = this;
+        prefabLink = Serializer.Deserialize<PrefabLink>(value["PrefabLink"], ctx);
+        if (prefabLink != null)
+            prefabLink.Obj = this;
 
         if (value.TryGet("AssetID", out var guid))
             AssetID = Guid.Parse(guid.StringValue);
@@ -1090,20 +1122,24 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     void ICloneExplicit.SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
     {
         GameObject target = targetObj as GameObject;
-        // Destroy additional Components in the target GameObject
-        if (target._components.Count > 0)
+        bool isPrefabApply = setup.Context is ApplyPrefabContext;
+
+        if (!isPrefabApply)
         {
-            List<MonoBehaviour> removeComponentTypes = [];
-            foreach (MonoBehaviour targetComp in target._components)
+            // Destroy additional Components in the target GameObject
+            if (target._components.Count > 0)
             {
-                if (!_components.Any(c => c.GetType() == targetComp.GetType()))
-                    removeComponentTypes.Add(targetComp);
+                List<MonoBehaviour> removeComponentTypes = [];
+                foreach (MonoBehaviour targetComp in target._components)
+                {
+                    if (!_components.Any(c => c.GetType() == targetComp.GetType()))
+                        removeComponentTypes.Add(targetComp);
+                }
+                foreach (MonoBehaviour type in removeComponentTypes)
+                {
+                    target.RemoveComponent(type);
+                }
             }
-            foreach (MonoBehaviour type in removeComponentTypes)
-            {
-                target.RemoveComponent(type);
-            }
-        }
 
             // Destroy additional child objects in the target GameObject
             if (target.children != null)
@@ -1114,6 +1150,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                     target.children[i].DestroyImmediate();
                 }
             }
+        }
 
         // Create missing Components in the target GameObject
         foreach (var comp in _components)
@@ -1146,6 +1183,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         // Handle referenced and child objects
         setup.HandleObject(this._transform, target._transform, CloneBehavior.ChildObject);
         setup.HandleObject(this._scene, target._scene, CloneBehavior.Reference);
+        setup.HandleObject(prefabLink, target.prefabLink);
     }
 
     void ICloneExplicit.CopyDataTo(object targetObj, ICloneOperation operation)
@@ -1193,6 +1231,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         {
             target._scene = targetScene;
         }
-    }
 
+        // Copy the objects prefab link
+        operation.HandleObject(prefabLink, ref target.prefabLink, true);
+    }
 }

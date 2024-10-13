@@ -209,15 +209,13 @@ public class AssetsBrowserWindow : EditorWindow
                 using (node.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                     AssetsTreeWindow.DrawContextMenu(null, CurDirectoryNode.Directory, true, popupHolder);
 
-            if (DragnDrop.Drop<GameObject>(out var go))
+            if (DragnDrop.Drop<GameObject>(out GameObject? go))
             {
                 if (go.AssetID == Guid.Empty)
                 {
-                    var prefab = new Prefab
-                    {
-                        GameObject = Serializer.Serialize(go),
-                        Name = go.Name
-                    };
+                    Prefab prefab = new(go);
+                    prefab.Name = go.Name;
+
                     FileInfo file = new FileInfo(CurDirectoryNode.Directory + $"/{prefab.Name}.prefab");
                     while (File.Exists(file.FullName))
                         file = new FileInfo(file.FullName.Replace(".prefab", "") + " new.prefab");
@@ -226,6 +224,8 @@ public class AssetsBrowserWindow : EditorWindow
 
                     AssetDatabase.Update();
                     AssetDatabase.Ping(file);
+
+                    go.LinkToPrefab(AssetDatabase.LoadAsset<Prefab>(file, 0));
                 }
             }
 

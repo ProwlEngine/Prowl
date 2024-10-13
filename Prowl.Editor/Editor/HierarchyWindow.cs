@@ -198,26 +198,38 @@ public class HierarchyWindow : EditorWindow
                 SceneViewWindow.SetCamera(parent.Transform.position, parent.Transform.rotation);
                 closePopup = true;
             }
+
+            if (SelectHandler.Count > 0 && SelectHandler.Selected.Any(x => (x.Target as GameObject)?.PrefabLink != null) && EditorGUI.StyledButton("Break Prefab Connection"))
+            {
+                SelectHandler.Foreach((go) =>
+                {
+                    if (go.Target is GameObject g)
+                        g.BreakPrefabLink();
+                });
+                closePopup = true;
+            }
         }
 
         if (closePopup)
             gui.ClosePopup(popupHolder);
     }
 
-    public void DrawGameObject(ref int index, GameObject entity, uint depth, bool isPartOfPrefab)
+    public void DrawGameObject(ref int index, GameObject entity, uint depth)
     {
         if (entity == null) return;
         if (entity.hideFlags.HasFlag(HideFlags.Hide) || entity.hideFlags.HasFlag(HideFlags.HideAndDontSave)) return;
 
+        bool isPartOfPrefab = entity.AffectedByPrefabLink != null;
+
         if (!string.IsNullOrEmpty(_searchText) && !entity.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
         {
             for (int i = 0; i < entity.children.Count; i++)
-                DrawGameObject(ref index, entity.children[i], depth, isPartOfPrefab);
+                DrawGameObject(ref index, entity.children[i], depth);
             return;
         }
 
         bool drawChildren = false;
-        bool isPrefab = entity.IsPrefab;
+        bool isPrefab = entity.PrefabLink != null;
         double left = depth * entryHeight;
         ulong goNodeID = 0;
         double width = gui.CurrentNode.LayoutData.InnerRect.width - left;
@@ -253,7 +265,7 @@ public class HierarchyWindow : EditorWindow
 
             if (IsFocused)
                 if (isSelected && Input.GetKeyDown(Key.Delete))
-                    entity.Destroy();
+                    entity.DestroyLater();
 
             // Drag n Drop
             // Dropping uses the current nodes rect by default
@@ -339,7 +351,7 @@ public class HierarchyWindow : EditorWindow
         {
             gui.PushID(goNodeID);
             for (int i = 0; i < entity.children.Count; i++)
-                DrawGameObject(ref index, entity.children[i], depth + 1, isPartOfPrefab || isPrefab);
+                DrawGameObject(ref index, entity.children[i], depth + 1);
             gui.PopID();
         }
     }
@@ -365,7 +377,15 @@ public class HierarchyWindow : EditorWindow
         }
         else if (DragnDrop.Drop<Prefab>(out Prefab? prefab))
         {
-            SelectHandler.SetSelection(new WeakReference(prefab!.Instantiate()));
+            var go = prefab!.Instantiate();
+            if (entity != null)
+                go.SetParent(entity); // Also adds to scene
+            else
+            {
+                go.SetParent(null); // null is root - doesnt add to scene as SetParent has no idea what scene to add to
+                SceneManager.Scene.Add(go);
+            }
+            SelectHandler.SetSelection(new WeakReference(go));
         }
         else if (DragnDrop.Drop<Scene>(out Scene? scene))
         {

@@ -197,7 +197,7 @@ public class SceneViewWindow : EditorWindow
                 // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
                 if (hit != null)
                 {
-                    if (!hit.IsPartOfPrefab || gui.IsPointerDoubleClick(MouseButton.Left))
+                    if (hit.AffectedByPrefabLink == null || gui.IsPointerDoubleClick(MouseButton.Left))
                     {
                         HierarchyWindow.SelectHandler.Select(new WeakReference(hit));
                         HierarchyWindow.Ping(hit);
@@ -209,7 +209,7 @@ public class SceneViewWindow : EditorWindow
                         while (prefab.parent != null)
                         {
                             prefab = prefab.parent;
-                            if (prefab.gameObject.IsPrefab)
+                            if (prefab.gameObject.PrefabLink != null)
                                 break;
                         }
 
@@ -403,7 +403,10 @@ public class SceneViewWindow : EditorWindow
         {
             if (original.AssetID == Guid.Empty) return;
 
-            GameObject go = (GameObject)EngineObject.Instantiate(original, true);
+            // Dropping a prefab into the scene
+            GameObject go = original.DeepClone();
+            go.AssetID = original.AssetID;
+            SceneManager.Scene.Add(go);
             if (go != null)
             {
                 Vector3? hit = SceneRaycaster.GetPosition(Cam, mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height));

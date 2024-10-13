@@ -67,7 +67,8 @@ public class GameObjectEditor : ScriptedEditor
 
         var btnRoundness = (float)EditorStylePrefs.Instance.ButtonRoundness;
 
-        if (go.IsPrefab)
+        bool isPrefab = go.PrefabLink != null;
+        if (isPrefab)
         {
             // Show buttons to Ping Prefab Asset, Revert Prefab, and Apply Prefab
             using (gui.Node("#_PrefabBtns").ExpandWidth().Height(ItemSize).Top((ItemSize + 5)).Layout(LayoutType.Row).ScaleChildren().Enter())
@@ -77,7 +78,7 @@ public class GameObjectEditor : ScriptedEditor
                     if (gui.IsNodePressed())
                     {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, btnRoundness, 9);
-                        AssetDatabase.Ping(go.AssetID);
+                        AssetDatabase.Ping(go.PrefabLink!.Prefab.AssetID);
                     }
                     else if (gui.IsNodeHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f, btnRoundness, 9);
@@ -89,7 +90,10 @@ public class GameObjectEditor : ScriptedEditor
                 using (gui.Node("#_RevertBtn").ExpandHeight().Margin(0, 4).Enter())
                 {
                     if (gui.IsNodePressed())
+                    {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
+                        go.PrefabLink!.ApplyPrefab();
+                    }
                     else if (gui.IsNodeHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f);
                     else
@@ -110,7 +114,7 @@ public class GameObjectEditor : ScriptedEditor
             }
         }
 
-        var height = (ItemSize + 5) * (go.IsPrefab ? 2 : 1) + 10;
+        var height = (ItemSize + 5) * (isPrefab ? 2 : 1) + 10;
         var addComponentHeight = 0.0;
         using (gui.Node("#_InspContent").Top(height).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Clip().Enter())
         {
@@ -182,7 +186,6 @@ public class GameObjectEditor : ScriptedEditor
             HashSet<int> editorsNeeded = [];
             List<MonoBehaviour> toDelete = [];
 
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
             var allComps = go.GetComponents<MonoBehaviour>();
             foreach (var comp in allComps)
             {

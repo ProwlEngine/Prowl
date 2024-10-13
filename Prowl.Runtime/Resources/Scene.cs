@@ -50,6 +50,14 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public void HandlePrefabs()
     {
+        // When in the editor, apply prefab links
+        if (Application.IsEditor)
+            PrefabLink.ApplyAllLinks(AllObjects);
+        
+        // When running the game, break prefab links
+        if (Application.IsPlaying)
+            foreach (GameObject obj in AllObjects)
+                obj.BreakPrefabLink();
     }
 
     /// <summary>
