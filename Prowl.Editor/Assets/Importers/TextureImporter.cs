@@ -41,16 +41,20 @@ public class TextureImporter : ScriptedImporter
 [CustomEditor(typeof(TextureImporter))]
 public class TextureImporterEditor : ScriptedEditor
 {
-    public override void OnInspectorGUI()
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
     {
         var importer = (TextureImporter)(target as MetaFile).importer;
 
         gui.CurrentNode.Layout(LayoutType.Column);
 
-        EditorGUI.DrawProperty(0, "Generate Mipmaps", ref importer.generateMipmaps);
-        EditorGUI.DrawProperty(1, "Min Filter", ref importer.textureMinFilter);
-        EditorGUI.DrawProperty(2, "Mag Filter", ref importer.textureMagFilter);
-        EditorGUI.DrawProperty(3, "Wrap Mode", ref importer.textureWrap);
+        if(EditorGUI.DrawProperty(0, "Generate Mipmaps", ref importer.generateMipmaps))
+            changes.Add(importer, nameof(TextureImporter.generateMipmaps));
+        if(EditorGUI.DrawProperty(1, "Min Filter", ref importer.textureMinFilter))
+            changes.Add(importer, nameof(TextureImporter.textureMinFilter));
+        if(EditorGUI.DrawProperty(2, "Mag Filter", ref importer.textureMagFilter))
+            changes.Add(importer, nameof(TextureImporter.textureMagFilter));
+        if(EditorGUI.DrawProperty(3, "Wrap Mode", ref importer.textureWrap))
+            changes.Add(importer, nameof(TextureImporter.textureWrap));
 
         if (EditorGUI.StyledButton("Save"))
         {

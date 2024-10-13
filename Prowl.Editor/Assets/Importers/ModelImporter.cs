@@ -661,7 +661,7 @@ public class ModelEditor : ScriptedEditor
 
     private int _selectedTab;
 
-    public override void OnInspectorGUI()
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
@@ -714,6 +714,8 @@ public class ModelEditor : ScriptedEditor
     private void Meshes(ModelImporter importer, SerializedAsset? serialized)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
+#warning TODO: Implement FieldChanges for all this
 
         EditorGUI.DrawProperty(0, "Merge Objects", ref importer.OptimizeGraph);
         EditorGUI.DrawProperty(1, "Generate Mesh Colliders", ref importer.GenerateColliders);

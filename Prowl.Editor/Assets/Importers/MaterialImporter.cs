@@ -58,8 +58,8 @@ public class MaterialImporterEditor : ScriptedEditor
     }
 
 
-    public override void OnInspectorGUI()
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
     {
-        _editor?.OnInspectorGUI();
+        _editor?.OnInspectorGUI(changes);
     }
 }

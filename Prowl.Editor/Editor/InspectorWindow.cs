@@ -141,7 +141,7 @@ public class InspectorWindow : EditorWindow
                 else if (customEditor.Value.Item1.Equals(path))
                 {
                     // We are still editing the same asset path
-                    customEditor.Value.Item2.OnInspectorGUI();
+                    customEditor.Value.Item2.OnInspectorGUI(new());
                     destroyCustomEditor = false;
                 }
             }
@@ -159,7 +159,7 @@ public class InspectorWindow : EditorWindow
                 else if (customEditor.Value.Item1 == Selected)
                 {
                     // We are still editing the same object
-                    customEditor.Value.Item2.OnInspectorGUI();
+                    customEditor.Value.Item2.OnInspectorGUI(new());
                     destroyCustomEditor = false;
                 }
             }

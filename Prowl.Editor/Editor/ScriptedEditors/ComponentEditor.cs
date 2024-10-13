@@ -20,13 +20,13 @@ public class ComponentEditor : ScriptedEditor
     }
 
 
-    public override void OnInspectorGUI()
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
     {
         if (_component == null)
             return;
 
         object componentRef = _component;
-        if (PropertyGrid("ComponentPropertyGrid", ref componentRef, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
+        if (PropertyGrid("ComponentPropertyGrid", ref componentRef, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground, changes))
             _component.OnValidate();
     }
 }

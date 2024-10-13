@@ -20,15 +20,15 @@ public class ScriptedEditor
 
     public virtual void OnEnable() { }
 
-    public virtual void OnInspectorGUI() => DrawDefaultInspector();
+    public virtual void OnInspectorGUI(EditorGUI.FieldChanges changes) => DrawDefaultInspector(changes);
 
     public virtual void OnDisable() { }
 
-    public void DrawDefaultInspector()
+    public void DrawDefaultInspector(EditorGUI.FieldChanges changes)
     {
         // PropertyGrid would fall apart if this was a value type, but ScriptedEditors don't work on value types!
         object refTarget = target;
-        if (EditorGUI.PropertyGrid("Default Drawer", ref refTarget, EditorGUI.TargetFields.Serializable, EditorGUI.PropertyGridConfig.NoHeader))
+        if (EditorGUI.PropertyGrid("Default Drawer", ref refTarget, EditorGUI.TargetFields.Serializable, EditorGUI.PropertyGridConfig.NoHeader, changes))
         {
             MethodInfo? method = target.GetType().GetMethod("OnValidate", BindingFlags.Public | BindingFlags.Instance);
             method?.Invoke(refTarget, null);

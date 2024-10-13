@@ -215,7 +215,16 @@ public static class EditorGUI
         Debug = 128
     }
 
-    public static bool PropertyGrid(string name, ref object target, TargetFields targetFields, PropertyGridConfig config = PropertyGridConfig.None)
+    public class FieldChanges
+    {
+        public List<(object target, FieldInfo field)> AllChanges = [];
+
+        public void Add(object obj, string name) => AllChanges.Add((obj, obj.GetType().GetField(name)));
+        public void Add(object obj, FieldInfo field) => AllChanges.Add((obj, field));
+    }
+
+
+    public static bool PropertyGrid(string name, ref object target, TargetFields targetFields, PropertyGridConfig config = PropertyGridConfig.None, FieldChanges? changes = null)
     {
         bool changed = false;
         if (target == null) return changed;
@@ -225,13 +234,13 @@ public static class EditorGUI
         {
             DrawGrid(name, config, node);
 
-            changed = DrawProperties(ref target, targetFields, config);
+            changed = DrawProperties(ref target, targetFields, config, changes);
         }
 
         return changed;
     }
 
-    public static bool PropertyGrid(string name, ref object target, List<MemberInfo> members, PropertyGridConfig config = PropertyGridConfig.None)
+    public static bool PropertyGrid(string name, ref object target, List<MemberInfo> members, PropertyGridConfig config = PropertyGridConfig.None, FieldChanges? changes = null)
     {
         bool changed = false;
         if (target == null) return changed;
@@ -241,7 +250,7 @@ public static class EditorGUI
         {
             DrawGrid(name, config, node);
 
-            changed = DrawProperties(ref target, members, config);
+            changed = DrawProperties(ref target, members, config, changes);
         }
 
         return changed;
@@ -270,7 +279,7 @@ public static class EditorGUI
         }
     }
 
-    private static bool DrawProperties(ref object target, TargetFields targetFields, PropertyGridConfig config = PropertyGridConfig.None)
+    private static bool DrawProperties(ref object target, TargetFields targetFields, PropertyGridConfig config = PropertyGridConfig.None, FieldChanges? changes = null)
     {
         // Get the target fields
         List<MemberInfo> members = [];
@@ -289,10 +298,10 @@ public static class EditorGUI
         if (all || targetFields.HasFlag(TargetFields.Properties))
             members.AddRange(target.GetType().GetProperties().Where(prop => prop.CanRead && prop.CanWrite && prop.GetCustomAttribute<ShowInInspectorAttribute>(false) != null));
 
-        return DrawProperties(ref target, members, config);
+        return DrawProperties(ref target, members, config, changes);
     }
 
-    private static bool DrawProperties(ref object target, List<MemberInfo> members, PropertyGridConfig config = PropertyGridConfig.None)
+    private static bool DrawProperties(ref object target, List<MemberInfo> members, PropertyGridConfig config = PropertyGridConfig.None, FieldChanges? changes = null)
     {
         // Draw the fields & properties
         bool changed = false;
@@ -318,7 +327,11 @@ public static class EditorGUI
 
             // Update the value
             if (propChange)
+            {
                 field.SetValue(target, fieldValue);
+                if (changes != null && field is FieldInfo f)
+                    changes.Add(target, f);
+            }
 
             changed |= propChange;
         }

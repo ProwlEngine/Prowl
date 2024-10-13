@@ -136,7 +136,7 @@ public class AudioClipEditor : ScriptedEditor
         }
     }
 
-    public override void OnInspectorGUI()
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 

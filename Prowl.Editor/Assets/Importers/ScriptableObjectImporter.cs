@@ -34,7 +34,7 @@ public class ScriptableObjectImporterEditor : ScriptedEditor
     }
 
 
-    public override void OnInspectorGUI()
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
     {
         try
         {
@@ -43,7 +43,8 @@ public class ScriptableObjectImporterEditor : ScriptedEditor
             object t = _editingObject;
             changed |= EditorGUI.PropertyGrid("CompPropertyGrid", ref t,
                 EditorGUI.TargetFields.Serializable | EditorGUI.TargetFields.Properties,
-                EditorGUI.PropertyGridConfig.NoHeader | EditorGUI.PropertyGridConfig.NoBorder | EditorGUI.PropertyGridConfig.NoBackground);
+                EditorGUI.PropertyGridConfig.NoHeader | EditorGUI.PropertyGridConfig.NoBorder | EditorGUI.PropertyGridConfig.NoBackground,
+                changes);
 
             // Draw any Buttons
             //changed |= EditorGui.HandleAttributeButtons(scriptObject);

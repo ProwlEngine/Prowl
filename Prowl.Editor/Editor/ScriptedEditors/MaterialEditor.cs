@@ -6,6 +6,8 @@ using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 
+using TerraFX.Interop.Vulkan;
+
 namespace Prowl.Editor.ScriptedEditors;
 
 [CustomEditor(typeof(Material))]
@@ -13,7 +15,7 @@ public class MaterialEditor : ScriptedEditor
 {
     public Action onChange;
 
-    public override void OnInspectorGUI()
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
@@ -28,6 +30,7 @@ public class MaterialEditor : ScriptedEditor
         {
             AssetRef<Shader> assetref = mat.Shader;
             changed |= EditorGUI.DrawProperty(0, "Shader", ref assetref);
+            if (changed) changes.Add(mat, nameof(Material.Shader));
             mat.Shader = assetref;
         }
 
@@ -40,7 +43,7 @@ public class MaterialEditor : ScriptedEditor
                 {
                     using (gui.Node("prop", id++).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
-                        changed |= DrawProperty(property, mat);
+                        changed |= DrawProperty(property, mat, changes);
                     }
                 }
             }
@@ -53,7 +56,7 @@ public class MaterialEditor : ScriptedEditor
     }
 
 
-    private bool DrawProperty(ShaderProperty property, Material mat)
+    private bool DrawProperty(ShaderProperty property, Material mat, EditorGUI.FieldChanges changes)
     {
         bool changed = false;
 
@@ -114,7 +117,10 @@ public class MaterialEditor : ScriptedEditor
         }
 
         if (changed)
+        {
             mat.SetProperty(property.Name, value);
+            changes.Add(mat, "_propertyLookup");
+        }
 
         return changed;
     }

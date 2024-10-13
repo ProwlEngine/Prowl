@@ -37,7 +37,7 @@ public class GameObjectEditor : ScriptedEditor
             editor.OnDisable();
     }
 
-    public override void OnInspectorGUI()
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
@@ -255,10 +255,12 @@ public class GameObjectEditor : ScriptedEditor
                     {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, btnRoundness, 12);
 
+                        EditorGUI.FieldChanges subChanges = new();
                         // Handle Editors for this type if we have any
                         if (compEditors.TryGetValue(comp.InstanceID, out ScriptedEditor? editor))
                         {
                             editor.OnInspectorGUI();
+                            editor.OnInspectorGUI(subChanges);
                         }
                         else
                         {
@@ -266,8 +268,14 @@ public class GameObjectEditor : ScriptedEditor
                             if (editor != null)
                             {
                                 compEditors[comp.InstanceID] = editor;
-                                editor.OnInspectorGUI();
+                                editor.OnInspectorGUI(subChanges);
                             }
+                        }
+
+                        foreach (var change in subChanges.AllChanges)
+                        {
+                            // Propagate changes to the main FieldChanges
+                            changes.Add(change.target, change.field);
                         }
 
                         // ScriptedEditor.CreateEditor should provide a fallback default instead of providing
