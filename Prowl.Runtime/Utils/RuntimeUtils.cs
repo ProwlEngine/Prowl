@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -413,4 +414,15 @@ public static class RuntimeUtils
 
         return result;
     }
+
+    /// <summary>
+    /// An ultra-fast way to convert a bool to an int.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static unsafe int AsInt(this bool b) =>
+        NonNormalizedAsInt((*(byte*)&b) != 0);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static unsafe int NonNormalizedAsInt(bool b) =>
+        (int)(*(byte*)(&b));
 }
