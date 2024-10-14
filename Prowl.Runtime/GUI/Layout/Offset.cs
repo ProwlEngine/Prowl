@@ -72,30 +72,30 @@ public struct Offset
 
     public ulong GetHashCode64()
     {
-        //ulong hash = 17;
-        //hash = hash * 23 + (ulong)Value.GetHashCode();
-        //hash = hash * 23 + (ulong)PixelOffset.GetHashCode();
-        //hash = hash * 23 + (ulong)Type.GetHashCode();
-        //hash = hash * 23 + (ulong)_lerpValue.GetHashCode();
-        //hash = hash * 23 + (ulong)_lerpPixelOffset.GetHashCode();
-        //hash = hash * 23 + (ulong)_lerpTime.GetHashCode();
-        //hash = hash * 23 + (ulong)_lerpType.GetHashCode();
-        //return hash;
+        ulong hash = 17;
+        hash = hash * 23 + (ulong)Value.GetHashCode();
+        hash = hash * 23 + (ulong)PixelOffset.GetHashCode();
+        hash = hash * 23 + (ulong)Type.GetHashCode();
+        hash = hash * 23 + (ulong)_lerpValue.GetHashCode();
+        hash = hash * 23 + (ulong)_lerpPixelOffset.GetHashCode();
+        hash = hash * 23 + (ulong)_lerpTime.GetHashCode();
+        hash = hash * 23 + (ulong)_lerpType.GetHashCode();
+        return hash;
 
 
-        unchecked
-        {
-            ulong hash = 17;
-
-            // Combine main values
-            hash ^= (ulong)Value.GetHashCode();
-            hash ^= ((ulong)PixelOffset.GetHashCode() << 32) | (uint)Type.GetHashCode();
-
-            // Combine lerp values
-            hash ^= ((ulong)_lerpValue.GetHashCode() << 32) | (uint)_lerpPixelOffset.GetHashCode();
-            hash ^= ((ulong)_lerpTime.GetHashCode() << 32) | (uint)_lerpType.GetHashCode();
-
-            return hash;
-        }
+        //unchecked
+        //{
+        //    ulong hash = 17;
+        //
+        //    // Combine main values
+        //    hash ^= (ulong)Value.GetHashCode();
+        //    hash ^= ((ulong)PixelOffset.GetHashCode() << 32) | (uint)Type.GetHashCode();
+        //
+        //    // Combine lerp values
+        //    hash ^= ((ulong)_lerpValue.GetHashCode() << 32) | (uint)_lerpPixelOffset.GetHashCode();
+        //    hash ^= ((ulong)_lerpTime.GetHashCode() << 32) | (uint)_lerpType.GetHashCode();
+        //
+        //    return hash;
+        //}
     }
 }

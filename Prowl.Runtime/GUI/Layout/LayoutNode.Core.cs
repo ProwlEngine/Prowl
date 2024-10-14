@@ -545,70 +545,70 @@ public partial class LayoutNode
 
     public ulong GetHashCode64()
     {
-        //ulong hash = 17;
-        //hash = hash * 23 + ID;
-        //hash = hash * 23 + _positionX.GetHashCode64();
-        //hash = hash * 23 + _positionY.GetHashCode64();
-        //hash = hash * 23 + _width.GetHashCode64();
-        //hash = hash * 23 + _height.GetHashCode64();
-        //hash = hash * 23 + _maxWidth.GetHashCode64();
-        //hash = hash * 23 + _maxHeight.GetHashCode64();
-        //hash = hash * 23 + _marginLeft.GetHashCode64();
-        //hash = hash * 23 + _marginRight.GetHashCode64();
-        //hash = hash * 23 + _marginTop.GetHashCode64();
-        //hash = hash * 23 + _marginBottom.GetHashCode64();
-        //hash = hash * 23 + _paddingLeft.GetHashCode64();
-        //hash = hash * 23 + _paddingRight.GetHashCode64();
-        //hash = hash * 23 + _paddingTop.GetHashCode64();
-        //hash = hash * 23 + _paddingBottom.GetHashCode64();
-        //hash = hash * 23 + (ulong)_ignore.GetHashCode();
-        //hash = hash * 23 + (ulong)_fitContentX.GetHashCode();
-        //hash = hash * 23 + (ulong)_fitContentXPerc.GetHashCode();
-        //hash = hash * 23 + (ulong)_fitContentY.GetHashCode();
-        //hash = hash * 23 + (ulong)_fitContentYPerc.GetHashCode();
-        //hash = hash * 23 + (ulong)_centerContent.GetHashCode();
-        //hash = hash * 23 + (ulong)_canScaleChildren.GetHashCode();
-        //hash = hash * 23 + (ulong)_layout.GetHashCode();
-        //hash = hash * 23 + (ulong)_clipped.GetHashCode();
-        //hash = hash * 23 + (ulong)VScroll.GetHashCode();
-        //hash = hash * 23 + (ulong)HScroll.GetHashCode();
-        //hash = hash * 23 + (ulong)_nextAnimation.GetHashCode();
-        //return hash;
+        ulong hash = 17;
+        hash = hash * 23 + ID;
+        hash = hash * 23 + _positionX.GetHashCode64();
+        hash = hash * 23 + _positionY.GetHashCode64();
+        hash = hash * 23 + _width.GetHashCode64();
+        hash = hash * 23 + _height.GetHashCode64();
+        hash = hash * 23 + _maxWidth.GetHashCode64();
+        hash = hash * 23 + _maxHeight.GetHashCode64();
+        hash = hash * 23 + _marginLeft.GetHashCode64();
+        hash = hash * 23 + _marginRight.GetHashCode64();
+        hash = hash * 23 + _marginTop.GetHashCode64();
+        hash = hash * 23 + _marginBottom.GetHashCode64();
+        hash = hash * 23 + _paddingLeft.GetHashCode64();
+        hash = hash * 23 + _paddingRight.GetHashCode64();
+        hash = hash * 23 + _paddingTop.GetHashCode64();
+        hash = hash * 23 + _paddingBottom.GetHashCode64();
+        hash = hash * 23 + (ulong)_ignore.GetHashCode();
+        hash = hash * 23 + (ulong)_fitContentX.GetHashCode();
+        hash = hash * 23 + (ulong)_fitContentXPerc.GetHashCode();
+        hash = hash * 23 + (ulong)_fitContentY.GetHashCode();
+        hash = hash * 23 + (ulong)_fitContentYPerc.GetHashCode();
+        hash = hash * 23 + (ulong)_centerContent.GetHashCode();
+        hash = hash * 23 + (ulong)_canScaleChildren.GetHashCode();
+        hash = hash * 23 + (ulong)_layout.GetHashCode();
+        hash = hash * 23 + (ulong)_clipped.GetHashCode();
+        hash = hash * 23 + (ulong)VScroll.GetHashCode();
+        hash = hash * 23 + (ulong)HScroll.GetHashCode();
+        hash = hash * 23 + (ulong)_nextAnimation.GetHashCode();
+        return hash;
 
-        unchecked
-        {
-            ulong hash = 17;
-
-            // Use XOR and bit shifting for faster mixing
-            hash ^= ID;
-            hash ^= (_positionX.GetHashCode64() << 32) | _positionY.GetHashCode64();
-            hash ^= (_width.GetHashCode64() << 32) | _height.GetHashCode64();
-            hash ^= (_maxWidth.GetHashCode64() << 32) | _maxHeight.GetHashCode64();
-        
-            // Combine margins
-            hash ^= (_marginLeft.GetHashCode64() << 48) | (_marginRight.GetHashCode64() << 32) |
-                    (_marginTop.GetHashCode64() << 16) | _marginBottom.GetHashCode64();
-        
-            // Combine paddings
-            hash ^= (_paddingLeft.GetHashCode64() << 48) | (_paddingRight.GetHashCode64() << 32) |
-                    (_paddingTop.GetHashCode64() << 16) | _paddingBottom.GetHashCode64();
-
-            // Combine boolean flags
-            int flags = _ignore.AsInt() |
-                          (_fitContentX.AsInt() << 1) |
-                          (_fitContentY.AsInt() << 2) |
-                          (_centerContent.AsInt() << 3) |
-                          (_canScaleChildren.AsInt() << 4);
-            hash ^= (ulong)flags;
-
-            // Combine remaining fields
-            hash = (hash << 5) + hash ^ (ulong)_fitContentXPerc.GetHashCode();
-            hash = (hash << 5) + hash ^ (ulong)_fitContentYPerc.GetHashCode();
-            hash = (hash << 5) + hash ^ (ulong)_layout.GetHashCode();
-            hash ^= ((ulong)VScroll.GetHashCode() << 32) | (uint)HScroll.GetHashCode();
-            hash = (hash << 5) + hash ^ (ulong)_nextAnimation.GetHashCode();
-        
-            return hash;
-        }
+        //unchecked
+        //{
+        //    ulong hash = 17;
+        //
+        //    // Use XOR and bit shifting for faster mixing
+        //    hash ^= ID;
+        //    hash ^= (_positionX.GetHashCode64() << 32) | _positionY.GetHashCode64();
+        //    hash ^= (_width.GetHashCode64() << 32) | _height.GetHashCode64();
+        //    hash ^= (_maxWidth.GetHashCode64() << 32) | _maxHeight.GetHashCode64();
+        //
+        //    // Combine margins
+        //    hash ^= (_marginLeft.GetHashCode64() << 48) | (_marginRight.GetHashCode64() << 32) |
+        //            (_marginTop.GetHashCode64() << 16) | _marginBottom.GetHashCode64();
+        //
+        //    // Combine paddings
+        //    hash ^= (_paddingLeft.GetHashCode64() << 48) | (_paddingRight.GetHashCode64() << 32) |
+        //            (_paddingTop.GetHashCode64() << 16) | _paddingBottom.GetHashCode64();
+        //
+        //    // Combine boolean flags
+        //    int flags = _ignore.AsInt() |
+        //                  (_fitContentX.AsInt() << 1) |
+        //                  (_fitContentY.AsInt() << 2) |
+        //                  (_centerContent.AsInt() << 3) |
+        //                  (_canScaleChildren.AsInt() << 4);
+        //    hash ^= (ulong)flags;
+        //
+        //    // Combine remaining fields
+        //    hash = (hash << 5) + hash ^ (ulong)_fitContentXPerc.GetHashCode();
+        //    hash = (hash << 5) + hash ^ (ulong)_fitContentYPerc.GetHashCode();
+        //    hash = (hash << 5) + hash ^ (ulong)_layout.GetHashCode();
+        //    hash ^= ((ulong)VScroll.GetHashCode() << 32) | (uint)HScroll.GetHashCode();
+        //    hash = (hash << 5) + hash ^ (ulong)_nextAnimation.GetHashCode();
+        //
+        //    return hash;
+        //}
     }
 }
