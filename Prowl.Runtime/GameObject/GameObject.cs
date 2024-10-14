@@ -1177,7 +1177,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             {
                 var tc = targetComps.ElementAt(j);
                 if (!updatedComponents.Contains(tc) && tc.GetType() == compType)
+                {
                     targetComp = tc;
+                    break;
+                }
             }
 
             // If all existing components have been updated, add a new one
