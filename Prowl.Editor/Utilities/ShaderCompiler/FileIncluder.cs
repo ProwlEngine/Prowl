@@ -31,6 +31,15 @@ public class FileIncluder
 
     public string Include(string file)
     {
+        return File.ReadAllText(file);
+    }
+
+
+    public string GetFullFilePath(string file)
+    {
+        if (file == "hlsl.hlsl")
+            return SourceFilePath;
+
         string filePath = Path.GetFullPath(file, _relativeDirectory)[_qualifiedPrefixLength..];
 
         string? resultPath = null;
@@ -51,6 +60,6 @@ public class FileIncluder
         if (resultPath == null)
             throw new FileNotFoundException($"Could not resolve include path: {file}");
 
-        return File.ReadAllText(resultPath);
+        return resultPath;
     }
 }

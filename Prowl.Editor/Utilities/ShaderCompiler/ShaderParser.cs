@@ -133,36 +133,36 @@ public static partial class ShaderParser
 
             string sourceCode = sourceBuilder.ToString();
 
-            if (!ParseProgramInfo(sourceCode, out EntryPoint[]? entrypoints, out (int, int)? shaderModel, out CompilationMessage? message))
-            {
-                LogCompilationError(message.Value.message, includer, message.Value.line, message.Value.column);
-                return false;
-            }
+            ShaderCreationArgs args;
+            args.combinations = passDesc.Keywords ?? new() { { "", [""] } };
+            args.sourceCode = sourceCode;
 
-            if (!Array.Exists(entrypoints, x => x.Stage == ShaderStages.Vertex))
+            if (!ParseProgramInfo(sourceCode, includer, parsedPass.ProgramStartLine, out args.entryPoints, out args.shaderModel))
+                return false;
+
+            if (!Array.Exists(args.entryPoints, x => x.Stage == ShaderStages.Vertex))
             {
                 LogCompilationError($"Pass {i} does not contain a vertex stage", includer, parsedPass.Line, 0);
                 return false;
             }
 
-            if (!Array.Exists(entrypoints, x => x.Stage == ShaderStages.Fragment))
+            if (!Array.Exists(args.entryPoints, x => x.Stage == ShaderStages.Fragment))
             {
                 LogCompilationError($"Pass {i} does not contain a fragment stage.", includer, parsedPass.Line, 0);
                 return false;
             }
 
-            ShaderCreationArgs args;
-            args.entryPoints = entrypoints;
-            args.combinations = passDesc.Keywords ?? new() { { "", [""] } };
-            args.shaderModel = shaderModel ?? (6, 0);
-            args.sourceCode = sourceCode;
-
             List<CompilationMessage> compilerMessages = [];
 
             ShaderVariant[] variants = ShaderCompiler.GenerateVariants(args, includer, compilerMessages);
 
-            if (LogCompilationMessages(name, compilerMessages, includer, parsedPass.ProgramStartLine, globalDefaults))
-                return false;
+            LogCompilationMessages(name, compilerMessages, includer, parsedPass.ProgramStartLine, globalDefaults);
+
+            foreach (ShaderVariant variant in variants)
+            {
+                if (variant == null)
+                    return false;
+            }
 
             passes[i] = new ShaderPass(parsedPass.Name, passDesc, variants);
         }
@@ -182,26 +182,34 @@ public static partial class ShaderParser
     }
 
 
-    private static bool LogCompilationMessages(string shaderName, List<CompilationMessage> messages, FileIncluder includer, int programStartLine, ParsedPass? global)
+    private static void LogCompilationMessages(string shaderName, List<CompilationMessage> messages, FileIncluder includer, int programStartLine, ParsedPass? global)
     {
-        bool hasErrors = false;
-
         foreach (CompilationMessage message in messages)
         {
-            if (message.severity == LogSeverity.Error || message.severity == LogSeverity.Exception)
-                hasErrors = true;
-
-            int msgLine = message.line - 1;
-
-            int line = programStartLine + msgLine;
-
-            if (global != null && global.Program != null)
+            int GetLine(int line)
             {
-                if (msgLine - global.ProgramStartLine < 0)
-                    line = global!.ProgramStartLine + msgLine;
-                else
-                    line -= global.ProgramLines;
+                int msgLine = line - 1;
+
+                line = programStartLine + msgLine; // Offset program-relative line to file line
+
+                if (global != null && global.Program != null) // Global block was added at start
+                {
+                    if (msgLine - global.ProgramStartLine < 0)
+                        line = global!.ProgramStartLine + msgLine; // Line is inside global block - make global-relative
+                    else
+                        line -= global.ProgramLines; // Line is outside global block - remove the added global block lines
+                }
+
+                return line;
             }
+
+            DebugStackTrace trace = new(message.stackTrace.Select(x =>
+                    new DebugStackFrame(
+                        includer.GetFullFilePath(x.filename),
+                        GetLine(x.line),
+                        x.column)
+                ).ToArray()
+            );
 
             string prefix = message.severity switch
             {
@@ -212,13 +220,8 @@ public static partial class ShaderParser
 
             prefix += $" compiling {shaderName}: ";
 
-            DebugStackFrame frame = new(includer.SourceFilePath, line, message.column);
-            DebugStackTrace trace = new(frame);
-
             Debug.Log(prefix + message.message, message.severity, trace);
         }
-
-        return hasErrors;
     }
 
 
@@ -743,12 +746,11 @@ public static partial class ShaderParser
     }
 
 
-    private static bool ParseProgramInfo(string program, out EntryPoint[]? entrypoints, out (int, int)? shaderModel, out CompilationMessage? message)
+    private static bool ParseProgramInfo(string program, FileIncluder includer, int programLine, out EntryPoint[] entrypoints, out (int, int) shaderModel)
     {
         List<EntryPoint> entrypointsList = [];
-        entrypoints = null;
-        shaderModel = null;
-        message = null;
+        entrypoints = [];
+        shaderModel = (6, 0);
 
         void AddEntrypoint(ShaderStages stage, string name, string idType)
         {
@@ -761,6 +763,7 @@ public static partial class ShaderParser
         using StringReader sr = new(program);
 
         string? line;
+        bool hasModel = false;
         int lineNumber = 0;
         while ((line = sr.ReadLine()) != null)
         {
@@ -798,7 +801,7 @@ public static partial class ShaderParser
                         break;
 
                     case "target":
-                        if (shaderModel != null)
+                        if (hasModel)
                             throw new ParseException("target", "duplicate shader model targets defined.");
 
                         try
@@ -814,6 +817,7 @@ public static partial class ShaderParser
                                 throw new Exception();
 
                             shaderModel = (major, minor);
+                            hasModel = true;
                         }
                         catch
                         {
@@ -824,14 +828,7 @@ public static partial class ShaderParser
             }
             catch (ParseException ex)
             {
-                message = new()
-                {
-                    severity = LogSeverity.Error,
-                    line = lineNumber,
-                    column = line.IndexOf("#pragma") + 7,
-                    message = ex.Message
-                };
-
+                LogCompilationError(ex.Message, includer, programLine + lineNumber, line.IndexOf("#pragma") + 7);
                 return false;
             }
         }
