@@ -24,8 +24,12 @@ public static class Program
     private static bool s_createdDefaultWindows;
     private static bool s_opened;
 
+
     public static int Main(string[] args)
     {
+        // Workaround for native library segmentation faults on some Fedora/Arch distributions.
+        DirectXShaderCompiler.NET.ShaderCompiler.Initialize();
+
         return Parser.Default.ParseArguments<CliOpenOptions, CliCreateOptions>(args)
                      .MapResult(
                          (CliOpenOptions options) => Run(options),
