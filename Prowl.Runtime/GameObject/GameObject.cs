@@ -537,29 +537,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     }
 
     /// <summary>
-    /// Removes all components of type T from the GameObject.
-    /// </summary>
-    /// <typeparam name="T">The type of components to remove.</typeparam>
-    public void RemoveAll<T>() where T : MonoBehaviour
-    {
-        IReadOnlyCollection<MonoBehaviour> components;
-        if (_componentCache.TryGetValue(typeof(T), out components))
-        {
-            foreach (MonoBehaviour c in components)
-                if (c.EnabledInHierarchy)
-                    c.Do(c.OnDisable);
-            foreach (MonoBehaviour c in components)
-            {
-                if (c.HasStarted) // OnDestroy is only called if the component has previously been active
-                    c.Do(c.OnDestroy);
-
-                _components.Remove(c);
-            }
-            _componentCache.Remove(typeof(T));
-        }
-    }
-
-    /// <summary>
     /// Removes a specific component from the GameObject.
     /// </summary>
     /// <typeparam name="T">The type of component to remove.</typeparam>

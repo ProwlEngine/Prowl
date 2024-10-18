@@ -114,7 +114,6 @@ public abstract class MonoBehaviour : EngineObject
     // This is used to make the Component API more similar to Unity's, Its generally recommended to use the GameObject instead
     public T AddComponent<T>() where T : MonoBehaviour, new() => (T)AddComponent(typeof(T));
     public MonoBehaviour AddComponent(Type type) => GameObject.AddComponent(type);
-    public void RemoveAll<T>() where T : MonoBehaviour => GameObject.RemoveAll<T>();
     public void RemoveComponent<T>(T component) where T : MonoBehaviour => GameObject.RemoveComponent(component);
     public void RemoveComponent(MonoBehaviour component) => GameObject.RemoveComponent(component);
     public void RemoveSelf() => GameObject.RemoveComponent(this);
