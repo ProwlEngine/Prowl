@@ -73,6 +73,7 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
         - OpenAL
         - Currently only supports .wav files
     - Prefabs
+        - Supports Nested Prefabs
     - Build System - Build to Standalone Application
         - Packed Asset files
         - Less than 15 MB builds (currently working on removing 10 MB, almost done!)
