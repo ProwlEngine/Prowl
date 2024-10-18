@@ -60,7 +60,10 @@ public class GameObjectEditor : ScriptedEditor
         style.BorderThickness = 1f;
         string name = go.Name;
         if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, ItemSize, 0, Size.Percentage(1f, -(ItemSize * 3)), ItemSize, style))
+        {
             go.Name = name.Trim();
+            OnFieldChange(go, typeof(GameObject).GetInstanceField("name"));
+        }
 
         var invisStyle = GetInputStyle() with { BGColor = new Color(0, 0, 0, 0), BorderColor = new Color(0, 0, 0, 0) };
         int tagIndex = go.tagIndex;
