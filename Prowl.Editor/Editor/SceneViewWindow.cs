@@ -392,6 +392,12 @@ public class SceneViewWindow : EditorWindow
 
                 if (result.Value.ScaleDelta.HasValue)
                     selectedGo.Transform.localScale *= result.Value.ScaleDelta.Value;
+
+                if (result.Value.TranslationDelta.HasValue || result.Value.RotationDelta.HasValue ||
+                    result.Value.ScaleDelta.HasValue)
+                {
+                    Prefab.OnFieldChange(selectedGo, "_transform");
+                }
             }
         }
         gizmo.Draw();
