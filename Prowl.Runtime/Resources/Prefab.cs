@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Runtime.Cloning;
+using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Runtime;
 
@@ -134,6 +135,77 @@ public class Prefab : EngineObject
         if (child == null) return false;
         return child.GetComponent(cmpType) != null;
     }
+
+
+    public static string PrefabLinkInfo = "prefabLink";
+
+    /// <summary>
+    /// Used to push a change to the PrefabLink
+    /// If the PrefabLink itself is what's changed (They)
+    /// </summary>
+    /// <param name="o"></param>
+    /// <param name="info"></param>
+    /// <returns></returns>
+    public static void OnFieldChange(object o, string? info)
+    {
+        if (info != null)
+        {
+            HashSet<PrefabLink> changedLinks = new HashSet<PrefabLink>();
+
+            MonoBehaviour cmp = o as MonoBehaviour;
+            GameObject obj = o as GameObject;
+            if (cmp == null && obj == null) return;
+
+            PrefabLink link = null;
+            if (obj != null) link = obj.AffectedByPrefabLink;
+            else if (cmp != null && cmp.GameObject != null) link = cmp.GameObject.AffectedByPrefabLink;
+
+            if (link == null) return;
+            if (cmp != null && !link.IsSource(cmp)) return;
+            if (obj != null && !link.IsSource(obj)) return;
+
+            // Handle property changes regarding affected prefab links change lists
+            if (PushPrefabLinkFieldChange(link, o, info))
+                changedLinks.Add(link);
+
+            foreach (PrefabLink l in changedLinks)
+            {
+                OnFieldChange(l.Obj, PrefabLinkInfo);
+            }
+        }
+
+        if (o is Prefab)
+        {
+            // Prefab was modified, Update all instances
+            Prefab prefab = o as Prefab;
+            HashSet<PrefabLink> appliedLinks = PrefabLink.ApplyAllLinks(SceneManager.Scene.AllObjects, p => p.Prefab.AssetID == prefab.AssetID);
+            foreach (PrefabLink l in appliedLinks)
+                OnFieldChange(l.Obj, PrefabLinkInfo);
+        }
+    }
+
+    private static bool PushPrefabLinkFieldChange(PrefabLink link, object target, string? info)
+    {
+        if (link == null) return false;
+
+        if (info == "prefabLink" && target is GameObject)
+        {
+            GameObject obj = target as GameObject;
+            if (obj == null) return false;
+
+            PrefabLink parentLink;
+            if (obj.PrefabLink == link && (parentLink = link.ParentLink) != null)
+            {
+                parentLink.PushChange(obj, info, obj.PrefabLink.Clone());
+            }
+            return false;
+        }
+        else
+        {
+            link.PushChange(target, info);
+            return true;
+        }
+    }
 }
 
 /// <summary>
@@ -141,9 +213,9 @@ public class Prefab : EngineObject
 /// </summary>
 public sealed class PrefabLink
 {
-    private struct VarMod
+    public struct VarMod
     {
-        public FieldInfo prop;
+        public string fieldName;
         public Type componentType;
         public List<int> childIndex;
         public object val;
@@ -162,8 +234,8 @@ public sealed class PrefabLink
             if (this.componentType != null)
                 childStr += "." + this.componentType.Name;
 
-            if (prop != null)
-                propStr = prop.Name;
+            if (fieldName != null)
+                propStr = fieldName;
             else
                 propStr = "null";
 
@@ -255,7 +327,7 @@ public sealed class PrefabLink
                 else
                     target = targetObj;
 
-                other.PushChange(target, change.prop, change.val);
+                other.PushChange(target, change.fieldName, change.val);
 
                 _changes.RemoveAt(i);
             }
@@ -340,22 +412,25 @@ public sealed class PrefabLink
             else
                 target = targetObj;
 
-            if (_changes[i].prop != null && target != null)
+            if (_changes[i].fieldName != null && target != null)
             {
                 try
                 {
-                    CloneType cloneType = CloneProvider.GetCloneType(_changes[i].prop.FieldType);
+                    var field = target.GetType().GetInstanceField(_changes[i].fieldName);
+                    if (field == null) continue;
+
+                    CloneType cloneType = CloneProvider.GetCloneType(field.FieldType);
                     object applyVal;
                     if (cloneType.Type.IsValueType || cloneType.DefaultCloneBehavior != CloneBehavior.ChildObject)
                         applyVal = _changes[i].val;
                     else
                         applyVal = _changes[i].val.DeepClone();
 
-                    _changes[i].prop.SetValue(target, applyVal);
+                    field.SetValue(target, applyVal);
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError(string.Format("Error applying PrefabLink changes in {0}, field  {1}:\n{2}", _obj.Name, _changes[i].prop.Name, e));
+                    Debug.LogError(string.Format("Error applying PrefabLink changes in {0}, field  {1}:\n{2}", _obj.Name, _changes[i].fieldName, e));
                 }
             }
             else
@@ -385,8 +460,11 @@ public sealed class PrefabLink
             else
                 target = targetObj;
 
+            var field = target.GetType().GetInstanceField(_changes[i].fieldName);
+            if (field == null) continue;
+
             VarMod modTmp = _changes[i];
-            modTmp.val = _changes[i].prop.GetValue(target);
+            modTmp.val = field.GetValue(target);
             _changes[i] = modTmp;
         }
     }
@@ -395,9 +473,9 @@ public sealed class PrefabLink
     /// Creates a new change list entry.
     /// </summary>
     /// <param name="target">The target object in which the change has been made. Must be a GameObject or Component.</param>
-    /// <param name="prop">The target objects <see cref="System.Reflection.FieldInfo">Field</see> that has been changed.</param>
+    /// <param name="prop">The target objects <see cref="System.Reflection.FieldInfo">Field's</see> name that has been changed.</param>
     /// <param name="value">The value to which the specified Field has been changed to.</param>
-    public void PushChange(object target, FieldInfo prop, object value)
+    public void PushChange(object target, string prop, object value)
     {
         //if (prop.IsEquivalent(typeof(GameObject).GetInstanceField(nameof(GameObject.parent)))) return; // Reject changing "Parent" as it would destroy the PrefabLink - Changing parent doesnt send a change event so this is not needed
         //if (!prop.CanWrite) return;
@@ -407,17 +485,21 @@ public sealed class PrefabLink
         MonoBehaviour targetComp = target as MonoBehaviour;
         if (targetObj == null && targetComp != null) targetObj = targetComp.GameObject;
 
+        var field = targetObj.GetType().GetInstanceField(prop);
+
+        if (field == null)
+            throw new ArgumentException("Target field not found in GameObject", nameof(prop));
         if (targetObj == null)
             throw new ArgumentException("Target object is not a valid child of this PrefabLinks GameObject", nameof(target));
-        if (value == null && prop.FieldType.GetTypeInfo().IsValueType)
+        if (value == null && field.FieldType.GetTypeInfo().IsValueType)
             throw new ArgumentException("Target field cannot be assigned from null value.", nameof(value));
-        if (value != null && !prop.FieldType.GetTypeInfo().IsInstanceOfType(value))
+        if (value != null && !field.FieldType.GetTypeInfo().IsInstanceOfType(value))
             throw new ArgumentException("Target field not assignable from Type " + value.GetType().Name + ".", nameof(value));
 
         VarMod change;
         change.childIndex = _obj.GetIndexPathOfChild(targetObj);
         change.componentType = (targetComp != null) ? targetComp.GetType() : null; // Is EngineObject, Cannot use Null Coalescing Operator
-        change.prop = prop;
+        change.fieldName = prop;
         change.val = value;
 
         PopChange(change.childIndex, prop, change.componentType);
@@ -428,11 +510,14 @@ public sealed class PrefabLink
     /// Creates a new change list entry.
     /// </summary>
     /// <param name="target">The target object in which the change has been made. Must be a GameObject or Component.</param>
-    /// <param name="prop">The target objects <see cref="System.Reflection.FieldInfo">Field</see> that has been changed.</param>
-    public void PushChange(object target, FieldInfo prop)
+    /// <param name="prop">The target objects <see cref="System.Reflection.FieldInfo">Field's</see> name that has been changed.</param>
+    public void PushChange(object target, string prop)
     {
         //if (!prop.CanWrite || !prop.CanRead) return;
-        object changeVal = prop.GetValue(target);
+        var field = target.GetType().GetInstanceField(prop);
+        if (field == null)
+            throw new ArgumentException("Target field not found in Target Object", nameof(prop));
+        object changeVal = field.GetValue(target);
 
         // Clone the change list entry value, if required
         if (changeVal != null)
@@ -451,8 +536,8 @@ public sealed class PrefabLink
     /// Removes an existing change list entry.
     /// </summary>
     /// <param name="target">The target object in which the change has been made. Must be a GameObject or Component.</param>
-    /// <param name="prop">The target objects <see cref="System.Reflection.FieldInfo">Field</see> that has been changed.</param>
-    public void PopChange(object target, FieldInfo prop)
+    /// <param name="prop">The target objects <see cref="System.Reflection.FieldInfo">Field's</see> name that has been changed.</param>
+    public void PopChange(object target, string prop)
     {
         GameObject targetObj = target as GameObject;
         MonoBehaviour targetComp = target as MonoBehaviour;
@@ -464,12 +549,12 @@ public sealed class PrefabLink
         PopChange(_obj.GetIndexPathOfChild(targetObj), prop);
     }
 
-    private void PopChange(IEnumerable<int> indexPath, FieldInfo prop, Type componentType)
+    private void PopChange(IEnumerable<int> indexPath, string prop, Type componentType)
     {
         if (_changes == null || _changes.Count == 0) return;
         for (int i = _changes.Count - 1; i >= 0; i--)
         {
-            if (_changes[i].prop == prop && _changes[i].childIndex.SequenceEqual(indexPath))
+            if (_changes[i].fieldName == prop && _changes[i].childIndex.SequenceEqual(indexPath))
             {
                 if (componentType != null && this._changes[i].componentType != componentType)
                     continue;
@@ -484,9 +569,9 @@ public sealed class PrefabLink
     /// Returns whether there is a specific change list entry.
     /// </summary>
     /// <param name="target">The target object in which the change has been made. Must be a GameObject or Component.</param>
-    /// <param name="prop">The target objects <see cref="System.Reflection.FieldInfo">Field</see> that has been changed.</param>
+    /// <param name="prop">The target objects <see cref="System.Reflection.FieldInfo">Field's</see> name that has been changed.</param>
     /// <returns>True, if such change list entry exists, false if not.</returns>
-    public bool HasChange(object target, FieldInfo prop)
+    public bool HasChange(object target, string prop)
     {
         if (_changes == null || _changes.Count == 0) return false;
 
@@ -500,7 +585,7 @@ public sealed class PrefabLink
         List<int> indexPath = _obj.GetIndexPathOfChild(targetObj);
         for (int i = 0; i < _changes.Count; i++)
         {
-            if (_changes[i].childIndex.SequenceEqual(indexPath) && _changes[i].prop == prop)
+            if (_changes[i].childIndex.SequenceEqual(indexPath) && _changes[i].fieldName == prop)
                 return true;
         }
 
@@ -511,7 +596,7 @@ public sealed class PrefabLink
     public void ClearChanges() => _changes?.Clear();
 
     /// <summary> Clears the change list for certain objects </summary>
-    public void ClearChanges(GameObject targetObj, TypeInfo cmpType, FieldInfo prop)
+    public void ClearChanges(GameObject targetObj, TypeInfo cmpType, string prop)
     {
         if (_changes == null || _changes.Count == 0) return;
 
@@ -520,7 +605,7 @@ public sealed class PrefabLink
         {
             if (indexPath != null && !_changes[i].childIndex.SequenceEqual(indexPath)) continue;
             if (cmpType != null && !cmpType.IsAssignableFrom(this._changes[i].componentType.GetTypeInfo())) continue;
-            if (prop != null && prop != _changes[i].prop) continue;
+            if (prop != null && prop != _changes[i].fieldName) continue;
             _changes.RemoveAt(i);
         }
     }
@@ -528,7 +613,7 @@ public sealed class PrefabLink
     private void ClearEmptyChanges()
     {
         for (int i = _changes.Count - 1; i >= 0; i--)
-            if (_changes[i].prop == null)
+            if (_changes[i].fieldName == null)
                 _changes.RemoveAt(i);
     }
 

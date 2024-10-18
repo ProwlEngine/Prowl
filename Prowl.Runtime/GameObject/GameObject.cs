@@ -301,7 +301,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                 {
                     if (child.PrefabLink != null && child.PrefabLink.ParentLink == prefabLink)
                     {
-                        prefabLink.PushChange(child, GetType().GetInstanceField(nameof(prefabLink)), child.PrefabLink.Clone());
+                        prefabLink.PushChange(child, nameof(prefabLink), child.PrefabLink.Clone());
                     }
                 }
             }
@@ -1151,6 +1151,9 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         // Create missing Components in the target GameObject
         foreach (KeyValuePair<Type, MonoBehaviour> pair in _components)
         {
+            if (target._components.ContainsKey(pair.Key))
+                continue;
+
             MonoBehaviour targetComponent = target.AddComponent(pair.Key);
             setup.HandleObject(pair.Value, targetComponent, CloneBehavior.ChildObject);
         }
