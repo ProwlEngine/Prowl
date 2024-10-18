@@ -177,6 +177,7 @@ public abstract class EngineObject : ICloneExplicit
         if (AssetID != Guid.Empty)
         {
             compound.Add("AssetID", new SerializedProperty(AssetID.ToString()));
+
             if (FileID != 0)
                 compound.Add("FileID", new SerializedProperty(FileID));
         }
@@ -189,7 +190,11 @@ public abstract class EngineObject : ICloneExplicit
         if (value.TryGet("AssetID", out SerializedProperty? assetIDTag))
         {
             AssetID = Guid.Parse(assetIDTag.StringValue);
-            FileID = value.Get("FileID").UShortValue;
+
+            if (value.TryGet("FileID", out var fileIDTag))
+                FileID = fileIDTag.UShortValue;
+            else
+                FileID = 0;
         }
     }
 }

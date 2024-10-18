@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Runtime.RenderPipelines;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime.SceneManagement;
@@ -112,6 +113,40 @@ public static class SceneManager
             x.Do(x.UpdateFixedUpdateCoroutines);
             x.Do(x.FixedUpdate);
         });
+    }
+
+    public static bool Draw(RenderTexture? target = null)
+    {
+        var Cameras = Scene.ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
+
+        Cameras.Sort((a, b) => a.DrawOrder.CompareTo(b.DrawOrder));
+
+        if (Cameras.Count == 0)
+            return false;
+
+        foreach (Camera? cam in Cameras)
+        {
+            Veldrid.Framebuffer t = Graphics.ScreenTarget;
+
+            if (cam.Target.Res != null)
+                t = cam.Target.Res.Framebuffer;
+            else if (target != null)
+                t = target.Framebuffer;
+
+            uint width = t.Width;
+            uint height = t.Height;
+
+            RenderingData data = new RenderingData
+            {
+                TargetResolution = new Vector2(width, height),
+            };
+
+            RenderPipeline pipeline = cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
+
+            pipeline.Render(t, cam, data);
+        }
+
+        return true;
     }
 
     public static void LoadScene(Scene scene)

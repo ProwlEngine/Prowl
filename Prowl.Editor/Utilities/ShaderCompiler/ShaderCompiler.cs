@@ -11,7 +11,7 @@ using Veldrid;
 
 #pragma warning disable
 
-namespace Prowl.Editor.Utilities;
+namespace Prowl.Editor;
 
 public struct ShaderCreationArgs
 {
@@ -24,15 +24,14 @@ public struct ShaderCreationArgs
 
 public struct CompilationMessage
 {
+    public IReadOnlyList<CompilationFile> stackTrace;
+
     public LogSeverity severity;
-    public string filename;
+    public string message;
 
     public string entrypoint;
     public KeywordState? keywords;
 
-    public int line;
-    public int column;
-    public string message;
 
     public static CompilationMessage FromDXC(DirectXShaderCompiler.NET.CompilationMessage dxcMessage)
     {
@@ -45,9 +44,7 @@ public struct CompilationMessage
             MessageSeverity.Error => LogSeverity.Error,
         };
 
-        message.filename = dxcMessage.filename;
-        message.line = dxcMessage.line;
-        message.column = dxcMessage.column;
+        message.stackTrace = dxcMessage.stackTrace;
         message.message = dxcMessage.message;
 
         return message;
@@ -93,9 +90,6 @@ public static partial class ShaderCompiler
 
             for (int j = 0; j < result.messages.Length; j++)
             {
-                if (result.messages[j].filename.Contains("hlsl.hlsl"))
-                    result.messages[j].filename = includer.SourceFile;
-
                 CompilationMessage msg = CompilationMessage.FromDXC(result.messages[j]);
 
                 msg.entrypoint = args.entryPoints[i].Name;

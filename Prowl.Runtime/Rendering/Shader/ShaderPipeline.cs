@@ -41,7 +41,7 @@ public struct ShaderPipelineDescription : IEquatable<ShaderPipelineDescription>
 
 public sealed partial class ShaderPipeline : IDisposable
 {
-    public static readonly FrontFace FrontFace = FrontFace.Clockwise;
+    public static readonly FrontFace FrontFace = Graphics.GetFrontFace();
 
     public readonly ShaderVariant shader;
 

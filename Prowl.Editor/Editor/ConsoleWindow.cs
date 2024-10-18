@@ -367,7 +367,7 @@ public class ConsoleWindow : EditorWindow
         if (frame.fileName == null)
             return;
 
-        AssetDatabase.OpenPath(new FileInfo(frame.fileName), frame.line, frame.column);
+        AssetDatabase.OpenPath(new FileInfo(frame.fileName), frame.line ?? 0, frame.column ?? 0);
     }
 
 

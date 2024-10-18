@@ -262,8 +262,8 @@ public class SceneViewWindow : EditorWindow
                     Vector2 mouseDelta = gui.PointerDelta;
                     if (SceneViewPreferences.Instance.InvertLook)
                         mouseDelta.y = -mouseDelta.y;
-                    camY += mouseDelta.x * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
-                    camX += mouseDelta.y * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
+                    camY += mouseDelta.x * 0.05f * SceneViewPreferences.Instance.LookSensitivity;
+                    camX += mouseDelta.y * 0.05f * SceneViewPreferences.Instance.LookSensitivity;
                     camX = MathD.Clamp(camX, -89.9f, 89.9f);
                     Cam.Transform.eulerAngles = new Vector3(camX, camY, 0);
 

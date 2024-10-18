@@ -1,41 +1,24 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
-    <PropertyGroup>
-        <OutputType>Exe</OutputType>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-    </PropertyGroup>
-
-  <PropertyGroup Condition=" '$(Configuration)' == 'Debug'">
-    <OutputPath>../../Build/Players/Debug/Desktop/</OutputPath>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-    <OutputPath>../../Build/Players/Release/Desktop/</OutputPath>
+  <!-- For IntelliSense purposes, leave some project defaults to be removed here - these should be overwritten in an actual build -->
+  <PropertyGroup Label="RemoveFromBuild">
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>DesktopPlayer</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
-  <Target Name="MoveToEditorTarget" AfterTargets="AfterBuild">
-    <PropertyGroup>
-      <EditorOutputPath>$(ProjectDir)../../Build/Editor/$(Configuration)/$(TargetFramework)/Players/Desktop/</EditorOutputPath>
-    </PropertyGroup>
+  <PropertyGroup>
+    <ImplicitUsings>true</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
 
-  	  	<Message Text="Copying files from $(OutputPath) to $(EditorOutputPath)" Importance="high" />
+  <!-- For IntelliSense purposes, keep a reference to the Runtime csproj - however, this reference is invalid at build and should be removed-->
+  <ItemGroup Label="RemoveFromBuild">
+    <ProjectReference Include="..\..\Prowl.Runtime\Prowl.Runtime.csproj" />
+  </ItemGroup>
 
-  	  	<ItemGroup>
-  	  	  	<FilesToCopy Include="$(OutputPath)**\*.*" />
-  	  	</ItemGroup>
-
-  	  	<Copy SourceFiles="@(FilesToCopy)" DestinationFolder="$(EditorOutputPath)%(RecursiveDir)" OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
-
-  	  	<Message Text="Files copied successfully." Importance="high" />
-  	</Target>
-
-  	<PropertyGroup>
-  	  	<MSBuildGlobalProperties>$(MSBuildGlobalProperties);EnableMSBuildAssemblyLogging=1;MSBuildDebugEngine=1</MSBuildGlobalProperties>
-  	</PropertyGroup>
-
-  	<ItemGroup>
-  	  	<ProjectReference Include="..\..\Prowl.Runtime\Prowl.Runtime.csproj" />
-  	</ItemGroup>
-
+  <ItemGroup>
+    <!-- Janky fix to include native SDL2 binaries in the built player -->
+    <PackageReference Include="Ultz.Native.SDL" Version="2.30.1" />
+  </ItemGroup>
 </Project>

@@ -8,6 +8,8 @@ using CommandLine;
 using Prowl.Editor.Assets;
 using Prowl.Editor.Editor.CLI;
 using Prowl.Editor.Preferences;
+using Prowl.Editor.ProjectSettings;
+
 using Prowl.Runtime;
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.SceneManagement;
@@ -19,11 +21,16 @@ public static class Program
 {
     private static bool IsReloadingExternalAssemblies { get; set; }
     public static void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
+
     private static bool s_createdDefaultWindows;
     private static bool s_opened;
 
+
     public static int Main(string[] args)
     {
+        // Workaround for native library segmentation faults on some Fedora/Arch distributions.
+        DirectXShaderCompiler.NET.ShaderCompiler.Initialize();
+
         return Parser.Default.ParseArguments<CliOpenOptions, CliCreateOptions>(args)
                      .MapResult(
                          (CliOpenOptions options) => Run(options),
@@ -176,31 +183,57 @@ public static class Program
                 try
                 {
                     // Unload External Assemblies
-                    AssemblyManager.Unload(DumpHeapInfo);
+                    AssemblyManager.Unload();
 
                     Project active = Project.Active;
 
                     DirectoryInfo temp = active.TempDirectory;
                     DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
-                    DirectoryInfo debug = new DirectoryInfo(Path.Combine(bin.FullName, "Debug"));
+                    DirectoryInfo project = new DirectoryInfo(Path.Combine(bin.FullName, Project.GameCSProjectName, "Editor"));
+                    DirectoryInfo editor = new DirectoryInfo(Path.Combine(bin.FullName, Project.EditorCSProjectName));
 
-                    // Delete everything under Temp\Bin
+                    DirectoryInfo tmpProject = new DirectoryInfo(Path.Combine(temp.FullName, "obj", Project.GameCSProjectName));
+                    DirectoryInfo tmpEditor = new DirectoryInfo(Path.Combine(temp.FullName, "obj", Project.EditorCSProjectName));
+
+                    string projectOutputPath = Path.Combine(project.FullName, Project.GameCSProjectName + ".dll");
+                    string editorOutputPath = Path.Combine(editor.FullName, Project.EditorCSProjectName + ".dll");
+
+                    // Delete everything under Temp/bin
                     if (bin.Exists)
                         Directory.Delete(bin.FullName, true);
+
                     bin.Create();
 
-                    // Compile the Projects
-                    Project.Compile(active.Assembly_Proj.FullName, debug);
-                    Project.Compile(active.Editor_Assembly_Proj.FullName, debug);
+                    DotnetCompileOptions options = new DotnetCompileOptions()
+                    {
+                        isRelease = false,
+                        isSelfContained = false,
+                        outputPath = project,
+                        tempPath = tmpProject
+                    };
 
-                    // Reload the External Assemblies
-                    AssemblyManager.LoadExternalAssembly(active.Editor_Assembly_DLL.FullName, true);
-                    AssemblyManager.LoadExternalAssembly(active.Assembly_DLL.FullName, true);
+                    active.GenerateGameProject();
+                    active.CompileGameAssembly(options);
+                    Assembly? gameAssembly = AssemblyManager.LoadExternalAssembly(projectOutputPath, true);
+
+                    if (gameAssembly != null)
+                    {
+                        Debug.Log($"Successfully reloaded project assemblies");
+
+                        options.outputPath = editor;
+                        options.tempPath = tmpEditor;
+
+                        active.GenerateEditorProject(gameAssembly);
+                        active.CompileEditorAssembly(options);
+                        Assembly? editorAssembly = AssemblyManager.LoadExternalAssembly(editorOutputPath, true);
+
+                        if (editorAssembly != null)
+                            Debug.Log($"Successfully reloaded editor assemblies");
+                    }
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Error reloading assemblies: {e.Message}");
-                    Debug.LogError(e.StackTrace);
+                    Debug.LogException(new Exception("Error reloading assemblies", e));
                 }
                 finally
                 {
@@ -214,56 +247,6 @@ public static class Program
             {
                 Debug.LogError("Cannot reload assemblies, No project loaded.");
             }
-        }
-    }
-
-
-    private static void DumpHeapInfo()
-    {
-        Assembly[] blacklisted =
-        [
-            typeof(Application).Assembly,
-            typeof(Program).Assembly,
-            typeof(AppDomain).Assembly,
-            typeof(Veldrid.GraphicsDevice).Assembly,
-            typeof(BepuPhysics.Simulation).Assembly,
-            typeof(Veldrid.Sdl2.Sdl2Window).Assembly,
-            typeof(Veldrid.StartupUtilities.VeldridStartup).Assembly,
-            typeof(TerraFX.Interop.Vulkan.Vulkan).Assembly,
-            typeof(BepuUtilities.BoundingBox).Assembly,
-            typeof(SixLabors.ImageSharp.Image).Assembly,
-            typeof(System.Collections.Concurrent.Partitioner).Assembly,
-            typeof(System.Collections.Generic.KeyValuePair).Assembly,
-            typeof(System.IO.File).Assembly,
-            typeof(System.ComponentModel.Component).Assembly,
-            typeof(System.Reflection.Assembly).Assembly,
-            typeof(Microsoft.Extensions.DependencyModel.Library).Assembly,
-            typeof(Silk.NET.Core.PlatformException).Assembly,
-            typeof(Silk.NET.OpenAL.AL).Assembly,
-            typeof(Microsoft.Win32.SafeHandles.SafeFileHandle).Assembly,
-            typeof(CommandLine.Error).Assembly,
-            typeof(System.Linq.Enumerable).Assembly,
-            typeof(System.Diagnostics.StackTrace).Assembly,
-            typeof(System.Collections.Immutable.ImmutableArray).Assembly,
-            typeof(System.Collections.Generic.Stack<IInputHandler>).Assembly,
-            typeof(System.Net.Sockets.SocketAsyncEventArgs).Assembly,
-            typeof(NuGet.Protocol.Core.Types.DownloadResource).Assembly,
-            typeof(System.Reflection.PortableExecutable.CoffHeader).Assembly,
-            typeof(System.Buffers.ReadOnlySequence<byte>).Assembly,
-            typeof(System.IO.MemoryMappedFiles.MemoryMappedFile).Assembly,
-            typeof(Microsoft.Win32.SafeHandles.SafeMemoryMappedViewHandle).Assembly
-        ];
-
-        foreach (HeapDumper.HeapInfo heapInfo in HeapDumper.HeapDumper.DumpHeap())
-        {
-            if (heapInfo.Type == null)
-            {
-                Debug.Log(heapInfo);
-                continue;
-            }
-
-            if (!blacklisted.Contains(heapInfo.Type.Assembly))
-                Debug.Log(heapInfo.Type.FullName);
         }
     }
 }

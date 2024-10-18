@@ -1,31 +1,28 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utils;
 
-internal class Program
+namespace Prowl.Desktop;
+
+public static class DesktopPlayer
 {
-
     public static DirectoryInfo Data => new DirectoryInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GameData"));
 
-    public static FileInfo AssemblyDLL => new FileInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "net8.0", "CSharp.dll"));
-
-    public static int Main(string[] args)
+    public static int Main()
     {
-
-        Application.IsPlaying = true;
         Application.DataPath = Data.FullName;
 
+        Application.IsPlaying = true;
+
+        AssemblyManager.LoadProjectAssemblies();
 
         Application.Initialize += () =>
         {
-
             Physics.Initialize();
 
-            AssemblyManager.LoadExternalAssembly(AssemblyDLL.FullName, true);
-            OnAssemblyLoadAttribute.Invoke();
-
             FileInfo StartingScene = new FileInfo(Path.Combine(Data.FullName, "scene_0.prowl"));
+
             Debug.Log($"Starting Scene: {StartingScene.FullName}");
+
             if (File.Exists(StartingScene.FullName))
             {
                 var tag = BinaryTagConverter.ReadFromFile(StartingScene);
@@ -46,9 +43,10 @@ internal class Program
 
         Application.Quitting += () =>
         {
+
         };
 
-        Application.Run("Prowl Editor", 1920, 1080, new StandaloneAssetProvider(), false);
+        Application.Run("Prowl Engine", 1920, 1080, new StandaloneAssetProvider(), false);
 
         return 0;
     }

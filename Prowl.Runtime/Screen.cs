@@ -17,11 +17,12 @@ public static class Screen
     public static InputSnapshot LatestInputSnapshot { get; private set; }
 
 
-    public static event Action? Load;
-    public static event Action? Update;
+    internal static Action? s_load;
+    internal static Action? s_update;
+    internal static Action? s_closing;
+
     public static event Action<bool>? FocusChanged;
     public static event Action<Vector2Int>? Resize;
-    public static event Action? Closing;
 
     public static event Action<Vector2Int>? Move;
     public static event Action<string[]>? FileDrop;
@@ -55,7 +56,7 @@ public static class Screen
     public static float FramesPerSecond
     {
         get => InternalWindow.PollIntervalInMs / 1000.0f;
-        set { InternalWindow.LimitPollRate = value != 0 && MathD.ApproximatelyEquals(value , double.MaxValue); InternalWindow.PollIntervalInMs = value * 1000.0f; }
+        set { InternalWindow.LimitPollRate = value != 0 && MathD.ApproximatelyEquals(value, double.MaxValue); InternalWindow.PollIntervalInMs = value * 1000.0f; }
     }
 
     public static bool IsVisible
@@ -96,7 +97,7 @@ public static class Screen
 
         Input.PushHandler(WindowInputHandler);
 
-        Load?.Invoke();
+        s_load?.Invoke();
 
         InternalWindow.DropFile += (dragDropEvent) => { FileDrop?.Invoke([System.Text.Encoding.UTF8.GetString(dragDropEvent.FileNameUtf8)]); };
 
@@ -105,7 +106,7 @@ public static class Screen
         InternalWindow.FocusGained += () => FocusChanged?.Invoke(IsFocused = true);
         InternalWindow.FocusLost += () => FocusChanged?.Invoke(IsFocused = false);
 
-        InternalWindow.Closing += Closing;
+        InternalWindow.Closing += s_closing;
         InternalWindow.Closed += () => Environment.Exit(0);
 
         while (InternalWindow.Exists)
@@ -116,7 +117,7 @@ public static class Screen
 
             WindowInputHandler.EarlyUpdate();
 
-            Update?.Invoke();
+            s_update?.Invoke();
         }
     }
 

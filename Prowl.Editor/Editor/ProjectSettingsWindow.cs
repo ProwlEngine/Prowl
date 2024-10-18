@@ -22,7 +22,7 @@ public class ProjectSettingsWindow : SingletonEditorWindow
     public override void RenderSideView()
     {
         RenderSideViewElement(PhysicsSetting.Instance);
-        RenderSideViewElement(BuildProjectSetting.Instance);
+        RenderSideViewElement(BuildProjectSettings.Instance);
     }
 }
 
