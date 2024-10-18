@@ -538,7 +538,6 @@ public sealed class PrefabLink
     }
 
     /// <summary> Returns whether a specific object is affected by this PrefabLink. </summary>
-    public bool AffectsObject(MonoBehaviour cmp) => _prefab.IsAvailable && _prefab.Res.HasComponent(_obj.GetIndexPathOfChild(cmp.GameObject), cmp.GetType());
 
     /// <summary> Returns whether a specific object is affected by this PrefabLink. </summary>
     public bool AffectsObject(GameObject obj) => _prefab.IsAvailable && _prefab.Res.HasGameObject(this._obj.GetIndexPathOfChild(obj));

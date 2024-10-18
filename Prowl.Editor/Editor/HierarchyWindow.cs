@@ -219,7 +219,7 @@ public class HierarchyWindow : EditorWindow
         if (entity == null) return;
         if (entity.hideFlags.HasFlag(HideFlags.Hide) || entity.hideFlags.HasFlag(HideFlags.HideAndDontSave)) return;
 
-        bool isPartOfPrefab = entity.AffectedByPrefabLink != null && entity.AffectedByPrefabLink.AffectsObject(entity);
+        bool isPartOfPrefab = entity.AffectedByPrefabLink != null && entity.AffectedByPrefabLink.IsSource(entity);
 
         if (!string.IsNullOrEmpty(_searchText) && !entity.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
         {
