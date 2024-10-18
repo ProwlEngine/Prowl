@@ -20,9 +20,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 {
     #region Private Fields/Properties
 
-    private List<MonoBehaviour> _components = new();
-
-    private readonly MultiValueDictionary<Type, MonoBehaviour> _componentCache = new();
+    private Dictionary<Type, MonoBehaviour> _components = new();
 
     private bool _enabled = true;
     private bool _enabledInHierarchy = true;
@@ -412,25 +410,12 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         return path;
     }
 
-    public MonoBehaviour GetComponentAtAddress(int componentAddress)
-    {
-        if (componentAddress < 0) return null;
-        if (componentAddress >= _components.Count) return null;
-        return _components[componentAddress];
-    }
-
-    public int GetComponentAddress(MonoBehaviour targetComp)
-    {
-        if (targetComp == null) return -1;
-        return _components.IndexOf(targetComp);
-    }
-
     /// <summary>
     /// Performs pre-update operations on the GameObject's components.
     /// </summary>
     internal void PreUpdate()
     {
-        foreach (var component in _components)
+        foreach (var component in _components.Values)
         {
             if (!component.HasAwoken)
                 component.Do(component.InternalAwake);
@@ -459,6 +444,12 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     {
         if (!typeof(MonoBehaviour).IsAssignableFrom(type)) return null;
 
+        if (_components.ContainsKey(type))
+        {
+            Debug.LogError("Cannot Add the Same Component Type Multiple Times!");
+            return null;
+        }
+
         var requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
         if (requireComponentAttribute != null)
         {
@@ -476,18 +467,11 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             }
         }
 
-        if (type.GetCustomAttribute<DisallowMultipleComponentAttribute>() != null && GetComponent(type) != null)
-        {
-            Debug.LogError("Can't Add the Same Component Multiple Times The component of type " + type.Name + " does not allow multiple instances");
-            return null;
-        }
-
         var newComponent = Activator.CreateInstance(type) as MonoBehaviour;
         if (newComponent == null) return null;
 
         newComponent.AttachToGameObject(this);
-        _components.Add(newComponent);
-        _componentCache.Add(type, newComponent);
+        _components.Add(type, newComponent);
 
         if (enabledInHierarchy)
         {
@@ -503,6 +487,14 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <param name="comp">The MonoBehaviour component to add.</param>
     public void AddComponent(MonoBehaviour comp)
     {
+        ArgumentNullException.ThrowIfNull(comp, nameof(comp));
+
+        if (_components.ContainsKey(comp.GetType()))
+        {
+            Debug.LogError("Cannot Add the Same Component Type Multiple Times!");
+            return;
+        }
+
         var type = comp.GetType();
         var requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
         if (requireComponentAttribute != null)
@@ -521,15 +513,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             }
         }
 
-        if (type.GetCustomAttribute<DisallowMultipleComponentAttribute>() != null && GetComponent(type) != null)
-        {
-            Debug.LogError("Can't Add the Same Component Multiple Times" + "The component of type " + type.Name + " does not allow multiple instances");
-            return;
-        }
-
         comp.AttachToGameObject(this);
-        _components.Add(comp);
-        _componentCache.Add(comp.GetType(), comp);
+        _components.Add(comp.GetType(), comp);
         if (enabledInHierarchy)
         {
             comp.Do(comp.InternalAwake);
@@ -543,13 +528,30 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <param name="component">The component instance to remove.</param>
     public void RemoveComponent<T>(T component) where T : MonoBehaviour
     {
+        ArgumentNullException.ThrowIfNull(component, nameof(component));
         if (component.CanDestroy() == false) return;
 
-        _components.Remove(component);
-        _componentCache.Remove(typeof(T), component);
+        _components.Remove(typeof(T));
 
         if (component.EnabledInHierarchy) component.Do(component.OnDisable);
         if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
+    }
+
+    /// <summary>
+    /// Removes a specific component from the GameObject.
+    /// </summary>
+    /// <param name="cType">The component type to remove.</param>
+    public void RemoveComponent(Type cType)
+    {
+        ArgumentNullException.ThrowIfNull(cType, nameof(cType));
+        MonoBehaviour? c = GetComponent(cType);
+        if (c == null) return;
+        if (c.CanDestroy() == false) return;
+
+        _components.Remove(cType);
+
+        if (c.EnabledInHierarchy) c.Do(c.OnDisable);
+        if (c.HasStarted) c.Do(c.OnDestroy); // OnDestroy is only called if the component has previously been active
     }
 
     /// <summary>
@@ -558,13 +560,20 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <param name="component">The MonoBehaviour component to remove.</param>
     public void RemoveComponent(MonoBehaviour component)
     {
+        ArgumentNullException.ThrowIfNull(component, nameof(component));
         if (component.CanDestroy() == false) return;
 
-        _components.Remove(component);
-        _componentCache.Remove(component.GetType(), component);
+        if (_components.TryGetValue(component.GetType(), out var comp) && comp == component)
+        {
+            _components.Remove(component.GetType());
 
-        if (component.EnabledInHierarchy) component.Do(component.OnDisable);
-        if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
+            if (component.EnabledInHierarchy) component.Do(component.OnDisable);
+            if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
+        }
+        else
+        {
+            Debug.LogError("Attempted to remove the component " + component.GetType().Name + " but failed because it is not attached to the target GameObject");
+        }
     }
 
     /// <summary>
@@ -582,10 +591,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     public MonoBehaviour? GetComponent(Type type)
     {
         if (type == null) return null;
-        if (_componentCache.TryGetValue(type, out var components))
-            return components.First();
+        if (_components.TryGetValue(type, out var component))
+            return component;
         else
-            foreach (var comp in _components)
+            foreach (var comp in _components.Values)
                 if (comp.GetType().IsAssignableTo(type))
                     return comp;
         return null;
@@ -595,7 +604,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// Gets all components attached to the GameObject.
     /// </summary>
     /// <returns>An IEnumerable of all MonoBehaviour components.</returns>
-    public IEnumerable<MonoBehaviour> GetComponents() => _components;
+    public IEnumerable<MonoBehaviour> GetComponents() => _components.Values;
 
     /// <summary>
     /// Tries to get the first component of type T attached to the GameObject.
@@ -622,23 +631,21 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (type == typeof(MonoBehaviour))
         {
             // Special case for Component
-            for (int i = 0; i < _components.Count; i++)
-                yield return _components[i];
+            foreach (KeyValuePair<Type, MonoBehaviour> kvp in _components.ToArray())
+                yield return kvp.Value;
         }
         else
         {
-            if (!_componentCache.TryGetValue(type, out var components))
+            if (!_components.TryGetValue(type, out var component))
             {
-                foreach (var kvp in _componentCache.ToArray())
-                    if (kvp.Key.GetTypeInfo().IsAssignableTo(type))
-                        foreach (var comp in kvp.Value.ToArray())
-                            yield return comp;
+                foreach (KeyValuePair<Type, MonoBehaviour> kvp in _components.ToArray())
+                    if (kvp.Key.IsAssignableTo(type))
+                        yield return kvp.Value;
             }
             else
             {
-                foreach (var comp in components)
-                    if (comp.GetType().IsAssignableTo(type))
-                        yield return comp;
+                if (component.GetType().IsAssignableTo(type))
+                    yield return component;
             }
         }
     }
@@ -872,14 +879,13 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
         for (int i = _components.Count - 1; i >= 0; i--)
         {
-            var component = _components[i];
+            var component = _components.Values.ElementAt(i);
             if (component.IsDestroyed) continue;
             if (component.EnabledInHierarchy) component.Do(component.OnDisable);
             if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
             component.DestroyImmediate();
         }
         _components.Clear();
-        _componentCache.Clear();
 
         if (_parent != null && !_parent.IsDestroyed)
             SetParent(null);
@@ -975,7 +981,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         }
 
         SerializedProperty components = SerializedProperty.NewList();
-        foreach (var comp in _components)
+        foreach (var comp in _components.Values)
             components.ListAdd(Serializer.Serialize(comp, ctx));
         compoundTag.Add("Components", components);
 
@@ -1038,8 +1044,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                     Debug.LogWarning("Missing Monobehaviour Type: " + typeProperty.StringValue + " On " + Name);
                     MissingMonobehaviour missing = new MissingMonobehaviour();
                     missing.ComponentData = compTag;
-                    _components.Add(missing);
-                    _componentCache.Add(typeof(MissingMonobehaviour), missing);
+                    _components.Add(typeof(MissingMonobehaviour), missing);
                     continue;
                 }
                 else if (oType == typeof(MissingMonobehaviour))
@@ -1051,12 +1056,11 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
             MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(compTag, ctx);
             if (component == null) continue;
-            _components.Add(component);
-            _componentCache.Add(component.GetType(), component);
+            _components.Add(component.GetType(), component);
         }
         // Attach all components
         foreach (var comp in _components)
-            comp.AttachToGameObject(this);
+            comp.Value.AttachToGameObject(this);
     }
 
     /// <summary>
@@ -1079,8 +1083,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                 MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(oldData);
                 if (component != null)
                 {
-                    _components.Add(component);
-                    _componentCache.Add(component.GetType(), component);
+                    _components.Add(component.GetType(), component);
                 }
             }
         }
@@ -1090,7 +1093,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// Creates a deep copy of this GameObject.
     /// </summary>
     /// <returns>A reference to a newly created deep copy of this GameObject.</returns>
-    public GameObject Clone()
+    public new GameObject Clone()
     {
         return this.DeepClone();
     }
@@ -1107,67 +1110,49 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     void ICloneExplicit.SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
     {
         GameObject target = targetObj as GameObject;
+        bool isPrefabApply = setup.Context is ApplyPrefabContext;
 
-        // Destroy additional Components in the target GameObject
-        if (target._components.Count > 0)
+        // We don't destroy anything when Applying a prefab
+        // Since the user could have added new components or children those should stay
+        if (!isPrefabApply)
         {
-            List<MonoBehaviour> removeComponentAddresses = null;
-            for (int i = 0; i < target._components.Count; i++)
+            // Destroy additional Components in the target GameObject
+            if (target._components.Count > 0)
             {
-                if (i >= _components.Count || _components[i].GetType() != target._components[i].GetType())
+                List<Type> removeComponentTypes = null;
+                foreach (KeyValuePair<Type, MonoBehaviour> targetComp in target._components)
                 {
-                    removeComponentAddresses ??= [];
-                    removeComponentAddresses.Add(target._components[i]);
+                    if (!_components.ContainsKey(targetComp.Key))
+                    {
+                        removeComponentTypes ??= [];
+                        removeComponentTypes.Add(targetComp.Key);
+                    }
+                }
+                if (removeComponentTypes != null)
+                {
+                    foreach (Type type in removeComponentTypes)
+                    {
+                        target.RemoveComponent(type);
+                    }
                 }
             }
-            if (removeComponentAddresses != null)
-            {
-                // Remove components in reverse order to maintain correct indices
-                for (int i = removeComponentAddresses.Count - 1; i >= 0; i--)
-                {
-                    target.RemoveComponent(removeComponentAddresses[i]);
-                }
-            }
-        }
 
-        // Destroy additional child objects in the target GameObject
-        if (target.children != null)
-        {
-            int thisChildCount = children != null ? children.Count : 0;
-            for (int i = target.children.Count - 1; i >= thisChildCount; i--)
+            // Destroy additional child objects in the target GameObject
+            if (target.children != null)
             {
-                target.children[i].DestroyImmediate();
+                int thisChildCount = children != null ? children.Count : 0;
+                for (int i = target.children.Count - 1; i >= thisChildCount; i--)
+                {
+                    target.children[i].DestroyImmediate();
+                }
             }
         }
 
         // Create missing Components in the target GameObject
-        HashSet<MonoBehaviour> updatedComponents = [];
-        for (int i=0; i<_components.Count; i++)
+        foreach (KeyValuePair<Type, MonoBehaviour> pair in _components)
         {
-            MonoBehaviour sourceComp = _components[i];
-            Type compType = sourceComp.GetType();
-            IEnumerable<MonoBehaviour> targetComps = target.GetComponents();
-            MonoBehaviour targetComp = null;
-
-            // Find the first component of this type that hasn't been updated yet
-            for (int j = 0; j < targetComps.Count(); j++)
-            {
-                var tc = targetComps.ElementAt(j);
-                if (!updatedComponents.Contains(tc) && tc.GetType() == compType)
-                {
-                    targetComp = tc;
-                    break;
-                }
-            }
-
-            // If all existing components have been updated, add a new one
-            if (targetComp == null)
-                targetComp = target.AddComponent(compType);
-
-            setup.HandleObject(sourceComp, targetComp, CloneBehavior.ChildObject);
-
-            // Mark this component as updated
-            updatedComponents.Add(targetComp);
+            MonoBehaviour targetComponent = target.AddComponent(pair.Key);
+            setup.HandleObject(pair.Value, targetComponent, CloneBehavior.ChildObject);
         }
 
         // Create missing child objects in the target GameObject
@@ -1189,8 +1174,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         }
 
         // Handle referenced and child objects
-        setup.HandleObject(this._transform, target._transform, CloneBehavior.ChildObject);
-        setup.HandleObject(this._scene, target._scene, CloneBehavior.Reference);
+        setup.HandleObject(_transform, target._transform, CloneBehavior.ChildObject);
+        setup.HandleObject(_scene, target._scene, CloneBehavior.Reference);
         setup.HandleObject(prefabLink, target.prefabLink);
     }
 
@@ -1216,7 +1201,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         // Copy Components from source to target
         for (int i = 0; i < _components.Count; i++)
         {
-            operation.HandleObject(_components[i]);
+            operation.HandleObject(_components.Values.ElementAt(i));
         }
 
         // Copy child objects from source to target
@@ -1227,8 +1212,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                 operation.HandleObject(children[i]);
             }
         }
-
-
 
         // Copy the objects parent scene as a weak reference, i.e.
         // by assignment, and only when the the scene is itself part of the

@@ -221,7 +221,6 @@ public class GameObjectEditor : ScriptedEditor
 
             // Draw Components
             HashSet<int> editorsNeeded = [];
-            List<MonoBehaviour> toDelete = [];
 
             var allComps = go.GetComponents<MonoBehaviour>();
             foreach (var comp in allComps)
@@ -280,7 +279,7 @@ public class GameObjectEditor : ScriptedEditor
                         {
                             var instanceID = gui.GetGlobalStorage<int>("RightClickComp");
                             if (instanceID == comp.InstanceID)
-                                HandleComponentContextMenu(go, comp, popupHolder, ref toDelete);
+                                HandleComponentContextMenu(go, comp, popupHolder);
                         }
                     }
                 }
@@ -331,9 +330,6 @@ public class GameObjectEditor : ScriptedEditor
                 //HandleComponentContextMenu(go, comp, ref toDelete);
             }
 
-            // Handle Deletion
-            foreach (MonoBehaviour comp in toDelete)
-                go.RemoveComponent(comp);
 
             // Remove any editors that are no longer needed
             HandleUnusedEditors(editorsNeeded);
@@ -388,8 +384,8 @@ public class GameObjectEditor : ScriptedEditor
             else if (cmp != null && cmp.GameObject != null) link = cmp.GameObject.AffectedByPrefabLink;
 
             if (link == null) return;
-            if (cmp != null && !link.AffectsObject(cmp)) return;
-            if (obj != null && !link.AffectsObject(obj)) return;
+            if (cmp != null && !link.IsSource(cmp)) return;
+            if (obj != null && !link.IsSource(obj)) return;
 
             // Handle property changes regarding affected prefab links change lists
             if (PushPrefabLinkFieldChange(link, o, info))
@@ -463,21 +459,24 @@ public class GameObjectEditor : ScriptedEditor
 
     #region Add Component Popup
 
-    private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp, LayoutNode popupHolder, ref List<MonoBehaviour> toDelete)
+    private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp, LayoutNode popupHolder)
     {
         bool closePopup = false;
-        if (StyledButton("Duplicate"))
-        {
-            MonoBehaviour cloned = comp.DeepClone();
-            go.AddComponent(cloned);
-            cloned.OnValidate();
-            closePopup = true;
-        }
+        //if (StyledButton("Duplicate"))
+        //{
+        //    MonoBehaviour cloned = comp.DeepClone();
+        //    go.AddComponent(cloned);
+        //    cloned.OnValidate();
+        //    closePopup = true;
+        //}
 
-        if (StyledButton("Delete"))
+        if (go.AffectedByPrefabLink == null || !go.AffectedByPrefabLink.IsSource(comp))
         {
-            toDelete.Add(comp);
-            closePopup = true;
+            if (StyledButton("Delete"))
+            {
+                go.RemoveComponent(comp);
+                closePopup = true;
+            }
         }
 
         if (closePopup)
@@ -502,7 +501,16 @@ public class GameObjectEditor : ScriptedEditor
             {
 
                 if (StyledButton(item.Name))
-                    go.AddComponent(item.Type).OnValidate();
+                {
+                    if (go.GetComponent(item.Type) != null)
+                    {
+                        Debug.LogError($"Component {item.Type.Name} already exists on GameObject");
+                        return;
+                    }
+
+                    var comp = go.AddComponent(item.Type);
+                    comp.OnValidate();
+                }
 
             }
             else
@@ -561,7 +569,16 @@ public class GameObjectEditor : ScriptedEditor
 
                 Type? type = Type.GetType($"{EditorUtils.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
                 if (type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
-                    go.AddComponent(type).OnValidate();
+                {
+                    if (go.GetComponent(type) != null)
+                    {
+                        Debug.LogError($"Script {type.Name} already exists on GameObject");
+                        return;
+                    }
+
+                    MonoBehaviour comp = go.AddComponent(type);
+                    comp.OnValidate();
+                }
             }
         }
     }
