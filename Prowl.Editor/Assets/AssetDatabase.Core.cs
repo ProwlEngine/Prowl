@@ -526,6 +526,35 @@ public static partial class AssetDatabase
         }
     }
 
+    /// <summary>
+    /// Saves the specified asset instance to its Asset file.
+    /// </summary>
+    /// <param name="assetInstance">The Asset Instance, Needs to be properly linked to the asset and have the AssetID Assigned!</param>
+    /// <param name="pingAsset">Whether to ping the asset after saving.</param>
+    public static void SaveAsset(EngineObject assetInstance, bool pingAsset = true)
+    {
+        ArgumentNullException.ThrowIfNull(assetInstance);
+
+        if (AssetDatabase.TryGetFile(assetInstance.AssetID, out FileInfo? fileInfo))
+        {
+            try
+            {
+                SerializedProperty serialized = Serializer.Serialize(assetInstance);
+                StringTagConverter.WriteToFile(serialized, fileInfo);
+
+                AssetDatabase.Ping(fileInfo);
+
+                // All we did was update the file on disk to perfectly match the already in memory asset
+                // So no need to reimport or update the cache's
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(new Exception($"Failed to save asset {assetInstance.Name}.", e));
+            }
+
+        }
+    }
+
     #endregion
 
     #region Private Methods

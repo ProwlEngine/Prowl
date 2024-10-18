@@ -132,15 +132,7 @@ public class GameObjectEditor : ScriptedEditor
                                 go.LinkToPrefab(prefab);
 
                             // Save prefab asset
-#warning TODO: This should be consolidated into a single method: AssetDatabase.SaveAsset()
-                            //AssetDatabase.SaveAsset(prefab);
-                            if(AssetDatabase.TryGetFile(prefab.AssetID, out FileInfo? fileInfo))
-                            {
-                                StringTagConverter.WriteToFile(Serializer.Serialize(prefab), fileInfo);
-
-                                AssetDatabase.Update();
-                                AssetDatabase.Ping(fileInfo);
-                            }
+                            AssetDatabase.SaveAsset(prefab);
 
                             Prefab.OnFieldChange(prefab, null);
                             Prefab.OnFieldChange(go, Prefab.PrefabLinkInfo);
