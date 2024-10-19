@@ -10,7 +10,7 @@ using Prowl.Runtime.Rendering;
 using Veldrid;
 
 using Debug = Prowl.Runtime.Debug;
-using Shader = Prowl.Runtime.Rendering.Shader;
+using Shader = Prowl.Runtime.Shader;
 
 namespace Prowl.Editor;
 

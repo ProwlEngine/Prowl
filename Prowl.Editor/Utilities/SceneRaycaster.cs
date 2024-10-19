@@ -6,7 +6,7 @@ using Prowl.Runtime.Rendering.Pipelines;
 
 using Veldrid;
 
-using Shader = Prowl.Runtime.Rendering.Shader;
+using Shader = Prowl.Runtime.Shader;
 
 namespace Prowl.Editor;
 
