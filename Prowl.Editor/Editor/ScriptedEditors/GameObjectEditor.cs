@@ -8,10 +8,8 @@ using Prowl.Editor.Preferences;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.Cloning;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
-using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 
 using static Prowl.Editor.EditorGUI;
@@ -34,7 +32,7 @@ public class GameObjectEditor : ScriptedEditor
 
     public override void OnDisable()
     {
-        foreach (var editor in compEditors.Values)
+        foreach (ScriptedEditor editor in compEditors.Values)
             editor.OnDisable();
     }
 
@@ -58,7 +56,6 @@ public class GameObjectEditor : ScriptedEditor
         style.Roundness = 8f;
         style.BorderThickness = 1f;
         string name = go.Name;
-        if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, ItemSize, 0, Size.Percentage(1f, -(ItemSize * 3)), ItemSize, style))
         if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, ItemSize, 0, Size.Percentage(1f, -(ItemSize * 4)), ItemSize, style))
         {
             go.Name = name.Trim();
@@ -117,7 +114,7 @@ public class GameObjectEditor : ScriptedEditor
 
                         // Clear all changes and re-apply Prefabs
                         //go.PrefabLink!.ApplyPrefab();
-                        go.PrefabLink.ClearChanges();
+                        go.PrefabLink!.ClearChanges();
                         PrefabLink.ApplyAllLinks([go]);
                     }
                     else if (gui.IsNodeHovered())
@@ -133,8 +130,8 @@ public class GameObjectEditor : ScriptedEditor
                     {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, btnRoundness, 6);
 
-                        Prefab? prefab = go.PrefabLink!.Prefab.Res;
-                        if (prefab != null)
+                        Prefab prefab = go.PrefabLink!.Prefab.Res!;
+                        if (!object.ReferenceEquals(prefab, null))
                         {
                             prefab.Inject(go);
                             if (go.PrefabLink == null)
@@ -156,8 +153,8 @@ public class GameObjectEditor : ScriptedEditor
             }
         }
 
-        var height = (ItemSize + 5) * (isPrefab ? 2 : 1) + 10;
-        var addComponentHeight = 0.0;
+        double height = (ItemSize + 5) * (isPrefab ? 2 : 1) + 10;
+        double addComponentHeight = 0.0;
         using (gui.Node("#_InspContent").Top(height).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Clip().Enter())
         {
             addComponentHeight = gui.CurrentNode.LayoutData.Rect.height;
@@ -181,9 +178,9 @@ public class GameObjectEditor : ScriptedEditor
                     gui.SetNodeStorage(gui.CurrentNode.Parent, "#_Opened_TransformH", opened);
                 }
 
-                var rect = gui.CurrentNode.LayoutData.InnerRect;
-                var textSizeY = Font.DefaultFont.CalcTextSize("Transform", 20).y;
-                var centerY = (rect.height / 2) - (textSizeY / 2);
+                Rect rect = gui.CurrentNode.LayoutData.InnerRect;
+                double textSizeY = Font.DefaultFont.CalcTextSize("Transform", 20).y;
+                double centerY = (rect.height / 2) - (textSizeY / 2);
                 gui.Draw2D.DrawText((opened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, centerY + 3));
                 gui.Draw2D.DrawText(FontAwesome6.MapLocation + " Transform", 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(29, centerY + 3), Color.black * 0.8f);
                 gui.Draw2D.DrawText(FontAwesome6.MapLocation + " Transform", 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, centerY + 2));
@@ -198,10 +195,10 @@ public class GameObjectEditor : ScriptedEditor
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, btnRoundness, 12);
 
-                    var t = go.Transform;
+                    Transform t = go.Transform;
                     using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
-                        var tpos = t.localPosition;
+                        Vector3 tpos = t.localPosition;
                         if (DrawProperty(0, "Position", ref tpos))
                         {
                             t.localPosition = tpos;
@@ -211,7 +208,7 @@ public class GameObjectEditor : ScriptedEditor
 
                     using (ActiveGUI.Node("RotParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
-                        var tpos = t.localEulerAngles;
+                        Vector3 tpos = t.localEulerAngles;
                         if (DrawProperty(1, "Rotation", ref tpos))
                         {
                             t.localEulerAngles = tpos;
@@ -221,7 +218,7 @@ public class GameObjectEditor : ScriptedEditor
 
                     using (ActiveGUI.Node("ScaleParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
-                        var tpos = t.localScale;
+                        Vector3 tpos = t.localScale;
                         if (DrawProperty(2, "Scale", ref tpos))
                         {
                             t.localScale = tpos;
@@ -236,8 +233,8 @@ public class GameObjectEditor : ScriptedEditor
             // Draw Components
             HashSet<int> editorsNeeded = [];
 
-            var allComps = go.GetComponents<MonoBehaviour>();
-            foreach (var comp in allComps)
+            IEnumerable<MonoBehaviour> allComps = go.GetComponents<MonoBehaviour>();
+            foreach (MonoBehaviour comp in allComps)
             {
                 if (comp == null) continue;
                 editorsNeeded.Add(comp.InstanceID);
@@ -245,7 +242,7 @@ public class GameObjectEditor : ScriptedEditor
                 if (comp.hideFlags.HasFlag(HideFlags.Hide) || comp.hideFlags.HasFlag(HideFlags.HideAndDontSave) || comp.hideFlags.HasFlag(HideFlags.NotEditable))
                     continue;
 
-                var cType = comp.GetType();
+                Type cType = comp.GetType();
 
                 // Component
                 // Header
@@ -286,12 +283,12 @@ public class GameObjectEditor : ScriptedEditor
                         gui.SetGlobalStorage("RightClickComp", comp.InstanceID);
                     }
 
-                    var popupHolder = gui.CurrentNode;
-                    if (gui.BeginPopup("RightClickComp", out var node))
+                    LayoutNode popupHolder = gui.CurrentNode;
+                    if (gui.BeginPopup("RightClickComp", out LayoutNode? node))
                     {
-                        using (node.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
+                        using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                         {
-                            var instanceID = gui.GetGlobalStorage<int>("RightClickComp");
+                            int instanceID = gui.GetGlobalStorage<int>("RightClickComp");
                             if (instanceID == comp.InstanceID)
                                 HandleComponentContextMenu(go, comp, popupHolder);
                         }
@@ -321,7 +318,7 @@ public class GameObjectEditor : ScriptedEditor
                             }
                         }
 
-                        foreach (var change in subChanges.AllChanges)
+                        foreach ((object target, FieldInfo field) change in subChanges.AllChanges)
                         {
                             Prefab.OnFieldChange(change.target, change.field.Name);
                             // Propagate changes to the main FieldChanges
@@ -356,10 +353,10 @@ public class GameObjectEditor : ScriptedEditor
                 if (gui.IsNodePressed())
                     gui.OpenPopup("AddComponentPopup", null, gui.CurrentNode);
 
-                var popupHolder = gui.CurrentNode;
-                if (gui.BeginPopup("AddComponentPopup", out var node))
+                LayoutNode popupHolder = gui.CurrentNode;
+                if (gui.BeginPopup("AddComponentPopup", out LayoutNode? node))
                 {
-                    using (node.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
+                    using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                     {
                         gui.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f));
 
@@ -379,7 +376,7 @@ public class GameObjectEditor : ScriptedEditor
     private float DrawCompHeader(Type cType, bool compOpened)
     {
         float animState = gui.AnimateBool(compOpened, 0.1f, EaseType.Linear);
-        var compColor = EditorStylePrefs.RandomPastelColor(cType.GetHashCode());
+        Color compColor = EditorStylePrefs.RandomPastelColor(cType.GetHashCode());
         if (compOpened || animState > 0)
             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, compColor, (float)EditorStylePrefs.Instance.ButtonRoundness, 3);
         else
@@ -389,13 +386,13 @@ public class GameObjectEditor : ScriptedEditor
 
     private static string GetComponentDisplayName(Type cType)
     {
-        var addToMenuAttribute = cType.GetCustomAttribute<AddComponentMenuAttribute>();
+        AddComponentMenuAttribute? addToMenuAttribute = cType.GetCustomAttribute<AddComponentMenuAttribute>();
         return addToMenuAttribute != null ? Path.GetFileName(addToMenuAttribute.Path) : cType.Name;
     }
 
     private void HandleUnusedEditors(HashSet<int> editorsNeeded)
     {
-        foreach (var key in compEditors.Keys)
+        foreach (int key in compEditors.Keys)
             if (!editorsNeeded.Contains(key))
             {
                 compEditors[key].OnDisable();
@@ -408,6 +405,9 @@ public class GameObjectEditor : ScriptedEditor
     private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp, LayoutNode popupHolder)
     {
         bool closePopup = false;
+
+        if (go == null) return;
+
         //if (StyledButton("Duplicate"))
         //{
         //    MonoBehaviour cloned = comp.DeepClone();
@@ -418,7 +418,7 @@ public class GameObjectEditor : ScriptedEditor
 
         if (StyledButton("Delete"))
         {
-            go.RemoveComponent(comp);
+            go!.RemoveComponent(comp);
             closePopup = true;
         }
 
@@ -430,7 +430,7 @@ public class GameObjectEditor : ScriptedEditor
     {
         bool foundName = false;
         bool hasSearch = string.IsNullOrEmpty(_searchText) == false;
-        foreach (var item in menuItem.Children)
+        foreach (MenuItemInfo item in menuItem.Children)
         {
             if (hasSearch && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null))
             {
@@ -445,13 +445,13 @@ public class GameObjectEditor : ScriptedEditor
 
                 if (StyledButton(item.Name))
                 {
-                    if (go.GetComponent(item.Type) != null)
+                    if (go.GetComponent(item.Type) is not null)
                     {
                         Debug.LogError($"Component {item.Type.Name} already exists on GameObject");
                         return;
                     }
 
-                    var comp = go.AddComponent(item.Type);
+                    MonoBehaviour comp = go.AddComponent(item.Type);
                     comp.OnValidate();
                 }
 
@@ -472,10 +472,10 @@ public class GameObjectEditor : ScriptedEditor
                     ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
                 }
 
-                if (ActiveGUI.BeginPopup(item.Name + "Popup", out var node))
+                if (ActiveGUI.BeginPopup(item.Name + "Popup", out LayoutNode? node))
                 {
                     double largestWidth = 0;
-                    foreach (var child in item.Children)
+                    foreach (MenuItemInfo child in item.Children)
                     {
                         double width = Font.DefaultFont.CalcTextSize(child.Name, 0).x + 30;
                         if (width > largestWidth)
@@ -513,7 +513,7 @@ public class GameObjectEditor : ScriptedEditor
                 Type? type = Type.GetType($"{EditorUtils.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
                 if (type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
                 {
-                    if (go.GetComponent(type) != null)
+                    if (go.GetComponent(type) is not null)
                     {
                         Debug.LogError($"Script {type.Name} already exists on GameObject");
                         return;
@@ -528,15 +528,15 @@ public class GameObjectEditor : ScriptedEditor
 
     private MenuItemInfo GetAddComponentMenuItems()
     {
-        var componentTypes = AppDomain.CurrentDomain.GetAssemblies()
+        Type[] componentTypes = AppDomain.CurrentDomain.GetAssemblies()
                                       .SelectMany(assembly => assembly.GetTypes())
                                       .Where(type => type.IsSubclassOf(typeof(MonoBehaviour)) && !type.IsAbstract)
                                       .ToArray();
 
-        var items = componentTypes.Select(type =>
+        (string Name, Type type)[] items = componentTypes.Select(type =>
         {
             string Name = type.Name;
-            var addToMenuAttribute = type.GetCustomAttribute<AddComponentMenuAttribute>();
+            AddComponentMenuAttribute? addToMenuAttribute = type.GetCustomAttribute<AddComponentMenuAttribute>();
             if (addToMenuAttribute != null)
                 Name = addToMenuAttribute.Path;
             return (Name, type);
@@ -546,7 +546,7 @@ public class GameObjectEditor : ScriptedEditor
         // Create a root MenuItemInfo object to serve as the starting point of the tree
         MenuItemInfo root = new MenuItemInfo { Name = "Root" };
 
-        foreach (var (path, type) in items)
+        foreach ((string path, Type type) in items)
         {
             string[] parts = path.Split('/');
 
@@ -586,7 +586,7 @@ public class GameObjectEditor : ScriptedEditor
     {
         node.Children.Sort((x, y) => x.Type == null ? -1 : 1);
 
-        foreach (var child in node.Children)
+        foreach (MenuItemInfo child in node.Children)
             SortChildren(child);
     }
 
@@ -602,7 +602,7 @@ public class GameObjectEditor : ScriptedEditor
         {
             Type = type;
             Name = type.Name;
-            var addToMenuAttribute = type.GetCustomAttribute<AddComponentMenuAttribute>();
+            AddComponentMenuAttribute? addToMenuAttribute = type.GetCustomAttribute<AddComponentMenuAttribute>();
             if (addToMenuAttribute != null)
                 Name = addToMenuAttribute.Path;
         }
