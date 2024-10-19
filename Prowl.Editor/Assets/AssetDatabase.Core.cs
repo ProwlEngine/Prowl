@@ -508,6 +508,13 @@ public static partial class AssetDatabase
         try
         {
             var serializedAsset = SerializedAsset.FromSerializedAsset(serializedAssetPath.FullName);
+
+            if (serializedAsset == null || object.ReferenceEquals(serializedAsset.Main, null))
+            {
+                Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}, Asset was Null.");
+                return null;
+            }
+
             serializedAsset.Guid = assetGuid;
             serializedAsset.Main.AssetID = assetGuid;
             serializedAsset.Main.FileID = 0;
