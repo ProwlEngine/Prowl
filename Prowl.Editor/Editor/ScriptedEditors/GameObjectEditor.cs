@@ -64,7 +64,7 @@ public class GameObjectEditor : ScriptedEditor
             Prefab.OnFieldChange(go, nameof(GameObject.Name));
         }
 
-        var invisStyle = GetInputStyle() with { BGColor = new Color(0, 0, 0, 0), BorderColor = new Color(0, 0, 0, 0) };
+        WidgetStyle invisStyle = GetInputStyle() with { BorderColor = new Color(0, 0, 0, 0) };
         int tagIndex = go.tagIndex;
         if (gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, invisStyle, null, FontAwesome6.Tag))
         {
