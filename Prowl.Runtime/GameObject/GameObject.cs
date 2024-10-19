@@ -22,6 +22,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     private Dictionary<Type, MonoBehaviour> _components = new();
 
+    private bool _static = false;
+
     private bool _enabled = true;
     private bool _enabledInHierarchy = true;
     [SerializeField]
@@ -75,6 +77,14 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         get => TagLayerManager.GetLayer(layerIndex);
         set => layerIndex = TagLayerManager.GetLayerIndex(value);
     }
+
+    /// <summary> The Static flag of this GameObject, Changing this may not behave as expected! </summary>
+    public bool isStatic
+    {
+        get => _static;
+        set => _static = value;
+    }
+
 
     /// <summary> The Parent of this GameObject, Can be null </summary>
     public GameObject? parent => _parent;
@@ -962,6 +972,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         SerializedProperty compoundTag = SerializedProperty.NewCompound();
         compoundTag.Add("Name", new SerializedProperty(Name));
 
+        compoundTag.Add("Static", new SerializedProperty((byte)(_static ? 1 : 0)));
+
         compoundTag.Add("Enabled", new SerializedProperty((byte)(_enabled ? 1 : 0)));
         compoundTag.Add("EnabledInHierarchy", new SerializedProperty((byte)(_enabledInHierarchy ? 1 : 0)));
 
@@ -1006,6 +1018,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         tagIndex = value["TagIndex"].ByteValue;
         layerIndex = value["LayerIndex"].ByteValue;
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
+        _static = value["Static"]?.ByteValue == 1;
 
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
         _transform.gameObject = this;
@@ -1188,6 +1201,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
         // Copy plain old data
         target.Name = Name;
+        target._static = _static;
         target._enabled = _enabled;
         target._enabledInHierarchy = _enabledInHierarchy;
         target.tagIndex = tagIndex;
