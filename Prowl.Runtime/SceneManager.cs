@@ -87,7 +87,6 @@ public static class SceneManager
         if (Application.IsPlaying)
             Physics.Update();
 
-
         ForeachComponent(activeGOs, (x) =>
         {
             x.Do(x.UpdateCoroutines);
@@ -100,8 +99,8 @@ public static class SceneManager
 
     public static void ForeachComponent(IEnumerable<GameObject> objs, Action<MonoBehaviour> action)
     {
-        for (int i = 0; i < objs.Count(); i++)
-            foreach (var comp in objs.ElementAt(i).GetComponents<MonoBehaviour>())
+        foreach (var go in objs)
+            foreach (var comp in go.GetComponents<MonoBehaviour>())
                 if (comp.EnabledInHierarchy)
                     action.Invoke(comp);
     }
