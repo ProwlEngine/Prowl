@@ -6,7 +6,7 @@ using System.Text;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 public enum ValueType : byte
 {
@@ -16,7 +16,7 @@ public enum ValueType : byte
     UInt
 }
 
-public struct ShaderUniformMember
+public struct UniformMember
 {
     public string name;
 
@@ -31,7 +31,7 @@ public struct ShaderUniformMember
     public ValueType type;
 }
 
-public class ShaderUniform
+public class Uniform
 {
     private static string CleanseName(string rawName)
     {
@@ -44,12 +44,12 @@ public class ShaderUniform
 
     public uint size;
 
-    public ShaderUniformMember[] members;
+    public UniformMember[] members;
 
 
-    private ShaderUniform() { }
+    private Uniform() { }
 
-    public ShaderUniform(string rawName, uint binding, ResourceKind kind)
+    public Uniform(string rawName, uint binding, ResourceKind kind)
     {
         this.kind = kind;
         name = CleanseName(rawName);
@@ -58,7 +58,7 @@ public class ShaderUniform
     }
 
 
-    public ShaderUniform(string rawName, uint binding, uint size, ShaderUniformMember[] members)
+    public Uniform(string rawName, uint binding, uint size, UniformMember[] members)
     {
         kind = ResourceKind.UniformBuffer;
         name = CleanseName(rawName);
@@ -102,7 +102,7 @@ public class ShaderUniform
     }
 
 
-    public bool IsEqual(ShaderUniform other)
+    public bool IsEqual(Uniform other)
     {
         if (kind != other.kind)
             return false;
