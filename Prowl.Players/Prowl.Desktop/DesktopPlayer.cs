@@ -35,8 +35,7 @@ public static class DesktopPlayer
 
         Application.Render += () =>
         {
-            // Needs to be reimplemented
-            //SceneManager.Draw();
+            SceneManager.Draw();
 
             Graphics.EndFrame();
         };
