@@ -235,7 +235,7 @@ public class ModelImporter : ScriptedImporter
     {
         foreach (var m in scene.Materials)
         {
-            Material mat = Material.GetDefaultMaterial();
+            Material mat = Material.CreateDefaultMaterial();
             string? name = m.HasName ? m.Name : null;
 
             // Albedo
