@@ -2,14 +2,15 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Text;
-using System.Text.RegularExpressions;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
+using Prowl.Runtime.Rendering;
 
 using Veldrid;
 
 using Debug = Prowl.Runtime.Debug;
+using Shader = Prowl.Runtime.Rendering.Shader;
 
 namespace Prowl.Editor;
 
@@ -55,7 +56,7 @@ public static partial class ShaderParser
     }
 
 
-    public static bool ParseShader(string input, FileIncluder includer, out Runtime.Shader? shader)
+    public static bool ParseShader(string input, FileIncluder includer, out Shader? shader)
     {
         shader = null;
 
@@ -167,7 +168,7 @@ public static partial class ShaderParser
             passes[i] = new ShaderPass(parsedPass.Name, passDesc, variants);
         }
 
-        shader = new Runtime.Shader(name, [.. properties ?? []], passes);
+        shader = new Shader(name, [.. properties ?? []], passes);
 
         return true;
     }

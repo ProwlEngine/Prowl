@@ -7,7 +7,7 @@ using System.Text;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 {

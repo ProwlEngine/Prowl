@@ -5,7 +5,7 @@ using System;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 public readonly struct VertexInput : IEquatable<VertexInput>
 {

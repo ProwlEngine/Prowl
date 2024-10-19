@@ -1,7 +1,6 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.Net;
 using System.Text;
 
 using NuGet.Protocol.Core.Types;
@@ -11,6 +10,7 @@ using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
+using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor;
 

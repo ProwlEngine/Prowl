@@ -1,9 +1,9 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
+using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor.Assets;
 
@@ -47,13 +47,13 @@ public class TextureImporterEditor : ScriptedEditor
 
         gui.CurrentNode.Layout(LayoutType.Column);
 
-        if(EditorGUI.DrawProperty(0, "Generate Mipmaps", ref importer.generateMipmaps))
+        if (EditorGUI.DrawProperty(0, "Generate Mipmaps", ref importer.generateMipmaps))
             changes.Add(importer, nameof(TextureImporter.generateMipmaps));
-        if(EditorGUI.DrawProperty(1, "Min Filter", ref importer.textureMinFilter))
+        if (EditorGUI.DrawProperty(1, "Min Filter", ref importer.textureMinFilter))
             changes.Add(importer, nameof(TextureImporter.textureMinFilter));
-        if(EditorGUI.DrawProperty(2, "Mag Filter", ref importer.textureMagFilter))
+        if (EditorGUI.DrawProperty(2, "Mag Filter", ref importer.textureMagFilter))
             changes.Add(importer, nameof(TextureImporter.textureMagFilter));
-        if(EditorGUI.DrawProperty(3, "Wrap Mode", ref importer.textureWrap))
+        if (EditorGUI.DrawProperty(3, "Wrap Mode", ref importer.textureWrap))
             changes.Add(importer, nameof(TextureImporter.textureWrap));
 
         if (EditorGUI.StyledButton("Save"))

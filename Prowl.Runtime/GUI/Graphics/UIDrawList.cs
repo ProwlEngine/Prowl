@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Prowl.Runtime.Rendering;
+
 
 namespace Prowl.Runtime.GUI
 {
@@ -686,7 +688,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void PathLineToMergeDuplicate(Vector2 pos)
         {
-            if (_buildingPath.Count == 0 || MathD.ApproximatelyEquals(_buildingPath[ 1].x, pos.x) || MathD.ApproximatelyEquals(_buildingPath[^1].y, pos.y))
+            if (_buildingPath.Count == 0 || MathD.ApproximatelyEquals(_buildingPath[1].x, pos.x) || MathD.ApproximatelyEquals(_buildingPath[^1].y, pos.y))
                 _buildingPath.Add(pos);
         }
 

@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;

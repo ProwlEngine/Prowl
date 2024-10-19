@@ -6,7 +6,7 @@ using System.Linq;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 public sealed class ShaderVariant : ISerializationCallbackReceiver
 {
@@ -18,7 +18,7 @@ public sealed class ShaderVariant : ISerializationCallbackReceiver
     public VertexInput[] VertexInputs;
 
     [HideInInspector]
-    public ShaderUniform[] Uniforms;
+    public Uniform[] Uniforms;
 
     [NonSerialized]
     public ShaderStages[] UniformStages;
@@ -59,11 +59,11 @@ public sealed class ShaderVariant : ISerializationCallbackReceiver
         return backend switch
         {
             GraphicsBackend.Direct3D11 => Direct3D11Shaders ?? throw invalidBackend,
-            GraphicsBackend.Vulkan     => VulkanShaders ?? throw invalidBackend,
-            GraphicsBackend.OpenGL     => OpenGLShaders ?? throw invalidBackend,
-            GraphicsBackend.OpenGLES   => OpenGLESShaders ?? throw invalidBackend,
-            GraphicsBackend.Metal      => MetalShaders ?? throw invalidBackend,
-            _                          => throw invalidBackend,
+            GraphicsBackend.Vulkan => VulkanShaders ?? throw invalidBackend,
+            GraphicsBackend.OpenGL => OpenGLShaders ?? throw invalidBackend,
+            GraphicsBackend.OpenGLES => OpenGLESShaders ?? throw invalidBackend,
+            GraphicsBackend.Metal => MetalShaders ?? throw invalidBackend,
+            _ => throw invalidBackend,
         };
     }
 

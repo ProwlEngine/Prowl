@@ -9,11 +9,20 @@ using Veldrid;
 
 #pragma warning disable
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
+
+
+public interface IBindableResourceProvider
+{
+    public IReadOnlyList<Uniform> Uniforms { get; }
+
+    public bool GetBufferIndex(string ID, out ushort uniformIndex, out ushort bufferIndex);
+}
+
 
 public class BindableResourceSet
 {
-    public ShaderPipeline Pipeline { get; private set; }
+    public IBindableResourceProvider resourceProvider;
 
     public ResourceSetDescription description;
     private ResourceSet resources;
@@ -22,9 +31,9 @@ public class BindableResourceSet
     private readonly byte[][] intermediateBuffers;
 
 
-    public BindableResourceSet(ShaderPipeline pipeline, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
+    public BindableResourceSet(IBindableResourceProvider provider, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
     {
-        Pipeline = pipeline;
+        resourceProvider = provider;
         this.description = description;
         uniformBuffers = buffers;
         intermediateBuffers = buffers.Select(x => new byte[x.SizeInBytes]).ToArray();
@@ -35,10 +44,8 @@ public class BindableResourceSet
     {
         bool recreateResourceSet = false | (resources == null);
 
-        for (int i = 0; i < Pipeline.Uniforms.Length; i++)
+        foreach (Uniform uniform in resourceProvider.Uniforms)
         {
-            ShaderUniform uniform = Pipeline.Uniforms[i];
-
             switch (uniform.kind)
             {
                 case ResourceKind.UniformBuffer:
@@ -130,16 +137,16 @@ public class BindableResourceSet
 
     public bool UpdateBuffer(CommandList list, string ID, PropertyState state)
     {
-        if (!Pipeline.GetBuffer(ID, out ushort uniformIndex, out ushort bufferIndex))
+        if (!resourceProvider.GetBufferIndex(ID, out ushort uniformIndex, out ushort bufferIndex))
             return false;
 
-        ShaderUniform uniform = Pipeline.Uniforms[uniformIndex];
+        Uniform uniform = resourceProvider.Uniforms[uniformIndex];
         DeviceBuffer buffer = uniformBuffers[bufferIndex];
         byte[] tempBuffer = intermediateBuffers[bufferIndex];
 
         for (int i = 0; i < uniform.members.Length; i++)
         {
-            ShaderUniformMember member = uniform.members[i];
+            UniformMember member = uniform.members[i];
 
             if (state._values.TryGetValue(member.name, out ValueProperty value))
             {

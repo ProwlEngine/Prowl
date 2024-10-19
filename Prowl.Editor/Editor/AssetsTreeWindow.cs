@@ -8,6 +8,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor;
 

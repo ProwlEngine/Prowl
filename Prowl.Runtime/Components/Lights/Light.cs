@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Runtime.Rendering.Pipelines;
+
 namespace Prowl.Runtime;
 
 public abstract class Light : MonoBehaviour, IRenderableLight
@@ -15,7 +17,7 @@ public abstract class Light : MonoBehaviour, IRenderableLight
 
     public override void Update()
     {
-        RenderPipelines.RenderPipeline.AddLight(this);
+        RenderPipeline.AddLight(this);
     }
 
 

@@ -9,6 +9,8 @@ using System.Runtime.InteropServices;
 
 using Veldrid;
 
+using Prowl.Runtime.Rendering;
+
 namespace Prowl.Runtime.GUI.Graphics;
 
 public enum ColorSpaceHandling
@@ -43,7 +45,7 @@ public static class UIDrawListRenderer
     // Max active texture sets before the cache is cleared.
     // If for some reason we're rendering 500+ textures caching isn't solving anything anyways.
     private static readonly int s_texturesBeforeClear = 500;
-    private static readonly Dictionary<Texture, ResourceSet> s_textureSets = [];
+    private static readonly Dictionary<Rendering.Texture, ResourceSet> s_textureSets = [];
 
 
 
@@ -135,7 +137,7 @@ public static class UIDrawListRenderer
     }
 
 
-    public static ResourceSet GetResourceSet(Texture texture)
+    public static ResourceSet GetResourceSet(Rendering.Texture texture)
     {
         if (!s_textureSets.TryGetValue(texture, out ResourceSet resourceSet))
         {

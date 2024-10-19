@@ -4,12 +4,12 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 
 using Veldrid;
 using Veldrid.StartupUtilities;
 
-
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Pipelines;
 
 namespace Prowl.Runtime;
 
@@ -68,7 +68,7 @@ public static partial class Graphics
         Device.WaitForIdle();
 
         RenderTexture.UpdatePool();
-        RenderPipelines.RenderPipeline.ClearRenderables();
+        RenderPipeline.ClearRenderables();
 
         foreach (IDisposable disposable in s_disposables)
             disposable.Dispose();

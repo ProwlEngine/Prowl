@@ -4,7 +4,7 @@
 using System.Collections.Generic;
 
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 public static class ShaderPipelineCache
 {

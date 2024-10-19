@@ -10,6 +10,8 @@ using System.Text;
 
 using Veldrid;
 
+using Prowl.Runtime.Rendering;
+
 namespace Prowl.Runtime;
 
 public enum LogSeverity

@@ -7,7 +7,8 @@ using Prowl.Runtime;
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Widgets.Gizmo;
-using Prowl.Runtime.RenderPipelines;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Pipelines;
 using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Editor;

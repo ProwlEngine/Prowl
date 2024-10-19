@@ -5,6 +5,8 @@ using System;
 
 using Veldrid;
 
+using Prowl.Runtime.Rendering;
+
 namespace Prowl.Runtime;
 
 public static class ShadowAtlas
@@ -49,21 +51,21 @@ public static class ShadowAtlas
         int tileHeight = height / tileSize;
 
         for (int i = 0; i <= tileCount - tileWidth; i++)
-        for (int j = 0; j <= tileCount - tileHeight; j++)
-            if (tiles[i, j] == null)
-            {
-                bool found = true;
-                for (int x = i; x < i + tileWidth && found; x++)
-                for (int y = j; y < j + tileHeight && found; y++)
-                    if (tiles[x, y] != null)
-                        found = false;
-
-                if (found)
+            for (int j = 0; j <= tileCount - tileHeight; j++)
+                if (tiles[i, j] == null)
                 {
-                    ReserveTile(i, j, tileWidth, tileHeight, lightID);
-                    return new Vector2Int(i * tileSize, j * tileSize);
+                    bool found = true;
+                    for (int x = i; x < i + tileWidth && found; x++)
+                        for (int y = j; y < j + tileHeight && found; y++)
+                            if (tiles[x, y] != null)
+                                found = false;
+
+                    if (found)
+                    {
+                        ReserveTile(i, j, tileWidth, tileHeight, lightID);
+                        return new Vector2Int(i * tileSize, j * tileSize);
+                    }
                 }
-            }
 
         return null;
     }
@@ -74,12 +76,12 @@ public static class ShadowAtlas
             throw new ArgumentException("Tile is out of bounds");
 
         for (int i = x; i < x + width; i++)
-        for (int j = y; j < y + height; j++)
-        {
-            if (tiles[i, j].HasValue)
-                throw new ArgumentException("Tile is already reserved");
-            tiles[i, j] = lightID;
-        }
+            for (int j = y; j < y + height; j++)
+            {
+                if (tiles[i, j].HasValue)
+                    throw new ArgumentException("Tile is already reserved");
+                tiles[i, j] = lightID;
+            }
 
         freeTiles -= width * height;
     }
@@ -88,19 +90,19 @@ public static class ShadowAtlas
     public static void FreeTiles(int lightID)
     {
         for (int i = 0; i < tileCount; i++)
-        for (int j = 0; j < tileCount; j++)
-            if (tiles[i, j] == lightID)
-            {
-                tiles[i, j] = null;
-                freeTiles++;
-            }
+            for (int j = 0; j < tileCount; j++)
+                if (tiles[i, j] == lightID)
+                {
+                    tiles[i, j] = null;
+                    freeTiles++;
+                }
     }
 
     public static void Clear()
     {
         for (int i = 0; i < tileCount; i++)
-        for (int j = 0; j < tileCount; j++)
-            tiles[i, j] = null;
+            for (int j = 0; j < tileCount; j++)
+                tiles[i, j] = null;
 
         freeTiles = tileCount * tileCount;
     }

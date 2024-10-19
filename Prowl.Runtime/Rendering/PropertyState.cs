@@ -10,7 +10,7 @@ using Vector2F = System.Numerics.Vector2;
 using Vector3F = System.Numerics.Vector3;
 using Vector4F = System.Numerics.Vector4;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 public struct ValueProperty
 {
