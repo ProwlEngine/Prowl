@@ -137,7 +137,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     {
         get
         {
-            _transform.gameObject = this; // ensure gameobject is this
+            _transform.gameObject = this; // ensure game object is this
             return _transform;
         }
     }
@@ -287,7 +287,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (go.parent?.InstanceID == InstanceID)
             return true;
 
-        foreach (var child in children)
+        foreach (GameObject child in children)
             if (child.IsParentOf(go))
                 return true;
 
@@ -345,22 +345,23 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// Finds a GameObject by name.
     /// </summary>
     /// <param name="otherName">The name of the GameObject to find.</param>
+    /// <param name="ignoreCase">If true, the search is case-insensitive.</param>
     /// <returns>The first GameObject with the given name, or null if not found.</returns>
-    public static GameObject Find(string otherName) => FindObjectsOfType<GameObject>().FirstOrDefault(gameObject => gameObject.Name == otherName);
+    public static GameObject Find(string otherName, bool ignoreCase = false) => SceneManager.Scene.AllObjects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
 
     /// <summary>
     /// Finds a GameObject with the specified tag.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>The first GameObject with the given tag, or null if not found.</returns>
-    public static GameObject FindGameObjectWithTag(string otherTag) => FindObjectsOfType<GameObject>().FirstOrDefault(gameObject => gameObject.CompareTag(otherTag));
+    public static GameObject FindGameObjectWithTag(string otherTag) => SceneManager.Scene.AllObjects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag));
 
     /// <summary>
     /// Finds all GameObjects with the specified tag.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>An array of GameObjects with the given tag.</returns>
-    public static GameObject[] FindGameObjectsWithTag(string otherTag) => FindObjectsOfType<GameObject>().Where(gameObject => gameObject.CompareTag(otherTag)).ToArray();
+    public static GameObject[] FindGameObjectsWithTag(string otherTag) => SceneManager.Scene.AllObjects.Where(gameObject => gameObject.CompareTag(otherTag)).ToArray();
 
 
     /// <summary>
@@ -425,7 +426,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     internal void PreUpdate()
     {
-        foreach (var component in _components.Values)
+        foreach (MonoBehaviour component in _components.Values)
         {
             if (!component.HasAwoken)
                 component.Do(component.InternalAwake);
@@ -460,10 +461,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             return null;
         }
 
-        var requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
+        RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
         if (requireComponentAttribute != null)
         {
-            foreach (var requiredComponentType in requireComponentAttribute.types)
+            foreach (Type requiredComponentType in requireComponentAttribute.types)
             {
                 if (!typeof(MonoBehaviour).IsAssignableFrom(requiredComponentType))
                     continue;
@@ -505,11 +506,11 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             return;
         }
 
-        var type = comp.GetType();
-        var requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
+        Type type = comp.GetType();
+        RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
         if (requireComponentAttribute != null)
         {
-            foreach (var requiredComponentType in requireComponentAttribute.types)
+            foreach (Type requiredComponentType in requireComponentAttribute.types)
             {
                 if (!typeof(MonoBehaviour).IsAssignableFrom(requiredComponentType))
                     continue;
@@ -573,7 +574,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         ArgumentNullException.ThrowIfNull(component, nameof(component));
         if (component.CanDestroy() == false) return;
 
-        if (_components.TryGetValue(component.GetType(), out var comp) && comp == component)
+        if (_components.TryGetValue(component.GetType(), out MonoBehaviour? comp) && comp == component)
         {
             _components.Remove(component.GetType());
 
@@ -601,10 +602,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     public MonoBehaviour? GetComponent(Type type)
     {
         if (type == null) return null;
-        if (_components.TryGetValue(type, out var component))
+        if (_components.TryGetValue(type, out MonoBehaviour? component))
             return component;
         else
-            foreach (var comp in _components.Values)
+            foreach (MonoBehaviour comp in _components.Values)
                 if (comp.GetType().IsAssignableTo(type))
                     return comp;
         return null;
@@ -646,7 +647,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         }
         else
         {
-            if (!_components.TryGetValue(type, out var component))
+            if (!_components.TryGetValue(type, out MonoBehaviour? component))
             {
                 foreach (KeyValuePair<Type, MonoBehaviour> kvp in _components.ToArray())
                     if (kvp.Key.IsAssignableTo(type))
@@ -721,14 +722,14 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     {
         // First check the current Object
         if (includeSelf && enabledInHierarchy)
-            foreach (var component in GetComponents(type))
+            foreach (MonoBehaviour component in GetComponents(type))
                 yield return component;
         // Now check all parents
         GameObject parent = this;
         while ((parent = parent.parent) != null)
         {
             if (parent.enabledInHierarchy || includeInactive)
-                foreach (var component in parent.GetComponents(type))
+                foreach (MonoBehaviour component in parent.GetComponents(type))
                     yield return component;
         }
     }
@@ -761,7 +762,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                 return component;
         }
         // Now check all children
-        foreach (var child in children)
+        foreach (GameObject child in children)
         {
             if (enabledInHierarchy || includeInactive)
             {
@@ -793,13 +794,13 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     {
         // First check the current Object
         if (includeSelf && enabledInHierarchy)
-            foreach (var component in GetComponents(type))
+            foreach (MonoBehaviour component in GetComponents(type))
                 yield return component;
         // Now check all children
-        foreach (var child in children)
+        foreach (GameObject child in children)
         {
             if (enabledInHierarchy || includeInactive)
-                foreach (var component in child.GetComponentsInChildren(type, true, includeInactive))
+                foreach (MonoBehaviour component in child.GetComponentsInChildren(type, true, includeInactive))
                     yield return component;
         }
     }
@@ -812,10 +813,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <returns>True if the component is required, false otherwise.</returns>
     internal bool IsComponentRequired(MonoBehaviour requiredComponent, out Type dependentType)
     {
-        var componentType = requiredComponent.GetType();
-        foreach (var component in _components)
+        Type componentType = requiredComponent.GetType();
+        foreach (KeyValuePair<Type, MonoBehaviour> component in _components)
         {
-            var requireComponentAttribute =
+            RequireComponentAttribute? requireComponentAttribute =
                 component.GetType().GetCustomAttribute<RequireComponentAttribute>();
             if (requireComponentAttribute == null)
                 continue;
@@ -889,7 +890,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
         for (int i = _components.Count - 1; i >= 0; i--)
         {
-            var component = _components.Values.ElementAt(i);
+            MonoBehaviour component = _components.Values.ElementAt(i);
             if (component.IsDestroyed) continue;
             if (component.EnabledInHierarchy) component.Do(component.OnDisable);
             if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
@@ -920,11 +921,11 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (_enabledInHierarchy != newState)
         {
             _enabledInHierarchy = newState;
-            foreach (var component in GetComponents<MonoBehaviour>())
+            foreach (MonoBehaviour component in GetComponents<MonoBehaviour>())
                 component.HierarchyStateChanged();
         }
 
-        foreach (var child in children)
+        foreach (GameObject child in children)
             child.HierarchyStateChanged();
     }
 
@@ -941,10 +942,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <param name="objs">Optional parameters to pass to the method.</param>
     public void BroadcastMessage(string methodName, params object[] objs)
     {
-        foreach (var component in GetComponents<MonoBehaviour>())
+        foreach (MonoBehaviour component in GetComponents<MonoBehaviour>())
             component.SendMessage(methodName, objs);
 
-        foreach (var child in children)
+        foreach (GameObject child in children)
             child.BroadcastMessage(methodName, objs);
     }
 
@@ -955,7 +956,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <param name="objs">Optional parameters to pass to the method.</param>
     public void SendMessage(string methodName, params object[] objs)
     {
-        foreach (var c in GetComponents<MonoBehaviour>())
+        foreach (MonoBehaviour c in GetComponents<MonoBehaviour>())
         {
             MethodInfo method = c.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
             method?.Invoke(c, objs);
@@ -993,12 +994,12 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         }
 
         SerializedProperty components = SerializedProperty.NewList();
-        foreach (var comp in _components.Values)
+        foreach (MonoBehaviour comp in _components.Values)
             components.ListAdd(Serializer.Serialize(comp, ctx));
         compoundTag.Add("Components", components);
 
         SerializedProperty children = SerializedProperty.NewList();
-        foreach (var child in this.children)
+        foreach (GameObject child in this.children)
             children.ListAdd(Serializer.Serialize(child, ctx));
         compoundTag.Add("Children", children);
 
@@ -1013,27 +1014,30 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
     {
         Name = value["Name"].StringValue;
-        _enabled = value["Enabled"].ByteValue == 1;
-        _enabledInHierarchy = value["EnabledInHierarchy"].ByteValue == 1;
-        tagIndex = value["TagIndex"].ByteValue;
-        layerIndex = value["LayerIndex"].ByteValue;
-        hideFlags = (HideFlags)value["HideFlags"].IntValue;
         _static = value["Static"]?.ByteValue == 1;
+        _enabled = value["Enabled"]?.ByteValue == 1;
+        _enabledInHierarchy = value["EnabledInHierarchy"]?.ByteValue == 1;
+        tagIndex = value["TagIndex"]?.ByteValue ?? 0;
+        layerIndex = value["LayerIndex"]?.ByteValue ?? 0;
+        hideFlags = (HideFlags)value["HideFlags"]?.IntValue!;
 
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
         _transform.gameObject = this;
-        prefabLink = Serializer.Deserialize<PrefabLink>(value["PrefabLink"], ctx);
-        if (prefabLink != null)
-            prefabLink.Obj = this;
+        if (value.TryGet("PrefabLink", out SerializedProperty? link))
+        {
+            prefabLink = Serializer.Deserialize<PrefabLink>(link, ctx);
+            if (prefabLink != null)
+                prefabLink.Obj = this;
+        }
 
-        if (value.TryGet("AssetID", out var guid))
+        if (value.TryGet("AssetID", out SerializedProperty? guid))
             AssetID = Guid.Parse(guid.StringValue);
-        if (value.TryGet("FileID", out var fileID))
+        if (value.TryGet("FileID", out SerializedProperty? fileID))
             FileID = fileID.UShortValue;
 
-        var children = value["Children"];
-        this.children = new();
-        foreach (var childTag in children.List)
+        SerializedProperty children = value["Children"];
+        this.children = [];
+        foreach (SerializedProperty childTag in children.List)
         {
             GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
             if (child == null) continue;
@@ -1041,13 +1045,13 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             this.children.Add(child);
         }
 
-        var comps = value["Components"];
-        _components = new();
-        foreach (var compTag in comps.List)
+        SerializedProperty comps = value["Components"];
+        _components = [];
+        foreach (SerializedProperty compTag in comps.List)
         {
             // Fallback for Missing Type
             SerializedProperty? typeProperty = compTag.Get("$type");
-            // If the type is missing or string null/whitespace something is wrong, so just let the deserializer handle it, maybe it knows what to do
+            // If the type is missing or string null/whitespace something is wrong, so just let the Deserializer handle it, maybe it knows what to do
             if (typeProperty != null && !string.IsNullOrWhiteSpace(typeProperty.StringValue))
             {
                 // Look for Monobehaviour Type
@@ -1072,7 +1076,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             _components.Add(component.GetType(), component);
         }
         // Attach all components
-        foreach (var comp in _components)
+        foreach (KeyValuePair<Type, MonoBehaviour> comp in _components)
             comp.Value.AttachToGameObject(this);
     }
 
@@ -1085,9 +1089,9 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     {
         // Were missing! see if we can recover
         MissingMonobehaviour missing = Serializer.Deserialize<MissingMonobehaviour>(compTag, ctx);
-        var oldData = missing.ComponentData;
+        SerializedProperty oldData = missing.ComponentData;
         // Try to recover the component
-        if (oldData.TryGet("$type", out var typeProp))
+        if (oldData.TryGet("$type", out SerializedProperty? typeProp))
         {
             Type oType = RuntimeUtils.FindType(typeProp.StringValue);
             if (oType != null)
@@ -1213,12 +1217,12 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         target.AssetID = AssetID;
         target.FileID = FileID;
 
-        operation.HandleObject(_transform);
+        operation.HandleObject<Transform>(_transform);
 
         // Copy Components from source to target
         for (int i = 0; i < _components.Count; i++)
         {
-            operation.HandleObject(_components.Values.ElementAt(i));
+            operation.HandleObject<MonoBehaviour>(_components.Values.ElementAt(i));
         }
 
         // Copy child objects from source to target
@@ -1226,7 +1230,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         {
             for (int i = 0; i < children.Count; i++)
             {
-                operation.HandleObject(children[i]);
+                operation.HandleObject<GameObject>(children[i]);
             }
         }
 
