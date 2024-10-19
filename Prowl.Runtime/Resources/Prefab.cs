@@ -127,6 +127,7 @@ public class Prefab : EngineObject
     /// It is based on this Prefabs root GameObject.
     /// </summary>
     /// <param name="gameObjIndexPath">The <see cref="GameObject.GetIndexPathOfChild">index path</see> at which to search for a GameObject.</param>
+    /// <param name="cmpType">The component type to search for.</param>
     public bool HasComponent(IEnumerable<int> gameObjIndexPath, Type cmpType)
     {
         if (_objTree == null) return false;
@@ -300,8 +301,8 @@ public sealed class PrefabLink
     /// </para>
     /// <para>
     /// Change relocation is done when linking an existing GameObject to a Prefab although it is already affected by a
-    /// hierarchically higher PrefabLink. In order to prevent both PrefabLinks to interfere with each other, 
-    /// all higher PrefabLink change list entries referring to that GameObject are relocated to the new, lower 
+    /// hierarchically higher PrefabLink. In order to prevent both PrefabLinks to interfere with each other,
+    /// all higher PrefabLink change list entries referring to that GameObject are relocated to the new, lower
     /// PrefabLink that is specifically targeting it.
     /// </para>
     /// <para>
@@ -396,7 +397,7 @@ public sealed class PrefabLink
 
     /// <summary>
     /// Applies this PrefabLinks change list to its GameObject. This will restore
-    /// all deliberate modifications (made in the editor) of the GameObjects Fields 
+    /// all deliberate modifications (made in the editor) of the GameObjects Fields
     /// after linking it to the Prefab.
     /// </summary>
     public void ApplyChanges()
@@ -448,7 +449,7 @@ public sealed class PrefabLink
         if (_changes == null || _changes.Count == 0) return;
 
         // Remove empty change list entries
-         ClearEmptyChanges();
+        ClearEmptyChanges();
 
         // Update change list values from fields
         for (int i = 0; i < _changes.Count; i++)
@@ -624,9 +625,9 @@ public sealed class PrefabLink
     public bool IsSource(GameObject obj) => _prefab.IsAvailable && _prefab.Res.HasGameObject(this._obj.GetIndexPathOfChild(obj));
 
     /// <summary>
-    /// Applies all PrefabLinks in a set of GameObjects. 
+    /// Applies all PrefabLinks in a set of GameObjects.
     /// </summary>
-    /// <param name="objEnum">An enumeration of all GameObjects containing PrefabLinks that are to <see cref="Apply()">apply</see>.</param>
+    /// <param name="objEnum">An enumeration of all GameObjects containing PrefabLinks that are to apply.</param>
     /// <param name="predicate">An optional predicate. If set, only PrefabLinks meeting its requirements are applied.</param>
     /// <returns>A List of all PrefabLinks that have been applied.</returns>
     public static HashSet<PrefabLink> ApplyAllLinks(IEnumerable<GameObject> objEnum, Predicate<PrefabLink> predicate = null)
