@@ -55,6 +55,7 @@ public static class RuntimeUtils
     public static bool IsLinux() => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
     public static bool IsFreeBSD() => RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD);
     public static bool IsMac() => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+    public static bool IsBrowser() => RuntimeInformation.IsOSPlatform(OSPlatform.Create("BROWSER"));
 
 
     public static Platform GetOSPlatform()
