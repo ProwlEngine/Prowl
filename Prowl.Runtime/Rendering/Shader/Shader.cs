@@ -5,9 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
+using Prowl.Runtime.Rendering;
+
 using Veldrid;
 
-namespace Prowl.Runtime.Rendering;
+namespace Prowl.Runtime;
 
 public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 {
