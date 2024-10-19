@@ -250,10 +250,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     public GameObject(string name = "New GameObject") : base(name) { }
 
     /// <summary>
-    /// Creates a GameObject based on a specific <see cref="Duality.Resources.Prefab"/>.
+    /// Creates a GameObject based on a specific <see cref="Prowl.Runtime.Prefab"/>.
     /// </summary>
     /// <param name="prefab">The Prefab that will be applied to this GameObject.</param>
-    /// <seealso cref="Duality.Resources.Prefab"/>
+    /// <seealso cref="Prowl.Runtime.Prefab"/>
     public GameObject(AssetRef<Prefab> prefab)
     {
         if (!prefab.IsAvailable) return;
