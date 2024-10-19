@@ -59,6 +59,7 @@ public class GameObjectEditor : ScriptedEditor
         style.BorderThickness = 1f;
         string name = go.Name;
         if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, ItemSize, 0, Size.Percentage(1f, -(ItemSize * 3)), ItemSize, style))
+        if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, ItemSize, 0, Size.Percentage(1f, -(ItemSize * 4)), ItemSize, style))
         {
             go.Name = name.Trim();
             Prefab.OnFieldChange(go, nameof(GameObject.Name));
@@ -66,19 +67,27 @@ public class GameObjectEditor : ScriptedEditor
 
         WidgetStyle invisStyle = GetInputStyle() with { BorderColor = new Color(0, 0, 0, 0) };
         int tagIndex = go.tagIndex;
-        if (gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, invisStyle, null, FontAwesome6.Tag))
+        if (gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 3)), 0, ItemSize, ItemSize, null, null, FontAwesome6.Tag))
         {
             go.tagIndex = (byte)tagIndex;
             Prefab.OnFieldChange(go, nameof(GameObject.tagIndex));
         }
         int layerIndex = go.layerIndex;
-        if (gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize)), 0, ItemSize, ItemSize, invisStyle, null, FontAwesome6.LayerGroup))
+        if (gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, null, null, FontAwesome6.LayerGroup))
         {
             go.layerIndex = (byte)layerIndex;
             Prefab.OnFieldChange(go, nameof(GameObject.layerIndex));
         }
 
-        var btnRoundness = (float)EditorStylePrefs.Instance.ButtonRoundness;
+        bool isStatic = go.isStatic;
+        if (gui.Checkbox("IsStaticChk", ref isStatic, Offset.Percentage(1f, -(ItemSize)), 0, out _, GetInputStyle()))
+        {
+            go.isStatic = isStatic;
+            Prefab.OnFieldChange(go, nameof(GameObject.isStatic));
+        }
+        gui.Tooltip("Is Static");
+
+        float btnRoundness = (float)EditorStylePrefs.Instance.ButtonRoundness;
 
         bool isPrefab = go.PrefabLink != null;
         if (isPrefab)
