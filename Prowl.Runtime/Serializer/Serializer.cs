@@ -346,7 +346,9 @@ public static class Serializer
 
             void Search(SerializedProperty prop)
             {
-                foreach (var tag in prop.Tags)
+                if (prop.Tags == null) return;
+
+                foreach (KeyValuePair<string, SerializedProperty> tag in prop.Tags)
                 {
                     if (tag.Value.TagType == PropertyType.Compound)
                         _ = DeserializeObject(tag.Value, ctx);
