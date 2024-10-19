@@ -9,6 +9,7 @@ using Prowl.Editor.ProjectSettings;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
+using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor.Build;
 

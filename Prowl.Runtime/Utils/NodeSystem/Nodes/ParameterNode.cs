@@ -3,6 +3,8 @@
 
 using System.Linq;
 
+using Prowl.Runtime.Rendering;
+
 namespace Prowl.Runtime.NodeSystem;
 
 public class ParameterNode : Node
@@ -24,12 +26,12 @@ public class ParameterNode : Node
 
         var paramType = param.type switch
         {
-            GraphParameter.ParameterType.Int      => typeof(int),
-            GraphParameter.ParameterType.Double   => typeof(double),
-            GraphParameter.ParameterType.Bool     => typeof(bool),
-            GraphParameter.ParameterType.Texture  => typeof(Texture),
+            GraphParameter.ParameterType.Int => typeof(int),
+            GraphParameter.ParameterType.Double => typeof(double),
+            GraphParameter.ParameterType.Bool => typeof(bool),
+            GraphParameter.ParameterType.Texture => typeof(Texture),
             GraphParameter.ParameterType.Material => typeof(Material),
-            _                                     => null
+            _ => null
         };
 
         if (DynamicOutputs.Count() != 1 || paramType != DynamicOutputs.ElementAt(0).ValueType)

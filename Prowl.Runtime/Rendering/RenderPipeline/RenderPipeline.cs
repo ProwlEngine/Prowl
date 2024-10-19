@@ -8,7 +8,7 @@ using System.Runtime.CompilerServices;
 using Veldrid;
 
 
-namespace Prowl.Runtime.RenderPipelines;
+namespace Prowl.Runtime.Rendering.Pipelines;
 
 public struct RenderingData
 {

@@ -5,8 +5,7 @@ using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-
-using TerraFX.Interop.Vulkan;
+using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor.ScriptedEditors;
 

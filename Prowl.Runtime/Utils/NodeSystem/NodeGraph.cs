@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
+using Prowl.Runtime.Rendering;
+
 namespace Prowl.Runtime.NodeSystem;
 
 public class GraphParameter

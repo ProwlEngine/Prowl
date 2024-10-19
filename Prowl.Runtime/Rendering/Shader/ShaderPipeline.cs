@@ -8,7 +8,7 @@ using System.Diagnostics.CodeAnalysis;
 using Veldrid;
 
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 public struct ShaderPipelineDescription : IEquatable<ShaderPipelineDescription>
 {
@@ -39,7 +39,7 @@ public struct ShaderPipelineDescription : IEquatable<ShaderPipelineDescription>
     }
 }
 
-public sealed partial class ShaderPipeline : IDisposable
+public sealed partial class ShaderPipeline : IDisposable, IBindableResourceProvider
 {
     public static readonly FrontFace FrontFace = Graphics.GetFrontFace();
 
@@ -53,7 +53,7 @@ public sealed partial class ShaderPipeline : IDisposable
 
     private readonly byte _bufferCount;
 
-    public ShaderUniform[] Uniforms => shader.Uniforms;
+    public IReadOnlyList<Uniform> Uniforms => shader.Uniforms;
 
     private GraphicsPipelineDescription _description;
 
@@ -111,11 +111,11 @@ public sealed partial class ShaderPipeline : IDisposable
         _bufferLookup = new();
 
         ResourceLayoutDescription layoutDescription = new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription[Uniforms.Length]);
+            new ResourceLayoutElementDescription[Uniforms.Count]);
 
-        for (ushort uniformIndex = 0; uniformIndex < Uniforms.Length; uniformIndex++)
+        for (ushort uniformIndex = 0; uniformIndex < Uniforms.Count; uniformIndex++)
         {
-            ShaderUniform uniform = Uniforms[uniformIndex];
+            Uniform uniform = Uniforms[uniformIndex];
             ShaderStages stages = shader.UniformStages[uniformIndex];
 
             layoutDescription.Elements[uniform.binding] =
@@ -140,7 +140,7 @@ public sealed partial class ShaderPipeline : IDisposable
             false
         );
 
-        this._description = new(
+        _description = new(
             description.pass.Blend,
             description.pass.DepthStencilState,
             rasterizerState,
@@ -151,7 +151,7 @@ public sealed partial class ShaderPipeline : IDisposable
     }
 
 
-    private static BindableResource GetBindableResource(ShaderUniform uniform, out DeviceBuffer? buffer)
+    private static BindableResource GetBindableResource(Uniform uniform, out DeviceBuffer? buffer)
     {
         buffer = null;
 
@@ -179,11 +179,12 @@ public sealed partial class ShaderPipeline : IDisposable
 
     public BindableResourceSet CreateResources()
     {
+        BindableResource[] boundResources = new BindableResource[Uniforms.Count];
+
         DeviceBuffer[] boundBuffers = new DeviceBuffer[_bufferCount];
-        BindableResource[] boundResources = new BindableResource[Uniforms.Length];
         byte[][] intermediateBuffers = new byte[_bufferCount][];
 
-        for (int i = 0, b = 0; i < Uniforms.Length; i++)
+        for (int i = 0, b = 0; i < Uniforms.Count; i++)
         {
             boundResources[Uniforms[i].binding] = GetBindableResource(Uniforms[i], out DeviceBuffer? buffer);
 
@@ -203,7 +204,7 @@ public sealed partial class ShaderPipeline : IDisposable
     }
 
 
-    public bool GetBuffer(string name, out ushort uniform, out ushort buffer)
+    public bool GetBufferIndex(string name, out ushort uniform, out ushort buffer)
     {
         uniform = 0;
         buffer = 0;

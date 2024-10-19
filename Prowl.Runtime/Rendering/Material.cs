@@ -9,6 +9,8 @@ using Vector2F = System.Numerics.Vector2;
 using Vector3F = System.Numerics.Vector3;
 using Vector4F = System.Numerics.Vector4;
 
+using Prowl.Runtime.Rendering;
+
 namespace Prowl.Runtime;
 
 public sealed class Material : EngineObject, ISerializationCallbackReceiver

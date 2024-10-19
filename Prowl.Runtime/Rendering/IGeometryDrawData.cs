@@ -3,7 +3,7 @@
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 public interface IGeometryDrawData
 {

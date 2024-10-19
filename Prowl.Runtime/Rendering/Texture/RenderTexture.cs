@@ -8,7 +8,7 @@ using System.Linq;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 public struct RenderTextureDescription
 {
@@ -135,7 +135,9 @@ public sealed class RenderTexture : EngineObject, ISerializable
     /// </summary>
     /// <param name="width">The width of the <see cref="RenderTexture"/> and its internal buffers.</param>
     /// <param name="height">The height of the <see cref="RenderTexture"/> and its internal buffers.</param>
+    /// <param name="sampled">Whether or not the texture is sampleable as a uniform.</param>
     /// <param name="enableRandomWrite">Enable random reads/writes to the <see cref="RenderTexture"/> internal buffers. This is useful within compute shaders which draw to the texture.</param>
+    /// <param name="sampleCount">The multisampled count of the texture. Values above Count1 will require the texture to be resolved with <see cref="CommandBuffer.ResolveMultisampledTexture(RenderTexture, RenderTexture)"/> </param>
     public RenderTexture(
         uint width, uint height,
         bool sampled = false,
@@ -150,7 +152,9 @@ public sealed class RenderTexture : EngineObject, ISerializable
     /// <param name="width">The width of the <see cref="RenderTexture"/> and its internal buffers.</param>
     /// <param name="height">The height of the <see cref="RenderTexture"/> and its internal buffers.</param>
     /// <param name="colorFormats">The format of the color buffer(s) in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of a color buffer.</param>
+    /// <param name="sampled">Whether or not the texture is sampleable as a uniform.</param>
     /// <param name="enableRandomWrite">Enable random reads/writes to the <see cref="RenderTexture"/> internal buffers. This is useful within compute shaders which draw to the texture.</param>
+    /// <param name="sampleCount">The multisampled count of the texture. Values above Count1 will require the texture to be resolved with <see cref="CommandBuffer.ResolveMultisampledTexture(RenderTexture, RenderTexture)"/> </param>
     public RenderTexture(
         uint width, uint height,
         PixelFormat[] colorFormats = null,
@@ -168,6 +172,8 @@ public sealed class RenderTexture : EngineObject, ISerializable
     /// <param name="colorFormats">The format of the color buffer(s) in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of a color buffer.</param>
     /// <param name="depthFormat">The format of the depth stencil buffer in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of the depth stencil buffer.</param>
     /// <param name="enableRandomWrite">Enable random reads/writes to the <see cref="RenderTexture"/> internal buffers. This is useful within compute shaders which draw to the texture.</param>
+    /// <param name="sampled">Whether or not the texture is sampleable as a uniform.</param>
+    /// <param name="sampleCount">The multisampled count of the texture. Values above Count1 will require the texture to be resolved with <see cref="CommandBuffer.ResolveMultisampledTexture(RenderTexture, RenderTexture)"/> </param>
     public RenderTexture(
         uint width, uint height,
         PixelFormat[] colorFormats = null,

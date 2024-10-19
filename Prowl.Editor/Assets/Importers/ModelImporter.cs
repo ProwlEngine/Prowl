@@ -13,7 +13,7 @@ using static Prowl.Runtime.AnimationClip;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
 using Node = Assimp.Node;
-using Texture2D = Prowl.Runtime.Texture2D;
+using Texture2D = Prowl.Runtime.Rendering.Texture2D;
 
 namespace Prowl.Editor.Assets;
 

@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Icons;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.GUI.Graphics;
 
 using StbTrueTypeSharp;

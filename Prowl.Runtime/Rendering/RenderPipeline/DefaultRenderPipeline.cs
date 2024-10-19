@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 using Veldrid;
 
-namespace Prowl.Runtime.RenderPipelines;
+namespace Prowl.Runtime.Rendering.Pipelines;
 
 public class DefaultRenderPipeline : RenderPipeline
 {

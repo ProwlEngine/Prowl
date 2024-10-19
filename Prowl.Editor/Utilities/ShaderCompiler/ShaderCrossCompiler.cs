@@ -4,6 +4,7 @@
 using System.Text;
 
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 
 using SPIRVCross.NET;
 using SPIRVCross.NET.GLSL;
@@ -19,7 +20,7 @@ namespace Prowl.Editor;
 public struct ReflectedResourceInfo
 {
     public VertexInput[] vertexInputs;
-    public ShaderUniform[] uniforms;
+    public Uniform[] uniforms;
     public ShaderStages[] stages;
 }
 
@@ -29,7 +30,7 @@ public static partial class ShaderCompiler
     {
         VertexInput[] vertexInputs = [];
 
-        List<ShaderUniform> uniforms = [];
+        List<Uniform> uniforms = [];
         List<ShaderStages> stages = [];
 
         for (int i = 0; i < compiledSPIRV.Length; i++)
@@ -145,7 +146,7 @@ public static partial class ShaderCompiler
     }
 
 
-    private static void MergeUniforms(List<ShaderUniform> uniforms, List<ShaderStages> stages, ShaderUniform[] other, ShaderStages stage)
+    private static void MergeUniforms(List<Uniform> uniforms, List<ShaderStages> stages, Uniform[] other, ShaderStages stage)
     {
         foreach (var ub in other)
         {

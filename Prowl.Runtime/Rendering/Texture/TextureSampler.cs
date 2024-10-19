@@ -5,7 +5,7 @@ using System;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 [Flags]
 public enum SamplerAxis
@@ -27,7 +27,7 @@ public enum TextureWrapMode
     Wrap = SamplerAddressMode.Wrap,
 }
 
-public sealed class TextureSampler : EngineObject, ISerializable
+public sealed class TextureSampler : IDisposable, ISerializable
 {
     private Sampler _internalSampler;
     private SamplerDescription _internalDescription;
@@ -62,7 +62,7 @@ public sealed class TextureSampler : EngineObject, ISerializable
     public static TextureSampler CreatePoint() => new TextureSampler(SamplerDescription.Point);
 
 
-    internal TextureSampler() : base("New Sampler") { }
+    internal TextureSampler() { }
 
     internal TextureSampler(SamplerDescription description) : this()
     {
@@ -94,9 +94,9 @@ public sealed class TextureSampler : EngineObject, ISerializable
 
         if (_internalSampler == null || !CompareDescriptions(in description, in _internalDescription))
         {
-            OnDispose();
+            Dispose();
             _internalDescription = description;
-            _internalSampler = Graphics.Factory.CreateSampler(ref _internalDescription);
+            _internalSampler = Graphics.Factory.CreateSampler(in _internalDescription);
         }
     }
 
@@ -174,7 +174,7 @@ public sealed class TextureSampler : EngineObject, ISerializable
         }
     }
 
-    public override void OnDispose()
+    public void Dispose()
     {
         _internalSampler?.Dispose();
         _internalSampler = null;
@@ -198,8 +198,6 @@ public sealed class TextureSampler : EngineObject, ISerializable
     {
         SerializedProperty compoundTag = SerializedProperty.NewCompound();
 
-        SerializeHeader(compoundTag);
-
         compoundTag.Add("WrapModeU", new((int)WrapModeU));
         compoundTag.Add("WrapModeV", new((int)WrapModeV));
         compoundTag.Add("WrapModeW", new((int)WrapModeW));
@@ -215,8 +213,6 @@ public sealed class TextureSampler : EngineObject, ISerializable
 
     public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
     {
-        DeserializeHeader(value);
-
         WrapModeU = (TextureWrapMode)value["WrapModeU"].IntValue;
         WrapModeV = (TextureWrapMode)value["WrapModeV"].IntValue;
         WrapModeW = (TextureWrapMode)value["WrapModeW"].IntValue;

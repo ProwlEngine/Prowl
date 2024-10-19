@@ -5,7 +5,7 @@ using System;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 /// <summary>
 /// A <see cref="Texture"/> whose image has two dimensions and support for multisampling.
@@ -57,6 +57,8 @@ public sealed class Texture2D : Texture
     /// <param name="height">The height of the <see cref="Texture2D"/>.</param>
     /// <param name="mipLevels">How many mip levels this <see cref="Texture2D"/> has.</param>
     /// <param name="format">The pixel format for this <see cref="Texture2D"/>.</param>
+    /// <param name="usage">The usage modes of this <see cref="Texture2D"/>.</param>
+    /// <param name="sampleCount">The multisampled count of the texture. Values above Count1 will require the texture to be resolved with <see cref="CommandBuffer.ResolveMultisampledTexture(RenderTexture, RenderTexture)"/> </param>
     public Texture2D(
         uint width, uint height,
         uint mipLevels = 1,
@@ -87,6 +89,7 @@ public sealed class Texture2D : Texture
     /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
     /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
     /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
+    /// <param name="mipLevel">The mip level to copy from.</param>
     public unsafe void SetDataPtr(void* ptr, uint rectX, uint rectY, uint rectWidth, uint rectHeight, uint mipLevel = 0) =>
         InternalSetDataPtr(ptr, new Vector3Int((int)rectX, (int)rectY, 0), new Vector3Int((int)rectWidth, (int)rectHeight, 1), 0, mipLevel);
 
@@ -108,6 +111,7 @@ public sealed class Texture2D : Texture
     /// </summary>
     /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
     /// <param name="data">A <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
+    /// <param name="mipLevel">The mip level to copy from.</param>
     public void SetData<T>(Span<T> data, uint mipLevel = 0) where T : unmanaged =>
         SetData(data, 0, 0, Width, Height, mipLevel);
 
@@ -115,6 +119,7 @@ public sealed class Texture2D : Texture
     /// Copies the data of a portion of a <see cref="Texture2D"/>.
     /// </summary>
     /// <param name="data">The pointer to the location to copy to.</param>
+    /// <param name="dataSize">The number of bytes to copy from the source.</param>
     /// <param name="mipLevel">The mip level to copy.</param>
     public unsafe void CopyDataPtr(void* data, uint dataSize, uint mipLevel = 0) =>
         InternalCopyDataPtr(data, dataSize, out _, out _, 0, mipLevel);

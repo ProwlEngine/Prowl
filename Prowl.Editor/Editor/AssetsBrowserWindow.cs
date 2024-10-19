@@ -8,6 +8,7 @@ using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
+using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor;
 
@@ -70,8 +71,8 @@ public class AssetsBrowserWindow : EditorWindow
         string path = to switch
         {
             DirectoryInfo dir => dir.FullName,
-            FileInfo file     => file.Directory.FullName,
-            _                 => CurDirectoryNode.Directory.FullName
+            FileInfo file => file.Directory.FullName,
+            _ => CurDirectoryNode.Directory.FullName
         };
 
         if (AssetDatabase.PathToCachedNode(path, out var node))

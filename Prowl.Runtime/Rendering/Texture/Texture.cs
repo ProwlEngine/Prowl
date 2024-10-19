@@ -7,9 +7,9 @@ using System.Runtime.InteropServices;
 
 using Veldrid;
 
-using static Prowl.Runtime.TextureUtility;
+using static Prowl.Runtime.Rendering.TextureUtility;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 /// <summary>
 /// This is the base class for all texture types and manages some of their internal workings.
@@ -79,7 +79,7 @@ public abstract class Texture : EngineObject, ISerializable
         InternalTexture = null;
         stagingTexture = null;
 
-        Sampler?.DestroyImmediate();
+        Sampler?.Dispose();
     }
 
     public void GenerateMipmaps(bool waitForCompletion = false)

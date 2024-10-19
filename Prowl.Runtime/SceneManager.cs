@@ -5,7 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Runtime.RenderPipelines;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Pipelines;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime.SceneManagement;
@@ -155,7 +156,7 @@ public static class SceneManager
         Current = scene;
         Scene.HandlePrefabs();
         IEnumerable<GameObject> activeGOs = Scene.ActiveObjects;
-        ForeachComponent(activeGOs , (x) => x.Do(x.OnLevelWasLoaded));
+        ForeachComponent(activeGOs, (x) => x.Do(x.OnLevelWasLoaded));
     }
 
     public static void LoadScene(AssetRef<Scene> scene)

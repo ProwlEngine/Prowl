@@ -5,7 +5,7 @@ using System;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 /// <summary>
 /// A <see cref="Texture"/> comprised of an array of images with two dimensions and support for multisampling.
@@ -31,6 +31,8 @@ public sealed class Texture2DArray : Texture
     /// <param name="layers">The height of the <see cref="Texture2DArray"/>.</param>
     /// <param name="mipLevels">How many mip levels this <see cref="Texture2DArray"/> has.</param>
     /// <param name="format">The pixel format for this <see cref="Texture2DArray"/>.</param>
+    /// <param name="usage">The usage modes of this <see cref="Texture2DArray"/>.</param>
+    /// <param name="sampleCount">The multisampled count of the texture. Values above Count1 will require the texture to be resolved with <see cref="CommandBuffer.ResolveMultisampledTexture(RenderTexture, RenderTexture)"/> </param>
     public Texture2DArray(
         uint width, uint height,
         uint layers, uint mipLevels = 1,
@@ -82,6 +84,8 @@ public sealed class Texture2DArray : Texture
     /// </summary>
     /// <typeparam name="T">A struct with the same format as this <see cref="Texture2DArray"/>'s pixels.</typeparam>
     /// <param name="data">A <see cref="Span{T}"/> containing the new pixel data.</param>
+    /// <param name="layerIndex">The layer index of the array to write to.</param>
+    /// <param name="mipLevel">The mip level to copy.</param>
     public void SetData<T>(Span<T> data, uint layerIndex, uint mipLevel = 0) where T : unmanaged =>
         SetData(data, 0, 0, Width, Height, layerIndex, mipLevel);
 
@@ -91,6 +95,7 @@ public sealed class Texture2DArray : Texture
     /// <param name="data">The pointer to the copied .</param>
     /// <param name="mipLevel">The mip level to copy.</param>
     /// <param name="layer">The array layer to copy.</param>
+    /// <param name="dataSize">The number of bytes to copy from the source.</param>
     public unsafe void CopyDataPtr(void* data, uint dataSize, uint layer, uint mipLevel = 0) =>
         InternalCopyDataPtr(data, dataSize, out _, out _, layer, mipLevel);
 

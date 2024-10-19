@@ -2,7 +2,8 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Icons;
-using Prowl.Runtime.RenderPipelines;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Pipelines;
 
 namespace Prowl.Runtime;
 

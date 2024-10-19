@@ -4,6 +4,7 @@
 using DirectXShaderCompiler.NET;
 
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 
 using SPIRVCross.NET;
 

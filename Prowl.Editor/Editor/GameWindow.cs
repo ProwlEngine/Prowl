@@ -6,6 +6,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Rendering;
 
 using static Prowl.Editor.EditorGUI;
 
@@ -150,9 +151,9 @@ public class GameWindow : EditorWindow
                 // Needs to be reimplemented
                 //if (!SceneManager.Draw(RenderTarget))
                 //{
-                    gui.Draw2D.DrawRect(innerRect, Color.red, 2);
-                    gui.Draw2D.DrawText(Font.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
-                    return;
+                gui.Draw2D.DrawRect(innerRect, Color.red, 2);
+                gui.Draw2D.DrawText(Font.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
+                return;
                 //}
             }
 

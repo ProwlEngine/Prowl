@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 /// <summary>
 /// A collection of set keywords.

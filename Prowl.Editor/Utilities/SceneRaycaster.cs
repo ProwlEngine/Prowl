@@ -1,9 +1,12 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 using Prowl.Runtime;
-using Prowl.Runtime.RenderPipelines;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Pipelines;
 
 using Veldrid;
+
+using Shader = Prowl.Runtime.Rendering.Shader;
 
 namespace Prowl.Editor;
 
@@ -51,7 +54,7 @@ public static class SceneRaycaster
 
     private static bool RenderRaycast(Camera camera, Vector2 rayUV, Vector2 screenScale, out Vector3 position, out int objectID)
     {
-        s_scenePickMaterial ??= new Material(Application.AssetProvider.LoadAsset<Runtime.Shader>("Defaults/ScenePicker.shader"));
+        s_scenePickMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ScenePicker.shader"));
 
         Ray ray = camera.ScreenPointToRay(rayUV, screenScale);
 

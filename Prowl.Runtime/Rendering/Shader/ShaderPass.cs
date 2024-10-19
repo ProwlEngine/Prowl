@@ -7,7 +7,7 @@ using System.Linq;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 public struct ShaderPassDescription
 {
@@ -172,7 +172,7 @@ public sealed class ShaderPass : ISerializationCallbackReceiver
         _keywords = new();
 
         for (int i = 0; i < _serializedKeywordKeys.Length; i++)
-            _keywords.Add(_serializedKeywordKeys[i], [.._serializedKeywordValues[i]]);
+            _keywords.Add(_serializedKeywordKeys[i], [.. _serializedKeywordValues[i]]);
 
         _variants = new();
 

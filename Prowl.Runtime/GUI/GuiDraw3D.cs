@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Runtime.Rendering;
+
 namespace Prowl.Runtime.GUI;
 
 // Based on ShapeBuilder from: https://github.com/urholaukkarinen/transform-gizmo - Dual licensed under MIT and Apache 2.0.

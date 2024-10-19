@@ -5,7 +5,7 @@ using System;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Rendering;
 
 /// <summary>
 /// A <see cref="Texture"/> whose image has two dimensions and support for multisampling.
@@ -45,6 +45,8 @@ public sealed class Texture3D : Texture
     /// <param name="depth">The depth of the <see cref="Texture3D"/>.</param>
     /// <param name="mipLevels">How many mip levels this <see cref="Texture3D"/> has.</param>
     /// <param name="format">The pixel format for this <see cref="Texture3D"/>.</param>
+    /// <param name="usage">The usage modes of this <see cref="Texture3D"/>.</param>
+
     public Texture3D(
         uint width, uint height, uint depth,
         uint mipLevels = 1,
@@ -68,8 +70,11 @@ public sealed class Texture3D : Texture
     /// <param name="ptr">The pointer from which the pixel data will be read.</param>
     /// <param name="rectX">The X coordinate of the first pixel to write.</param>
     /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
+    /// <param name="rectZ">The Z coordinate of the first pixel to write.</param>
     /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
     /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
+    /// <param name="rectDepth">The depth of the rectangle of pixels to write.</param>
+    /// <param name="mipLevel">The mipmap level to write to.</param>
     public unsafe void SetDataPtr(void* ptr, uint rectX, uint rectY, uint rectZ, uint rectWidth, uint rectHeight, uint rectDepth, uint mipLevel = 0) =>
         InternalSetDataPtr(ptr, new Vector3Int((int)rectX, (int)rectY, (int)rectZ), new Vector3Int((int)rectWidth, (int)rectHeight, (int)rectDepth), 0, mipLevel);
 
@@ -80,8 +85,10 @@ public sealed class Texture3D : Texture
     /// <param name="data">A <see cref="Span{T}"/> containing the new pixel data.</param>
     /// <param name="rectX">The X coordinate of the first pixel to write.</param>
     /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
+    /// <param name="rectZ">The Z coordinate of the first pixel to write.</param>
     /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
     /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
+    /// <param name="rectDepth">The depth of the rectangle of pixels to write.</param>
     /// <param name="mipLevel">The mip level to write to.</param>
     public unsafe void SetData<T>(Span<T> data, uint rectX, uint rectY, uint rectZ, uint rectWidth, uint rectHeight, uint rectDepth, uint mipLevel = 0) where T : unmanaged =>
         InternalSetData(data, new Vector3Int((int)rectX, (int)rectY, (int)rectZ), new Vector3Int((int)rectWidth, (int)rectHeight, (int)rectDepth), 0, mipLevel);
@@ -91,6 +98,7 @@ public sealed class Texture3D : Texture
     /// </summary>
     /// <typeparam name="T">A struct with the same format as this <see cref="Texture3D"/>'s pixels.</typeparam>
     /// <param name="data">A <see cref="Span{T}"/> containing the new pixel data.</param>
+    /// <param name="mipLevel">The mip level to write to.</param>
     public void SetData<T>(Span<T> data, uint mipLevel = 0) where T : unmanaged =>
         SetData(data, 0, 0, 0, Width, Height, Depth, mipLevel);
 
@@ -98,6 +106,7 @@ public sealed class Texture3D : Texture
     /// Copies the data of a portion of a <see cref="Texture3D"/>.
     /// </summary>
     /// <param name="data">The pointer to the copied data.</param>
+    /// <param name="dataSize">The number of bytes to copy from the source.</param>
     /// <param name="mipLevel">The mip level to copy.</param>
     public unsafe void CopyDataPtr(void* data, uint dataSize, uint mipLevel = 0) =>
         InternalCopyDataPtr(data, dataSize, out _, out _, 0, mipLevel);

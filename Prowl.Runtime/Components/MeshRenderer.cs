@@ -3,6 +3,9 @@
 
 using Prowl.Icons;
 
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Pipelines;
+
 namespace Prowl.Runtime;
 
 [ExecuteAlways]
@@ -23,7 +26,7 @@ public class MeshRenderer : MonoBehaviour, IRenderable
 
         Properties.SetInt("_ObjectID", InstanceID);
 
-        RenderPipelines.RenderPipeline.AddRenderable(this);
+        RenderPipeline.AddRenderable(this);
     }
 
     public Material GetMaterial()
