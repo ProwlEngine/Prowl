@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 
@@ -64,7 +65,7 @@ public abstract class Node
     }
 
     /// <summary> Iterate over all ports on this node. </summary>
-    public IEnumerable<NodePort> Ports { get { foreach (NodePort port in ports.Values) yield return port; } }
+    public IEnumerable<NodePort> Ports { get { foreach (NodePort port in _ports.Values) yield return port; } }
     /// <summary> Iterate over all outputs on this node. </summary>
     public IEnumerable<NodePort> Outputs { get { foreach (NodePort port in Ports) { if (port.IsOutput) yield return port; } } }
     /// <summary> Iterate over all inputs on this node. </summary>
@@ -80,7 +81,7 @@ public abstract class Node
     /// <summary> Position on the <see cref="NodeGraph"/> </summary>
     [SerializeField, HideInInspector] public Vector2 position;
     /// <summary> It is recommended not to modify these at hand. Instead, see <see cref="InputAttribute"/> and <see cref="OutputAttribute"/> </summary>
-    [SerializeField, HideInInspector] private NodePortDictionary ports = new NodePortDictionary();
+    [SerializeField, HideInInspector] private NodePortDictionary _ports = new();
     [HideInInspector] public int InstanceID;
 
     public string Error { get; set; } = "";
@@ -91,9 +92,9 @@ public abstract class Node
 
     public void OnEnable()
     {
-        ports ??= new NodePortDictionary();
+        _ports ??= new NodePortDictionary();
         InstanceID = graph.NextID;
-        NodeDataCache.UpdatePorts(this, ports);
+        NodeDataCache.UpdatePorts(this, _ports);
         Init();
     }
 
@@ -104,7 +105,7 @@ public abstract class Node
     /// <summary> Checks all connections for invalid references, and removes them. </summary>
     public void VerifyConnections()
     {
-        ports ??= new NodePortDictionary();
+        _ports ??= new NodePortDictionary();
         foreach (NodePort port in Ports) port.VerifyConnections();
     }
 
@@ -114,7 +115,6 @@ public abstract class Node
     /// <seealso cref="AddDynamicOutput"/>
     public NodePort AddDynamicInput(Type type, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
     {
-        return AddDynamicPort(type, NodePort.IO.Input, connectionType, typeConstraint, fieldName);
         return AddDynamicPort(type, NodePort.IO.Input, connectionType, typeConstraint, fieldName, onHeader);
     }
 
@@ -123,7 +123,6 @@ public abstract class Node
     /// <seealso cref="AddDynamicInput"/>
     public NodePort AddDynamicOutput(Type type, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
     {
-        return AddDynamicPort(type, NodePort.IO.Output, connectionType, typeConstraint, fieldName);
         return AddDynamicPort(type, NodePort.IO.Output, connectionType, typeConstraint, fieldName, onHeader);
     }
 
@@ -141,19 +140,18 @@ public abstract class Node
         else if (HasPort(fieldName))
         {
             Debug.LogWarning("Port '" + fieldName + "' already exists in " + GetType().Name);
-            return ports[fieldName];
+            return _ports[fieldName];
         }
-        NodePort port = new NodePort(fieldName, type, direction, connectionType, typeConstraint, this, onHeader);
-        ports.Add(fieldName, port);
+        NodePort port = new(fieldName, type, direction, connectionType, typeConstraint, this, onHeader);
+        _ports.Add(fieldName, port);
         return port;
     }
 
     /// <summary> Remove an dynamic port from the node </summary>
     public void RemoveDynamicPort(string fieldName)
     {
-        NodePort dynamicPort = GetPort(fieldName);
-        if (dynamicPort == null) throw new ArgumentException("port " + fieldName + " doesn't exist");
-        RemoveDynamicPort(GetPort(fieldName));
+        NodePort dynamicPort = GetPort(fieldName) ?? throw new ArgumentException("port " + fieldName + " doesn't exist");
+        RemoveDynamicPort(dynamicPort);
     }
 
     /// <summary> Remove an dynamic port from the node </summary>
@@ -162,7 +160,7 @@ public abstract class Node
     {
         if (port.IsStatic) throw new ArgumentException("cannot remove static port");
         port.ClearConnections();
-        ports.Remove(port.fieldName);
+        _ports.Remove(port.fieldName);
     }
 
     /// <summary> Removes all dynamic ports from the node </summary>
@@ -197,19 +195,18 @@ public abstract class Node
     /// <summary> Returns port which matches fieldName </summary>
     public NodePort GetPort(string fieldName)
     {
-        NodePort port;
-        if (ports.TryGetValue(fieldName, out port)) return port;
+        if (_ports.TryGetValue(fieldName, out NodePort port)) return port;
         else return null;
     }
 
     public NodePort GetPort(int instanceID)
     {
-        return ports.Values.Where(p => p.InstanceID == instanceID).FirstOrDefault();
+        return _ports.Values.Where(p => p.InstanceID == instanceID).FirstOrDefault();
     }
 
     public bool HasPort(string fieldName)
     {
-        return ports.ContainsKey(fieldName);
+        return _ports.ContainsKey(fieldName);
     }
     #endregion
 
@@ -217,7 +214,7 @@ public abstract class Node
     /// <summary> Return input value for a specified port. Returns fallback value if no ports are connected </summary>
     /// <param name="fieldName">Field name of requested input port</param>
     /// <param name="fallback">If no ports are connected, this value will be returned</param>
-    public T GetInputValue<T>(string fieldName, T fallback = default(T))
+    public T GetInputValue<T>(string fieldName, T fallback = default)
     {
         NodePort port = GetPort(fieldName);
         if (port != null && port.IsConnected) return port.GetInputValue<T>();
@@ -259,115 +256,92 @@ public abstract class Node
 
     #region Attributes
     /// <summary> Mark a serializable field as an input port. You can access this through <see cref="GetInputPort(string)"/> </summary>
+    /// <param name="backingValue">Should we display the backing value for this port as an editor field? </param>
+    /// <param name="connectionType">Should we allow multiple connections? </param>
+    /// <param name="typeConstraint">Constrains which input connections can be made to this port </param>
+    /// <param name="onHeader">Display this port on the node's header </param>
+    /// <param name="dynamicPortList">If true, will display a reorderable list of inputs instead of a single port. Will automatically add and display values for lists and arrays </param>
     [AttributeUsage(AttributeTargets.Field)]
-    public class InputAttribute : Attribute
+    public class InputAttribute(ShowBackingValue backingValue = ShowBackingValue.Unconnected, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.AssignableTo, bool onHeader = false, bool dynamicPortList = false) : Attribute
     {
-        public ShowBackingValue backingValue;
-        public ConnectionType connectionType;
-        public bool dynamicPortList;
-        public TypeConstraint typeConstraint;
-        public bool onHeader;
-
-        /// <summary> Mark a serializable field as an input port. You can access this through <see cref="GetInputPort(string)"/> </summary>
-        /// <param name="backingValue">Should we display the backing value for this port as an editor field? </param>
-        /// <param name="connectionType">Should we allow multiple connections? </param>
-        /// <param name="typeConstraint">Constrains which input connections can be made to this port </param>
-        /// <param name="onHeader">Display this port on the node's header </param>
-        /// <param name="dynamicPortList">If true, will display a reorderable list of inputs instead of a single port. Will automatically add and display values for lists and arrays </param>
-        public InputAttribute(ShowBackingValue backingValue = ShowBackingValue.Unconnected, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.AssignableTo, bool onHeader = false, bool dynamicPortList = false)
-        {
-            this.backingValue = backingValue;
-            this.onHeader = onHeader;
-            this.connectionType = connectionType;
-            this.dynamicPortList = dynamicPortList;
-            this.typeConstraint = typeConstraint;
-        }
+        public ShowBackingValue backingValue = backingValue;
+        public ConnectionType connectionType = connectionType;
+        public bool dynamicPortList = dynamicPortList;
+        public TypeConstraint typeConstraint = typeConstraint;
+        public bool onHeader = onHeader;
     }
 
     /// <summary> Mark a serializable field as an output port. You can access this through <see cref="GetOutputPort(string)"/> </summary>
+    /// <param name="connectionType">Should we allow multiple connections? </param>
+    /// <param name="typeConstraint">Constrains which input connections can be made from this port </param>
+    /// <param name="onHeader">Display this port on the node's header </param>
+    /// <param name="dynamicPortList">If true, will display a reorderable list of outputs instead of a single port. Will automatically add and display values for lists and arrays </param>
     [AttributeUsage(AttributeTargets.Field)]
-    public class OutputAttribute : Attribute
+    public class OutputAttribute(ConnectionType connectionType = ConnectionType.Multiple, TypeConstraint typeConstraint = TypeConstraint.None, bool onHeader = false, bool dynamicPortList = false) : Attribute
     {
-        public ConnectionType connectionType;
-        public bool dynamicPortList;
-        public TypeConstraint typeConstraint;
-        public bool onHeader;
-
-        /// <summary> Mark a serializable field as an output port. You can access this through <see cref="GetOutputPort(string)"/> </summary>
-        /// <param name="connectionType">Should we allow multiple connections? </param>
-        /// <param name="typeConstraint">Constrains which input connections can be made from this port </param>
-        /// <param name="onHeader">Display this port on the node's header </param>
-        /// <param name="dynamicPortList">If true, will display a reorderable list of outputs instead of a single port. Will automatically add and display values for lists and arrays </param>
-        public OutputAttribute(ConnectionType connectionType = ConnectionType.Multiple, TypeConstraint typeConstraint = TypeConstraint.None, bool onHeader = false, bool dynamicPortList = false)
-        {
-            this.connectionType = connectionType;
-            this.onHeader = onHeader;
-            this.dynamicPortList = dynamicPortList;
-            this.typeConstraint = typeConstraint;
-        }
+        public ConnectionType connectionType = connectionType;
+        public bool dynamicPortList = dynamicPortList;
+        public TypeConstraint typeConstraint = typeConstraint;
+        public bool onHeader = onHeader;
     }
 
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
     public class NodeAttribute(string menuName) : Attribute
     {
-        public string catagory = menuName;
+        public string category = menuName;
 
-        public static MultiValueDictionary<string, Type> nodeCatagories = new MultiValueDictionary<string, Type>();
+        public static readonly MultiValueDictionary<string, Type> nodeCategories = [];
 
         [OnAssemblyLoad]
+        [RequiresUnreferencedCode("This method is called on assembly load and will not be stripped.")]
         public static void OnAssemblyLoad()
         {
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            foreach (var type in assembly.GetTypes())
+            foreach (Assembly? assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (Type type in assembly.GetTypes())
                 if (type != null)
                 {
-                    var attribute = type.GetCustomAttribute<NodeAttribute>();
+                        NodeAttribute? attribute = type.GetCustomAttribute<NodeAttribute>();
                     if (attribute != null)
-                        nodeCatagories.Add(attribute.catagory, type);
+                        nodeCategories.Add(attribute.category, type);
                 }
         }
 
         [OnAssemblyUnload]
         public static void OnAssemblyUnload()
         {
-            nodeCatagories.Clear();
+            nodeCategories.Clear();
         }
 
     }
 
     /// <summary> Prevents Node of the same type to be added more than once (configurable) to a NodeGraph </summary>
+    /// <param name="max"> How many nodes to allow. Defaults to 1. </param>
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
-    public class DisallowMultipleNodesAttribute : Attribute
+    public class DisallowMultipleNodesAttribute(int max = 1) : Attribute
     {
-        public int max;
-        /// <summary> Prevents Node of the same type to be added more than once (configurable) to a NodeGraph </summary>
-        /// <param name="max"> How many nodes to allow. Defaults to 1. </param>
-        public DisallowMultipleNodesAttribute(int max = 1)
-        {
-            this.max = max;
-        }
+        public int max = max;
     }
     #endregion
 
     [Serializable]
     public class NodePortDictionary : ISerializationCallbackReceiver
     {
-        [SerializeField] private List<string> keys = [];
-        [SerializeField] private List<NodePort> values = [];
-        private Dictionary<string, NodePort> dictionary = new Dictionary<string, NodePort>();
+        [SerializeField] private List<string> _keys = [];
+        [SerializeField] private List<NodePort> _values = [];
+        private Dictionary<string, NodePort> _dictionary = [];
 
         /// <summary>
         /// Gets the underlying dictionary of the NodePortDictionary. This dictionary should be used as read only. Changes to this dictionary will not be serialized.
         /// </summary>
-        public Dictionary<string, NodePort> Dictionary => dictionary;
+        public Dictionary<string, NodePort> Dictionary => _dictionary;
         /// <summary>
         /// Gets the keys of the NodePortDictionary. Keys are ordered by insertion time..
         /// </summary>
-        public List<string> Keys => keys;
+        public List<string> Keys => _keys;
         /// <summary>
         /// Gets the values in the NodePortDictionary. Values are ordered by insertion time.
         /// </summary>
-        public List<NodePort> Values => values;
+        public List<NodePort> Values => _values;
 
         /// <summary>
         /// Adds the specified key and value to the NodePortDictionary.
@@ -376,9 +350,9 @@ public abstract class Node
         /// <param name="value">The value of the element to add.</param>
         public void Add(string key, NodePort value)
         {
-            keys.Add(key);
-            values.Add(value);
-            dictionary.Add(key, value);
+            _keys.Add(key);
+            _values.Add(value);
+            _dictionary.Add(key, value);
         }
 
         /// <summary>
@@ -388,7 +362,7 @@ public abstract class Node
         /// <returns>The value associated with the specified key.</returns>
         public NodePort this[string key]
         {
-            get => dictionary[key];
+            get => _dictionary[key];
         }
 
         /// <summary>
@@ -398,7 +372,7 @@ public abstract class Node
         /// <returns>true if the NodePortDictionary contains an element with the specified key; otherwise, false.</returns>
         public bool ContainsKey(string key)
         {
-            return dictionary.ContainsKey(key);
+            return _dictionary.ContainsKey(key);
         }
 
         /// <summary>
@@ -409,7 +383,7 @@ public abstract class Node
         /// <returns>true if the NodePortDictionary contains an element with the specified key; otherwise, false.</returns>
         public bool TryGetValue(string key, out NodePort value)
         {
-            var result = dictionary.TryGetValue(key, out NodePort dictionaryValue);
+            bool result = _dictionary.TryGetValue(key, out NodePort dictionaryValue);
             value = dictionaryValue;
             return result;
         }
@@ -419,9 +393,9 @@ public abstract class Node
         /// </summary>
         public void Clear()
         {
-            dictionary.Clear();
-            keys.Clear();
-            values.Clear();
+            _dictionary.Clear();
+            _keys.Clear();
+            _values.Clear();
         }
 
         /// <summary>
@@ -431,13 +405,13 @@ public abstract class Node
         /// <returns>true if the element is successfully found and removed; otherwise, false.</returns>
         public bool Remove(string key)
         {
-            if (dictionary.ContainsKey(key))
+            if (_dictionary.ContainsKey(key))
             {
-                var index = keys.IndexOf(key);
-                keys.RemoveAt(index);
-                values.RemoveAt(index);
+                int index = _keys.IndexOf(key);
+                _keys.RemoveAt(index);
+                _values.RemoveAt(index);
             }
-            return dictionary.Remove(key);
+            return _dictionary.Remove(key);
         }
 
         public void OnBeforeSerialize()
@@ -446,13 +420,13 @@ public abstract class Node
 
         public void OnAfterDeserialize()
         {
-            dictionary.Clear();
+            _dictionary.Clear();
 
-            if (keys.Count != values.Count)
-                throw new Exception("there are " + keys.Count + " keys and " + values.Count + " values after deserialization. Make sure that both key and value types are serializable.");
+            if (_keys.Count != _values.Count)
+                throw new Exception("there are " + _keys.Count + " keys and " + _values.Count + " values after deserialization. Make sure that both key and value types are serializable.");
 
-            for (int i = 0; i < keys.Count; i++)
-                dictionary.Add(keys[i], values[i]);
+            for (int i = 0; i < _keys.Count; i++)
+                _dictionary.Add(_keys[i], _values[i]);
         }
     }
 }

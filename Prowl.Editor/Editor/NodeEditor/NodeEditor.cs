@@ -1167,7 +1167,7 @@ public class NodeEditor
             string Name = type.Name;
             var addToMenuAttribute = type.GetCustomAttribute<NodeAttribute>();
             if (addToMenuAttribute != null)
-                Name = addToMenuAttribute.catagory;
+                Name = addToMenuAttribute.category;
             return (Name, type);
         }).ToArray();
 
@@ -1242,7 +1242,7 @@ public class NodeEditor
             Name = type.Name;
             var addToMenuAttribute = type.GetCustomAttribute<NodeAttribute>();
             if (addToMenuAttribute != null)
-                Name = addToMenuAttribute.catagory;
+                Name = addToMenuAttribute.category;
         }
 
         public void AddChild(string path, Type type, MethodInfo method = null)
