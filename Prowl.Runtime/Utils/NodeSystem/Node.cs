@@ -110,16 +110,16 @@ public abstract class Node
 
     #region Dynamic Ports
     /// <summary> Convenience function. </summary>
-    /// <seealso cref="AddInstancePort"/>
-    /// <seealso cref="AddInstanceOutput"/>
+    /// <seealso cref="AddDynamicPort"/>
+    /// <seealso cref="AddDynamicOutput"/>
     public NodePort AddDynamicInput(Type type, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
     {
         return AddDynamicPort(type, NodePort.IO.Input, connectionType, typeConstraint, fieldName);
     }
 
     /// <summary> Convenience function. </summary>
-    /// <seealso cref="AddInstancePort"/>
-    /// <seealso cref="AddInstanceInput"/>
+    /// <seealso cref="AddDynamicPort"/>
+    /// <seealso cref="AddDynamicInput"/>
     public NodePort AddDynamicOutput(Type type, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
     {
         return AddDynamicPort(type, NodePort.IO.Output, connectionType, typeConstraint, fieldName);

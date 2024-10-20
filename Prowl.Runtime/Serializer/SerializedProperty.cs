@@ -241,7 +241,7 @@ public sealed partial class SerializedProperty
     /// <exception cref="InvalidCastException"> When used on a tag other than DoubleTag. </exception>
     public double DoubleValue { get => Convert.ToDouble(Value); set => Set(value); }
 
-    /// <summary> Returns the value of this tag, cast as a decimal. </summary>
+    /// <summary> Returns the value of this tag, cast as a decimal.
     /// Only supported by DecimalTag. </summary>
     /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
     public decimal DecimalValue { get => Convert.ToDecimal(Value); set => Set(value); }
@@ -269,7 +269,7 @@ public sealed partial class SerializedProperty
         set => Set(value);
     }
 
-    /// <summary> Returns the value of this tag, cast as a byte array.
+    /// <summary> Returns the value of this tag, cast as a byte array. </summary>
     /// <exception cref="InvalidCastException"> When used on a tag other than ByteArrayTag. </exception>
     public byte[] ByteArrayValue { get => (byte[])Value; set => Set(value); }
 

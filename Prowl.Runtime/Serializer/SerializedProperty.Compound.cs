@@ -165,7 +165,7 @@ public sealed partial class SerializedProperty
     /// All instances of this CompoundTag will remain the same just their values will be updated
     /// NOTE: Completely Untested
     /// </summary>
-    /// <param name="tag"></param>
+    /// <param name="toApply"></param>
     public void Apply(SerializedProperty toApply)
     {
         if (TagType != PropertyType.Compound)

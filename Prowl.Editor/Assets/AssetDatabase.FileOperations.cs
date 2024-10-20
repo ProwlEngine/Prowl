@@ -100,7 +100,7 @@ public static partial class AssetDatabase
     /// <summary>
     /// Renames a folder.
     /// </summary>
-    /// <param name="folder">The folder to rename.</param>
+    /// <param name="source">The folder to rename.</param>
     /// <param name="newName">The new name of the folder.</param>
     /// <returns>True if the folder was renamed successfully, false otherwise.</returns>
     public static bool Rename(DirectoryInfo source, string newName)
@@ -143,7 +143,7 @@ public static partial class AssetDatabase
     /// <summary>
     /// Deletes a folder.
     /// </summary>
-    /// <param name="folder">The folder to delete.</param>
+    /// <param name="source">The folder to delete.</param>
     /// <returns>True if the folder was deleted successfully, false otherwise.</returns>
     public static bool Delete(DirectoryInfo source)
     {

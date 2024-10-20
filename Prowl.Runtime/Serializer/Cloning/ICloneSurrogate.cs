@@ -131,16 +131,16 @@ namespace Prowl.Runtime.Cloning
 		{
 			return typeof(T).GetTypeInfo().IsAssignableFrom(t);
 		}
-		
-		/// <summary>
-		/// In case there is no pre-existing correspondent object in the target graph, this method
-		/// is invoked in order to create one based on the source object. The default implementation
-		/// creates a target object of matching type using <see cref="ObjectCreator.CreateInstanceOf"/>.
-		/// </summary>
-		/// <param name="source"></param>
-		/// <param name="target"></param>
-		/// <param name="setup"></param>
-		public virtual void CreateTargetObject(T source, ref T target, ICloneTargetSetup setup)
+
+        /// <summary>
+        /// In case there is no pre-existing correspondent object in the target graph, this method
+        /// is invoked in order to create one based on the source object. The default implementation
+        /// creates a target object of matching type using <see cref="Activator.CreateInstance"/>.
+        /// </summary>
+        /// <param name="source"></param>
+        /// <param name="target"></param>
+        /// <param name="setup"></param>
+        public virtual void CreateTargetObject(T source, ref T target, ICloneTargetSetup setup)
 		{
 			Type objType = source.GetType();
 			//TypeInfo objTypeInfo = objType.GetTypeInfo();

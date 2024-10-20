@@ -128,7 +128,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     public Type InstanceType => typeof(T);
 
     /// <summary>
-    /// Creates a ContentRef pointing to the <see cref="Resource"/> at the specified id / using
+    /// Creates a ContentRef pointing to the <see cref="EngineObject"/> at the specified id / using
     /// the specified alias.
     /// </summary>
     /// <param name="id"></param>
@@ -140,7 +140,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     }
 
     /// <summary>
-    /// Creates a ContentRef pointing to the <see cref="Resource"/> at the specified id / using
+    /// Creates a ContentRef pointing to the <see cref="EngineObject"/> at the specified id / using
     /// the specified alias.
     /// </summary>
     /// <param name="id"></param>
@@ -151,7 +151,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         fileID = fileId;
     }
     /// <summary>
-    /// Creates a ContentRef pointing to the specified <see cref="Resource"/>.
+    /// Creates a ContentRef pointing to the specified <see cref="EngineObject"/>.
     /// </summary>
     /// <param name="res">The Resource to reference.</param>
     public AssetRef(T? res)

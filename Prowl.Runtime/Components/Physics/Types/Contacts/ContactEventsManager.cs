@@ -92,7 +92,6 @@ internal class ContactEventsManager : IDisposable
     /// <summary>
     /// Initializes the contact events system with a simulation.
     /// </summary>
-    /// <param name="simulation">Simulation to use with the contact events demo.</param>
     /// <remarks>The constructor and initialization are split because of how this class is expected to be used.
     /// It will be passed into a simulation's constructor as a part of its contact callbacks, so there is no simulation available at the time of construction.</remarks>
     public void Initialize()

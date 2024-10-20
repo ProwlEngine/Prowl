@@ -431,7 +431,7 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
 }
 
 /// <summary>
-/// The collection of the <see cref="CurveKey"/> elements and a part of the <see cref="AnimationCurve"/> class.
+/// The collection of the <see cref="KeyFrame"/> elements and a part of the <see cref="AnimationCurve"/> class.
 /// </summary>
 public class CurveKeyCollection : ICollection<KeyFrame>
 {
