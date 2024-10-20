@@ -406,7 +406,7 @@ public struct Quaternion : IEquatable<Quaternion>
     }
 
     /// <summary>
-    /// Returns the angle in degrees between two rotations.</para>
+    /// Returns the angle in degrees between two rotations.
     /// </summary>
     public static double Angle(Quaternion a, Quaternion b) => MathD.Acos(MathD.Min(MathD.Abs(Dot(a, b)), 1.0)) * 2.0 * MathD.Rad2Deg;
 
