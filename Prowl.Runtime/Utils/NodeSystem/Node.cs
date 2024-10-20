@@ -115,6 +115,7 @@ public abstract class Node
     public NodePort AddDynamicInput(Type type, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
     {
         return AddDynamicPort(type, NodePort.IO.Input, connectionType, typeConstraint, fieldName);
+        return AddDynamicPort(type, NodePort.IO.Input, connectionType, typeConstraint, fieldName, onHeader);
     }
 
     /// <summary> Convenience function. </summary>
@@ -123,6 +124,7 @@ public abstract class Node
     public NodePort AddDynamicOutput(Type type, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
     {
         return AddDynamicPort(type, NodePort.IO.Output, connectionType, typeConstraint, fieldName);
+        return AddDynamicPort(type, NodePort.IO.Output, connectionType, typeConstraint, fieldName, onHeader);
     }
 
     /// <summary> Add a dynamic, serialized port to this node. </summary>
