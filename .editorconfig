@@ -162,6 +162,7 @@ dotnet_sort_system_directives_first = true
 
 # No simplification of null checks
 dotnet_diagnostic.IDE0031.severity = none
+dotnet_diagnostic.IDE0041.severity = none
 
 # License header
 file_header_template = This file is part of the Prowl Game Engine\nLicensed under the MIT License. See the LICENSE file in the project root for details.
