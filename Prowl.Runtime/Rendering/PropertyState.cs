@@ -46,13 +46,13 @@ public class PropertyState
 {
     public bool IsEmpty => _values.Count == 0 && _buffers.Count == 0;
 
-    [NonSerialized]
+    [SerializeIgnore]
     internal Dictionary<string, ValueProperty> _values;
 
-    [NonSerialized]
+    [SerializeIgnore]
     internal Dictionary<string, (Veldrid.Texture?, Veldrid.Sampler?)> _textures;
 
-    [NonSerialized]
+    [SerializeIgnore]
     internal Dictionary<string, GraphicsBuffer?> _buffers;
 
 

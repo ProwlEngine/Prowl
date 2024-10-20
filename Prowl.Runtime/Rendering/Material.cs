@@ -46,14 +46,14 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     [SerializeField]
     internal List<ShaderProperty> _serializedProperties;
 
-    [NonSerialized]
+    [SerializeIgnore]
     // DO NOT RENAME, its name is used in MaterialEditor to find the property "_propertyLookup", NameOf is not used since its private
     private Dictionary<string, int> _propertyLookup;
 
-    [NonSerialized]
+    [SerializeIgnore]
     internal PropertyState _properties;
 
-    [NonSerialized]
+    [SerializeIgnore]
     internal KeywordState _localKeywords;
 
 

@@ -519,7 +519,7 @@ public class NodePort
         [SerializeField] public int InstanceID = 0;
         public NodePort Port { get { return port != null ? port : port = GetPort(); } }
 
-        [NonSerialized] private NodePort port;
+        [SerializeIgnore] private NodePort port;
         /// <summary> Extra connection path points for organization </summary>
         [SerializeField] public List<Vector2> reroutePoints = new List<Vector2>();
 

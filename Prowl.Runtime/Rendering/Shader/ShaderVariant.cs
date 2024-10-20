@@ -20,7 +20,7 @@ public sealed class ShaderVariant : ISerializationCallbackReceiver
     [HideInInspector]
     public Uniform[] Uniforms;
 
-    [NonSerialized]
+    [SerializeIgnore]
     public ShaderStages[] UniformStages;
 
 

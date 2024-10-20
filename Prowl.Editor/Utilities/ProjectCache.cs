@@ -9,7 +9,7 @@ namespace Prowl.Editor;
 [FilePath("Projects.cache", FilePathAttribute.Location.EditorPreference)]
 public class ProjectCache : ScriptableSingleton<ProjectCache>, ISerializationCallbackReceiver
 {
-    [NonSerialized]
+    [SerializeIgnore]
     private List<Project> _projectCache = [];
 
     [SerializeField]

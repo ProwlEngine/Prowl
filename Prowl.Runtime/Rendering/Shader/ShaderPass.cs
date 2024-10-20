@@ -57,10 +57,10 @@ public sealed class ShaderPass : ISerializationCallbackReceiver
     [SerializeField, HideInInspector]
     private readonly bool _depthClipEnabled = true;
 
-    [NonSerialized]
+    [SerializeIgnore]
     private Dictionary<string, HashSet<string>> _keywords;
 
-    [NonSerialized]
+    [SerializeIgnore]
     private Dictionary<KeywordState, ShaderVariant> _variants;
 
 
