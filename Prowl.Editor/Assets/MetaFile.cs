@@ -28,22 +28,22 @@ public class MetaFile
     /// <param name="assetFile">The path of the asset.</param>
     public MetaFile(FileInfo assetFile)
     {
-        var importerType = ImporterAttribute.GetImporter(assetFile.Extension);
+        Type? importerType = ImporterAttribute.GetImporter(assetFile.Extension);
         if (importerType == null)
             return;
 
         AssetPath = assetFile;
         guid = Guid.NewGuid();
         lastModified = assetFile.LastWriteTimeUtc;
-        importer = Activator.CreateInstance(importerType) as ScriptedImporter;
+        importer = (Activator.CreateInstance(importerType) as ScriptedImporter)!;
     }
 
     /// <summary>Save the MetaFile to a specified file or default to the associated asset file with a ".meta" extension.</summary>
     public void Save()
     {
-        var file = new FileInfo(AssetPath.FullName + ".meta");
+        FileInfo file = new(AssetPath.FullName + ".meta");
         version = MetaVersion;
-        var tag = Serializer.Serialize(this);
+        SerializedProperty tag = Serializer.Serialize(this);
         StringTagConverter.WriteToFile(tag, file);
     }
 
@@ -52,10 +52,10 @@ public class MetaFile
     /// <returns>The loaded MetaFile.</returns>
     public static MetaFile? Load(FileInfo assetFile)
     {
-        var file = new FileInfo(assetFile + ".meta");
+        FileInfo file = new(assetFile + ".meta");
         if (!File.Exists(file.FullName)) return null; // Doesnt Exist
-        var tag = StringTagConverter.ReadFromFile(file);
-        var meta = Serializer.Deserialize<MetaFile>(tag);
+        SerializedProperty tag = StringTagConverter.ReadFromFile(file);
+        MetaFile? meta = Serializer.Deserialize<MetaFile>(tag);
         meta!.AssetPath = assetFile;
         meta.lastModified = DateTime.UtcNow;
 

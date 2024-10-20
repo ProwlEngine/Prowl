@@ -58,14 +58,9 @@ public static class Physics
     public static PhysicsBody GetContainer(CollidableReference collidable)
     {
         if (collidable.Mobility == CollidableMobility.Static)
-        {
             return GetContainer(collidable.StaticHandle);
-        }
         else
-        {
             return GetContainer(collidable.BodyHandle);
-        }
-        return null;
     }
 
     public static Rigidbody GetContainer(BodyHandle handle)
