@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Rendering;
 public static class ComputeDispatcher
 {
 
-    public static void Dispatch(ComputeDescriptor descriptor, int kernelIndex, uint threadsX, uint threadsY, uint threadsZ)
+    public static void Dispatch(ComputeDescriptor descriptor, int kernelIndex, uint groupsX, uint groupsY, uint groupsZ)
     {
         CommandList cl = Graphics.GetCommandList();
 
@@ -22,11 +22,18 @@ public static class ComputeDispatcher
 
         cl.SetPipeline(pipeline.GetPipeline());
 
-        BindableResourceSet set = pipeline.CreateResources();
+        BindableResourceSet bindable = pipeline.CreateResources();
 
         List<IDisposable> toDispose = new();
-        set.Bind(cl, descriptor._properties, toDispose);
+
+        ResourceSet set = bindable.BindResources(cl, descriptor._properties, toDispose);
+
+        cl.SetComputeResourceSet(0, set);
+
+        cl.Dispatch(groupsX, groupsY, groupsZ);
 
         Graphics.SubmitCommandList(cl);
+
+        Graphics.SubmitResourcesForDisposal(toDispose);
     }
 }

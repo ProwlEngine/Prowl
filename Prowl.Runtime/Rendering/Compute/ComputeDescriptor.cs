@@ -23,6 +23,15 @@ public class ComputeDescriptor
     [NonSerialized]
     internal KeywordState _localKeywords;
 
+    [NonSerialized]
+    internal BindableResourceSet _resources;
+
+    [NonSerialized]
+    internal ComputePipeline _pipeline;
+
+    [NonSerialized]
+    internal int _kernelIndex;
+
 
     public ComputeDescriptor(AssetRef<ComputeShader> shader, PropertyState? properties = null, KeywordState? keywords = null)
     {
@@ -32,9 +41,33 @@ public class ComputeDescriptor
         Shader = shader;
         _properties = properties ?? new();
         _localKeywords = keywords ?? KeywordState.Default;
+        RecreateResources();
     }
 
-    public void SetKeyword(string keyword, string value) => _localKeywords.SetKey(keyword, value);
+    private void RecreateResources()
+    {
+        ComputeKernel kernel = Shader.Res.GetKernel(_kernelIndex);
+        ComputeVariant variant = kernel.GetVariant(_localKeywords);
+        ComputePipeline pipeline = ComputePipelineCache.GetPipeline(variant);
+
+        if (_pipeline != pipeline)
+        {
+            _pipeline = pipeline;
+            _resources = pipeline.CreateResources();
+        }
+    }
+
+    public void SetKernel(int kernelIndex)
+    {
+        _kernelIndex = kernelIndex;
+        RecreateResources();
+    }
+
+    public void SetKeyword(string keyword, string value)
+    {
+        _localKeywords.SetKey(keyword, value);
+        RecreateResources();
+    }
 
     public void SetColor(string name, Color value) => _properties.SetColor(name, value);
     public void SetVector(string name, Vector2F value) => _properties.SetVector(name, value);
