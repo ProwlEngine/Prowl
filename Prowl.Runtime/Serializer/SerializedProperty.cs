@@ -161,9 +161,9 @@ public sealed partial class SerializedProperty
             return TagType switch
             {
                 PropertyType.Compound => false,
-                PropertyType.List     => false,
-                PropertyType.Null     => false,
-                _                     => true
+                PropertyType.List => false,
+                PropertyType.Null => false,
+                _ => true
             };
         }
     }
@@ -177,21 +177,21 @@ public sealed partial class SerializedProperty
         var old = _value;
         _value = TagType switch
         {
-            PropertyType.Byte      => (byte)value,
-            PropertyType.sByte     => (sbyte)value,
-            PropertyType.Short     => (short)value,
-            PropertyType.Int       => (int)value,
-            PropertyType.Long      => (long)value,
-            PropertyType.UShort    => (ushort)value,
-            PropertyType.UInt      => (uint)value,
-            PropertyType.ULong     => (ulong)value,
-            PropertyType.Float     => (float)value,
-            PropertyType.Double    => (double)value,
-            PropertyType.Decimal   => (decimal)value,
-            PropertyType.String    => (string)value,
+            PropertyType.Byte => (byte)value,
+            PropertyType.sByte => (sbyte)value,
+            PropertyType.Short => (short)value,
+            PropertyType.Int => (int)value,
+            PropertyType.Long => (long)value,
+            PropertyType.UShort => (ushort)value,
+            PropertyType.UInt => (uint)value,
+            PropertyType.ULong => (ulong)value,
+            PropertyType.Float => (float)value,
+            PropertyType.Double => (double)value,
+            PropertyType.Decimal => (decimal)value,
+            PropertyType.String => (string)value,
             PropertyType.ByteArray => (byte[])value,
-            PropertyType.Bool      => (bool)value,
-            _                      => throw new InvalidOperationException("Cannot set value of " + TagType.ToString())
+            PropertyType.Bool => (bool)value,
+            _ => throw new InvalidOperationException("Cannot set value of " + TagType.ToString())
         };
 
         OnPropertyChanged(new PropertyChangeEventArgs(this, old, value));

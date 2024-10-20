@@ -161,7 +161,8 @@ public class CommandBuffer : IDisposable
     public void BindResources()
     {
         UpdatePipeline();
-        _pipelineResources.Bind(_commandList, _bufferProperties, _resourcesToDispose);
+        ResourceSet set = _pipelineResources.BindResources(_commandList, _bufferProperties, _resourcesToDispose);
+        _commandList.SetGraphicsResourceSet(0, set);
     }
 
     public void ApplyPropertyState(PropertyState state)

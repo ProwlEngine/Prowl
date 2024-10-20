@@ -23,26 +23,26 @@ public interface IBindableResourceProvider
 public class BindableResourceSet
 {
     public IBindableResourceProvider resourceProvider;
-
     public ResourceSetDescription description;
-    private ResourceSet resources;
 
-    private readonly DeviceBuffer[] uniformBuffers;
-    private readonly byte[][] intermediateBuffers;
+    private ResourceSet _resources;
+
+    private readonly DeviceBuffer[] _uniformBuffers;
+    private readonly byte[][] _intermediateBuffers;
 
 
     public BindableResourceSet(IBindableResourceProvider provider, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
     {
         resourceProvider = provider;
         this.description = description;
-        uniformBuffers = buffers;
-        intermediateBuffers = buffers.Select(x => new byte[x.SizeInBytes]).ToArray();
+        _uniformBuffers = buffers;
+        _intermediateBuffers = buffers.Select(x => new byte[x.SizeInBytes]).ToArray();
     }
 
 
-    public void Bind(CommandList list, PropertyState state, List<IDisposable> resourcesToDispose)
+    public ResourceSet BindResources(CommandList list, PropertyState state, List<IDisposable> resourcesToDispose)
     {
-        bool recreateResourceSet = false | (resources == null);
+        bool recreateResourceSet = false | (_resources == null);
 
         foreach (Uniform uniform in resourceProvider.Uniforms)
         {
@@ -95,13 +95,13 @@ public class BindableResourceSet
 
         if (recreateResourceSet)
         {
-            if (resources != null)
-                resourcesToDispose.Add(resources);
+            if (_resources != null)
+                resourcesToDispose.Add(_resources);
 
-            resources = Graphics.Factory.CreateResourceSet(description);
+            _resources = Graphics.Factory.CreateResourceSet(description);
         }
 
-        list.SetGraphicsResourceSet(0, resources);
+        return _resources;
     }
 
 
@@ -141,8 +141,8 @@ public class BindableResourceSet
             return false;
 
         Uniform uniform = resourceProvider.Uniforms[uniformIndex];
-        DeviceBuffer buffer = uniformBuffers[bufferIndex];
-        byte[] tempBuffer = intermediateBuffers[bufferIndex];
+        DeviceBuffer buffer = _uniformBuffers[bufferIndex];
+        byte[] tempBuffer = _intermediateBuffers[bufferIndex];
 
         for (int i = 0; i < uniform.members.Length; i++)
         {
@@ -189,16 +189,16 @@ public class BindableResourceSet
 
     public void DisposeResources(List<IDisposable> resourcesToDispose)
     {
-        resourcesToDispose.Add(resources);
-        resourcesToDispose.AddRange(uniformBuffers);
+        resourcesToDispose.Add(_resources);
+        resourcesToDispose.AddRange(_uniformBuffers);
     }
 
 
     ~BindableResourceSet()
     {
-        resources?.Dispose();
+        _resources?.Dispose();
 
-        foreach (IDisposable disposable in uniformBuffers)
+        foreach (IDisposable disposable in _uniformBuffers)
             disposable.Dispose();
     }
 }
