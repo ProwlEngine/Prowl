@@ -24,8 +24,8 @@ public class MetaFile
     /// <summary>Default constructor for MetaFile.</summary>
     public MetaFile() { }
 
-    /// <summary>Constructor for MetaFile with a relative asset path.</summary>
-    /// <param name="relativeAssetPath">The relative path of the asset.</param>
+    /// <summary>Constructor for MetaFile with a asset path.</summary>
+    /// <param name="assetFile">The path of the asset.</param>
     public MetaFile(FileInfo assetFile)
     {
         var importerType = ImporterAttribute.GetImporter(assetFile.Extension);
@@ -39,7 +39,6 @@ public class MetaFile
     }
 
     /// <summary>Save the MetaFile to a specified file or default to the associated asset file with a ".meta" extension.</summary>
-    /// <param name="file">The file to save the meta data.</param>
     public void Save()
     {
         var file = new FileInfo(AssetPath.FullName + ".meta");
@@ -49,7 +48,7 @@ public class MetaFile
     }
 
     /// <summary>Load a MetaFile from the specified file.</summary>
-    /// <param name="file">The file to load the meta data from.</param>
+    /// <param name="assetFile">The file to load the meta data from.</param>
     /// <returns>The loaded MetaFile.</returns>
     public static MetaFile? Load(FileInfo assetFile)
     {

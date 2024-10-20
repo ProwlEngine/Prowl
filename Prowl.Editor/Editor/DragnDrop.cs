@@ -27,8 +27,8 @@ public static class DragnDrop
     }
 
     /// <summary>
-    /// Peek at what object you would receive if you were to call Drop<T>
-    /// </summary>
+    /// Peek at what object you would receive if you were to call Drop T
+    ///  </summary>
     public static bool Peek(out object? payload, Type type, string tag = "")
     {
         if (Gui.ActiveGUI.PreviousInteractable == null)

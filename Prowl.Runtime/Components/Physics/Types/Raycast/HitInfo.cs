@@ -5,12 +5,14 @@ using System;
 
 namespace Prowl.Runtime.Raycast;
 
+#pragma warning disable CS1572 // XML comment has a param tag, but there is no parameter by that name
+
 /// <summary>
-/// Information returned by the different simulation test methods in <see cref="Stride.BepuPhysics.Configurations.BepuSimulation"/>
+/// Information returned by the different simulation test methods in <see cref="Prowl.Runtime.Physics"/>
 /// </summary>
-/// <param name="Point">The position where the intersection occured</param>
+/// <param name="Point">The position where the intersection occurred</param>
 /// <param name="Normal">The direction of the surface hit</param>
-/// <param name="Distance">The distance along the ray where the hit occured</param>
+/// <param name="Distance">The distance along the ray where the hit occurred</param>
 /// <param name="Container">The container hit</param>
 public readonly record struct HitInfo : IComparable<HitInfo>
 {
@@ -32,3 +34,5 @@ public readonly record struct HitInfo : IComparable<HitInfo>
         return Distance.CompareTo(other.Distance);
     }
 }
+
+#pragma warning restore CS1572 // XML comment has a param tag, but there is no parameter by that name

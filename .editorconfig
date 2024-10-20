@@ -162,6 +162,13 @@ dotnet_sort_system_directives_first = true
 
 # No null check simplification suggestions
 dotnet_diagnostic.IDE0031.severity = none
+dotnet_diagnostic.IDE0041.severity = none
+
+# No Auto Property recommendation
+dotnet_diagnostic.IDE0032.severity = none
+
+# No Readonly recommendation, As it can behave strangely with serialization
+dotnet_diagnostic.IDE0044.severity = none
 
 # No primary constructor suggestions
 dotnet_diagnostic.IDE0290.severity = none
