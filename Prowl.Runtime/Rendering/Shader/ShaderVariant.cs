@@ -52,18 +52,24 @@ public sealed class ShaderVariant : ISerializationCallbackReceiver
 
     public ShaderDescription[] GetProgramsForBackend()
     {
-        var backend = Graphics.Device.BackendType;
+        GraphicsBackend backend = Graphics.Device.BackendType;
 
-        Exception invalidBackend = new Exception($"No compiled shaders for backend: {backend}");
+        ShaderDescription[] Validate(ShaderDescription[] shaders)
+        {
+            if (shaders == null || shaders.Length == 0)
+                throw new Exception($"No compiled shaders for backend: {backend}");
+
+            return shaders;
+        }
 
         return backend switch
         {
-            GraphicsBackend.Direct3D11 => Direct3D11Shaders ?? throw invalidBackend,
-            GraphicsBackend.Vulkan => VulkanShaders ?? throw invalidBackend,
-            GraphicsBackend.OpenGL => OpenGLShaders ?? throw invalidBackend,
-            GraphicsBackend.OpenGLES => OpenGLESShaders ?? throw invalidBackend,
-            GraphicsBackend.Metal => MetalShaders ?? throw invalidBackend,
-            _ => throw invalidBackend,
+            GraphicsBackend.Direct3D11 => Validate(Direct3D11Shaders),
+            GraphicsBackend.Vulkan => Validate(VulkanShaders),
+            GraphicsBackend.OpenGL => Validate(OpenGLShaders),
+            GraphicsBackend.OpenGLES => Validate(OpenGLESShaders),
+            GraphicsBackend.Metal => Validate(MetalShaders),
+            _ => throw new Exception($"Invalid backend: {backend}")
         };
     }
 
