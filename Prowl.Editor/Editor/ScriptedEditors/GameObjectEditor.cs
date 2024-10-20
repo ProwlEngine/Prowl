@@ -497,12 +497,12 @@ public class GameObjectEditor : ScriptedEditor
         {
             if (StyledButton("Create Script " + _searchText))
             {
-                FileInfo file = new FileInfo(Path.Combine(Project.Active!.AssetDirectory.FullName, $"/{_searchText}.cs"));
+                FileInfo file = new(Path.Combine(Project.Active!.AssetDirectory.FullName, $"/{_searchText}.cs"));
                 if (File.Exists(file.FullName))
                     return;
 
                 using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt")!;
-                using StreamReader reader = new StreamReader(stream);
+                using StreamReader reader = new(stream);
                 string script = reader.ReadToEnd();
                 script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(_searchText));
                 File.WriteAllText(file.FullName, script);
@@ -526,7 +526,7 @@ public class GameObjectEditor : ScriptedEditor
         }
     }
 
-    private MenuItemInfo GetAddComponentMenuItems()
+    private static MenuItemInfo GetAddComponentMenuItems()
     {
         Type[] componentTypes = AppDomain.CurrentDomain.GetAssemblies()
                                       .SelectMany(assembly => assembly.GetTypes())
@@ -544,7 +544,7 @@ public class GameObjectEditor : ScriptedEditor
 
 
         // Create a root MenuItemInfo object to serve as the starting point of the tree
-        MenuItemInfo root = new MenuItemInfo { Name = "Root" };
+        MenuItemInfo root = new() { Name = "Root" };
 
         foreach ((string path, Type type) in items)
         {
@@ -558,7 +558,7 @@ public class GameObjectEditor : ScriptedEditor
             for (int i = 0; i < parts.Length - 1; i++)  // Skip the last part
             {
                 string part = parts[i];
-                MenuItemInfo childNode = currentNode.Children.Find(c => c.Name == part);
+                MenuItemInfo? childNode = currentNode.Children.Find(c => c.Name == part);
 
                 if (childNode == null)
                 {
@@ -569,7 +569,7 @@ public class GameObjectEditor : ScriptedEditor
                 currentNode = childNode;
             }
 
-            MenuItemInfo leafNode = new MenuItemInfo
+            MenuItemInfo leafNode = new()
             {
                 Name = parts[^1],  // Get the last part
                 Type = type
@@ -582,7 +582,7 @@ public class GameObjectEditor : ScriptedEditor
         return root;
     }
 
-    private void SortChildren(MenuItemInfo node)
+    private static void SortChildren(MenuItemInfo node)
     {
         node.Children.Sort((x, y) => x.Type == null ? -1 : 1);
 

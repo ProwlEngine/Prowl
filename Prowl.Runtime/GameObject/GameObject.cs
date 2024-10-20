@@ -20,7 +20,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 {
     #region Private Fields/Properties
 
-    private Dictionary<Type, MonoBehaviour> _components = new();
+    private Dictionary<Type, MonoBehaviour> _components = [];
 
     private bool _static = false;
 
