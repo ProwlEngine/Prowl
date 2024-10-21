@@ -91,18 +91,18 @@ public static partial class Graphics
     public static void SubmitCommandBuffer(CommandBuffer commandBuffer, GraphicsFence? fence = null)
     {
         commandBuffer.Clear();
-        Device.SubmitCommands(commandBuffer._commandList, fence.Fence);
+        Device.SubmitCommands(commandBuffer._commandList, fence?.Fence);
     }
 
     public static void SubmitCommandList(CommandList list, GraphicsFence? fence = null)
     {
         list.End();
-        Device.SubmitCommands(list, fence.Fence);
+        Device.SubmitCommands(list, fence?.Fence);
     }
 
     public static void WaitForFence(GraphicsFence fence, ulong timeout = ulong.MaxValue)
     {
-        Device.WaitForFence(fence.Fence, timeout);
+        Device.WaitForFence(fence?.Fence, timeout);
     }
 
     public static void WaitForFences(GraphicsFence[] fences, bool waitAll, ulong timeout = ulong.MaxValue)
