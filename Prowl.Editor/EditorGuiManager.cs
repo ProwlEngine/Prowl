@@ -516,6 +516,7 @@ public static class EditorGuiManager
     [MenuItem("Windows/Console")] public static void Window_Console() => new ConsoleWindow();
     [MenuItem("Windows/Project Settings")] public static void Window_ProjectSettings() => new ProjectSettingsWindow();
     [MenuItem("Windows/Editor Preferences")] public static void Window_Preferences() => new PreferencesWindow();
+    [MenuItem("Windows/Blueprint Editor")] public static void Window_Blueprint () => new BlueprintWindow();
     // [MenuItem("Windows/Render Graph")] public static void Window_RenderGraph() => new RenderGraphWindow();
 
 
