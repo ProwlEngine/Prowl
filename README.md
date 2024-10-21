@@ -105,6 +105,7 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
         - HDR with Tonemapping (Melon, Aces, Reinhard, Uncharted, Filmic)
     - Transparency
     - Procedural Super Performant Skybox
+    - Node-Based Visual Scripting (Working but pretty simple)
 
 -   **Asset Pipeline:**
     - A Powerful Asset Pipeline with a very similar structure to unity
@@ -168,7 +169,7 @@ Getting Prowl up and running is super easy!
 
 - 🛠️ Package Manager (Packages partially implemented)
 - ❌ Animation Tools
-- 🛠️ Visual Scripting
+- ✔️ Visual Scripting
 - ❌ Material Node Editor
 - ❌ 2D Support
 
