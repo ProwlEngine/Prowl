@@ -3,7 +3,7 @@
 
 namespace Prowl.Runtime.NodeSystem;
 
-[Node("GameObject/Set Euler Rotation")]
+[Node("GameObject/Transform/Set Euler Rotation")]
 public class SetEulerRotationNode : InOutFlowNode
 {
     public override bool ShowTitle => true;

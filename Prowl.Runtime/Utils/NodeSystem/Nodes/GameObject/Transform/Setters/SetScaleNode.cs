@@ -3,29 +3,24 @@
 
 namespace Prowl.Runtime.NodeSystem;
 
-[Node("GameObject/Set Rotation")]
-public class SetRotationNode : InOutFlowNode
+[Node("GameObject/Transform/Set Scale")]
+public class SetScaleNode : InOutFlowNode
 {
     public override bool ShowTitle => true;
-    public override string Title => "Set Rotation";
+    public override string Title => "Set Scale";
     public override float Width => 100;
 
-    [Input] public bool InLocalSpace;
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Input] public Quaternion Rotation;
+    [Input] public Vector3 Scale;
 
     public override void Execute(NodePort input)
     {
-        bool local = GetInputValue("InLocalSpace", InLocalSpace);
         GameObject t = GetInputValue("Target", Target);
-        Quaternion r = GetInputValue("Rotation", Rotation);
+        Vector3 s = GetInputValue("Scale", Scale);
 
         if (t != null)
         {
-            if (local)
-                t.Transform.localRotation = r;
-            else
-                t.Transform.rotation = r;
+            t.Transform.localScale = s;
         }
 
         ExecuteNext();

@@ -3,19 +3,19 @@
 
 namespace Prowl.Runtime.NodeSystem;
 
-[Node("GameObject/Get Rotation")]
-public class GetRotationNode : Node
+[Node("GameObject/Transform/Get Euler Rotation")]
+public class GetEulerRotationNode : Node
 {
     public override bool ShowTitle => true;
-    public override string Title => "Get Rotation";
+    public override string Title => "Get Euler Rotation";
     public override float Width => 100;
 
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Output, SerializeIgnore] public Quaternion Rotation;
+    [Output, SerializeIgnore] public Vector3 EulerRotation;
 
     public override object GetValue(NodePort input)
     {
         GameObject t = GetInputValue("Target", Target);
-        return t != null ? t.Transform.rotation : null;
+        return t != null ? t.Transform.eulerAngles : Vector3.zero;
     }
 }

@@ -3,7 +3,7 @@
 
 namespace Prowl.Runtime.NodeSystem;
 
-[Node("GameObject/Set Position")]
+[Node("GameObject/Transform/Set Position")]
 public class SetPositionNode : InOutFlowNode
 {
     public override bool ShowTitle => true;
