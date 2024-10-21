@@ -59,7 +59,7 @@ public static partial class Graphics
                 Debug.LogException(new Exception("Failed to set DPI awareness", exception));
         }
 
-        GUI.Graphics.UIDrawListRenderer.Initialize(Device.SwapchainFramebuffer.OutputDescription, GUI.Graphics.ColorSpaceHandling.Direct);
+        GUI.Graphics.UIDrawListRenderer.Initialize(GUI.Graphics.ColorSpaceHandling.Direct);
     }
 
     public static void EndFrame()

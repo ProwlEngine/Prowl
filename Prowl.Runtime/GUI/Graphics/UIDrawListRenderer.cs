@@ -49,12 +49,12 @@ public static class UIDrawListRenderer
 
 
 
-    public static void Initialize(OutputDescription outputDescription, ColorSpaceHandling handling)
+    public static void Initialize(ColorSpaceHandling handling)
     {
         s_initialized = true;
         s_handling = handling;
 
-        CreateDeviceResources(outputDescription);
+        CreateDeviceResources();
 
         GetResourceSet(Font.DefaultFont.Texture);
     }
@@ -71,7 +71,7 @@ public static class UIDrawListRenderer
     }
 
 
-    private static void CreateDeviceResources(OutputDescription outputDescription)
+    private static void CreateDeviceResources()
     {
         ResourceFactory factory = Runtime.Graphics.Factory;
 
@@ -88,14 +88,6 @@ public static class UIDrawListRenderer
         s_fragmentShader = factory.CreateShader(new ShaderDescription(ShaderStages.Fragment, fragmentShaderBytes, "FS"));
         s_fragmentShader.Name = "UI Fragment Shader";
 
-        VertexLayoutDescription[] vertexLayouts =
-        [
-            new VertexLayoutDescription(
-                new VertexElementDescription("in_position", VertexElementSemantic.Position, VertexElementFormat.Float3),
-                new VertexElementDescription("in_texCoord", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                new VertexElementDescription("in_color", VertexElementSemantic.Color, VertexElementFormat.Byte4_Norm))
-        ];
-
         s_layout = factory.CreateResourceLayout(new ResourceLayoutDescription(
             new ResourceLayoutElementDescription("ProjectionMatrixBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
             new ResourceLayoutElementDescription("MainSampler", ResourceKind.Sampler, ShaderStages.Fragment)));
@@ -104,30 +96,6 @@ public static class UIDrawListRenderer
         s_textureLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
             new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)));
         s_textureLayout.Name = "UI Texture Layout";
-
-        GraphicsPipelineDescription pd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleAlphaBlend,
-
-            new DepthStencilStateDescription(false, false, ComparisonKind.Always),
-
-            new RasterizerStateDescription(FaceCullMode.None, PolygonFillMode.Solid, FrontFace.Clockwise, true, true),
-
-            PrimitiveTopology.TriangleList,
-
-            new ShaderSetDescription(
-                vertexLayouts,
-                [s_vertexShader, s_fragmentShader]
-            ),
-
-            [s_layout, s_textureLayout],
-
-            outputDescription,
-
-            ResourceBindingModel.Default
-        );
-
-        s_pipeline = factory.CreateGraphicsPipeline(pd);
-        s_pipeline.Name = "UI Pipeline";
 
         s_mainResourceSet = factory.CreateResourceSet(new ResourceSetDescription(s_layout,
             s_projMatrixBuffer,
@@ -191,8 +159,43 @@ public static class UIDrawListRenderer
         if (!s_initialized)
         {
             Debug.LogWarning("UI Draw List Renderer not initialized. Try to ensure that Initialize() is called to avoid implicit initialization.");
-            Initialize(cl.CurrentFramebuffer?.OutputDescription ?? Runtime.Graphics.ScreenTarget.OutputDescription, ColorSpaceHandling.Direct);
+            Initialize(ColorSpaceHandling.Direct);
         }
+
+#warning FIXME: This is a temporary fix to allow the UI to render on multiple differant framebuffers, Ideally this is cached.
+
+        VertexLayoutDescription[] vertexLayouts =
+        [
+            new VertexLayoutDescription(
+                new VertexElementDescription("in_position", VertexElementSemantic.Position, VertexElementFormat.Float3),
+                new VertexElementDescription("in_texCoord", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
+                new VertexElementDescription("in_color", VertexElementSemantic.Color, VertexElementFormat.Byte4_Norm))
+        ];
+
+        GraphicsPipelineDescription pd = new GraphicsPipelineDescription(
+            BlendStateDescription.SingleAlphaBlend,
+
+            new DepthStencilStateDescription(false, false, ComparisonKind.Always),
+
+            new RasterizerStateDescription(FaceCullMode.None, PolygonFillMode.Solid, FrontFace.Clockwise, true, true),
+
+            PrimitiveTopology.TriangleList,
+
+            new ShaderSetDescription(
+                vertexLayouts,
+                [s_vertexShader, s_fragmentShader]
+            ),
+
+            [s_layout, s_textureLayout],
+
+            cl.CurrentFramebuffer?.OutputDescription ?? Runtime.Graphics.ScreenTarget.OutputDescription,
+
+            ResourceBindingModel.Default
+        );
+
+        s_pipeline?.Dispose();
+        s_pipeline = Runtime.Graphics.Factory.CreateGraphicsPipeline(pd);
+        s_pipeline.Name = "UI Pipeline";
 
         if (lists.Length == 0)
         {
