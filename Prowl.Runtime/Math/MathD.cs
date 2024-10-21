@@ -218,7 +218,7 @@ public static class MathD
     }
 
     /// <summary>
-    /// Checks if two Lines Intersect (Mathf.Small Tolerance)
+    /// Checks if two Lines Intersect (MathD.Small Tolerance)
     /// </summary>
     public static bool DoesLineIntersectLine(Vector2 startA, Vector2 endA, Vector2 startB, Vector2 endB, out Vector2 result)
     {
@@ -274,7 +274,7 @@ public static class MathD
     }
 
     /// <summary>
-    /// Checks if a Ray intersects a triangle (Uses Mathf.Small for Error)
+    /// Checks if a Ray intersects a triangle (Uses MathD.Small for Error)
     /// </summary>
     public static bool RayIntersectsTriangle(Vector3 origin, Vector3 dir, Vector3 a, Vector3 b, Vector3 c, out Vector3 intersection)
     {
