@@ -12,15 +12,15 @@ public class NodePort
 {
     public enum IO { Input, Output }
 
-    public int ConnectionCount { get { return connections.Count; } }
+    public int ConnectionCount { get { return _connections.Count; } }
     /// <summary> Return the first non-null connection </summary>
     public NodePort Connection
     {
         get
         {
-            for (int i = 0; i < connections.Count; i++)
+            for (int i = 0; i < _connections.Count; i++)
             {
-                if (connections[i] != null) return connections[i].Port;
+                if (_connections[i] != null) return _connections[i].Port;
             }
             return null;
         }
@@ -44,8 +44,8 @@ public class NodePort
         internal set { _typeConstraint = value; }
     }
 
-    /// <summary> Is this port connected to anytihng? </summary>
-    public bool IsConnected { get { return connections.Count != 0; } }
+    /// <summary> Is this port connected to anything? </summary>
+    public bool IsConnected { get { return _connections.Count != 0; } }
     public bool IsInput { get { return direction == IO.Input; } }
     public bool IsOutput { get { return direction == IO.Output; } }
 
@@ -58,26 +58,26 @@ public class NodePort
     {
         get
         {
-            if (valueType == null && !string.IsNullOrEmpty(_typeQualifiedName)) valueType = Type.GetType(_typeQualifiedName, false);
-            return valueType;
+            if (_valueType == null && !string.IsNullOrEmpty(_typeQualifiedName)) _valueType = Type.GetType(_typeQualifiedName, false);
+            return _valueType;
         }
         set
         {
-            if (valueType == value) return;
-            valueType = value;
+            if (_valueType == value) return;
+            _valueType = value;
             if (value != null) _typeQualifiedName = value.AssemblyQualifiedName;
         }
     }
-    private Type valueType;
+    private Type _valueType;
 
-    public Vector2 LastKnownPosition { get { return lastKnownPosition; } set { lastKnownPosition = value; } }
+    public Vector2 LastKnownPosition { get { return _lastKnownPosition; } set { _lastKnownPosition = value; } }
 
-    [SerializeIgnore] private Vector2 lastKnownPosition;
+    [SerializeIgnore] private Vector2 _lastKnownPosition;
 
     [SerializeField] private string _fieldName;
     [SerializeField] private Node _node;
     [SerializeField] private string _typeQualifiedName;
-    [SerializeField] private List<PortConnection> connections = new List<PortConnection>();
+    [SerializeField] private List<PortConnection> _connections = [];
     [SerializeField] private IO _direction;
     [SerializeField] private Node.ConnectionType _connectionType;
     [SerializeField] private Node.TypeConstraint _typeConstraint;
@@ -124,7 +124,7 @@ public class NodePort
     public NodePort(NodePort nodePort, Node node)
     {
         _fieldName = nodePort._fieldName;
-        ValueType = nodePort.valueType;
+        ValueType = nodePort._valueType;
         _direction = nodePort.direction;
         _dynamic = nodePort._dynamic;
         _onHeader = nodePort._onHeader;
@@ -151,13 +151,13 @@ public class NodePort
     /// <summary> Checks all connections for invalid references, and removes them. </summary>
     public void VerifyConnections()
     {
-        for (int i = connections.Count - 1; i >= 0; i--)
+        for (int i = _connections.Count - 1; i >= 0; i--)
         {
-            if (connections[i].node != null &&
-                !string.IsNullOrEmpty(connections[i].fieldName) &&
-                connections[i].node.GetPort(connections[i].fieldName) != null)
+            if (_connections[i].node != null &&
+                !string.IsNullOrEmpty(_connections[i].fieldName) &&
+                _connections[i].node.GetPort(_connections[i].fieldName) != null)
                 continue;
-            connections.RemoveAt(i);
+            _connections.RemoveAt(i);
         }
     }
 
@@ -193,10 +193,10 @@ public class NodePort
         object[] objs = new object[ConnectionCount];
         for (int i = 0; i < ConnectionCount; i++)
         {
-            NodePort connectedPort = connections[i].Port;
+            NodePort connectedPort = _connections[i].Port;
             if (connectedPort == null)
             { // if we happen to find a null port, remove it and look again
-                connections.RemoveAt(i);
+                _connections.RemoveAt(i);
                 i--;
                 continue;
             }
@@ -210,7 +210,7 @@ public class NodePort
     public T GetInputValue<T>()
     {
         object obj = GetInputValue();
-        return obj is T ? (T)obj : default(T);
+        return obj is T t ? t : default;
     }
 
     /// <summary> Return the output values of all connected ports. </summary>
@@ -221,7 +221,7 @@ public class NodePort
         T[] ts = new T[objs.Length];
         for (int i = 0; i < objs.Length; i++)
         {
-            if (objs[i] is T) ts[i] = (T)objs[i];
+            if (objs[i] is T t) ts[i] = t;
         }
         return ts;
     }
@@ -231,14 +231,14 @@ public class NodePort
     public bool TryGetInputValue<T>(out T value)
     {
         object obj = GetInputValue();
-        if (obj is T)
+        if (obj is T t)
         {
-            value = (T)obj;
+            value = t;
             return true;
         }
         else
         {
-            value = default(T);
+            value = default;
             return false;
         }
     }
@@ -252,7 +252,7 @@ public class NodePort
         float result = 0;
         for (int i = 0; i < objs.Length; i++)
         {
-            if (objs[i] is float) result += (float)objs[i];
+            if (objs[i] is float v) result += v;
         }
         return result;
     }
@@ -266,7 +266,7 @@ public class NodePort
         int result = 0;
         for (int i = 0; i < objs.Length; i++)
         {
-            if (objs[i] is int) result += (int)objs[i];
+            if (objs[i] is int v) result += v;
         }
         return result;
     }
@@ -275,7 +275,7 @@ public class NodePort
     /// <param name="port">The <see cref="NodePort"/> to connect to</param>
     public void Connect(NodePort port)
     {
-        if (connections == null) connections = new List<PortConnection>();
+        _connections ??= [];
         if (port == null) { Debug.LogWarning("Cannot connect to null port"); return; }
         if (port == this) { Debug.LogWarning("Cannot connect port to self."); return; }
         if (IsConnectedTo(port)) { Debug.LogWarning("Port already connected. "); return; }
@@ -286,17 +286,17 @@ public class NodePort
 
         if (port.connectionType == Node.ConnectionType.Override && port.ConnectionCount != 0) { port.ClearConnections(); }
         if (connectionType == Node.ConnectionType.Override && ConnectionCount != 0) { ClearConnections(); }
-        connections.Add(new PortConnection(port));
-        if (port.connections == null) port.connections = new List<PortConnection>();
-        if (!port.IsConnectedTo(this)) port.connections.Add(new PortConnection(this));
+        _connections.Add(new PortConnection(port));
+        port._connections ??= [];
+        if (!port.IsConnectedTo(this)) port._connections.Add(new PortConnection(this));
         node.OnCreateConnection(this, port);
         port.node.OnCreateConnection(this, port);
     }
 
     public List<NodePort> GetConnections()
     {
-        List<NodePort> result = new List<NodePort>();
-        for (int i = 0; i < connections.Count; i++)
+        List<NodePort> result = [];
+        for (int i = 0; i < _connections.Count; i++)
         {
             NodePort port = GetConnection(i);
             if (port != null) result.Add(port);
@@ -307,15 +307,15 @@ public class NodePort
     public NodePort GetConnection(int i)
     {
         //If the connection is broken for some reason, remove it.
-        if (connections[i].node == null || string.IsNullOrEmpty(connections[i].fieldName))
+        if (_connections[i].node == null || string.IsNullOrEmpty(_connections[i].fieldName))
         {
-            connections.RemoveAt(i);
+            _connections.RemoveAt(i);
             return null;
         }
-        NodePort port = connections[i].node.GetPort(connections[i].fieldName);
+        NodePort port = _connections[i].node.GetPort(_connections[i].fieldName);
         if (port == null)
         {
-            connections.RemoveAt(i);
+            _connections.RemoveAt(i);
             return null;
         }
         return port;
@@ -326,7 +326,7 @@ public class NodePort
     {
         for (int i = 0; i < ConnectionCount; i++)
         {
-            if (connections[i].Port == port) return i;
+            if (_connections[i].Port == port) return i;
         }
         return -1;
     }
@@ -334,14 +334,14 @@ public class NodePort
     /// <summary> Get instance id of the connection connecting this</summary>
     public int GetConnectionInstanceID(int i)
     {
-        return connections[i].InstanceID;
+        return _connections[i].InstanceID;
     }
 
     public bool IsConnectedTo(NodePort port)
     {
-        for (int i = 0; i < connections.Count; i++)
+        for (int i = 0; i < _connections.Count; i++)
         {
-            if (connections[i].Port == port) return true;
+            if (_connections[i].Port == port) return true;
         }
         return false;
     }
@@ -369,7 +369,7 @@ public class NodePort
         return true;
     }
 
-    private bool CheckTypeConstraints(NodePort input, NodePort output)
+    private static bool CheckTypeConstraints(NodePort input, NodePort output)
     {
         switch (input.typeConstraint)
         {
@@ -389,21 +389,21 @@ public class NodePort
     public void Disconnect(NodePort port)
     {
         // Remove this ports connection to the other
-        for (int i = connections.Count - 1; i >= 0; i--)
+        for (int i = _connections.Count - 1; i >= 0; i--)
         {
-            if (connections[i].Port == port)
+            if (_connections[i].Port == port)
             {
-                connections.RemoveAt(i);
+                _connections.RemoveAt(i);
             }
         }
         if (port != null)
         {
             // Remove the other ports connection to this port
-            for (int i = 0; i < port.connections.Count; i++)
+            for (int i = 0; i < port._connections.Count; i++)
             {
-                if (port.connections[i].Port == this)
+                if (port._connections[i].Port == this)
                 {
-                    port.connections.RemoveAt(i);
+                    port._connections.RemoveAt(i);
                     // Trigger OnRemoveConnection from this side port
                     port.node.OnRemoveConnection(port);
                 }
@@ -417,13 +417,13 @@ public class NodePort
     public void Disconnect(int i)
     {
         // Remove the other ports connection to this port
-        NodePort otherPort = connections[i].Port;
+        NodePort otherPort = _connections[i].Port;
         if (otherPort != null)
         {
-            otherPort.connections.RemoveAll(it => { return it.Port == this; });
+            otherPort._connections.RemoveAll(it => { return it.Port == this; });
         }
         // Remove this ports connection to the other
-        connections.RemoveAt(i);
+        _connections.RemoveAt(i);
 
         // Trigger OnRemoveConnection
         node.OnRemoveConnection(this);
@@ -432,34 +432,34 @@ public class NodePort
 
     public void ClearConnections()
     {
-        while (connections.Count > 0)
+        while (_connections.Count > 0)
         {
-            Disconnect(connections[0].Port);
+            Disconnect(_connections[0].Port);
         }
     }
 
     /// <summary> Get reroute points for a given connection. This is used for organization </summary>
     public List<Vector2> GetReroutePoints(int index)
     {
-        return connections[index].reroutePoints;
+        return _connections[index].reroutePoints;
     }
 
     /// <summary> Swap connections with another node </summary>
     public void SwapConnections(NodePort targetPort)
     {
-        int aConnectionCount = connections.Count;
-        int bConnectionCount = targetPort.connections.Count;
+        int aConnectionCount = _connections.Count;
+        int bConnectionCount = targetPort._connections.Count;
 
-        List<NodePort> portConnections = new List<NodePort>();
-        List<NodePort> targetPortConnections = new List<NodePort>();
+        List<NodePort> portConnections = [];
+        List<NodePort> targetPortConnections = [];
 
         // Cache port connections
         for (int i = 0; i < aConnectionCount; i++)
-            portConnections.Add(connections[i].Port);
+            portConnections.Add(_connections[i].Port);
 
         // Cache target port connections
         for (int i = 0; i < bConnectionCount; i++)
-            targetPortConnections.Add(targetPort.connections[i].Port);
+            targetPortConnections.Add(targetPort._connections[i].Port);
 
         ClearConnections();
         targetPort.ClearConnections();
@@ -480,7 +480,7 @@ public class NodePort
         int connectionCount = targetPort.ConnectionCount;
         for (int i = 0; i < connectionCount; i++)
         {
-            PortConnection connection = targetPort.connections[i];
+            PortConnection connection = targetPort._connections[i];
             NodePort otherPort = connection.Port;
             Connect(otherPort);
         }
@@ -489,12 +489,12 @@ public class NodePort
     /// <summary> Move all connections pointing to this node, to another node </summary>
     public void MoveConnections(NodePort targetPort)
     {
-        int connectionCount = connections.Count;
+        int connectionCount = _connections.Count;
 
         // Add connections to target port
         for (int i = 0; i < connectionCount; i++)
         {
-            PortConnection connection = targetPort.connections[i];
+            PortConnection connection = targetPort._connections[i];
             NodePort otherPort = connection.Port;
             Connect(otherPort);
         }
@@ -504,7 +504,7 @@ public class NodePort
     /// <summary> Swap connected nodes from the old list with nodes from the new list </summary>
     public void Redirect(List<Node> oldNodes, List<Node> newNodes)
     {
-        foreach (PortConnection connection in connections)
+        foreach (PortConnection connection in _connections)
         {
             int index = oldNodes.IndexOf(connection.node);
             if (index >= 0) connection.node = newNodes[index];
@@ -517,9 +517,9 @@ public class NodePort
         [SerializeField] public string fieldName;
         [SerializeField] public Node node;
         [SerializeField] public int InstanceID = 0;
-        public NodePort Port { get { return port != null ? port : port = GetPort(); } }
+        public NodePort Port { get { return _port ??= GetPort(); } }
 
-        [SerializeIgnore] private NodePort port;
+        [SerializeIgnore] private NodePort _port;
         /// <summary> Extra connection path points for organization </summary>
         [SerializeField] public List<Vector2> reroutePoints = new List<Vector2>();
 
@@ -527,7 +527,7 @@ public class NodePort
 
         public PortConnection(NodePort port)
         {
-            this.port = port;
+            _port = port;
             node = port.node;
             fieldName = port.fieldName;
             InstanceID = node.graph.NextID;
