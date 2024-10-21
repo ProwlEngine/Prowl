@@ -82,18 +82,18 @@ public abstract class Texture : EngineObject, ISerializable
         Sampler?.Dispose();
     }
 
-    public void GenerateMipmaps(bool waitForCompletion = false)
+    public void GenerateMipmaps()
     {
         if (!IsMipmappable)
             throw new InvalidOperationException($"Cannot generate mipmaps on a non-mipmappable texture. Ensure texture is created with the {TextureUsage.GenerateMipmaps} flag.");
 
-        CommandList commandList = Graphics.GetCommandList();
+        using CommandList commandList = Graphics.GetCommandList();
+        using GraphicsFence fence = new();
 
         commandList.GenerateMipmaps(InternalTexture);
 
-        Graphics.SubmitCommandList(commandList, waitForCompletion);
-
-        commandList.Dispose();
+        Graphics.SubmitCommandList(commandList, fence);
+        Graphics.WaitForFence(fence);
 
         IsMipmapped = true;
     }
@@ -153,7 +153,7 @@ public abstract class Texture : EngineObject, ISerializable
         Graphics.Device.UpdateTexture(stagingTexture, (IntPtr)data, mipLevelSize, (uint)rectPos.x, (uint)rectPos.y, (uint)rectPos.z, (uint)rectSize.x, (uint)rectSize.y, (uint)rectSize.z, mipLevel, layer);
 
         if (stagingTexture != InternalTexture)
-            Graphics.InternalCopyTexture(stagingTexture, InternalTexture, mipLevel, layer, true);
+            InternalCopyTexture(stagingTexture, InternalTexture, mipLevel, layer);
     }
 
     protected unsafe void InternalSetData<T>(Span<T> data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel) where T : unmanaged
@@ -170,7 +170,7 @@ public abstract class Texture : EngineObject, ISerializable
         EnsureStagingTexture();
 
         if (stagingTexture != InternalTexture)
-            Graphics.InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer, true);
+            InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer);
 
         uint subresource = (MipLevels * arrayLayer) + mipLevel;
 
@@ -189,7 +189,7 @@ public abstract class Texture : EngineObject, ISerializable
         EnsureStagingTexture();
 
         if (stagingTexture != InternalTexture)
-            Graphics.InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer, true);
+            InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer);
 
         uint subresource = (MipLevels * arrayLayer) + mipLevel;
 
@@ -211,7 +211,7 @@ public abstract class Texture : EngineObject, ISerializable
         EnsureStagingTexture();
 
         if (stagingTexture != InternalTexture)
-            Graphics.InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer, true);
+            InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer);
 
         uint subresource = (MipLevels * arrayLayer) + mipLevel;
 
@@ -241,9 +241,15 @@ public abstract class Texture : EngineObject, ISerializable
         return data;
     }
 
-    public void Apply()
+    private static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer)
     {
+        using CommandList commandList = Graphics.GetCommandList();
+        using GraphicsFence fence = new();
 
+        commandList.CopyTexture(source, destination, mipLevel, arrayLayer);
+
+        Graphics.SubmitCommandList(commandList, fence);
+        Graphics.WaitForFence(fence);
     }
 
     // Ensure that a CPU-accessible staging texture matching the internal one exists

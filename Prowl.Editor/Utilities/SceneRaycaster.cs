@@ -103,7 +103,9 @@ public static class SceneRaycaster
             buffer.DrawIndexed((uint)drawData.IndexCount, 0, 1, 0, 0);
         }
 
-        Graphics.SubmitCommandBuffer(buffer, true);
+        using GraphicsFence fence = new();
+        Graphics.SubmitCommandBuffer(buffer, fence);
+        Graphics.WaitForFence(fence);
 
         CommandBufferPool.Release(buffer);
 
