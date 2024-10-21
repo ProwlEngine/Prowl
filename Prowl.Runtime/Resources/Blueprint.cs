@@ -11,6 +11,7 @@ public sealed class Blueprint : NodeGraph
 {
     public override string[] NodeCategories => new[]
     {
+        "Self",
         "Event",
         "Flow Control",
         "Math",
@@ -18,4 +19,12 @@ public sealed class Blueprint : NodeGraph
         "GameObject",
         "String",
     };
+
+    public GameObject GameObject { get; private set; }
+
+    public void SetActiveGameObject(GameObject gameObject)
+    {
+        GameObject = gameObject;
+    }
+
 }

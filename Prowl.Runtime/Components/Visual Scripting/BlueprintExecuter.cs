@@ -48,45 +48,20 @@ public class BlueprintExecuter : MonoBehaviour
         }
     }
 
-    public override void Start()
+    private void ExecuteEventNodes<T>(List<T> nodes) where T : BasicEventNode
     {
-        foreach (OnStartEventNode node in _startNodes)
+        if (!Blueprint.IsAvailable) return;
+        Blueprint.Res.SetActiveGameObject(GameObject);
+        foreach (BasicEventNode node in nodes)
             node.Execute(null);
     }
 
-    public override void OnEnable()
-    {
-        foreach (OnEnableEventNode node in _enableNodes)
-            node.Execute(null);
-    }
+    public override void Start() => ExecuteEventNodes(_startNodes);
+    public override void OnEnable() => ExecuteEventNodes(_enableNodes);
+    public override void OnDisable() => ExecuteEventNodes(_disableNodes);
+    public override void OnDestroy() => ExecuteEventNodes(_destroyNodes);
 
-    public override void OnDisable()
-    {
-        foreach (OnDisableEventNode node in _disableNodes)
-            node.Execute(null);
-    }
-
-    public override void OnDestroy()
-    {
-        foreach (OnDestroyEventNode node in _destroyNodes)
-            node.Execute(null);
-    }
-
-    public override void Update()
-    {
-        foreach (OnUpdateEventNode node in _updateNodes)
-            node.Execute(null);
-    }
-
-    public override void LateUpdate()
-    {
-        foreach (OnLateUpdateEventNode node in _lateUpdateNodes)
-            node.Execute(null);
-    }
-
-    public override void FixedUpdate()
-    {
-        foreach (OnFixedUpdateEventNode node in _fixedUpdateNodes)
-            node.Execute(null);
-    }
+    public override void Update() => ExecuteEventNodes(_updateNodes);
+    public override void LateUpdate() => ExecuteEventNodes(_lateUpdateNodes);
+    public override void FixedUpdate() => ExecuteEventNodes(_fixedUpdateNodes);
 }
