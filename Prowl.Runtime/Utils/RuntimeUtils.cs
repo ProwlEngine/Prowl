@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -37,6 +38,7 @@ public enum Platform
 }
 
 
+[RequiresUnreferencedCode("These methods use reflection and can't be statically analyzed.")]
 public static class RuntimeUtils
 {
     private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
