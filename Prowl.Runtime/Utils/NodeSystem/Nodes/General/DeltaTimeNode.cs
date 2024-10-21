@@ -10,7 +10,13 @@ public class DeltaTimeNode : Node
     public override string Title => "Delta Time";
     public override float Width => 100;
 
-    [Output, SerializeIgnore] public double Time;
+    [Output, SerializeIgnore] public double DeltaTime;
+    [Output, SerializeIgnore] public float DeltaTimeF;
 
-    public override object GetValue(NodePort port) => Runtime.Time.deltaTime;
+    public override object GetValue(NodePort port)
+    {
+        if (port.fieldName == nameof(DeltaTime))
+            return DeltaTime;
+        return DeltaTimeF;
+    }
 }
