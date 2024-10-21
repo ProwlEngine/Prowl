@@ -3,7 +3,7 @@
 
 namespace Prowl.Runtime.NodeSystem;
 
-[Node("Operations/String/Concat")]
+[Node("String/Concat")]
 public class String_Concat_Node : Node
 {
     public override string Title => "String Concat";
@@ -17,7 +17,7 @@ public class String_Concat_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) + GetInputValue("B", B);
 }
 
-[Node("Operations/String/Replace")]
+[Node("String/Replace")]
 public class String_Replace_Node : Node
 {
     public override string Title => "String Replace";
@@ -32,7 +32,7 @@ public class String_Replace_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).Replace(GetInputValue("Replace", Replace), GetInputValue("With", With));
 }
 
-[Node("Operations/String/Contains")]
+[Node("String/Contains")]
 public class String_Contains_Node : Node
 {
     public override string Title => "String Contains";
@@ -48,7 +48,7 @@ public class String_Contains_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).Contains(GetInputValue("Has", Has), Mode);
 }
 
-[Node("Operations/String/Starts With")]
+[Node("String/Starts With")]
 public class String_StartsWith_Node : Node
 {
     public override string Title => "String Starts With";
@@ -64,7 +64,7 @@ public class String_StartsWith_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).StartsWith(GetInputValue("StartsWith", StartsWith), Mode);
 }
 
-[Node("Operations/String/Ends With")]
+[Node("String/Ends With")]
 public class String_EndsWith_Node : Node
 {
     public override string Title => "String Ends With";
@@ -80,7 +80,7 @@ public class String_EndsWith_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).EndsWith(GetInputValue("EndsWith", EndsWith), Mode);
 }
 
-[Node("Operations/String/Length")]
+[Node("String/Length")]
 public class String_Length_Node : Node
 {
     public override string Title => "String Length";
@@ -93,7 +93,7 @@ public class String_Length_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).Length;
 }
 
-[Node("Operations/String/To Upper")]
+[Node("String/To Upper")]
 public class String_ToUpper_Node : Node
 {
     public override string Title => "String To Upper";
@@ -106,7 +106,7 @@ public class String_ToUpper_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).ToUpper();
 }
 
-[Node("Operations/String/To Lower")]
+[Node("String/To Lower")]
 public class String_ToLower_Node : Node
 {
     public override string Title => "String To Lower";
@@ -119,7 +119,7 @@ public class String_ToLower_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).ToLower();
 }
 
-[Node("Operations/String/Trim")]
+[Node("String/Trim")]
 public class String_Trim_Node : Node
 {
     public override string Title => "String Trim";
@@ -132,7 +132,7 @@ public class String_Trim_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).Trim();
 }
 
-[Node("Operations/String/Sub String")]
+[Node("String/Sub String")]
 public class String_SubString_Node : Node
 {
     public override string Title => "String Sub String";
@@ -147,7 +147,7 @@ public class String_SubString_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).Substring(GetInputValue("Start", Start), GetInputValue("Length", Length));
 }
 
-[Node("Operations/String/Is Null Or White Space")]
+[Node("String/Is Null Or White Space")]
 public class String_IsNullOrWhiteSpace_Node : Node
 {
     public override string Title => "String Is Null Or White Space";
@@ -160,7 +160,7 @@ public class String_IsNullOrWhiteSpace_Node : Node
     public override object GetValue(NodePort port) => string.IsNullOrWhiteSpace(GetInputValue("In", In));
 }
 
-[Node("Operations/String/Last Index Of")]
+[Node("String/Last Index Of")]
 public class String_LastIndexOf_Node : Node
 {
     public override string Title => "String Last Index Of";
@@ -174,7 +174,7 @@ public class String_LastIndexOf_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).LastIndexOf(GetInputValue("Find", Find));
 }
 
-[Node("Operations/String/First Index Of")]
+[Node("String/First Index Of")]
 public class String_IndexOf_Node : Node
 {
     public override string Title => "String Index Of";
@@ -188,7 +188,7 @@ public class String_IndexOf_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("In", In).IndexOf(GetInputValue("Find", Find));
 }
 
-[Node("Operations/String/Is Equal")]
+[Node("String/Is Equal")]
 public class String_IsEqual_Node : Node
 {
     public override string Title => "String Is Equal";

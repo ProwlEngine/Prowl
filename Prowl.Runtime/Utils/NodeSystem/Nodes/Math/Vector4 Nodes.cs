@@ -3,7 +3,7 @@
 
 namespace Prowl.Runtime.NodeSystem;
 
-[Node("Operations/Vector4/Add")]
+[Node("Math/Vector4/Add")]
 public class Vector4_Add_Node : Node
 {
     public override string Title => "Vec4 A + B";
@@ -17,7 +17,7 @@ public class Vector4_Add_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) + GetInputValue("B", B);
 }
 
-[Node("Operations/Vector4/Subtract")]
+[Node("Math/Vector4/Subtract")]
 public class Vector4_Subtract_Node : Node
 {
     public override string Title => "Vec4 A - B";
@@ -31,7 +31,7 @@ public class Vector4_Subtract_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) - GetInputValue("B", B);
 }
 
-[Node("Operations/Vector4/Multiply")]
+[Node("Math/Vector4/Multiply")]
 public class Vector4_Multiply_Node : Node
 {
     public override string Title => "Vec4 A * B";
@@ -45,7 +45,7 @@ public class Vector4_Multiply_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) * GetInputValue("B", B);
 }
 
-[Node("Operations/Vector4/Divide")]
+[Node("Math/Vector4/Divide")]
 public class Vector4_Divide_Node : Node
 {
     public override string Title => "Vec4 A / B";
@@ -59,7 +59,7 @@ public class Vector4_Divide_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) / GetInputValue("B", B);
 }
 
-[Node("Operations/Vector4/Direction From To")]
+[Node("Math/Vector4/Direction From To")]
 public class Vector4_Direction_Node : Node
 {
     public override string Title => "Vec4 Direction From To";
@@ -73,7 +73,7 @@ public class Vector4_Direction_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("To", To) - GetInputValue("From", From);
 }
 
-[Node("Operations/Vector4/Distance")]
+[Node("Math/Vector4/Distance")]
 public class Vector4_Distance_Node : Node
 {
     public override string Title => "Vec4 Distance";
@@ -87,7 +87,7 @@ public class Vector4_Distance_Node : Node
     public override object GetValue(NodePort port) => Vector4.Distance(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector4/Dot")]
+[Node("Math/Vector4/Dot")]
 public class Vector4_Dot_Node : Node
 {
     public override string Title => "Vec4 Dot";
@@ -101,7 +101,7 @@ public class Vector4_Dot_Node : Node
     public override object GetValue(NodePort port) => Vector4.Dot(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector4/Lerp")]
+[Node("Math/Vector4/Lerp")]
 public class Vector4_Lerp_Node : Node
 {
     public override string Title => "Vec4 Lerp";
@@ -116,7 +116,7 @@ public class Vector4_Lerp_Node : Node
     public override object GetValue(NodePort port) => Vector4.Lerp(GetInputValue("From", From), GetInputValue("To", To), GetInputValue("Time", Time));
 }
 
-[Node("Operations/Vector4/Magnitude")]
+[Node("Math/Vector4/Magnitude")]
 public class Vector4_Magnitude_Node : Node
 {
     public override string Title => "Vec4 Magnitude";
@@ -129,7 +129,7 @@ public class Vector4_Magnitude_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("Vector", Vector).magnitude;
 }
 
-[Node("Operations/Vector4/Max")]
+[Node("Math/Vector4/Max")]
 public class Vector4_Max_Node : Node
 {
     public override string Title => "Vec4 Max";
@@ -143,7 +143,7 @@ public class Vector4_Max_Node : Node
     public override object GetValue(NodePort port) => Vector4.Max(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector4/Min")]
+[Node("Math/Vector4/Min")]
 public class Vector4_Min_Node : Node
 {
     public override string Title => "Vec4 Min";
@@ -157,7 +157,7 @@ public class Vector4_Min_Node : Node
     public override object GetValue(NodePort port) => Vector4.Min(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector4/Move Towards")]
+[Node("Math/Vector4/Move Towards")]
 public class Vector4_MoveTowards_Node : Node
 {
     public override string Title => "Vec4 Move Towards";
@@ -172,7 +172,7 @@ public class Vector4_MoveTowards_Node : Node
     public override object GetValue(NodePort port) => Vector4.MoveTowards(GetInputValue("Current", Current), GetInputValue("Target", Target), GetInputValue("MaxDistanceDelta", MaxDistanceDelta));
 }
 
-[Node("Operations/Vector4/Normalize")]
+[Node("Math/Vector4/Normalize")]
 public class Vector4_Normalize_Node : Node
 {
     public override string Title => "Vec4 Normalize";
@@ -185,7 +185,7 @@ public class Vector4_Normalize_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("Vector", Vector).normalized;
 }
 
-[Node("Operations/Vector4/Scale")]
+[Node("Math/Vector4/Scale")]
 public class Vector4_Scale_Node : Node
 {
     public override string Title => "Vec4 Scale";
@@ -199,7 +199,7 @@ public class Vector4_Scale_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("Vector", Vector) * GetInputValue("ScaleBy", ScaleBy);
 }
 
-[Node("Operations/Vector4/Squared Magnitude")]
+[Node("Math/Vector4/Squared Magnitude")]
 public class Vector4_SqrMagnitude_Node : Node
 {
     public override string Title => "Vec4 Sqr Magnitude";
@@ -212,7 +212,7 @@ public class Vector4_SqrMagnitude_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("Vector", Vector).sqrMagnitude;
 }
 
-[Node("Operations/Vector4/Zero")]
+[Node("Math/Vector4/Zero")]
 public class Vector4_Zero_Node : Node
 {
     public override string Title => "Vec4 Zero";
@@ -223,7 +223,7 @@ public class Vector4_Zero_Node : Node
     public override object GetValue(NodePort port) => Vector4.zero;
 }
 
-[Node("Operations/Vector4/One")]
+[Node("Math/Vector4/One")]
 public class Vector4_One_Node : Node
 {
     public override string Title => "Vec4 One";
@@ -234,7 +234,7 @@ public class Vector4_One_Node : Node
     public override object GetValue(NodePort port) => Vector4.one;
 }
 
-[Node("Operations/Vector4/Up")]
+[Node("Math/Vector4/Up")]
 public class Vector4_Up_Node : Node
 {
     public override string Title => "Vec4 Up";
@@ -245,7 +245,7 @@ public class Vector4_Up_Node : Node
     public override object GetValue(NodePort port) => Vector4.up;
 }
 
-[Node("Operations/Vector4/Right")]
+[Node("Math/Vector4/Right")]
 public class Vector4_Right_Node : Node
 {
     public override string Title => "Vec4 Right";
@@ -256,7 +256,7 @@ public class Vector4_Right_Node : Node
     public override object GetValue(NodePort port) => Vector4.right;
 }
 
-[Node("Operations/Vector4/Forward")]
+[Node("Math/Vector4/Forward")]
 public class Vector4_Forward_Node : Node
 {
     public override string Title => "Vec4 Forward";
@@ -267,7 +267,7 @@ public class Vector4_Forward_Node : Node
     public override object GetValue(NodePort port) => Vector4.forward;
 }
 
-[Node("Operations/Vector4/From XYZW")]
+[Node("Math/Vector4/From XYZW")]
 public class Vector4_FromXYZW_Node : Node
 {
     public override string Title => "From XYZW";
@@ -283,7 +283,7 @@ public class Vector4_FromXYZW_Node : Node
     public override object GetValue(NodePort port) => new Vector4(GetInputValue("X", X), GetInputValue("Y", Y), GetInputValue("Z", Z), GetInputValue("W", W));
 }
 
-[Node("Operations/Vector4/To XYZW")]
+[Node("Math/Vector4/To XYZW")]
 public class Vector4_ToXYZW_Node : Node
 {
     public override string Title => "To XYZW";

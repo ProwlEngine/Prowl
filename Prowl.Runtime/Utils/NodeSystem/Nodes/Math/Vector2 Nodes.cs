@@ -3,7 +3,7 @@
 
 namespace Prowl.Runtime.NodeSystem;
 
-[Node("Operations/Vector2/Add")]
+[Node("Math/Vector2/Add")]
 public class Vector2_Add_Node : Node
 {
     public override string Title => "Vec2 A + B";
@@ -17,7 +17,7 @@ public class Vector2_Add_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) + GetInputValue("B", B);
 }
 
-[Node("Operations/Vector2/Subtract")]
+[Node("Math/Vector2/Subtract")]
 public class Vector2_Subtract_Node : Node
 {
     public override string Title => "Vec2 A - B";
@@ -31,7 +31,7 @@ public class Vector2_Subtract_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) - GetInputValue("B", B);
 }
 
-[Node("Operations/Vector2/Multiply")]
+[Node("Math/Vector2/Multiply")]
 public class Vector2_Multiply_Node : Node
 {
     public override string Title => "Vec2 A * B";
@@ -45,7 +45,7 @@ public class Vector2_Multiply_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) * GetInputValue("B", B);
 }
 
-[Node("Operations/Vector2/Divide")]
+[Node("Math/Vector2/Divide")]
 public class Vector2_Divide_Node : Node
 {
     public override string Title => "Vec2 A / B";
@@ -59,7 +59,7 @@ public class Vector2_Divide_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) / GetInputValue("B", B);
 }
 
-[Node("Operations/Vector2/Angle Between")]
+[Node("Math/Vector2/Angle Between")]
 public class Vector2_Angle_Node : Node
 {
     public override string Title => "Vec2 Angle Between";
@@ -73,7 +73,7 @@ public class Vector2_Angle_Node : Node
     public override object GetValue(NodePort port) => Vector2.AngleBetween(GetInputValue("From", From), GetInputValue("To", To));
 }
 
-[Node("Operations/Vector2/Clamp Magnitude")]
+[Node("Math/Vector2/Clamp Magnitude")]
 public class Vector2_ClampMagnitude_Node : Node
 {
     public override string Title => "Vec2 Clamp Magnitude";
@@ -87,7 +87,7 @@ public class Vector2_ClampMagnitude_Node : Node
     public override object GetValue(NodePort port) => Vector2.ClampMagnitude(GetInputValue("Vector", Vector), GetInputValue("Max", Max));
 }
 
-[Node("Operations/Vector2/Direction From To")]
+[Node("Math/Vector2/Direction From To")]
 public class Vector2_Direction_Node : Node
 {
     public override string Title => "Vec2 Direction From To";
@@ -101,7 +101,7 @@ public class Vector2_Direction_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("To", To) - GetInputValue("From", From);
 }
 
-[Node("Operations/Vector2/Distance")]
+[Node("Math/Vector2/Distance")]
 public class Vector2_Distance_Node : Node
 {
     public override string Title => "Vec2 Distance";
@@ -115,7 +115,7 @@ public class Vector2_Distance_Node : Node
     public override object GetValue(NodePort port) => Vector2.Distance(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector2/Dot")]
+[Node("Math/Vector2/Dot")]
 public class Vector2_Dot_Node : Node
 {
     public override string Title => "Vec2 Dot";
@@ -129,7 +129,7 @@ public class Vector2_Dot_Node : Node
     public override object GetValue(NodePort port) => Vector2.Dot(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector2/Lerp")]
+[Node("Math/Vector2/Lerp")]
 public class Vector2_Lerp_Node : Node
 {
     public override string Title => "Vec2 Lerp";
@@ -144,7 +144,7 @@ public class Vector2_Lerp_Node : Node
     public override object GetValue(NodePort port) => Vector2.Lerp(GetInputValue("From", From), GetInputValue("To", To), GetInputValue("Time", Time));
 }
 
-[Node("Operations/Vector2/Magnitude")]
+[Node("Math/Vector2/Magnitude")]
 public class Vector2_Magnitude_Node : Node
 {
     public override string Title => "Vec2 Magnitude";
@@ -157,7 +157,7 @@ public class Vector2_Magnitude_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("Vector", Vector).magnitude;
 }
 
-[Node("Operations/Vector2/Max")]
+[Node("Math/Vector2/Max")]
 public class Vector2_Max_Node : Node
 {
     public override string Title => "Vec2 Max";
@@ -171,7 +171,7 @@ public class Vector2_Max_Node : Node
     public override object GetValue(NodePort port) => Vector2.Max(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector2/Min")]
+[Node("Math/Vector2/Min")]
 public class Vector2_Min_Node : Node
 {
     public override string Title => "Vec2 Min";
@@ -185,7 +185,7 @@ public class Vector2_Min_Node : Node
     public override object GetValue(NodePort port) => Vector2.Min(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector2/Move Towards")]
+[Node("Math/Vector2/Move Towards")]
 public class Vector2_MoveTowards_Node : Node
 {
     public override string Title => "Vec2 Move Towards";
@@ -200,7 +200,7 @@ public class Vector2_MoveTowards_Node : Node
     public override object GetValue(NodePort port) => Vector2.MoveTowards(GetInputValue("Current", Current), GetInputValue("Target", Target), GetInputValue("MaxDistanceDelta", MaxDistanceDelta));
 }
 
-[Node("Operations/Vector2/Normalize")]
+[Node("Math/Vector2/Normalize")]
 public class Vector2_Normalize_Node : Node
 {
     public override string Title => "Vec2 Normalize";
@@ -213,7 +213,7 @@ public class Vector2_Normalize_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("Vector", Vector).normalized;
 }
 
-[Node("Operations/Vector2/Reflect")]
+[Node("Math/Vector2/Reflect")]
 public class Vector2_Reflect_Node : Node
 {
     public override string Title => "Vec2 Reflect";
@@ -227,7 +227,7 @@ public class Vector2_Reflect_Node : Node
     public override object GetValue(NodePort port) => Vector2.Reflect(GetInputValue("InDirection", InDirection), GetInputValue("Normal", Normal));
 }
 
-[Node("Operations/Vector2/Scale")]
+[Node("Math/Vector2/Scale")]
 public class Vector2_Scale_Node : Node
 {
     public override string Title => "Vec2 Scale";
@@ -241,7 +241,7 @@ public class Vector2_Scale_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) * GetInputValue("B", B);
 }
 
-[Node("Operations/Vector2/Squared Magnitude")]
+[Node("Math/Vector2/Squared Magnitude")]
 public class Vector2_SqrMagnitude_Node : Node
 {
     public override string Title => "Vec2 Sqr Magnitude";
@@ -254,7 +254,7 @@ public class Vector2_SqrMagnitude_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("Vector", Vector).sqrMagnitude;
 }
 
-[Node("Operations/Vector2/Zero")]
+[Node("Math/Vector2/Zero")]
 public class Vector2_Zero_Node : Node
 {
     public override string Title => "Vec2 Zero";
@@ -265,7 +265,7 @@ public class Vector2_Zero_Node : Node
     public override object GetValue(NodePort port) => Vector2.zero;
 }
 
-[Node("Operations/Vector2/One")]
+[Node("Math/Vector2/One")]
 public class Vector2_One_Node : Node
 {
     public override string Title => "Vec2 One";
@@ -276,7 +276,7 @@ public class Vector2_One_Node : Node
     public override object GetValue(NodePort port) => Vector2.one;
 }
 
-[Node("Operations/Vector2/Up")]
+[Node("Math/Vector2/Up")]
 public class Vector2_Up_Node : Node
 {
     public override string Title => "Vec2 Up";
@@ -287,7 +287,7 @@ public class Vector2_Up_Node : Node
     public override object GetValue(NodePort port) => Vector2.up;
 }
 
-[Node("Operations/Vector2/Right")]
+[Node("Math/Vector2/Right")]
 public class Vector2_Right_Node : Node
 {
     public override string Title => "Vec2 Right";
@@ -298,7 +298,7 @@ public class Vector2_Right_Node : Node
     public override object GetValue(NodePort port) => Vector2.right;
 }
 
-[Node("Operations/Vector2/From XY")]
+[Node("Math/Vector2/From XY")]
 public class Vector2_FromXY_Node : Node
 {
     public override string Title => "Vec2 From XY";
@@ -312,7 +312,7 @@ public class Vector2_FromXY_Node : Node
     public override object GetValue(NodePort port) => new Vector2(GetInputValue("X", X), GetInputValue("Y", Y));
 }
 
-[Node("Operations/Vector2/To XY")]
+[Node("Math/Vector2/To XY")]
 public class Vector2_ToXY_Node : Node
 {
     public override string Title => "Vec2 To XY";

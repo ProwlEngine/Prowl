@@ -3,7 +3,7 @@
 
 namespace Prowl.Runtime.NodeSystem;
 
-[Node("Operations/Boolean/AND")]
+[Node("Math/Boolean/AND")]
 public class BoolANDNode : Node
 {
     public override string Title => "A && B";
@@ -17,7 +17,7 @@ public class BoolANDNode : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) && GetInputValue("B", B);
 }
 
-[Node("Operations/Boolean/OR")]
+[Node("Math/Boolean/OR")]
 public class BoolORNode : Node
 {
     public override string Title => "A || B";
@@ -31,7 +31,7 @@ public class BoolORNode : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) || GetInputValue("B", B);
 }
 
-[Node("Operations/Boolean/Invert")]
+[Node("Math/Boolean/Invert")]
 public class BoolInvertNode : Node
 {
     public override string Title => "!A";

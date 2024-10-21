@@ -3,7 +3,7 @@
 
 namespace Prowl.Runtime.NodeSystem;
 
-[Node("Operations/Vector3/Add")]
+[Node("Math/Vector3/Add")]
 public class Vector3_Add_Node : Node
 {
     public override string Title => "Vec3 A + B";
@@ -17,7 +17,7 @@ public class Vector3_Add_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) + GetInputValue("B", B);
 }
 
-[Node("Operations/Vector3/Subtract")]
+[Node("Math/Vector3/Subtract")]
 public class Vector3_Subtract_Node : Node
 {
     public override string Title => "Vec3 A - B";
@@ -31,7 +31,7 @@ public class Vector3_Subtract_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) - GetInputValue("B", B);
 }
 
-[Node("Operations/Vector3/Multiply")]
+[Node("Math/Vector3/Multiply")]
 public class Vector3_Multiply_Node : Node
 {
     public override string Title => "Vec3 A * B";
@@ -45,7 +45,7 @@ public class Vector3_Multiply_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) * GetInputValue("B", B);
 }
 
-[Node("Operations/Vector3/Divide")]
+[Node("Math/Vector3/Divide")]
 public class Vector3_Divide_Node : Node
 {
     public override string Title => "Vec3 A / B";
@@ -59,7 +59,7 @@ public class Vector3_Divide_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("A", A) / GetInputValue("B", B);
 }
 
-[Node("Operations/Vector3/Angle Between")]
+[Node("Math/Vector3/Angle Between")]
 public class Vector3_Angle_Node : Node
 {
     public override string Title => "Vec3 Angle Between";
@@ -73,7 +73,7 @@ public class Vector3_Angle_Node : Node
     public override object GetValue(NodePort port) => Vector3.AngleBetween(GetInputValue("From", From), GetInputValue("To", To));
 }
 
-[Node("Operations/Vector3/Clamp Magnitude")]
+[Node("Math/Vector3/Clamp Magnitude")]
 public class Vector3_ClampMagnitude_Node : Node
 {
     public override string Title => "Vec3 Clamp Magnitude";
@@ -87,7 +87,7 @@ public class Vector3_ClampMagnitude_Node : Node
     public override object GetValue(NodePort port) => Vector3.ClampMagnitude(GetInputValue("Vector", Vector), GetInputValue("Max", Max));
 }
 
-[Node("Operations/Vector3/Direction From To")]
+[Node("Math/Vector3/Direction From To")]
 public class Vector3_Direction_Node : Node
 {
     public override string Title => "Vec3 Direction From To";
@@ -101,7 +101,7 @@ public class Vector3_Direction_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("To", To) - GetInputValue("From", From);
 }
 
-[Node("Operations/Vector3/Distance")]
+[Node("Math/Vector3/Distance")]
 public class Vector3_Distance_Node : Node
 {
     public override string Title => "Vec3 Distance";
@@ -115,7 +115,7 @@ public class Vector3_Distance_Node : Node
     public override object GetValue(NodePort port) => Vector3.Distance(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector3/Dot")]
+[Node("Math/Vector3/Dot")]
 public class Vector3_Dot_Node : Node
 {
     public override string Title => "Vec3 Dot";
@@ -129,7 +129,7 @@ public class Vector3_Dot_Node : Node
     public override object GetValue(NodePort port) => Vector3.Dot(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector3/Lerp")]
+[Node("Math/Vector3/Lerp")]
 public class Vector3_Lerp_Node : Node
 {
     public override string Title => "Vec3 Lerp";
@@ -144,7 +144,7 @@ public class Vector3_Lerp_Node : Node
     public override object GetValue(NodePort port) => Vector3.Lerp(GetInputValue("From", From), GetInputValue("To", To), GetInputValue("Time", Time));
 }
 
-[Node("Operations/Vector3/Cross")]
+[Node("Math/Vector3/Cross")]
 public class Vector3_Cross_Node : Node
 {
     public override string Title => "Vec3 Cross";
@@ -158,7 +158,7 @@ public class Vector3_Cross_Node : Node
     public override object GetValue(NodePort port) => Vector3.Cross(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector3/Magnitude")]
+[Node("Math/Vector3/Magnitude")]
 public class Vector3_Magnitude_Node : Node
 {
     public override string Title => "Vec3 Magnitude";
@@ -171,7 +171,7 @@ public class Vector3_Magnitude_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("Vector", Vector).magnitude;
 }
 
-[Node("Operations/Vector3/Max")]
+[Node("Math/Vector3/Max")]
 public class Vector3_Max_Node : Node
 {
     public override string Title => "Vec3 Max";
@@ -185,7 +185,7 @@ public class Vector3_Max_Node : Node
     public override object GetValue(NodePort port) => Vector3.Max(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector3/Min")]
+[Node("Math/Vector3/Min")]
 public class Vector3_Min_Node : Node
 {
     public override string Title => "Vec3 Min";
@@ -199,7 +199,7 @@ public class Vector3_Min_Node : Node
     public override object GetValue(NodePort port) => Vector3.Min(GetInputValue("A", A), GetInputValue("B", B));
 }
 
-[Node("Operations/Vector3/Move Towards")]
+[Node("Math/Vector3/Move Towards")]
 public class Vector3_MoveTowards_Node : Node
 {
     public override string Title => "Vec3 Move Towards";
@@ -214,7 +214,7 @@ public class Vector3_MoveTowards_Node : Node
     public override object GetValue(NodePort port) => Vector3.MoveTowards(GetInputValue("Current", Current), GetInputValue("Target", Target), GetInputValue("MaxDistanceDelta", MaxDistanceDelta));
 }
 
-[Node("Operations/Vector3/Normalize")]
+[Node("Math/Vector3/Normalize")]
 public class Vector3_Normalize_Node : Node
 {
     public override string Title => "Vec3 Normalize";
@@ -227,7 +227,7 @@ public class Vector3_Normalize_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("Vector", Vector).normalized;
 }
 
-[Node("Operations/Vector3/Reflect")]
+[Node("Math/Vector3/Reflect")]
 public class Vector3_Reflect_Node : Node
 {
     public override string Title => "Vec3 Reflect";
@@ -241,7 +241,7 @@ public class Vector3_Reflect_Node : Node
     public override object GetValue(NodePort port) => Vector3.Reflect(GetInputValue("InDirection", InDirection), GetInputValue("Normal", Normal));
 }
 
-[Node("Operations/Vector3/Scale")]
+[Node("Math/Vector3/Scale")]
 public class Vector3_Scale_Node : Node
 {
     public override string Title => "Vec3 Scale";
@@ -255,7 +255,7 @@ public class Vector3_Scale_Node : Node
     public override object GetValue(NodePort port) => Vector3.Scale(GetInputValue("Vector", Vector), GetInputValue("ScaleBy", ScaleBy));
 }
 
-[Node("Operations/Vector3/Squared Magnitude")]
+[Node("Math/Vector3/Squared Magnitude")]
 public class Vector3_SqrMagnitude_Node : Node
 {
     public override string Title => "Vec3 Sqr Magnitude";
@@ -268,7 +268,7 @@ public class Vector3_SqrMagnitude_Node : Node
     public override object GetValue(NodePort port) => GetInputValue("Vector", Vector).sqrMagnitude;
 }
 
-[Node("Operations/Vector3/Zero")]
+[Node("Math/Vector3/Zero")]
 public class Vector3_Zero_Node : Node
 {
     public override string Title => "Vec3 Zero";
@@ -279,7 +279,7 @@ public class Vector3_Zero_Node : Node
     public override object GetValue(NodePort port) => Vector3.zero;
 }
 
-[Node("Operations/Vector3/One")]
+[Node("Math/Vector3/One")]
 public class Vector3_One_Node : Node
 {
     public override string Title => "Vec3 One";
@@ -290,7 +290,7 @@ public class Vector3_One_Node : Node
     public override object GetValue(NodePort port) => Vector3.one;
 }
 
-[Node("Operations/Vector3/Up")]
+[Node("Math/Vector3/Up")]
 public class Vector3_Up_Node : Node
 {
     public override string Title => "Vec3 Up";
@@ -301,7 +301,7 @@ public class Vector3_Up_Node : Node
     public override object GetValue(NodePort port) => Vector3.up;
 }
 
-[Node("Operations/Vector3/Right")]
+[Node("Math/Vector3/Right")]
 public class Vector3_Right_Node : Node
 {
     public override string Title => "Vec3 Right";
@@ -312,7 +312,7 @@ public class Vector3_Right_Node : Node
     public override object GetValue(NodePort port) => Vector3.right;
 }
 
-[Node("Operations/Vector3/Forward")]
+[Node("Math/Vector3/Forward")]
 public class Vector3_Forward_Node : Node
 {
     public override string Title => "Vec3 Forward";
@@ -323,7 +323,7 @@ public class Vector3_Forward_Node : Node
     public override object GetValue(NodePort port) => Vector3.forward;
 }
 
-[Node("Operations/Vector3/From XYZ")]
+[Node("Math/Vector3/From XYZ")]
 public class Vector3_FromXYZ_Node : Node
 {
     public override string Title => "Vec3 From XYZ";
@@ -338,7 +338,7 @@ public class Vector3_FromXYZ_Node : Node
     public override object GetValue(NodePort port) => new Vector3(GetInputValue("X", X), GetInputValue("Y", Y), GetInputValue("Z", Z));
 }
 
-[Node("Operations/Vector3/To XYZ")]
+[Node("Math/Vector3/To XYZ")]
 public class Vector3_ToXYZ_Node : Node
 {
     public override string Title => "Vec3 To XYZ";
