@@ -82,6 +82,11 @@ public static class RuntimeUtils
                 t = asm.GetType(qualifiedTypeName);
                 if (t != null)
                     return t;
+
+                // If not found, try to find by name without namespace
+                t = asm.GetTypes().FirstOrDefault(t => t.Name.Equals(qualifiedTypeName, StringComparison.OrdinalIgnoreCase));
+                if (t != null)
+                    return t;
             }
             return null;
         }
