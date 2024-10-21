@@ -11,7 +11,7 @@ public class GetTagNode : Node
     public override float Width => 100;
 
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Output] public string Tag;
+    [Output, SerializeIgnore] public string Tag;
 
     public override object GetValue(NodePort input)
     {

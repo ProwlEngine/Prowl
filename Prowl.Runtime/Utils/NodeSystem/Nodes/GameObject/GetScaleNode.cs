@@ -11,7 +11,7 @@ public class GetScaleNode : Node
     public override float Width => 100;
 
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Output] public Vector3 Scale;
+    [Output, SerializeIgnore] public Vector3 Scale;
 
     public override object GetValue(NodePort input)
     {

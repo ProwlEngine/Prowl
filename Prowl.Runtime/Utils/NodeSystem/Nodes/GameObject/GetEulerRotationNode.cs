@@ -11,7 +11,7 @@ public class GetEulerRotationNode : Node
     public override float Width => 100;
 
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Output] public Vector3 EulerRotation;
+    [Output, SerializeIgnore] public Vector3 EulerRotation;
 
     public override object GetValue(NodePort input)
     {

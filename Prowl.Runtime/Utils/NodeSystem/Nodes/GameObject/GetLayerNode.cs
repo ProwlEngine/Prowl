@@ -11,7 +11,7 @@ public class GetLayerNode : Node
     public override float Width => 100;
 
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Output] public string Layer;
+    [Output, SerializeIgnore] public string Layer;
 
     public override object GetValue(NodePort input)
     {

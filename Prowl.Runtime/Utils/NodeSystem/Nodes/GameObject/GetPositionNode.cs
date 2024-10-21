@@ -11,7 +11,7 @@ public class GetPositionNode : Node
     public override float Width => 100;
 
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Output] public Vector3 Position;
+    [Output, SerializeIgnore] public Vector3 Position;
 
     public override object GetValue(NodePort input)
     {

@@ -11,7 +11,7 @@ public class GetNameNode : Node
     public override float Width => 100;
 
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Output] public string Name;
+    [Output, SerializeIgnore] public string Name;
 
     public override object GetValue(NodePort input)
     {

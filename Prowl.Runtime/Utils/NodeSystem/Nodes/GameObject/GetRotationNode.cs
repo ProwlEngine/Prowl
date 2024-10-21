@@ -11,7 +11,7 @@ public class GetRotationNode : Node
     public override float Width => 100;
 
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Output] public Quaternion Rotation;
+    [Output, SerializeIgnore] public Quaternion Rotation;
 
     public override object GetValue(NodePort input)
     {

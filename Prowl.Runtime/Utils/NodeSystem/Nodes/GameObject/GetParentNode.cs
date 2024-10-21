@@ -11,7 +11,7 @@ public class GetParentNode : Node
     public override float Width => 100;
 
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Output] public GameObject Parent;
+    [Output, SerializeIgnore] public GameObject Parent;
 
     public override object GetValue(NodePort input)
     {

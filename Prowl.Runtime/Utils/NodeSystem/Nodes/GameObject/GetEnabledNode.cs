@@ -11,7 +11,7 @@ public class GetEnabledNode : Node
     public override float Width => 100;
 
     [Input(ShowBackingValue.Never)] public GameObject Target;
-    [Output] public bool Enabled;
+    [Output, SerializeIgnore] public bool Enabled;
 
     public override object GetValue(NodePort input)
     {
