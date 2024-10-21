@@ -10,6 +10,7 @@ using Veldrid.StartupUtilities;
 
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Pipelines;
+using System.Linq;
 
 namespace Prowl.Runtime;
 
@@ -82,62 +83,31 @@ public static partial class Graphics
     public static CommandList GetCommandList()
     {
         CommandList list = Factory.CreateCommandList();
-
         list.Begin();
 
         return list;
     }
 
-    public static void SubmitCommandBuffer(CommandBuffer commandBuffer, bool awaitComplete = false, ulong timeout = ulong.MaxValue)
+    public static void SubmitCommandBuffer(CommandBuffer commandBuffer, GraphicsFence? fence = null)
     {
         commandBuffer.Clear();
-
-        try
-        {
-            if (awaitComplete)
-            {
-                Fence fence = Factory.CreateFence(false);
-                Device.SubmitCommands(commandBuffer._commandList, fence);
-                Device.WaitForFence(fence, timeout);
-                fence.Dispose();
-
-                return;
-            }
-
-            Device.SubmitCommands(commandBuffer._commandList);
-        }
-        catch (Exception ex)
-        {
-            Debug.LogException(new Exception("Failed to execute command list", ex));
-        }
+        Device.SubmitCommands(commandBuffer._commandList, fence.Fence);
     }
 
-    public static void SubmitCommandList(CommandList list, bool awaitComplete = false, ulong timeout = ulong.MaxValue)
+    public static void SubmitCommandList(CommandList list, GraphicsFence? fence = null)
     {
         list.End();
-
-        if (awaitComplete)
-        {
-            Fence fence = Factory.CreateFence(false);
-            Device.SubmitCommands(list, fence);
-            Device.WaitForFence(fence, timeout);
-            fence.Dispose();
-
-            return;
-        }
-
-        Device.SubmitCommands(list);
+        Device.SubmitCommands(list, fence.Fence);
     }
 
-    internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool awaitComplete = false)
+    public static void WaitForFence(GraphicsFence fence, ulong timeout = ulong.MaxValue)
     {
-        CommandList commandList = GetCommandList();
+        Device.WaitForFence(fence.Fence, timeout);
+    }
 
-        commandList.CopyTexture(source, destination, mipLevel, arrayLayer);
-
-        SubmitCommandList(commandList, awaitComplete);
-
-        commandList.Dispose();
+    public static void WaitForFences(GraphicsFence[] fences, bool waitAll, ulong timeout = ulong.MaxValue)
+    {
+        Device.WaitForFences(fences.Select(x => x.Fence).ToArray(), waitAll, timeout);
     }
 
     internal static void SubmitResourcesForDisposal(IEnumerable<IDisposable> resources)

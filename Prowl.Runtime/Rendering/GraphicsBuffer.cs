@@ -7,7 +7,7 @@ using Veldrid;
 
 namespace Prowl.Runtime.Rendering;
 
-public class GraphicsBuffer
+public sealed class GraphicsBuffer
 {
     public static readonly GraphicsBuffer Empty = new GraphicsBuffer(0, 0, false);
     public static readonly GraphicsBuffer EmptyRW = new GraphicsBuffer(0, 0, true);
