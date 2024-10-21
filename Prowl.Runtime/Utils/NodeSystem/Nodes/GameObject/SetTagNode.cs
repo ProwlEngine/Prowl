@@ -10,7 +10,7 @@ public class SetTagNode : InOutFlowNode
     public override string Title => "Set Tag";
     public override float Width => 100;
 
-    [Input] public GameObject Target;
+    [Input(ShowBackingValue.Never)] public GameObject Target;
     [Input] public string Tag;
 
     public override void Execute(NodePort input)

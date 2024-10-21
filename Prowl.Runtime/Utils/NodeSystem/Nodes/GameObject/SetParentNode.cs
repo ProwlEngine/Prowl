@@ -10,8 +10,8 @@ public class SetParentNode : InOutFlowNode
     public override string Title => "Set Parent";
     public override float Width => 100;
 
-    [Input] public GameObject Target;
-    [Input] public GameObject Parent;
+    [Input(ShowBackingValue.Never)] public GameObject Target;
+    [Input(ShowBackingValue.Never)] public GameObject Parent;
     [Input] public bool KeepWorldPosition;
 
     public override void Execute(NodePort input)

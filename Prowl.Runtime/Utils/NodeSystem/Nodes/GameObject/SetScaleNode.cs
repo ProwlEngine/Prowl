@@ -10,7 +10,7 @@ public class SetScaleNode : InOutFlowNode
     public override string Title => "Set Scale";
     public override float Width => 100;
 
-    [Input] public GameObject Target;
+    [Input(ShowBackingValue.Never)] public GameObject Target;
     [Input] public Vector3 Scale;
 
     public override void Execute(NodePort input)

@@ -11,7 +11,7 @@ public class SetEulerRotationNode : InOutFlowNode
     public override float Width => 100;
 
     [Input] public bool InLocalSpace;
-    [Input] public GameObject Target;
+    [Input(ShowBackingValue.Never)] public GameObject Target;
     [Input] public Vector3 Rotation;
 
     public override void Execute(NodePort input)

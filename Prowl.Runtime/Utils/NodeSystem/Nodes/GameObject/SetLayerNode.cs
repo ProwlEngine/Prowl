@@ -10,7 +10,7 @@ public class SetLayerNode : InOutFlowNode
     public override string Title => "Set Layer";
     public override float Width => 100;
 
-    [Input] public GameObject Target;
+    [Input(ShowBackingValue.Never)] public GameObject Target;
     [Input] public string Layer;
 
     public override void Execute(NodePort input)
