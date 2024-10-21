@@ -191,7 +191,7 @@ public static class UIDrawListRenderer
         if (!s_initialized)
         {
             Debug.LogWarning("UI Draw List Renderer not initialized. Try to ensure that Initialize() is called to avoid implicit initialization.");
-            Initialize(Runtime.Graphics.ScreenTarget.OutputDescription, ColorSpaceHandling.Direct);
+            Initialize(cl.CurrentFramebuffer?.OutputDescription ?? Runtime.Graphics.ScreenTarget.OutputDescription, ColorSpaceHandling.Direct);
         }
 
         if (lists.Length == 0)
