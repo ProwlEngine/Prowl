@@ -11,7 +11,7 @@ public sealed class GraphicsFence : IDisposable
 {
     public Fence Fence;
 
-    internal GraphicsFence(bool signaled = false)
+    public GraphicsFence(bool signaled = false)
     {
         Fence = Graphics.Factory.CreateFence(signaled);
     }
