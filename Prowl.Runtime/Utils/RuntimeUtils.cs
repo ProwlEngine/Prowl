@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -37,6 +38,7 @@ public enum Platform
 }
 
 
+[RequiresUnreferencedCode("These methods use reflection and can't be statically analyzed.")]
 public static class RuntimeUtils
 {
     private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
@@ -78,6 +80,11 @@ public static class RuntimeUtils
             foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
             {
                 t = asm.GetType(qualifiedTypeName);
+                if (t != null)
+                    return t;
+
+                // If not found, try to find by name without namespace
+                t = asm.GetTypes().FirstOrDefault(t => t.Name.Equals(qualifiedTypeName, StringComparison.OrdinalIgnoreCase));
                 if (t != null)
                     return t;
             }

@@ -9,8 +9,8 @@ public class ForLoopNode : InOutFlowNode
     public override string Title => "For Loop";
     public override float Width => 170;
 
-    [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.Strict), SerializeIgnore]
-    public FlowNode Break;
+    //[Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.Strict), SerializeIgnore]
+    //public FlowNode Break;
 
     [Output(ConnectionType.Override, TypeConstraint.Strict), SerializeIgnore]
     public FlowNode Completed;
@@ -24,11 +24,11 @@ public class ForLoopNode : InOutFlowNode
 
     public override void Execute(NodePort input)
     {
-        if (input.fieldName == nameof(Break))
-        {
-            ExecuteNext(nameof(Completed));
-            return;
-        }
+        //if (input.fieldName == nameof(Break))
+        //{
+        //    ExecuteNext(nameof(Completed));
+        //    return;
+        //}
 
         var index = GetInputValue("FirstIndex", FirstIndex);
         var lastIndex = GetInputValue("LastIndex", LastIndex);

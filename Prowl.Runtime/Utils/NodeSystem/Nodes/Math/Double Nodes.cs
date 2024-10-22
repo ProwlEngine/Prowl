@@ -1,86 +1,88 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
 namespace Prowl.Runtime.NodeSystem;
 
-[Node("Operations/Integer/Add")]
-public class IntegerAddNode : Node
+[Node("Math/Double/Add")]
+public class DoubleAddNode : Node
 {
     public override string Title => "A + B";
     public override float Width => 75;
 
-    [Input] public int A;
-    [Input] public int B;
+    [Input] public double A;
+    [Input] public double B;
 
-    [Output, SerializeIgnore] public int Result;
+    [Output, SerializeIgnore] public double Result;
 
     public override object GetValue(NodePort port) => GetInputValue("A", A) + GetInputValue("B", B);
 }
 
-[Node("Operations/Int/Subtract")]
-public class IntSubtractNode : Node
+[Node("Math/Double/Subtract")]
+public class DoubleSubtractNode : Node
 {
     public override string Title => "A - B";
     public override float Width => 75;
 
-    [Input] public int A;
-    [Input] public int B;
+    [Input] public double A;
+    [Input] public double B;
 
-    [Output, SerializeIgnore] public int Result;
+    [Output, SerializeIgnore] public double Result;
 
     public override object GetValue(NodePort port) => GetInputValue("A", A) - GetInputValue("B", B);
 }
 
-[Node("Operations/Int/Multiply")]
-public class IntMultiplyNode : Node
+[Node("Math/Double/Multiply")]
+public class DoubleMultiplyNode : Node
 {
     public override string Title => "A * B";
     public override float Width => 75;
 
-    [Input] public int A;
-    [Input] public int B;
+    [Input] public double A;
+    [Input] public double B;
 
-    [Output, SerializeIgnore] public int Result;
+    [Output, SerializeIgnore] public double Result;
 
     public override object GetValue(NodePort port) => GetInputValue("A", A) * GetInputValue("B", B);
 }
 
-[Node("Operations/Int/Divide")]
-public class IntDivideNode : Node
+[Node("Math/Double/Divide")]
+public class DoubleDivideNode : Node
 {
     public override string Title => "A / B";
     public override float Width => 75;
 
-    [Input] public int A;
-    [Input] public int B;
+    [Input] public double A;
+    [Input] public double B;
 
-    [Output, SerializeIgnore] public int Result;
+    [Output, SerializeIgnore] public double Result;
 
     public override object GetValue(NodePort port) => GetInputValue("A", A) / GetInputValue("B", B);
 }
 
-[Node("Operations/Int/Modulo")]
-public class IntModuloNode : Node
+[Node("Math/Double/Modulo")]
+public class DoubleModuloNode : Node
 {
     public override string Title => "A % B";
     public override float Width => 75;
 
-    [Input] public int A;
-    [Input] public int B;
+    [Input] public double A;
+    [Input] public double B;
 
-    [Output, SerializeIgnore] public int Result;
+    [Output, SerializeIgnore] public double Result;
 
     public override object GetValue(NodePort port) => GetInputValue("A", A) % GetInputValue("B", B);
 }
 
-[Node("Operations/Int/Compare")]
-public class IntCompareNode : InFlowNode
+[Node("Math/Double/Compare")]
+public class DoubleCompareNode : InFlowNode
 {
-    public override string Title => "Compare Ints";
+    public override string Title => "Compare Doubles";
     public override float Width => 75;
 
-    [Input] public int A;
-    [Input] public int B;
+    [Input] public double A;
+    [Input] public double B;
 
     [Output(ConnectionType.Override, TypeConstraint.Strict), SerializeIgnore]
     public FlowNode OnEquals;
@@ -99,9 +101,9 @@ public class IntCompareNode : InFlowNode
         var a = GetInputValue("A", A);
         var b = GetInputValue("B", B);
 
-        if (a == b)
+        if (MathD.ApproximatelyEquals(a, b))
             ExecuteNext("OnEquals");
-        else if (a != b)
+        else if (MathD.ApproximatelyEquals(a , b))
             ExecuteNext("OnNotEquals");
         else if (a > b)
             ExecuteNext("OnGreaterThan");
