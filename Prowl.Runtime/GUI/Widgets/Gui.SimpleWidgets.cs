@@ -270,14 +270,15 @@ public partial class Gui
                 long frame = GetNodeStorage<long>(parentNode, "Popup_Frame");
                 if (frame < Time.frameCount)
                 {
-                    if ((IsPointerClick(MouseButton.Left) || IsPointerClick(MouseButton.Middle) || IsPointerClick(MouseButton.Right)) &&
-                        !IsPointerMoving &&
-                        !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
-                                                                      //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
-                        !IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
-                    {
-                        CloseAllPopups();
-                        return false;
+                    if (IsPointerClick(MouseButton.Left) || IsPointerClick(MouseButton.Middle) || IsPointerClick(MouseButton.Right)) {
+                        bool isMouseContained = node.LayoutData.Rect.Contains(PointerPos); // Mouse not in Popup
+                        bool isMouseBlocked = IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex); // Not blocked by any interactables above this popup
+                                                                                                           //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
+                        if (!IsPointerMoving && !isMouseContained && !isMouseBlocked)
+                        {
+                            CloseAllPopups();
+                            return false;
+                        }
                     }
                 }
 
