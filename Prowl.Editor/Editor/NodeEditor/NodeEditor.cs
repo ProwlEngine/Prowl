@@ -1048,7 +1048,6 @@ public class NodeEditor
                 g.OpenPopup("NodeCreatePopup", g.PointerPos);
         }
 
-        Runtime.GUI.Layout.LayoutNode popupHolder = g.CurrentNode;
         if (g.BeginPopup("NodeCreatePopup", out Runtime.GUI.Layout.LayoutNode? popup))
         {
             using (popup!.Width(200).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())

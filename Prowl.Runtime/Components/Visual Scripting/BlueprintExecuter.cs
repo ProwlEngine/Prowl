@@ -12,6 +12,7 @@ public class BlueprintExecuter : MonoBehaviour
 
     public List<AssetRef<Blueprint>> Blueprints;
 
+    private List<OnAwakeEventNode> _awakeNodes = [];
     private List<OnStartEventNode> _startNodes = [];
     private List<OnEnableEventNode> _enableNodes = [];
     private List<OnDisableEventNode> _disableNodes = [];
@@ -21,9 +22,20 @@ public class BlueprintExecuter : MonoBehaviour
     private List<OnLateUpdateEventNode> _lateUpdateNodes = [];
     private List<OnFixedUpdateEventNode> _fixedUpdateNodes = [];
 
+    public override void OnValidate() => UpdateEventCache();
 
-    public override void Awake()
+    public void UpdateEventCache()
     {
+        _awakeNodes.Clear();
+        _startNodes.Clear();
+        _enableNodes.Clear();
+        _disableNodes.Clear();
+        _destroyNodes.Clear();
+
+        _updateNodes.Clear();
+        _lateUpdateNodes.Clear();
+        _fixedUpdateNodes.Clear();
+
         foreach (AssetRef<Blueprint> Blueprint in Blueprints)
         {
             if (Blueprint.IsAvailable)
@@ -31,7 +43,7 @@ public class BlueprintExecuter : MonoBehaviour
                 foreach (Node node in Blueprint.Res.nodes)
                 {
                     if (node is OnAwakeEventNode awakeNode)
-                        awakeNode.Execute(null); // Can execute immediately and not cache since Awake is never* called twice
+                        _awakeNodes.Add(awakeNode);
                     else if (node is OnStartEventNode startNode)
                         _startNodes.Add(startNode);
                     else if (node is OnEnableEventNode enableNode)
@@ -59,6 +71,12 @@ public class BlueprintExecuter : MonoBehaviour
             (node.graph as Blueprint)!.SetActiveGameObject(GameObject);
             node.Execute(null);
         }
+    }
+
+    public override void Awake()
+    {
+        UpdateEventCache();
+        ExecuteEventNodes(_awakeNodes);
     }
 
     public override void Start() => ExecuteEventNodes(_startNodes);
