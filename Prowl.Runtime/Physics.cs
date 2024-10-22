@@ -145,26 +145,33 @@ public static class Physics
 
     private static void InterpolateTransforms()
     {
+#warning TODO: Very broken
         // Find the interpolation factor, a value [0,1] which represents the ratio of the current time relative to the previous and the next physics step,
         // a value of 0.5 means that we're halfway to the next physics update, just have to wait for the same amount of time.
-        var interpolationFactor = (float)(timer / Time.fixedDeltaTime);
-        interpolationFactor = MathF.Min(interpolationFactor, 1f);
+        //var interpolationFactor = (float)(timer / Time.fixedDeltaTime);
+        //interpolationFactor = MathF.Min(interpolationFactor, 1f);
         foreach (var body in Bodies)
         {
             if (body == null) continue;
 
-            if (body.InterpolationMode == InterpolationMode.Extrapolated)
-                interpolationFactor += 1f;
-
-            var interpolatedPosition = Vector3.Lerp(body.PreviousPose.Position, body.CurrentPose.Position, interpolationFactor);
-            // We may be able to get away with just a Lerp instead of Slerp, not sure if it needs to be normalized though at which point it may not be that much faster
-            var interpolatedRotation = Quaternion.Slerp(body.PreviousPose.Orientation, body.CurrentPose.Orientation, interpolationFactor);
-
             var prevVersion = body.Transform.version;
-            body.Transform.rotation = interpolatedRotation;
-            body.Transform.position = interpolatedPosition - Vector3.Transform(body.CenterOfMass, interpolatedRotation);
+            body.Transform.rotation = body.CurrentPose.Orientation;
+            body.Transform.position = body.CurrentPose.Position;
             // Physics doesnt (for the time being, may change) update the transform version
             body.Transform.version = prevVersion;
+
+            //if (body.InterpolationMode == InterpolationMode.Extrapolated)
+            //    interpolationFactor += 1f;
+            //
+            //var interpolatedPosition = Vector3.Lerp(body.PreviousPose.Position, body.CurrentPose.Position, interpolationFactor);
+            //// We may be able to get away with just a Lerp instead of Slerp, not sure if it needs to be normalized though at which point it may not be that much faster
+            //var interpolatedRotation = Quaternion.Slerp(body.PreviousPose.Orientation, body.CurrentPose.Orientation, interpolationFactor);
+            //
+            //var prevVersion = body.Transform.version;
+            //body.Transform.rotation = interpolatedRotation;
+            //body.Transform.position = interpolatedPosition - Vector3.Transform(body.CenterOfMass, interpolatedRotation);
+            //// Physics doesnt (for the time being, may change) update the transform version
+            //body.Transform.version = prevVersion;
         }
     }
 
