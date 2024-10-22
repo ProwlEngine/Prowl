@@ -52,14 +52,7 @@ public class BlueprintWindow : EditorWindow
 
                 changed |= _editor.DrawBlackBoard(gui);
 
-                if (!_editor.IsDragging)
-                {
-                    _editor.DrawContextMenu(gui);
-                }
-                else
-                {
-                    gui.CloseAllPopups();
-                }
+                _editor.DrawContextMenu(gui);
 
                 if (changed)
                 {

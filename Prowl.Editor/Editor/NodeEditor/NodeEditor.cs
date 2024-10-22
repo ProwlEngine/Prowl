@@ -1059,6 +1059,10 @@ public class NodeEditor
                 s_rootMenuItem ??= GetNodeMenuTree(_graph.NodeCategories, _graph.NodeTypes, _graph.NodeReflectionTypes);
                 DrawMenuItems(s_rootMenuItem, g);
             }
+
+
+            if (IsDragging)
+                g.CloseAllPopups();
         }
     }
 
