@@ -642,8 +642,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (type == typeof(MonoBehaviour))
         {
             // Special case for Component
-            foreach (KeyValuePair<Type, MonoBehaviour> kvp in _components.ToArray())
-                yield return kvp.Value;
+            foreach (MonoBehaviour comp in _components.Values)
+                yield return comp;
         }
         else
         {
