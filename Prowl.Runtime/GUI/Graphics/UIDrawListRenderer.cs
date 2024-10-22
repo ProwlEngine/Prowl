@@ -35,9 +35,9 @@ public static class UIDrawListRenderer
     private static ResourceLayout s_layout;
     private static ResourceLayout s_textureLayout;
 
-    private static Pipeline s_pipeline;
-
     private static ResourceSet s_mainResourceSet;
+
+    private static GraphicsPipelineDescription s_pipelineDescription;
 
 
     private static bool s_initialized = false;
@@ -46,6 +46,9 @@ public static class UIDrawListRenderer
     // If for some reason we're rendering 500+ textures caching isn't solving anything anyways.
     private static readonly int s_texturesBeforeClear = 500;
     private static readonly Dictionary<Rendering.Texture, ResourceSet> s_textureSets = [];
+
+    private static readonly int s_pipelinesBeforeClear = 500;
+    private static readonly Dictionary<OutputDescription, Pipeline> s_pipelineCache = [];
 
 
 
@@ -102,6 +105,35 @@ public static class UIDrawListRenderer
             Runtime.Graphics.Device.LinearSampler));
 
         s_mainResourceSet.Name = "UI Main Resource Set";
+
+        VertexLayoutDescription[] vertexLayouts =
+        [
+            new VertexLayoutDescription(
+                new VertexElementDescription("in_position", VertexElementSemantic.Position, VertexElementFormat.Float3),
+                new VertexElementDescription("in_texCoord", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
+                new VertexElementDescription("in_color", VertexElementSemantic.Color, VertexElementFormat.Byte4_Norm))
+        ];
+
+        s_pipelineDescription = new GraphicsPipelineDescription(
+            BlendStateDescription.SingleAlphaBlend,
+
+            new DepthStencilStateDescription(false, false, ComparisonKind.Always),
+
+            new RasterizerStateDescription(FaceCullMode.None, PolygonFillMode.Solid, FrontFace.Clockwise, true, true),
+
+            PrimitiveTopology.TriangleList,
+
+            new ShaderSetDescription(
+                vertexLayouts,
+                [s_vertexShader, s_fragmentShader]
+            ),
+
+            [s_layout, s_textureLayout],
+
+            Runtime.Graphics.ScreenTarget.OutputDescription,
+
+            ResourceBindingModel.Default
+        );
     }
 
 
@@ -130,6 +162,17 @@ public static class UIDrawListRenderer
     }
 
 
+    public static void ClearCachedPipelines()
+    {
+        foreach (IDisposable resource in s_pipelineCache.Values)
+            resource.Dispose();
+
+        s_pipelineCache.Clear();
+
+        GetPipeline(null); // Screen target
+    }
+
+
     private static byte[] LoadEmbeddedShaderCode(string name, ShaderStages stage, ColorSpaceHandling handling)
     {
         // No spec. constants since it creates a divide between platforms that do/don't support them
@@ -154,6 +197,26 @@ public static class UIDrawListRenderer
     }
 
 
+    private static Pipeline GetPipeline(OutputDescription? targetDescription)
+    {
+        OutputDescription target = targetDescription ?? Runtime.Graphics.ScreenTarget.OutputDescription;
+
+        if (s_pipelineCache.TryGetValue(target, out Pipeline pipeline))
+            return pipeline;
+
+        GraphicsPipelineDescription pd = s_pipelineDescription;
+
+        pd.Outputs = target;
+
+        pipeline = Runtime.Graphics.Factory.CreateGraphicsPipeline(pd);
+        pipeline.Name = "UI Pipeline";
+
+        s_pipelineCache.Add(target, pipeline);
+
+        return pipeline;
+    }
+
+
     public static unsafe void Draw(CommandList cl, UIDrawList[] lists, Vector2 displaySize, double clipscale)
     {
         if (!s_initialized)
@@ -162,41 +225,6 @@ public static class UIDrawListRenderer
             Initialize(ColorSpaceHandling.Direct);
         }
 
-#warning FIXME: This is a temporary fix to allow the UI to render on multiple differant framebuffers, Ideally this is cached.
-
-        VertexLayoutDescription[] vertexLayouts =
-        [
-            new VertexLayoutDescription(
-                new VertexElementDescription("in_position", VertexElementSemantic.Position, VertexElementFormat.Float3),
-                new VertexElementDescription("in_texCoord", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                new VertexElementDescription("in_color", VertexElementSemantic.Color, VertexElementFormat.Byte4_Norm))
-        ];
-
-        GraphicsPipelineDescription pd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleAlphaBlend,
-
-            new DepthStencilStateDescription(false, false, ComparisonKind.Always),
-
-            new RasterizerStateDescription(FaceCullMode.None, PolygonFillMode.Solid, FrontFace.Clockwise, true, true),
-
-            PrimitiveTopology.TriangleList,
-
-            new ShaderSetDescription(
-                vertexLayouts,
-                [s_vertexShader, s_fragmentShader]
-            ),
-
-            [s_layout, s_textureLayout],
-
-            cl.CurrentFramebuffer?.OutputDescription ?? Runtime.Graphics.ScreenTarget.OutputDescription,
-
-            ResourceBindingModel.Default
-        );
-
-        s_pipeline?.Dispose();
-        s_pipeline = Runtime.Graphics.Factory.CreateGraphicsPipeline(pd);
-        s_pipeline.Name = "UI Pipeline";
-
         if (lists.Length == 0)
         {
             return;
@@ -204,6 +232,9 @@ public static class UIDrawListRenderer
 
         if (s_textureSets.Count > s_texturesBeforeClear)
             ClearCachedImageResources();
+
+        if (s_pipelineCache.Count > s_pipelinesBeforeClear)
+            ClearCachedPipelines();
 
         uint totalVtxCount = 0;
         uint totalIdxCount = 0;
@@ -231,10 +262,9 @@ public static class UIDrawListRenderer
 
         cl.UpdateBuffer(s_projMatrixBuffer, 0, ref mvp);
 
-
         cl.SetVertexBuffer(0, s_vertexBuffer);
         cl.SetIndexBuffer(s_indexBuffer, IndexFormat.UInt32);
-        cl.SetPipeline(s_pipeline);
+        cl.SetPipeline(GetPipeline(cl.CurrentFramebuffer?.OutputDescription));
         cl.SetGraphicsResourceSet(0, s_mainResourceSet);
 
         // Render command lists
@@ -288,12 +318,15 @@ public static class UIDrawListRenderer
         s_fragmentShader.Dispose();
         s_layout.Dispose();
         s_textureLayout.Dispose();
-        s_pipeline.Dispose();
         s_mainResourceSet.Dispose();
 
-        foreach (IDisposable resource in s_textureSets.Values)
-        {
+        foreach (IDisposable resource in s_pipelineCache.Values)
             resource.Dispose();
-        }
+
+        foreach (IDisposable resource in s_textureSets.Values)
+            resource.Dispose();
+
+        s_pipelineCache.Clear();
+        s_textureSets.Clear();
     }
 }
