@@ -126,7 +126,8 @@ public class SceneViewWindow : EditorWindow
         }
 
         Debug.ClearGizmos();
-        foreach (GameObject activeGO in SceneManager.Scene.ActiveObjects)
+        List<GameObject> activeGOs = SceneManager.Scene.ActiveObjects.ToList();
+        foreach (GameObject activeGO in activeGOs)
         {
             if (activeGO.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
 

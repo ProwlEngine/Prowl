@@ -80,7 +80,7 @@ public static class SceneManager
     {
         EngineObject.HandleDestroyed();
 
-        IEnumerable<GameObject> activeGOs = Scene.ActiveObjects;
+        List<GameObject> activeGOs = Scene.ActiveObjects.ToList();
         foreach (GameObject go in activeGOs)
             go.PreUpdate();
 
@@ -100,14 +100,14 @@ public static class SceneManager
     public static void ForeachComponent(IEnumerable<GameObject> objs, Action<MonoBehaviour> action)
     {
         foreach (var go in objs)
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
+            foreach (var comp in go.GetComponents(typeof(MonoBehaviour)))
                 if (comp.EnabledInHierarchy)
                     action.Invoke(comp);
     }
 
     public static void PhysicsUpdate()
     {
-        var activeGOs = Scene.ActiveObjects;
+        List<GameObject> activeGOs = Scene.ActiveObjects.ToList();
         ForeachComponent(activeGOs, (x) =>
         {
             x.Do(x.UpdateFixedUpdateCoroutines);
