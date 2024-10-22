@@ -1219,7 +1219,12 @@ public class NodeEditor
 
     private static void SortChildren(NodeMenuItemInfo node)
     {
-        node.Children.Sort((x, y) => x.Type == null ? -1 : 1);
+        node.Children.Sort((x, y) => {
+            if (x.Type == null && y.Type == null) return 0;  // Both null, equal
+            if (x.Type == null) return -1;                   // x null comes first
+            if (y.Type == null) return 1;                    // y null comes second
+            return 0;  // Both not null, consider equal
+        });
 
         foreach (NodeMenuItemInfo child in node.Children)
             SortChildren(child);
