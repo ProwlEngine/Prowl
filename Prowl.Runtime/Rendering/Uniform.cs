@@ -33,11 +33,6 @@ public struct UniformMember
 
 public class Uniform
 {
-    private static string CleanseName(string rawName)
-    {
-        return rawName.Replace("type.", "");
-    }
-
     public readonly ResourceKind kind;
     public readonly string name;
     public readonly uint binding;
@@ -49,19 +44,19 @@ public class Uniform
 
     private Uniform() { }
 
-    public Uniform(string rawName, uint binding, ResourceKind kind)
+    public Uniform(string name, uint binding, ResourceKind kind)
     {
         this.kind = kind;
-        name = CleanseName(rawName);
+        this.name = name;
         this.binding = binding;
         members = [];
     }
 
 
-    public Uniform(string rawName, uint binding, uint size, UniformMember[] members)
+    public Uniform(string name, uint binding, uint size, UniformMember[] members)
     {
         kind = ResourceKind.UniformBuffer;
-        name = CleanseName(rawName);
+        this.name = name;
         this.binding = binding;
         this.size = size;
         this.members = members;
