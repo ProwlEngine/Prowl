@@ -22,6 +22,7 @@ public struct ReflectedResourceInfo
     public VertexInput[] vertexInputs;
     public Uniform[] uniforms;
     public ShaderStages[] stages;
+    public uint threadsX, threadsY, threadsZ;
 }
 
 public static partial class ShaderCompiler
@@ -33,6 +34,10 @@ public static partial class ShaderCompiler
         List<Uniform> uniforms = [];
         List<ShaderStages> stages = [];
 
+        uint kX = 0;
+        uint kY = 0;
+        uint kZ = 0;
+
         for (int i = 0; i < compiledSPIRV.Length; i++)
         {
             ShaderDescription shader = compiledSPIRV[i];
@@ -40,18 +45,28 @@ public static partial class ShaderCompiler
             ParsedIR IR = context.ParseSpirv(shader.ShaderBytes);
 
             var compiler = context.CreateReflector(IR);
-
             var resources = compiler.CreateShaderResources();
 
             if (shader.Stage == ShaderStages.Vertex)
                 vertexInputs = VertexInputReflector.GetStageInputs(compiler, resources, Mesh.MeshSemantics.TryGetValue);
+
+            if (shader.Stage == ShaderStages.Compute)
+                ComputeThreadReflector.GetThreadgroupSizes(compiler, out kX, out kY, out kZ);
 
             var stageUniforms = UniformReflector.GetUniforms(compiler, resources);
 
             MergeUniforms(uniforms, stages, stageUniforms, shader.Stage);
         }
 
-        return new ReflectedResourceInfo() { vertexInputs = vertexInputs, uniforms = uniforms.ToArray(), stages = stages.ToArray() };
+        return new ReflectedResourceInfo()
+        {
+            vertexInputs = vertexInputs,
+            uniforms = uniforms.ToArray(),
+            stages = stages.ToArray(),
+            threadsX = kX,
+            threadsY = kY,
+            threadsZ = kZ,
+        };
     }
 
 
