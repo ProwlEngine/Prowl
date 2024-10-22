@@ -10,7 +10,7 @@ namespace Prowl.Runtime.Components;
 public class BlueprintExecuter : MonoBehaviour
 {
 
-    public AssetRef<Blueprint> Blueprint;
+    public List<AssetRef<Blueprint>> Blueprints;
 
     private List<OnStartEventNode> _startNodes = [];
     private List<OnEnableEventNode> _enableNodes = [];
@@ -24,36 +24,41 @@ public class BlueprintExecuter : MonoBehaviour
 
     public override void Awake()
     {
-        if (Blueprint.IsAvailable)
+        foreach (AssetRef<Blueprint> Blueprint in Blueprints)
         {
-            foreach (Node node in Blueprint.Res.nodes)
+            if (Blueprint.IsAvailable)
             {
-                if (node is OnAwakeEventNode awakeNode)
-                    awakeNode.Execute(null); // Can execute immediately and not cache since Awake is never* called twice
-                else if(node is OnStartEventNode startNode)
-                    _startNodes.Add(startNode);
-                else if (node is OnEnableEventNode enableNode)
-                    _enableNodes.Add(enableNode);
-                else if (node is OnDisableEventNode disableNode)
-                    _disableNodes.Add(disableNode);
-                else if (node is OnDestroyEventNode destroyNode)
-                    _destroyNodes.Add(destroyNode);
-                else if (node is OnUpdateEventNode updateNode)
-                    _updateNodes.Add(updateNode);
-                else if (node is OnLateUpdateEventNode lateUpdateNode)
-                    _lateUpdateNodes.Add(lateUpdateNode);
-                else if (node is OnFixedUpdateEventNode fixedUpdateNode)
-                    _fixedUpdateNodes.Add(fixedUpdateNode);
+                foreach (Node node in Blueprint.Res.nodes)
+                {
+                    if (node is OnAwakeEventNode awakeNode)
+                        awakeNode.Execute(null); // Can execute immediately and not cache since Awake is never* called twice
+                    else if (node is OnStartEventNode startNode)
+                        _startNodes.Add(startNode);
+                    else if (node is OnEnableEventNode enableNode)
+                        _enableNodes.Add(enableNode);
+                    else if (node is OnDisableEventNode disableNode)
+                        _disableNodes.Add(disableNode);
+                    else if (node is OnDestroyEventNode destroyNode)
+                        _destroyNodes.Add(destroyNode);
+                    else if (node is OnUpdateEventNode updateNode)
+                        _updateNodes.Add(updateNode);
+                    else if (node is OnLateUpdateEventNode lateUpdateNode)
+                        _lateUpdateNodes.Add(lateUpdateNode);
+                    else if (node is OnFixedUpdateEventNode fixedUpdateNode)
+                        _fixedUpdateNodes.Add(fixedUpdateNode);
+                }
             }
         }
     }
 
     private void ExecuteEventNodes<T>(List<T> nodes) where T : BasicEventNode
     {
-        if (!Blueprint.IsAvailable) return;
-        Blueprint.Res.SetActiveGameObject(GameObject);
         foreach (BasicEventNode node in nodes)
+        {
+            if (node.graph == null) continue;
+            (node.graph as Blueprint)!.SetActiveGameObject(GameObject);
             node.Execute(null);
+        }
     }
 
     public override void Start() => ExecuteEventNodes(_startNodes);
