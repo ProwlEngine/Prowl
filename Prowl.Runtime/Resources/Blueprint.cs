@@ -20,6 +20,13 @@ public sealed class Blueprint : NodeGraph
         "String",
     };
 
+    public override (string, Type)[] NodeReflectionTypes => new[]
+    {
+        ("Experimental/Reflection/Physics", typeof(Physics)),
+        ("Experimental/Reflection/Rigidbody", typeof(Rigidbody)),
+        ("Experimental/Reflection/Serializer", typeof(Serializer)),
+    };
+
     public GameObject GameObject { get; private set; }
 
     public void SetActiveGameObject(GameObject gameObject)
