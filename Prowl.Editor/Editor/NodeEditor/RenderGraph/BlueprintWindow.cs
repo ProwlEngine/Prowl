@@ -56,6 +56,10 @@ public class BlueprintWindow : EditorWindow
                 {
                     _editor.DrawContextMenu(gui);
                 }
+                else
+                {
+                    gui.CloseAllPopups();
+                }
 
                 if (changed)
                 {
