@@ -29,21 +29,9 @@ public struct Spacing
         Bottom = bottom;
     }
 
-    public static bool operator ==(Spacing s1, Spacing s2)
-    {
-        return MathD.ApproximatelyEquals(s1.Left, s2.Left) &&
-               MathD.ApproximatelyEquals(s1.Right, s2.Right) &&
-               MathD.ApproximatelyEquals(s1.Top, s2.Top) &&
-               MathD.ApproximatelyEquals(s1.Bottom, s2.Bottom);
-    }
+    public static bool operator ==(Spacing s1, Spacing s2) => s1.Equals(s2);
 
-    public static bool operator !=(Spacing s1, Spacing s2)
-    {
-        return MathD.ApproximatelyEquals(s1.Left, s2.Left) ||
-               MathD.ApproximatelyEquals(s1.Right, s2.Right) ||
-               MathD.ApproximatelyEquals(s1.Top, s2.Top) ||
-               MathD.ApproximatelyEquals(s1.Bottom, s2.Bottom);
-    }
+    public static bool operator !=(Spacing s1, Spacing s2) => !Equals(s1, s2);
 
     public override bool Equals(object? obj)
     {
