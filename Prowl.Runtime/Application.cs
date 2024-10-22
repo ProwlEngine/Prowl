@@ -136,6 +136,11 @@ public static class Application
 
     public static void Quit()
     {
+        if(Application.IsEditor && Application.IsPlaying)
+        {
+            // Its in Editor and in playmode, Quit doesn't do anything
+            return;
+        }
         Screen.Close();
     }
 }
