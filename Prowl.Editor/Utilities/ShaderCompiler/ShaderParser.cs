@@ -14,7 +14,7 @@ using Shader = Prowl.Runtime.Shader;
 
 namespace Prowl.Editor;
 
-public static partial class ShaderParser
+public static class ShaderParser
 {
     public enum ShaderToken
     {
