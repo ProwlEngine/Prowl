@@ -160,37 +160,37 @@ public class FontEditor : ScriptedEditor
                         changes.Add(importer, nameof(FontImporter.characterRanges));
                     }
 
-                    if (QuickButton("Add Basic Latin", popupNode.Parent))
+                    if (QuickButton("Add Basic Latin"))
                         AddRange(Font.CharacterRange.BasicLatin);
-                    if (QuickButton("Add Latin1 Supplement", popupNode.Parent))
+                    if (QuickButton("Add Latin1 Supplement"))
                         AddRange(Font.CharacterRange.Latin1Supplement);
-                    if (QuickButton("Add Latin Extended A", popupNode.Parent))
+                    if (QuickButton("Add Latin Extended A"))
                         AddRange(Font.CharacterRange.LatinExtendedA);
-                    if (QuickButton("Add Latin Extended B", popupNode.Parent))
+                    if (QuickButton("Add Latin Extended B"))
                         AddRange(Font.CharacterRange.LatinExtendedB);
-                    if (QuickButton("Add Cyrillic", popupNode.Parent))
+                    if (QuickButton("Add Cyrillic"))
                         AddRange(Font.CharacterRange.Cyrillic);
-                    if (QuickButton("Add Cyrillic Supplement", popupNode.Parent))
+                    if (QuickButton("Add Cyrillic Supplement"))
                         AddRange(Font.CharacterRange.CyrillicSupplement);
-                    if (QuickButton("Add Hiragana", popupNode.Parent))
+                    if (QuickButton("Add Hiragana"))
                         AddRange(Font.CharacterRange.Hiragana);
-                    if (QuickButton("Add Katakana", popupNode.Parent))
+                    if (QuickButton("Add Katakana"))
                         AddRange(Font.CharacterRange.Katakana);
-                    if (QuickButton("Add Greek", popupNode.Parent))
+                    if (QuickButton("Add Greek"))
                         AddRange(Font.CharacterRange.Greek);
-                    if (QuickButton("Add Cjk Symbols And Punctuation", popupNode.Parent))
+                    if (QuickButton("Add Cjk Symbols And Punctuation"))
                         AddRange(Font.CharacterRange.CjkSymbolsAndPunctuation);
-                    if (QuickButton("Add Cjk Unified Ideographs", popupNode.Parent))
+                    if (QuickButton("Add Cjk Unified Ideographs"))
                         AddRange(Font.CharacterRange.CjkUnifiedIdeographs);
-                    if (QuickButton("Add Hangul Compatibility Jamo", popupNode.Parent))
+                    if (QuickButton("Add Hangul Compatibility Jamo"))
                         AddRange(Font.CharacterRange.HangulCompatibilityJamo);
-                    if (QuickButton("Add Hangul Syllables", popupNode.Parent))
+                    if (QuickButton("Add Hangul Syllables"))
                         AddRange(Font.CharacterRange.HangulSyllables);
                 }
             }
         }
 
-        if (QuickButton("Save", null))
+        if (QuickButton("Save"))
         {
             (target as MetaFile).Save();
             AssetDatabase.Reimport((target as MetaFile).AssetPath);
