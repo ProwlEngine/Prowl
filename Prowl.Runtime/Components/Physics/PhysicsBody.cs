@@ -122,7 +122,7 @@ public abstract class PhysicsBody : MonoBehaviour
 
     internal void Detach()
     {
-        Debug.Assert(Physics.IsReady, "Physics is not ready, cannot detach");
+        if (!Physics.IsReady) return; // Dispose can call this so dont throw an error
 
         CenterOfMass = new();
 

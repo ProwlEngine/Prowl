@@ -74,13 +74,13 @@ public sealed class AudioSource : MonoBehaviour
             _looping = Looping;
         }
 
-        if (Mathf.ApproximatelyEquals(_gain , Volume))
+        if (_gain != Volume)
         {
             _source.Gain = Volume;
             _gain = Volume;
         }
 
-        if (Mathf.ApproximatelyEquals(_maxDistance , MaxDistance))
+        if (_maxDistance != MaxDistance)
         {
             _source.MaxDistance = MaxDistance;
             _maxDistance = MaxDistance;

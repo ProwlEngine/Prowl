@@ -56,7 +56,7 @@ public static class Screen
     public static float FramesPerSecond
     {
         get => InternalWindow.PollIntervalInMs / 1000.0f;
-        set { InternalWindow.LimitPollRate = value != 0 && MathD.ApproximatelyEquals(value, double.MaxValue); InternalWindow.PollIntervalInMs = value * 1000.0f; }
+        set { InternalWindow.LimitPollRate = value != 0 && value != double.MaxValue; InternalWindow.PollIntervalInMs = value * 1000.0f; }
     }
 
     public static bool IsVisible
