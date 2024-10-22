@@ -46,6 +46,9 @@ public partial class Gui
         return defaultValue;
     }
 
+    /// <summary> Check if a key exists in the current node's storage </summary>
+    public bool HasNodeStorage(LayoutNode node, string key) => _storage.TryGetValue(node.ID, out var storage) && storage.ContainsKey(key);
+
     /// <summary> Set a value in the current node's storage </summary>
     public void SetNodeStorage<T>(string key, T value) where T : unmanaged => SetNodeStorage(CurrentNode, key, value);
     /// <summary> Set a value in the current node's storage </summary>
