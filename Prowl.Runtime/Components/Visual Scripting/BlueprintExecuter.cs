@@ -10,7 +10,7 @@ namespace Prowl.Runtime.Components;
 public class BlueprintExecuter : MonoBehaviour
 {
 
-    public List<AssetRef<Blueprint>> Blueprints;
+    public List<AssetRef<Blueprint>> Blueprints = [];
 
     private List<OnAwakeEventNode> _awakeNodes = [];
     private List<OnStartEventNode> _startNodes = [];
