@@ -21,7 +21,7 @@ public class ReflectedNode : FlowNode, ISerializationCallbackReceiver
     [SerializeField, HideInInspector] private string node_title;
     [SerializeField, HideInInspector] private float node_width;
 
-    private string[] parameterNames;
+    [SerializeField, HideInInspector] private string[] parameterNames;
 
     public static string GetNodeName(MethodInfo method_info)
     {
@@ -84,6 +84,16 @@ public class ReflectedNode : FlowNode, ISerializationCallbackReceiver
     public override object GetValue(NodePort port)
     {
         var target = GetInputValue<object>("Target", null);
+        if (target == null)
+        {
+            Error = "Target is null";
+            return null;
+        }
+        else if(parameterNames == null)
+        {
+            Error = "Parameter names are null";
+            return null;
+        }
         var args = parameterNames.Select(i => GetInputValue<object>(i)).ToArray();
         return cached_method.Invoke(target, args);
     }

@@ -23,7 +23,7 @@ public class InstantiatePrefabNode : InOutFlowNode
         if (prefab != null && prefab.IsAvailable)
         {
             Output = prefab.Res.Instantiate();
-            SceneManagement.SceneManager.Scene.Add(Output);
+            Prowl.Runtime.SceneManagement.SceneManager.Scene.Add(Output);
         }
 
         ExecuteNext();
