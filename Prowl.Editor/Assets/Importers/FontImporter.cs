@@ -70,7 +70,7 @@ public class FontEditor : ScriptedEditor
         }
     }
 
-    public bool QuickButton(string label, LayoutNode? popupHolder)
+    public bool QuickButton(string label)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
@@ -83,8 +83,7 @@ public class FontEditor : ScriptedEditor
             if (gui.IsNodePressed())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.ButtonRoundness);
-                if (popupHolder != null)
-                    gui.ClosePopup(popupHolder);
+                gui.CloseAllPopups();
                 return true;
             }
 

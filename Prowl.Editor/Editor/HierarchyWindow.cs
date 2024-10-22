@@ -65,12 +65,11 @@ public class HierarchyWindow : EditorWindow
                 if (gui.IsNodePressed())
                     gui.OpenPopup("CreateGameObject");
 
-                LayoutNode test = gui.CurrentNode;
                 if (gui.BeginPopup("CreateGameObject", out LayoutNode? node))
                 {
                     using (node!.Width(150).Layout(LayoutType.Column).Spacing(5).Padding(5).FitContentHeight().Enter())
                     {
-                        DrawContextMenu(null, test);
+                        DrawContextMenu(null);
                     }
                 }
             }
@@ -108,7 +107,6 @@ public class HierarchyWindow : EditorWindow
                 height += entryHeight;
             }
 
-            LayoutNode popupHolder = gui.CurrentNode;
             if (gui.BeginPopup("RightClickGameObject", out LayoutNode? node))
             {
                 using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
@@ -117,13 +115,13 @@ public class HierarchyWindow : EditorWindow
                     GameObject? go = null;
                     if (instanceID != -1)
                         go = EngineObject.FindObjectByID<GameObject>(instanceID);
-                    DrawContextMenu(go, popupHolder);
+                    DrawContextMenu(go);
                 }
             }
         }
     }
 
-    private void DrawContextMenu(GameObject? parent, LayoutNode popupHolder)
+    private void DrawContextMenu(GameObject? parent)
     {
         EditorGUI.Text("Create");
 
@@ -211,7 +209,7 @@ public class HierarchyWindow : EditorWindow
         }
 
         if (closePopup)
-            gui.ClosePopup(popupHolder);
+            gui.CloseAllPopups();
     }
 
     public void DrawGameObject(ref int index, GameObject entity, uint depth)

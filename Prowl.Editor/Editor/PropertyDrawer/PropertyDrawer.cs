@@ -145,7 +145,6 @@ public class DrawerAttribute(Type type) : Attribute
                 gui.Draw2D.DrawText(FontAwesome6.Plus, 20, gui.CurrentNode.LayoutData.InnerRect, Color.white);
 
 
-                var popupHolder = gui.CurrentNode;
                 if (gui.BeginPopup("Create_Interface", out var popupNode))
                     using (popupNode.Width(200).FitContentHeight().Layout(LayoutType.Column).Padding(5).Enter())
                     {
@@ -155,7 +154,7 @@ public class DrawerAttribute(Type type) : Attribute
                             {
                                 propertyValue = Activator.CreateInstance(t);
                                 changed = true;
-                                gui.ClosePopup(popupHolder);
+                                gui.CloseAllPopups();
                             }
                         }
                     }

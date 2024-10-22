@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Icons;
 using Prowl.Runtime.GUI.Layout;
@@ -76,7 +77,7 @@ public partial class Gui
                             if (g.IsNodePressed())
                             {
                                 NewIndex = i;
-                                g.ClosePopup(popupHolder);
+                                g.CloseAllPopups();
                             }
                             else if (g.IsNodeHovered())
                                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.HoveredColor, style.Roundness);
@@ -275,7 +276,7 @@ public partial class Gui
                                                                       //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
                         !IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
                     {
-                        ClosePopup(parentNode);
+                        CloseAllPopups();
                         return false;
                     }
                 }
@@ -294,10 +295,27 @@ public partial class Gui
         return show;
     }
 
-    public void ClosePopup(LayoutNode? popupHolder = null)
+    public void CloseAllPopups()
     {
-        SetNodeStorage(popupHolder ?? CurrentNode, "Popup", false);
-        SetNodeStorage(popupHolder ?? CurrentNode, "Popup_ID", -1);
+        var stack = new Stack<LayoutNode>();
+        stack.Push(rootNode);
+
+        while (stack.Count > 0)
+        {
+            var target = stack.Pop();
+
+            if (GetNodeStorage<bool>(target, "Popup"))
+            {
+                SetNodeStorage(target, "Popup", false);
+                SetNodeStorage(target, "Popup_ID", -1);
+            }
+
+            // Push all children onto the stack
+            foreach (LayoutNode child in target.Children)
+            {
+                stack.Push(child);
+            }
+        }
     }
 
     public bool Search(string ID, ref string searchText, Offset x, Offset y, Size width, Size? height = null, WidgetStyle? inputstyle = null, bool enterReturnsTrue = true)

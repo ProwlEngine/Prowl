@@ -285,7 +285,7 @@ public class DefaultNodeEditor : ScriptedNodeEditor
                 if (close)
                 {
                     changed = true;
-                    g.ClosePopup(popupHolder);
+                    g.CloseAllPopups();
                 }
             }
         }
@@ -652,7 +652,7 @@ public class NodeEditor
                 if (g.PointerWheel != 0)
                 {
                     _targetzoom = MathD.Clamp(_targetzoom + g.PointerWheel * 0.1, 0.1, 2.0);
-                    g.ClosePopup();
+                    g.CloseAllPopups();
                     //offset -= (g.PointerPos - (new Vector2(width / targetzoom, height / targetzoom) / 2)) * g.PointerWheel * 0.5f;
                 }
                 _zoom = MathD.Lerp(_zoom, _targetzoom, 0.1);
@@ -660,7 +660,7 @@ public class NodeEditor
                 if (g.IsPointerDown(MouseButton.Middle))
                 {
                     _topleft -= g.PointerDelta;
-                    g.ClosePopup();
+                    g.CloseAllPopups();
                 }
 
                 // Draw Connections behind nodes
@@ -1113,6 +1113,8 @@ public class NodeEditor
                         node = _graph.AddNode(item.Type);
                     }
                     node.position = WindowToGrid(_gui.PointerPos);
+
+                    g.CloseAllPopups();
                 }
             }
             else

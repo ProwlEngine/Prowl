@@ -49,7 +49,6 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
             if (interact.TakeFocus())
                 g.OpenPopup("LayerMask_Popup_" + ID, g.CurrentNode.LayoutData.Rect.BottomLeft);
 
-            var popupHolder = g.CurrentNode;
             if (g.BeginPopup("LayerMask_Popup_" + ID, out var popupNode))
             {
                 int longestText = 0;
@@ -64,15 +63,15 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
 
                 using (popupNode.Width(popupWidth).FitContentHeight().Layout(LayoutType.Column).Enter())
                 {
-                    NothingButton(ItemSize, ref maskValue, g, popupHolder);
-                    EverythingButton(ItemSize, ref maskValue, g, popupHolder, layers);
+                    NothingButton(ItemSize, ref maskValue, g);
+                    EverythingButton(ItemSize, ref maskValue, g, layers);
 
                     for (int i = 0; i < layers.Length; i++)
                     {
                         if (string.IsNullOrEmpty(layers[i]))
                             continue;
 
-                        LayerButton(ItemSize, ref maskValue, layers, g, popupHolder, i);
+                        LayerButton(ItemSize, ref maskValue, layers, g, i);
                     }
                 }
             }
@@ -87,7 +86,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
         }
     }
 
-    private static void LayerButton(double ItemSize, ref LayerMask maskValue, string[] layers, Gui g, LayoutNode popupHolder, int i)
+    private static void LayerButton(double ItemSize, ref LayerMask maskValue, string[] layers, Gui g, int i)
     {
         using (g.Node("Item_" + i).ExpandWidth().Height(ItemSize).Enter())
         {
@@ -101,7 +100,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
                     maskValue.RemoveLayer((byte)i);
                 else
                     maskValue.SetLayer((byte)i);
-                g.ClosePopup(popupHolder);
+                g.CloseAllPopups();
             }
             else if (g.IsNodeHovered())
                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
@@ -110,14 +109,14 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
         }
     }
 
-    private static void NothingButton(double ItemSize, ref LayerMask maskValue, Gui g, LayoutNode popupHolder)
+    private static void NothingButton(double ItemSize, ref LayerMask maskValue, Gui g)
     {
         using (g.Node("NothingBtn").ExpandWidth().Height(ItemSize).Enter())
         {
             if (g.IsNodePressed())
             {
                 maskValue.Clear();
-                g.ClosePopup(popupHolder);
+                g.CloseAllPopups();
             }
             else if (g.IsNodeHovered())
                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
@@ -126,7 +125,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
         }
     }
 
-    private static void EverythingButton(double ItemSize, ref LayerMask maskValue, Gui g, LayoutNode popupHolder, string[] layers)
+    private static void EverythingButton(double ItemSize, ref LayerMask maskValue, Gui g, string[] layers)
     {
         using (g.Node("EverythingBtn").ExpandWidth().Height(ItemSize).Enter())
         {
@@ -136,7 +135,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
                 for (int i = 0; i < 32; i++)
                     maskValue.SetLayer((byte)i);
 
-                g.ClosePopup(popupHolder);
+                g.CloseAllPopups();
             }
             else if (g.IsNodeHovered())
                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);

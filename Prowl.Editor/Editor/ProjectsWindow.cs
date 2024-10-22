@@ -465,7 +465,7 @@ public class ProjectsWindow : EditorWindow
         if (closePopup)
         {
             contextMenuProject = null;
-            gui.ClosePopup(popupHolder);
+            gui.CloseAllPopups();
         }
     }
 

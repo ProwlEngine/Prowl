@@ -283,14 +283,13 @@ public class GameObjectEditor : ScriptedEditor
                         gui.SetGlobalStorage("RightClickComp", comp.InstanceID);
                     }
 
-                    LayoutNode popupHolder = gui.CurrentNode;
                     if (gui.BeginPopup("RightClickComp", out LayoutNode? node))
                     {
                         using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                         {
                             int instanceID = gui.GetGlobalStorage<int>("RightClickComp");
                             if (instanceID == comp.InstanceID)
-                                HandleComponentContextMenu(go, comp, popupHolder);
+                                HandleComponentContextMenu(go, comp);
                         }
                     }
                 }
@@ -402,7 +401,7 @@ public class GameObjectEditor : ScriptedEditor
 
     #region Add Component Popup
 
-    private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp, LayoutNode popupHolder)
+    private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp)
     {
         bool closePopup = false;
 
@@ -423,7 +422,7 @@ public class GameObjectEditor : ScriptedEditor
         }
 
         if (closePopup)
-            ActiveGUI.ClosePopup(popupHolder);
+            ActiveGUI.CloseAllPopups();
     }
 
     private void DrawMenuItems(MenuItemInfo menuItem, GameObject go)

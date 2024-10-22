@@ -215,7 +215,7 @@ public class AssetsTreeWindow : EditorWindow
         }
 
         if (closePopup)
-            Gui.ActiveGUI.ClosePopup(popupHolder);
+            Gui.ActiveGUI.CloseAllPopups();
     }
 
     private static bool DrawCreateContextMenu(DirectoryInfo? directory, bool fromAssetBrowser)
