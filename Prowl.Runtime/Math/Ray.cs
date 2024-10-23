@@ -61,7 +61,7 @@ public struct Ray : IEquatable<Ray>
 
     public override bool Equals(object? obj)
     {
-        return (obj is Ray ray) ? Equals(ray) : false;
+        return (obj is Ray ray) && Equals(ray);
     }
 
 
@@ -77,7 +77,7 @@ public struct Ray : IEquatable<Ray>
     }
 
     // adapted from http://www.scratchapixel.com/lessons/3d-basic-lessons/lesson-7-intersecting-simple-shapes/ray-box-intersection/
-    public double? Intersects(Bounds box)
+    public readonly double? Intersects(Bounds box)
     {
         double? tMin = null, tMax = null;
 
@@ -93,9 +93,7 @@ public struct Ray : IEquatable<Ray>
 
             if (tMin > tMax)
             {
-                var temp = tMin;
-                tMin = tMax;
-                tMax = temp;
+                (tMax, tMin) = (tMin, tMax);
             }
         }
 
@@ -106,14 +104,12 @@ public struct Ray : IEquatable<Ray>
         }
         else
         {
-            var tMinY = (box.min.y - origin.y) / direction.y;
-            var tMaxY = (box.max.y - origin.y) / direction.y;
+            double tMinY = (box.min.y - origin.y) / direction.y;
+            double tMaxY = (box.max.y - origin.y) / direction.y;
 
             if (tMinY > tMaxY)
             {
-                var temp = tMinY;
-                tMinY = tMaxY;
-                tMaxY = temp;
+                (tMaxY, tMinY) = (tMinY, tMaxY);
             }
 
             if ((tMin.HasValue && tMin > tMaxY) || (tMax.HasValue && tMinY > tMax))
@@ -130,14 +126,12 @@ public struct Ray : IEquatable<Ray>
         }
         else
         {
-            var tMinZ = (box.min.z - origin.z) / direction.z;
-            var tMaxZ = (box.max.z - origin.z) / direction.z;
+            double tMinZ = (box.min.z - origin.z) / direction.z;
+            double tMaxZ = (box.max.z - origin.z) / direction.z;
 
             if (tMinZ > tMaxZ)
             {
-                var temp = tMinZ;
-                tMinZ = tMaxZ;
-                tMaxZ = temp;
+                (tMaxZ, tMinZ) = (tMinZ, tMaxZ);
             }
 
             if ((tMin.HasValue && tMin > tMaxZ) || (tMax.HasValue && tMinZ > tMax))
@@ -159,21 +153,20 @@ public struct Ray : IEquatable<Ray>
     }
 
 
-    public void Intersects(ref Bounds box, out double? result)
+    public readonly void Intersects(ref Bounds box, out double? result)
     {
         result = Intersects(box);
     }
 
-    public double? Intersects(Plane plane)
+    public readonly double? Intersects(Plane plane)
     {
-        double? result;
-        Intersects(ref plane, out result);
+        Intersects(ref plane, out double? result);
         return result;
     }
 
-    public void Intersects(ref Plane plane, out double? result)
+    public readonly void Intersects(ref Plane plane, out double? result)
     {
-        var den = Vector3.Dot(direction, plane.normal);
+        double den = Vector3.Dot(direction, plane.normal);
         if (Math.Abs(den) < 0.00001)
         {
             result = null;
@@ -192,6 +185,48 @@ public struct Ray : IEquatable<Ray>
 
             result = 0.0;
         }
+    }
+
+    public readonly double? Intersects(Vector3 vertex1, Vector3 vertex2, Vector3 vertex3, bool cullBackface = false)
+    {
+        // Edge vectors
+        Vector3 edge1 = vertex2 - vertex1;
+        Vector3 edge2 = vertex3 - vertex1;
+
+        // Calculate determinant
+        Vector3 h = Vector3.Cross(direction, edge2);
+        double a = Vector3.Dot(edge1, h);
+
+        // If determinant is near zero, ray lies in plane of triangle or ray is parallel to plane of triangle
+        // Backface culling: if a < 0, ray hits triangle from behind
+        if (cullBackface)
+        {
+            if (a < float.Epsilon) return null;
+        }
+        else
+        {
+            if (Math.Abs(a) < float.Epsilon) return null;
+        }
+
+        double f = 1.0 / a;
+        Vector3 s = origin - vertex1;
+        double u = f * Vector3.Dot(s, h);
+
+        // Ray lies outside the triangle
+        if (u < 0.0 || u > 1.0) return null;
+
+        Vector3 q = Vector3.Cross(s, edge1);
+        double v = f * Vector3.Dot(direction, q);
+
+        // Ray lies outside the triangle
+        if (v < 0.0 || u + v > 1.0) return null;
+
+        double t = f * Vector3.Dot(edge2, q);
+
+        // Line intersection but not ray intersection
+        if (t < float.Epsilon) return null;
+
+        return t;
     }
 
     public readonly Vector3 Position(double distance)
