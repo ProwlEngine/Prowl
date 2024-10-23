@@ -554,7 +554,8 @@ public static partial class AssetDatabase
                 SerializedProperty serialized = Serializer.Serialize(assetInstance);
                 StringTagConverter.WriteToFile(serialized, fileInfo);
 
-                AssetDatabase.Ping(fileInfo);
+                if(pingAsset)
+                    AssetDatabase.Ping(fileInfo);
 
                 // All we did was update the file on disk to perfectly match the already in memory asset
                 // So no need to reimport or update the cache's
