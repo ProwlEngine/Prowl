@@ -36,7 +36,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
             StringBuilder sb = new();
             for (int i = 0; i < layers.Length; i++)
             {
-                if (maskValue.HasLayer((byte)i))
+                if (maskValue.HasLayer((byte)i) && layers[i].Length > 0)
                 {
                     sb.Append(layers[i]);
                     sb.Append(", ");
