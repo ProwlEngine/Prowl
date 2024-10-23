@@ -66,14 +66,19 @@ public static class SceneManager
     [OnAssemblyUnload]
     public static void Clear()
     {
-        Physics.Dispose();
-        // The act of Destroying a active scene sets the current scene to an new one
-        // During this period the previous scene is Destroyed, making Res return null, hence the ? here
-        Current.Res?.DestroyImmediate();
+        if (Current.Res != null)
+        {
+            Physics.Dispose();
+            // The act of Destroying a active scene sets the current scene to an new one
+            // During this period the previous scene is Destroyed, making Res return null, hence the ? here
+            Current.Res.DestroyImmediate();
 
-        EngineObject.HandleDestroyed();
+            EngineObject.HandleDestroyed();
 
-        Physics.Initialize();
+            Current = new Scene();
+
+            Physics.Initialize();
+        }
     }
 
     public static void Update()
