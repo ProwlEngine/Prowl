@@ -61,6 +61,10 @@ public class AssetsBrowserWindow : EditorWindow
         // If theres no project directory well why the hell are we here? the line above should have stopped us
         while (!Path.Exists(CurDirectoryNode.Directory.FullName))
             CurDirectoryNode = CurDirectoryNode.Parent ?? AssetDatabase.GetRootFolderCache(2).RootNode;
+
+        _found.Clear();
+        if (!string.IsNullOrEmpty(_searchText))
+            _found = CurDirectoryNode.Search(_searchText).ToList();
     }
 
     private void SelectionChanged(object to)
