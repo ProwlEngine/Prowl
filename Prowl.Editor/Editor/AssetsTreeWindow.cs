@@ -171,6 +171,11 @@ public class AssetsTreeWindow : EditorWindow
             if (EditorGUI.StyledButton("Delete"))
             {
                 file.Delete();
+                // if meta file also exists delete that too
+                var metaFile = new FileInfo(file.FullName + ".meta");
+                if (metaFile.Exists)
+                    metaFile.Delete();
+                AssetDatabase.Update(true, true);
                 closePopup = true;
             }
 
@@ -205,6 +210,7 @@ public class AssetsTreeWindow : EditorWindow
             if (EditorGUI.StyledButton("Delete"))
             {
                 dir.Delete(true);
+                AssetDatabase.Update(true, true);
                 closePopup = true;
             }
             EditorGUI.Separator();

@@ -184,10 +184,6 @@ public static class BVHConstructor
     ///
     /// This is mostly untested and may contain bugs.
     /// </summary>
-    /// <param name="meshes"></param>
-    /// <param name="matrices"></param>
-    /// <param name="maxTrianglePerLeaf"></param>
-    /// <returns></returns>
     public static BVHNode BuildBVH(IEnumerable<Mesh> meshes, IEnumerable<Matrix4x4>? matrices = null, int maxTrianglePerLeaf = 4)
     {
         // Convert all meshes to triangles
