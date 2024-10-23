@@ -11,6 +11,25 @@ public class AssetDirectoryCache(DirectoryInfo root)
         public DirNode Parent = parent;
         public List<DirNode> SubDirectories = [];
         public List<FileNode> Files = [];
+
+        public IEnumerable<FileNode> Search(string searchPattern, bool recursive = false)
+        {
+            foreach (FileNode file in Files)
+            {
+                if (file.File.Name.Contains(searchPattern, StringComparison.OrdinalIgnoreCase))
+                    yield return file;
+            }
+
+            if (recursive)
+            {
+                foreach (DirNode subDir in SubDirectories)
+                {
+                    foreach (FileNode file in subDir.Search(searchPattern, true))
+                        yield return file;
+                }
+            }
+        }
+
     }
 
     public class FileNode
