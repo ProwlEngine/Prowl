@@ -133,7 +133,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         foreach (GameObject g in AllObjects)
             g.OnDispose();
 
-        if (SceneManager.Scene == null || SceneManager.Scene?.InstanceID == InstanceID)
+        if (SceneManager.Current == this)
         {
             // Load a new Empty scene
             SceneManager.LoadScene(new Scene());

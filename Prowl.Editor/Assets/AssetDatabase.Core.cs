@@ -535,11 +535,6 @@ public static partial class AssetDatabase
 
     /// <summary>
     /// Saves the specified asset instance to its Asset file.
-    /// Keep in mind this Serializes and saves the asset instance to the original asset file.
-    /// This will overwrite the asset file with the new data, and may not behave how you expect.
-    /// For example if you call this on a Mesh asset, it will overwrite the mesh file which may be .obj or .fbx with a String Tag serialized format.
-    /// This would break the Mesh Asset!
-    /// Only use it on Assets where the Original asset file Is itself a string tag, like a Scene, Material, Prefab or ScriptableObject.
     /// </summary>
     /// <param name="assetInstance">The Asset Instance, Needs to be properly linked to the asset and have the AssetID Assigned!</param>
     /// <param name="pingAsset">Whether to ping the asset after saving.</param>
