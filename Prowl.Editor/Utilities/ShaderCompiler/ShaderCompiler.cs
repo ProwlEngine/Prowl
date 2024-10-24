@@ -1,7 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using DirectXShaderCompiler.NET;
+using Glslang.NET;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
@@ -9,6 +9,9 @@ using Prowl.Runtime.Rendering;
 using SPIRVCross.NET;
 
 using Veldrid;
+
+using Program = Glslang.NET.Program;
+using Shader = Glslang.NET.Shader;
 
 #pragma warning disable
 
@@ -23,6 +26,14 @@ public struct ShaderCreationArgs
 }
 
 
+public struct CompilationFile
+{
+    public string filename;
+    public int line;
+    public int column;
+}
+
+
 public struct CompilationMessage
 {
     public IReadOnlyList<CompilationFile> stackTrace;
@@ -34,76 +45,155 @@ public struct CompilationMessage
     public KeywordState? keywords;
 
 
-    public static CompilationMessage FromDXC(DirectXShaderCompiler.NET.CompilationMessage dxcMessage)
+    public CompilationMessage()
     {
-        CompilationMessage message = new();
-
-        message.severity = dxcMessage.severity switch
-        {
-            MessageSeverity.Info => LogSeverity.Normal,
-            MessageSeverity.Warning => LogSeverity.Warning,
-            MessageSeverity.Error => LogSeverity.Error,
-        };
-
-        message.stackTrace = dxcMessage.stackTrace;
-        message.message = dxcMessage.message;
-
-        return message;
+        severity = LogSeverity.Normal;
+        message = "";
+        entrypoint = "";
+        keywords = null;
+        stackTrace = [];
     }
 }
 
 
 public static partial class ShaderCompiler
 {
-    private static ShaderType StageToType(ShaderStages stages)
+    private static ShaderStage StageToType(ShaderStages stages)
     {
         return stages switch
         {
-            ShaderStages.Vertex => ShaderType.Vertex,
-            ShaderStages.Geometry => ShaderType.Geometry,
-            ShaderStages.TessellationControl => ShaderType.Hull,
-            ShaderStages.TessellationEvaluation => ShaderType.Domain,
-            ShaderStages.Fragment => ShaderType.Fragment,
-            ShaderStages.Compute => ShaderType.Compute,
+            ShaderStages.Vertex => ShaderStage.Vertex,
+            ShaderStages.Geometry => ShaderStage.Geometry,
+            ShaderStages.TessellationControl => ShaderStage.TessControl,
+            ShaderStages.TessellationEvaluation => ShaderStage.TessEvaluation,
+            ShaderStages.Fragment => ShaderStage.Fragment,
+            ShaderStages.Compute => ShaderStage.Compute,
         };
+    }
+
+
+    private static void CheckMessages(string messageText, List<CompilationMessage> messages)
+    {
+        Debug.Log(messageText);
     }
 
 
     public static ShaderDescription[] Compile(ShaderCreationArgs args, KeywordState keywords, FileIncluder includer, List<CompilationMessage> messages)
     {
-        byte[][] compiledSPIRV = new byte[args.entryPoints.Length][];
+        ShaderDescription[] outputs = new ShaderDescription[args.entryPoints.Length];
+
+        using Glslang.NET.Program program = new Glslang.NET.Program();
+
+        const MessageType messageFlags = MessageType.Default |
+            MessageType.ReadHLSL |
+            MessageType.HLSLOffsets |
+            MessageType.DebugInfo |
+            MessageType.Enable16BitHLSLTypes |
+            MessageType.LegalizeHLSL |
+            MessageType.Enhanced;
+
+        CompilationInput input = new CompilationInput()
+        {
+            language = SourceType.HLSL,
+            stage = ShaderStage.Fragment,
+            client = ClientType.Vulkan,
+            clientVersion = TargetClientVersion.Vulkan_1_1,
+            targetLanguage = TargetLanguage.SPV,
+            targetLanguageVersion = TargetLanguageVersion.SPV_1_3,
+            defaultVersion = 500,
+            entrypoint = "main",
+            code = args.sourceCode,
+            defaultProfile = ShaderProfile.None,
+            forceDefaultVersionAndProfile = false,
+            forwardCompatible = false,
+            fileIncluder = includer.Include,
+            messages = messageFlags,
+            invertY = true,
+        };
+
+        List<Shader> shaders = [];
+
+        foreach (EntryPoint entrypoint in args.entryPoints)
+        {
+            input.sourceEntrypoint = entrypoint.Name;
+            input.stage = StageToType(entrypoint.Stage);
+
+            Shader shader = new Shader(input);
+
+            shaders.Add(shader);
+
+            bool preprocessed = shader.Preprocess();
+
+            CheckMessages(shader.GetDebugLog(), messages);
+            CheckMessages(shader.GetInfoLog(), messages);
+
+            if (!preprocessed)
+            {
+                return null;
+            }
+
+            bool parsed = shader.Parse();
+
+            CheckMessages(shader.GetDebugLog(), messages);
+            CheckMessages(shader.GetInfoLog(), messages);
+
+            if (!parsed)
+            {
+                return null;
+            }
+
+            program.AddShader(shader);
+        }
+
+        bool linked = program.Link(MessageType.VulkanRules | MessageType.SPVRules | MessageType.RelaxedErrors | messageFlags);
+
+        CheckMessages(program.GetDebugLog(), messages);
+        CheckMessages(program.GetInfoLog(), messages);
+
+        if (!linked)
+        {
+            return null;
+        }
+
+        string fileName = Path.GetFileName(includer.SourceFile);
 
         for (int i = 0; i < args.entryPoints.Length; i++)
         {
-            DirectXShaderCompiler.NET.CompilerOptions options = new(StageToType(args.entryPoints[i].Stage).ToProfile(args.shaderModel.Item1, args.shaderModel.Item2));
+            EntryPoint entryPoint = args.entryPoints[i];
 
-            options.generateAsSpirV = true;
-            options.useOpenGLMemoryLayout = true;
-            options.entryPoint = args.entryPoints[i].Name;
-            options.entrypointName = "main"; // Ensure 'main' entrypoint for OpenGL compatibility.
+            SPIRVOptions options = new();
+            options.emitNonsemanticShaderDebugInfo = true;
+            options.emitNonsemanticShaderDebugSource = true;
+            options.generateDebugInfo = true;
 
-            foreach (var keyword in keywords.KeyValuePairs)
+            program.SetSourceFile(StageToType(entryPoint.Stage), fileName);
+
+            bool generatedSPIRV = program.GenerateSPIRV(out uint[] SPIRVWords, StageToType(entryPoint.Stage), options);
+
+            CheckMessages(program.GetSPIRVMessages(), messages);
+
+            if (!generatedSPIRV)
             {
-                if (!string.IsNullOrWhiteSpace(keyword.Key) && !string.IsNullOrWhiteSpace(keyword.Value))
-                    options.SetMacro(keyword.Key, keyword.Value);
+                return null;
             }
 
-            CompilationResult result = DirectXShaderCompiler.NET.ShaderCompiler.Compile(args.sourceCode, options, includer.Include);
-
-            for (int j = 0; j < result.messages.Length; j++)
-            {
-                CompilationMessage msg = CompilationMessage.FromDXC(result.messages[j]);
-
-                msg.entrypoint = args.entryPoints[i].Name;
-                msg.keywords = keywords;
-
-                messages.Add(msg);
-            }
-
-            compiledSPIRV[i] = result.objectBytes;
+            outputs[i].EntryPoint = "main";
+            outputs[i].Stage = entryPoint.Stage;
+            outputs[i].ShaderBytes = GetBytes(SPIRVWords);
         }
 
-        return compiledSPIRV.Zip(args.entryPoints, (x, y) => new ShaderDescription(y.Stage, x, "main")).ToArray();
+        foreach (Shader shader in shaders)
+            shader.Dispose();
+
+        return outputs;
+    }
+
+
+    private static byte[] GetBytes(uint[] arr)
+    {
+        byte[] byteArr = new byte[arr.Length * sizeof(uint)];
+        Buffer.BlockCopy(arr, 0, byteArr, 0, arr.Length * sizeof(uint));
+        return byteArr;
     }
 
 
@@ -144,9 +234,8 @@ public static partial class ShaderCompiler
     {
         ShaderDescription[] compiledSPIRV = Compile(args, state, includer, messages);
 
-        foreach (ShaderDescription desc in compiledSPIRV)
-            if (desc.ShaderBytes == null || desc.ShaderBytes.Length == 0)
-                return null;
+        if (compiledSPIRV == null)
+            return null;
 
         ReflectedResourceInfo info = Reflect(ctx, compiledSPIRV);
 
@@ -207,12 +296,8 @@ public static partial class ShaderCompiler
 
         ShaderDescription[] compiledSPIRV = Compile(args, state, includer, messages);
 
-        if (compiledSPIRV.Length == 0)
+        if (compiledSPIRV == null)
             return null;
-
-        foreach (ShaderDescription desc in compiledSPIRV)
-            if (desc.ShaderBytes == null || desc.ShaderBytes.Length == 0)
-                return null;
 
         ReflectedResourceInfo info = Reflect(ctx, compiledSPIRV);
 

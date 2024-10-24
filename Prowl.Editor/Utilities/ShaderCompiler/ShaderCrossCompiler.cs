@@ -151,9 +151,8 @@ public static partial class ShaderCompiler
 
         var resources = compiler.CreateShaderResources();
 
-        // Removes annoying 'type_' prefix
         foreach (var res in resources.UniformBuffers)
-            compiler.SetName(res.base_type_id, compiler.GetName(res.id));
+            compiler.SetName(res.base_type_id, res.name);
 
         string c = compiler.Compile();
 

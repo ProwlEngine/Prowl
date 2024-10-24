@@ -3,6 +3,11 @@
 
 #pragma warning disable
 
+using System;
+using System.Diagnostics;
+
+using Glslang.NET;
+
 namespace Prowl.Editor;
 
 public class FileIncluder
@@ -10,8 +15,7 @@ public class FileIncluder
     public string SourceFile;
     public string SourceFilePath => Path.Join(_searchDirectories[0].FullName, SourceFile);
 
-    private readonly string _relativeDirectory;
-    private readonly int _qualifiedPrefixLength;
+    private static readonly string s_qualifiedPrefix = Path.GetFullPath("/");
 
     private readonly DirectoryInfo[] _searchDirectories;
 
@@ -19,13 +23,34 @@ public class FileIncluder
     public FileIncluder(string sourceFile, DirectoryInfo[] searchDirectories)
     {
         SourceFile = sourceFile;
-        _relativeDirectory = Path.GetDirectoryName(_relativeDirectory) ?? "";
-
-        string fullyQualifiedPath = Path.GetFullPath("/");
-
-        _qualifiedPrefixLength = fullyQualifiedPath.Length;
-        _relativeDirectory = fullyQualifiedPath + _relativeDirectory;
         _searchDirectories = searchDirectories;
+    }
+
+
+    public IncludeResult Include(string headerName, string includerName, uint includeDepth, bool isSystemFile)
+    {
+        if (includeDepth > 150)
+        {
+            return new IncludeResult()
+            {
+                headerName = headerName,
+                headerData = ""
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(includerName))
+            includerName = Path.GetDirectoryName(SourceFile) ?? "";
+
+        Runtime.Debug.Log($"Including {headerName} from: {includerName}");
+
+        IncludeResult result = new IncludeResult();
+
+        string fullPath = ResolveHeader(headerName, includerName, out string parsedHeader);
+
+        result.headerName = parsedHeader;
+        result.headerData = File.ReadAllText(GetFullFilePath(includerName));
+
+        return result;
     }
 
 
@@ -35,20 +60,29 @@ public class FileIncluder
     }
 
 
-    public string GetFullFilePath(string file)
+    public string ResolveHeader(string rawHeader, string fullIncluder, out string parsedHeader)
     {
-        if (file == "hlsl.hlsl")
-            return SourceFilePath;
+        string filePath = rawHeader;
 
-        string filePath = Path.GetFullPath(file, _relativeDirectory)[_qualifiedPrefixLength..];
+        // Not an absolute/full path - resolve to project-relative 'full path'
+        if (!rawHeader.StartsWith('/'))
+            filePath = Path.GetFullPath(rawHeader, s_qualifiedPrefix + fullIncluder)[s_qualifiedPrefix.Length..];
 
+        parsedHeader = Path.GetDirectoryName(filePath);
+
+        return GetFullFilePath(filePath);
+    }
+
+
+    public string GetFullFilePath(string projectRelativePath)
+    {
         string? resultPath = null;
 
         for (int i = 0; i < _searchDirectories.Length; i++)
         {
             DirectoryInfo directory = _searchDirectories[i];
 
-            string relativePath = Path.Join(directory.FullName, filePath);
+            string relativePath = Path.Join(directory.FullName, projectRelativePath);
 
             if (File.Exists(relativePath))
             {
@@ -58,7 +92,7 @@ public class FileIncluder
         }
 
         if (resultPath == null)
-            throw new FileNotFoundException($"Could not resolve include path: {file}");
+            throw new FileNotFoundException($"Could not resolve include path: {projectRelativePath}");
 
         return resultPath;
     }

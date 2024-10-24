@@ -16,23 +16,18 @@ namespace Prowl.Editor;
 
 public static partial class UniformReflector
 {
-    private static string CleanseName(string rawName)
-    {
-        return rawName.Replace("type.", "");
-    }
-
     public static Uniform[] GetUniforms(Reflector reflector, Resources resources)
     {
         List<Uniform> uniforms = new();
 
         foreach (var res in resources.StorageImages)
-            uniforms.Add(new Uniform(CleanseName(GetName(reflector, res.id)), GetBinding(reflector, res.id), ResourceKind.TextureReadWrite));
+            uniforms.Add(new Uniform(res.name, GetBinding(reflector, res.id), ResourceKind.TextureReadWrite));
 
         foreach (var res in resources.SeparateImages)
-            uniforms.Add(new Uniform(CleanseName(GetName(reflector, res.id)), GetBinding(reflector, res.id), ResourceKind.TextureReadOnly));
+            uniforms.Add(new Uniform(res.name, GetBinding(reflector, res.id), ResourceKind.TextureReadOnly));
 
         foreach (var res in resources.SeparateSamplers)
-            uniforms.Add(new Uniform(CleanseName(GetName(reflector, res.id)), GetBinding(reflector, res.id), ResourceKind.Sampler));
+            uniforms.Add(new Uniform(res.name, GetBinding(reflector, res.id), ResourceKind.Sampler));
 
         foreach (var res in resources.StorageBuffers)
             uniforms.Add(CreateStorageBuffer(reflector, res));
@@ -57,11 +52,9 @@ public static partial class UniformReflector
         var decoratedType = reflector.GetTypeHandle(bufferResource.type_id);
 
         if (reflector.HasDecoration(bufferResource.id, Decoration.NonWritable))
-            return new Uniform(CleanseName(bufferResource.name), binding, ResourceKind.StructuredBufferReadOnly);
+            return new Uniform(bufferResource.name, binding, ResourceKind.StructuredBufferReadOnly);
 
-        string name = GetName(reflector, bufferResource.id);
-
-        return new Uniform(CleanseName(name), binding, ResourceKind.StructuredBufferReadWrite);
+        return new Uniform(bufferResource.name, binding, ResourceKind.StructuredBufferReadWrite);
     }
 
     static Uniform CreateConstantBuffer(Reflector reflector, ReflectedResource bufferResource)
@@ -127,16 +120,9 @@ public static partial class UniformReflector
             members.Add(member);
         }
 
-        string name = GetName(reflector, bufferResource.id);
-
-        return new Uniform(CleanseName(name), binding, size, members.ToArray());
+        return new Uniform(bufferResource.name, binding, size, members.ToArray());
     }
 
-
-    static string GetName(Reflector reflector, ID id)
-    {
-        return reflector.GetName(id).Replace('$', '_');
-    }
 
     static uint GetBinding(Reflector reflector, ID id)
     {

@@ -29,8 +29,8 @@ public static class Application
 
     private static readonly GraphicsBackend[] s_preferredWindowsBackends = // Covers Windows/UWP
     [
-        GraphicsBackend.Vulkan,
         GraphicsBackend.OpenGL,
+        GraphicsBackend.Vulkan,
         GraphicsBackend.Direct3D11,
         GraphicsBackend.OpenGLES,
     ];
@@ -136,7 +136,7 @@ public static class Application
 
     public static void Quit()
     {
-        if(Application.IsEditor && Application.IsPlaying)
+        if (Application.IsEditor && Application.IsPlaying)
         {
             // Its in Editor and in playmode, Quit doesn't do anything
             return;

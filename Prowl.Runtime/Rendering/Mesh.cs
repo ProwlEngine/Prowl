@@ -198,12 +198,12 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public static readonly Dictionary<string, VertexElementFormat> MeshSemantics = new()
     {
-        { "POSITION0", VertexElementFormat.Float3 },
-        { "TEXCOORD0", VertexElementFormat.Float2 },
-        { "TEXCOORD1", VertexElementFormat.Float2 },
-        { "NORMAL0", VertexElementFormat.Float3 },
-        { "TANGENT0", VertexElementFormat.Float3 },
-        { "COLOR0", VertexElementFormat.Byte4_Norm }
+        { "position0", VertexElementFormat.Float3 },
+        { "texcoord0", VertexElementFormat.Float2 },
+        { "texcoord1", VertexElementFormat.Float2 },
+        { "normal0", VertexElementFormat.Float3 },
+        { "tangent0", VertexElementFormat.Float3 },
+        { "color0", VertexElementFormat.Byte4_Norm }
     };
 
     public Mesh()
