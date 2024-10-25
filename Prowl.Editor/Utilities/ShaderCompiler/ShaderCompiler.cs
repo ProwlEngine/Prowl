@@ -74,7 +74,8 @@ public static partial class ShaderCompiler
 
     private static void CheckMessages(string messageText, List<CompilationMessage> messages)
     {
-        Debug.Log(messageText);
+        if (!string.IsNullOrWhiteSpace(messageText))
+            Debug.Log(messageText);
     }
 
 
@@ -128,9 +129,7 @@ public static partial class ShaderCompiler
             CheckMessages(shader.GetInfoLog(), messages);
 
             if (!preprocessed)
-            {
                 return null;
-            }
 
             bool parsed = shader.Parse();
 
@@ -138,9 +137,7 @@ public static partial class ShaderCompiler
             CheckMessages(shader.GetInfoLog(), messages);
 
             if (!parsed)
-            {
                 return null;
-            }
 
             program.AddShader(shader);
         }
@@ -151,9 +148,7 @@ public static partial class ShaderCompiler
         CheckMessages(program.GetInfoLog(), messages);
 
         if (!linked)
-        {
             return null;
-        }
 
         string fileName = Path.GetFileName(includer.SourceFile);
 
@@ -173,9 +168,7 @@ public static partial class ShaderCompiler
             CheckMessages(program.GetSPIRVMessages(), messages);
 
             if (!generatedSPIRV)
-            {
                 return null;
-            }
 
             outputs[i].EntryPoint = "main";
             outputs[i].Stage = entryPoint.Stage;
