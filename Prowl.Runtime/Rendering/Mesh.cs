@@ -314,12 +314,12 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
         commandList.SetIndexBuffer(IndexBuffer, IndexFormat);
 
-        pipeline.BindVertexBuffer(commandList, "POSITION0", VertexBuffer, 0);
-        pipeline.BindVertexBuffer(commandList, "TEXCOORD0", VertexBuffer, (uint)UVStart);
-        pipeline.BindVertexBuffer(commandList, "TEXCOORD1", VertexBuffer, (uint)UV2Start);
-        pipeline.BindVertexBuffer(commandList, "NORMAL0", VertexBuffer, (uint)NormalsStart);
-        pipeline.BindVertexBuffer(commandList, "TANGENT0", VertexBuffer, (uint)TangentsStart);
-        pipeline.BindVertexBuffer(commandList, "COLOR0", VertexBuffer, (uint)ColorsStart);
+        pipeline.BindVertexBuffer(commandList, "position0", VertexBuffer, 0);
+        pipeline.BindVertexBuffer(commandList, "texcoord0", VertexBuffer, (uint)UVStart);
+        pipeline.BindVertexBuffer(commandList, "texcoord1", VertexBuffer, (uint)UV2Start);
+        pipeline.BindVertexBuffer(commandList, "normal0", VertexBuffer, (uint)NormalsStart);
+        pipeline.BindVertexBuffer(commandList, "tangent0", VertexBuffer, (uint)TangentsStart);
+        pipeline.BindVertexBuffer(commandList, "color0", VertexBuffer, (uint)ColorsStart);
     }
 
     private T ReadVertexData<T>(T value)

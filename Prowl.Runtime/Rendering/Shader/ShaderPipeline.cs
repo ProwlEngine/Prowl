@@ -98,9 +98,8 @@ public sealed partial class ShaderPipeline : IDisposable, IBindableResourceProvi
         {
             VertexInput input = shader.VertexInputs[inputIndex];
 
-            // Add in_var_ to match reflected name in SPIRV-Cross generated GLSL.
             vertexLayouts[inputIndex] = new VertexLayoutDescription(
-                new VertexElementDescription("in_var_" + input.semantic, input.format, VertexElementSemantic.TextureCoordinate));
+                new VertexElementDescription(input.semantic, input.format, VertexElementSemantic.TextureCoordinate));
 
             _semanticLookup[input.semantic] = (uint)inputIndex;
         }
@@ -228,7 +227,7 @@ public sealed partial class ShaderPipeline : IDisposable, IBindableResourceProvi
 
     public void BindVertexBuffer(CommandList list, string semantic, DeviceBuffer buffer, uint offset = 0)
     {
-        if (_semanticLookup.TryGetValue(semantic, out uint location))
+        if (_semanticLookup.TryGetValue(semantic.ToLower(), out uint location))
             list.SetVertexBuffer(location, buffer, offset);
     }
 
