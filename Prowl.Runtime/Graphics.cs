@@ -171,8 +171,8 @@ public static partial class Graphics
     public static FrontFace GetFrontFace()
     {
         if (IsOpenGL)
-            return FrontFace.CounterClockwise;
+            return FrontFace.Clockwise;
 
-        return FrontFace.Clockwise;
+        return FrontFace.CounterClockwise;
     }
 }
