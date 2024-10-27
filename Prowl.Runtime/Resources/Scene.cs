@@ -132,6 +132,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         foreach (GameObject g in AllObjects)
             g.OnDispose();
+
+        Clear();
     }
 
     public void OnBeforeSerialize()
