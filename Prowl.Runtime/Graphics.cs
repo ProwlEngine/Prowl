@@ -16,6 +16,37 @@ namespace Prowl.Runtime;
 
 public static partial class Graphics
 {
+    private class MeshRenderable : IRenderable
+    {
+        private AssetRef<Mesh> _mesh;
+        private AssetRef<Material> _material;
+        private Matrix4x4 _transform;
+        private PropertyState _properties;
+
+        public MeshRenderable(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, PropertyState? propertyBlock = null)
+        {
+            _mesh = mesh;
+            _material = material;
+            _transform = matrix;
+            _properties = propertyBlock ?? new();
+        }
+
+        public Material GetMaterial() => _material.Res;
+
+        public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
+        {
+            drawData = _mesh.Res;
+            properties = _properties;
+            model = _transform;
+        }
+
+        public void GetCullingData(out bool isRenderable, out Bounds bounds)
+        {
+            isRenderable = true;
+            bounds = _mesh.Res.bounds.Transform(_transform);
+        }
+    }
+
     public static GraphicsDevice Device { get; internal set; }
     public static ResourceFactory Factory => Device.ResourceFactory;
 
@@ -86,6 +117,11 @@ public static partial class Graphics
         list.Begin();
 
         return list;
+    }
+
+    public static void DrawMesh(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, PropertyState? propertyBlock = null)
+    {
+        RenderPipeline.AddRenderable(new MeshRenderable(mesh, material, matrix, propertyBlock));
     }
 
     public static void SubmitCommandBuffer(CommandBuffer commandBuffer, GraphicsFence? fence = null)
