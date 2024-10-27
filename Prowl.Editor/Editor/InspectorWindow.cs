@@ -17,7 +17,7 @@ public class InspectorWindow : EditorWindow
     private readonly Stack<object> _BackStack = new();
     private readonly Stack<object> _ForwardStack = new();
 
-    private object? Selected;
+    private WeakReference Selected;
     private bool lockSelection;
 
     (object, ScriptedEditor)? customEditor;
@@ -45,7 +45,7 @@ public class InspectorWindow : EditorWindow
         _ForwardStack.Clear();
         if (Selected != null)
             _BackStack.Push(Selected);
-        Selected = n;
+        Selected = new(n);
     }
 
     protected override void Close()
@@ -55,6 +55,13 @@ public class InspectorWindow : EditorWindow
 
     protected override void Draw()
     {
+        if (Selected != null && Selected.IsAlive == false)
+        {
+            Selected = null;
+            Debug.Log("Selected object in inspector was garbage collected.");
+            return;
+        }
+
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
         gui.CurrentNode.Layout(LayoutType.Column);
@@ -89,7 +96,7 @@ public class InspectorWindow : EditorWindow
                 DrawInspectorLabel("Nothing Selecting.");
                 return;
             }
-            if (Selected is EngineObject eo1 && eo1.IsDestroyed)
+            if (Selected.Target is EngineObject eo1 && eo1.IsDestroyed)
             {
                 gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Warning, 2, (float)EditorStylePrefs.Instance.ButtonRoundness);
                 DrawInspectorLabel("Object Destroyed.");
@@ -98,7 +105,7 @@ public class InspectorWindow : EditorWindow
 
             bool destroyCustomEditor = true;
 
-            if (Selected is FileInfo path)
+            if (Selected.Target is FileInfo path)
             {
                 if (customEditor == null)
                 {
@@ -149,14 +156,14 @@ public class InspectorWindow : EditorWindow
             {
                 if (customEditor == null)
                 {
-                    ScriptedEditor? editor = ScriptedEditor.CreateEditor(Selected);
+                    ScriptedEditor? editor = ScriptedEditor.CreateEditor(Selected.Target);
                     if (editor != null)
                     {
-                        customEditor = (Selected, editor);
+                        customEditor = (Selected.Target, editor);
                         destroyCustomEditor = false;
                     }
                 }
-                else if (customEditor.Value.Item1 == Selected)
+                else if (customEditor.Value.Item1 == Selected.Target)
                 {
                     // We are still editing the same object
                     customEditor.Value.Item2.OnInspectorGUI(new());
@@ -188,7 +195,7 @@ public class InspectorWindow : EditorWindow
         while (_BackStack.Count > 0)
         {
             var peek = _BackStack.Peek();
-            if (peek == null || (peek is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected))
+            if (peek == null || (peek is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
                 _BackStack.Pop();
             else
                 break;
@@ -202,8 +209,8 @@ public class InspectorWindow : EditorWindow
             {
                 if (gui.IsNodePressed())
                 {
-                    _ForwardStack.Push(Selected);
-                    Selected = _BackStack.Pop();
+                    _ForwardStack.Push(Selected.Target);
+                    Selected = new(_BackStack.Pop());
 
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
                 }
@@ -219,7 +226,7 @@ public class InspectorWindow : EditorWindow
         while (_ForwardStack.Count > 0)
         {
             var peek = _ForwardStack.Peek();
-            if (peek == null || (peek is EngineObject eo3 && eo3.IsDestroyed) || ReferenceEquals(peek, Selected))
+            if (peek == null || (peek is EngineObject eo3 && eo3.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
                 _ForwardStack.Pop();
             else
                 break;
@@ -234,8 +241,8 @@ public class InspectorWindow : EditorWindow
             {
                 if (gui.IsNodePressed())
                 {
-                    _BackStack.Push(Selected);
-                    Selected = _ForwardStack.Pop();
+                    _BackStack.Push(Selected.Target);
+                    Selected = new(_ForwardStack.Pop());
 
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
                 }
