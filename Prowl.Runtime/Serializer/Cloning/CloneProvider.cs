@@ -810,9 +810,12 @@ namespace Prowl.Runtime.Cloning
             return directAttrib;
 		}
 
+        [OnAssemblyUnload]
 		internal static void ClearTypeCache()
 		{
 			s_surrogates = null;
+            s_cloneTypeCache.Clear();
+            s_cloneBehaviorCache.Clear();
 		}
 	}
 
