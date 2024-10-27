@@ -811,7 +811,7 @@ namespace Prowl.Runtime.Cloning
 		}
 
         [OnAssemblyUnload]
-		internal static void ClearTypeCache()
+		public static void ClearTypeCache()
 		{
 			s_surrogates = null;
             s_cloneTypeCache.Clear();

@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
+using Prowl.Runtime.Utils;
+
 using Veldrid;
 
 
@@ -65,6 +67,7 @@ public abstract class RenderPipeline : EngineObject
     }
 
 
+    [OnAssemblyUnload]
     public static void ClearRenderables()
     {
         s_renderables.Clear(); // Clear renderables
