@@ -39,6 +39,7 @@ public static partial class AssetDatabase
     static readonly Dictionary<string, MetaFile> assetPathToMeta = new(StringComparer.OrdinalIgnoreCase);
     static readonly Dictionary<Guid, MetaFile> assetGuidToMeta = [];
     static readonly Dictionary<Guid, SerializedAsset> guidToAssetData = [];
+    static int updateLock = 0;
 
     #endregion
 
@@ -94,12 +95,30 @@ public static partial class AssetDatabase
     }
 
     /// <summary>
+    /// Prevents the AssetDatabase from updating.
+    /// </summary>
+    public static void LockUpdate() => updateLock++;
+
+    /// <summary>
+    /// Allows the AssetDatabase to update if it was previously locked.
+    /// </summary>
+    public static void UnlockUpdate()
+    {
+        bool wasLocked = updateLock > 0;
+        updateLock = Math.Max(0, updateLock - 1);
+        if (wasLocked && updateLock == 0)
+            Update(true, true);
+    }
+
+    /// <summary>
     /// Checks for changes in the AssetDatabase.
     /// Call manually when you make changes to the asset files to ensure the changes are loaded
     /// </summary>
     public static void Update(bool doUnload = true, bool forceCacheUpdate = false)
     {
         if (!Project.HasProject) return;
+
+        if (updateLock > 0) return;
 
         RefreshTimer = 0f;
 
