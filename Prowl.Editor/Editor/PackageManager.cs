@@ -3,14 +3,14 @@
 
 using System.Text;
 
-using NuGet.Protocol.Core.Types;
-
 using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
+
+using SemVersion;
 
 namespace Prowl.Editor;
 
@@ -21,31 +21,31 @@ public class PackageManagerWindow : EditorWindow
 
     private string Error = "";
 
-    private enum Page { Installed, AllPackages, Source }
+    private enum Page { Installed, AllPackages }
     private Page _currentPage = Page.Installed;
-    private (string, string) _currentSource;
 
     // Selected Package
     bool _showProjectDetails;
-    string[] _projectVersions = [];
+    SemanticVersion[] _projectVersions = [];
     int _selectedVersionIndex;
-    List<IPackageSearchMetadata> _selectedPackageMetaData = [];
+    GithubPackageMetaData _selectedPackageMetaData;
 
     byte loadingPackageEntries;
     bool loadingDetails;
-    string package_Title, package_Authors, package_Description, package_Downloads, package_Version, package_PublishDate, package_ProjectURL, package_LicenseURL;
+    string package_Title, package_Author, package_Description, package_Version, package_ProjectURL, package_License;
+    SemanticVersion? package_InstalledVersion;
     Texture2D? package_Icon;
     List<(string, string)> package_Dependencies;
-    IPackageSearchMetadata? _metadata;
+    GithubPackageMetaData? _metadata;
 
-    readonly List<(IPackageSearchMetadata, Texture2D?)> PackageEntries = [];
+    readonly List<(GithubPackageMetaData, Texture2D?)> PackageEntries = [];
 
     string _searchText;
 
     public PackageManagerWindow() : base()
     {
         Title = FontAwesome6.BoxesPacking + " PackageManager";
-        PopulateListWith(AssetDatabase.Packages);
+        PopulateListWith(AssetDatabase.GetInstalledPackages());
     }
 
     protected override void Draw()
@@ -60,7 +60,7 @@ public class PackageManagerWindow : EditorWindow
             {
                 _searchText = "";
                 _currentPage = Page.Installed;
-                PopulateListWith(AssetDatabase.Packages);
+                PopulateListWith(AssetDatabase.GetInstalledPackages());
             }
 
             if (EditorGUI.StyledButton("All Packages"))
@@ -68,22 +68,6 @@ public class PackageManagerWindow : EditorWindow
                 _searchText = "";
                 _currentPage = Page.AllPackages;
                 PopulateListWithSearchResults("");
-            }
-
-            EditorGUI.Text("---");
-
-            foreach (var source in PackageManagerPreferences.Instance.Sources)
-            {
-                if (source.IsEnabled)
-                {
-                    if (EditorGUI.StyledButton(source.Name))
-                    {
-                        _searchText = "";
-                        _currentPage = Page.Source;
-                        _currentSource = (source.Name, source.Source);
-                        PopulateListWithSearchResults("", source.Source);
-                    }
-                }
             }
         }
 
@@ -104,7 +88,7 @@ public class PackageManagerWindow : EditorWindow
         using (gui.Node("Header").ExpandWidth().MaxHeight(75).Layout(LayoutType.Column, false).Padding(5).Enter())
         {
             EditorGUI.Text(_currentPage.ToString());
-            var update = gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), EditorStylePrefs.Instance.ItemSize);
+            bool update = gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), EditorStylePrefs.Instance.ItemSize);
 
             gui.Draw2D.DrawText("Include Prerelease", gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(35, 50), Color.white * 0.9f);
             if (gui.Checkbox("prerelease", ref PackageManagerPreferences.Instance.IncludePrerelease, 0, 0, out _))
@@ -115,10 +99,7 @@ public class PackageManagerWindow : EditorWindow
 
             if (update)
             {
-                if (_currentPage == Page.Source)
-                    PopulateListWithSearchResults(_searchText, _currentSource.Item2);
-                else
-                    PopulateListWithSearchResults(_searchText);
+                PopulateListWithSearchResults(_searchText);
             }
         }
 
@@ -144,11 +125,11 @@ public class PackageManagerWindow : EditorWindow
         {
             for (int i = 0; i < PackageEntries.Count; i++)
             {
-                var entry = PackageEntries[i];
+                (GithubPackageMetaData, Texture2D?) entry = PackageEntries[i];
                 using (gui.Node("PackageEntry", i).ExpandWidth().Height(64).Clip().Enter())
                 {
                     if (gui.IsNodePressed())
-                        ClickPackage(entry.Item1.Identity.Id);
+                        ClickPackage(entry.Item1.repository.githubPath);
 
                     if (gui.IsNodeHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
@@ -162,9 +143,9 @@ public class PackageManagerWindow : EditorWindow
                         pos.x += width + 5;
                     }
 
-                    gui.Draw2D.DrawText(entry.Item1.Title, pos);
+                    gui.Draw2D.DrawText(entry.Item1.name, pos);
                     pos.y += 20;
-                    gui.Draw2D.DrawText(entry.Item1.Description, 17, pos, Color.white * 0.9f, gui.CurrentNode.LayoutData.GlobalContentWidth - (pos.x - startpos.x));
+                    gui.Draw2D.DrawText(entry.Item1.description, 17, pos, Color.white * 0.9f, gui.CurrentNode.LayoutData.GlobalContentWidth - (pos.x - startpos.x));
                 }
             }
         }
@@ -201,32 +182,31 @@ public class PackageManagerWindow : EditorWindow
             var installWidth = width - 75 - 10 - 10;
             using (gui.Node("Installed").Height(itemSize).ExpandWidth().Layout(LayoutType.Row).Enter())
             {
-                var installedPackage = AssetDatabase.GetInstalledPackage(_metadata.Identity.Id);
-                if (installedPackage != null)
+                if (package_InstalledVersion is not null)
                 {
-                    if (gui.Combo("Version", "VersionPopup", ref _selectedVersionIndex, _projectVersions, 0, 0, 75, itemSize))
+                    if (gui.Combo("Version", "VersionPopup", ref _selectedVersionIndex, _projectVersions.Select(x => x.ToString()).ToArray(), 0, 0, 75, itemSize))
                         PopulateDetails(_projectVersions[_selectedVersionIndex]);
 
-                    bool canUpdate = _projectVersions[_selectedVersionIndex] != installedPackage.Identity.Version.ToString();
+                    bool canUpdate = _projectVersions[_selectedVersionIndex] != package_InstalledVersion;
                     if (canUpdate && EditorGUI.StyledButton("Update", installWidth / 2, itemSize))
                     {
-                        AssetDatabase.UninstallPackage(_metadata.Identity.Id, installedPackage.Identity.Version.ToString());
-                        AssetDatabase.InstallPackage(_metadata.Identity.Id, _projectVersions[_selectedVersionIndex]);
+                        //AssetDatabase.UninstallPackage(_metadata.repository);
+                        AssetDatabase.InstallPackage(_metadata.repository.githubPath, _projectVersions[_selectedVersionIndex].ToString());
                     }
 
                     if (EditorGUI.StyledButton("Uninstall", canUpdate ? installWidth / 2 : installWidth, itemSize))
-                        AssetDatabase.UninstallPackage(_metadata.Identity.Id, installedPackage.Identity.Version.ToString());
+                        AssetDatabase.UninstallPackage(_metadata.repository.githubPath);
 
                     sb.AppendLine("==========");
-                    sb.AppendLine("Installed Version: " + installedPackage.Identity.Version.ToString());
+                    sb.AppendLine("Installed Version: " + package_InstalledVersion);
                     sb.AppendLine("==========");
                 }
                 else
                 {
-                    if (gui.Combo("Version", "VersionPopup", ref _selectedVersionIndex, _projectVersions, 0, 0, 75, itemSize))
+                    if (gui.Combo("Version", "VersionPopup", ref _selectedVersionIndex, _projectVersions.Select(x => x.ToString()).ToArray(), 0, 0, 75, itemSize))
                         PopulateDetails(_projectVersions[_selectedVersionIndex]);
                     if (EditorGUI.StyledButton("Install", installWidth, itemSize))
-                        AssetDatabase.InstallPackage(_metadata.Identity.Id, _projectVersions[_selectedVersionIndex]);
+                        AssetDatabase.InstallPackage(_metadata.repository.githubPath, _projectVersions[_selectedVersionIndex].ToString());
                 }
             }
 
@@ -234,10 +214,9 @@ public class PackageManagerWindow : EditorWindow
             sb.AppendLine("Description:");
             sb.AppendLine(package_Description);
             sb.AppendLine("");
-            sb.AppendLine("Authors: " + package_Authors);
+            sb.AppendLine("Author: " + package_Author);
             //sb.AppendLine("Downloads: " + package_Downloads);
             sb.AppendLine("Version: " + package_Version);
-            sb.AppendLine("Publish Date: " + package_PublishDate);
 
             EditorGUI.TextSimple(sb.ToString());
 
@@ -245,7 +224,7 @@ public class PackageManagerWindow : EditorWindow
                 System.Diagnostics.Process.Start("explorer", package_ProjectURL.ToString());
 
             if (EditorGUI.StyledButton("License"))
-                System.Diagnostics.Process.Start("explorer", package_LicenseURL.ToString());
+                System.Diagnostics.Process.Start("explorer", package_License.ToString());
 
 
             if (package_Dependencies.Count > 0)
@@ -260,33 +239,29 @@ public class PackageManagerWindow : EditorWindow
         }
     }
 
-    private async void PopulateListWithSearchResults(string search, string? source = null)
+    private async void PopulateListWithSearchResults(string search)
     {
         loadingPackageEntries++;
         PackageEntries.Clear();
         try
         {
-            List<IPackageSearchMetadata> searchResults = [];
-            if (source == null)
-            {
-                foreach (var src in PackageManagerPreferences.Instance.Sources)
-                {
-                    if (!src.IsEnabled) continue;
+            List<GithubPackageMetaData> searchResults = [];
+            //searchResults.AddRange(await AssetDatabase.SearchPackages(search, PackageManagerPreferences.Instance.IncludePrerelease));
 
-                    try
-                    {
-                        searchResults.AddRange(await AssetDatabase.SearchPackages(search, src.Source, PackageManagerPreferences.Instance.IncludePrerelease));
-                    }
-                    catch (Exception ex)
-                    {
-                        Error = $"An Error Occurred Error in Source: {src.Name} : " + ex.Message;
-                    }
-                }
-            }
-            else
+            searchResults.Add(new GithubPackageMetaData()
             {
-                searchResults.AddRange(await AssetDatabase.SearchPackages(search, source, PackageManagerPreferences.Instance.IncludePrerelease));
-            }
+                name = "git-install",
+                description = "git-based package manager",
+                author = "pfraces",
+                repository = new() { githubPath = "pfraces-graveyard/git-install" },
+                iconurl = "https://m.media-amazon.com/images/I/813kqvYoRfL.png",
+                license = "MIT",
+                homepage = "www.google.com",
+                dependencies = new Dictionary<string, string>()
+                {
+                    { "git", "1.0.0" }
+                }
+            });
 
             if (searchResults != null)
                 PopulateListWith(searchResults);
@@ -298,7 +273,7 @@ public class PackageManagerWindow : EditorWindow
         loadingPackageEntries--;
     }
 
-    private async void PopulateListWith(List<IPackageSearchMetadata> searchresults)
+    private async void PopulateListWith(IEnumerable<GithubPackageMetaData> searchresults)
     {
         loadingPackageEntries++;
         foreach (var entry in PackageEntries)
@@ -307,14 +282,14 @@ public class PackageManagerWindow : EditorWindow
         PackageEntries.Clear();
         foreach (var result in searchresults)
         {
-            PackageEntries.Add((result, await DownloadIcon(result.IconUrl)));
+            PackageEntries.Add((result, await DownloadIcon(result.iconurl ?? "")));
         }
         loadingPackageEntries--;
     }
 
-    private async Task<Texture2D?> DownloadIcon(Uri? url)
+    private async Task<Texture2D?> DownloadIcon(string url)
     {
-        if (string.IsNullOrWhiteSpace(url?.ToString()))
+        if (string.IsNullOrWhiteSpace(url))
             return null;
 
         try
@@ -336,41 +311,13 @@ public class PackageManagerWindow : EditorWindow
         Error = "";
         try
         {
-            List<IPackageSearchMetadata> metadata = [];
-            List<NuGet.Versioning.NuGetVersion> versions = [];
-            if (_currentPage == Page.Source)
-            {
-                metadata.AddRange(await AssetDatabase.GetPackageMetadata(packageId, _currentSource.Item2, PackageManagerPreferences.Instance.IncludePrerelease));
-                // Get Versions
-                versions.AddRange(await AssetDatabase.GetPackageVersions(packageId, _currentSource.Item2, PackageManagerPreferences.Instance.IncludePrerelease));
-            }
-            else
-            {
-                if (_currentPage == Page.Installed)
-                {
-                    metadata.AddRange(await AssetDatabase.GetPackageMetadata(packageId, Project.Active.PackagesDirectory.FullName, PackageManagerPreferences.Instance.IncludePrerelease));
-                }
-                else if (_currentPage == Page.AllPackages)
-                {
-                    foreach (var source in PackageManagerPreferences.Instance.Sources)
-                        if (source.IsEnabled)
-                            metadata.AddRange(await AssetDatabase.GetPackageMetadata(packageId, source.Source, PackageManagerPreferences.Instance.IncludePrerelease));
-                }
+            List<SemanticVersion> semVers = await AssetDatabase.GetVersions(packageId);
+            _projectVersions = [.. semVers.OrderByDescending(x => x)];
 
-                // Get Versions
-                foreach (var source in PackageManagerPreferences.Instance.Sources)
-                    if (source.IsEnabled)
-                        versions.AddRange(await AssetDatabase.GetPackageVersions(packageId, source.Source, PackageManagerPreferences.Instance.IncludePrerelease));
-            }
-
-            string latestVersion = metadata.LastOrDefault().Identity.Version.ToString();
-
-            _projectVersions = versions.Select(x => x.ToString()).Reverse().ToArray();
-
-            _selectedPackageMetaData = metadata;
+            _metadata = await AssetDatabase.GetDetails(packageId);
 
             _selectedVersionIndex = 0;
-            PopulateDetails(latestVersion);
+            PopulateDetails(_projectVersions[_selectedVersionIndex]);
 
             _showProjectDetails = true;
         }
@@ -381,43 +328,37 @@ public class PackageManagerWindow : EditorWindow
         loadingDetails = false;
     }
 
-    private async void PopulateDetails(string version)
+    private async void PopulateDetails(SemanticVersion version)
     {
-        _metadata = _selectedPackageMetaData.SingleOrDefault(x => x.Identity.Version.ToString() == version);
-
-        package_Version = version;
+        package_Version = version.ToString();
         package_Dependencies = [];
 
         package_Icon?.DestroyImmediate();
 
         if (_metadata != null)
         {
-            package_Icon = await DownloadIcon(_metadata.IconUrl);
+            package_Icon = await DownloadIcon(_metadata.iconurl ?? "");
 
-            package_Title = _metadata.Title;
-            package_Authors = _metadata.Authors;
-            package_Description = _metadata.Description;
-            package_Downloads = _metadata.DownloadCount?.ToString() ?? "Unknown";
-            package_PublishDate = DateTime.Parse(_metadata.Published.ToString()).ToString("g");
-            package_ProjectURL = _metadata.ProjectUrl.ToString();
-            package_LicenseURL = _metadata.LicenseUrl.ToString();
+            package_Title = _metadata.name ?? "undefined";
+            package_Author = _metadata.author ?? "undefined";
+            package_Description = _metadata.description ?? "undefined";
+            package_ProjectURL = _metadata.homepage ?? "undefined";
+            package_License = _metadata.license ?? "undefined";
 
-            if (_metadata.DependencySets.ToList().Count > 0)
-                foreach (var dependency in _metadata.DependencySets.FirstOrDefault().Packages)
-                    package_Dependencies.Add((dependency.Id, dependency.VersionRange.ToString()));
+            foreach (KeyValuePair<string, string> dependency in _metadata.dependencies)
+                    package_Dependencies.Add((dependency.Key, dependency.Value ?? "*"));
+
+            package_InstalledVersion = await AssetDatabase.GetInstalledVersion(_metadata.repository.githubPath);
         }
         else
         {
-            _metadata = _selectedPackageMetaData.Last();
-            package_Icon = await DownloadIcon(_metadata.IconUrl);
+            package_Icon = null;
 
-            package_Title = _metadata.Title;
-            package_Authors = "Unknown";
+            package_Title = "Unknown";
+            package_Author = "Unknown";
             package_Description = "Unknown";
-            package_Downloads = "Unknown";
-            package_PublishDate = "Unknown";
             package_ProjectURL = "Unknown";
-            package_LicenseURL = "Unknown";
+            package_License = "Unknown";
         }
     }
 }

@@ -2,35 +2,44 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.IO.Compression;
-using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
-using NuGet.Common;
-using NuGet.Configuration;
-using NuGet.Frameworks;
-using NuGet.Packaging;
-using NuGet.Packaging.Core;
-using NuGet.Packaging.Signing;
-using NuGet.Protocol;
-using NuGet.Protocol.Core.Types;
-using NuGet.Resolver;
-using NuGet.Versioning;
+using BepuPhysics.CollisionDetection;
 
-using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
+using SemVersion;
+
 namespace Prowl.Editor.Assets;
+
+#warning TODO: Support other sources then just Github, like GitLab, BitBucket, etc, Could also look into NuGet packages
+
+public class GithubPackageMetaData
+{
+    public string name { get; set; } = "";
+    public string description { get; set; } = "";
+    public string author { get; set; } = "";
+    public string iconurl { get; set; } = "";
+    public string license { get; set; } = "";
+    public Repository repository { get; set; } = new();
+    public string homepage { get; set; } = "";
+    public Dictionary<string, string> dependencies { get; set; } = [];
+}
+
+public class Repository
+{
+    [JsonPropertyName("url")]
+    public string githubPath { get; set; } = "";
+}
 
 public static partial class AssetDatabase
 {
-    /// <summary>
-    /// The packages the projects wants.
-    /// Key: Package ID
-    /// Value: Package Version
-    /// </summary>
-    public static Dictionary<string, string> DesiredPackages = [];
-
-    public static List<IPackageSearchMetadata> Packages = [];
+    private static DirectoryInfo s_packagesPath;
+    private static readonly Dictionary<string, GithubPackageMetaData> s_installedPackages = new(StringComparer.OrdinalIgnoreCase);
+    private static HttpClient s_httpClient;
+    private static JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
 
     #region Public Methods
 
@@ -167,233 +176,477 @@ public static partial class AssetDatabase
 
     #endregion
 
-    #region Nuget Packages
+    #region Git Packages
 
-    public static IPackageSearchMetadata? GetInstalledPackage(string packageId)
+    private static void ValidateIsReady()
     {
-        return Packages.Where(x => x.Identity.Id == packageId).FirstOrDefault();
+        if (!Project.HasProject) throw new Exception("Cannot load packages, No project is open.");
+        ArgumentNullException.ThrowIfNullOrEmpty(Project.Active?.PackagesDirectory.FullName);
     }
 
-    internal static async void LoadPackages()
+    public static async Task ValidatePackages()
     {
-        // Load Packages.txt
-        string packagesPath = Path.Combine(Project.Active.PackagesDirectory.FullName, "Packages.txt");
-        if (File.Exists(packagesPath))
-        {
-            string[] lines = File.ReadAllText(packagesPath).Split(';');
-            foreach (string line in lines)
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
+        ValidateIsReady();
 
-                string[] nodes = line.Split('=');
-                if (nodes.Length != 2)
+        DirectoryInfo packagesPath = Project.Active!.PackagesDirectory;
+        string packagesJsonPath = Path.Combine(packagesPath.FullName, "Packages.json");
+
+        // Load Packages.json
+        Dictionary<string, string> packageVersions = [];
+        if (File.Exists(packagesJsonPath))
+        {
+            packageVersions = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(packagesJsonPath)) ?? [];
+        }
+
+        bool validateAgain = false;
+        foreach ((string githubRepo, string versionRange) in packageVersions)
+        {
+            string githubPath = ConvertToPath(githubRepo) ?? throw new Exception($"Invalid GitHub repository path: {githubRepo}");
+            string fileSafeName = githubPath.Replace('/', '.');
+            string packageDir = Path.Combine(packagesPath.FullName, fileSafeName);
+
+            try
+            {
+                // Check if package exists and get its version
+                SemanticVersion? currentVersion = await GetInstalledVersion(githubPath);
+                if (Directory.Exists(packageDir) && currentVersion == null)
                 {
-                    Debug.LogError($"Invalid Package: {line}");
-                    continue;
+                    // If we can't get the version, treat as not installed
+                    Debug.LogWarning($"Failed to get version for package {githubPath}, Uninstalling...");
+                    DeleteDirectoryRetries(packageDir);
                 }
 
-                DesiredPackages[nodes[0]] = nodes[1];
-            }
-        }
-
-        // Validate Packages
-        foreach (var pair in DesiredPackages)
-        {
-            var dependency = (await GetPackageMetadata(pair.Key, Project.Active.PackagesDirectory.FullName, PackageManagerPreferences.Instance.IncludePrerelease))
-                             .Where(x => x.Identity.Version.ToString() == pair.Value).FirstOrDefault();
-            if (dependency == null)
-            {
-                // The package is not installed, Lets try to install it
-                try
+                // If not installed or wrong version, install/update it
+                var range = new SemVersion.Parser.Range(versionRange);
+                if (currentVersion is null || !range.IsSatisfied(currentVersion))
                 {
-                    await InstallPackage(pair.Key, pair.Value);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Error Installing Package: {pair.Key} {pair.Value} : {ex.Message}");
-                }
-            }
-            else
-            {
-                Debug.Log($"Found Package: {pair.Key} : {pair.Value}");
-                Packages.Add(dependency);
-            }
-        }
-    }
+                    // Get available versions and find the best match
+                    List<SemanticVersion> versions = await GetVersions(githubPath);
+                    SemanticVersion? bestVersion = FindBestVersion(versions, versionRange)
+                        ?? throw new Exception($"No version matching '{versionRange}' found for {githubPath}");
 
-    public static void SaveProjectPackagesFile()
-    {
-        StringBuilder sb = new StringBuilder();
-        foreach (var pair in DesiredPackages)
-        {
-            sb.AppendLine($"{pair.Key}={pair.Value};");
-        }
-        File.WriteAllText(Path.Combine(Project.Active.PackagesDirectory.FullName, "Packages.txt"), sb.ToString());
-    }
+                    // Ensure directory exists
+                    Directory.CreateDirectory(packageDir);
 
-    public static async Task<List<NuGetVersion>> GetPackageVersions(string packageId, string source, bool includePrerelease)
-    {
-        ArgumentNullException.ThrowIfNull(packageId, nameof(packageId));
-        ArgumentNullException.ThrowIfNull(source, nameof(source));
+                    if (currentVersion is null)
+                    {
+                        // Clone the repository
+                        await ExecuteGitCommand($"clone \"https://github.com/{githubPath}.git\" \"{packageDir}\"");
+                    }
 
-        SourceRepository repository = Repository.Factory.GetCoreV3(source);
-        FindPackageByIdResource resource = await repository.GetResourceAsync<FindPackageByIdResource>();
-        IEnumerable<NuGetVersion> versions = await resource.GetAllVersionsAsync(packageId, new(), NugetLogger.Instance, CancellationToken.None);
-        return includePrerelease ? versions.ToList() : versions.Where(x => x.IsPrerelease == false).ToList();
-    }
+                    // Fetch tags and checkout the correct version
+                    await ExecuteGitCommand($"-C \"{packageDir}\" fetch --tags");
+                    await ExecuteGitCommand($"-C \"{packageDir}\" checkout -f tags/{versionRange}");
 
-    public static async Task<List<IPackageSearchMetadata>> SearchPackages(string packageKeyword, string source, bool includePrerelease)
-    {
-        ArgumentNullException.ThrowIfNull(packageKeyword, nameof(packageKeyword));
-        ArgumentNullException.ThrowIfNull(source, nameof(source));
+                    // Verify package.json matches the repository
+                    string packageJsonPath = Path.Combine(packageDir, "package.json");
+                    if (!File.Exists(packageJsonPath))
+                        throw new Exception($"package.json not found in repository {githubPath}");
 
-        SourceRepository repository = Repository.Factory.GetCoreV3(source);
-        PackageSearchResource resource = await repository.GetResourceAsync<PackageSearchResource>();
-        SearchFilter searchFilter = new SearchFilter(includePrerelease);
-        var results = await resource.SearchAsync(packageKeyword, searchFilter, 0, 50, NugetLogger.Instance, CancellationToken.None);
-        return results.Where(p => p.Tags.Contains("Prowl")).ToList(); // TODO: Is this a good way to handle Tags?
-    }
+                    GithubPackageMetaData package = JsonSerializer.Deserialize<GithubPackageMetaData>(
+                        File.ReadAllText(packageJsonPath)) ?? throw new Exception("Failed to parse package.json");
 
-    public static async Task<List<IPackageSearchMetadata>> GetPackageMetadata(string packageId, string source, bool includePrerelease)
-    {
-        ArgumentNullException.ThrowIfNull(packageId, nameof(packageId));
-        ArgumentNullException.ThrowIfNull(source, nameof(source));
+                    package.repository.githubPath = ConvertToPath(package.repository.githubPath)
+                        ?? throw new Exception("Invalid GitHub repository path in package.json");
 
-        SourceRepository repository = Repository.Factory.GetCoreV3(source);
-        PackageMetadataResource resource = await repository.GetResourceAsync<PackageMetadataResource>();
-        return (await resource.GetMetadataAsync(packageId, includePrerelease, true, new(), NugetLogger.Instance, CancellationToken.None)).ToList();
-    }
+                    if (!package.repository.githubPath.Equals(githubPath, StringComparison.OrdinalIgnoreCase))
+                        throw new Exception($"Repository in package.json does not match the requested repository: {package.repository.githubPath}");
 
-    public static async Task InstallPackage(string packageId, string version)
-    {
-        ArgumentNullException.ThrowIfNull(packageId, nameof(packageId));
-        ArgumentNullException.ThrowIfNull(version, nameof(version));
+                    // Handle dependencies
+                    if (package.dependencies != null && package.dependencies.Count > 0)
+                    {
+                        // Add dependencies to Packages.json if not already there
+                        bool changed = false;
+                        foreach ((string depRepo, string depVersion) in package.dependencies)
+                        {
+                            if (!packageVersions.ContainsKey(depRepo))
+                            {
+                                packageVersions[depRepo] = depVersion;
+                                changed = true;
+                            }
+                            else
+                            {
+                                // We have the dependency already, Check if the installed version is Less then the required version
+                                // We always prioritize the latest version of a package
+                                SemanticVersion? installedVersion = await GetInstalledVersion(depRepo);
+                                if (installedVersion is not null && installedVersion < SemanticVersion.Parse(depVersion))
+                                {
+                                    packageVersions[depRepo] = depVersion;
+                                    changed = true;
+                                    validateAgain = true;
+                                }
+                            }
+                        }
 
-        var nuGetFramework = NuGetFramework.ParseFolder("net8.0"); // TODO: Not really sure what todo with this? should we use "Prowl" instead of net8.0?
-        var settings = Settings.LoadDefaultSettings(null);
-        var srp = new SourceRepositoryProvider(new PackageSourceProvider(settings), Repository.Provider.GetCoreV3());
-
-        using (var cache = new SourceCacheContext())
-        {
-            List<SourceRepository> repositories = new();
-            foreach (var source in PackageManagerPreferences.Instance.Sources)
-            {
-                if (source.IsEnabled)
-                {
-                    var sourceRepo = srp.CreateRepository(new PackageSource(source.Source, source.Name, true));
-                    repositories.Add(sourceRepo);
+                        // Save updated Packages.json
+                        if (changed)
+                            File.WriteAllText(packagesJsonPath, JsonSerializer.Serialize(packageVersions, s_jsonOptions));
+                    }
                 }
             }
-
-            var available = new HashSet<SourcePackageDependencyInfo>(PackageIdentityComparer.Default);
-            await GetPackageDependencies(new(packageId, NuGetVersion.Parse(version)), nuGetFramework, cache, NugetLogger.Instance, repositories, available);
-
-            PackageResolverContext resolverContext = new(DependencyBehavior.Lowest, [packageId], [], [], [], available, srp.GetRepositories().Select(s => s.PackageSource), NugetLogger.Instance);
-
-            PackageResolver resolver = new();
-
-            var packagesToInstall = resolver.Resolve(resolverContext, CancellationToken.None).Select(p => available.Single(x => PackageIdentityComparer.Default.Equals(x, p)));
-
-            PackagePathResolver packagePathResolver = new(Project.Active.PackagesDirectory.FullName);
-            PackageExtractionContext packageExtractionContext = new(PackageSaveMode.Defaultv3, XmlDocFileSaveMode.None, ClientPolicyContext.GetClientPolicy(settings, NugetLogger.Instance), NugetLogger.Instance);
-
-            FrameworkReducer frameworkReducer = new();
-            PackageDownloadContext downloadContext = new(cache);
-
-            foreach (var packageToInstall in packagesToInstall)
+            catch (Exception ex)
             {
-                var installedPath = packagePathResolver.GetInstalledPath(packageToInstall);
-                if (installedPath == null)
+                Debug.LogError($"Failed to validate package {githubPath}: {ex.Message}");
+
+                // Cleanup on failure
+                if (Directory.Exists(packageDir))
+                    DeleteDirectoryRetries(packageDir);
+
+                throw;
+            }
+        }
+
+        // Recursively validate to handle new dependencies
+        if (validateAgain)
+            await ValidatePackages();
+    }
+
+    public static void LoadPackages()
+    {
+        ValidateIsReady();
+
+        s_packagesPath = Project.Active!.PackagesDirectory;
+        s_httpClient = new HttpClient();
+
+        s_installedPackages.Clear();
+        DirectoryInfo[] packageDirs = s_packagesPath.GetDirectories();
+
+        foreach (DirectoryInfo dir in packageDirs)
+        {
+            string packageJsonPath = Path.Combine(dir.FullName, "package.json");
+            if (File.Exists(packageJsonPath))
+            {
+                string packageJson = File.ReadAllText(packageJsonPath);
+                GithubPackageMetaData? package = JsonSerializer.Deserialize<GithubPackageMetaData>(packageJson);
+                if (package != null)
                 {
-                    var downloadResource = await packageToInstall.Source.GetResourceAsync<DownloadResource>(CancellationToken.None);
-                    var downloadResult = await downloadResource.GetDownloadResourceResultAsync(packageToInstall, downloadContext, SettingsUtility.GetGlobalPackagesFolder(settings), NugetLogger.Instance, CancellationToken.None);
-
-                    await PackageExtractor.ExtractPackageAsync(downloadResult.PackageSource, downloadResult.PackageStream, packagePathResolver, packageExtractionContext, CancellationToken.None);
+                    s_installedPackages[package.repository.githubPath] = package;
                 }
-
-                DesiredPackages[packageToInstall.Id] = packageToInstall.Version.ToString();
-
-                var metaData = (await GetPackageMetadata(packageId, Project.Active.PackagesDirectory.FullName, PackageManagerPreferences.Instance.IncludePrerelease)).Where(x => x.Identity.Version.ToString() == packageToInstall.Version.ToString()).FirstOrDefault();
-
-                Packages.RemoveAll(x => x.Identity.Id == packageId);
-                Packages.Add(metaData);
-
-                SaveProjectPackagesFile();
             }
         }
-
-        Update();
     }
 
-    public static async Task UninstallPackage(string packageId, string version)
+    public static IEnumerable<GithubPackageMetaData> GetInstalledPackages()
     {
-        ArgumentNullException.ThrowIfNull(packageId, nameof(packageId));
-        ArgumentNullException.ThrowIfNull(version, nameof(version));
-
-        // Simply delete the folder & remove from the list
-        var packageDirectory = Path.Combine(Project.Active.PackagesDirectory.FullName, $"{packageId}.{version}");
-        if (Directory.Exists(packageDirectory))
-            Directory.Delete(packageDirectory, true);
-
-        Packages.RemoveAll(x => x.Identity.Id == packageId);
-        DesiredPackages.Remove(packageId);
-
-        SaveProjectPackagesFile();
-
-        Update();
+        return s_installedPackages.Values;
     }
 
-    public static async Task GetPackageDependencies(PackageIdentity package, NuGetFramework framework, SourceCacheContext cacheContext, ILogger logger, IEnumerable<SourceRepository> repositories, ISet<SourcePackageDependencyInfo> availablePackages)
+    public static async Task<SemanticVersion?> GetInstalledVersion(string githubRepo)
     {
-        if (availablePackages.Contains(package))
-            return;
+        ValidateIsReady();
 
-        foreach (var sourceRepository in repositories)
+        githubRepo = ConvertToPath(githubRepo) ?? throw new Exception("Invalid GitHub repository path");
+        string packageDir = Path.Combine(s_packagesPath.FullName, Path.GetFileNameWithoutExtension(githubRepo));
+
+        try
         {
-            var dependencyInfoResource = await sourceRepository.GetResourceAsync<DependencyInfoResource>();
-            var dependencyInfo = await dependencyInfoResource.ResolvePackage(package, framework, cacheContext, logger, CancellationToken.None);
-
-            if (dependencyInfo == null)
-                continue;
-
-            foreach (var dependency in dependencyInfo.Dependencies)
-                await GetPackageDependencies(new(dependency.Id, dependency.VersionRange.MinVersion), framework, cacheContext, logger, repositories, availablePackages);
+            string result = await ExecuteGitCommand($"-C \"{packageDir}\" describe --tags");
+            return string.IsNullOrWhiteSpace(result) ? null : SemanticVersion.Parse(result.Trim());
+        }
+        catch (Exception)
+        {
+            // If no tags are found or other error
+            return null;
         }
     }
 
-    public class NugetLogger : LoggerBase
+    public static GithubPackageMetaData? GetInstalledPackage(string githubRepo)
     {
-        private static ILogger? _instance;
-        public static ILogger Instance => _instance ??= new NugetLogger();
+        githubRepo = ConvertToPath(githubRepo) ?? throw new Exception("Invalid GitHub repository path");
 
-        public override void Log(ILogMessage message) => Debug.Log(message.Message);
+        return s_installedPackages.TryGetValue(githubRepo, out GithubPackageMetaData? package)
+            ? package
+            : null;
+    }
 
-        public override void Log(LogLevel level, string data)
+    /// <param name="githubRepo">The GitHub repository path, ex: 'ProwlEngine/Prowl', 'username/repository'</param>
+    public static async Task<GithubPackageMetaData> GetDetails(string githubRepo)
+    {
+        githubRepo = ConvertToPath(githubRepo) ?? throw new Exception("Invalid GitHub repository path");
+
+        // Convert git URL to raw GitHub URL
+        string rawUrl = $"https://raw.githubusercontent.com/{githubRepo}/refs/heads/master/package.json";
+
+        try
         {
-            switch (level)
+            string response = await s_httpClient.GetStringAsync(rawUrl);
+            return JsonSerializer.Deserialize<GithubPackageMetaData>(response);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new Exception($"Failed to fetch package.json from {rawUrl}", ex);
+        }
+    }
+
+    /// <param name="githubRepo">The GitHub repository path, ex: 'ProwlEngine/Prowl', 'username/repository'</param>
+    public static async Task<List<SemanticVersion>> GetVersions(string githubRepo)
+    {
+        githubRepo = ConvertToPath(githubRepo) ?? throw new Exception("Invalid GitHub repository path");
+
+        string url = $"https://github.com/{githubRepo}.git";
+        string result = await ExecuteGitCommand($"ls-remote --tags {url}");
+        var versions = new List<SemanticVersion>();
+
+        foreach (string line in result.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            // Extract tag name from refs/tags/
+            string[] parts = line.Split("refs/tags/");
+            if (parts.Length == 2)
             {
-                case LogLevel.Debug or LogLevel.Verbose or LogLevel.Minimal: Debug.Log(data); break;
-                case LogLevel.Warning: Debug.LogWarning(data); break;
-                case LogLevel.Error: Debug.LogError(data); break;
+                // Remove ^{} suffix that some tags have
+                string tag = parts[1].Replace("^{}", "");
+                var version = SemanticVersion.Parse(tag);
+                if (!versions.Contains(version))
+                    versions.Add(version);
             }
         }
 
-        public override Task LogAsync(ILogMessage message)
-        {
-            Debug.Log(message.Message);
-            return Task.CompletedTask;
-        }
+        return versions;
+    }
 
-        public override Task LogAsync(LogLevel level, string data)
+    private static SemanticVersion? FindBestVersion(List<SemanticVersion> semanticVersions, string versionRange)
+    {
+        try
         {
-            switch (level)
+            var range = new SemVersion.Parser.Range(versionRange);
+
+            // Filter versions that match the range and order by version (descending)
+            return semanticVersions
+                .Where(v => range.IsSatisfied(v))
+                .OrderByDescending(v => v)
+                .FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Failed to evaluate version range '{versionRange}': {ex.Message}");
+        }
+    }
+
+    public static async Task<GithubPackageMetaData> InstallPackage(string githubRepo, string versionRange)
+    {
+        ValidateIsReady();
+
+        githubRepo = ConvertToPath(githubRepo) ?? throw new Exception("Invalid GitHub repository path");
+
+        // Get available versions and find the best match
+        List<SemanticVersion> versions = await GetVersions(githubRepo);
+        SemanticVersion? bestVersion = FindBestVersion(versions, versionRange)
+            ?? throw new Exception($"No version matching '{versionRange}' found for {githubRepo}");
+
+        string packageDir = Path.Combine(s_packagesPath.FullName, Path.GetFileNameWithoutExtension(githubRepo));
+        Directory.CreateDirectory(packageDir);
+
+        // Check if package is already installed
+        Task<SemanticVersion?> existingVersion = GetInstalledVersion(githubRepo);
+        bool isUpdate = existingVersion != null;
+        if (isUpdate)
+        {
+            if (existingVersion.Equals(bestVersion))
             {
-                case LogLevel.Debug or LogLevel.Verbose or LogLevel.Minimal: Debug.Log(data); break;
-                case LogLevel.Warning: Debug.LogWarning(data); break;
-                case LogLevel.Error: Debug.LogError(data); break;
+                // Package already installed at best matching version
+                return s_installedPackages[githubRepo];
             }
-            return Task.CompletedTask;
         }
+
+        LockUpdate();
+
+        try
+        {
+            string url = $"https://github.com/{githubRepo}.git";
+
+            if (!isUpdate)
+            {
+                // Clone the repository
+                await ExecuteGitCommand($"clone \"{url}\" \"{packageDir}\"");
+            }
+
+            // Fetch tags
+            await ExecuteGitCommand($"-C \"{packageDir}\" fetch --tags");
+
+            // Checkout the specific tag
+            await ExecuteGitCommand($"-C \"{packageDir}\" checkout -f tags/\"{bestVersion}\"");
+
+            // Checkout or reset to the specific version
+            //await ExecuteGitCommand($"-C {packageDir} checkout tags/{bestVersion}");
+
+            // Read package.json
+            string packageJsonPath = Path.Combine(packageDir, "package.json");
+            if (!File.Exists(packageJsonPath))
+            {
+                throw new Exception($"package.json not found in repository {githubRepo}");
+            }
+
+            string packageJson = File.ReadAllText(packageJsonPath);
+            GithubPackageMetaData? package = JsonSerializer.Deserialize<GithubPackageMetaData>(packageJson) ?? throw new Exception("Failed to parse package.json");
+            package.repository.githubPath = ConvertToPath(package.repository.githubPath) ?? throw new Exception("Invalid GitHub repository path");
+
+            if (!package.repository.githubPath.Equals(githubRepo, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"Repository in package.json does not match the requested repository: {package.repository.githubPath}");
+            }
+
+            // Install dependencies first
+            if (package.dependencies != null)
+            {
+                //foreach (KeyValuePair<string, string> dependency in package.dependencies)
+                //{
+                //    await InstallPackage(dependency.Key, dependency.Value.TrimStart('^'));
+                //}
+            }
+
+            s_installedPackages[package.repository.githubPath] = package;
+            return package;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to install package {githubRepo}: {ex.Message}");
+
+            UninstallPackage(githubRepo);
+
+            throw;
+        }
+        finally
+        {
+            UnlockUpdate();
+        }
+    }
+
+    public static void UninstallPackage(string githubRepo)
+    {
+        ValidateIsReady();
+
+        githubRepo = ConvertToPath(githubRepo) ?? throw new Exception("Invalid GitHub repository path");
+
+        LockUpdate();
+        try
+        {
+            //if (s_installedPackages.ContainsKey(githubRepo))
+            {
+                string packageDir = Path.Combine(s_packagesPath.FullName, Path.GetFileNameWithoutExtension(githubRepo));
+                DeleteDirectoryRetries(packageDir);
+                s_installedPackages.Remove(githubRepo);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to uninstall package {githubRepo}: {ex.Message}");
+            throw;
+        }
+        finally
+        {
+            UnlockUpdate();
+        }
+    }
+
+    private static void DeleteDirectoryRetries(string packageDir)
+    {
+        int index = 0;
+        while (Directory.Exists(packageDir))
+        {
+            try
+            {
+                DeleteDirectory(packageDir);
+                Thread.Sleep(100);
+            }
+            catch (Exception ex)
+            {
+                if (index > 10)
+                {
+                    Debug.LogError("Failed to delete package directory, too many attempts.");
+                    break;
+                }
+            }
+            index++;
+        }
+    }
+
+    /// <summary>
+    /// Depth-first recursive delete, with handling for descendant 
+    /// directories open in Windows Explorer.
+    /// </summary>
+    private static void DeleteDirectory(string path)
+    {
+        foreach (string directory in Directory.GetDirectories(path))
+        {
+            DeleteDirectory(directory);
+        }
+
+        try
+        {
+            Directory.Delete(path, true);
+        }
+        catch (IOException)
+        {
+            Directory.Delete(path, true);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            Directory.Delete(path, true);
+        }
+    }
+
+    private static string? ConvertToPath(string githubRepo)
+    {
+        // They may pass in the full URL, so we need to convert it to just the Username/Repository format
+
+        // Handle null or empty
+        if (string.IsNullOrWhiteSpace(githubRepo))
+            return null;
+
+        // if it has .git at the end, remove it
+        if (githubRepo.EndsWith(".git"))
+            githubRepo = githubRepo.Substring(0, githubRepo.Length - 4);
+
+        // Already in correct format (Username/Repository)
+        if (!githubRepo.Contains("github.com") && githubRepo.Count(c => c == '/') == 1)
+            return githubRepo;
+
+        // Handle different URL formats
+        if (githubRepo.Contains("github.com"))
+        {
+            // Handle SSH format: git@github.com:Username/Repository
+            if (githubRepo.StartsWith("git@"))
+            {
+                return githubRepo.Split(':')[1];
+            }
+
+            // Handle HTTPS format: https://github.com/Username/Repository
+            var parts = githubRepo.Split("github.com/");
+            if (parts.Length == 2)
+            {
+                return parts[1];
+            }
+        }
+
+        return null;
+    }
+
+    private static async Task<string> ExecuteGitCommand(string arguments)
+    {
+        using var process = new System.Diagnostics.Process
+        {
+            StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            }
+        };
+
+        process.Start();
+        string output = await process.StandardOutput.ReadToEndAsync();
+        string error = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        if (process.ExitCode != 0)
+        {
+            throw new Exception($"Git command failed: {error}");
+        }
+
+        return output;
     }
 
     #endregion
