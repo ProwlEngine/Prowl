@@ -617,6 +617,30 @@ public static partial class AssetDatabase
         }
     }
 
+    /// <param name="githubRepo">The GitHub repository path, ex: 'ProwlEngine/Prowl', 'username/repository'</param>
+    public static async Task<GithubPackageMetaData> GetPackageDetails(string githubRepo)
+    {
+        githubRepo = ConvertToPath(githubRepo) ?? throw new Exception("Invalid GitHub repository path");
+        string fileSafeName = githubRepo.Replace('/', '.');
+        string packageJsonPath = Path.Combine(Project.Active!.PackagesDirectory.FullName, fileSafeName, "package.json");
+        if (File.Exists(packageJsonPath))
+        {
+            return await LoadPackageJson(packageJsonPath) ?? throw new Exception("Failed to load package.json");
+        }
+
+        // Convert git URL to raw GitHub URL
+        string rawUrl = $"https://raw.githubusercontent.com/{githubRepo}/refs/heads/master/package.json";
+
+        try
+        {
+            string response = await s_httpClient.GetStringAsync(rawUrl);
+            return JsonSerializer.Deserialize<GithubPackageMetaData>(response);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new Exception($"Failed to fetch package.json from {rawUrl}", ex);
+        }
+    }
 
     /// <param name="githubRepo">The GitHub repository path, ex: 'ProwlEngine/Prowl', 'username/repository'</param>
     public static async Task<List<SemanticVersion>> GetVersions(string githubRepo)
