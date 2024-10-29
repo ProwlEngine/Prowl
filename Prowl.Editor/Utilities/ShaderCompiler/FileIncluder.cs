@@ -4,9 +4,10 @@
 #pragma warning disable
 
 using System;
-using System.Diagnostics;
+using Prowl.Runtime;
 
 using Glslang.NET;
+using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor;
 
@@ -27,48 +28,77 @@ public class FileIncluder
     }
 
 
-    public IncludeResult Include(string headerName, string includerName, uint includeDepth, bool isSystemFile)
+    struct IncludeContext
     {
-        if (includeDepth > 150)
+        public FileIncluder parentIncluder;
+        public List<CompilationMessage> messages;
+        public string entrypoint;
+        public KeywordState? keywords;
+
+
+        public IncludeResult Include(string headerName, string includerName, uint includeDepth, bool isSystemFile)
         {
-            return new IncludeResult()
+            if (includeDepth > 150)
             {
-                headerName = headerName,
-                headerData = ""
-            };
+                return new IncludeResult()
+                {
+                    headerName = headerName,
+                    headerData = ""
+                };
+            }
+
+            if (string.IsNullOrWhiteSpace(includerName))
+                includerName = parentIncluder.SourceFile;
+
+            IncludeResult result = new IncludeResult();
+
+            result.headerData = " ";
+            result.headerName = " ";
+
+            try
+            {
+                string fullPath = parentIncluder.ResolveHeader(headerName, includerName, out string parsedHeader);
+
+                result.headerName = parsedHeader;
+                result.headerData = File.ReadAllText(fullPath);
+            }
+            catch (FileNotFoundException)
+            {
+                messages.Add(new CompilationMessage()
+                {
+                    severity = LogSeverity.Error,
+                    message = $"Failed to open source file: {headerName}",
+                    entrypoint = entrypoint,
+                    keywords = keywords
+                });
+
+            }
+
+            return result;
         }
-
-        if (string.IsNullOrWhiteSpace(includerName))
-            includerName = Path.GetDirectoryName(SourceFile) ?? "";
-
-        Runtime.Debug.Log($"Including {headerName} from: {includerName}");
-
-        IncludeResult result = new IncludeResult();
-
-        string fullPath = ResolveHeader(headerName, includerName, out string parsedHeader);
-
-        result.headerName = parsedHeader;
-        result.headerData = File.ReadAllText(GetFullFilePath(includerName));
-
-        return result;
     }
 
 
-    public string Include(string file)
+    public Glslang.NET.FileIncluder GetIncluder(List<CompilationMessage> messages, string entrypoint, KeywordState? keywords)
     {
-        return File.ReadAllText(file);
+        IncludeContext ctx;
+        ctx.parentIncluder = this;
+        ctx.messages = messages;
+        ctx.entrypoint = entrypoint;
+        ctx.keywords = keywords;
+
+        return ctx.Include;
     }
 
 
-    public string ResolveHeader(string rawHeader, string fullIncluder, out string parsedHeader)
+    public string ResolveHeader(string rawHeader, string includer, out string parsedHeader)
     {
         string filePath = rawHeader;
 
-        // Not an absolute/full path - resolve to project-relative 'full path'
-        if (!rawHeader.StartsWith('/'))
-            filePath = Path.GetFullPath(rawHeader, s_qualifiedPrefix + fullIncluder)[s_qualifiedPrefix.Length..];
+        if (!Path.IsPathRooted(rawHeader))
+            filePath = Path.GetFullPath(rawHeader, s_qualifiedPrefix + Path.GetDirectoryName(includer))[(s_qualifiedPrefix.Length - 1)..];
 
-        parsedHeader = Path.GetDirectoryName(filePath);
+        parsedHeader = filePath;
 
         return GetFullFilePath(filePath);
     }
@@ -92,7 +122,7 @@ public class FileIncluder
         }
 
         if (resultPath == null)
-            throw new FileNotFoundException($"Could not resolve include path: {projectRelativePath}");
+            throw new FileNotFoundException();
 
         return resultPath;
     }

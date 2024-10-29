@@ -74,6 +74,9 @@ public static partial class ShaderCompiler
 
     private static void CheckMessages(string messageText, List<CompilationMessage> messages)
     {
+        // ERROR: File:Line:Column: Error text: Additional message.
+        // ERROR: Error text: Additional meessage.
+
         if (!string.IsNullOrWhiteSpace(messageText))
             Debug.Log(messageText);
     }
@@ -99,8 +102,7 @@ public static partial class ShaderCompiler
             defaultProfile = ShaderProfile.None,
             forceDefaultVersionAndProfile = false,
             forwardCompatible = false,
-            fileIncluder = includer.Include,
-            messages = MessageType.Enhanced | MessageType.ReadHlsl | MessageType.DisplayErrorColumn,
+            messages = MessageType.Enhanced | MessageType.ReadHlsl | MessageType.DisplayErrorColumn | MessageType.CascadingErrors,
         };
 
         string fileName = Path.GetFileName(includer.SourceFile);
@@ -109,6 +111,7 @@ public static partial class ShaderCompiler
         {
             input.sourceEntrypoint = entrypoint.Name;
             input.stage = StageToType(entrypoint.Stage);
+            input.fileIncluder = includer.GetIncluder(messages, entrypoint.Name, keywords);
 
             Shader shader = new Shader(input);
 
