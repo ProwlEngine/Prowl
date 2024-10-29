@@ -95,10 +95,6 @@ public static partial class Graphics
 
     public static void EndFrame()
     {
-        Device.SwapBuffers();
-
-        Device.WaitForIdle();
-
         RenderTexture.UpdatePool();
         RenderPipeline.ClearRenderables();
 
@@ -109,6 +105,10 @@ public static partial class Graphics
 
         if (Device.SwapchainFramebuffer.Width != Screen.Width || Device.SwapchainFramebuffer.Height != Screen.Height)
             Device.ResizeMainWindow((uint)Screen.Width, (uint)Screen.Height);
+
+        Device.WaitForIdle();
+
+        Device.SwapBuffers();
     }
 
     public static CommandList GetCommandList()
