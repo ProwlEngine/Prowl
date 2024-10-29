@@ -190,6 +190,13 @@ public static partial class AssetDatabase
         DirectoryInfo packagesPath = Project.Active!.PackagesDirectory;
         string packagesJsonPath = Path.Combine(packagesPath.FullName, "Packages.json");
 
+
+        // Initialize safety mechanisms
+        using var lockManager = new AsyncFileLocker(packagesPath.FullName, ".package-lock");
+        // Acquire lock with timeout
+        if (!await lockManager.AcquireLockAsync(TimeSpan.FromSeconds(30)))
+            throw new TimeoutException("Could not acquire package manager lock. Another operation might be in progress.");
+
         // Load Packages.json with backup handling
         Dictionary<string, string> packageVersions = [];
         string? backupContent = null;
