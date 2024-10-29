@@ -308,7 +308,7 @@ public static partial class AssetDatabase
             {
                 // Get available versions with retry logic
                 List<SemanticVersion> versions = await RetryWithTimeout(
-                    () => GetVersions(githubPath),
+                    () => GetPackageVersions(githubPath),
                     maxAttempts: 3,
                     timeout: TimeSpan.FromSeconds(30)
                 );
@@ -490,7 +490,7 @@ public static partial class AssetDatabase
         throw new IOException($"Failed to delete directory {path} after {maxRetries} attempts");
     }
 
-    public static async Task SafeWriteJson<T>(string path, T content)
+    private static async Task SafeWriteJson<T>(string path, T content)
     {
         string tempPath = path + ".tmp";
         string backupPath = path + ".bak";
@@ -643,7 +643,7 @@ public static partial class AssetDatabase
     }
 
     /// <param name="githubRepo">The GitHub repository path, ex: 'ProwlEngine/Prowl', 'username/repository'</param>
-    public static async Task<List<SemanticVersion>> GetVersions(string githubRepo)
+    public static async Task<List<SemanticVersion>> GetPackageVersions(string githubRepo)
     {
         githubRepo = ConvertToPath(githubRepo) ?? throw new Exception("Invalid GitHub repository path");
 
