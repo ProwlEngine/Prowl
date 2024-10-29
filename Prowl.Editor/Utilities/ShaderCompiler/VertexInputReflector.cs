@@ -31,8 +31,7 @@ public static partial class VertexInputReflector
             string semantic = reflector.GetDecorationString(resource.id, Decoration.HlslSemanticGOOGLE) ?? "SEMANTIC_UNKNOWN";
             semantic = semantic.ToUpperInvariant();
 
-            if (!ParseSemantic(semantic, formatter, out VertexInput input))
-                throw new Exception($"Unknown semantic: {semantic}");
+            ParseSemantic(semantic, formatter, out VertexInput input);
 
             if (!reflector.HasDecoration(resource.id, Decoration.Location))
                 throw new Exception("Stage input does not contain location decoration.");
