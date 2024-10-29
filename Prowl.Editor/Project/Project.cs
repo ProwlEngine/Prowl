@@ -123,7 +123,7 @@ public class Project
 
         OnProjectChanged?.Invoke();
 
-        AssetDatabase.LoadPackages();
+        AssetDatabase.ValidatePackages().Wait();
 
         return true;
     }
