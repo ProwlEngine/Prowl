@@ -21,13 +21,13 @@ public static partial class UniformReflector
         List<Uniform> uniforms = new();
 
         foreach (var res in resources.StorageImages)
-            uniforms.Add(new Uniform(res.name, GetBinding(reflector, res.id), ResourceKind.TextureReadWrite));
+            uniforms.Add(new Uniform(CleanseName(res.name), GetBinding(reflector, res.id), ResourceKind.TextureReadWrite));
 
         foreach (var res in resources.SeparateImages)
-            uniforms.Add(new Uniform(res.name, GetBinding(reflector, res.id), ResourceKind.TextureReadOnly));
+            uniforms.Add(new Uniform(CleanseName(res.name), GetBinding(reflector, res.id), ResourceKind.TextureReadOnly));
 
         foreach (var res in resources.SeparateSamplers)
-            uniforms.Add(new Uniform(res.name, GetBinding(reflector, res.id), ResourceKind.Sampler));
+            uniforms.Add(new Uniform(CleanseName(res.name), GetBinding(reflector, res.id), ResourceKind.Sampler));
 
         foreach (var res in resources.StorageBuffers)
             uniforms.Add(CreateStorageBuffer(reflector, res));
@@ -52,9 +52,9 @@ public static partial class UniformReflector
         var decoratedType = reflector.GetTypeHandle(bufferResource.type_id);
 
         if (reflector.HasDecoration(bufferResource.id, Decoration.NonWritable))
-            return new Uniform(bufferResource.name, binding, ResourceKind.StructuredBufferReadOnly);
+            return new Uniform(CleanseName(bufferResource.name), binding, ResourceKind.StructuredBufferReadOnly);
 
-        return new Uniform(bufferResource.name, binding, ResourceKind.StructuredBufferReadWrite);
+        return new Uniform(CleanseName(bufferResource.name), binding, ResourceKind.StructuredBufferReadWrite);
     }
 
     static Uniform CreateConstantBuffer(Reflector reflector, ReflectedResource bufferResource)
@@ -120,7 +120,13 @@ public static partial class UniformReflector
             members.Add(member);
         }
 
-        return new Uniform(bufferResource.name, binding, size, members.ToArray());
+        return new Uniform(CleanseName(bufferResource.name), binding, size, members.ToArray());
+    }
+
+
+    static string CleanseName(string name)
+    {
+        return name.Replace('$', '_');
     }
 
 
