@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.IO.Compression;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -14,7 +15,7 @@ using SemVersion;
 
 namespace Prowl.Editor.Assets;
 
-#warning TODO: Support other sources then just Github, like GitLab, BitBucket, etc, Could also look into NuGet packages
+#warning TODO: Support other sources then just Github, should support any git source, Also would be nice to look into NuGet support
 
 public class GithubPackageMetaData
 {
@@ -25,12 +26,6 @@ public class GithubPackageMetaData
     public string license { get; set; } = "";
     public string homepage { get; set; } = "";
     public Dictionary<string, string> dependencies { get; set; } = [];
-}
-
-public class Repository
-{
-    [JsonPropertyName("url")]
-    public string githubPath { get; set; } = "";
 }
 
 public static partial class AssetDatabase
@@ -184,7 +179,6 @@ public static partial class AssetDatabase
     public static async Task ValidatePackages()
     {
         ValidateIsReady();
-
         Debug.Log("Validating packages...");
 
         DirectoryInfo packagesPath = Project.Active!.PackagesDirectory;
@@ -193,6 +187,8 @@ public static partial class AssetDatabase
 
         // Initialize safety mechanisms
         using var lockManager = new AsyncFileLocker(packagesPath.FullName, ".package-lock");
+        var dependencyDetector = new CircularDependencyDetector();
+
         // Acquire lock with timeout
         if (!await lockManager.AcquireLockAsync(TimeSpan.FromSeconds(30)))
             throw new TimeoutException("Could not acquire package manager lock. Another operation might be in progress.");
@@ -226,147 +222,378 @@ public static partial class AssetDatabase
             await SafeWriteJson(packagesJsonPath, packageVersions);
         }
 
-
-        bool validateAgain = false;
-        var packagesCopy = new Dictionary<string, string>(packageVersions);
-        foreach ((string githubRepo, string versionRange) in packagesCopy)
+        // Build dependency graph
+        foreach ((string package, string version) in packageVersions)
         {
-            string githubPath = ConvertToPath(githubRepo) ?? throw new Exception($"Invalid GitHub repository path: {githubRepo}");
-            string fileSafeName = githubPath.Replace('/', '.');
-            string packageDir = Path.Combine(packagesPath.FullName, fileSafeName);
-            string packageJsonPath = Path.Combine(packageDir, "package.json");
+            GithubPackageMetaData? packageJson = await LoadPackageJson(
+                Path.Combine(packagesPath.FullName, ConvertToPath(package)!, "package.json"));
 
-            Debug.Log($"Validating package {githubPath}...");
-
-            GithubPackageMetaData package;
-            try
+            if (packageJson?.dependencies != null)
             {
-                // Check if package exists and get its version
-                SemanticVersion? currentVersion = await GetInstalledVersion(githubPath);
-                if (Directory.Exists(packageDir) && currentVersion == null)
+                foreach ((string depPackage, string _) in packageJson.dependencies)
                 {
-                    // If we can't get the version, treat as not installed
-                    Debug.LogWarning($"Failed to get version for package {githubPath}, Uninstalling...");
-                    DeleteDirectoryRetries(packageDir);
+                    dependencyDetector.AddDependency(package, depPackage);
                 }
-
-                // If not installed or wrong version, install/update it
-                var range = new SemVersion.Parser.Range(versionRange);
-                if (currentVersion is null || !range.IsSatisfied(currentVersion))
-                {
-                    // Get available versions and find the best match
-                    List<SemanticVersion> versions = await GetVersions(githubPath);
-                    SemanticVersion? bestVersion = FindBestVersion(versions, versionRange)
-                        ?? throw new Exception($"No version matching '{versionRange}' found for {githubPath}");
-
-                    // Ensure directory exists
-                    Directory.CreateDirectory(packageDir);
-
-                    if (currentVersion is null)
-                    {
-                        Debug.Log($"Installing package {githubPath}...");
-
-                        // Clone the repository
-                        await ExecuteGitCommand($"clone \"https://github.com/{githubPath}.git\" \"{packageDir}\"");
-                    }
-                    else
-                    {
-                        Debug.Log($"Updating package {githubPath}...");
-                    }
-
-                    // Fetch tags and checkout the correct version
-                    await ExecuteGitCommand($"-C \"{packageDir}\" fetch --tags");
-                    await ExecuteGitCommand($"-C \"{packageDir}\" checkout -f tags/{versionRange}");
-
-                    // load the package.json
-                    if (!File.Exists(packageJsonPath))
-                        throw new Exception($"package.json not found in repository {githubPath}");
-
-                    package = JsonSerializer.Deserialize<GithubPackageMetaData>(
-                        File.ReadAllText(packageJsonPath)) ?? throw new Exception("Failed to parse package.json");
-                    validateAgain = await ValidateDependencies(packagesJsonPath, packageVersions, validateAgain, githubPath, package);
-                }
-                else
-                {
-                    // It is installed, and the version is correct but maybe a dependency has an update or been removed
-
-                    // Verify package.json matches the repository
-                    if (!File.Exists(packageJsonPath))
-                        throw new Exception($"package.json not found in repository {githubPath}");
-
-                    package = JsonSerializer.Deserialize<GithubPackageMetaData>(
-                        File.ReadAllText(packageJsonPath)) ?? throw new Exception("Failed to parse package.json");
-                    validateAgain = await ValidateDependencies(packagesJsonPath, packageVersions, validateAgain, githubPath, package);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Failed to validate package {githubPath}: {ex.Message}");
-
-                // Cleanup on failure
-                if (Directory.Exists(packageDir))
-                    DeleteDirectoryRetries(packageDir);
             }
         }
+
+        // Validate each package
+        bool validateAgain = false;
+        var packagesCopy = new Dictionary<string, string>(packageVersions);
+        foreach (var (githubRepo, versionRange) in packagesCopy)
+        {
+            // Check for circular dependencies
+            if (dependencyDetector.HasCircularDependency(githubRepo, out var circle))
+            {
+                Debug.LogError($"Circular dependency detected: {string.Join(" -> ", circle!)}");
+                packageVersions.Remove(githubRepo);
+                continue;
+            }
+
+
+            (bool isValid, bool needsValidation) = await ValidatePackage(githubRepo, versionRange, packagesPath,
+                                                                   packagesJsonPath, packageVersions);
+            validateAgain |= needsValidation;
+            if (!isValid)
+            {
+                packageVersions.Remove(githubRepo);
+                await SafeWriteJson(packagesJsonPath, packageVersions);
+            }
+        }
+
+        // Clean up orphaned package directories
+        await CleanupOrphanedPackages(packagesPath, packageVersions);
 
         // Recursively validate to handle new dependencies
         if (validateAgain)
             await ValidatePackages();
     }
 
-    private static async Task<bool> ValidateDependencies(string packagesJsonPath, Dictionary<string, string> packageVersions, bool validateAgain, string githubPath, GithubPackageMetaData package)
+    private static async Task<(bool isValid, bool validateAgain)> ValidatePackage(
+        string githubRepo,
+        string versionRange,
+        DirectoryInfo packagesPath,
+        string packagesJsonPath,
+        Dictionary<string, string> packageVersions)
     {
+        string githubPath = ConvertToPath(githubRepo) ?? throw new Exception($"Invalid GitHub repository path: {githubRepo}");
+        string fileSafeName = githubPath.Replace('/', '.');
+        string packageDir = Path.Combine(packagesPath.FullName, fileSafeName);
+        string packageJsonPath = Path.Combine(packageDir, "package.json");
 
-        // Handle dependencies
-        if (package.dependencies != null && package.dependencies.Count > 0)
+        Debug.Log($"Validating package {githubPath}...");
+
+        try
         {
-            Debug.Log($"Validating dependencies for package {githubPath}...");
+            SemanticVersion? currentVersion = await GetInstalledVersion(githubPath);
 
-            // Add dependencies to Packages.json if not already there
-            bool changed = false;
-            foreach ((string depRepo, string depVersion) in package.dependencies)
+            // Handle corrupted or incomplete installations
+            if (Directory.Exists(packageDir))
             {
-                if (!packageVersions.ContainsKey(depRepo))
+                if (currentVersion == null)
                 {
-                    packageVersions[depRepo] = depVersion;
-                    changed = true;
+                    Debug.LogWarning($"Failed to get version for package {githubPath}, Uninstalling...");
+                    await SafeDeleteDirectory(packageDir);
                 }
-                else
+                else if (!await ValidatePackageIntegrity(packageDir, packageJsonPath))
                 {
-                    // We have the dependency already, Check if the installed version is Less then the required version
-                    // We always prioritize the latest version of a package
-                    SemanticVersion? installedVersion = await GetInstalledVersion(depRepo);
-                    if (installedVersion is not null && installedVersion < SemanticVersion.Parse(depVersion))
-                    {
-                        packageVersions[depRepo] = depVersion;
-                        changed = true;
-                    }
+                    Debug.LogWarning($"Package {githubPath} integrity check failed, reinstalling...");
+                    await SafeDeleteDirectory(packageDir);
+                    currentVersion = null;
                 }
             }
 
-            // Save updated Packages.json
-            if (changed)
+            var range = new SemVersion.Parser.Range(versionRange);
+            if (currentVersion is null || !range.IsSatisfied(currentVersion))
             {
-                File.WriteAllText(packagesJsonPath, JsonSerializer.Serialize(packageVersions, s_jsonOptions));
-                validateAgain = true;
+                // Get available versions with retry logic
+                List<SemanticVersion> versions = await RetryWithTimeout(
+                    () => GetVersions(githubPath),
+                    maxAttempts: 3,
+                    timeout: TimeSpan.FromSeconds(30)
+                );
+
+                SemanticVersion? bestVersion = FindBestVersion(versions, versionRange)
+                    ?? throw new Exception($"No version matching '{versionRange}' found for {githubPath}");
+
+                Directory.CreateDirectory(packageDir);
+
+                try
+                {
+                    if (currentVersion is null)
+                    {
+                        Debug.Log($"Installing package {githubPath} version {bestVersion}...");
+                        await ExecuteGitCommand($"clone \"https://github.com/{githubPath}.git\" \"{packageDir}\"");
+                    }
+                    else
+                    {
+                        Debug.Log($"Updating package {githubPath} from {currentVersion} to {bestVersion}...");
+                    }
+
+                    await ExecuteGitCommand($"-C \"{packageDir}\" fetch --tags");
+                    await ExecuteGitCommand($"-C \"{packageDir}\" checkout -f tags/{bestVersion}");
+
+                    // TODO: Implement package.json validation
+                    // Verify package.json after installation/update
+                    //if (!await ValidatePackageJson(packageJsonPath, githubPath))
+                    //    throw new Exception("Package validation failed after installation");
+                }
+                catch (Exception ex)
+                {
+                    await SafeDeleteDirectory(packageDir);
+                    throw new Exception($"Failed to install/update package: {ex.Message}");
+                }
+            }
+
+            // If we got here, the package itself is valid
+            // Now check dependencies and update validateAgain if needed
+            bool validateAgain = await ValidateDependencies(
+                packagesJsonPath,
+                packageVersions,
+                githubPath,
+                packageJsonPath);
+
+            return (true, validateAgain);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to validate package {githubPath}: {ex.Message}");
+            await SafeDeleteDirectory(packageDir);
+            return (false, false);
+        }
+    }
+
+    private static async Task<bool> ValidateDependencies(
+        string packagesJsonPath,
+        Dictionary<string, string> packageVersions,
+        string githubPath,
+        string packageJsonPath)
+    {
+        GithubPackageMetaData? package = await LoadPackageJson(packageJsonPath);
+        if (package?.dependencies == null)
+            return false; // No dependencies means no need to validate again
+
+        Debug.Log($"Validating dependencies for package {githubPath}...");
+        bool changed = false;
+
+        foreach ((string depRepo, string depVersion) in package.dependencies)
+        {
+            // Validate dependency format
+            if (!IsValidDependencyFormat(depRepo, depVersion))
+            {
+                Debug.LogWarning($"Invalid dependency format: {depRepo} [{depVersion}] in {githubPath}");
+                continue;
+            }
+
+            if (!packageVersions.TryGetValue(depRepo, out string? existingVersion))
+            {
+                packageVersions[depRepo] = depVersion;
+                changed = true;
+            }
+            else
+            {
+                // Version conflict resolution
+                var required = SemanticVersion.Parse(depVersion);
+                var existing = SemanticVersion.Parse(existingVersion);
+
+                // Simple highest-wins strategy
+                if (required > existing)
+                {
+                    Debug.Log($"Upgrading {depRepo} from {existing} to {required} due to dependency requirement in {githubPath}");
+                    packageVersions[depRepo] = required.ToString();
+                    changed = true;
+                }
             }
         }
 
-        return validateAgain;
+        if (changed)
+        {
+            await SafeWriteJson(packagesJsonPath, packageVersions);
+            return true;
+        }
+
+        return false;
     }
 
-    private static async Task SafeWriteJson<T>(string path, T content)
+    // Helper methods
+    private static async Task<bool> ValidatePackageIntegrity(string packageDir, string packageJsonPath)
     {
-        string tempPath = path + ".tmp";
+        // Check if git repository is valid
         try
         {
-            await File.WriteAllTextAsync(tempPath, JsonSerializer.Serialize(content, s_jsonOptions));
+            if (File.Exists(packageJsonPath))
+            {
+                await ExecuteGitCommand($"-C \"{packageDir}\" status");
+                return true;
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    private static async Task<T> RetryWithTimeout<T>(
+        Func<Task<T>> operation,
+        int maxAttempts = 3,
+        TimeSpan? timeout = null,
+        TimeSpan? retryDelay = null)
+    {
+        timeout ??= TimeSpan.FromSeconds(30);
+        retryDelay ??= TimeSpan.FromSeconds(1);
+
+        using var cts = new CancellationTokenSource(timeout.Value);
+        Exception? lastException = null;
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            try
+            {
+                if (attempt > 0)
+                    await Task.Delay(retryDelay.Value * attempt, cts.Token);
+
+                return await operation();
+            }
+            catch (Exception ex) when (attempt < maxAttempts - 1 && !cts.Token.IsCancellationRequested)
+            {
+                lastException = ex;
+                Debug.LogWarning($"Attempt {attempt + 1} failed: {ex.Message}. Retrying...");
+            }
+        }
+
+        throw new TimeoutException(
+            $"Operation failed after {maxAttempts} attempts within {timeout.Value.TotalSeconds} seconds",
+            lastException);
+    }
+
+    private static async Task SafeDeleteDirectory(string path)
+    {
+        const int maxRetries = 3;
+        const int retryDelayMs = 100;
+
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    // Force removal of read-only attributes
+                    foreach (string file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+                        File.SetAttributes(file, FileAttributes.Normal);
+                    Directory.Delete(path, recursive: true);
+                }
+                return;
+            }
+            catch (IOException) when (i < maxRetries - 1)
+            {
+                await Task.Delay(retryDelayMs * (i + 1));
+            }
+        }
+        throw new IOException($"Failed to delete directory {path} after {maxRetries} attempts");
+    }
+
+    public static async Task SafeWriteJson<T>(string path, T content)
+    {
+        string tempPath = path + ".tmp";
+        string backupPath = path + ".bak";
+
+        try
+        {
+            // Create backup of existing file if it exists
+            if (File.Exists(path))
+                File.Copy(path, backupPath, overwrite: true);
+
+            // Write to temporary file
+            await File.WriteAllTextAsync(
+                tempPath,
+                JsonSerializer.Serialize(content, s_jsonOptions));
+
+            // Verify the written content can be deserialized
+            try
+            {
+                T? verification = JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(tempPath))
+                    ?? throw new JsonException("Verification failed - null content");
+            }
+            catch
+            {
+                // If verification fails, restore from backup
+                if (File.Exists(backupPath))
+                    File.Copy(backupPath, path, overwrite: true);
+                throw;
+            }
+
             File.Move(tempPath, path, overwrite: true);
         }
         finally
         {
-            if (File.Exists(tempPath))
-                File.Delete(tempPath);
+            // Cleanup
+            if (File.Exists(tempPath))   File.Delete(tempPath);
+            if (File.Exists(backupPath)) File.Delete(backupPath);
+        }
+    }
+
+    private static async Task CleanupOrphanedPackages(DirectoryInfo packagesPath, Dictionary<string, string> validPackages)
+    {
+        foreach (DirectoryInfo dir in packagesPath.GetDirectories())
+        {
+            string packageName = dir.Name.Replace('.', '/');
+            if (!validPackages.ContainsKey(packageName))
+            {
+                Debug.Log($"Removing orphaned package directory: {dir.Name}");
+                await SafeDeleteDirectory(dir.FullName);
+            }
+        }
+    }
+
+    private static async Task<GithubPackageMetaData?> LoadPackageJson(string packageJsonPath)
+    {
+        if (!File.Exists(packageJsonPath))
+        {
+            Debug.LogError($"package.json not found at {packageJsonPath}");
+            return null;
+        }
+
+        try
+        {
+            string jsonContent = await File.ReadAllTextAsync(packageJsonPath);
+            GithubPackageMetaData? package = JsonSerializer.Deserialize<GithubPackageMetaData>(jsonContent);
+
+            if (package == null)
+            {
+                Debug.LogError($"Failed to deserialize package.json at {packageJsonPath}");
+                return null;
+            }
+
+            return package;
+        }
+        catch (JsonException ex)
+        {
+            Debug.LogError($"Invalid JSON in package.json at {packageJsonPath}: {ex.Message}");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error loading package.json at {packageJsonPath}: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static bool IsValidDependencyFormat(string repo, string version)
+    {
+        if (string.IsNullOrWhiteSpace(repo) || string.IsNullOrWhiteSpace(version))
+            return false;
+
+        // Validate repo format (should be "owner/repo")
+        if (!repo.Contains('/') || repo.Count(c => c == '/') != 1)
+            return false;
+
+        // Validate version format (should be valid semantic version or range)
+        try
+        {
+            _ = new SemVersion.Parser.Range(version); // Throws if invalid
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -390,24 +617,6 @@ public static partial class AssetDatabase
         }
     }
 
-    /// <param name="githubRepo">The GitHub repository path, ex: 'ProwlEngine/Prowl', 'username/repository'</param>
-    public static async Task<GithubPackageMetaData> GetDetails(string githubRepo)
-    {
-        githubRepo = ConvertToPath(githubRepo) ?? throw new Exception("Invalid GitHub repository path");
-
-        // Convert git URL to raw GitHub URL
-        string rawUrl = $"https://raw.githubusercontent.com/{githubRepo}/refs/heads/master/package.json";
-
-        try
-        {
-            string response = await s_httpClient.GetStringAsync(rawUrl);
-            return JsonSerializer.Deserialize<GithubPackageMetaData>(response);
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new Exception($"Failed to fetch package.json from {rawUrl}", ex);
-        }
-    }
 
     /// <param name="githubRepo">The GitHub repository path, ex: 'ProwlEngine/Prowl', 'username/repository'</param>
     public static async Task<List<SemanticVersion>> GetVersions(string githubRepo)
@@ -450,53 +659,6 @@ public static partial class AssetDatabase
         catch (Exception ex)
         {
             throw new Exception($"Failed to evaluate version range '{versionRange}': {ex.Message}");
-        }
-    }
-
-    private static void DeleteDirectoryRetries(string packageDir)
-    {
-        int index = 0;
-        while (Directory.Exists(packageDir))
-        {
-            try
-            {
-                DeleteDirectory(packageDir);
-                Thread.Sleep(100);
-            }
-            catch (Exception ex)
-            {
-                if (index > 10)
-                {
-                    Debug.LogError("Failed to delete package directory, too many attempts.");
-                    break;
-                }
-            }
-            index++;
-        }
-    }
-
-    /// <summary>
-    /// Depth-first recursive delete, with handling for descendant 
-    /// directories open in Windows Explorer.
-    /// </summary>
-    private static void DeleteDirectory(string path)
-    {
-        foreach (string directory in Directory.GetDirectories(path))
-        {
-            DeleteDirectory(directory);
-        }
-
-        try
-        {
-            Directory.Delete(path, true);
-        }
-        catch (IOException)
-        {
-            Directory.Delete(path, true);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            Directory.Delete(path, true);
         }
     }
 
