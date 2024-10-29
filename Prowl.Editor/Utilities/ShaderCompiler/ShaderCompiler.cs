@@ -85,14 +85,6 @@ public static partial class ShaderCompiler
 
         using Glslang.NET.Program program = new Glslang.NET.Program();
 
-        const MessageType messageFlags = MessageType.Default |
-            MessageType.ReadHLSL |
-            MessageType.HLSLOffsets |
-            MessageType.DebugInfo |
-            MessageType.Enable16BitHLSLTypes |
-            MessageType.LegalizeHLSL |
-            MessageType.Enhanced;
-
         CompilationInput input = new CompilationInput()
         {
             language = SourceType.HLSL,
@@ -102,17 +94,16 @@ public static partial class ShaderCompiler
             targetLanguage = TargetLanguage.SPV,
             targetLanguageVersion = TargetLanguageVersion.SPV_1_3,
             defaultVersion = 500,
-            entrypoint = "main",
             code = args.sourceCode,
+            hlslFunctionality1 = true,
             defaultProfile = ShaderProfile.None,
             forceDefaultVersionAndProfile = false,
             forwardCompatible = false,
             fileIncluder = includer.Include,
-            messages = messageFlags,
-            invertY = true,
+            messages = MessageType.Enhanced | MessageType.ReadHlsl | MessageType.DisplayErrorColumn,
         };
 
-        List<Shader> shaders = [];
+        string fileName = Path.GetFileName(includer.SourceFile);
 
         foreach (EntryPoint entrypoint in args.entryPoints)
         {
@@ -121,7 +112,14 @@ public static partial class ShaderCompiler
 
             Shader shader = new Shader(input);
 
-            shaders.Add(shader);
+            shader.SetSourceFile(fileName);
+
+            shader.SetOptions(
+                ShaderOptions.AutoMapBindings |
+                ShaderOptions.AutoMapLocations |
+                ShaderOptions.MapUnusedUniforms |
+                ShaderOptions.UseHLSLIOMapper
+            );
 
             bool preprocessed = shader.Preprocess();
 
@@ -142,7 +140,7 @@ public static partial class ShaderCompiler
             program.AddShader(shader);
         }
 
-        bool linked = program.Link(MessageType.VulkanRules | MessageType.SPVRules | MessageType.RelaxedErrors | messageFlags);
+        bool linked = program.Link(MessageType.VulkanRules | MessageType.SpvRules | input.messages ?? MessageType.Default);
 
         CheckMessages(program.GetDebugLog(), messages);
         CheckMessages(program.GetInfoLog(), messages);
@@ -150,20 +148,19 @@ public static partial class ShaderCompiler
         if (!linked)
             return null;
 
-        string fileName = Path.GetFileName(includer.SourceFile);
+        bool mapIO = program.MapIO();
+
+        CheckMessages(program.GetDebugLog(), messages);
+        CheckMessages(program.GetInfoLog(), messages);
+
+        if (!mapIO)
+            return null;
 
         for (int i = 0; i < args.entryPoints.Length; i++)
         {
             EntryPoint entryPoint = args.entryPoints[i];
 
-            SPIRVOptions options = new();
-            options.emitNonsemanticShaderDebugInfo = true;
-            options.emitNonsemanticShaderDebugSource = true;
-            options.generateDebugInfo = true;
-
-            program.SetSourceFile(StageToType(entryPoint.Stage), fileName);
-
-            bool generatedSPIRV = program.GenerateSPIRV(out uint[] SPIRVWords, StageToType(entryPoint.Stage), options);
+            bool generatedSPIRV = program.GenerateSPIRV(out uint[] SPIRVWords, StageToType(entryPoint.Stage));
 
             CheckMessages(program.GetSPIRVMessages(), messages);
 
@@ -174,9 +171,6 @@ public static partial class ShaderCompiler
             outputs[i].Stage = entryPoint.Stage;
             outputs[i].ShaderBytes = GetBytes(SPIRVWords);
         }
-
-        foreach (Shader shader in shaders)
-            shader.Dispose();
 
         return outputs;
     }

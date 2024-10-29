@@ -79,19 +79,25 @@ Pass "Grid"
 
             bool2 invertLine = _lineWidth > 0.5;
 
-            float2 targetWidth = select(invertLine, 1.0 - _lineWidth, _lineWidth);
+            float2 targetWidth;
+            targetWidth.x = invertLine.x ? 1.0 - _lineWidth.x : _lineWidth.x;
+            targetWidth.y = invertLine.y ? 1.0 - _lineWidth.y : _lineWidth.y;
+
             float2 drawWidth = clamp(targetWidth, uvDeriv, 0.5);
 
             float2 lineAA = max(uvDeriv, 0.000001) * 1.5;
             float2 gridUV = abs(frac(uv) * 2.0 - 1.0);
 
-            gridUV = select(invertLine, gridUV, 1.0 - gridUV);
+            gridUV.x = invertLine.x ? gridUV.x : 1.0 - gridUV.x;
+            gridUV.y = invertLine.y ? gridUV.y : 1.0 - gridUV.y;
 
             float2 grid2 = smoothstep(drawWidth + lineAA, drawWidth - lineAA, gridUV);
 
             grid2 *= saturate(targetWidth / drawWidth);
             grid2 = lerp(grid2, targetWidth, saturate(uvDeriv * 2.0 - 1.0));
-            grid2 = select(invertLine, 1.0 - grid2, grid2);
+
+            grid2.x = invertLine.x ? 1.0 - grid2.x : grid2.x;
+            grid2.y = invertLine.y ? 1.0 - grid2.y : grid2.y;
 
             return lerp(grid2.x, 1.0, grid2.y);
         }

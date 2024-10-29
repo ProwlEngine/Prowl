@@ -227,9 +227,10 @@ public sealed partial class ShaderPipeline : IDisposable, IBindableResourceProvi
 
     public void BindVertexBuffer(CommandList list, string semantic, DeviceBuffer buffer, uint offset = 0)
     {
-        if (_semanticLookup.TryGetValue(semantic.ToLower(), out uint location))
+        if (_semanticLookup.TryGetValue(semantic.ToUpperInvariant(), out uint location))
             list.SetVertexBuffer(location, buffer, offset);
     }
+
 
 
     public void Dispose()

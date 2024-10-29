@@ -28,8 +28,11 @@ public static partial class VertexInputReflector
 
             var typeInfo = reflector.GetTypeHandle(resource.type_id);
 
-            if (!ParseSemantic(resource.name, formatter, out VertexInput input))
-                throw new Exception($"Unknown semantic: {input.semantic}");
+            string semantic = reflector.GetDecorationString(resource.id, Decoration.HlslSemanticGOOGLE) ?? "SEMANTIC_UNKNOWN";
+            semantic = semantic.ToUpperInvariant();
+
+            if (!ParseSemantic(semantic, formatter, out VertexInput input))
+                throw new Exception($"Unknown semantic: {semantic}");
 
             if (!reflector.HasDecoration(resource.id, Decoration.Location))
                 throw new Exception("Stage input does not contain location decoration.");
@@ -48,10 +51,8 @@ public static partial class VertexInputReflector
     [GeneratedRegex(@"\d+$")]
     private static partial Regex TrailingInteger();
 
-    private static bool ParseSemantic(string name, SemanticFormatter formatter, out VertexInput input)
+    private static bool ParseSemantic(string semantic, SemanticFormatter formatter, out VertexInput input)
     {
-        string semantic = name.Substring(name.LastIndexOf('.') + 1);
-
         // If the uniform has no trailing index, force its index to 0.
         if (!TrailingInteger().IsMatch(semantic))
             semantic += "0";
