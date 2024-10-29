@@ -180,6 +180,14 @@ public struct Bounds : IEquatable<Bounds>
     private static readonly Vector3 MaxVector3 = new Vector3(double.MaxValue);
     private static readonly Vector3 MinVector3 = new Vector3(double.MinValue);
 
+    public static Bounds CreateFromMinMax(Vector3 min, Vector3 max)
+    {
+        Bounds bounds;
+        bounds.min = min;
+        bounds.max = max;
+        return bounds;
+    }
+
     /// <summary>
     /// Create a bounding box from the given list of points.
     /// </summary>

@@ -39,6 +39,7 @@ public static partial class AssetDatabase
     static readonly Dictionary<string, MetaFile> assetPathToMeta = new(StringComparer.OrdinalIgnoreCase);
     static readonly Dictionary<Guid, MetaFile> assetGuidToMeta = [];
     static readonly Dictionary<Guid, SerializedAsset> guidToAssetData = [];
+    static int updateLock = 0;
 
     #endregion
 
@@ -94,12 +95,30 @@ public static partial class AssetDatabase
     }
 
     /// <summary>
+    /// Prevents the AssetDatabase from updating.
+    /// </summary>
+    public static void LockUpdate() => updateLock++;
+
+    /// <summary>
+    /// Allows the AssetDatabase to update if it was previously locked.
+    /// </summary>
+    public static void UnlockUpdate()
+    {
+        bool wasLocked = updateLock > 0;
+        updateLock = Math.Max(0, updateLock - 1);
+        if (wasLocked && updateLock == 0)
+            Update(true, true);
+    }
+
+    /// <summary>
     /// Checks for changes in the AssetDatabase.
     /// Call manually when you make changes to the asset files to ensure the changes are loaded
     /// </summary>
     public static void Update(bool doUnload = true, bool forceCacheUpdate = false)
     {
         if (!Project.HasProject) return;
+
+        if (updateLock > 0) return;
 
         RefreshTimer = 0f;
 
@@ -535,6 +554,11 @@ public static partial class AssetDatabase
 
     /// <summary>
     /// Saves the specified asset instance to its Asset file.
+    /// Keep in mind this Serializes and saves the asset instance to the original asset file.
+    /// This will overwrite the asset file with the new data, and may not behave how you expect.
+    /// For example if you call this on a Mesh asset, it will overwrite the mesh file which may be .obj or .fbx with a String Tag serialized format.
+    /// This would break the Mesh Asset!
+    /// Only use it on Assets where the Original asset file Is itself a string tag, like a Scene, Material, Prefab or ScriptableObject.
     /// </summary>
     /// <param name="assetInstance">The Asset Instance, Needs to be properly linked to the asset and have the AssetID Assigned!</param>
     /// <param name="pingAsset">Whether to ping the asset after saving.</param>
@@ -549,7 +573,8 @@ public static partial class AssetDatabase
                 SerializedProperty serialized = Serializer.Serialize(assetInstance);
                 StringTagConverter.WriteToFile(serialized, fileInfo);
 
-                AssetDatabase.Ping(fileInfo);
+                if(pingAsset)
+                    AssetDatabase.Ping(fileInfo);
 
                 // All we did was update the file on disk to perfectly match the already in memory asset
                 // So no need to reimport or update the cache's

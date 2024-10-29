@@ -21,7 +21,7 @@ public class AssetsBrowserWindow : EditorWindow
     double itemPadding => 4;
 
     private string _searchText = "";
-    private readonly List<FileInfo> _found = new();
+    private List<AssetDirectoryCache.FileNode> _found = new();
     private readonly Dictionary<string, AssetRef<Texture2D>> _cachedThumbnails = new();
     private static (long, bool) _lastGenerated = (-1, false);
     internal static string? RenamingEntry;
@@ -61,6 +61,10 @@ public class AssetsBrowserWindow : EditorWindow
         // If theres no project directory well why the hell are we here? the line above should have stopped us
         while (!Path.Exists(CurDirectoryNode.Directory.FullName))
             CurDirectoryNode = CurDirectoryNode.Parent ?? AssetDatabase.GetRootFolderCache(2).RootNode;
+
+        _found.Clear();
+        if (!string.IsNullOrEmpty(_searchText))
+            _found = CurDirectoryNode.Search(_searchText).ToList();
     }
 
     private void SelectionChanged(object to)
@@ -122,14 +126,9 @@ public class AssetsBrowserWindow : EditorWindow
                 gui.Draw2D.DrawText(FontAwesome6.ArrowUp, 30, gui.CurrentNode.LayoutData.Rect, cantGoUp ? EditorStylePrefs.Instance.LesserText : (gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering : Color.white));
             }
 
-            if (gui.Search("SearchInput", ref _searchText, itemHeight + itemPadding, 0, 200, itemHeight))
+            if (gui.Search("SearchInput", ref _searchText, itemHeight + itemPadding, 0, 200, itemHeight, null, false))
             {
-                _found.Clear();
-                if (!string.IsNullOrEmpty(_searchText))
-                {
-                    _found.AddRange(CurDirectoryNode.Directory.EnumerateFiles("*", SearchOption.AllDirectories));
-                    _found.RemoveAll(f => f.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase) || !f.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
-                }
+                _found = CurDirectoryNode.Search(_searchText).ToList();
             }
 
             //var pathPos = new Vector2(itemHeight + 200 + (itemPadding * 3), 7);
@@ -239,8 +238,8 @@ public class AssetsBrowserWindow : EditorWindow
             int i = 0;
             if (!string.IsNullOrEmpty(_searchText))
             {
-                //foreach (var entry in _found)
-                //    RenderEntry(ref i, entry);
+                foreach (var entry in _found)
+                    RenderEntry(ref i, entry);
             }
             else
             {

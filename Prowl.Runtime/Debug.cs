@@ -114,7 +114,7 @@ public static class Debug
 
         Console.ForegroundColor = prevColor;
 
-        OnLog?.Invoke(exception.Message + "\n" + exception.InnerException.Message, trace, LogSeverity.Exception);
+        OnLog?.Invoke(exception.Message + "\n" + (exception.InnerException?.Message ?? ""), trace, LogSeverity.Exception);
     }
 
     // NOTE : StackTrace is pretty fast on modern .NET, so it's nice to keep it on by default, since it gives useful line numbers for debugging purposes.

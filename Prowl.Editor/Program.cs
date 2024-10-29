@@ -175,7 +175,7 @@ public static class Program
             if (Project.HasProject)
             {
                 SceneManager.StoreScene();
-                SceneManager.Clear();
+                //SceneManager.Clear(); // SceneManager.Clear has OnAssemblyUnload
 
                 try
                 {

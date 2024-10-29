@@ -34,13 +34,21 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
             g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1f, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
             StringBuilder sb = new();
-            for (int i = 0; i < layers.Length; i++)
+            bool everything = maskValue.Mask == LayerMask.Everything.Mask;
+            if (!everything)
             {
-                if (maskValue.HasLayer((byte)i))
+                for (int i = 0; i < layers.Length; i++)
                 {
-                    sb.Append(layers[i]);
-                    sb.Append(", ");
+                    if (maskValue.HasLayer((byte)i) && layers[i].Length > 0)
+                    {
+                        sb.Append(layers[i]);
+                        sb.Append(", ");
+                    }
                 }
+            }
+            else
+            {
+                sb.Append("Everything");
             }
 
             g.Draw2D.DrawText(sb.Length <= 0 ? "No Layers." : sb.ToString(), g.CurrentNode.LayoutData.InnerRect, false);

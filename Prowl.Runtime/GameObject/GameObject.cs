@@ -39,7 +39,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     private Transform _transform = new();
 
     [SerializeIgnore]
-    private Scene _scene;
+    private WeakReference<Scene> _scene;
 
     #endregion
 
@@ -125,10 +125,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Scene.Add(GameObject)"/> and
     /// <see cref="Prowl.Runtime.Scene.Remove(GameObject)"/> methods.
     /// </summary>
-    public Scene Scene
+    public Scene? Scene
     {
-        get => _scene;
-        internal set => _scene = value;
+        get => _scene != null && _scene.TryGetTarget(out Scene? scene) ? scene : null;
+        internal set => _scene = new(value);
     }
 
     #endregion
@@ -195,11 +195,11 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (IsChildOrSameTransform(NewParent, this))
             return false;
 
-        Scene newScene = (NewParent != null) ? NewParent._scene : _scene;
+        Scene newScene = (NewParent != null) ? NewParent.Scene : Scene;
 
-        if (newScene != _scene)
+        if (newScene != Scene)
         {
-            _scene?.Remove(this);
+            Scene?.Remove(this);
             newScene?.Add(this);
         }
 
@@ -1238,10 +1238,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         // by assignment, and only when the the scene is itself part of the
         // copied object graph. That way, cloning a GameObject but not its
         // scene will result in a clone that doesn't reference a parent scene.
-        Scene targetScene = operation.GetWeakTarget(_scene);
+        Scene targetScene = operation.GetWeakTarget(Scene);
         if (targetScene != null)
         {
-            target._scene = targetScene;
+            target.Scene = targetScene;
         }
 
         // Copy the objects prefab link
