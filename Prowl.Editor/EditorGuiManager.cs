@@ -506,7 +506,6 @@ public static class EditorGuiManager
     [MenuItem("Edit/Project Settings")] public static void Edit_ProjectSettings() => new ProjectSettingsWindow();
     [MenuItem("Edit/Editor Preferences")] public static void Edit_Preferences() => new PreferencesWindow();
 
-    [MenuItem("Windows/Package Manager")] public static void Edit_PackageManager() => new PackageManagerWindow();
     [MenuItem("Windows/Scene View")] public static void Window_SceneView() => new SceneViewWindow();
     [MenuItem("Windows/Game View")] public static void Window_GameView() => new GameWindow();
     [MenuItem("Windows/Hierarchy")] public static void Window_Hierarchy() => new HierarchyWindow();
