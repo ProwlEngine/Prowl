@@ -290,20 +290,24 @@ public abstract class Node
     {
         public string category = menuName;
 
-        public static readonly MultiValueDictionary<string, Type> nodeCategories = [];
+        public static readonly Dictionary<string, List<Type>> nodeCategories = [];
 
         [OnAssemblyLoad]
         [RequiresUnreferencedCode("This method is called on assembly load and will not be stripped.")]
         public static void OnAssemblyLoad()
         {
             foreach (Assembly? assembly in AppDomain.CurrentDomain.GetAssemblies())
-            foreach (Type type in assembly.GetTypes())
-                if (type != null)
-                {
+                foreach (Type type in assembly.GetTypes())
+                    if (type != null)
+                    {
                         NodeAttribute? attribute = type.GetCustomAttribute<NodeAttribute>();
-                    if (attribute != null)
-                        nodeCategories.Add(attribute.category, type);
-                }
+                        if (attribute != null)
+                        {
+                            if (!nodeCategories.ContainsKey(attribute.category))
+                                nodeCategories.Add(attribute.category, new());
+                            nodeCategories[attribute.category].Add(type);
+                        }
+                    }
         }
 
         [OnAssemblyUnload]

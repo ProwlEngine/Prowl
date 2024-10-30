@@ -16,6 +16,7 @@ using SemVersion;
 namespace Prowl.Editor.Assets;
 
 #warning TODO: Support other sources then just Github, should support any git source, Also would be nice to look into NuGet support
+#warning TODO: Move packages to another folder, and reference that instead of the project directory to support uploading the project to Git
 
 public class GithubPackageMetaData
 {
