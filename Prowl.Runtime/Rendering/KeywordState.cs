@@ -12,15 +12,7 @@ namespace Prowl.Runtime.Rendering;
 /// </summary>
 public class KeywordState : ISerializationCallbackReceiver, IEquatable<KeywordState>
 {
-    public static KeywordState Empty => new([new("", "")]);
-
-    public static KeywordState Default => new(
-        [
-            new("UV_STARTS_AT_TOP", Graphics.Device?.IsUvOriginTopLeft ?? false ? "1" : "0"),
-            new("DEPTH_ZERO_TO_ONE", Graphics.Device?.IsDepthRangeZeroToOne ?? false ? "1" : "0"),
-            new("CLIP_SPACE_Y_INVERTED", Graphics.Device?.IsClipSpaceYInverted ?? false ? "1" : "0")
-        ]
-    );
+    public static KeywordState Empty => new();
 
     private struct KeyValuePairComparer : IEqualityComparer<KeyValuePair<string, string>>
     {
@@ -42,6 +34,7 @@ public class KeywordState : ISerializationCallbackReceiver, IEquatable<KeywordSt
     private bool _hasValidHash;
     private int _hash;
 
+    public int Count => _keyValuePairs.Count;
     public IEnumerable<string> Keys => _keyValuePairs.Keys;
     public IEnumerable<string> Values => _keyValuePairs.Values;
     public IEnumerable<KeyValuePair<string, string>> KeyValuePairs => _keyValuePairs;

@@ -105,21 +105,23 @@ public sealed class ShaderPass : ISerializationCallbackReceiver
     {
         _name = name;
 
-        _tags = description.Tags ?? new();
+        _tags = description.Tags ?? [];
         _blend = description.BlendState ?? BlendStateDescription.SingleOverrideBlend;
         _depthStencilState = description.DepthStencilState ?? DepthStencilStateDescription.DepthOnlyLessEqual;
         _cullMode = description.CullingMode ?? FaceCullMode.Back;
         _depthClipEnabled = description.DepthClipEnabled ?? true;
-        _keywords = description.Keywords ?? new() { { string.Empty, [string.Empty] } };
+        _keywords = description.Keywords ?? [];
 
-        _variants = new();
+        _variants = [];
 
-        foreach (var variant in variants)
+        foreach (ShaderVariant variant in variants)
+        {
             _variants[variant.VariantKeywords] = variant;
+        }
     }
 
     public ShaderVariant GetVariant(KeywordState? keywordID = null)
-        => _variants[ValidateKeyword(keywordID ?? KeywordState.Empty)];
+        => _variants[keywordID != null ? ValidateKeyword(keywordID) : KeywordState.Empty];
 
     public bool TryGetVariant(KeywordState? keywordID, out ShaderVariant? variant)
         => _variants.TryGetValue(keywordID ?? KeywordState.Empty, out variant);
@@ -136,7 +138,7 @@ public sealed class ShaderPass : ISerializationCallbackReceiver
     {
         KeywordState combinedKey = new();
 
-        foreach (var definition in _keywords)
+        foreach (KeyValuePair<string, HashSet<string>> definition in _keywords)
         {
             string defaultValue = definition.Value.First();
             string value = key.GetKey(definition.Key, defaultValue);
@@ -161,20 +163,20 @@ public sealed class ShaderPass : ISerializationCallbackReceiver
 
     public void OnBeforeSerialize()
     {
-        _serializedKeywordKeys = _keywords.Keys.ToArray();
+        _serializedKeywordKeys = [.. _keywords.Keys];
         _serializedKeywordValues = _keywords.Values.Select(x => x.ToArray()).ToArray();
 
-        _serializedVariants = _variants.Values.ToArray();
+        _serializedVariants = [.. _variants.Values];
     }
 
     public void OnAfterDeserialize()
     {
-        _keywords = new();
+        _keywords = [];
 
         for (int i = 0; i < _serializedKeywordKeys.Length; i++)
             _keywords.Add(_serializedKeywordKeys[i], [.. _serializedKeywordValues[i]]);
 
-        _variants = new();
+        _variants = [];
 
         foreach (var variant in _serializedVariants)
             _variants.Add(variant.VariantKeywords, variant);

@@ -40,7 +40,7 @@ public class ComputeDescriptor
 
         Shader = shader;
         _properties = properties ?? new();
-        _localKeywords = keywords ?? KeywordState.Default;
+        _localKeywords = keywords ?? KeywordState.Empty;
         RecreateResources();
     }
 

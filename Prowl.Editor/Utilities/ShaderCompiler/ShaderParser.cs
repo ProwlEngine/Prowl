@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Text;
@@ -135,7 +135,7 @@ public static class ShaderParser
             string sourceCode = sourceBuilder.ToString();
 
             ShaderCreationArgs args;
-            args.combinations = passDesc.Keywords ?? new() { { "", [""] } };
+            args.combinations = passDesc.Keywords ?? [];
             args.sourceCode = sourceCode;
 
             if (!ParseProgramInfo(sourceCode, includer, parsedPass.ProgramStartLine, out args.entryPoints, out args.shaderModel))
@@ -731,7 +731,7 @@ public static class ShaderParser
 
     private static Dictionary<string, HashSet<string>> ParseKeywords(Tokenizer<ShaderToken> tokenizer)
     {
-        Dictionary<string, HashSet<string>> keywords = new();
+        Dictionary<string, HashSet<string>> keywords = [];
         ExpectToken("keywords", tokenizer, ShaderToken.OpenCurlBrace);
 
         while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseCurlBrace)

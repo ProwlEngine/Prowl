@@ -44,7 +44,7 @@ public class CommandBuffer : IDisposable
     private void ResetState()
     {
         _activeFramebuffer = null;
-        _keywordState = KeywordState.Default;
+        _keywordState = KeywordState.Empty;
 
         _bufferProperties.Clear();
         _resourcesToDispose.Clear();

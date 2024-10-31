@@ -60,7 +60,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     internal Material() : base("New Material")
     {
         _properties = new();
-        _localKeywords = KeywordState.Default;
+        _localKeywords = KeywordState.Empty;
     }
 
     public Material(AssetRef<Shader> shader, PropertyState? properties = null, KeywordState? keywords = null) : base("New Material")
@@ -70,7 +70,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
         Shader = shader;
         _properties = properties ?? new();
-        _localKeywords = keywords ?? KeywordState.Default;
+        _localKeywords = keywords ?? KeywordState.Empty;
     }
 
     public void SetKeyword(string keyword, string value) => _localKeywords.SetKey(keyword, value);
