@@ -20,16 +20,9 @@ public static class ComputeThreadReflector
 {
     public static void GetThreadgroupSizes(Reflector reflector, out uint xSize, out uint ySize, out uint zSize)
     {
-        ConstantID id = reflector.GetWorkGroupSizeSpecificationConstants(
-            out SpecializationConstant x,
-            out SpecializationConstant y,
-            out SpecializationConstant z);
-
-        Constant cID = reflector.GetConstantHandle(id);
-
-        xSize = cID.GetScalarUInt32(0, 0);
-        ySize = cID.GetScalarUInt32(0, 1);
-        zSize = cID.GetScalarUInt32(0, 2);
+        xSize = 0;
+        ySize = 0;
+        zSize = 0;
 
         Debug.Log($"Kernel threadgroups: {xSize}, {ySize}, {zSize}");
     }
