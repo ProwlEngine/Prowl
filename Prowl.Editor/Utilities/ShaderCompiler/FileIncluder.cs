@@ -32,66 +32,74 @@ public class FileIncluder
     {
         public FileIncluder parentIncluder;
         public List<CompilationMessage> messages;
-        public string entrypoint;
-        public KeywordState? keywords;
 
 
-        public IncludeResult Include(string headerName, string includerName, uint includeDepth, bool isSystemFile)
+        public IncludeResult Include(string includeText, string includerPath, uint includeDepth, bool isSystemFile)
         {
             if (includeDepth > 150)
             {
                 return new IncludeResult()
                 {
-                    headerName = headerName,
+                    headerName = includeText,
                     headerData = ""
                 };
             }
 
-            if (string.IsNullOrWhiteSpace(includerName))
-                includerName = parentIncluder.SourceFile;
+            bool fromSource = false;
+            if (string.IsNullOrWhiteSpace(includerPath))
+            {
+                fromSource = true;
+                includerPath = parentIncluder.SourceFile;
+            }
 
             IncludeResult result = new IncludeResult();
 
             result.headerData = " ";
             result.headerName = " ";
 
-            try
+            if (!parentIncluder.ResolveHeader(includeText, includerPath, out string fullPath, out string parsedHeader))
             {
-                string fullPath = parentIncluder.ResolveHeader(headerName, includerName, out string parsedHeader);
-
-                result.headerName = parsedHeader;
-                result.headerData = File.ReadAllText(fullPath);
-            }
-            catch (FileNotFoundException)
-            {
-                messages.Add(new CompilationMessage()
+                CompilationMessage msg = new CompilationMessage()
                 {
                     severity = LogSeverity.Error,
-                    message = $"Failed to open source file: {headerName}",
-                    entrypoint = entrypoint,
-                    keywords = keywords
-                });
+                    message = $"Failed to open source file: {includeText}",
+                };
 
+                if (parentIncluder.GetFullFilePath(includerPath, out string? sourceFile))
+                {
+                    msg.file = new CompilationFile()
+                    {
+                        isSourceFile = fromSource,
+                        filename = sourceFile,
+                        line = 1,
+                        column = 1
+                    };
+                }
+
+                messages.Add(msg);
+
+                return result;
             }
+
+            result.headerName = parsedHeader;
+            result.headerData = File.ReadAllText(fullPath);
 
             return result;
         }
     }
 
 
-    public Glslang.NET.FileIncluder GetIncluder(List<CompilationMessage> messages, string entrypoint, KeywordState? keywords)
+    public Glslang.NET.FileIncluder GetIncluder(List<CompilationMessage> messages)
     {
         IncludeContext ctx;
         ctx.parentIncluder = this;
         ctx.messages = messages;
-        ctx.entrypoint = entrypoint;
-        ctx.keywords = keywords;
 
         return ctx.Include;
     }
 
 
-    public string ResolveHeader(string rawHeader, string includer, out string parsedHeader)
+    public bool ResolveHeader(string rawHeader, string includer, out string fullPath, out string parsedHeader)
     {
         string filePath = rawHeader;
 
@@ -100,13 +108,13 @@ public class FileIncluder
 
         parsedHeader = filePath;
 
-        return GetFullFilePath(filePath);
+        return GetFullFilePath(filePath, out fullPath);
     }
 
 
-    public string GetFullFilePath(string projectRelativePath)
+    public bool GetFullFilePath(string projectRelativePath, out string? resultPath)
     {
-        string? resultPath = null;
+        resultPath = null;
 
         for (int i = 0; i < _searchDirectories.Length; i++)
         {
@@ -117,13 +125,10 @@ public class FileIncluder
             if (File.Exists(relativePath))
             {
                 resultPath = relativePath;
-                break;
+                return true;
             }
         }
 
-        if (resultPath == null)
-            throw new FileNotFoundException();
-
-        return resultPath;
+        return false;
     }
 }
