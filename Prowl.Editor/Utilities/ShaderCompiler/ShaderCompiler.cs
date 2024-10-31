@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Text;
+
 using Glslang.NET;
 
 using Prowl.Runtime;
@@ -28,7 +30,8 @@ public struct ShaderCreationArgs
 
 public struct CompilationFile
 {
-    public string filename;
+    public bool isSourceFile;
+    public string? filename;
     public int line;
     public int column;
 }
@@ -36,22 +39,17 @@ public struct CompilationFile
 
 public struct CompilationMessage
 {
-    public IReadOnlyList<CompilationFile> stackTrace;
+    public CompilationFile? file;
 
     public LogSeverity severity;
     public string message;
-
-    public string entrypoint;
-    public KeywordState? keywords;
 
 
     public CompilationMessage()
     {
         severity = LogSeverity.Normal;
         message = "";
-        entrypoint = "";
-        keywords = null;
-        stackTrace = [];
+        file = null;
     }
 }
 
@@ -72,10 +70,109 @@ public static partial class ShaderCompiler
     }
 
 
-    private static void CheckMessages(string messageText, List<CompilationMessage> messages)
+    private static (string, string) SplitFirst(string text, char delim)
+    {
+        int ind = text.IndexOf(delim);
+
+        if (ind < 0)
+            return (text, "");
+
+        return (text.Substring(0, ind), text.Substring(Math.Min(text.Length, ind + 1)));
+    }
+
+
+    private static IEnumerable<int> IndicesOf(string text, char delim)
+    {
+        for (int i = text.IndexOf(delim); i > -1; i = text.IndexOf(delim, i + 1))
+            yield return i;
+    }
+
+
+    private static CompilationMessage? ParseMessage(string messageText, int sourceOffset, FileIncluder includer)
+    {
+        if (string.IsNullOrWhiteSpace(messageText))
+            return null;
+
+        (string severityText, string messageNext) = SplitFirst(messageText, ':');
+
+        LogSeverity severity = severityText switch
+        {
+            "WARNING" => LogSeverity.Warning,
+            "ERROR" => LogSeverity.Error,
+            _ => LogSeverity.Normal
+        };
+
+        bool hasFile = false;
+        CompilationFile file = new();
+
+        int[] indices = IndicesOf(messageNext, ':').ToArray();
+
+        for (int i = 0; i < indices.Length; i++)
+        {
+            string substr = messageNext.Substring(0, indices[i]).TrimStart();
+
+            if (substr.Length == 1 && substr[0] == '0')
+            {
+                file.isSourceFile = true;
+                file.filename = includer.SourceFilePath;
+            }
+            else if (includer.GetFullFilePath(substr, out string? fullPath))
+            {
+                file.isSourceFile = false;
+                file.filename = fullPath;
+            }
+            else
+            {
+                continue;
+            }
+
+            string lnText = messageNext.Substring(indices[i] + 1, (indices[i + 1] - indices[i]) - 1);
+            string colText = messageNext.Substring(indices[i + 1] + 1, (indices[i + 2] - indices[i + 1]) - 1);
+
+            messageNext = messageNext.Substring(indices[i + 2] + 1);
+
+            if (!int.TryParse(lnText, out file.line))
+                continue;
+
+            if (!int.TryParse(colText, out file.column))
+                continue;
+
+            if (file.isSourceFile)
+                file.line -= sourceOffset;
+
+            hasFile = true;
+            break;
+        }
+
+        return new CompilationMessage()
+        {
+            file = hasFile ? file : null,
+            severity = severity,
+            message = messageNext.TrimStart(),
+        };
+    }
+
+
+
+    private static void CheckMessages(string messageText, int sourceOffset, FileIncluder includer, List<CompilationMessage> messages)
     {
         // ERROR: File:Line:Column: Error text: Additional message.
-        // ERROR: Error text: Additional meessage.
+        // ERROR: Error text: Additional message.
+
+        if (string.IsNullOrWhiteSpace(messageText))
+            return;
+
+        string[] messagesSplit = messageText.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (string messageLine in messagesSplit)
+        {
+            CompilationMessage? message = ParseMessage(messageLine, sourceOffset, includer);
+
+            if (message != null)
+                messages.Add(message.Value);
+        }
+    }
+
 
     private static string AddDefines(string sourceCode, KeywordState keywords)
     {
@@ -127,11 +224,9 @@ public static partial class ShaderCompiler
         {
             input.sourceEntrypoint = entrypoint.Name;
             input.stage = StageToType(entrypoint.Stage);
-            input.fileIncluder = includer.GetIncluder(messages, entrypoint.Name, keywords);
+            input.fileIncluder = includer.GetIncluder(messages);
 
             Shader shader = new Shader(input);
-
-            shader.SetSourceFile(fileName);
 
             shader.SetOptions(
                 ShaderOptions.AutoMapBindings |
@@ -141,38 +236,24 @@ public static partial class ShaderCompiler
             );
 
             bool preprocessed = shader.Preprocess();
-
-            CheckMessages(shader.GetDebugLog(), messages);
-            CheckMessages(shader.GetInfoLog(), messages);
-
-            if (!preprocessed)
-                return null;
-
             bool parsed = shader.Parse();
 
-            CheckMessages(shader.GetDebugLog(), messages);
-            CheckMessages(shader.GetInfoLog(), messages);
+            CheckMessages(shader.GetDebugLog(), keywords.Count, includer, messages);
+            CheckMessages(shader.GetInfoLog(), keywords.Count, includer, messages);
 
-            if (!parsed)
+            if (!preprocessed || !parsed)
                 return null;
 
             program.AddShader(shader);
         }
 
         bool linked = program.Link(MessageType.VulkanRules | MessageType.SpvRules | input.messages ?? MessageType.Default);
-
-        CheckMessages(program.GetDebugLog(), messages);
-        CheckMessages(program.GetInfoLog(), messages);
-
-        if (!linked)
-            return null;
-
         bool mapIO = program.MapIO();
 
-        CheckMessages(program.GetDebugLog(), messages);
-        CheckMessages(program.GetInfoLog(), messages);
+        CheckMessages(program.GetDebugLog(), keywords.Count, includer, messages);
+        CheckMessages(program.GetInfoLog(), keywords.Count, includer, messages);
 
-        if (!mapIO)
+        if (!linked || !mapIO)
             return null;
 
         for (int i = 0; i < args.entryPoints.Length; i++)
@@ -181,7 +262,7 @@ public static partial class ShaderCompiler
 
             bool generatedSPIRV = program.GenerateSPIRV(out uint[] SPIRVWords, StageToType(entryPoint.Stage));
 
-            CheckMessages(program.GetSPIRVMessages(), messages);
+            CheckMessages(program.GetSPIRVMessages(), keywords.Count, includer, messages);
 
             if (!generatedSPIRV)
                 return null;

@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Text;
@@ -204,13 +204,18 @@ public static class ShaderParser
                 return line;
             }
 
-            DebugStackTrace trace = new(message.stackTrace.Select(x =>
-                    new DebugStackFrame(
-                        includer.GetFullFilePath(x.filename),
-                        GetLine(x.line),
-                        x.column)
-                ).ToArray()
-            );
+            DebugStackTrace? trace = null;
+
+            if (message.file != null)
+            {
+                CompilationFile file = message.file.Value;
+
+                trace = new(new DebugStackFrame(
+                    file.filename ?? "<Unknown File>",
+                    file.isSourceFile ? GetLine(file.line) : file.line,
+                    file.column
+                ));
+            }
 
             string prefix = message.severity switch
             {

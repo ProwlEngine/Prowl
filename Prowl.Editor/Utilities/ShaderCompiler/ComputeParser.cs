@@ -71,13 +71,18 @@ public static class ComputeParser
     {
         foreach (CompilationMessage message in messages)
         {
-            DebugStackTrace trace = new(message.stackTrace.Select(x =>
+            DebugStackTrace? trace = null;
+
+            if (message.file != null)
+            {
+                trace = new(
                     new DebugStackFrame(
-                        includer.GetFullFilePath(x.filename),
-                        x.line,
-                        x.column)
-                ).ToArray()
-            );
+                        message.file?.filename ?? "<Unknown File>",
+                        message.file?.line,
+                        message.file?.column
+                    )
+                );
+            }
 
             string prefix = message.severity switch
             {
