@@ -743,7 +743,19 @@ public static class ShaderParser
             ExpectToken("keyword", tokenizer, ShaderToken.OpenSquareBrace);
 
             while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseSquareBrace)
+            {
+                string keyword = tokenizer.Token.ToString();
+
+                const string specialChars = @"\|!#$%&/()=?»«@{}.-;'<>,;""";
+
+                for (int i = 0; i < specialChars.Length; i++)
+                {
+                    if (keyword.Contains(specialChars[i]))
+                        throw new ParseException("keyword", $"Keyword cannot contain character: ' {specialChars[i]} '");
+                }
+
                 values.Add(tokenizer.Token.ToString());
+            }
 
             keywords.Add(name, values);
         }
