@@ -29,8 +29,8 @@ public static class Application
 
     private static readonly GraphicsBackend[] s_preferredWindowsBackends = // Covers Windows/UWP
     [
-        GraphicsBackend.Vulkan,
         GraphicsBackend.OpenGL,
+        GraphicsBackend.Vulkan,
         GraphicsBackend.Direct3D11,
         GraphicsBackend.OpenGLES,
     ];
