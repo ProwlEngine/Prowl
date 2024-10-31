@@ -218,7 +218,6 @@ public static partial class AssetDatabase
         else
         {
             Debug.LogWarning("Packages.json not found, creating new file...");
-            packageVersions.Add("pfraces-graveyard/git-install", "0.5.0");
             await SafeWriteJson(packagesJsonPath, packageVersions);
         }
 
