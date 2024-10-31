@@ -23,7 +23,5 @@ public static class ComputeThreadReflector
         xSize = reflector.GetExecutionModeArgumentByIndex(ExecutionMode.LocalSize, 0);
         ySize = reflector.GetExecutionModeArgumentByIndex(ExecutionMode.LocalSize, 1);
         zSize = reflector.GetExecutionModeArgumentByIndex(ExecutionMode.LocalSize, 2);
-
-        Debug.Log($"Kernel threadgroups: {xSize}, {ySize}, {zSize}");
     }
 }
