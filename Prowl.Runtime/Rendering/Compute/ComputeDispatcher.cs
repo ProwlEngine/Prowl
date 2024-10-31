@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Rendering;
 public static class ComputeDispatcher
 {
 
-    public static void Dispatch(ComputeDescriptor descriptor, int kernelIndex, uint groupsX, uint groupsY, uint groupsZ)
+    public static void Dispatch(ComputeDescriptor descriptor, int kernelIndex, uint groupsX, uint groupsY, uint groupsZ, GraphicsFence? fence = null)
     {
         CommandList cl = Graphics.GetCommandList();
 
@@ -32,7 +32,7 @@ public static class ComputeDispatcher
 
         cl.Dispatch(groupsX, groupsY, groupsZ);
 
-        Graphics.SubmitCommandList(cl);
+        Graphics.SubmitCommandList(cl, fence);
 
         Graphics.SubmitResourcesForDisposal(toDispose);
     }
