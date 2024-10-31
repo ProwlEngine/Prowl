@@ -77,8 +77,24 @@ public static partial class ShaderCompiler
         // ERROR: File:Line:Column: Error text: Additional message.
         // ERROR: Error text: Additional meessage.
 
-        if (!string.IsNullOrWhiteSpace(messageText))
-            Debug.Log(messageText);
+    private static string AddDefines(string sourceCode, KeywordState keywords)
+    {
+        StringBuilder builder = new StringBuilder();
+
+        foreach (var pair in keywords.KeyValuePairs)
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key))
+                continue;
+
+            builder.Append("#define ");
+            builder.Append(pair.Key);
+            builder.Append(" ");
+            builder.AppendLine(pair.Value);
+        }
+
+        builder.Append(sourceCode);
+
+        return builder.ToString();
     }
 
 
@@ -97,7 +113,7 @@ public static partial class ShaderCompiler
             targetLanguage = TargetLanguage.SPV,
             targetLanguageVersion = TargetLanguageVersion.SPV_1_3,
             defaultVersion = 500,
-            code = args.sourceCode,
+            code = AddDefines(args.sourceCode, keywords),
             hlslFunctionality1 = true,
             defaultProfile = ShaderProfile.None,
             forceDefaultVersionAndProfile = false,
