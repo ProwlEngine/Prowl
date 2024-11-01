@@ -1,4 +1,4 @@
-﻿namespace SemVersion.Parser;
+﻿namespace Prowl.Editor.Utilities.SemVersion.Parser;
 
 public class Range
 {

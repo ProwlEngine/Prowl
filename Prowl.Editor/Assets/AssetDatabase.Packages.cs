@@ -11,7 +11,7 @@ using BepuPhysics.CollisionDetection;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
-using SemVersion;
+using Prowl.Editor.Utilities.SemVersion;
 
 namespace Prowl.Editor.Assets;
 
@@ -302,7 +302,7 @@ public static partial class AssetDatabase
                 }
             }
 
-            var range = new SemVersion.Parser.Range(versionRange);
+            var range = new Prowl.Editor.Utilities.SemVersion.Parser.Range(versionRange);
             if (currentVersion is null || !range.IsSatisfied(currentVersion))
             {
                 // Get available versions with retry logic
@@ -587,7 +587,7 @@ public static partial class AssetDatabase
         // Validate version format (should be valid semantic version or range)
         try
         {
-            _ = new SemVersion.Parser.Range(version); // Throws if invalid
+            _ = new Prowl.Editor.Utilities.SemVersion.Parser.Range(version); // Throws if invalid
             return true;
         }
         catch
@@ -671,7 +671,7 @@ public static partial class AssetDatabase
     {
         try
         {
-            var range = new SemVersion.Parser.Range(versionRange);
+            var range = new Prowl.Editor.Utilities.SemVersion.Parser.Range(versionRange);
 
             // Filter versions that match the range and order by version (descending)
             return semanticVersions

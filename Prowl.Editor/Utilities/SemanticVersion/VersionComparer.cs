@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace SemVersion;
+namespace Prowl.Editor.Utilities.SemVersion;
 
 /// <summary>Compares two <see cref="SemanticVersion"/> objects for equality.</summary>
 public sealed class VersionComparer : IEqualityComparer<SemanticVersion>, IComparer<SemanticVersion>

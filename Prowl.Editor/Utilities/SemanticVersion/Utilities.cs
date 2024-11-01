@@ -1,4 +1,4 @@
-﻿namespace SemVersion;
+﻿namespace Prowl.Editor.Utilities.SemVersion;
 
 internal static class Utilities
 {

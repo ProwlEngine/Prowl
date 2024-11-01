@@ -11,7 +11,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace SemVersion;
+namespace Prowl.Editor.Utilities.SemVersion;
 
 /// <summary>Represents a version object, compliant with the Semantic Version standard 2.0 (http://semver.org)</summary>
 public partial class SemanticVersion : IEquatable<SemanticVersion>, IComparable<SemanticVersion>
