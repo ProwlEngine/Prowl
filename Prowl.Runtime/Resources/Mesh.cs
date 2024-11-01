@@ -739,6 +739,14 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             compoundTag.Add("MeshData", new SerializedProperty(memoryStream.ToArray()));
         }
 
+        // write bounds
+        compoundTag.Add("bMinX", new(bounds.min.x));
+        compoundTag.Add("bMinY", new(bounds.min.y));
+        compoundTag.Add("bMinZ", new(bounds.min.z));
+        compoundTag.Add("bMaxX", new(bounds.max.x));
+        compoundTag.Add("bMaxY", new(bounds.max.y));
+        compoundTag.Add("bMaxZ", new(bounds.max.z));
+
         return compoundTag;
     }
 
@@ -779,6 +787,19 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
             _changed = true;
         }
+
+        bounds = Bounds.CreateFromMinMax(
+                    new Vector3F(
+                        value["bMinX"]?.FloatValue ?? 0,
+                        value["bMinY"]?.FloatValue ?? 0,
+                        value["bMinZ"]?.FloatValue ?? 0
+                    ),
+                    new Vector3F(
+                        value["bMaxX"]?.FloatValue ?? 0,
+                        value["bMaxY"]?.FloatValue ?? 0,
+                        value["bMaxZ"]?.FloatValue ?? 0
+                    )
+                );
     }
 
     private static unsafe T[] ReadArray<T>(BinaryReader reader) where T : unmanaged
