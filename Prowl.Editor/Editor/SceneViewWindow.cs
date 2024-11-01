@@ -139,6 +139,22 @@ public class SceneViewWindow : EditorWindow
             }
         }
 
+        List<WeakReference> selectedWeaks = HierarchyWindow.SelectHandler.Selected;
+        var selectedGOs = new List<GameObject>();
+        foreach (WeakReference weak in selectedWeaks)
+            if (weak.Target is GameObject go)
+            {
+                selectedGOs.Add(go);
+
+                // Get all MeshRenderers and draw their bounds
+                foreach (MeshRenderer renderer in go.GetComponentsInChildren<MeshRenderer>())
+                {
+                    Bounds bounds = renderer.Mesh.Res?.bounds ?? new();
+                    bounds = bounds.Transform(renderer.Transform.localToWorldMatrix);
+                    Debug.DrawWireCube(bounds.center, bounds.extents, Color.yellow);
+                }
+            }
+
         RenderPipeline pipeline = Cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
 
         pipeline.Render(RenderTarget.Framebuffer, Cam, data);
@@ -146,12 +162,6 @@ public class SceneViewWindow : EditorWindow
         Vector2 imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         Vector2 imageSize = gui.CurrentNode.LayoutData.Rect.Size;
         gui.Draw2D.DrawImage(RenderTarget!.ColorBuffers[0], imagePos, imageSize, Color.white);
-
-        List<WeakReference> selectedWeaks = HierarchyWindow.SelectHandler.Selected;
-        var selectedGOs = new List<GameObject>();
-        foreach (WeakReference weak in selectedWeaks)
-            if (weak.Target is GameObject go)
-                selectedGOs.Add(go);
 
         Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
