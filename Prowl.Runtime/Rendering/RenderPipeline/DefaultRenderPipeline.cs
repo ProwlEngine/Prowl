@@ -60,7 +60,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         Matrix4x4 vp = view * projection;
 
-        // BoundingFrustum frustum = new BoundingFrustum(vp);
+        BoundingFrustum worldFrustum = new(camera.GetViewMatrix() * projection);
 
         System.Numerics.Matrix4x4 floatVP = vp.ToFloat();
 
@@ -79,13 +79,15 @@ public class DefaultRenderPipeline : RenderPipeline
             }
         }
 
+        buffer.SetVector("_SunDir", sunDirection);
+
 
         if (drawSkybox)
         {
             buffer.SetMaterial(s_skybox);
 
             buffer.SetMatrix("_Matrix_VP", (camera.GetViewMatrix(false) * projection).ToFloat());
-            buffer.SetVector("_SunDir", sunDirection);
+            //buffer.SetVector("_SunDir", sunDirection);
 
             buffer.DrawSingle(s_skyDome);
         }
@@ -99,8 +101,8 @@ public class DefaultRenderPipeline : RenderPipeline
             {
                 IRenderable renderable = GetRenderable(renderIndex);
 
-                //if (CullRenderable(renderable, frustum))
-                //    continue;
+                if (CullRenderable(renderable, worldFrustum))
+                    continue;
 
                 renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
 
@@ -210,6 +212,6 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         renderable.GetCullingData(out bool isRenderable, out Bounds bounds);
 
-        return !isRenderable || cameraFrustum.Contains(bounds) == ContainmentType.Disjoint;
+        return !isRenderable || !cameraFrustum.Intersects(bounds);
     }
 }
