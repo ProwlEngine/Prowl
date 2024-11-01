@@ -431,35 +431,14 @@ public struct Bounds : IEquatable<Bounds>
     public Bounds Transform(Matrix4x4 matrix)
     {
         // Get the vertices of the OBB in local space
-        Vector3[] localVertices = new Vector3[8];
-        localVertices[0] = new Vector3(-extents.x, -extents.y, -extents.z);
-        localVertices[1] = new Vector3(extents.x, -extents.y, -extents.z);
-        localVertices[2] = new Vector3(-extents.x, extents.y, -extents.z);
-        localVertices[3] = new Vector3(extents.x, extents.y, -extents.z);
-        localVertices[4] = new Vector3(-extents.x, -extents.y, extents.z);
-        localVertices[5] = new Vector3(extents.x, -extents.y, extents.z);
-        localVertices[6] = new Vector3(-extents.x, extents.y, extents.z);
-        localVertices[7] = new Vector3(extents.x, extents.y, extents.z);
+        Vector3[] localVertices = GetCorners();
 
         // Transform the vertices to world space
         Vector3[] worldVertices = new Vector3[8];
         for (int i = 0; i < 8; i++)
-            worldVertices[i] = Vector3.Transform(localVertices[i], matrix);
+            worldVertices[i] = Vector4.Transform(new Vector4(localVertices[i], 1.0), matrix).xyz;
 
-        // Find the min and max points
-        Vector3 min = worldVertices[0];
-        Vector3 max = worldVertices[0];
-        foreach (var vertex in worldVertices)
-        {
-            min = Vector3.Min(min, vertex);
-            max = Vector3.Max(max, vertex);
-        }
-
-        // The min and max points define the AABB
-        Vector3 aabbCenter = (min + max) / 2;
-        Vector3 aabbExtents = (max - min) / 2;
-
-        return new Bounds(aabbCenter, aabbExtents);
+        return Bounds.CreateFromPoints(worldVertices);
     }
 
     public static bool operator ==(Bounds a, Bounds b)
