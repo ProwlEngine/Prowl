@@ -22,7 +22,7 @@ public sealed partial class ComputePipeline : IDisposable, IBindableResourceProv
 
     public IReadOnlyList<Uniform> Uniforms => variant.Uniforms;
 
-    private Veldrid.ComputePipelineDescription _description;
+    private ComputePipelineDescription _description;
 
     private Pipeline _pipeline;
 
@@ -30,6 +30,8 @@ public sealed partial class ComputePipeline : IDisposable, IBindableResourceProv
 
     public ComputePipeline(ComputeVariant variant)
     {
+        this.variant = variant;
+
         ShaderDescription shaderDescription = variant.GetProgramForBackend();
 
         Veldrid.Shader shader = Graphics.Factory.CreateShader(shaderDescription);
