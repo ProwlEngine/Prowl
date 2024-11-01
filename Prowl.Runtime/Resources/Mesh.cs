@@ -81,7 +81,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         {
             if (isWritable == false)
                 return;
-            var needsReset = _vertices == null || _vertices.Length != value.Length;
+            bool needsReset = _vertices == null || _vertices.Length != value.Length;
             _vertices = value;
             _changed = true;
             if (needsReset)
@@ -346,9 +346,9 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         if (_vertices.Length < 1)
             throw new ArgumentException();
 
-        var minVec = Vector3F.One * 99999f;
-        var maxVec = Vector3F.One * -99999f;
-        foreach (var ptVector in _vertices)
+        Vector3F minVec = Vector3F.One * 99999f;
+        Vector3F maxVec = Vector3F.One * -99999f;
+        foreach (Vector3F ptVector in _vertices)
         {
             minVec.X = (minVec.X < ptVector.X) ? minVec.X : ptVector.X;
             minVec.Y = (minVec.Y < ptVector.Y) ? minVec.Y : ptVector.Y;
@@ -467,7 +467,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public static Mesh CreateQuad(Vector2 scale)
     {
-        Mesh mesh = new Mesh();
+        Mesh mesh = new();
 
         float x = (float)scale.x;
         float y = (float)scale.y;
@@ -494,7 +494,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public static Mesh CreateSphere(float radius, int rings, int slices)
     {
-        Mesh mesh = new Mesh();
+        Mesh mesh = new();
 
         List<Vector3F> vertices = [];
         List<Vector2F> uvs = [];
@@ -536,10 +536,10 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             }
         }
 
-        mesh.Vertices = vertices.ToArray();
-        mesh.UV = uvs.ToArray();
+        mesh.Vertices = [.. vertices];
+        mesh.UV = [.. uvs];
         mesh.IndexFormat = IndexFormat.UInt16;
-        mesh.Indices16 = indices.ToArray();
+        mesh.Indices16 = [.. indices];
 
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
@@ -550,7 +550,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public static Mesh CreateCube(Vector3 size)
     {
-        Mesh mesh = new Mesh();
+        Mesh mesh = new();
         float x = (float)size.x / 2f;
         float y = (float)size.y / 2f;
         float z = (float)size.z / 2f;
@@ -617,7 +617,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     public static Mesh CreateCylinder(float radius, float length, int sliceCount)
     {
         // TODO: Test, This hasent been tested like at all just assumed it will work
-        Mesh mesh = new Mesh();
+        Mesh mesh = new();
 
         List<Vector3F> vertices = [];
         List<Vector2F> uvs = [];
@@ -692,10 +692,10 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             indices.Add((ushort)bottomCenterIndex);
         }
 
-        mesh.Vertices = vertices.ToArray();
-        mesh.UV = uvs.ToArray();
+        mesh.Vertices = [.. vertices];
+        mesh.UV = [.. uvs];
         mesh.IndexFormat = IndexFormat.UInt16;
-        mesh.Indices16 = indices.ToArray();
+        mesh.Indices16 = [.. indices];
 
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
@@ -706,10 +706,12 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public static Mesh CreateTriangle(Vector3 a, Vector3 b, Vector3 c)
     {
-        Mesh mesh = new Mesh();
-        mesh.Vertices = [a, b, c];
-        mesh.IndexFormat = IndexFormat.UInt16;
-        mesh.Indices16 = [0, 1, 2];
+        Mesh mesh = new()
+        {
+            Vertices = [a, b, c],
+            IndexFormat = IndexFormat.UInt16,
+            Indices16 = [0, 1, 2]
+        };
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
         mesh.RecalculateTangents();
@@ -720,8 +722,8 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     {
         var compoundTag = SerializedProperty.NewCompound();
 
-        using (MemoryStream memoryStream = new MemoryStream())
-        using (BinaryWriter writer = new BinaryWriter(memoryStream))
+        using (MemoryStream memoryStream = new())
+        using (BinaryWriter writer = new(memoryStream))
         {
             writer.Write((byte)_indexFormat);
             writer.Write((byte)_topology);
@@ -761,8 +763,8 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
     {
-        using (MemoryStream memoryStream = new MemoryStream(value["MeshData"].ByteArrayValue))
-        using (BinaryReader reader = new BinaryReader(memoryStream))
+        using (MemoryStream memoryStream = new(value["MeshData"].ByteArrayValue))
+        using (BinaryReader reader = new(memoryStream))
         {
             _indexFormat = (IndexFormat)reader.ReadByte();
             _topology = (PrimitiveTopology)reader.ReadByte();
