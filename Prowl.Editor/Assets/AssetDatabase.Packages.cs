@@ -183,7 +183,7 @@ public static partial class AssetDatabase
         Debug.Log("Validating packages...");
 
         DirectoryInfo packagesPath = Project.Active!.PackagesDirectory;
-        string packagesJsonPath = Path.Combine(packagesPath.FullName, "Packages.json");
+        string packagesJsonPath = Path.Combine(packagesPath.FullName, "packages.json");
 
         // Initialize safety mechanisms
         using var lockManager = new AsyncFileLocker(packagesPath.FullName, ".package-lock");
@@ -224,8 +224,8 @@ public static partial class AssetDatabase
         // Build dependency graph
         foreach ((string package, string version) in packageVersions)
         {
-            GithubPackageMetaData? packageJson = await LoadPackageJson(
-                Path.Combine(packagesPath.FullName, ConvertToPath(package)!, "package.json"));
+            string fileSafeName = ConvertToPath(package)?.Replace('/', '.') ?? throw new Exception("Invalid package name");
+            GithubPackageMetaData? packageJson = await LoadPackageJson(Path.Combine(packagesPath.FullName, fileSafeName, "package.json"));
 
             if (packageJson?.dependencies != null)
             {
