@@ -525,11 +525,6 @@ public class GizmoBuilder
 
     public void DrawIcon(Texture2D icon, Vector3 center, float scale, Color color) => _icons.Add(new IconDrawCall { texture = icon, center = center, scale = scale, color = color });
 
-    public void DrawText(Font font, string text, Vector3 position, Color color) // TODO: Try to share the same code from UI rendering to avoid duplicate Text rendering code
-    {
-
-    }
-
     public (Mesh? wire, Mesh? solid) UpdateMesh(bool cameraRelative, Vector3 cameraPosition)
     {
         bool hasWire = _wireData.s_vertices.Count > 0;
