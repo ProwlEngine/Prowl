@@ -60,9 +60,9 @@ public struct Bounds : IEquatable<Bounds>
     #endregion Public Fields
 
     #region Public Properties
-    public Vector3 center { readonly get { return (min + max) * 0.5f; } set { var s = size * 0.5f; min = value - s; max = value + s; } }
-    public Vector3 extents { readonly get { return (max - min) * 0.5f; } set { var c = center; min = c - value; max = c + value; } }
-    public Vector3 size { readonly get { return max - min; } set { var c = center; var s = value * 0.5f; min = c - s; max = c + s; } }
+    public Vector3 center { readonly get { return (min + max) * 0.5f; } set { Vector3 s = size * 0.5f; min = value - s; max = value + s; } }
+    public Vector3 extents { readonly get { return (max - min) * 0.5f; } set { Vector3 c = center; min = c - value; max = c + value; } }
+    public Vector3 size { readonly get { return max - min; } set { Vector3 c = center; Vector3 s = value * 0.5f; min = c - s; max = c + s; } }
     #endregion
 
 
@@ -70,7 +70,7 @@ public struct Bounds : IEquatable<Bounds>
 
     public Bounds(Vector3 center, Vector3 size)
     {
-        var hs = size * 0.5f;
+        Vector3 hs = size * 0.5f;
         min = center - hs;
         max = center + hs;
     }
@@ -198,25 +198,20 @@ public struct Bounds : IEquatable<Bounds>
     {
         ArgumentNullException.ThrowIfNull(points);
 
-        var empty = true;
-        var minVec = MaxVector3;
-        var maxVec = MinVector3;
-        foreach (var ptVector in points)
+        bool empty = true;
+        Vector3 minVec = MaxVector3;
+        Vector3 maxVec = MinVector3;
+        foreach (Vector3 ptVector in points)
         {
-            minVec.x = (minVec.x < ptVector.x) ? minVec.x : ptVector.x;
-            minVec.y = (minVec.y < ptVector.y) ? minVec.y : ptVector.y;
-            minVec.z = (minVec.z < ptVector.z) ? minVec.z : ptVector.z;
-
-            maxVec.x = (maxVec.x > ptVector.x) ? maxVec.x : ptVector.x;
-            maxVec.y = (maxVec.y > ptVector.y) ? maxVec.y : ptVector.y;
-            maxVec.z = (maxVec.z > ptVector.z) ? maxVec.z : ptVector.z;
+            minVec = Vector3.Min(minVec, ptVector);
+            maxVec = Vector3.Max(maxVec, ptVector);
 
             empty = false;
         }
         if (empty)
             throw new ArgumentException();
 
-        return new Bounds(minVec, maxVec);
+        return Bounds.CreateFromMinMax(minVec, maxVec);
     }
 
 
@@ -400,7 +395,7 @@ public struct Bounds : IEquatable<Bounds>
         }
 
         // Inline Vector3.Dot(plane.Normal, negativeVertex) + plane.D;
-        var distance = plane.normal.x * negativeVertex.x + plane.normal.y * negativeVertex.y + plane.normal.z * negativeVertex.z + plane.distance;
+        double distance = plane.normal.x * negativeVertex.x + plane.normal.y * negativeVertex.y + plane.normal.z * negativeVertex.z + plane.distance;
         if (distance > 0)
         {
             result = PlaneIntersectionType.Front;
