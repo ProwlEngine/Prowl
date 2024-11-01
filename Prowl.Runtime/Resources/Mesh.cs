@@ -346,20 +346,15 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         if (_vertices.Length < 1)
             throw new ArgumentException();
 
-        Vector3F minVec = Vector3F.One * 99999f;
-        Vector3F maxVec = Vector3F.One * -99999f;
+        Vector3F minVec = Vector3F.One * float.MaxValue;
+        Vector3F maxVec = Vector3F.One * float.MinValue;
         foreach (Vector3F ptVector in _vertices)
         {
-            minVec.X = (minVec.X < ptVector.X) ? minVec.X : ptVector.X;
-            minVec.Y = (minVec.Y < ptVector.Y) ? minVec.Y : ptVector.Y;
-            minVec.Z = (minVec.Z < ptVector.Z) ? minVec.Z : ptVector.Z;
-
-            maxVec.X = (maxVec.X > ptVector.X) ? maxVec.X : ptVector.X;
-            maxVec.Y = (maxVec.Y > ptVector.Y) ? maxVec.Y : ptVector.Y;
-            maxVec.Z = (maxVec.Z > ptVector.Z) ? maxVec.Z : ptVector.Z;
+            minVec = Vector3.Min(minVec, ptVector);
+            maxVec = Vector3.Max(maxVec, ptVector);
         }
 
-        bounds = new Bounds(minVec, maxVec);
+        bounds = Bounds.CreateFromMinMax(minVec, maxVec);
     }
 
     public void RecalculateNormals()
