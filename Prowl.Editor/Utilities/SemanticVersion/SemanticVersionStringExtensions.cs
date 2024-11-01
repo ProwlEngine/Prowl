@@ -1,6 +1,6 @@
 using System;
 
-namespace SemVersion;
+namespace Prowl.Editor.Utilities.SemVersion;
 
 /// <summary>Contains extensions to the string class to improve comparison.</summary>
 internal static class SemanticVersionStringExtensions

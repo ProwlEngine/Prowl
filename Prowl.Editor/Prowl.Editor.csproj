@@ -72,7 +72,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Assets\SemanticVersion\" />
+    <Folder Include="Utilities\SemanticVersion\" />
   </ItemGroup>
 
 </Project>
