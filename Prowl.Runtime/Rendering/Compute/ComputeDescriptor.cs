@@ -87,5 +87,5 @@ public class ComputeDescriptor
     public void SetColorArray(string name, Color[] values) => _properties.SetColorArray(name, values);
     public void SetMatrixArray(string name, Matrix4x4F[] values) => _properties.SetMatrixArray(name, values);
 
-    public void SetBuffer(string name, GraphicsBuffer buffer) => _properties.SetBuffer(name, buffer);
+    public void SetBuffer(string name, GraphicsBuffer buffer, int start = 0, int length = -1) => _properties.SetBuffer(name, buffer);
 }

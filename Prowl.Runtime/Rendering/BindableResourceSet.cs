@@ -53,21 +53,25 @@ public class BindableResourceSet
                     break;
 
                 case ResourceKind.StructuredBufferReadOnly:
-                    GraphicsBuffer buffer = state._buffers.GetValueOrDefault(uniform.name, null) ?? GraphicsBuffer.Empty;
+                    (GraphicsBuffer? buffer, int start, int length) = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
+                    buffer ??= GraphicsBuffer.Empty;
 
                     if (!buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly))
                         buffer = GraphicsBuffer.EmptyRW;
 
-                    UpdateResource(buffer.Buffer, uniform.binding, ref recreateResourceSet);
+                    DeviceBufferRange range = new DeviceBufferRange(buffer.Buffer, (uint)start, length < 0 ? buffer.Buffer.SizeInBytes : (uint)length);
+                    UpdateResource(range, uniform.binding, ref recreateResourceSet);
                     break;
 
                 case ResourceKind.StructuredBufferReadWrite:
-                    GraphicsBuffer rwbuffer = state._buffers.GetValueOrDefault(uniform.name, null) ?? GraphicsBuffer.EmptyRW;
+                    (GraphicsBuffer? rwbuffer, int rwstart, int rwlength) = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
+                    rwbuffer ??= GraphicsBuffer.EmptyRW;
 
                     if (!rwbuffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
                         rwbuffer = GraphicsBuffer.EmptyRW;
 
-                    UpdateResource(rwbuffer.Buffer, uniform.binding, ref recreateResourceSet);
+                    DeviceBufferRange rwrange = new DeviceBufferRange(rwbuffer.Buffer, (uint)rwstart, rwlength < 0 ? rwbuffer.Buffer.SizeInBytes : (uint)rwlength);
+                    UpdateResource(rwrange, uniform.binding, ref recreateResourceSet);
                     break;
 
                 case ResourceKind.TextureReadOnly:
@@ -127,11 +131,11 @@ public class BindableResourceSet
 
     private void UpdateResource(BindableResource newResource, uint binding, ref bool wasChanged)
     {
-        if (description.BoundResources[binding].Resource != newResource.Resource)
-        {
-            wasChanged |= true;
-            description.BoundResources[binding] = newResource;
-        }
+        if (description.BoundResources[binding].Resource.Equals(newResource.Resource))
+            return;
+
+        wasChanged |= true;
+        description.BoundResources[binding] = newResource;
     }
 
 

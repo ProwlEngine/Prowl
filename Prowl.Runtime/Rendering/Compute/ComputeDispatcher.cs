@@ -3,37 +3,58 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 
 using Veldrid;
 
 namespace Prowl.Runtime.Rendering;
 
+
 public static class ComputeDispatcher
 {
-
     public static void Dispatch(ComputeDescriptor descriptor, int kernelIndex, uint groupsX, uint groupsY, uint groupsZ, GraphicsFence? fence = null)
     {
         CommandList cl = Graphics.GetCommandList();
 
+        if (fence == null)
+        {
+            fence = new GraphicsFence();
+            Graphics.SubmitResourcesForDisposal([cl, fence], fence);
+        }
+        else
+        {
+            Graphics.SubmitResourcesForDisposal([cl], fence);
+        }
+
+        Dispatch(descriptor, cl, kernelIndex, groupsX, groupsY, groupsZ, fence);
+    }
+
+
+    internal static void Dispatch(ComputeDescriptor descriptor, CommandList list, int kernelIndex, uint groupsX, uint groupsY, uint groupsZ, GraphicsFence? fence = null)
+    {
         ComputeKernel kernel = descriptor.Shader.Res.GetKernel(kernelIndex);
         ComputeVariant variant = kernel.GetVariant(descriptor._localKeywords);
         ComputePipeline pipeline = ComputePipelineCache.GetPipeline(variant);
 
-        cl.SetPipeline(pipeline.GetPipeline());
+        list.SetPipeline(pipeline.GetPipeline());
 
         BindableResourceSet bindable = pipeline.CreateResources();
 
-        List<IDisposable> toDispose = new();
+        List<IDisposable> toDispose = [];
 
-        ResourceSet set = bindable.BindResources(cl, descriptor._properties, toDispose);
+        ResourceSet set = bindable.BindResources(list, descriptor._properties, toDispose);
 
-        cl.SetComputeResourceSet(0, set);
+        list.SetComputeResourceSet(0, set);
 
-        cl.Dispatch(groupsX, groupsY, groupsZ);
+        if (fence == null)
+        {
+            fence = new GraphicsFence();
+            toDispose.Add(fence);
+        }
 
-        Graphics.SubmitCommandList(cl, fence);
+        list.Dispatch(groupsX, groupsY, groupsZ);
 
-        Graphics.SubmitResourcesForDisposal(toDispose);
+        Graphics.SubmitCommandList(list, fence);
+
+        Graphics.SubmitResourcesForDisposal(toDispose, fence);
     }
 }

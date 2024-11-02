@@ -8,6 +8,7 @@ using Prowl.Runtime.Rendering.Pipelines;
 
 namespace Prowl.Runtime;
 
+
 [ExecuteAlways]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
 public class MeshRenderer : MonoBehaviour, IRenderable

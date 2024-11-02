@@ -8,23 +8,18 @@ using Glslang.NET;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 
-using SPIRVCross.NET;
-
 using Veldrid;
 
-using Program = Glslang.NET.Program;
 using Shader = Glslang.NET.Shader;
 
-#pragma warning disable
-
 namespace Prowl.Editor;
+
 
 public struct ShaderCreationArgs
 {
     public string sourceCode;
     public EntryPoint[] entryPoints;
     public (int, int) shaderModel;
-    public Dictionary<string, HashSet<string>> combinations;
 }
 
 
@@ -66,6 +61,7 @@ public static partial class ShaderCompiler
             ShaderStages.TessellationEvaluation => ShaderStage.TessEvaluation,
             ShaderStages.Fragment => ShaderStage.Fragment,
             ShaderStages.Compute => ShaderStage.Compute,
+            _ => throw new Exception($"Unknown shader stage: {stages}")
         };
     }
 
@@ -153,7 +149,6 @@ public static partial class ShaderCompiler
     }
 
 
-
     private static void CheckMessages(string messageText, int sourceOffset, FileIncluder includer, List<CompilationMessage> messages)
     {
         // ERROR: File:Line:Column: Error text: Additional message.
@@ -195,7 +190,7 @@ public static partial class ShaderCompiler
     }
 
 
-    public static ShaderDescription[] Compile(ShaderCreationArgs args, KeywordState keywords, FileIncluder includer, List<CompilationMessage> messages)
+    public static ShaderDescription[]? Compile(ShaderCreationArgs args, KeywordState keywords, FileIncluder includer, List<CompilationMessage> messages)
     {
         ShaderDescription[] outputs = new ShaderDescription[args.entryPoints.Length];
 
@@ -281,127 +276,5 @@ public static partial class ShaderCompiler
         byte[] byteArr = new byte[arr.Length * sizeof(uint)];
         Buffer.BlockCopy(arr, 0, byteArr, 0, arr.Length * sizeof(uint));
         return byteArr;
-    }
-
-
-    public static ShaderVariant[] GenerateVariants(ShaderCreationArgs args, FileIncluder includer, List<CompilationMessage> messages)
-    {
-        List<KeyValuePair<string, HashSet<string>>> combinations = [.. args.combinations];
-        List<ShaderVariant> variantList = [];
-        List<KeyValuePair<string, string>> combination = new(combinations.Count);
-
-        using Context ctx = new Context();
-
-        void GenerateRecursive(int depth)
-        {
-            if (depth == combinations.Count) // Reached the end for this permutation, add a result.
-            {
-                variantList.Add(GenerateVariant(ctx, args, new(combination), includer, messages));
-                return;
-            }
-
-            var pair = combinations[depth];
-            foreach (var value in pair.Value) // Go down a level for every value
-            {
-                combination.Add(new(pair.Key, value));
-
-                GenerateRecursive(depth + 1);
-
-                combination.RemoveAt(combination.Count - 1); // Go up once we're done
-            }
-        }
-
-        GenerateRecursive(0);
-
-        return variantList.ToArray();
-    }
-
-
-    public static ShaderVariant GenerateVariant(Context ctx, ShaderCreationArgs args, KeywordState state, FileIncluder includer, List<CompilationMessage> messages)
-    {
-        ShaderDescription[] compiledSPIRV = Compile(args, state, includer, messages);
-
-        if (compiledSPIRV == null)
-            return null;
-
-        ReflectedResourceInfo info = Reflect(ctx, compiledSPIRV);
-
-        ShaderVariant variant = new ShaderVariant(state);
-
-        variant.Uniforms = info.uniforms;
-        variant.UniformStages = info.stages;
-        variant.VertexInputs = info.vertexInputs;
-
-        variant.Direct3D11Shaders = CrossCompile(ctx, GraphicsBackend.Direct3D11, compiledSPIRV);
-        variant.OpenGLShaders = CrossCompile(ctx, GraphicsBackend.OpenGL, compiledSPIRV);
-        variant.OpenGLESShaders = CrossCompile(ctx, GraphicsBackend.OpenGLES, compiledSPIRV);
-        variant.MetalShaders = CrossCompile(ctx, GraphicsBackend.Metal, compiledSPIRV);
-
-        variant.VulkanShaders = compiledSPIRV;
-
-        return variant;
-    }
-
-
-    public static ComputeVariant[] GenerateComputeVariants(ShaderCreationArgs args, FileIncluder includer, List<CompilationMessage> messages)
-    {
-        List<KeyValuePair<string, HashSet<string>>> combinations = [.. args.combinations];
-        List<ComputeVariant> variantList = [];
-        List<KeyValuePair<string, string>> combination = new(combinations.Count);
-
-        using Context ctx = new Context();
-
-        void GenerateRecursive(int depth)
-        {
-            if (depth == combinations.Count) // Reached the end for this permutation, add a result.
-            {
-                variantList.Add(GenerateComputeVariant(ctx, args, new(combination), includer, messages));
-                return;
-            }
-
-            var pair = combinations[depth];
-            foreach (var value in pair.Value) // Go down a level for every value
-            {
-                combination.Add(new(pair.Key, value));
-
-                GenerateRecursive(depth + 1);
-
-                combination.RemoveAt(combination.Count - 1); // Go up once we're done
-            }
-        }
-
-        GenerateRecursive(0);
-
-        return variantList.ToArray();
-    }
-
-
-    public static ComputeVariant GenerateComputeVariant(Context ctx, ShaderCreationArgs args, KeywordState state, FileIncluder includer, List<CompilationMessage> messages)
-    {
-        if (args.entryPoints == null || args.entryPoints.Length != 1)
-            return null;
-
-        ShaderDescription[] compiledSPIRV = Compile(args, state, includer, messages);
-
-        if (compiledSPIRV == null)
-            return null;
-
-        ReflectedResourceInfo info = Reflect(ctx, compiledSPIRV);
-
-        ComputeVariant variant = new ComputeVariant(state);
-
-        variant.Uniforms = info.uniforms;
-        variant.ThreadGroupSizeX = info.threadsX;
-        variant.ThreadGroupSizeY = info.threadsY;
-        variant.ThreadGroupSizeZ = info.threadsZ;
-
-        variant.Direct3D11Shader = CrossCompile(ctx, GraphicsBackend.Direct3D11, compiledSPIRV)[0];
-        variant.OpenGLShader = CrossCompile(ctx, GraphicsBackend.OpenGL, compiledSPIRV)[0];
-        variant.OpenGLESShader = CrossCompile(ctx, GraphicsBackend.OpenGLES, compiledSPIRV)[0];
-        variant.MetalShader = CrossCompile(ctx, GraphicsBackend.Metal, compiledSPIRV)[0];
-
-        variant.VulkanShader = compiledSPIRV[0];
-
-        return variant;
     }
 }

@@ -8,13 +8,11 @@ using SPIRVCross.NET;
 using Veldrid;
 
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Pipelines;
-
-#pragma warning disable
 
 namespace Prowl.Editor;
 
-public static partial class UniformReflector
+
+public static partial class ShaderCrossCompiler
 {
     public static Uniform[] GetUniforms(Reflector reflector, Resources resources)
     {
@@ -45,17 +43,17 @@ public static partial class UniformReflector
         return uniforms.ToArray();
     }
 
+
     static Uniform CreateStorageBuffer(Reflector reflector, ReflectedResource bufferResource)
     {
         uint binding = GetBinding(reflector, bufferResource.id);
-
-        var decoratedType = reflector.GetTypeHandle(bufferResource.type_id);
 
         if (reflector.HasDecoration(bufferResource.id, Decoration.NonWritable))
             return new Uniform(CleanseName(bufferResource.name), binding, ResourceKind.StructuredBufferReadOnly);
 
         return new Uniform(CleanseName(bufferResource.name), binding, ResourceKind.StructuredBufferReadWrite);
     }
+
 
     static Uniform CreateConstantBuffer(Reflector reflector, ReflectedResource bufferResource)
     {
@@ -74,7 +72,7 @@ public static partial class UniformReflector
         for (uint i = 0; i < baseType.MemberCount; i++)
         {
             TypeID memberID = baseType.GetMemberType(i);
-            var type = reflector.GetTypeHandle(memberID);
+            SPIRVCross.NET.Type type = reflector.GetTypeHandle(memberID);
 
             if (!IsPrimitiveType(type.BaseType))
                 continue;
@@ -115,6 +113,8 @@ public static partial class UniformReflector
                     BaseType.UInt32 or
                     BaseType.UInt64
                     => Runtime.Rendering.ValueType.UInt,
+
+                _ => throw new Exception($"Unknown BaseType while getting uniform: {type.BaseType}")
             };
 
             members.Add(member);
@@ -137,6 +137,7 @@ public static partial class UniformReflector
 
         return reflector.GetDecoration(id, Decoration.Binding);
     }
+
 
     static bool IsPrimitiveType(BaseType type)
     {

@@ -9,13 +9,11 @@ using SPIRVCross.NET;
 
 using Veldrid;
 
-#pragma warning disable
-
 namespace Prowl.Editor;
 
-public static partial class VertexInputReflector
-{
 
+public static partial class ShaderCrossCompiler
+{
     public delegate bool SemanticFormatter(string semantic, out VertexElementFormat format);
 
     public static VertexInput[] GetStageInputs(Reflector reflector, Resources resources, SemanticFormatter formatter)

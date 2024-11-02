@@ -29,9 +29,6 @@ public struct RenderBatch
 {
     public Material material;
     public List<int> renderIndices;
-
-    public static implicit operator RenderBatch(KeyValuePair<Material, List<int>> pair)
-        => Unsafe.As<KeyValuePair<Material, List<int>>, RenderBatch>(ref pair); // Less safe but also easier
 }
 
 
@@ -40,7 +37,7 @@ public abstract class RenderPipeline : EngineObject
     private static readonly List<IRenderable> s_renderables = [];
     public static int RenderableCount => s_renderables.Count;
 
-    private static readonly Dictionary<Material, List<int>> s_batchedRenderables = [];
+    private static readonly Dictionary<Material, RenderBatch> s_batchedRenderables = [];
 
     private static readonly List<IRenderableLight> s_lights = [];
 
@@ -51,13 +48,14 @@ public abstract class RenderPipeline : EngineObject
 
         Material material = renderable.GetMaterial();
 
-        if (!s_batchedRenderables.TryGetValue(material, out List<int> renderables))
+        if (!s_batchedRenderables.TryGetValue(material, out RenderBatch batch))
         {
-            renderables = [];
-            s_batchedRenderables.Add(material, renderables);
+            batch.material = material;
+            batch.renderIndices = [];
+            s_batchedRenderables.Add(material, batch);
         }
 
-        renderables.Add(s_renderables.Count - 1);
+        batch.renderIndices.Add(s_renderables.Count - 1);
     }
 
 
@@ -72,8 +70,8 @@ public abstract class RenderPipeline : EngineObject
     {
         s_renderables.Clear(); // Clear renderables
 
-        foreach (List<int> batch in s_batchedRenderables.Values)
-            batch.Clear(); // Clear batch indices
+        foreach (RenderBatch batch in s_batchedRenderables.Values)
+            batch.renderIndices.Clear(); // Clear batch indices
 
         s_batchedRenderables.Clear(); // Clear batch lookup
         s_lights.Clear(); // Clear lights
@@ -82,7 +80,7 @@ public abstract class RenderPipeline : EngineObject
 
     public static IEnumerable<RenderBatch> EnumerateBatches()
     {
-        return s_batchedRenderables.Select(x => (RenderBatch)x);
+        return s_batchedRenderables.Values;
     }
 
 

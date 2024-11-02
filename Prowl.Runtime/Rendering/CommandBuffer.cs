@@ -259,6 +259,9 @@ public class CommandBuffer : IDisposable
     public void SetMatrix(string name, System.Numerics.Matrix4x4 value)
         => _bufferProperties.SetMatrix(name, value);
 
+    public void SetBuffer(string name, GraphicsBuffer buffer, int start = 0, int length = -1)
+        => _bufferProperties.SetBuffer(name, buffer, start, length);
+
 
     internal void UpdatePipeline()
     {

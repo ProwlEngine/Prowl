@@ -1,18 +1,15 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.Text;
-
 using Prowl.Runtime;
-using Prowl.Runtime.Utils;
 using Prowl.Runtime.Rendering;
 
 using Veldrid;
 
 using Debug = Prowl.Runtime.Debug;
-using Shader = Prowl.Runtime.Shader;
 
 namespace Prowl.Editor;
+
 
 public static class ComputeParser
 {
@@ -25,31 +22,44 @@ public static class ComputeParser
 
         ComputeKernel[] kernels = new ComputeKernel[kernelNames.Length];
 
+        ShaderCreationArgs args;
+        args.sourceCode = input;
+        args.shaderModel = shaderModel;
+        args.entryPoints = [new EntryPoint(ShaderStages.Compute, "")];
+
+        using SPIRVCross.NET.Context context = new();
+
         for (int i = 0; i < kernelNames.Length; i++)
         {
-            Debug.Log("Compiling kernel " + kernelNames[i]);
+            string kernelName = kernelNames[i];
+            args.entryPoints[0].Name = kernelName;
 
-            Dictionary<string, HashSet<string>> keywords = new() { { "", [""] } };
+            Debug.Log("Compiling kernel " + kernelName);
 
-            ShaderCreationArgs args;
-            args.combinations = keywords;
-            args.sourceCode = input;
-            args.shaderModel = shaderModel;
-            args.entryPoints = [new EntryPoint(ShaderStages.Compute, kernelNames[i])];
+            Dictionary<string, HashSet<string>> keywords = [];
+            List<KeywordState> permutations = VariantCompiler.GeneratePermutations([.. keywords]);
 
-            List<CompilationMessage> compilerMessages = [];
+            List<CompilationMessage> messages = [];
 
-            ComputeVariant[] variants = ShaderCompiler.GenerateComputeVariants(args, includer, compilerMessages);
+            ComputeVariant[] variants = new ComputeVariant[permutations.Count];
 
-            LogCompilationMessages(name, compilerMessages, includer);
-
-            foreach (ComputeVariant variant in variants)
+            bool compiled = true;
+            for (int j = 0; j < permutations.Count; j++)
             {
+                ComputeVariant? variant = VariantCompiler.CompileComputeVariant(context, args, permutations[j], includer, messages);
+
                 if (variant == null)
-                    return false;
+                    compiled = false;
+                else
+                    variants[j] = variant!;
             }
 
-            kernels[i] = new ComputeKernel(kernelNames[i], keywords, variants);
+            LogCompilationMessages(kernelName, messages, includer);
+
+            if (!compiled)
+                return false;
+
+            kernels[i] = new ComputeKernel(kernelName, keywords, variants);
         }
 
         shader = new ComputeShader(name, kernels);
