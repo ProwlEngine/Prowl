@@ -79,15 +79,12 @@ public class DefaultRenderPipeline : RenderPipeline
             }
         }
 
-        buffer.SetVector("_SunDir", sunDirection);
-
-
         if (drawSkybox)
         {
             buffer.SetMaterial(s_skybox);
 
             buffer.SetMatrix("_Matrix_VP", (camera.GetViewMatrix(false) * projection).ToFloat());
-            //buffer.SetVector("_SunDir", sunDirection);
+            buffer.SetVector("_SunDir", sunDirection);
 
             buffer.DrawSingle(s_skyDome);
         }
