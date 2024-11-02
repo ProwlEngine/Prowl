@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Diagnostics;
+
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
@@ -348,6 +350,9 @@ public static partial class AssetDatabase
     /// <returns>True if the asset was reimported successfully, false otherwise.</returns>
     public static bool Reimport(FileInfo assetFile, bool disposeExisting = true)
     {
+        Stopwatch sw = new();
+        sw.Start();
+
         ArgumentNullException.ThrowIfNull(assetFile);
 
         // Dispose if we already have it
@@ -358,19 +363,19 @@ public static partial class AssetDatabase
         // make sure path exists
         if (!File.Exists(assetFile.FullName))
         {
-            Debug.LogError($"Failed to import {ToRelativePath(assetFile)}. Asset does not exist.");
+            Debug.LogError($"Failed to import {ToRelativePath(assetFile)}. Asset does not exist. Took {sw.ElapsedMilliseconds}ms");
             return false;
         }
 
         var meta = MetaFile.Load(assetFile);
         if (meta == null)
         {
-            Debug.LogError($"No valid meta file found for asset: {ToRelativePath(assetFile)}");
+            Debug.LogError($"No valid meta file found for asset: {ToRelativePath(assetFile)} Took {sw.ElapsedMilliseconds}ms");
             return false;
         }
         if (meta.importer == null)
         {
-            Debug.LogError($"No valid importer found for asset: {ToRelativePath(assetFile)}");
+            Debug.LogError($"No valid importer found for asset: {ToRelativePath(assetFile)} Took {sw.ElapsedMilliseconds}ms");
             return false;
         }
 
@@ -382,13 +387,13 @@ public static partial class AssetDatabase
         }
         catch (Exception e)
         {
-            Debug.LogException(new Exception($"Failed to import {ToRelativePath(assetFile)}", e));
+            Debug.LogException(new Exception($"Failed to import {ToRelativePath(assetFile)} Took {sw.ElapsedMilliseconds}ms", e));
             return false; // Import failed
         }
 
         if (!ctx.HasMain)
         {
-            Debug.LogException(new Exception($"Failed to import {ToRelativePath(assetFile)}. No main object found."));
+            Debug.LogException(new Exception($"Failed to import {ToRelativePath(assetFile)}. No main object found. Took {sw.ElapsedMilliseconds}ms"));
             return false; // Import failed no Main Object
         }
 
@@ -414,7 +419,7 @@ public static partial class AssetDatabase
         meta.dependencies = dependencies.ToList();
         meta.Save();
 
-        Debug.Log($"Reimported {Path.GetRelativePath(Project.Active.ProjectPath, assetFile.FullName)}.");
+        Debug.Log($"Reimported {Path.GetRelativePath(Project.Active.ProjectPath, assetFile.FullName)}. Took {sw.ElapsedMilliseconds}ms");
         return true;
     }
 
