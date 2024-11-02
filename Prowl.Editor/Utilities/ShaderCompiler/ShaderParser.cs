@@ -115,6 +115,8 @@ public static class ShaderParser
             return false;
         }
 
+        using SPIRVCross.NET.Context context = new();
+
         ShaderPass[] passes = new ShaderPass[parsedPasses.Count];
 
         for (int i = 0; i < passes.Length; i++)
@@ -135,7 +137,6 @@ public static class ShaderParser
             string sourceCode = sourceBuilder.ToString();
 
             ShaderCreationArgs args;
-            args.combinations = passDesc.Keywords ?? [];
             args.sourceCode = sourceCode;
 
             if (!ParseProgramInfo(sourceCode, includer, parsedPass.ProgramStartLine, out args.entryPoints, out args.shaderModel))
@@ -153,17 +154,29 @@ public static class ShaderParser
                 return false;
             }
 
-            List<CompilationMessage> compilerMessages = [];
 
-            ShaderVariant[] variants = ShaderCompiler.GenerateVariants(args, includer, compilerMessages);
+            Dictionary<string, HashSet<string>> keywords = passDesc.Keywords ?? [];
+            List<KeywordState> permutations = VariantCompiler.GeneratePermutations([.. keywords]);
 
-            LogCompilationMessages(name, compilerMessages, includer, parsedPass.ProgramStartLine, globalDefaults);
+            List<CompilationMessage> messages = [];
 
-            foreach (ShaderVariant variant in variants)
+            ShaderVariant[] variants = new ShaderVariant[permutations.Count];
+
+            bool compiled = true;
+            for (int j = 0; j < permutations.Count; j++)
             {
+                ShaderVariant? variant = VariantCompiler.CompileVariant(context, args, permutations[j], includer, messages);
+
                 if (variant == null)
-                    return false;
+                    compiled = false;
+                else
+                    variants[j] = variant!;
             }
+
+            LogCompilationMessages(name, messages, includer, parsedPass.ProgramStartLine, globalDefaults);
+
+            if (!compiled)
+                return false;
 
             passes[i] = new ShaderPass(parsedPass.Name, passDesc, variants);
         }

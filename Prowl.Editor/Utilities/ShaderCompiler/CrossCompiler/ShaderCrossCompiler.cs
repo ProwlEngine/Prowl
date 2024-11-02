@@ -25,7 +25,7 @@ public struct ReflectedResourceInfo
     public uint threadsX, threadsY, threadsZ;
 }
 
-public static partial class ShaderCompiler
+public static partial class ShaderCrossCompiler
 {
     public static ReflectedResourceInfo Reflect(Context context, ShaderDescription[] compiledSPIRV)
     {
@@ -48,12 +48,12 @@ public static partial class ShaderCompiler
             var resources = compiler.CreateShaderResources();
 
             if (shader.Stage == ShaderStages.Vertex)
-                vertexInputs = VertexInputReflector.GetStageInputs(compiler, resources, Mesh.MeshSemantics.TryGetValue);
+                vertexInputs = GetStageInputs(compiler, resources, Mesh.MeshSemantics.TryGetValue);
 
             if (shader.Stage == ShaderStages.Compute)
                 ComputeThreadReflector.GetThreadgroupSizes(compiler, out kX, out kY, out kZ);
 
-            var stageUniforms = UniformReflector.GetUniforms(compiler, resources);
+            var stageUniforms = GetUniforms(compiler, resources);
 
             MergeUniforms(uniforms, stages, stageUniforms, shader.Stage);
         }

@@ -1,15 +1,12 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-#pragma warning disable
-
-using System;
 using Prowl.Runtime;
 
 using Glslang.NET;
-using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor;
+
 
 public class FileIncluder
 {
@@ -57,7 +54,7 @@ public class FileIncluder
             result.headerData = " ";
             result.headerName = " ";
 
-            if (!parentIncluder.ResolveHeader(includeText, includerPath, out string fullPath, out string parsedHeader))
+            if (!parentIncluder.ResolveHeader(includeText, includerPath, out string? fullPath, out string parsedHeader))
             {
                 CompilationMessage msg = new CompilationMessage()
                 {
@@ -82,7 +79,7 @@ public class FileIncluder
             }
 
             result.headerName = parsedHeader;
-            result.headerData = File.ReadAllText(fullPath);
+            result.headerData = File.ReadAllText(fullPath!);
 
             return result;
         }
@@ -99,7 +96,7 @@ public class FileIncluder
     }
 
 
-    public bool ResolveHeader(string rawHeader, string includer, out string fullPath, out string parsedHeader)
+    public bool ResolveHeader(string rawHeader, string includer, out string? fullPath, out string parsedHeader)
     {
         string filePath = rawHeader;
 
