@@ -93,4 +93,12 @@ public class Camera : MonoBehaviour
 
         return proj;
     }
+
+    public BoundingFrustum GetFrustum(Vector2 resolution)
+    {
+        Matrix4x4 view = GetViewMatrix();
+        Matrix4x4 proj = GetProjectionMatrix(resolution, true);
+
+        return new(view * proj);
+    }
 }
