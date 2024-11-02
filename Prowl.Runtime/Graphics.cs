@@ -58,7 +58,7 @@ public static partial class Graphics
     public static bool IsOpenGL => Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES;
     public static bool IsVulkan => Device.BackendType == GraphicsBackend.Vulkan;
 
-    private static readonly List<IDisposable> s_disposables = new();
+    private static readonly List<(List<IDisposable>, GraphicsFence?)> s_disposables = new();
 
     public static bool VSync
     {
@@ -98,10 +98,16 @@ public static partial class Graphics
         RenderTexture.UpdatePool();
         RenderPipeline.ClearRenderables();
 
-        foreach (IDisposable disposable in s_disposables)
-            disposable.Dispose();
+        for (int i = s_disposables.Count - 1; i >= 0; i--)
+        {
+            (List<IDisposable> resources, GraphicsFence? fence) = s_disposables[i];
 
-        s_disposables.Clear();
+            if (fence == null || fence.Fence.Signaled)
+            {
+                resources.ForEach(x => x.Dispose());
+                s_disposables.RemoveAt(i);
+            }
+        }
 
         if (Device.SwapchainFramebuffer.Width != Screen.Width || Device.SwapchainFramebuffer.Height != Screen.Height)
             Device.ResizeMainWindow((uint)Screen.Width, (uint)Screen.Height);
@@ -146,9 +152,9 @@ public static partial class Graphics
         Device.WaitForFences(fences.Select(x => x.Fence).ToArray(), waitAll, timeout);
     }
 
-    internal static void SubmitResourcesForDisposal(IEnumerable<IDisposable> resources)
+    internal static void SubmitResourcesForDisposal(IEnumerable<IDisposable> resources, GraphicsFence? operationFence = null)
     {
-        s_disposables.AddRange(resources);
+        s_disposables.Add((new(resources), operationFence));
     }
 
     internal static void Dispose()
