@@ -55,7 +55,7 @@ public class EditorStylePrefs : ScriptableSingleton<EditorStylePrefs>
     public Color WindowBGTwo = new Color(25, 27, 32);
     public Color Borders = new(49, 52, 66);
     public Color Hovering = Color.white * 0.8f;
-    public Color Highlighted = Indigo;
+    public Color Highlighted = new(25, 72, 133);
     public Color Ping = Yellow;
     public Color DropHighlight = Orange;
     public Color Warning = Red;
