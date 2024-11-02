@@ -194,10 +194,10 @@ public class CommandBuffer : IDisposable
             _commandList.ResolveTexture(src.ColorBuffers[i].InternalTexture, dest.ColorBuffers[i].InternalTexture);
     }
 
-    public void SetViewport(uint viewport, int x, int y, int width, int height, int z, int depth)
+    public void SetViewport(uint viewport, int x, int y, int width, int height, float z, float depth)
         => _commandList.SetViewport(viewport, new Viewport(x, y, width, height, z, depth));
 
-    public void SetViewports(int x, int y, int width, int height, int z, int depth)
+    public void SetViewports(int x, int y, int width, int height, float z, float depth)
         => _commandList.SetViewports(new Viewport(x, y, width, height, z, depth));
 
     public void SetFullViewport(uint index = 0)
