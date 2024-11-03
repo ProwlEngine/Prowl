@@ -20,6 +20,7 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material s_defaultMaterial;
     private static Material s_skybox;
     private static Material s_gizmo;
+    private static Material s_tonemapper;
     private static Mesh s_skyDome;
 
     public static DefaultRenderPipeline Default = new();
@@ -35,6 +36,7 @@ public class DefaultRenderPipeline : RenderPipeline
         s_defaultMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Standard.shader"));
         s_skybox ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ProceduralSky.shader"));
         s_gizmo ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Gizmo.shader"));
+        s_tonemapper ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ToneMapper.shader"));
 
         if (s_skyDome == null)
         {
@@ -56,7 +58,9 @@ public class DefaultRenderPipeline : RenderPipeline
         bool clearDepth = camera.ClearMode == CameraClearMode.DepthOnly || camera.ClearMode == CameraClearMode.DepthColor;
         bool drawSkybox = camera.ClearMode == CameraClearMode.Skybox;
 
-        buffer.SetRenderTarget(target);
+        RenderTexture forward = RenderTexture.GetTemporaryRT(target.Width, target.Height, [PixelFormat.R16_G16_B16_A16_Float]);
+
+        buffer.SetRenderTarget(forward);
         buffer.ClearRenderTarget(clearDepth || drawSkybox, clearColor || drawSkybox, camera.ClearColor);
 
         Matrix4x4 view = camera.GetViewMatrix(!cameraRelative);
@@ -82,7 +86,7 @@ public class DefaultRenderPipeline : RenderPipeline
         PrepareShadowAtlas();
 
         CreateLightBuffer(buffer, camera, lights);
-        buffer.SetRenderTarget(target); // Return target, as shadow map rendering may have changed it
+        buffer.SetRenderTarget(forward); // Return target, as shadow map rendering may have changed it
         buffer.SetTexture("_ShadowAtlas", ShadowMap.DepthBuffer);
         buffer.SetBuffer("_Lights", LightBuffer);
         buffer.SetInt("_LightCount", LightCount);
@@ -177,9 +181,19 @@ public class DefaultRenderPipeline : RenderPipeline
         }
         */
 
+
+        buffer.SetRenderTarget(target);
+        buffer.ClearRenderTarget(true, true , Color.black);
+        buffer.SetTexture("_MainTexture", forward.ColorBuffers[0]);
+        buffer.SetFloat("_Contrast", 1f);
+        buffer.SetFloat("_Saturation", 1f);
+        buffer.SetMaterial(s_tonemapper, 0);
+        buffer.DrawSingle(Mesh.FullscreenMesh);
+
         Graphics.SubmitCommandBuffer(buffer);
 
         CommandBufferPool.Release(buffer);
+        RenderTexture.ReleaseTemporaryRT(forward);
     }
 
     private static void DrawRenderables(CommandBuffer buffer, Vector3 cameraPosition, Matrix4x4 vp, Matrix4x4 view, Matrix4x4 proj, BoundingFrustum? worldFrustum = null, bool shadowPass = false)
