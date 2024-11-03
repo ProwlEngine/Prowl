@@ -9,8 +9,8 @@ namespace Prowl.Runtime.Rendering;
 
 public sealed class GraphicsBuffer : IDisposable
 {
-    public static readonly GraphicsBuffer Empty = new GraphicsBuffer(0, 0, false);
-    public static readonly GraphicsBuffer EmptyRW = new GraphicsBuffer(0, 0, true);
+    public static readonly GraphicsBuffer Empty = new GraphicsBuffer(1, 4, false);
+    public static readonly GraphicsBuffer EmptyRW = new GraphicsBuffer(1, 4, true);
 
 
     public DeviceBuffer Buffer { get; private set; }
