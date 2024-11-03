@@ -43,7 +43,6 @@ Pass "ProceduralSky"
 
         float3 _SunDir;
 
-
 		struct ScatteringParams
 		{
 			float sunRadius;

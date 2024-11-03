@@ -90,6 +90,7 @@ public class DefaultRenderPipeline : RenderPipeline
         buffer.SetTexture("_ShadowAtlas", ShadowMap.DepthBuffer);
         buffer.SetBuffer("_Lights", LightBuffer);
         buffer.SetInt("_LightCount", LightCount);
+        buffer.SetVector("_CameraWorldPos", cameraPosition);
 
         if (drawSkybox)
         {
