@@ -76,7 +76,7 @@ public static partial class Graphics
             SyncToVerticalBlank = VSync,
             ResourceBindingModel = ResourceBindingModel.Default,
             HasMainSwapchain = true,
-            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+            SwapchainDepthFormat = PixelFormat.D16_UNorm,
             SwapchainSrgbFormat = false,
         };
 

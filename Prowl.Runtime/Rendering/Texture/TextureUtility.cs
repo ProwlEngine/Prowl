@@ -176,6 +176,9 @@ public static class TextureUtility
 
     public static PixelFormat GetBestSupportedDepthFormat(bool needsStencil = false, TextureUsage usage = TextureUsage.DepthStencil)
     {
+        if (RuntimeUtils.IsMac())
+            return PixelFormat.D16_UNorm;
+
         if (Graphics.Device.GetPixelFormatSupport(PixelFormat.D24_UNorm_S8_UInt, TextureType.Texture2D, usage))
             return PixelFormat.D24_UNorm_S8_UInt;
 
