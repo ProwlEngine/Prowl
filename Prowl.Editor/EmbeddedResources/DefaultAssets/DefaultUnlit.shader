@@ -94,41 +94,84 @@ Pass "TestShader"
             return float4(color) / 255.0;
         }
 
-        const float _ShadowSoftness = 2.0;
-        const int _PCFSamples = 32;
+		// Constants for shadow calculation
+		static const float MIN_PENUMBRA_SIZE = 0.5;
+		static const float BIAS_SCALE = 0.001;
+		static const float _ShadowSoftness = 2.0;
+		static const int _PCFSamples = 32;
+		static const int _BlockerSearchSamples = 16;
 		
+		float2 VogelDiskSample(int sampleIndex, int samplesCount, float phi)
+		{
+			float GoldenAngle = 2.4f;
+			
+			float r = sqrt(sampleIndex + 0.5f) / sqrt(samplesCount);
+			float theta = sampleIndex * GoldenAngle + phi;
+			
+			float sine, cosine;
+			sincos(theta, sine, cosine);
+			
+			return float2(r * cosine, r * sine);
+		}
+		
+		float InterleavedGradientNoise(float2 position_screen)
+		{
+			float3 magic = float3(0.06711056f, 0.00583715f, 52.9829189f);
+			return frac(magic.z * frac(dot(position_screen, magic.xy)));
+		}
+		
+		
+		// Improved random function with better distribution
 		float random(float2 seed)
 		{
-			return frac(sin(dot(seed, float2(12.9898, 78.233))) * 43758.5453);
+			return frac(sin(dot(seed, float2(12.9898, 78.233))) * 43758.5453123);
 		}
-	
+		
+		// Improved Poisson disk sampling with better distribution
 		float2 poissonDisk(int i, int samplesCount, float2 randomSeed)
 		{
-			float goldenAngle = 2.4;
+			float goldenAngle = 2.399963229728653; // (3 - sqrt(5)) * PI
 			float theta = i * goldenAngle + random(randomSeed) * 2.0 * PI;
-			float r = sqrt(float(i) + 0.5) / sqrt(float(samplesCount));
-			return float2(r * cos(theta), r * sin(theta));
+			
+			// Improved radius calculation for more uniform distribution
+			float radius = sqrt((float(i) + 0.5) / float(samplesCount));
+			radius = lerp(0.1, 1.0, radius); // Ensure minimum spacing between samples
+			
+			return float2(radius * cos(theta), radius * sin(theta));
 		}
-	
-		float FindBlockerDistance(float2 uv, float2 lightPixelSize, float currentDepth, Light light)
+		
+		// Improved blocker search with early exit and better averaging
+		float FindBlockerDistance(float2 uv, float2 lightPixelSize, float currentDepth, Light light, float2 screenPos)
 		{
-			const int blockerSearchSamples = 16;
-			float searchWidth = light.ShadowData.x * (currentDepth - light.ShadowData.y) / currentDepth;
+			float searchWidth = light.ShadowData.x * (currentDepth - light.ShadowData.z) / currentDepth;
+			searchWidth = max(searchWidth, MIN_PENUMBRA_SIZE); // Ensure minimum search area
 			
 			float blockerSum = 0.0;
 			float numBlockers = 0.0;
+			float maxBlockerDistance = 0.0;
 			
-			for(int i = 0; i < blockerSearchSamples; i++)
+			// Get rotated angle from screen position
+			float phi = InterleavedGradientNoise(screenPos) * 2.0 * PI;
+			
+			[unroll]
+			for(int i = 0; i < _BlockerSearchSamples; i++)
 			{
-				float2 offset = poissonDisk(i, blockerSearchSamples, uv) * searchWidth;
+				float2 offset = VogelDiskSample(i, _BlockerSearchSamples, phi) * searchWidth;
 				float2 sampleUV = uv + offset * lightPixelSize;
 				
 				float shadowMapDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, sampleUV).r;
+				float bias = BIAS_SCALE * tan(acos(dot(light.DirectionRange.xyz, float3(0, 1, 0))));
+				bias = clamp(bias, 0.0, 0.01);
 				
-				if(shadowMapDepth < currentDepth - light.ShadowData.z)
+				if(shadowMapDepth < currentDepth - light.ShadowData.z - bias)
 				{
 					blockerSum += shadowMapDepth;
+					maxBlockerDistance = max(maxBlockerDistance, currentDepth - shadowMapDepth);
 					numBlockers++;
+					
+					// Early exit if we have enough samples
+					if(numBlockers > _BlockerSearchSamples * 0.7)
+						break;
 				}
 			}
 			
@@ -137,29 +180,44 @@ Pass "TestShader"
 				
 			return blockerSum / numBlockers;
 		}
-	
-		float PCF_Filter(float2 uv, float2 lightPixelSize, float currentDepth, float filterRadius, Light light)
+		
+		// Improved PCF filtering with depth-dependent kernel size
+		float PCF_Filter(float2 uv, float2 lightPixelSize, float currentDepth, float filterRadius, Light light, float2 screenPos)
 		{
 			float sum = 0.0;
+			float weightSum = 0.0;
+			
+			int qualitySamples = int(light.PositionType.x);
+			// Get rotated angle from screen position
+			float phi = InterleavedGradientNoise(screenPos) * 2.0 * PI;
 			
 			[loop]
-			for(int i = 0; i < _PCFSamples; i++)
+			for(int i = 0; i < qualitySamples; i++)
 			{
-				float2 offset = poissonDisk(i, _PCFSamples, uv) * filterRadius;
+				float2 offset = VogelDiskSample(i, qualitySamples, phi) * filterRadius;
 				float2 sampleUV = uv + offset * lightPixelSize;
 				
+				// Calculate sample weight based on distance from center
+				float weight = 1.0 - length(offset) / filterRadius;
+				weight = max(0.0, weight * weight); // Quadratic falloff
+				
 				float shadowMapDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, sampleUV).r;
-				sum += (currentDepth - light.ShadowData.z) > shadowMapDepth ? 1.0 : 0.0;
+				float bias = BIAS_SCALE * tan(acos(dot(light.DirectionRange.xyz, float3(0, 1, 0))));
+				bias = clamp(bias, 0.0, 0.01);
+				
+				sum += ((currentDepth - light.ShadowData.z - bias) > shadowMapDepth ? 1.0 : 0.0) * weight;
+				weightSum += weight;
 			}
 			
-			return sum / _PCFSamples;
+			return sum / weightSum;
 		}
-	
-		float PCSS(float4 fragPosLightSpace, Light light)
+		
+		float PCSS(float4 fragPosLightSpace, Light light, float2 screenPos)
 		{
 			float3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
 			projCoords = projCoords * 0.5 + 0.5;
 			
+			// Early exit for positions outside shadow map
 			if (any(projCoords > 1.0) || any(projCoords < 0.0))
 				return 0.0;
 			
@@ -177,48 +235,24 @@ Pass "TestShader"
 			float currentDepth = projCoords.z;
 			float2 lightPixelSize = 1.0 / float2(4096.0, 4096.0);
 			
-			// STEP 1: Blocker search
-			float blockerDistance = FindBlockerDistance(atlasCoords, lightPixelSize, currentDepth, light);
-			if(blockerDistance < 0.0)
-				return 0.0;
-				
-			// STEP 2: Penumbra size estimate
-			float penumbraWidth = (currentDepth - blockerDistance) * light.ShadowData.x / blockerDistance;
+			//// STEP 1: Blocker search
+			//float blockerDistance = FindBlockerDistance(atlasCoords, lightPixelSize, currentDepth, light, screenPos);
+			//if(blockerDistance < 0.0)
+			//	return 0.0;
+			//	
+			//// STEP 2: Penumbra size estimate
+			//float penumbraWidth = (currentDepth - blockerDistance) * light.ShadowData.x / blockerDistance;
+			//penumbraWidth = max(penumbraWidth, MIN_PENUMBRA_SIZE);
+			float penumbraWidth = light.ShadowData.x;
 			
 			// STEP 3: Filtering
-			return PCF_Filter(atlasCoords, lightPixelSize, currentDepth, penumbraWidth * _ShadowSoftness, light);
+			return PCF_Filter(atlasCoords, lightPixelSize, currentDepth, penumbraWidth * _ShadowSoftness, light, screenPos);
 		}
-	
-		// Replace the old ShadowCalculation function with PCSS
-		float ShadowCalculation(float4 fragPosLightSpace, Light light)
+		
+		float ShadowCalculation(float4 fragPosLightSpace, Light light, float2 screenPos)
 		{
-			return PCSS(fragPosLightSpace, light);
+			return PCSS(fragPosLightSpace, light, screenPos);
 		}
-
-        //float ShadowCalculation(float4 fragPosLightSpace, Light light)
-        //{
-        //    float3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-        //    projCoords = projCoords * 0.5 + 0.5;
-        //    
-        //    if (any(projCoords > 1.0) || any(projCoords < 0.0))
-        //        return 0.0;
-        //    
-        //    float AtlasX = (float)light.AtlasX;
-        //    float AtlasY = (float)light.AtlasY;
-        //    float AtlasWidth = (float)light.AtlasWidth;
-        //    
-        //    float2 atlasCoords;
-        //    atlasCoords.x = AtlasX + (projCoords.x * AtlasWidth);
-        //    atlasCoords.y = AtlasY + ((1.0 - projCoords.y) * AtlasWidth);
-        //    
-        //    atlasCoords /= float2(4096.0, 4096.0);
-        //    atlasCoords.y = 1.0 - atlasCoords.y;
-        //    
-        //    float closestDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, atlasCoords).r;
-        //    float currentDepth = projCoords.z;
-        //    
-        //    return (currentDepth - light.ShadowData.z) > closestDepth ? 1.0 : 0.0;
-        //}
 
         Varyings Vertex(Attributes input)
         {
