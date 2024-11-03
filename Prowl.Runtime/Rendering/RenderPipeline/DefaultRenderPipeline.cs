@@ -301,11 +301,13 @@ public class DefaultRenderPipeline : RenderPipeline
                     buffer.SetViewports(slot.Value.x, slot.Value.y, res, res, 0, 1000);
 
                     light.GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 proj);
-                    if(cameraRelative)
+                    BoundingFrustum frustum = new(view * proj);
+                    if (cameraRelative)
                         view.Translation = Vector3.zero;
                     Matrix4x4 lightVP = view * proj;
 
-                    DrawRenderables(buffer, light.GetLightPosition(), lightVP, view, proj, null, true);
+
+                    DrawRenderables(buffer, light.GetLightPosition(), lightVP, view, proj, frustum, true);
 
                     buffer.SetFullViewports();
                 }
