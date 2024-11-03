@@ -163,11 +163,10 @@ public class CommandBuffer : IDisposable
 
     public void Blit(Veldrid.Texture source, Framebuffer target)
     {
-        BlitMaterial.SetRawTexture("_MainTexture", source);
         SetRenderTarget(target);
         SetMaterial(BlitMaterial, 0);
-        SetDrawData(Mesh.FullscreenMesh);
-        DrawIndexed((uint)Mesh.FullscreenMesh.IndexCount, 0, 1, 0, 0);
+        _bufferProperties.SetRawTexture("_MainTexture", source);
+        DrawSingle(Mesh.FullscreenMesh);
     }
 
     public void SetDrawData(IGeometryDrawData drawData)
