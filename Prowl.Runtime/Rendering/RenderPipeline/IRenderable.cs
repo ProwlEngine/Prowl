@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.InteropServices;
+
 namespace Prowl.Runtime.Rendering.Pipelines;
 
 public interface IRenderable
@@ -23,9 +25,27 @@ public enum LightType
 
 public interface IRenderableLight
 {
-    public Material GetMaterial();
+    public int GetLightID();
+    public LightType GetLightType();
+    public Vector3 GetLightPosition();
+    public Vector3 GetLightDirection();
+    public bool DoCastShadows();
+    public void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection);
 
-    public void GetRenderingData(out LightType type, out Vector3 facingDirection);
+    public abstract GPULight GetGPULight(int res);
+}
 
-    public void GetCullingData(out bool isRenderable, out bool isCullable, out Bounds bounds);
+[StructLayout(LayoutKind.Sequential)]
+public struct GPULight
+{
+    public System.Numerics.Vector4 PositionType;
+    public System.Numerics.Vector4 DirectionRange;
+    public uint Color;
+    public float Intensity;
+    public System.Numerics.Vector2 SpotData;
+    public System.Numerics.Vector4 ShadowData;
+
+    public System.Numerics.Matrix4x4 ShadowMatrix;
+    public int AtlasX, AtlasY, AtlasWidth;
+    public int Padding;
 }

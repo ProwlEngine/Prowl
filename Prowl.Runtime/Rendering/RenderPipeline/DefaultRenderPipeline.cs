@@ -3,8 +3,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Veldrid;
+
+using static Prowl.Runtime.Light;
 
 namespace Prowl.Runtime.Rendering.Pipelines;
 
@@ -21,6 +24,9 @@ public class DefaultRenderPipeline : RenderPipeline
 
     public static DefaultRenderPipeline Default = new();
 
+    private static RenderTexture? ShadowMap;
+    private static GraphicsBuffer? LightBuffer;
+    private static int LightCount;
 
     private static void ValidateDefaults()
     {
@@ -60,24 +66,27 @@ public class DefaultRenderPipeline : RenderPipeline
 
         Matrix4x4 vp = view * projection;
 
-        BoundingFrustum worldFrustum = new(camera.GetViewMatrix() * projection);
+        BoundingFrustum worldFrustum = camera.GetFrustum(data.TargetResolution);
 
-        System.Numerics.Matrix4x4 floatVP = vp.ToFloat();
-
-        List<IRenderableLight> lights = GetLights();
         Vector3 sunDirection = Vector3.up;
 
+        List<IRenderableLight> lights = GetLights();
         if (lights.Count > 0)
         {
             IRenderableLight light0 = lights[0];
 
-            light0.GetRenderingData(out LightType type, out Vector3 facingDirection);
-
-            if (type == LightType.Directional)
-            {
-                sunDirection = facingDirection;
-            }
+            if (light0.GetLightType() == LightType.Directional)
+                sunDirection = light0.GetLightDirection();
         }
+
+        PrepareShadowAtlas();
+
+        CreateLightBuffer(buffer, camera, lights);
+        buffer.SetRenderTarget(target); // Return target, as shadow map rendering may have changed it
+
+        buffer.SetTexture("_ShadowAtlas", ShadowMap.DepthBuffer);
+        buffer.SetBuffer("_Lights", LightBuffer);
+        buffer.SetInt("_LightCount", LightCount);
 
         if (drawSkybox)
         {
@@ -89,37 +98,7 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.DrawSingle(s_skyDome);
         }
 
-
-        foreach (RenderBatch batch in EnumerateBatches())
-        {
-            buffer.SetMaterial(batch.material);
-
-            foreach (int renderIndex in batch.renderIndices)
-            {
-                IRenderable renderable = GetRenderable(renderIndex);
-
-                if (CullRenderable(renderable, worldFrustum))
-                    continue;
-
-                renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
-
-                if (cameraRelative)
-                    model.Translation -= cameraPosition;
-
-                // model = Graphics.GetGPUModelMatrix(model);
-
-                buffer.ApplyPropertyState(properties);
-
-                buffer.SetColor("_MainColor", Color.white);
-                buffer.SetMatrix("_Matrix_MVP", model.ToFloat() * floatVP);
-
-                buffer.UpdateBuffer("_PerDraw");
-
-                buffer.SetDrawData(drawData);
-                buffer.DrawIndexed((uint)drawData.IndexCount, 0, 1, 0, 0);
-            }
-        }
-
+        DrawRenderables(buffer, cameraPosition, vp, view, projection, worldFrustum);
 
         if (data.DisplayGrid)
         {
@@ -204,6 +183,162 @@ public class DefaultRenderPipeline : RenderPipeline
         CommandBufferPool.Release(buffer);
     }
 
+    private static void DrawRenderables(CommandBuffer buffer, Vector3 cameraPosition, Matrix4x4 vp, Matrix4x4 view, Matrix4x4 proj, BoundingFrustum? worldFrustum = null, bool shadowPass = false)
+    {
+        foreach (RenderBatch batch in EnumerateBatches())
+        {
+            if (!shadowPass)
+            {
+                buffer.SetMaterial(batch.material);
+            }
+            else
+            {
+                int pass = batch.material.Shader.Res.GetPassIndex("ShadowPass");
+                buffer.SetMaterial(batch.material, pass != -1 ? pass : 0);
+            }
+
+            foreach (int renderIndex in batch.renderIndices)
+            {
+                IRenderable renderable = GetRenderable(renderIndex);
+
+                if (worldFrustum != null && CullRenderable(renderable, worldFrustum))
+                    continue;
+
+                renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
+
+                if (cameraRelative)
+                    model.Translation -= cameraPosition;
+
+                // model = Graphics.GetGPUModelMatrix(model);
+
+                buffer.ApplyPropertyState(properties);
+
+                buffer.SetMatrix("Mat_V", view.ToFloat());
+                buffer.SetMatrix("Mat_P", proj.ToFloat());
+                buffer.SetMatrix("Mat_ObjectToWorld", model.ToFloat());
+                buffer.SetMatrix("Mat_WorldToObject", model.Invert().ToFloat());
+                buffer.SetMatrix("Mat_MVP", (model * vp).ToFloat());
+                
+                buffer.SetColor("_MainColor", Color.white);
+
+                buffer.UpdateBuffer("_PerDraw");
+
+
+                buffer.SetDrawData(drawData);
+                buffer.DrawIndexed((uint)drawData.IndexCount, 0, 1, 0, 0);
+            }
+        }
+    }
+
+    private static void PrepareShadowAtlas()
+    {
+        ShadowAtlas.TryInitialize();
+
+        ShadowAtlas.Clear();
+        CommandBuffer atlasClear = CommandBufferPool.Get("Shadow Atlas Clear");
+        atlasClear.SetRenderTarget(ShadowAtlas.GetAtlas());
+        atlasClear.ClearRenderTarget(true, false, Color.black);
+
+        Graphics.SubmitCommandBuffer(atlasClear);
+        CommandBufferPool.Release(atlasClear);
+    }
+    
+    private static void CreateLightBuffer(CommandBuffer buffer, Camera cam, List<IRenderableLight> lights)
+    {
+        // We have AtlasWidth slots for shadow maps
+        // a single shadow map can consume multiple slots if its larger then 128x128
+        // We need to distribute these slots and resolutions out to lights
+        // based on their distance from the camera
+        int width = ShadowAtlas.GetAtlasWidth();
+
+        // Sort lights by distance from camera
+        lights = lights.OrderBy(l => {
+            if (l is DirectionalLight)
+                return 0; // Directional Lights always get highest priority
+            else
+                return Vector3.Distance(cam.Transform.position, l.GetLightPosition());
+        }).ToList();
+
+        List<GPULight> gpuLights = [];
+        foreach (var light in lights)
+        {
+            // Calculate resolution based on distance
+            int res = CalculateResolution(Vector3.Distance(cam.Transform.position, light.GetLightPosition())); // Directional lights are always 1024
+            if (light is DirectionalLight dir)
+                res = (int)dir.shadowResolution;
+
+            if (light.DoCastShadows())
+            {
+                var gpu = light.GetGPULight(ShadowAtlas.GetSize());
+
+                // Find a slot for the shadow map
+                var slot = ShadowAtlas.ReserveTiles(res, res, light.GetLightID());
+
+                if (slot != null)
+                {
+                    gpu.AtlasX = slot.Value.x;
+                    gpu.AtlasY = slot.Value.y;
+                    gpu.AtlasWidth = res;
+
+                    // Draw the shadow map
+                    ShadowMap = ShadowAtlas.GetAtlas();
+
+                    buffer.SetRenderTarget(ShadowMap);
+                    buffer.SetViewports(slot.Value.x, slot.Value.y, res, res, 0, 1000);
+
+                    light.GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 proj);
+                    Matrix4x4 lightVP = view * proj;
+
+                    DrawRenderables(buffer, light.GetLightPosition(), lightVP, view, proj, null, true);
+
+                    buffer.SetFullViewports();
+                }
+                else
+                {
+                    gpu.AtlasX = -1;
+                    gpu.AtlasY = -1;
+                    gpu.AtlasWidth = 0;
+                }
+
+                gpuLights.Add(gpu);
+            }
+            else
+            {
+                GPULight gpu = light.GetGPULight(0);
+                gpu.AtlasX = -1;
+                gpu.AtlasY = -1;
+                gpu.AtlasWidth = 0;
+                gpuLights.Add(gpu);
+            }
+        }
+
+
+        unsafe
+        {
+            if (LightBuffer == null || lights.Count > LightCount)
+            {
+                LightBuffer?.Dispose();
+                LightBuffer = new((uint)lights.Count, (uint)sizeof(GPULight), true);
+            }
+
+            if (lights.Count > 0)
+                LightBuffer.SetData<GPULight>(gpuLights.ToArray(), 0);
+            //else Dont really need todo this since LightCount will be 0
+            //    LightBuffer = GraphicsBuffer.Empty;
+
+            LightCount = lights.Count;
+        }
+    }
+
+    private static int CalculateResolution(double distance)
+    {
+        double t = MathD.Clamp(distance / 16f, 0, 1);
+        var tileSize = ShadowAtlas.GetTileSize();
+        int resolution = MathD.RoundToInt(MathD.Lerp(ShadowAtlas.GetMaxShadowSize(), tileSize, t));
+
+        // Round to nearest multiple of tile size
+        return MathD.Max(tileSize, (resolution / tileSize) * tileSize);
+    }
 
     private static bool CullRenderable(IRenderable renderable, BoundingFrustum cameraFrustum)
     {

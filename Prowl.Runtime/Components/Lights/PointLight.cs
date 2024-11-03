@@ -11,23 +11,26 @@ public class PointLight : Light
 {
     public float radius = 4.0f;
 
-    public override void GetCullingData(out bool isRenderable, out bool isCullable, out Bounds bounds)
+    public override LightType GetLightType() => LightType.Point;
+
+    public override GPULight GetGPULight(int res)
     {
-        isRenderable = false;
-        isCullable = true;
-        bounds = default;
+        return new GPULight
+        {
+            PositionType = new Vector4(GameObject.Transform.position, 1),
+            DirectionRange = new Vector4(0, 0, 0, radius),
+            Color = color.GetUInt(),
+            Intensity = intensity,
+            SpotData = new Vector2(0, 0),
+            ShadowData = new Vector4(0, 0, 0, 0),
+            AtlasX = 0,
+            AtlasY = 0,
+            AtlasWidth = 0
+        };
     }
-
-
-    public override Material GetMaterial()
+    
+    public override void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection)
     {
-        return null;
-    }
-
-
-    public override void GetRenderingData(out LightType type, out Vector3 facingDirection)
-    {
-        type = LightType.Point;
-        facingDirection = Transform.forward;
+        view = Matrix4x4.Identity; projection = Matrix4x4.Identity;
     }
 }

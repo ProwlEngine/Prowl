@@ -27,24 +27,32 @@ public class DirectionalLight : Light
     public float shadowPenumbra = 80f;
     public float shadowMinimumPenumbra = 0.02f;
 
-
-    public override void GetCullingData(out bool isRenderable, out bool isCullable, out Bounds bounds)
+    public override void Update()
     {
-        isRenderable = false;
-        isCullable = true;
-        bounds = default;
+        RenderPipeline.AddLight(this);
     }
 
-
-    public override Material GetMaterial()
+    public override LightType GetLightType() => LightType.Directional;
+    public override void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection)
     {
-        return null;
+        Vector3 forward = Transform.forward;
+        projection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, -1000f, 1000f);
+        view = Matrix4x4.CreateLookToLeftHanded(Transform.position, -forward, Transform.up);
     }
 
-
-    public override void GetRenderingData(out LightType type, out Vector3 facingDirection)
+    public override GPULight GetGPULight(int res)
     {
-        type = LightType.Directional;
-        facingDirection = Transform.forward;
+        GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 proj);
+
+        return new GPULight
+        {
+            PositionType = new Vector4(qualitySamples, 0, 0, 0),
+            DirectionRange = new Vector4(GameObject.Transform.forward, shadowDistance),
+            Color = color.GetUInt(),
+            Intensity = intensity,
+            SpotData = new Vector2(ambientIntensity, 0),
+            ShadowData = new Vector4(shadowRadius, shadowPenumbra, shadowBias, shadowNormalBias),
+            ShadowMatrix = (view * proj).ToFloat()
+        };
     }
 }

@@ -47,4 +47,21 @@ float3 FresnelSchlick(float cosTheta, float3 F0)
     return F0 + (1.0f - F0) * exp2(-9.28f * cosTheta); // Faster but slightly less accurate version
 }
 
+// ----------------------------------------------------------------------------
+void CookTorrance(float3 N, float3 H, float3 L, float3 V, float3 F0, float roughness, float metallic,
+                 out float3 kD, out float3 specular)
+{
+    float NDF = DistributionGGX(N, H, roughness);        
+    float G = GeometrySmith(N, V, L, roughness);  
+    float3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    
+    float3 nominator = NDF * G * F;
+    float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001; 
+    specular = nominator / denominator;
+    
+    float3 kS = F;
+    kD = (float3)1.0 - kS;
+    kD *= 1.0 - metallic;  
+}
+
 #endif

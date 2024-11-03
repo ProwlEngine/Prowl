@@ -7,7 +7,7 @@ using Veldrid;
 
 namespace Prowl.Runtime.Rendering;
 
-public sealed class GraphicsBuffer
+public sealed class GraphicsBuffer : IDisposable
 {
     public static readonly GraphicsBuffer Empty = new GraphicsBuffer(0, 0, false);
     public static readonly GraphicsBuffer EmptyRW = new GraphicsBuffer(0, 0, true);
@@ -32,4 +32,6 @@ public sealed class GraphicsBuffer
     {
         Graphics.Device.UpdateBuffer(Buffer, offset, data);
     }
+
+    public void Dispose() => Buffer.Dispose();
 }

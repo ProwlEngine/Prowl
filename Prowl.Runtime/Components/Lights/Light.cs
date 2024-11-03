@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.InteropServices;
+
 using Prowl.Runtime.Rendering.Pipelines;
 
 namespace Prowl.Runtime;
@@ -20,10 +22,12 @@ public abstract class Light : MonoBehaviour, IRenderableLight
         RenderPipeline.AddLight(this);
     }
 
+    public virtual int GetLightID() => this.InstanceID;
+    public abstract LightType GetLightType();
+    public virtual Vector3 GetLightPosition() => Transform.position;
+    public virtual Vector3 GetLightDirection() => Transform.forward;
+    public virtual bool DoCastShadows() => castShadows;
+    public abstract void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection);
 
-    public abstract Material GetMaterial();
-
-    public abstract void GetRenderingData(out LightType type, out Vector3 facingDirection);
-
-    public abstract void GetCullingData(out bool isRenderable, out bool isCullable, out Bounds bounds);
+    public abstract GPULight GetGPULight(int res);
 }
