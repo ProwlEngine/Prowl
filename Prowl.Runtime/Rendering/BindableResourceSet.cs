@@ -53,25 +53,25 @@ public class BindableResourceSet
                     break;
 
                 case ResourceKind.StructuredBufferReadOnly:
-                    (GraphicsBuffer? buffer, int start, int length) = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
-                    buffer ??= GraphicsBuffer.Empty;
+                    (DeviceBuffer? buffer, int start, int length) = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
+                    buffer ??= GraphicsBuffer.Empty.Buffer;
 
-                    if (!buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly) &&
-                        !buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
-                        buffer = GraphicsBuffer.EmptyRW;
+                    if (!buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly) &&
+                        !buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
+                        buffer = GraphicsBuffer.EmptyRW.Buffer;
 
-                    DeviceBufferRange range = new DeviceBufferRange(buffer.Buffer, (uint)start, length < 0 ? buffer.Buffer.SizeInBytes : (uint)length);
+                    DeviceBufferRange range = new DeviceBufferRange(buffer, (uint)start, length < 0 ? buffer.SizeInBytes : (uint)length);
                     UpdateResource(range, uniform.binding, ref recreateResourceSet);
                     break;
 
                 case ResourceKind.StructuredBufferReadWrite:
-                    (GraphicsBuffer? rwbuffer, int rwstart, int rwlength) = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
-                    rwbuffer ??= GraphicsBuffer.EmptyRW;
+                    (DeviceBuffer? rwbuffer, int rwstart, int rwlength) = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
+                    rwbuffer ??= GraphicsBuffer.EmptyRW.Buffer;
 
-                    if (!rwbuffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
-                        rwbuffer = GraphicsBuffer.EmptyRW;
+                    if (!rwbuffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
+                        rwbuffer = GraphicsBuffer.EmptyRW.Buffer;
 
-                    DeviceBufferRange rwrange = new DeviceBufferRange(rwbuffer.Buffer, (uint)rwstart, rwlength < 0 ? rwbuffer.Buffer.SizeInBytes : (uint)rwlength);
+                    DeviceBufferRange rwrange = new DeviceBufferRange(rwbuffer, (uint)rwstart, rwlength < 0 ? rwbuffer.SizeInBytes : (uint)rwlength);
                     UpdateResource(rwrange, uniform.binding, ref recreateResourceSet);
                     break;
 

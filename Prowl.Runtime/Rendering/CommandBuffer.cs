@@ -307,6 +307,9 @@ public class CommandBuffer : IDisposable
     public void SetBuffer(string name, GraphicsBuffer buffer, int start = 0, int length = -1)
         => _bufferProperties.SetBuffer(name, buffer, start, length);
 
+    public void SetRawBuffer(string name, DeviceBuffer buffer, int start = 0, int length = -1)
+    => _bufferProperties.SetRawBuffer(name, buffer, start, length);
+
 
     internal void UpdatePipeline()
     {

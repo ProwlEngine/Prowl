@@ -53,7 +53,7 @@ public class PropertyState
     internal Dictionary<string, (Veldrid.Texture?, Veldrid.Sampler?)> _textures;
 
     [SerializeIgnore]
-    internal Dictionary<string, (GraphicsBuffer?, int, int)> _buffers;
+    internal Dictionary<string, (Veldrid.DeviceBuffer?, int, int)> _buffers;
 
 
 
@@ -85,7 +85,7 @@ public class PropertyState
         foreach (KeyValuePair<string, (Veldrid.Texture?, Veldrid.Sampler?)> pair in overrideState._textures)
             _textures[pair.Key] = pair.Value;
 
-        foreach (KeyValuePair<string, (GraphicsBuffer?, int, int)> pair in overrideState._buffers)
+        foreach (KeyValuePair<string, (Veldrid.DeviceBuffer?, int, int)> pair in overrideState._buffers)
             _buffers[pair.Key] = pair.Value;
     }
 
@@ -117,6 +117,9 @@ public class PropertyState
         => _textures[name] = (value, sampler);
 
     public void SetBuffer(string name, GraphicsBuffer value, int start = 0, int length = -1)
+        => _buffers[name] = (value.Buffer, start, length);
+
+    public void SetRawBuffer(string name, Veldrid.DeviceBuffer value, int start = 0, int length = -1)
         => _buffers[name] = (value, start, length);
 
     public void SetIntArray(string name, int[] values)
