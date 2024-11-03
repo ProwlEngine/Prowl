@@ -315,13 +315,13 @@ public class DefaultRenderPipeline : RenderPipeline
 
         unsafe
         {
-            if (LightBuffer == null || lights.Count > LightCount)
+            if (LightBuffer == null || gpuLights.Count > LightCount)
             {
                 LightBuffer?.Dispose();
-                LightBuffer = new((uint)lights.Count, (uint)sizeof(GPULight), true);
+                LightBuffer = new((uint)gpuLights.Count, (uint)sizeof(GPULight), true);
             }
-
-            if (lights.Count > 0)
+            
+            if (gpuLights.Count > 0)
                 LightBuffer.SetData<GPULight>(gpuLights.ToArray(), 0);
             //else Dont really need todo this since LightCount will be 0
             //    LightBuffer = GraphicsBuffer.Empty;
