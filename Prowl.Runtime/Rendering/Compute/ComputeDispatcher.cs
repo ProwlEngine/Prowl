@@ -13,16 +13,8 @@ public static class ComputeDispatcher
 {
     public static void Dispatch(ComputeDescriptor descriptor, int kernelIndex, uint groupsX, uint groupsY, uint groupsZ, GraphicsFence? fence = null)
     {
-        CommandList cl = Graphics.GetCommandList();
+        CommandList list = Graphics.GetCommandList();
 
-        Dispatch(descriptor, cl, kernelIndex, groupsX, groupsY, groupsZ, fence);
-
-        Graphics.SubmitResourceForDisposal(cl);
-    }
-
-
-    internal static void Dispatch(ComputeDescriptor descriptor, CommandList list, int kernelIndex, uint groupsX, uint groupsY, uint groupsZ, GraphicsFence? fence = null)
-    {
         ComputeKernel kernel = descriptor.Shader.Res.GetKernel(kernelIndex);
         ComputeVariant variant = kernel.GetVariant(descriptor._localKeywords);
         ComputePipeline pipeline = ComputePipelineCache.GetPipeline(variant);
@@ -41,6 +33,7 @@ public static class ComputeDispatcher
 
         Graphics.SubmitCommandList(list, fence);
 
+        Graphics.SubmitResourceForDisposal(list);
         Graphics.SubmitResourcesForDisposal(toDispose);
     }
 }
