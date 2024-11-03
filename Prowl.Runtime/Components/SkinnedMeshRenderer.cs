@@ -25,9 +25,10 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
     public Transform[] Bones = [];
 
     private System.Numerics.Matrix4x4[] _boneTransforms;
+    private SkinnedMesh _skinnedMesh;
 
 
-    void GetBoneMatrices()
+    private void GetBoneMatrices()
     {
         _boneTransforms = new System.Numerics.Matrix4x4[Bones.Length];
         for (int i = 0; i < Bones.Length; i++)
@@ -50,10 +51,11 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
         GetBoneMatrices();
 
         Properties ??= new();
+        _skinnedMesh ??= new(Mesh);
 
         Properties.SetInt("_ObjectID", InstanceID);
 
-
+        _skinnedMesh.RecomputeSkinning(_boneTransforms);
 
         RenderPipeline.AddRenderable(this);
     }
@@ -87,7 +89,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
     public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
     {
         properties = Properties;
-        drawData = Mesh.Res;
+        drawData = _skinnedMesh;
         model = Transform.localToWorldMatrix;
     }
 
@@ -96,5 +98,11 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
     {
         isRenderable = _enabledInHierarchy;
         bounds = new Bounds() { size = Vector3.infinity };
+    }
+
+
+    public override void OnDestroy()
+    {
+        _skinnedMesh.Dispose();
     }
 }

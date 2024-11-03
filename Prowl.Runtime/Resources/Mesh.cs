@@ -82,17 +82,15 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             if (isWritable == false)
                 return;
             bool needsReset = _vertices == null || _vertices.Length != value.Length;
-            _vertices = value;
-            _changed = true;
+
             if (needsReset)
             {
-                _normals = null;
-                _tangents = null;
-                _colors = null;
-                _uv = null;
-                _uv2 = null;
-                _indices32 = null;
+                Clear();
             }
+
+            _vertices = value;
+            _changed = true;
+
         }
     }
 
@@ -138,7 +136,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         set => WriteVertexData(ref _indices16, value, value.Length, false);
     }
 
-    public Vector4F[] BoneIndices
+    public Vector4Int[] BoneIndices
     {
         get => ReadVertexData(_boneIndices ?? []);
         set => WriteVertexData(ref _boneIndices, value, value.Length);
@@ -150,10 +148,26 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         set => WriteVertexData(ref _boneWeights, value, value.Length);
     }
 
+    public Matrix4x4F[] BindPoses
+    {
+        get => ReadVertexData(_bindPoses ?? []);
+        set => WriteVertexData(ref _bindPoses, value, value.Length, false);
+    }
+
+
     public int VertexCount => _vertices?.Length ?? 0;
     public int IndexCount => IndexFormat == IndexFormat.UInt16 ? _indices16.Length : _indices32.Length;
 
     public DeviceBuffer VertexBuffer => _vertexBuffer;
+    public DeviceBuffer UVBuffer => _uvBuffer;
+    public DeviceBuffer UV2Buffer => _uv2Buffer;
+    public DeviceBuffer NormalBuffer => _normalBuffer;
+    public DeviceBuffer TangentBuffer => _tangentBuffer;
+    public DeviceBuffer ColorBuffer => _colorBuffer;
+    public DeviceBuffer BoneIndexBuffer => _boneIndexBuffer;
+    public DeviceBuffer BoneWeightBuffer => _boneWeightBuffer;
+    public DeviceBuffer BindPoseBuffer => _bindPoseBuffer;
+
     public DeviceBuffer IndexBuffer => _indexBuffer;
 
     public bool HasNormals => (_normals?.Length ?? 0) > 0;
@@ -164,8 +178,8 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
     public bool HasBoneIndices => (_boneIndices?.Length ?? 0) > 0;
     public bool HasBoneWeights => (_boneWeights?.Length ?? 0) > 0;
+    public bool HasBindPoses => (_bindPoses?.Length ?? 0) > 0;
 
-    public Matrix4x4F[]? bindPoses;
 
     private bool _changed;
     private Vector3F[]? _vertices;
@@ -178,22 +192,25 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     private uint[]? _indices32;
     private ushort[]? _indices16;
 
-    private Vector4F[]? _boneIndices;
+    private Vector4Int[]? _boneIndices;
     private Vector4F[]? _boneWeights;
+    private Matrix4x4F[]? _bindPoses;
 
     private IndexFormat _indexFormat = IndexFormat.UInt16;
     private PrimitiveTopology _topology = PrimitiveTopology.TriangleList;
 
 
     private DeviceBuffer _vertexBuffer;
-    private DeviceBuffer _indexBuffer;
+    private DeviceBuffer? _uvBuffer;
+    private DeviceBuffer? _uv2Buffer;
+    private DeviceBuffer? _normalBuffer;
+    private DeviceBuffer? _tangentBuffer;
+    private DeviceBuffer? _colorBuffer;
+    private DeviceBuffer? _boneIndexBuffer;
+    private DeviceBuffer? _boneWeightBuffer;
+    private DeviceBuffer? _bindPoseBuffer;
 
-    public int UVStart { get; private set; }
-    public int UV2Start { get; private set; }
-    public int NormalsStart { get; private set; }
-    public int TangentsStart { get; private set; }
-    public int ColorsStart { get; private set; }
-    public int BufferLength { get; private set; }
+    private DeviceBuffer _indexBuffer;
 
 
     public static readonly Dictionary<string, VertexElementFormat> MeshSemantics = new()
@@ -229,14 +246,42 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         DeleteGPUBuffers();
     }
 
+    private static unsafe void ValidateBuffer<T>(ref DeviceBuffer buffer, T[] data, BufferUsage usage) where T : unmanaged
+    {
+        int sizeBytes = sizeof(T) * data.Length;
+        const int maxDiff = 2048; // If data is more than 2 kilobytes larger, downsize the buffer
+
+        if (buffer == null || buffer.SizeInBytes < sizeBytes || buffer.SizeInBytes - sizeBytes > maxDiff)
+        {
+            buffer?.Dispose();
+
+            BufferDescription description = new BufferDescription((uint)sizeBytes, usage);
+
+            if (usage.HasFlag(BufferUsage.StructuredBufferReadOnly))
+                description.StructureByteStride = (uint)sizeof(T);
+
+            buffer = Graphics.Factory.CreateBuffer(description);
+        }
+
+        Graphics.Device.UpdateBuffer(buffer, 0, data);
+    }
+
     public void Upload()
     {
-        if (_changed == false && _indexBuffer != null && _vertexBuffer != null)
+        if (_changed == false &&
+            _indexBuffer != null &&
+            _vertexBuffer != null &&
+            (HasUV && _uvBuffer != null) &&
+            (HasUV2 && _uv2Buffer != null) &&
+            (HasNormals && _normalBuffer != null) &&
+            (HasTangents && _tangentBuffer != null) &&
+            (HasColors && _colorBuffer != null) &&
+            (HasBoneIndices && _boneIndexBuffer != null) &&
+            (HasBoneWeights && _boneWeightBuffer != null) &&
+            (HasBindPoses && _bindPoseBuffer != null))
             return;
 
         _changed = false;
-
-        DeleteGPUBuffers();
 
         if (_vertices == null || _vertices.Length == 0)
             throw new InvalidOperationException($"Mesh has no vertices");
@@ -274,37 +319,46 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
                 break;
         }
 
-        RecalculateBufferOffsets();
+        BufferUsage usage = BufferUsage.VertexBuffer;
 
-        // Vertex buffer upload
-        _vertexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)BufferLength, BufferUsage.VertexBuffer));
+        if (Graphics.Device.Features.ComputeShader)
+        {
+            usage |= BufferUsage.StructuredBufferReadOnly;
+        }
 
-        Graphics.Device.UpdateBuffer(_vertexBuffer, 0, _vertices);
+        ValidateBuffer(ref _vertexBuffer, _vertices, usage);
 
         if (HasUV)
-            Graphics.Device.UpdateBuffer(_vertexBuffer, (uint)UVStart, _uv);
+            ValidateBuffer(ref _uvBuffer, _uv, BufferUsage.VertexBuffer);
 
         if (HasUV2)
-            Graphics.Device.UpdateBuffer(_vertexBuffer, (uint)UV2Start, _uv2);
+            ValidateBuffer(ref _uv2Buffer, _uv2, BufferUsage.VertexBuffer);
 
         if (HasNormals)
-            Graphics.Device.UpdateBuffer(_vertexBuffer, (uint)NormalsStart, _normals);
+            ValidateBuffer(ref _normalBuffer, _normals, usage);
 
         if (HasColors)
-            Graphics.Device.UpdateBuffer(_vertexBuffer, (uint)ColorsStart, _colors);
+            ValidateBuffer(ref _colorBuffer, _colors, BufferUsage.VertexBuffer);
 
         if (HasTangents)
-            Graphics.Device.UpdateBuffer(_vertexBuffer, (uint)TangentsStart, _tangents);
+            ValidateBuffer(ref _tangentBuffer, _tangents, usage);
+
+        if (HasBoneIndices)
+            ValidateBuffer(ref _boneIndexBuffer, _boneIndices, usage);
+
+        if (HasBoneWeights)
+            ValidateBuffer(ref _boneWeightBuffer, _boneWeights, usage);
+
+        if (HasBindPoses)
+            ValidateBuffer(ref _bindPoseBuffer, _bindPoses, usage);
 
         if (_indexFormat == IndexFormat.UInt16)
         {
-            _indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)_indices16.Length * sizeof(ushort), BufferUsage.IndexBuffer));
-            Graphics.Device.UpdateBuffer(_indexBuffer, 0, _indices16);
+            ValidateBuffer(ref _indexBuffer, _indices16, BufferUsage.IndexBuffer);
         }
         else if (_indexFormat == IndexFormat.UInt32)
         {
-            _indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)_indices32.Length * sizeof(uint), BufferUsage.IndexBuffer));
-            Graphics.Device.UpdateBuffer(_indexBuffer, 0, _indices32);
+            ValidateBuffer(ref _indexBuffer, _indices32, BufferUsage.IndexBuffer);
         }
     }
 
@@ -315,17 +369,19 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         commandList.SetIndexBuffer(IndexBuffer, IndexFormat);
 
         pipeline.BindVertexBuffer(commandList, "POSITION0", VertexBuffer, 0);
-        pipeline.BindVertexBuffer(commandList, "TEXCOORD0", VertexBuffer, (uint)UVStart);
-        pipeline.BindVertexBuffer(commandList, "TEXCOORD1", VertexBuffer, (uint)UV2Start);
-        pipeline.BindVertexBuffer(commandList, "NORMAL0", VertexBuffer, (uint)NormalsStart);
-        pipeline.BindVertexBuffer(commandList, "TANGENT0", VertexBuffer, (uint)TangentsStart);
-        pipeline.BindVertexBuffer(commandList, "COLOR0", VertexBuffer, (uint)ColorsStart);
+
+        pipeline.BindVertexBuffer(commandList, "TEXCOORD0", HasUV ? UVBuffer : VertexBuffer, 0);
+        pipeline.BindVertexBuffer(commandList, "TEXCOORD1", HasUV2 ? UV2Buffer : VertexBuffer, 0);
+        pipeline.BindVertexBuffer(commandList, "NORMAL0", HasNormals ? NormalBuffer : VertexBuffer, 0);
+        pipeline.BindVertexBuffer(commandList, "TANGENT0", HasTangents ? TangentBuffer : VertexBuffer, 0);
+        pipeline.BindVertexBuffer(commandList, "COLOR0", HasColors ? ColorBuffer : VertexBuffer, 0);
     }
 
     private T ReadVertexData<T>(T value)
     {
         if (isReadable == false)
             throw new InvalidOperationException("Mesh is not readable");
+
         return value;
     }
 
@@ -333,8 +389,10 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     {
         if (isWritable == false)
             throw new InvalidOperationException("Mesh is not writable");
+
         if ((value == null || length == 0 || length != (_vertices?.Length ?? 0)) && mustMatchLength)
             throw new ArgumentException("Array length should match vertices length");
+
         _changed = true;
         target = value;
     }
@@ -432,33 +490,44 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         Tangents = tangents;
     }
 
-    private void RecalculateBufferOffsets()
-    {
-        const int floatSize = sizeof(float);
-
-        const int vec2Size = floatSize * 2;
-        const int vec3Size = floatSize * 3;
-        const int byte4Size = 4;
-
-        int vertLen = _vertices.Length;
-
-        UVStart = vertLen * vec3Size;                                                 // Where vertices end
-        UV2Start = UVStart + (HasUV ? vertLen * vec2Size : 0);                        // Where UV0 ends
-        NormalsStart = UV2Start + (HasUV2 ? vertLen * vec2Size : 0);                  // Where UV1 ends
-        TangentsStart = NormalsStart + (HasNormals ? vertLen * vec3Size : 0);         // Where Normals end
-        ColorsStart = TangentsStart + (HasTangents ? vertLen * vec3Size : 0);         // Where Tangents end
-        BufferLength = ColorsStart + (HasColors ? vertLen * byte4Size : 0);           // Where Colors end
-    }
-
     public override void OnDispose() => DeleteGPUBuffers();
 
     private void DeleteGPUBuffers()
     {
-        _vertexBuffer?.Dispose();
-        _vertexBuffer = null;
-        _indexBuffer?.Dispose();
-        _indexBuffer = null;
+        static void Dispose(ref DeviceBuffer buffer)
+        {
+            buffer?.Dispose();
+            buffer = null;
+        }
+
+        Dispose(ref _vertexBuffer);
+        Dispose(ref _uvBuffer);
+        Dispose(ref _uv2Buffer);
+        Dispose(ref _normalBuffer);
+        Dispose(ref _tangentBuffer);
+        Dispose(ref _colorBuffer);
+        Dispose(ref _boneIndexBuffer);
+        Dispose(ref _boneWeightBuffer);
+        Dispose(ref _bindPoseBuffer);
+
+        Dispose(ref _indexBuffer);
     }
+
+
+    private static Mesh? _fullscreenMesh;
+
+    public static Mesh FullscreenMesh
+    {
+        get
+        {
+            if (_fullscreenMesh == null)
+                _fullscreenMesh = CreateQuad(Vector2.one);
+
+            return _fullscreenMesh;
+        }
+    }
+
+
 
     public static Mesh CreateQuad(Vector2 scale)
     {
@@ -734,7 +803,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             WriteArray(writer, _boneIndices);
             WriteArray(writer, _boneWeights);
 
-            WriteArray(writer, bindPoses);
+            WriteArray(writer, _bindPoses);
 
             compoundTag.Add("MeshData", new SerializedProperty(memoryStream.ToArray()));
         }
@@ -780,10 +849,10 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             _uv2 = ReadArray<Vector2F>(reader);
             _indices16 = ReadArray<ushort>(reader);
             _indices32 = ReadArray<uint>(reader);
-            _boneIndices = ReadArray<Vector4F>(reader);
+            _boneIndices = ReadArray<Vector4Int>(reader);
             _boneWeights = ReadArray<Vector4F>(reader);
 
-            bindPoses = ReadArray<Matrix4x4F>(reader);
+            _bindPoses = ReadArray<Matrix4x4F>(reader);
 
             _changed = true;
         }

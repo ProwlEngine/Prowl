@@ -6,13 +6,13 @@
 
 int BufferLength;
 
-Buffer<float3> InPositions;
-Buffer<float3> InNormals;
-Buffer<float4> InTangents;
+StructuredBuffer<float3> InPositions;
+StructuredBuffer<float3> InNormals;
+StructuredBuffer<float3> InTangents;
 
-RWBuffer<float3> OutPositions;
-RWBuffer<float3> OutNormals;
-RWBuffer<float4> OutTangents;
+RWStructuredBuffer<float3> OutPositions;
+RWStructuredBuffer<float3> OutNormals;
+RWStructuredBuffer<float3> OutTangents;
 
 StructuredBuffer<int4> BoneIndices;
 StructuredBuffer<float4> BoneWeights;
@@ -45,7 +45,7 @@ void SkinFull(uint id : SV_DispatchThreadID)
 
     float3 vertexPosition = InPositions[id];
     float3 vertexNormal = InNormals[id];
-    float4 vertexTangent = InTangents[id];
+    float3 vertexTangent = InTangents[id];
 
     int4 boneIndices = BoneIndices[id];
     float4 boneWeights = BoneWeights[id];
@@ -57,12 +57,12 @@ void SkinFull(uint id : SV_DispatchThreadID)
 	SKIN_LOOP_BEGIN
 	    totalPosition += mul(boneTransform, float4(vertexPosition, 1.0)).xyz * weight;
 	    totalNormal += mul(boneRotation, vertexNormal) * weight;
-	    totalTangent += mul(boneRotation, vertexTangent.xyz) * weight;
+	    totalTangent += mul(boneRotation, vertexTangent) * weight;
 	SKIN_LOOP_END
 
 	OutPositions[id] = totalPosition;
 	OutNormals[id] = normalize(totalNormal);
-	OutTangents[id] = float4(normalize(totalTangent), vertexTangent.w);
+	OutTangents[id] = normalize(totalTangent);
 }
 
 
@@ -122,7 +122,7 @@ void SkinVertexTangent(uint id : SV_DispatchThreadID)
         return;
 
     float3 vertexPosition = InPositions[id];
-    float4 vertexTangent = InTangents[id];
+    float3 vertexTangent = InTangents[id];
 
     int4 boneIndices = BoneIndices[id];
     float4 boneWeights = BoneWeights[id];
@@ -136,5 +136,5 @@ void SkinVertexTangent(uint id : SV_DispatchThreadID)
 	SKIN_LOOP_END
 
 	OutPositions[id] = totalPosition;
-	OutTangents[id] = float4(normalize(totalTangent), vertexTangent.w);
+	OutTangents[id] = normalize(totalTangent);
 }
