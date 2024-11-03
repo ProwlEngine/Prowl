@@ -66,7 +66,7 @@ Pass "TestShader"
         SamplerState sampler_ShadowAtlas;
 
         float _AlphaClip;
-        float _LightCount;
+        int _LightCount;
         float4 _MainColor;
 
         // Default uniforms buffer
@@ -218,9 +218,9 @@ Pass "TestShader"
                 }
             }
 
-            //lighting *= (1.0 - surface.r);
-            //baseColor.rgb *= ambientStrength;
-            //baseColor.rgb += lighting;
+            lighting *= (1.0 - surface.r);
+            baseColor.rgb *= ambientStrength;
+            baseColor.rgb += lighting;
 
             output.Albedo = float4(baseColor.rgb, 1.0);
             return output;
