@@ -94,7 +94,7 @@ public static partial class ShaderCrossCompiler
         ShaderDescription shader = new();
 
         shader.Stage = stage;
-        shader.EntryPoint = entrypoint;
+        shader.EntryPoint = backend == GraphicsBackend.Metal ? "main0" : entrypoint;
 
         ParsedIR IR = context.ParseSpirv(sourceSPIRV);
 
@@ -128,7 +128,9 @@ public static partial class ShaderCrossCompiler
     {
         MSLCrossCompiler compiler = context.CreateMSLCompiler(IR);
 
-        return Encoding.UTF8.GetBytes(compiler.Compile());
+        string c = compiler.Compile();
+
+        return Encoding.UTF8.GetBytes(c);
     }
 
 

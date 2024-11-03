@@ -17,7 +17,7 @@ struct PS_INPUT
 
 vertex PS_INPUT VS(
     VS_INPUT input [[ stage_in ]],
-    constant float4x4 &ProjectionMatrix [[ buffer(0) ]])
+    constant float4x4 &ProjectionMatrix [[ buffer(1) ]])
 {
     PS_INPUT output;
     output.pos = ProjectionMatrix * float4(input.pos.xy, 0.f, 1.f);

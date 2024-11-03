@@ -23,7 +23,12 @@ public static class TextureUtility
             PixelFormat.B8_G8_R8_A8_UNorm => 4,
             PixelFormat.B8_G8_R8_A8_UNorm_SRgb => 4,
 
+            // Depth 1-channel
+            PixelFormat.D16_UNorm => 2,
+            PixelFormat.D32_Float => 4,
+
             // Depth + stencil 2-channel
+            PixelFormat.D16_UNorm_S8_UInt => 3,
             PixelFormat.D24_UNorm_S8_UInt => 4,
             PixelFormat.D32_Float_S8_UInt => 5,
 
@@ -176,6 +181,9 @@ public static class TextureUtility
 
     public static PixelFormat GetBestSupportedDepthFormat(bool needsStencil = false, TextureUsage usage = TextureUsage.DepthStencil)
     {
+        if (RuntimeUtils.IsMac())
+            return PixelFormat.D16_UNorm;
+
         if (Graphics.Device.GetPixelFormatSupport(PixelFormat.D24_UNorm_S8_UInt, TextureType.Texture2D, usage))
             return PixelFormat.D24_UNorm_S8_UInt;
 
