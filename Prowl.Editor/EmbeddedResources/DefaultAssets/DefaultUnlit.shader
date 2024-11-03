@@ -94,30 +94,131 @@ Pass "TestShader"
             return float4(color) / 255.0;
         }
 
-        float ShadowCalculation(float4 fragPosLightSpace, Light light)
-        {
-            float3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-            projCoords = projCoords * 0.5 + 0.5;
-            
-            if (any(projCoords > 1.0) || any(projCoords < 0.0))
-                return 0.0;
-            
-            float AtlasX = (float)light.AtlasX;
-            float AtlasY = (float)light.AtlasY;
-            float AtlasWidth = (float)light.AtlasWidth;
-            
-            float2 atlasCoords;
-            atlasCoords.x = AtlasX + (projCoords.x * AtlasWidth);
-            atlasCoords.y = AtlasY + ((1.0 - projCoords.y) * AtlasWidth);
-            
-            atlasCoords /= float2(4096.0, 4096.0);
-            atlasCoords.y = 1.0 - atlasCoords.y;
-            
-            float closestDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, atlasCoords).r;
-            float currentDepth = projCoords.z;
-            
-            return (currentDepth - light.ShadowData.z) > closestDepth ? 1.0 : 0.0;
-        }
+        const float _ShadowSoftness = 2.0;
+        const int _PCFSamples = 32;
+		
+		float random(float2 seed)
+		{
+			return frac(sin(dot(seed, float2(12.9898, 78.233))) * 43758.5453);
+		}
+	
+		float2 poissonDisk(int i, int samplesCount, float2 randomSeed)
+		{
+			float goldenAngle = 2.4;
+			float theta = i * goldenAngle + random(randomSeed) * 2.0 * PI;
+			float r = sqrt(float(i) + 0.5) / sqrt(float(samplesCount));
+			return float2(r * cos(theta), r * sin(theta));
+		}
+	
+		float FindBlockerDistance(float2 uv, float2 lightPixelSize, float currentDepth, Light light)
+		{
+			const int blockerSearchSamples = 16;
+			float searchWidth = light.ShadowData.x * (currentDepth - light.ShadowData.y) / currentDepth;
+			
+			float blockerSum = 0.0;
+			float numBlockers = 0.0;
+			
+			for(int i = 0; i < blockerSearchSamples; i++)
+			{
+				float2 offset = poissonDisk(i, blockerSearchSamples, uv) * searchWidth;
+				float2 sampleUV = uv + offset * lightPixelSize;
+				
+				float shadowMapDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, sampleUV).r;
+				
+				if(shadowMapDepth < currentDepth - light.ShadowData.z)
+				{
+					blockerSum += shadowMapDepth;
+					numBlockers++;
+				}
+			}
+			
+			if(numBlockers < 1.0)
+				return -1.0;
+				
+			return blockerSum / numBlockers;
+		}
+	
+		float PCF_Filter(float2 uv, float2 lightPixelSize, float currentDepth, float filterRadius, Light light)
+		{
+			float sum = 0.0;
+			
+			[loop]
+			for(int i = 0; i < _PCFSamples; i++)
+			{
+				float2 offset = poissonDisk(i, _PCFSamples, uv) * filterRadius;
+				float2 sampleUV = uv + offset * lightPixelSize;
+				
+				float shadowMapDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, sampleUV).r;
+				sum += (currentDepth - light.ShadowData.z) > shadowMapDepth ? 1.0 : 0.0;
+			}
+			
+			return sum / _PCFSamples;
+		}
+	
+		float PCSS(float4 fragPosLightSpace, Light light)
+		{
+			float3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+			projCoords = projCoords * 0.5 + 0.5;
+			
+			if (any(projCoords > 1.0) || any(projCoords < 0.0))
+				return 0.0;
+			
+			float AtlasX = (float)light.AtlasX;
+			float AtlasY = (float)light.AtlasY;
+			float AtlasWidth = (float)light.AtlasWidth;
+			
+			float2 atlasCoords;
+			atlasCoords.x = AtlasX + (projCoords.x * AtlasWidth);
+			atlasCoords.y = AtlasY + ((1.0 - projCoords.y) * AtlasWidth);
+			
+			atlasCoords /= float2(4096.0, 4096.0);
+			atlasCoords.y = 1.0 - atlasCoords.y;
+			
+			float currentDepth = projCoords.z;
+			float2 lightPixelSize = 1.0 / float2(4096.0, 4096.0);
+			
+			// STEP 1: Blocker search
+			float blockerDistance = FindBlockerDistance(atlasCoords, lightPixelSize, currentDepth, light);
+			if(blockerDistance < 0.0)
+				return 0.0;
+				
+			// STEP 2: Penumbra size estimate
+			float penumbraWidth = (currentDepth - blockerDistance) * light.ShadowData.x / blockerDistance;
+			
+			// STEP 3: Filtering
+			return PCF_Filter(atlasCoords, lightPixelSize, currentDepth, penumbraWidth * _ShadowSoftness, light);
+		}
+	
+		// Replace the old ShadowCalculation function with PCSS
+		float ShadowCalculation(float4 fragPosLightSpace, Light light)
+		{
+			return PCSS(fragPosLightSpace, light);
+		}
+
+        //float ShadowCalculation(float4 fragPosLightSpace, Light light)
+        //{
+        //    float3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+        //    projCoords = projCoords * 0.5 + 0.5;
+        //    
+        //    if (any(projCoords > 1.0) || any(projCoords < 0.0))
+        //        return 0.0;
+        //    
+        //    float AtlasX = (float)light.AtlasX;
+        //    float AtlasY = (float)light.AtlasY;
+        //    float AtlasWidth = (float)light.AtlasWidth;
+        //    
+        //    float2 atlasCoords;
+        //    atlasCoords.x = AtlasX + (projCoords.x * AtlasWidth);
+        //    atlasCoords.y = AtlasY + ((1.0 - projCoords.y) * AtlasWidth);
+        //    
+        //    atlasCoords /= float2(4096.0, 4096.0);
+        //    atlasCoords.y = 1.0 - atlasCoords.y;
+        //    
+        //    float closestDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, atlasCoords).r;
+        //    float currentDepth = projCoords.z;
+        //    
+        //    return (currentDepth - light.ShadowData.z) > closestDepth ? 1.0 : 0.0;
+        //}
 
         Varyings Vertex(Attributes input)
         {

@@ -83,7 +83,6 @@ public class DefaultRenderPipeline : RenderPipeline
 
         CreateLightBuffer(buffer, camera, lights);
         buffer.SetRenderTarget(target); // Return target, as shadow map rendering may have changed it
-
         buffer.SetTexture("_ShadowAtlas", ShadowMap.DepthBuffer);
         buffer.SetBuffer("_Lights", LightBuffer);
         buffer.SetInt("_LightCount", LightCount);
@@ -269,8 +268,8 @@ public class DefaultRenderPipeline : RenderPipeline
 
             if (light.DoCastShadows())
             {
-                var gpu = light.GetGPULight(ShadowAtlas.GetSize());
-
+                var gpu = light.GetGPULight(ShadowAtlas.GetSize(), cameraRelative, cam.Transform.position);
+                
                 // Find a slot for the shadow map
                 var slot = ShadowAtlas.ReserveTiles(res, res, light.GetLightID());
 
@@ -287,6 +286,8 @@ public class DefaultRenderPipeline : RenderPipeline
                     buffer.SetViewports(slot.Value.x, slot.Value.y, res, res, 0, 1000);
 
                     light.GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 proj);
+                    if(cameraRelative)
+                        view.Translation = Vector3.zero;
                     Matrix4x4 lightVP = view * proj;
 
                     DrawRenderables(buffer, light.GetLightPosition(), lightVP, view, proj, null, true);
@@ -304,7 +305,7 @@ public class DefaultRenderPipeline : RenderPipeline
             }
             else
             {
-                GPULight gpu = light.GetGPULight(0);
+                GPULight gpu = light.GetGPULight(0, cameraRelative, cam.Transform.position);
                 gpu.AtlasX = -1;
                 gpu.AtlasY = -1;
                 gpu.AtlasWidth = 0;
@@ -318,7 +319,7 @@ public class DefaultRenderPipeline : RenderPipeline
             if (LightBuffer == null || gpuLights.Count > LightCount)
             {
                 LightBuffer?.Dispose();
-                LightBuffer = new((uint)gpuLights.Count, (uint)sizeof(GPULight), true);
+                LightBuffer = new((uint)gpuLights.Count, (uint)sizeof(GPULight), false);
             }
             
             if (gpuLights.Count > 0)

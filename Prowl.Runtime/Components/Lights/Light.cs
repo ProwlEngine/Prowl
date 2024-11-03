@@ -29,5 +29,5 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public virtual bool DoCastShadows() => castShadows;
     public abstract void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection);
 
-    public abstract GPULight GetGPULight(int res);
+    public abstract GPULight GetGPULight(int res, bool cameraRelative, Vector3 cameraPosition);
 }

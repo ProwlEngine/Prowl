@@ -16,11 +16,21 @@ public class PointLight : Light
 
     public override LightType GetLightType() => LightType.Point;
 
-    public override GPULight GetGPULight(int res)
+    public override GPULight GetGPULight(int res, bool cameraRelative, Vector3 cameraPosition)
     {
+        Vector3 lightPos;
+        if (cameraRelative)
+        {
+            lightPos = Transform.position - cameraPosition;
+        }
+        else
+        {
+            lightPos = Transform.position;
+        }
+
         return new GPULight
         {
-            PositionType = new Vector4(GameObject.Transform.position, 1),
+            PositionType = new Vector4(lightPos, 1),
             DirectionRange = new Vector4(0, 0, 0, radius),
             Color = color.GetUInt(),
             Intensity = intensity,

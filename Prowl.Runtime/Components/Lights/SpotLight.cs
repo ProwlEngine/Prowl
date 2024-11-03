@@ -18,13 +18,27 @@ public class SpotLight : Light
 
     public override LightType GetLightType() => LightType.Spot;
 
-    public override GPULight GetGPULight(int res)
+    public override GPULight GetGPULight(int res, bool cameraRelative, Vector3 cameraPosition)
     {
-        GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 proj);
+        var forward = Transform.forward;
+        Matrix4x4 proj = Matrix4x4.CreatePerspectiveFieldOfView(MathD.ToRad(90), 1f, 0.01f, distance);
+        proj = Graphics.GetGPUProjectionMatrix(proj);
+        Matrix4x4 view;
+        Vector3 lightPos;
+        if (cameraRelative)
+        {
+            view = Matrix4x4.CreateLookToLeftHanded(Transform.position - cameraPosition, -forward, Transform.up);
+            lightPos = Transform.position - cameraPosition;
+        }
+        else
+        {
+            view = Matrix4x4.CreateLookToLeftHanded(Transform.position, -forward, Transform.up);
+            lightPos = Transform.position;
+        }
 
         return new GPULight
         {
-            PositionType = new Vector4(GameObject.Transform.position, 2),
+            PositionType = new Vector4(lightPos, 2),
             DirectionRange = new Vector4(GameObject.Transform.forward, distance),
             Color = color.GetUInt(),
             Intensity = intensity,
@@ -41,6 +55,7 @@ public class SpotLight : Light
     {
         var forward = Transform.forward;
         projection = Matrix4x4.CreatePerspectiveFieldOfView(MathD.ToRad(90), 1f, 0.01f, distance);
+        projection = Graphics.GetGPUProjectionMatrix(projection);
         view = Matrix4x4.CreateLookToLeftHanded(Transform.position, -forward, Transform.up);
     }
 }

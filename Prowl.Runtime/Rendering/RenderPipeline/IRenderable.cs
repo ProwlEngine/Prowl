@@ -32,7 +32,7 @@ public interface IRenderableLight
     public bool DoCastShadows();
     public void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection);
 
-    public abstract GPULight GetGPULight(int res);
+    public abstract GPULight GetGPULight(int res, bool cameraRelative, Vector3 cameraPosition);
 }
 
 [StructLayout(LayoutKind.Sequential)]
