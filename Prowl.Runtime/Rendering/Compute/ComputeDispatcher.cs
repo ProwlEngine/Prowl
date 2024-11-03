@@ -15,17 +15,9 @@ public static class ComputeDispatcher
     {
         CommandList cl = Graphics.GetCommandList();
 
-        if (fence == null)
-        {
-            fence = new GraphicsFence();
-            Graphics.SubmitResourcesForDisposal([cl, fence], fence);
-        }
-        else
-        {
-            Graphics.SubmitResourcesForDisposal([cl], fence);
-        }
-
         Dispatch(descriptor, cl, kernelIndex, groupsX, groupsY, groupsZ, fence);
+
+        Graphics.SubmitResourceForDisposal(cl);
     }
 
 
@@ -45,16 +37,10 @@ public static class ComputeDispatcher
 
         list.SetComputeResourceSet(0, set);
 
-        if (fence == null)
-        {
-            fence = new GraphicsFence();
-            toDispose.Add(fence);
-        }
-
         list.Dispatch(groupsX, groupsY, groupsZ);
 
         Graphics.SubmitCommandList(list, fence);
 
-        Graphics.SubmitResourcesForDisposal(toDispose, fence);
+        Graphics.SubmitResourcesForDisposal(toDispose);
     }
 }

@@ -7,6 +7,8 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Pipelines;
 
 using Prowl.Icons;
+using Veldrid;
+using System;
 
 namespace Prowl.Runtime;
 
@@ -22,20 +24,20 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
     [HideInInspector]
     public Transform[] Bones = [];
 
-    private System.Numerics.Matrix4x4[] boneTransforms;
+    private System.Numerics.Matrix4x4[] _boneTransforms;
 
 
     void GetBoneMatrices()
     {
-        boneTransforms = new System.Numerics.Matrix4x4[Bones.Length];
+        _boneTransforms = new System.Numerics.Matrix4x4[Bones.Length];
         for (int i = 0; i < Bones.Length; i++)
         {
             Transform t = Bones[i];
 
             if (t == null)
-                boneTransforms[i] = System.Numerics.Matrix4x4.Identity;
+                _boneTransforms[i] = System.Numerics.Matrix4x4.Identity;
             else
-                boneTransforms[i] = (t.localToWorldMatrix * GameObject.Transform.worldToLocalMatrix).ToFloat();
+                _boneTransforms[i] = (t.localToWorldMatrix * GameObject.Transform.worldToLocalMatrix).ToFloat();
         }
     }
 
@@ -47,18 +49,13 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
 
         GetBoneMatrices();
 
-        Material.Res!.EnableKeyword("SKINNED");
-        Material.Res!.SetInt("ObjectID", GameObject.InstanceID);
-        Material.Res!.SetMatrices("bindPoses", Mesh.Res.bindPoses);
-        Material.Res!.SetMatrices("boneTransforms", boneTransforms);
-        for (int i = 0; i < Material.Res!.PassCount; i++)
-        {
-            Material.Res!.SetPass(i);
-            Graphics.DrawMeshNow(Mesh.Res!, mat, Material.Res!, prevMat);
-        }
-        Material.Res!.DisableKeyword("SKINNED");
+        Properties ??= new();
 
-        prevMats[camID] = mat;
+        Properties.SetInt("_ObjectID", InstanceID);
+
+
+
+        RenderPipeline.AddRenderable(this);
     }
 
 
@@ -89,12 +86,15 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
 
     public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
     {
-
+        properties = Properties;
+        drawData = Mesh.Res;
+        model = Transform.localToWorldMatrix;
     }
 
 
     public void GetCullingData(out bool isRenderable, out Bounds bounds)
     {
-
+        isRenderable = _enabledInHierarchy;
+        bounds = new Bounds() { size = Vector3.infinity };
     }
 }

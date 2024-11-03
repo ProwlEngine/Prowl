@@ -11,10 +11,18 @@ public sealed class GraphicsFence : IDisposable
 {
     public Fence Fence;
 
+    public bool Signaled => Fence.Signaled;
+
+
     public GraphicsFence(bool signaled = false)
     {
         Fence = Graphics.Factory.CreateFence(signaled);
     }
+
+
+    public void Reset()
+        => Fence.Reset();
+
 
     public void Dispose()
     {
