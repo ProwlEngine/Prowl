@@ -432,7 +432,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         Tangents = tangents;
     }
 
-    internal void RecalculateBufferOffsets()
+    private void RecalculateBufferOffsets()
     {
         const int floatSize = sizeof(float);
 
@@ -447,7 +447,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         NormalsStart = UV2Start + (HasUV2 ? vertLen * vec2Size : 0);                  // Where UV1 ends
         TangentsStart = NormalsStart + (HasNormals ? vertLen * vec3Size : 0);         // Where Normals end
         ColorsStart = TangentsStart + (HasTangents ? vertLen * vec3Size : 0);         // Where Tangents end
-        BufferLength = ColorsStart + (HasColors ? vertLen * byte4Size : 0);   // Where bone weights end
+        BufferLength = ColorsStart + (HasColors ? vertLen * byte4Size : 0);           // Where Colors end
     }
 
     public override void OnDispose() => DeleteGPUBuffers();

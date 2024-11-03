@@ -44,7 +44,7 @@ public class MeshRenderer : MonoBehaviour, IRenderable
 
     public void GetCullingData(out bool isRenderable, out Bounds bounds)
     {
-        isRenderable = true;
+        isRenderable = _enabledInHierarchy;
         bounds = Mesh.Res.bounds.Transform(Transform.localToWorldMatrix);
     }
 }
