@@ -10,7 +10,21 @@ namespace Prowl.Runtime.Rendering;
 
 public class CommandBuffer : IDisposable
 {
-    private static Material s_blit;
+    private static AssetRef<Shader>? s_blitShader;
+    private static Material? s_blitMaterial;
+    public static Material BlitMaterial
+    {
+        get
+        {
+            if (s_blitShader == null)
+                s_blitShader = Application.AssetProvider.LoadAsset<Shader>("Defaults/Blit.shader");
+
+            if (s_blitMaterial == null)
+                s_blitMaterial = new Material(s_blitShader.Value);
+
+            return s_blitMaterial;
+        }
+    }
 
     internal CommandList _commandList;
     private bool _isRecording = false;
@@ -123,6 +137,36 @@ public class CommandBuffer : IDisposable
         SetDrawData(drawData);
         BindResources();
         DrawIndexed((uint)(indexCount <= 0 ? drawData.IndexCount : indexCount), indexOffset, 1, 0, 0);
+    }
+
+    public void Blit(Texture2D source, Framebuffer target)
+        => Blit(source.InternalTexture, target);
+
+    public void Blit(Texture2D source, RenderTexture target)
+        => Blit(source.InternalTexture, target.Framebuffer);
+
+    public void Blit(RenderTexture source, Framebuffer target)
+    {
+        if (source.ColorBuffers == null)
+            return;
+
+        Blit(source.ColorBuffers[0].InternalTexture, target);
+    }
+
+    public void Blit(RenderTexture source, RenderTexture target)
+    {
+        if (source.ColorBuffers == null)
+            return;
+
+        Blit(source.ColorBuffers[0].InternalTexture, target.Framebuffer);
+    }
+
+    public void Blit(Veldrid.Texture source, Framebuffer target)
+    {
+        SetRenderTarget(target);
+        SetMaterial(BlitMaterial, 0);
+        _bufferProperties.SetRawTexture("_MainTexture", source);
+        DrawSingle(Mesh.FullscreenMesh);
     }
 
     public void SetDrawData(IGeometryDrawData drawData)
@@ -261,6 +305,9 @@ public class CommandBuffer : IDisposable
 
     public void SetBuffer(string name, GraphicsBuffer buffer, int start = 0, int length = -1)
         => _bufferProperties.SetBuffer(name, buffer, start, length);
+
+    public void SetRawBuffer(string name, DeviceBuffer buffer, int start = 0, int length = -1)
+    => _bufferProperties.SetRawBuffer(name, buffer, start, length);
 
 
     internal void UpdatePipeline()

@@ -4,6 +4,10 @@ using Veldrid;
 
 using Prowl.Runtime.Rendering;
 
+using Vector3F = System.Numerics.Vector3;
+using Vector4F = System.Numerics.Vector4;
+using Matrix4x4F = System.Numerics.Matrix4x4;
+
 namespace Prowl.Runtime;
 
 
@@ -24,7 +28,8 @@ public class SkinnedMesh : IGeometryDrawData, IDisposable
     }
 
 
-    public Mesh Mesh;
+    public AssetRef<Mesh> MeshRes;
+    public Mesh Mesh => MeshRes.Res;
 
     public int IndexCount => Mesh.IndexCount;
 
@@ -32,83 +37,51 @@ public class SkinnedMesh : IGeometryDrawData, IDisposable
 
     public PrimitiveTopology Topology => Mesh.Topology;
 
-    public DeviceBuffer VertexBufferCopy;
     public DeviceBuffer VertexOutput;
-    public DeviceBuffer SkinningBuffer;
+    public DeviceBuffer NormalOutput;
+    public DeviceBuffer TangentOutput;
+    public DeviceBuffer BoneBuffer;
 
-    public int NormalsStart { get; private set; }
-    public int TangentsStart { get; private set; }
-    public int VertexBufferLength { get; private set; }
-
-    public int BoneWeightsStart { get; private set; }
-    public int BindPoseStart { get; private set; }
-    public int BoneTransformStart { get; private set; }
-    public int SkinningBufferLength { get; private set; }
+    public int BoneBufferLength { get; private set; }
 
 
     public ComputeDescriptor ComputeDescriptor;
 
 
 
-    public SkinnedMesh(Mesh sourceMesh)
+    public SkinnedMesh(AssetRef<Mesh> sourceMesh)
     {
-        Mesh = sourceMesh;
+        MeshRes = sourceMesh;
         ComputeDescriptor = new(SkinningShader);
-
-        RecreateVertexBuffers();
-        RecreateSkinningBuffer();
     }
 
 
-    private void RecalculateBufferOffsets()
+    private static unsafe void ValidateBuffer(ref DeviceBuffer buffer, uint sizeBytes, int stride, BufferUsage usage)
     {
-        const int floatSize = sizeof(float);
-        const int intSize = sizeof(int);
+        const int maxDiff = 2048; // If data is more than 2 kilobytes larger, downsize the buffer
 
-        const int int4Size = intSize * 4;
-        const int vec3Size = floatSize * 3;
-        const int vec4Size = floatSize * 4;
-        const int mat4Size = vec4Size * 4;
-
-        int vertLen = Mesh.Vertices.Length;
-
-        NormalsStart = vertLen * vec3Size;
-        TangentsStart = NormalsStart + (Mesh.HasTangents ? vertLen * vec3Size : 0);
-        VertexBufferLength = TangentsStart + (Mesh.HasTangents ? vertLen * vec4Size : 0);
-
-        BoneWeightsStart = vertLen * int4Size;                                                // Where bone indices end
-        BindPoseStart = BoneWeightsStart + (vertLen * vec4Size);                              // Where bone weights end
-        BoneTransformStart = BindPoseStart + (Mesh.bindPoses.Length * mat4Size);              // Where bind poses end
-        SkinningBufferLength = BoneTransformStart + (Mesh.bindPoses.Length * mat4Size);       // Where bone transforms end
+        if (buffer == null || buffer.SizeInBytes < sizeBytes || buffer.SizeInBytes - sizeBytes > maxDiff)
+        {
+            buffer?.Dispose();
+            buffer = Graphics.Factory.CreateBuffer(new BufferDescription(sizeBytes, usage, (uint)stride));
+        }
     }
 
 
-    private void RecreateVertexBuffers()
+    public unsafe void RecomputeSkinning(Matrix4x4F[] boneTransforms)
     {
-        VertexBufferCopy?.Dispose();
-        VertexBufferCopy = Graphics.Factory.CreateBuffer(new BufferDescription((uint)VertexBufferLength, Mesh.VertexBuffer.Usage | BufferUsage.StructuredBufferReadOnly));
+        Mesh.Upload();
 
-        VertexOutput?.Dispose();
-        VertexOutput = Graphics.Factory.CreateBuffer(new BufferDescription((uint)VertexBufferLength, Mesh.VertexBuffer.Usage | BufferUsage.StructuredBufferReadWrite));
-    }
+        const BufferUsage usage = BufferUsage.VertexBuffer | BufferUsage.StructuredBufferReadWrite;
 
+        ValidateBuffer(ref VertexOutput, Mesh.VertexBuffer.SizeInBytes, sizeof(Vector3F), usage);
+        ValidateBuffer(ref BoneBuffer, Mesh.BindPoseBuffer.SizeInBytes, sizeof(Matrix4x4F), BufferUsage.StructuredBufferReadOnly);
 
-    private void RecreateSkinningBuffer()
-    {
-        SkinningBuffer?.Dispose();
-        SkinningBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)SkinningBufferLength, BufferUsage.StructuredBufferReadOnly));
-    }
+        if (Mesh.HasNormals)
+            ValidateBuffer(ref NormalOutput, Mesh.NormalBuffer.SizeInBytes, sizeof(Vector3F), usage);
 
-
-    public void RecomputeSkinning(System.Numerics.Matrix4x4[] boneTransforms)
-    {
-        RecalculateBufferOffsets();
-
-        if (VertexBufferCopy.SizeInBytes != (uint)VertexBufferLength)
-            RecreateVertexBuffers();
-
-        if (SkinningBuffer.SizeInBytes != (uint)SkinningBufferLength)
-            RecreateSkinningBuffer();
+        if (Mesh.HasTangents)
+            ValidateBuffer(ref TangentOutput, Mesh.TangentBuffer.SizeInBytes, sizeof(Vector3F), usage);
 
         int kernel;
 
@@ -121,8 +94,22 @@ public class SkinnedMesh : IGeometryDrawData, IDisposable
         else
             kernel = SkinningShader.Res.GetKernelIndex("SkinVertex");
 
+        Graphics.Device.UpdateBuffer(BoneBuffer, 0, boneTransforms);
 
         ComputeDescriptor.SetInt("BufferLength", Mesh.VertexCount);
+
+        ComputeDescriptor.SetRawBuffer("InPositions", Mesh.VertexBuffer);
+        ComputeDescriptor.SetRawBuffer("InNormals", Mesh.NormalBuffer);
+        ComputeDescriptor.SetRawBuffer("InTangents", Mesh.TangentBuffer);
+        ComputeDescriptor.SetRawBuffer("BoneIndices", Mesh.BoneIndexBuffer);
+        ComputeDescriptor.SetRawBuffer("BoneWeights", Mesh.BoneWeightBuffer);
+        ComputeDescriptor.SetRawBuffer("BindPoses", Mesh.BindPoseBuffer);
+
+        ComputeDescriptor.SetRawBuffer("BoneTransforms", BoneBuffer);
+
+        ComputeDescriptor.SetRawBuffer("OutPositions", VertexOutput);
+        ComputeDescriptor.SetRawBuffer("OutNormals", NormalOutput);
+        ComputeDescriptor.SetRawBuffer("OutTangents", TangentOutput);
 
         ComputeDispatcher.Dispatch(ComputeDescriptor, kernel, (uint)Math.Ceiling(Mesh.VertexCount / 64.0), 1, 1);
     }
@@ -132,20 +119,21 @@ public class SkinnedMesh : IGeometryDrawData, IDisposable
     {
         commandList.SetIndexBuffer(Mesh.IndexBuffer, IndexFormat);
 
-        pipeline.BindVertexBuffer(commandList, "POSITION0", VertexBufferCopy, 0);
-        pipeline.BindVertexBuffer(commandList, "TEXCOORD0", Mesh.VertexBuffer, (uint)Mesh.UVStart);
-        pipeline.BindVertexBuffer(commandList, "TEXCOORD1", Mesh.VertexBuffer, (uint)Mesh.UV2Start);
-        pipeline.BindVertexBuffer(commandList, "NORMAL0", VertexBufferCopy, (uint)NormalsStart);
-        pipeline.BindVertexBuffer(commandList, "TANGENT0", VertexBufferCopy, (uint)TangentsStart);
-        pipeline.BindVertexBuffer(commandList, "COLOR0", Mesh.VertexBuffer, (uint)Mesh.ColorsStart);
+        pipeline.BindVertexBuffer(commandList, "POSITION0", VertexOutput);
+        pipeline.BindVertexBuffer(commandList, "TEXCOORD0", Mesh.HasUV ? Mesh.UVBuffer : Mesh.VertexBuffer);
+        pipeline.BindVertexBuffer(commandList, "TEXCOORD1", Mesh.HasUV2 ? Mesh.UV2Buffer : Mesh.VertexBuffer);
+        pipeline.BindVertexBuffer(commandList, "NORMAL0", Mesh.HasNormals ? NormalOutput : Mesh.VertexBuffer);
+        pipeline.BindVertexBuffer(commandList, "TANGENT0", Mesh.HasTangents ? TangentOutput : Mesh.VertexBuffer);
+        pipeline.BindVertexBuffer(commandList, "COLOR0", Mesh.HasColors ? Mesh.ColorBuffer : Mesh.VertexBuffer);
     }
 
 
     public void Dispose()
     {
-        VertexBufferCopy?.Dispose();
         VertexOutput?.Dispose();
-        SkinningBuffer?.Dispose();
+        NormalOutput?.Dispose();
+        TangentOutput?.Dispose();
+        BoneBuffer?.Dispose();
 
         GC.SuppressFinalize(this);
     }

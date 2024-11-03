@@ -392,8 +392,8 @@ public class ModelImporter : ScriptedImporter
 
             if (m.HasBones)
             {
-                mesh.bindPoses = new System.Numerics.Matrix4x4[m.Bones.Count];
-                mesh.BoneIndices = new System.Numerics.Vector4[vertexCount];
+                mesh.BindPoses = new System.Numerics.Matrix4x4[m.Bones.Count];
+                mesh.BoneIndices = new Vector4Int[vertexCount];
                 mesh.BoneWeights = new System.Numerics.Vector4[vertexCount];
                 for (var i = 0; i < m.Bones.Count; i++)
                 {
@@ -410,7 +410,7 @@ public class ModelImporter : ScriptedImporter
                     // Adjust translation by scale
                     bindPose.Translation *= (float)scale;
 
-                    mesh.bindPoses[i] = bindPose;
+                    mesh.BindPoses[i] = bindPose;
 
                     if (!bone.HasVertexWeights) continue;
                     byte boneIndex = (byte)(i + 1);
@@ -421,24 +421,24 @@ public class ModelImporter : ScriptedImporter
                         var weight = bone.VertexWeights[j];
                         var b = mesh.BoneIndices[weight.VertexID];
                         var w = mesh.BoneWeights[weight.VertexID];
-                        if (b.X == 0 || weight.Weight > w.X)
+                        if (b.x == 0 || weight.Weight > w.X)
                         {
-                            b.X = boneIndex;
+                            b.x = boneIndex;
                             w.X = weight.Weight;
                         }
-                        else if (b.Y == 0 || weight.Weight > w.Y)
+                        else if (b.y == 0 || weight.Weight > w.Y)
                         {
-                            b.Y = boneIndex;
+                            b.y = boneIndex;
                             w.Y = weight.Weight;
                         }
-                        else if (b.Z == 0 || weight.Weight > w.Z)
+                        else if (b.z == 0 || weight.Weight > w.Z)
                         {
-                            b.Z = boneIndex;
+                            b.z = boneIndex;
                             w.Z = weight.Weight;
                         }
-                        else if (b.W == 0 || weight.Weight > w.W)
+                        else if (b.w == 0 || weight.Weight > w.W)
                         {
-                            b.W = boneIndex;
+                            b.w = boneIndex;
                             w.W = weight.Weight;
                         }
                         else
