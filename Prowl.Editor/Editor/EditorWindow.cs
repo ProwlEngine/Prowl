@@ -253,7 +253,7 @@ public class EditorWindow
         }
         catch (Exception e)
         {
-            Debug.LogError("Error in EditorWindow: " + e.Message + "\n" + e.StackTrace);
+            Debug.LogException(new Exception("Exception in EditorWindow", e));
         }
 
         MaxZ = gui.GetCurrentInteractableZLayer();
