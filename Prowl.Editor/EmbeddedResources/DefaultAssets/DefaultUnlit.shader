@@ -120,26 +120,6 @@ Pass "TestShader"
 			return frac(magic.z * frac(dot(position_screen, magic.xy)));
 		}
 		
-		
-		// Improved random function with better distribution
-		float random(float2 seed)
-		{
-			return frac(sin(dot(seed, float2(12.9898, 78.233))) * 43758.5453123);
-		}
-		
-		// Improved Poisson disk sampling with better distribution
-		float2 poissonDisk(int i, int samplesCount, float2 randomSeed)
-		{
-			float goldenAngle = 2.399963229728653; // (3 - sqrt(5)) * PI
-			float theta = i * goldenAngle + random(randomSeed) * 2.0 * PI;
-			
-			// Improved radius calculation for more uniform distribution
-			float radius = sqrt((float(i) + 0.5) / float(samplesCount));
-			radius = lerp(0.1, 1.0, radius); // Ensure minimum spacing between samples
-			
-			return float2(radius * cos(theta), radius * sin(theta));
-		}
-		
 		// Improved blocker search with early exit and better averaging
 		float FindBlockerDistance(float2 uv, float2 lightPixelSize, float currentDepth, Light light, float2 screenPos)
 		{
@@ -150,13 +130,14 @@ Pass "TestShader"
 			float numBlockers = 0.0;
 			float maxBlockerDistance = 0.0;
 			
+			int blockerSamples = int(light.PositionType.y);
 			// Get rotated angle from screen position
 			float phi = InterleavedGradientNoise(screenPos) * 2.0 * PI;
 			
 			[unroll]
-			for(int i = 0; i < _BlockerSearchSamples; i++)
+			for(int i = 0; i < blockerSamples; i++)
 			{
-				float2 offset = VogelDiskSample(i, _BlockerSearchSamples, phi) * searchWidth;
+				float2 offset = VogelDiskSample(i, blockerSamples, phi) * searchWidth;
 				float2 sampleUV = uv + offset * lightPixelSize;
 				
 				float shadowMapDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, sampleUV).r;
@@ -168,10 +149,6 @@ Pass "TestShader"
 					blockerSum += shadowMapDepth;
 					maxBlockerDistance = max(maxBlockerDistance, currentDepth - shadowMapDepth);
 					numBlockers++;
-					
-					// Early exit if we have enough samples
-					if(numBlockers > _BlockerSearchSamples * 0.7)
-						break;
 				}
 			}
 			
@@ -415,8 +392,7 @@ Pass "TestShader"
                     specular *= coneAttenuation;
                     
                     // shadows
-                    float4 fragPosLightSpace = mul(light.ShadowMatrix, 
-                                                 float4(input.vertPos + (normal * light.ShadowData.w), 1.0));
+                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * light.ShadowData.w), 1.0));
                     float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
                     
                     // add to outgoing radiance Lo

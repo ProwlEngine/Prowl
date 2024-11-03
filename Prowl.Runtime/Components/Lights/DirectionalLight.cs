@@ -20,12 +20,10 @@ public class DirectionalLight : Light
     public Resolution shadowResolution = Resolution._1024;
 
     public float ambientIntensity = 0.05f;
-    public float qualitySamples = 16;
-    public float blockerSamples = 16;
+    public int qualitySamples = 32;
+    public int blockerSamples = 16;
     public float shadowDistance = 50f;
-    public float shadowRadius = 0.02f;
-    public float shadowPenumbra = 80f;
-    public float shadowMinimumPenumbra = 0.02f;
+    public float shadowRadius = 70f;
 
     public override void Update()
     {
@@ -52,22 +50,20 @@ public class DirectionalLight : Light
         if (cameraRelative)
         {
             view = Matrix4x4.CreateLookToLeftHanded(Transform.position - cameraPosition, forward, Transform.up);
-            lightPos = Transform.position - cameraPosition;
         }
         else
         {
             view = Matrix4x4.CreateLookToLeftHanded(Transform.position, forward, Transform.up);
-            lightPos = Transform.position;
         }
 
         return new GPULight
         {
-            PositionType = new Vector4(qualitySamples, 0, 0, 0),
+            PositionType = new Vector4(qualitySamples, blockerSamples, 0, 0),
             DirectionRange = new Vector4(GameObject.Transform.forward, shadowDistance),
             Color = color.GetUInt(),
             Intensity = intensity,
             SpotData = new Vector2(ambientIntensity, 0),
-            ShadowData = new Vector4(shadowRadius, shadowPenumbra, shadowBias, shadowNormalBias),
+            ShadowData = new Vector4(shadowRadius, 0.0, shadowBias, shadowNormalBias),
             ShadowMatrix = (view * proj).ToFloat()
         };
     }
