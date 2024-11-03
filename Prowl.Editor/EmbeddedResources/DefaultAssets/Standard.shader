@@ -1,4 +1,4 @@
-﻿Shader "Default/TestShader"
+﻿Shader "Default/Standard"
 Properties
 {
     _AlbedoTex("Albedo Texture", Texture2D) = "white"
@@ -8,7 +8,7 @@ Properties
     _AlphaClip("Alpha Clip", Float) = 0.5
 }
 
-Pass "TestShader"
+Pass "Standard"
 {
     Tags { "RenderOrder" = "Opaque" }
     Cull Back

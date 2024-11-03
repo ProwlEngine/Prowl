@@ -30,7 +30,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     public static Material CreateDefaultMaterial()
     {
-        return new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
+        return new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Standard.shader"));
     }
 
 

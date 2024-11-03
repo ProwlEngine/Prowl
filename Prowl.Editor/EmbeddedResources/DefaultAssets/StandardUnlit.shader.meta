@@ -2,9 +2,9 @@
   "$id": 1,
   "$type": "Prowl.Editor.Assets.MetaFile",
   "version": 1,
-  "guid": "2f7a7ab0-8bc8-43b8-983d-0b2181865259",
+  "guid": "b7793e67-f720-44fd-8f1f-1707f2750de9",
   "assetNames": [
-    "Default/Unlit"
+    "Default/StandardUnlit"
   ],
   "assetTypes": [
     "Prowl.Runtime.Shader"

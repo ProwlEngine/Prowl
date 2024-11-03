@@ -32,7 +32,7 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         s_quadMesh ??= Mesh.CreateQuad(Vector2.one);
         s_gridMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
-        s_defaultMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
+        s_defaultMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Standard.shader"));
         s_skybox ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ProceduralSky.shader"));
         s_gizmo ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Gizmo.shader"));
 
