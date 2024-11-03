@@ -56,7 +56,8 @@ public class BindableResourceSet
                     (GraphicsBuffer? buffer, int start, int length) = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
                     buffer ??= GraphicsBuffer.Empty;
 
-                    if (!buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly))
+                    if (!buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly) &&
+                        !buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
                         buffer = GraphicsBuffer.EmptyRW;
 
                     DeviceBufferRange range = new DeviceBufferRange(buffer.Buffer, (uint)start, length < 0 ? buffer.Buffer.SizeInBytes : (uint)length);
