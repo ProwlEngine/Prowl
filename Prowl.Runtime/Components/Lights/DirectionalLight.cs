@@ -23,7 +23,7 @@ public class DirectionalLight : Light
     public int qualitySamples = 32;
     public int blockerSamples = 16;
     public float shadowDistance = 50f;
-    public float shadowRadius = 70f;
+    public float shadowRadius = 1f;
 
     public override void Update()
     {
