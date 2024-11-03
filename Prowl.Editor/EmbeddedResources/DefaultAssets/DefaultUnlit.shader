@@ -216,6 +216,70 @@ Pass "TestShader"
                     ambientStrength += light.SpotData.x;
                     lighting += color;
                 }
+                else if(light.PositionType.w == 1.0) // Point Light
+                {
+                    float radius = light.DirectionRange.w;
+                    
+                    float3 lightPos = mul(Mat_V, float4(light.PositionType.xyz, 1)).xyz;
+                    float3 L = normalize(lightPos - input.fragPos);
+                    float3 H = normalize(V + L);
+                    
+                    float3 kD;
+                    float3 specular;
+                    CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular);
+                    
+                    // attenuation
+                    float distance = length(lightPos - input.fragPos);
+                    float falloff = (saturate(1.0 - pow(distance / radius, 4)) * 
+                                    saturate(1.0 - pow(distance / radius, 4))) / 
+                                    (distance * distance + 1.0);
+                    float3 radiance = lightColor * intensity * falloff;
+                
+                    // add to outgoing radiance Lo
+                    float NdotL = max(dot(N, L), 0.0);                
+                    float3 color = (kD * baseColor.rgb / PI + specular) * radiance * NdotL;
+                    
+                    lighting += color;
+                }
+                else // Spot Light
+                {
+                    float3 lightPos = mul(Mat_V, float4(light.PositionType.xyz, 1)).xyz;
+                    float3 L = normalize(lightPos - input.fragPos);
+                    float3 H = normalize(V + L);
+                    float theta = dot(L, normalize(-mul((float3x3)Mat_V, light.DirectionRange.xyz)));
+                
+                    // attenuation
+                    float radius = light.DirectionRange.w;
+                    float lightAngle = light.SpotData.x;
+                    float lightFalloff = light.SpotData.y;
+                    
+                    float distance = length(lightPos - input.fragPos);
+                    float falloff = (saturate(1.0 - pow(distance / radius, 4)) * 
+                                    saturate(1.0 - pow(distance / radius, 4))) / 
+                                    (distance * distance + 1.0);
+                    
+                    // cone attenuation
+                    float epsilon = lightAngle - lightFalloff;
+                    float coneAttenuation = saturate((theta - lightFalloff) / epsilon);
+                    
+                    float3 radiance = lightColor * intensity * falloff * coneAttenuation;
+                    
+                    float3 kD;
+                    float3 specular;
+                    CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular);
+                    specular *= coneAttenuation;
+                    
+                    // shadows
+                    float4 fragPosLightSpace = mul(light.ShadowMatrix, 
+                                                 float4(input.vertPos + (normal * light.ShadowData.w), 1.0));
+                    float shadow = ShadowCalculation(fragPosLightSpace, light);
+                    
+                    // add to outgoing radiance Lo
+                    float NdotL = max(dot(N, L), 0.0);        
+                    float3 color = ((kD * baseColor.rgb) / PI + specular) * radiance * (1.0 - shadow) * NdotL;
+                    
+                    lighting += color;
+                }
             }
 
             lighting *= (1.0 - surface.r);
