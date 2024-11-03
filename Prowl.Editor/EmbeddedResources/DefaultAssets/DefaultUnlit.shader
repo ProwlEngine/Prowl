@@ -266,13 +266,23 @@ Pass "TestShader"
             output.uv = input.uv;
             output.vertColor = input.color;
             output.normal = input.normal;
-            
-            float3x3 normalMatrix = transpose((float3x3)Mat_WorldToObject);
-            
-            float3 T = normalize(mul((float3x3)Mat_ObjectToWorld, input.tangent));
-            float3 B = normalize(mul((float3x3)Mat_ObjectToWorld, cross(input.normal, input.tangent)));
-            float3 N = normalize(mul((float3x3)Mat_ObjectToWorld, input.normal));
-            output.TBN = float3x3(T, B, N);
+    
+			// Correctly transform normal and tangent to world space
+			float3 worldNormal = normalize(mul((float3x3)Mat_ObjectToWorld, input.normal));
+			float3 worldTangent = normalize(mul((float3x3)Mat_ObjectToWorld, input.tangent));
+			
+			// Ensure tangent is perpendicular to normal using Gram-Schmidt
+			worldTangent = normalize(worldTangent - dot(worldTangent, worldNormal) * worldNormal);
+			
+			// Calculate bitangent and ensure proper handedness
+			float3 worldBitangent = cross(worldNormal, worldTangent);
+			
+			// Construct TBN matrix - note the transpose here
+			output.TBN = float3x3(
+				worldTangent,
+				worldBitangent,
+				worldNormal
+			);
             
             return output;
         }
@@ -297,7 +307,7 @@ Pass "TestShader"
             // Normal
             float3 normal = _NormalTex.Sample(sampler_NormalTex, input.uv).rgb;
             normal = normal * 2.0 - 1.0;   
-            normal = normalize(mul(input.TBN, normal));
+            normal = normalize(mul(normal, input.TBN));
             output.Normal = mul((float3x3)Mat_V, normal);
 
             // AO, Roughness, Metallic
@@ -342,7 +352,7 @@ Pass "TestShader"
                     CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular);
 
                     float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * light.ShadowData.w), 1.0));
-                    float shadow = ShadowCalculation(fragPosLightSpace, light);
+                    float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
 
                     float3 radiance = lightColor * intensity;
                     float NdotL = max(dot(N, L), 0.0);
@@ -407,7 +417,7 @@ Pass "TestShader"
                     // shadows
                     float4 fragPosLightSpace = mul(light.ShadowMatrix, 
                                                  float4(input.vertPos + (normal * light.ShadowData.w), 1.0));
-                    float shadow = ShadowCalculation(fragPosLightSpace, light);
+                    float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
                     
                     // add to outgoing radiance Lo
                     float NdotL = max(dot(N, L), 0.0);        
