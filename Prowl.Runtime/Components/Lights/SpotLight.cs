@@ -7,11 +7,14 @@ using Prowl.Runtime.Rendering.Pipelines;
 namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Spot Light")]
+[ExecuteAlways]
 public class SpotLight : Light
 {
     public float distance = 4.0f;
     public float angle = 0.97f;
     public float falloff = 0.96f;
+
+    public override void Update() => RenderPipeline.AddLight(this);
 
     public override LightType GetLightType() => LightType.Spot;
 

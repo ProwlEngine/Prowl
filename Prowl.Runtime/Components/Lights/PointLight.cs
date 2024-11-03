@@ -7,9 +7,12 @@ using Prowl.Runtime.Rendering.Pipelines;
 namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Point Light")]
+[ExecuteAlways]
 public class PointLight : Light
 {
     public float radius = 4.0f;
+
+    public override void Update() => RenderPipeline.AddLight(this);
 
     public override LightType GetLightType() => LightType.Point;
 
