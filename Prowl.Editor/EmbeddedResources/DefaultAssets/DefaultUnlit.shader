@@ -218,7 +218,7 @@ Pass "TestShader"
 			projCoords = projCoords * 0.5 + 0.5;
 			
 			// Early exit for positions outside shadow map
-			if (any(projCoords > 1.0) || any(projCoords < 0.0))
+			if (any(projCoords > 1.0) || any(projCoords < 0.0) || light.AtlasWidth <= 1.0)
 				return 0.0;
 			
 			float AtlasX = (float)light.AtlasX;
