@@ -226,7 +226,7 @@ Pass "ToneMapper"
 
             float3 tonemappedColor = Tonemap(baseColor);
 
-            float3 color = mul(mul(contrastMatrix(), SaturationMatrix()), float4(baseColor, 1.0)).rgb;
+            float3 color = mul(mul(contrastMatrix(), SaturationMatrix()), float4(tonemappedColor, 1.0)).rgb;
 
             // Gamma correction
             float3 gcColor = pow(color.rgb, (float3)1.0 / 2.2);
