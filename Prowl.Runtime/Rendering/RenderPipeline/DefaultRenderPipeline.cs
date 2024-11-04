@@ -182,18 +182,13 @@ public class DefaultRenderPipeline : RenderPipeline
         }
         */
 
-
-        buffer.SetRenderTarget(target);
-        buffer.ClearRenderTarget(true, true , Color.black);
-        buffer.SetTexture("_MainTexture", forward.ColorBuffers[0]);
-        buffer.SetFloat("_Contrast", 1f);
-        buffer.SetFloat("_Saturation", 1f);
-        buffer.SetMaterial(s_tonemapper, 0);
-        buffer.DrawSingle(Mesh.FullscreenMesh);
-
         Graphics.SubmitCommandBuffer(buffer);
-
         CommandBufferPool.Release(buffer);
+
+        s_tonemapper.SetFloat("_Contrast", 1f);
+        s_tonemapper.SetFloat("_Saturation", 1f);
+        Graphics.Blit(forward.ColorBuffers[0], target, s_tonemapper);
+
         RenderTexture.ReleaseTemporaryRT(forward);
     }
 

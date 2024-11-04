@@ -9,13 +9,8 @@ Pass "ToneMapper"
 		DepthTest Off
 		DepthWrite Off
 	}
-
-    Blend
-    {
-		Src Alpha SourceAlpha
-		Dest Alpha One
-		Mode Alpha Add
-    }
+    
+    Blend Override
 
     // Rasterizer culling mode
     Cull None
@@ -37,8 +32,8 @@ Pass "ToneMapper"
 		};
 
 
-		Texture2D<float4> _MainTexture;
-		SamplerState sampler_MainTexture;
+		Texture2D<float4> _MainTex;
+		SamplerState sampler_MainTex;
 
         float _Contrast;
         float _Saturation;
@@ -222,7 +217,7 @@ Pass "ToneMapper"
 
         float4 Fragment(Varyings input) : SV_TARGET
         {
-			float3 baseColor = _MainTexture.Sample(sampler_MainTexture, input.uv).rgb;
+			float3 baseColor = _MainTex.Sample(sampler_MainTex, input.uv).rgb;
 
             float3 tonemappedColor = Tonemap(baseColor);
 
