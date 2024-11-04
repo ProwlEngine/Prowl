@@ -306,7 +306,7 @@ Pass "ProceduralSky"
 		{
 			float3 sunDisc = (float3)(1 - step(dot(normalize(input.vDir), normalize(-_SunDir)), 0.9995));
 
-			return float4(sunDisc + (input.vCol * 0.65), 1);
+			return float4(sunDisc + (input.vCol * 2), 1);
 		}
 	ENDHLSL
 }
