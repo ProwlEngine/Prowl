@@ -266,12 +266,12 @@ public class DefaultRenderPipeline : RenderPipeline
         int width = ShadowAtlas.GetAtlasWidth();
 
         // Sort lights by distance from camera
-        lights = lights.OrderBy(l => {
-            if (l is DirectionalLight)
-                return 0; // Directional Lights always get highest priority
-            else
-                return Vector3.Distance(cam.Transform.position, l.GetLightPosition());
-        }).ToList();
+        //lights = lights.OrderBy(l => {
+        //    if (l is DirectionalLight)
+        //        return 0; // Directional Lights always get highest priority
+        //    else
+        //        return Vector3.Distance(cam.Transform.position, l.GetLightPosition());
+        //}).ToList();
 
         List<GPULight> gpuLights = [];
         foreach (var light in lights)
