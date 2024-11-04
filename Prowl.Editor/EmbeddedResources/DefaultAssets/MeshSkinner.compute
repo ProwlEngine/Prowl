@@ -43,7 +43,6 @@ for (int i = 0; i < 4; i++) \
 [numthreads(64, 1, 1)]
 void SkinFull(uint id : SV_DispatchThreadID)
 {
-    // Bounds check
     if (id >= BufferLength)
         return;
 
@@ -64,16 +63,15 @@ void SkinFull(uint id : SV_DispatchThreadID)
 	    totalTangent += mul(boneRotation, vertexTangent.xyz) * weight;
 	SKIN_LOOP_END
 
-	SET_VERTEX(id, OutPositions, totalPosition);// totalPosition;
-	SET_VERTEX(id, OutNormals, normalize(totalNormal));// normalize(totalNormal);
-	SET_VERTEX(id, OutTangents, normalize(totalTangent));// normalize(totalTangent);
+	SET_VERTEX(id, OutPositions, totalPosition);
+	SET_VERTEX(id, OutNormals, normalize(totalNormal));
+	SET_VERTEX(id, OutTangents, normalize(totalTangent));
 }
 
 
 [numthreads(64, 1, 1)]
 void SkinVertex(uint id : SV_DispatchThreadID)
 {
-    // Bounds check
     if (id >= BufferLength)
         return;
 
@@ -88,14 +86,13 @@ void SkinVertex(uint id : SV_DispatchThreadID)
 	    totalPosition += mul(boneTransform, float4(vertexPosition, 1.0)).xyz * weight;
 	SKIN_LOOP_END
 
-	SET_VERTEX(id, OutPositions, totalPosition);// totalPosition;
+	SET_VERTEX(id, OutPositions, totalPosition);
 }
 
 
 [numthreads(64, 1, 1)]
 void SkinVertexNormal(uint id : SV_DispatchThreadID)
 {
-    // Bounds check
     if (id >= BufferLength)
         return;
 
@@ -113,15 +110,14 @@ void SkinVertexNormal(uint id : SV_DispatchThreadID)
 	    totalNormal += mul(boneRotation, vertexNormal.xyz) * weight;
 	SKIN_LOOP_END
 
-	SET_VERTEX(id, OutPositions, totalPosition);// totalPosition;
-	SET_VERTEX(id, OutNormals, normalize(totalNormal));// normalize(totalNormal);
+	SET_VERTEX(id, OutPositions, totalPosition);
+	SET_VERTEX(id, OutNormals, normalize(totalNormal));
 }
 
 
 [numthreads(64, 1, 1)]
 void SkinVertexTangent(uint id : SV_DispatchThreadID)
 {
-    // Bounds check
     if (id >= BufferLength)
         return;
 
@@ -139,6 +135,6 @@ void SkinVertexTangent(uint id : SV_DispatchThreadID)
 	    totalTangent += mul(boneRotation, vertexTangent) * weight;
 	SKIN_LOOP_END
 
-	SET_VERTEX(id, OutPositions, totalPosition);// totalPosition;
-	SET_VERTEX(id, OutTangents, normalize(totalTangent));// normalize(totalTangent);
+	SET_VERTEX(id, OutPositions, totalPosition);
+	SET_VERTEX(id, OutTangents, normalize(totalTangent));
 }
