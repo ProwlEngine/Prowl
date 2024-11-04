@@ -62,6 +62,11 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
         return _passes[passIndex];
     }
 
+    public ShaderPass GetPass(string passName)
+    {
+        return _passes[GetPassIndex(passName)];
+    }
+
     public int GetPassIndex(string passName)
     {
         return _nameIndexLookup.GetValueOrDefault(passName, -1);
