@@ -416,7 +416,7 @@ Pass "Standard"
 Pass "Shadow"
 {
     Tags { "RenderOrder" = "Shadow" }
-    Cull None
+    Cull Front
 
     HLSLPROGRAM
         #pragma vertex Vertex
