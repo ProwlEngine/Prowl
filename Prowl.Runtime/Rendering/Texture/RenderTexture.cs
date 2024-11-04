@@ -325,6 +325,9 @@ public sealed class RenderTexture : EngineObject, ISerializable
     // Cast to Framebuffer
     public static implicit operator Framebuffer(RenderTexture rt) => rt.Framebuffer;
 
+    // Cast to Texture2D
+    public static implicit operator Texture2D(RenderTexture rt) => rt.ColorBuffers[0];
+
     #region Pool
 
     private static readonly Dictionary<RenderTextureDescription, List<(RenderTexture, long frameCreated)>> pool = [];

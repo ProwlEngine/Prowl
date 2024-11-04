@@ -187,7 +187,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         s_tonemapper.SetFloat("_Contrast", 1f);
         s_tonemapper.SetFloat("_Saturation", 1f);
-        Graphics.Blit(forward.ColorBuffers[0], target, s_tonemapper);
+        Graphics.Blit(forward, target, s_tonemapper);
 
         RenderTexture.ReleaseTemporaryRT(forward);
     }
