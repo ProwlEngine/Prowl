@@ -322,6 +322,8 @@ public sealed class RenderTexture : EngineObject, ISerializable
         return true;
     }
 
+    // Cast to Framebuffer
+    public static implicit operator Framebuffer(RenderTexture rt) => rt.Framebuffer;
 
     #region Pool
 
