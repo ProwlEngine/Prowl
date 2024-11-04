@@ -72,6 +72,9 @@ public class SkinnedMesh : IGeometryDrawData, IDisposable
     {
         Mesh.Upload();
 
+        if (!Mesh.HasBoneIndices || !Mesh.HasBoneWeights || !Mesh.HasBindPoses)
+            return;
+
         const BufferUsage usage = BufferUsage.VertexBuffer | BufferUsage.StructuredBufferReadWrite;
 
         ValidateBuffer(ref VertexOutput, Mesh.VertexBuffer.SizeInBytes, sizeof(Vector3F), usage);
@@ -99,8 +102,13 @@ public class SkinnedMesh : IGeometryDrawData, IDisposable
         ComputeDescriptor.SetInt("BufferLength", Mesh.VertexCount);
 
         ComputeDescriptor.SetRawBuffer("InPositions", Mesh.VertexBuffer);
-        ComputeDescriptor.SetRawBuffer("InNormals", Mesh.NormalBuffer);
-        ComputeDescriptor.SetRawBuffer("InTangents", Mesh.TangentBuffer);
+
+        if (Mesh.HasNormals)
+            ComputeDescriptor.SetRawBuffer("InNormals", Mesh.NormalBuffer);
+
+        if (Mesh.HasTangents)
+            ComputeDescriptor.SetRawBuffer("InTangents", Mesh.TangentBuffer);
+
         ComputeDescriptor.SetRawBuffer("BoneIndices", Mesh.BoneIndexBuffer);
         ComputeDescriptor.SetRawBuffer("BoneWeights", Mesh.BoneWeightBuffer);
         ComputeDescriptor.SetRawBuffer("BindPoses", Mesh.BindPoseBuffer);
@@ -108,8 +116,12 @@ public class SkinnedMesh : IGeometryDrawData, IDisposable
         ComputeDescriptor.SetRawBuffer("BoneTransforms", BoneBuffer);
 
         ComputeDescriptor.SetRawBuffer("OutPositions", VertexOutput);
-        ComputeDescriptor.SetRawBuffer("OutNormals", NormalOutput);
-        ComputeDescriptor.SetRawBuffer("OutTangents", TangentOutput);
+
+        if (Mesh.HasNormals)
+            ComputeDescriptor.SetRawBuffer("OutNormals", NormalOutput);
+
+        if (Mesh.HasTangents)
+            ComputeDescriptor.SetRawBuffer("OutTangents", TangentOutput);
 
         ComputeDispatcher.Dispatch(ComputeDescriptor, kernel, (uint)Math.Ceiling(Mesh.VertexCount / 64.0), 1, 1);
     }
@@ -117,6 +129,12 @@ public class SkinnedMesh : IGeometryDrawData, IDisposable
 
     public void SetDrawData(CommandList commandList, ShaderPipeline pipeline)
     {
+        if (!Mesh.HasBoneIndices || !Mesh.HasBoneWeights || !Mesh.HasBindPoses || VertexOutput == null)
+        {
+            Mesh.SetDrawData(commandList, pipeline);
+            return;
+        }
+
         commandList.SetIndexBuffer(Mesh.IndexBuffer, IndexFormat);
 
         pipeline.BindVertexBuffer(commandList, "POSITION0", VertexOutput);
@@ -131,9 +149,13 @@ public class SkinnedMesh : IGeometryDrawData, IDisposable
     public void Dispose()
     {
         VertexOutput?.Dispose();
+        VertexOutput = null;
         NormalOutput?.Dispose();
+        NormalOutput = null;
         TangentOutput?.Dispose();
+        TangentOutput = null;
         BoneBuffer?.Dispose();
+        BoneBuffer = null;
 
         GC.SuppressFinalize(this);
     }
