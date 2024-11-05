@@ -59,7 +59,7 @@ public static class SceneManager
         cam.tag = "Main Camera";
         cam.Transform.position = new(0, 0, -10);
         Camera camComp = cam.AddComponent<Camera>();
-        camComp.DrawOrder = -1;
+        camComp.Depth = -1;
         Current.Res!.Add(cam);
     }
 
@@ -126,7 +126,7 @@ public static class SceneManager
     {
         var Cameras = Scene.ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
 
-        Cameras.Sort((a, b) => a.DrawOrder.CompareTo(b.DrawOrder));
+        Cameras.Sort((a, b) => a.Depth.CompareTo(b.Depth));
 
         if (Cameras.Count == 0)
             return false;

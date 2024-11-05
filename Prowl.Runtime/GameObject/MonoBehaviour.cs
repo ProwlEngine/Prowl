@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Reflection;
 
 using Prowl.Runtime.Cloning;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
@@ -228,6 +229,13 @@ public abstract class MonoBehaviour : EngineObject
     /// Called when a new level is loaded.
     /// </summary>
     public virtual void OnLevelWasLoaded() { }
+
+    /// <summary>
+    /// Called when the camera (On this gameobject) has rendered the scene.
+    /// <see cref="ImageEffectOpaqueAttribute"/> can be used to specify the order of execution.
+    /// <see cref="ImageEffectAllowedInSceneView"/> can be used to specify if the effect should be rendered in the Scene View.
+    /// </summary>
+    public virtual void OnRenderImage(RenderTexture src, RenderTexture dest) { }
 
     /// <summary>
     /// Called when the MonoBehaviour will be destroyed.

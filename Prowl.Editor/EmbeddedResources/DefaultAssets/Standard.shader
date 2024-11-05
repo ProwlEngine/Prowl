@@ -415,7 +415,7 @@ Pass "Standard"
 
 Pass "Shadow"
 {
-    Tags { "RenderOrder" = "Shadow" }
+    Tags { "LightMode" = "ShadowCaster" }
     Cull Front
 
     HLSLPROGRAM

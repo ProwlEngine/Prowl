@@ -1,13 +1,16 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+using System.Linq;
+
 using Prowl.Icons;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Pipelines;
 
 namespace Prowl.Runtime;
 
-public enum CameraClearMode
+public enum CameraClearFlags
 {
     None,
     DepthOnly,
@@ -17,28 +20,28 @@ public enum CameraClearMode
 }
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Camera}  Camera")]
-[ExecuteAlways]
 public class Camera : MonoBehaviour
 {
-    public LayerMask LayerMask = LayerMask.Everything;
-
-    public CameraClearMode ClearMode = CameraClearMode.Skybox;
-    public Color ClearColor = new Color(0f, 0f, 0f, 1f);
-    public float FieldOfView = 60f;
-    public float OrthographicSize = 0.5f;
-    public int DrawOrder = 0;
-    public Rect Viewrect = new Rect(0, 0, 1, 1);
-    public float NearClip = 0.01f;
-    public float FarClip = 1000f;
-
-    public float RenderScale = 1.0f;
+    public CameraClearFlags ClearFlags = CameraClearFlags.Skybox;
+    public Color ClearColor = new(0f, 0f, 0f, 1f);
+    public LayerMask CullingMask = LayerMask.Everything;
 
     public enum ProjectionType { Perspective, Orthographic }
     public ProjectionType projectionType = ProjectionType.Perspective;
 
+    [ShowIf(nameof(IsOrthographic), true)] public float FieldOfView = 60f;
+    [ShowIf(nameof(IsOrthographic))] public float OrthographicSize = 0.5f;
+    public float NearClip = 0.01f;
+    public float FarClip = 1000f;
+    public Rect Viewrect = new(0, 0, 1, 1);
+    public int Depth = -1;
 
-    public AssetRef<RenderTexture> Target;
     public AssetRef<RenderPipeline> Pipeline;
+    public AssetRef<RenderTexture> Target;
+    public bool HDR = false;
+    public float RenderScale = 1.0f;
+
+    public bool IsOrthographic => projectionType == ProjectionType.Orthographic;
 
     private static WeakReference<Camera> s_mainCamera = new(null);
 
@@ -49,7 +52,7 @@ public class Camera : MonoBehaviour
             if (s_mainCamera.TryGetTarget(out Camera? camera) && camera != null)
                 return camera;
 
-            camera = GameObject.FindGameObjectWithTag("Main Camera")?.GetComponent<Camera>() ?? GameObject.FindObjectsOfType<Camera>().FirstOrDefault(cam => cam.Name != "Editor-Camera");
+            camera = GameObject.FindGameObjectWithTag("Main Camera")?.GetComponent<Camera>() ?? GameObject.FindObjectsOfType<Camera>().FirstOrDefault();
             if(camera != null)
                 s_mainCamera.SetTarget(camera);
             return camera;
