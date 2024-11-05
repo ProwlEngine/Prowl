@@ -40,6 +40,22 @@ public class Camera : MonoBehaviour
     public AssetRef<RenderTexture> Target;
     public AssetRef<RenderPipeline> Pipeline;
 
+    private static WeakReference<Camera> s_mainCamera = new(null);
+
+    public static Camera? Main
+    {
+        get
+        {
+            if (s_mainCamera.TryGetTarget(out Camera? camera) && camera != null)
+                return camera;
+
+            camera = GameObject.FindGameObjectWithTag("Main Camera")?.GetComponent<Camera>() ?? GameObject.FindObjectsOfType<Camera>().FirstOrDefault(cam => cam.Name != "Editor-Camera");
+            if(camera != null)
+                s_mainCamera.SetTarget(camera);
+            return camera;
+        }
+        internal set => s_mainCamera.SetTarget(value);
+    }
 
     public Ray ScreenPointToRay(Vector2 screenPoint, Vector2 screenScale)
     {
