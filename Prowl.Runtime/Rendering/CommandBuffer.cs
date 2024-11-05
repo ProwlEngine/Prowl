@@ -165,7 +165,7 @@ public class CommandBuffer : IDisposable
     {
         SetRenderTarget(target);
         SetMaterial(BlitMaterial, 0);
-        _bufferProperties.SetRawTexture("_MainTexture", source);
+        _bufferProperties.SetRawTexture("_MainTex", source);
         DrawSingle(Mesh.FullscreenMesh);
     }
 

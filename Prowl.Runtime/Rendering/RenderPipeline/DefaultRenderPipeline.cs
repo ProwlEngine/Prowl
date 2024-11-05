@@ -143,7 +143,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 // The vertices have already been transformed by the gizmo system to be camera relative (if needed) so we just need to draw them
                 buffer.SetMatrix("_Matrix_VP", vp.ToFloat());
 
-                buffer.SetTexture("_MainTexture", Texture2D.White.Res);
+                buffer.SetTexture("_MainTex", Texture2D.White.Res);
                 buffer.SetMaterial(s_gizmo);
                 if (wire != null) buffer.DrawSingle(wire);
                 if (solid != null) buffer.DrawSingle(solid);
@@ -162,7 +162,7 @@ public class DefaultRenderPipeline : RenderPipeline
                     Matrix4x4 billboard = Matrix4x4.CreateBillboard(center, Vector3.zero, camera.Transform.up, camera.Transform.forward);
 
                     buffer.SetMatrix("_Matrix_VP", (billboard * vp).ToFloat());
-                    buffer.SetTexture("_MainTexture", icon.texture);
+                    buffer.SetTexture("_MainTex", icon.texture);
 
                     buffer.DrawSingle(s_quadMesh);
                 }

@@ -47,8 +47,8 @@ Pass "Gizmo"
             float2 uv : INTERPOLATE1;
         };
 
-		Texture2D<float4> _MainTexture;
-		SamplerState sampler_MainTexture;
+		Texture2D<float4> _MainTex;
+		SamplerState sampler_MainTex;
 
         float4x4 _Matrix_VP;
 
@@ -66,7 +66,7 @@ Pass "Gizmo"
 
 		float4 Fragment(Varyings input) : SV_TARGET
 		{
-			float3 color = _MainTexture.Sample(sampler_MainTexture, input.uv).rgb * input.col.rgb;
+			float3 color = _MainTex.Sample(sampler_MainTex, input.uv).rgb * input.col.rgb;
             return float4(color, 1.0);
 		}
 	ENDHLSL

@@ -22,8 +22,8 @@ Pass "Blit"
 		};
 
 
-		Texture2D<float4> _MainTexture;
-		SamplerState sampler_MainTexture;
+		Texture2D<float4> _MainTex;
+		SamplerState sampler_MainTex;
 
 
         Varyings Vertex(Attributes input)
@@ -38,7 +38,7 @@ Pass "Blit"
 
         float4 Fragment(Varyings input) : SV_TARGET
         {
-			float3 baseColor = _MainTexture.Sample(sampler_MainTexture, input.uv).rgb;
+			float3 baseColor = _MainTex.Sample(sampler_MainTex, input.uv).rgb;
 
             return float4(baseColor, 1.0);
         }
