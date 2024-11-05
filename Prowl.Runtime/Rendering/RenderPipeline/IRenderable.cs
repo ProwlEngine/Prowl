@@ -9,6 +9,8 @@ public interface IRenderable
 {
     public Material GetMaterial();
 
+    public byte GetLayer();
+
     public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
 
     public void GetCullingData(out bool isRenderable, out Bounds bounds);

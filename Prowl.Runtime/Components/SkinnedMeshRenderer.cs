@@ -80,10 +80,9 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
     }
 
 
-    public Material GetMaterial()
-    {
-        return Material.Res;
-    }
+    public Material GetMaterial() => Material.Res;
+
+    public byte GetLayer() => GameObject.layerIndex;
 
 
     public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)

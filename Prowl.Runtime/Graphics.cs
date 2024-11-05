@@ -21,17 +21,20 @@ public static partial class Graphics
         private AssetRef<Mesh> _mesh;
         private AssetRef<Material> _material;
         private Matrix4x4 _transform;
+        private byte _layerIndex;
         private PropertyState _properties;
 
-        public MeshRenderable(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, PropertyState? propertyBlock = null)
+        public MeshRenderable(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, byte layerIndex, PropertyState? propertyBlock = null)
         {
             _mesh = mesh;
             _material = material;
             _transform = matrix;
+            _layerIndex = layerIndex;
             _properties = propertyBlock ?? new();
         }
 
         public Material GetMaterial() => _material.Res;
+        public byte GetLayer() => _layerIndex;
 
         public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
         {
@@ -119,9 +122,9 @@ public static partial class Graphics
         return list;
     }
 
-    public static void DrawMesh(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, PropertyState? propertyBlock = null)
+    public static void DrawMesh(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, byte layerIndex, PropertyState? propertyBlock = null)
     {
-        RenderPipeline.AddRenderable(new MeshRenderable(mesh, material, matrix, propertyBlock));
+        RenderPipeline.AddRenderable(new MeshRenderable(mesh, material, matrix, layerIndex, propertyBlock));
     }
 
     public static void Blit(Texture2D source, Framebuffer dest, Material mat = null, int pass = 0)
