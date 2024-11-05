@@ -2,6 +2,14 @@
 
 Pass "Blit"
 {
+	DepthStencil
+	{
+		DepthTest Off
+		DepthWrite Off
+	}
+    
+    Blend Override
+
     // Rasterizer culling mode
     Cull None
 
