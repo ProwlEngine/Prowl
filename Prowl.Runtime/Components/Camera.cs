@@ -33,7 +33,7 @@ public class Camera : MonoBehaviour
     [ShowIf(nameof(IsOrthographic))] public float OrthographicSize = 0.5f;
     public float NearClip = 0.01f;
     public float FarClip = 1000f;
-    public Rect Viewrect = new(0, 0, 1, 1);
+    //public Rect Viewrect = new(0, 0, 1, 1); // Not Implemented
     public int Depth = -1;
 
     public AssetRef<RenderPipeline> Pipeline;
