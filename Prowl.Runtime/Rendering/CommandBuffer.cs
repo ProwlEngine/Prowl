@@ -236,6 +236,11 @@ public class CommandBuffer : IDisposable
             _commandList.ResolveTexture(src.ColorBuffers[i].InternalTexture, dest.ColorBuffers[i].InternalTexture);
     }
 
+    public void CopyTexture(Texture2D src, Texture2D dest)
+    {
+        _commandList.CopyTexture(src.InternalTexture, dest.InternalTexture);
+    }
+
     public void SetViewport(uint viewport, int x, int y, int width, int height, float z, float depth)
         => _commandList.SetViewport(viewport, new Viewport(x, y, width, height, z, depth));
 
