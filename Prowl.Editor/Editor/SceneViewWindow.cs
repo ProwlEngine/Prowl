@@ -41,7 +41,7 @@ public class SceneViewWindow : EditorWindow
         CamObject.hideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         CamObject.Transform.position = new Vector3(0, 5, -10);
         Cam = CamObject.AddComponent<Camera>();
-        SceneManager.Scene.Add(CamObject);
+        //SceneManager.Scene.Add(CamObject);
         LastFocusedCamera = Cam;
 
         TransformGizmoMode mode = TransformGizmoMode.TranslateX | TransformGizmoMode.TranslateY | TransformGizmoMode.TranslateZ | TransformGizmoMode.TranslateXY | TransformGizmoMode.TranslateXZ | TransformGizmoMode.TranslateYZ | TransformGizmoMode.TranslateView;
