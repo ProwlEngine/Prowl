@@ -124,14 +124,13 @@ public static partial class Graphics
         RenderPipeline.AddRenderable(new MeshRenderable(mesh, material, matrix, propertyBlock));
     }
 
-    public static void Blit(Texture2D source, RenderTexture dest, Material mat, int pass = 0) => Blit(source, dest.Framebuffer, mat, pass);
-    public static void Blit(Texture2D source, Framebuffer dest, Material mat, int pass = 0)
+    public static void Blit(Texture2D source, Framebuffer dest, Material mat = null, int pass = 0)
     {
         CommandBuffer buffer = CommandBufferPool.Get();
-        buffer.SetRenderTarget(dest);
-        buffer.SetTexture("_MainTex", source);
-        buffer.SetMaterial(mat, pass);
-        buffer.DrawSingle(Mesh.FullscreenMesh);
+        if(mat == null)
+            buffer.Blit(source, dest, pass);
+        else
+            buffer.Blit(source, dest, mat, pass);
         SubmitCommandBuffer(buffer);
         CommandBufferPool.Release(buffer);
     }

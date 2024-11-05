@@ -139,32 +139,30 @@ public class CommandBuffer : IDisposable
         DrawIndexed((uint)(indexCount <= 0 ? drawData.IndexCount : indexCount), indexOffset, 1, 0, 0);
     }
 
-    public void Blit(Texture2D source, Framebuffer target)
-        => Blit(source.InternalTexture, target);
+    public void Blit(Texture2D source, Framebuffer target, int pass = 0)
+        => Blit(source.InternalTexture, target, pass);
 
-    public void Blit(Texture2D source, RenderTexture target)
-        => Blit(source.InternalTexture, target.Framebuffer);
+    public void Blit(Texture2D source, Framebuffer target, Material mat, int pass = 0)
+        => Blit(source.InternalTexture, target, mat, pass);
 
-    public void Blit(RenderTexture source, Framebuffer target)
+    public void Blit(RenderTexture source, Framebuffer target, int pass = 0)
     {
-        if (source.ColorBuffers == null)
-            return;
-
-        Blit(source.ColorBuffers[0].InternalTexture, target);
+        ArgumentNullException.ThrowIfNull(source.ColorBuffers);
+        Blit(source.ColorBuffers[0].InternalTexture, target, pass);
+    }
+    public void Blit(RenderTexture source, Framebuffer target, Material mat, int pass = 0)
+    {
+        ArgumentNullException.ThrowIfNull(source.ColorBuffers);
+        Blit(source.ColorBuffers[0].InternalTexture, target, mat, pass);
     }
 
-    public void Blit(RenderTexture source, RenderTexture target)
-    {
-        if (source.ColorBuffers == null)
-            return;
+    public void Blit(Veldrid.Texture source, Framebuffer target, int pass = 0)
+        => Blit(source, target, BlitMaterial, pass);
 
-        Blit(source.ColorBuffers[0].InternalTexture, target.Framebuffer);
-    }
-
-    public void Blit(Veldrid.Texture source, Framebuffer target)
+    public void Blit(Veldrid.Texture source, Framebuffer target, Material mat, int pass = 0)
     {
         SetRenderTarget(target);
-        SetMaterial(BlitMaterial, 0);
+        SetMaterial(mat, pass);
         _bufferProperties.SetRawTexture("_MainTex", source);
         DrawSingle(Mesh.FullscreenMesh);
     }
