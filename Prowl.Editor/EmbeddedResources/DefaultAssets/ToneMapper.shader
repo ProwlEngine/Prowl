@@ -181,39 +181,28 @@ Pass "ToneMapper"
 			return color;
 		}
 
-
-		float4x4 contrastMatrix()
+		float4x4 SaturationMatrix(float saturation)
 		{
-			float t = (1.0 - _Contrast) / 2.0;
-
-		    return float4x4(_Contrast, 0, 0, 0,
-		                0, _Contrast, 0, 0,
-		                0, 0, _Contrast, 0,
-		                t, t, t, 1);
+			float3 luminance = float3(0.3086f, 0.6094f, 0.0820f);
+			
+			float oneMinusSat = 1.0 - saturation;
+			
+			float3 red = luminance.x * oneMinusSat;
+			red += float3(saturation, 0, 0);
+			
+			float3 green = luminance.y * oneMinusSat;
+			green += float3(0, saturation, 0);
+			
+			float3 blue = luminance.z * oneMinusSat;
+			blue += float3(0, 0, saturation);
+			
+			return float4x4(
+				red.x, red.y, red.z, 0,
+				green.x, green.y, green.z, 0,
+				blue.x, blue.y, blue.z, 0,
+				0, 0, 0, 1
+			);
 		}
-
-		float4x4 SaturationMatrix()
-		{
-		    float3 luminance = float3(0.3086, 0.6094, 0.0820);
-
-		    float oneMinusSat = 1.0 - _Saturation;
-
-		    float3 red = (float3)luminance.x * oneMinusSat;
-		    red += float3(_Saturation, 0, 0);
-
-		    float3 green = (float3)luminance.y * oneMinusSat;
-		    green += float3(0, _Saturation, 0);
-
-		    float3 blue = (float3)luminance.z * oneMinusSat;
-		    blue += float3(0, 0, _Saturation);
-
-		    return float4x4(
-                        red, 0,
-		                green, 0,
-		                blue, 0,
-		                0, 0, 0, 1);
-		}
-
 
         float4 Fragment(Varyings input) : SV_TARGET
         {
@@ -221,11 +210,16 @@ Pass "ToneMapper"
 
             float3 tonemappedColor = Tonemap(baseColor);
 
-            float3 color = mul(mul(contrastMatrix(), SaturationMatrix()), float4(tonemappedColor, 1.0)).rgb;
-
+			float4 adjustedColor = mul(tonemappedColor, SaturationMatrix(_Saturation));
+			
+			float t = 0.5 - _Contrast * 0.5; 
+			adjustedColor.rgb = adjustedColor.rgb * _Contrast + t;
+			
             // Gamma correction
-            float3 gcColor = pow(color.rgb, (float3)1.0 / 2.2);
-
+            float3 gcColor = pow(adjustedColor, (float3)1.0 / 2.2);
+			
+			gcColor = saturate(gcColor);
+			
             return float4(gcColor, 1.0);
         }
     ENDHLSL

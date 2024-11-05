@@ -124,7 +124,7 @@ public static class SceneManager
 
     public static bool Draw(RenderTexture? target = null)
     {
-        var Cameras = Scene.ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).Where(cam => cam.GameObject.Name != "Editor-Camera").ToList();
+        var Cameras = Scene.ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
 
         Cameras.Sort((a, b) => a.DrawOrder.CompareTo(b.DrawOrder));
 
