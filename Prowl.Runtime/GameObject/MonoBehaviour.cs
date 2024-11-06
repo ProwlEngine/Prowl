@@ -238,6 +238,21 @@ public abstract class MonoBehaviour : EngineObject
     public virtual void OnRenderImage(RenderTexture src, RenderTexture dest) { }
 
     /// <summary>
+    /// Called right before the camera starts rendering.
+    /// </summary>
+    public virtual void OnPreCull() { }
+
+    /// <summary>
+    /// Called right before the camera starts rendering the scene.
+    /// </summary>
+    public virtual void OnPreRender() { }
+
+    /// <summary>
+    /// Called after the camera has finished rendering the scene.
+    /// </summary>
+    public virtual void OnPostRender() { }
+
+    /// <summary>
     /// Called when the MonoBehaviour will be destroyed.
     /// </summary>
     public virtual void OnDestroy() { }

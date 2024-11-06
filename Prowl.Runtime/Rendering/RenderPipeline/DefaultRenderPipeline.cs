@@ -69,13 +69,13 @@ public class DefaultRenderPipeline : RenderPipeline
             (Camera.Main?.HDR ?? camera.HDR) :
             camera.HDR;
 
-        var (opaqueEffects, finalEffects) = GatherImageEffects(camera, data.IsSceneViewCamera);
+        var (all, opaqueEffects, finalEffects) = GatherImageEffects(camera, data.IsSceneViewCamera);
         var buffer = PrepareCommandBuffer(target, camera, isHDR, out RenderTexture? forwardBuffer);
 
         try
         {
             // Main rendering with correct order of operations
-            RenderScene(buffer, camera, data, forwardBuffer, opaqueEffects, ref isHDR);
+            RenderScene(buffer, camera, data, forwardBuffer, opaqueEffects, all, ref isHDR);
 
             // Final post-processing
             if (finalEffects.Count > 0)
@@ -104,10 +104,13 @@ public class DefaultRenderPipeline : RenderPipeline
                 CommandBufferPool.Release(buffer);
             }
             RenderTexture.ReleaseTemporaryRT(forwardBuffer);
+
+            foreach (MonoBehaviour effect in all)
+                effect.OnPostRender();
         }
     }
 
-    private static (List<MonoBehaviour> opaque, List<MonoBehaviour> final) GatherImageEffects(Camera camera, bool isSceneView)
+    private static (List<MonoBehaviour> all, List<MonoBehaviour> opaque, List<MonoBehaviour> final) GatherImageEffects(Camera camera, bool isSceneView)
     {
         var opaqueEffects = new List<MonoBehaviour>();
         var finalEffects = new List<MonoBehaviour>();
@@ -123,12 +126,17 @@ public class DefaultRenderPipeline : RenderPipeline
             if (effect is Camera) continue;
 
             var type = effect.GetType();
-            var method = type.GetMethod("OnRenderImage");
-            if (method?.DeclaringType == typeof(MonoBehaviour)) continue;
 
             // if this is Scene view camera, then the effect needs the ImageEffectAllowedInSceneView attribute
             if (isSceneView && type.GetCustomAttributes(typeof(ImageEffectAllowedInSceneViewAttribute), false).Length == 0)
                 continue;
+
+            // If they have OnRenderImage does not effect if they exist as a valid effect
+            all.Add(effect);
+
+            var method = type.GetMethod("OnRenderImage");
+            if (method?.DeclaringType == typeof(MonoBehaviour)) continue;
+
 
             if (type.GetCustomAttributes(typeof(ImageEffectOpaqueAttribute), false).Length > 0)
                 opaqueEffects.Add(effect);
@@ -136,7 +144,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 finalEffects.Add(effect);
         }
 
-        return (opaqueEffects, finalEffects);
+        return (all, opaqueEffects, finalEffects);
     }
 
     private static CommandBuffer PrepareCommandBuffer(Framebuffer target, Camera camera, bool isHDR, out RenderTexture forwardBuffer)
@@ -165,7 +173,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
     #region Scene Rendering
 
-    private static void RenderScene(CommandBuffer buffer, Camera camera, in RenderingData data, RenderTexture forwardBuffer, List<MonoBehaviour> opaqueEffects, ref bool isHDR)
+    private static void RenderScene(CommandBuffer buffer, Camera camera, in RenderingData data, RenderTexture forwardBuffer, List<MonoBehaviour> effects, List<MonoBehaviour> all, ref bool isHDR)
     {
         var view = camera.GetViewMatrix(!CAMERA_RELATIVE);
         var projection = camera.GetProjectionMatrix(data.TargetResolution, true);
@@ -177,6 +185,10 @@ public class DefaultRenderPipeline : RenderPipeline
         // 1. Skybox (if enabled)
         if (camera.ClearFlags == CameraClearFlags.Skybox)
             RenderSkybox(buffer, camera, projection);
+        foreach (MonoBehaviour effect in all)
+            effect.OnPreCull();
+        foreach (MonoBehaviour effect in all)
+            effect.OnPreRender();
 
         // 2. Opaque geometry
         DrawRenderables("RenderOrder", "Opaque", buffer, camera.Transform.position, vp, view, projection, camera.CullingMask, worldFrustum);
