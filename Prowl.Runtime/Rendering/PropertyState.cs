@@ -42,7 +42,7 @@ public struct ValueProperty
     }
 }
 
-public class PropertyState
+public partial class PropertyState
 {
     public bool IsEmpty => _values.Count == 0 && _buffers.Count == 0;
 
