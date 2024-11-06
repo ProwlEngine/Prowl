@@ -76,33 +76,37 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
         - Supports Nested Prefabs
     - Build System - Build to Standalone Application
         - Packed Asset files
-        - Less than 15 MB builds (currently working on removing 10 MB, almost done!)
+        - Tiny builds
         - Only exports used assets
         - Supports Windows, Mac & Linux
     - Navmesh and AI Agents (Recast & Detour)
 
 -   **Graphics Rendering:**
+    - Near Identical API to Unity
     - Modular Graphics Backend
         - OpenGL
         - OpenGL ES
         - Vulkan
         - Metal
-    - Powerful Customizable Node-Graph based Render Pipeline
-    -  PBR (Physically Based Rendering) using Cook-Torrance BRDF
+        - DirectX 11
+    - HDR, PBR (Physically Based Rendering)
         - Albedo Map
         - Normal Map
         - Roughness Map
         - Metallic Map
         - Ambient Occclusion Map
-        - Emission Map
     - Forward Renderer
+    - Batching & Frustum Culling
+    - Motion Vectors
     - Multiple Shader Passes
     - Point, Spot, and Directional Lights
         - Spot & Directional Light Shadows - Point shadows is not implemented
         - Shadow Atlas
         - Dynamic Shadow Resolutions
-    - Post Processing
-        - HDR with Tonemapping (Melon, Aces, Reinhard, Uncharted, Filmic)
+    - Post Processing - Near Identical API to Unity
+        - Tonemapping (Melon, Aces, Reinhard, Uncharted, Filmic)
+        - Motion Blur
+        - Simple Kawase Bloom
     - Transparency
     - Procedural Super Performant Skybox
     - Node-Based Visual Scripting (Working but pretty simple)
@@ -158,7 +162,6 @@ Getting Prowl up and running is super easy!
 
 ### Rendering
 
-- ❌ SSAO, Screen-Space Decals, etc.
 - ❌ Realtime GI
 - ❌ Lightmaps and Light Probes
 - ❌ Cascaded shadow mapping
