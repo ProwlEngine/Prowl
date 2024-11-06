@@ -7,6 +7,7 @@ using Prowl.Runtime.Rendering.Pipelines;
 
 namespace Prowl.Runtime;
 
+[RequireComponent(typeof(Camera))]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.EyeLowVision}  ToneMapperEffect")]
 [ImageEffectTransformsToLDR]
 [ImageEffectAllowedInSceneView]

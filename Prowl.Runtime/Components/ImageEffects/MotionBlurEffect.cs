@@ -6,8 +6,8 @@ using Prowl.Runtime.Rendering;
 
 namespace Prowl.Runtime;
 
+[RequireComponent(typeof(Camera))]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Stopwatch}  MotionBlurEffect")]
-[ImageEffectTransformsToLDR]
 [ImageEffectAllowedInSceneView]
 public class MotionBlurEffect : MonoBehaviour
 {
