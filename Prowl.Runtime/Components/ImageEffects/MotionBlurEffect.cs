@@ -13,7 +13,7 @@ public class MotionBlurEffect : MonoBehaviour
 {
     private static Material s_motionblur;
 
-    public float Intensity = 0.5f;
+    public float Intensity = 0.25f;
     public int SampleCount = 8;
 
     private Camera cam;
