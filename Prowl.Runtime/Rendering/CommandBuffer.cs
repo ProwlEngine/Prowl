@@ -44,6 +44,17 @@ public class CommandBuffer : IDisposable
     private ShaderPipeline _graphicsPipeline;
     private BindableResourceSet _pipelineResources;
     private Pipeline _actualActivePipeline;
+    private static TextureSampler _blitSampler = new(new()
+    {
+        AddressModeU = SamplerAddressMode.Clamp,
+        AddressModeV = SamplerAddressMode.Clamp,
+        AddressModeW = SamplerAddressMode.Clamp,
+        Filter = SamplerFilter.MinLinear_MagLinear_MipLinear,
+        LodBias = 0,
+        MinimumLod = 0,
+        MaximumLod = uint.MaxValue,
+        MaximumAnisotropy = 0,
+    });
 
     private List<IDisposable> _resourcesToDispose;
 
@@ -163,7 +174,7 @@ public class CommandBuffer : IDisposable
     {
         SetRenderTarget(target);
         SetMaterial(mat, pass);
-        _bufferProperties.SetRawTexture("_MainTex", source);
+        _bufferProperties.SetRawTexture("_MainTex", source, _blitSampler.InternalSampler);
         DrawSingle(Mesh.FullscreenMesh);
     }
 
