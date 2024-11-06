@@ -56,6 +56,11 @@ public static class SceneRaycaster
     {
         s_scenePickMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ScenePicker.shader"));
 
+        RenderTexture temporary = RenderTexture.GetTemporaryRT((uint)screenScale.x, (uint)screenScale.y, [PixelFormat.R8_G8_B8_A8_UNorm]);
+
+        camera.Target = temporary;
+        camera.UpdateRenderData();
+
         Ray ray = camera.ScreenPointToRay(rayUV, screenScale);
 
         intersectRenderables.Clear();
@@ -70,17 +75,16 @@ public static class SceneRaycaster
             intersectRenderables.Add(renderable);
         }
 
-        RenderTexture temporary = RenderTexture.GetTemporaryRT((uint)screenScale.x, (uint)screenScale.y, [PixelFormat.R8_G8_B8_A8_UNorm]);
-
         CommandBuffer buffer = CommandBufferPool.Get("Scene Picking Command Buffer");
 
         buffer.SetRenderTarget(temporary);
         buffer.ClearRenderTarget(true, true, Color.clear);
 
-        Matrix4x4 view = camera.GetViewMatrix(false);
+        Matrix4x4 view = camera.OriginViewMatrix;
         Vector3 cameraPosition = camera.Transform.position;
 
-        Matrix4x4 projection = camera.GetProjectionMatrix(screenScale, true);
+        Matrix4x4 projection = camera.ProjectionMatrix;
+        projection = Graphics.GetGPUProjectionMatrix(projection);
         Matrix4x4 vp = view * projection;
         System.Numerics.Matrix4x4 floatVP = vp.ToFloat();
 
@@ -114,7 +118,7 @@ public static class SceneRaycaster
 
         // ID is packed into 8-bit 4-channel vector
         Color32 id = temporary.ColorBuffers[0].GetPixel<Color32>(x, y);
-        float depth = GetDepth(temporary.DepthBuffer, x, y, camera.NearClip, camera.FarClip);
+        float depth = GetDepth(temporary.DepthBuffer, x, y, camera.NearClipPlane, camera.FarClipPlane);
 
         objectID = id.r | id.g << 8 | id.b << 16 | id.a << 24;
         position = ray.Position(depth);

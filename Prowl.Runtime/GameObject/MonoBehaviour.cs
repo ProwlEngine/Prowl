@@ -233,7 +233,7 @@ public abstract class MonoBehaviour : EngineObject
     /// <summary>
     /// Called when the camera (On this gameobject) has rendered the scene.
     /// <see cref="ImageEffectOpaqueAttribute"/> can be used to specify the order of execution.
-    /// <see cref="ImageEffectAllowedInSceneView"/> can be used to specify if the effect should be rendered in the Scene View.
+    /// <see cref="ImageEffectAllowedInSceneViewAttribute"/> can be used to specify if the effect should be rendered in the Scene View.
     /// </summary>
     public virtual void OnRenderImage(RenderTexture src, RenderTexture dest) { }
 

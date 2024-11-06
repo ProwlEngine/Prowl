@@ -14,8 +14,6 @@ namespace Prowl.Runtime.Rendering.Pipelines;
 
 public struct RenderingData
 {
-    public required Vector2 TargetResolution;
-
     public bool IsSceneViewCamera;
     public bool DisplayGrid;
     public bool DisplayGizmo;
@@ -102,5 +100,5 @@ public abstract class RenderPipeline : EngineObject
     }
 
 
-    public abstract void Render(Framebuffer target, Camera camera, in RenderingData data);
+    public abstract void Render(Camera camera, in RenderingData data);
 }

@@ -31,8 +31,8 @@ public class Camera : MonoBehaviour
 
     [ShowIf(nameof(IsOrthographic), true)] public float FieldOfView = 60f;
     [ShowIf(nameof(IsOrthographic))] public float OrthographicSize = 0.5f;
-    public float NearClip = 0.01f;
-    public float FarClip = 1000f;
+    public float NearClipPlane = 0.01f;
+    public float FarClipPlane = 1000f;
     //public Rect Viewrect = new(0, 0, 1, 1); // Not Implemented
     public int Depth = -1;
 
@@ -44,7 +44,6 @@ public class Camera : MonoBehaviour
     public bool IsOrthographic => projectionType == ProjectionType.Orthographic;
 
     private static WeakReference<Camera> s_mainCamera = new(null);
-
     public static Camera? Main
     {
         get
@@ -60,6 +59,95 @@ public class Camera : MonoBehaviour
         internal set => s_mainCamera.SetTarget(value);
     }
 
+    private float _aspect;
+    private bool _customAspect;
+    private Matrix4x4 _projectionMatrix;
+    private Matrix4x4 _nonJitteredProjectionMatrix;
+    private bool _customProjectionMatrix;
+
+    public uint PixelWidth { get; private set; }
+    public uint PixelHeight { get; private set; }
+
+    public float Aspect
+    {
+        get => _aspect;
+        set
+        {
+            _aspect = value;
+            _customAspect = true;
+        }
+    }
+
+    public Matrix4x4 ProjectionMatrix
+    {
+        get => _projectionMatrix;
+        set
+        {
+            _projectionMatrix = value;
+            _customProjectionMatrix = true;
+        }
+    }
+
+    public Matrix4x4 NonJitteredProjectionMatrix
+    {
+        get => _nonJitteredProjectionMatrix;
+        set
+        {
+            _nonJitteredProjectionMatrix = value;
+            _customProjectionMatrix = true;
+        }
+    }
+
+    public bool UseJitteredProjectionMatrixForTransparentRendering { get; set; }
+
+    public Matrix4x4 ViewMatrix { get; private set; }
+    public Matrix4x4 OriginViewMatrix { get; private set; }
+
+    public void Render(in RenderingData? data = null)
+    {
+        RenderPipeline pipeline = Pipeline.Res ?? DefaultRenderPipeline.Default;
+        pipeline.Render(this, data ?? new());
+    }
+
+    public Veldrid.Framebuffer UpdateRenderData()
+    {
+        // Since Scene Updating is guranteed to execute before rendering, we can setup camera data for this frame here
+        Veldrid.Framebuffer camTarget = Graphics.ScreenTarget;
+
+        if (Target.Res != null)
+            camTarget = Target.Res.Framebuffer;
+
+        float renderScale = Math.Clamp(RenderScale, 0.1f, 2.0f);
+        PixelWidth = (uint)Math.Max(1, (int)(camTarget.Width * renderScale));
+        PixelHeight = (uint)Math.Max(1, (int)(camTarget.Height * renderScale));
+
+        if (!_customAspect)
+            _aspect = PixelWidth / (float)PixelHeight;
+
+        if (!_customProjectionMatrix)
+        {
+            _projectionMatrix = GetProjectionMatrix(_aspect, true);
+            _nonJitteredProjectionMatrix = _projectionMatrix;
+        }
+
+        ViewMatrix = Matrix4x4.CreateLookToLeftHanded(Transform.position, Transform.forward, Transform.up);
+        OriginViewMatrix = Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Transform.forward, Transform.up);
+
+        return camTarget;
+    }
+
+    public void ResetAspect()
+    {
+        _aspect = PixelWidth / (float)PixelHeight;
+        _customAspect = false;
+    }
+
+    public void ResetProjectionMatrix()
+    {
+        _projectionMatrix = _nonJitteredProjectionMatrix;
+        _customProjectionMatrix = false;
+    }
+
     public Ray ScreenPointToRay(Vector2 screenPoint, Vector2 screenScale)
     {
         // Normalize screen coordinates to [-1, 1]
@@ -73,7 +161,8 @@ public class Camera : MonoBehaviour
         Vector4 farPointNDC = new Vector4(ndc.x, ndc.y, 1.0f, 1.0f);
 
         // Calculate the inverse view-projection matrix
-        Matrix4x4 viewProjectionMatrix = GetViewMatrix() * GetProjectionMatrix(screenScale);
+        double aspect = screenScale.x / screenScale.y;
+        Matrix4x4 viewProjectionMatrix = GetViewMatrix() * GetProjectionMatrix((float)aspect);
         Matrix4x4.Invert(viewProjectionMatrix, out Matrix4x4 inverseViewProjectionMatrix);
 
         // Unproject the near and far points to world space
@@ -98,26 +187,18 @@ public class Camera : MonoBehaviour
         return Matrix4x4.CreateLookToLeftHanded(position, Transform.forward, Transform.up);
     }
 
-    public Matrix4x4 GetProjectionMatrix(Vector2 resolution, bool accomodateGPUCoordinateSystem = false)
+    private Matrix4x4 GetProjectionMatrix(float aspect, bool accomodateGPUCoordinateSystem = false)
     {
         Matrix4x4 proj;
 
         if (projectionType == ProjectionType.Orthographic)
-            proj = Matrix4x4.CreateOrthographicLeftHanded(OrthographicSize, OrthographicSize, NearClip, FarClip);
+            proj = Matrix4x4.CreateOrthographicLeftHanded(OrthographicSize, OrthographicSize, NearClipPlane, FarClipPlane);
         else
-            proj = Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), (float)(resolution.x / resolution.y), NearClip, FarClip);
+            proj = Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), aspect, NearClipPlane, FarClipPlane);
 
         if (accomodateGPUCoordinateSystem)
             proj = Graphics.GetGPUProjectionMatrix(proj);
 
         return proj;
-    }
-
-    public BoundingFrustum GetFrustum(Vector2 resolution)
-    {
-        Matrix4x4 view = GetViewMatrix();
-        Matrix4x4 proj = GetProjectionMatrix(resolution, true);
-
-        return new(view * proj);
     }
 }

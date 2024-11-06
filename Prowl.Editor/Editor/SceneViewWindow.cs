@@ -88,14 +88,13 @@ public class SceneViewWindow : EditorWindow
         WindowCenter = gui.CurrentNode.LayoutData.Rect.Center;
 
         // Manually Render to the RenderTexture
-        Cam.NearClip = SceneViewPreferences.Instance.NearClip;
-        Cam.FarClip = SceneViewPreferences.Instance.FarClip;
+        Cam.NearClipPlane = SceneViewPreferences.Instance.NearClip;
+        Cam.FarClipPlane = SceneViewPreferences.Instance.FarClip;
 
         SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
 
         RenderingData data = new RenderingData
         {
-            TargetResolution = new Vector2(RenderTarget.Width, RenderTarget.Height),
             IsSceneViewCamera = true,
             DisplayGizmo = true,
         };
@@ -157,7 +156,8 @@ public class SceneViewWindow : EditorWindow
 
         RenderPipeline pipeline = Cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
 
-        pipeline.Render(RenderTarget.Framebuffer, Cam, data);
+        Cam.Target = RenderTarget;
+        pipeline.Render(Cam, data);
 
         Vector2 imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         Vector2 imageSize = gui.CurrentNode.LayoutData.Rect.Size;
@@ -166,7 +166,7 @@ public class SceneViewWindow : EditorWindow
         Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
         bool blockPicking = gui.IsBlockedByInteractable(gui.PointerPos);
-        HandleGizmos(selectedGOs, mouseRay, Cam.GetViewMatrix(), Cam.GetProjectionMatrix(new Vector2(RenderTarget.Width, RenderTarget.Height)), blockPicking);
+        HandleGizmos(selectedGOs, mouseRay, Cam.ViewMatrix, Cam.ProjectionMatrix, blockPicking);
 
         Rect rect = gui.CurrentNode.LayoutData.Rect;
         rect.width = 100;

@@ -133,24 +133,20 @@ public static class SceneManager
 
         foreach (Camera? cam in Cameras)
         {
-            Veldrid.Framebuffer t = Graphics.ScreenTarget;
-
-            if (cam.Target.Res != null)
-                t = cam.Target.Res.Framebuffer;
-            else if (target != null)
-                t = target.Framebuffer;
-
-            uint width = t.Width;
-            uint height = t.Height;
-
-            RenderingData data = new RenderingData
-            {
-                TargetResolution = new Vector2(width, height),
-            };
-
             RenderPipeline pipeline = cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
 
-            pipeline.Render(t, cam, data);
+            // If we have a target and the Camera doesnt, draw into the target
+            if (target != null && cam.Target == null)
+            {
+                cam.Target = target;
+                pipeline.Render(cam, new());
+                cam.Target = null;
+            }
+            else
+            {
+                // Have no target or the camera has its own target
+                pipeline.Render(cam, new());
+            }
         }
 
         return true;
