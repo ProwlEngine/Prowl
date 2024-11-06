@@ -108,7 +108,7 @@ public class DefaultRenderPipeline : RenderPipeline
             RenderTexture.ReleaseTemporaryRT(forwardBuffer);
 
             foreach (MonoBehaviour effect in all)
-                effect.OnPostRender();
+                effect.OnPostRender(camera);
         }
     }
 
@@ -187,7 +187,7 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         // 1. Pre Cull
         foreach (MonoBehaviour effect in all)
-            effect.OnPreCull();
+            effect.OnPreCull(camera);
 
         // 2. Take a snapshot of all Camera data
         var cameraPosition = camera.Transform.position;
@@ -203,6 +203,7 @@ public class DefaultRenderPipeline : RenderPipeline
         var view = CAMERA_RELATIVE ? originView : camera.ViewMatrix;
         var projection = Graphics.GetGPUProjectionMatrix(camera.ProjectionMatrix);
         var transparentProjection = camera.UseJitteredProjectionMatrixForTransparentRendering ? camera.ProjectionMatrix : camera.NonJitteredProjectionMatrix;
+        var previousViewProj = camera.PreviousViewProjectionMatrix;
         var worldFrustum = new BoundingFrustum(camera.ViewMatrix * camera.ProjectionMatrix);
         var depthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Depth, Normals, MotionVectors
         Texture2D? depthTexture = null;
@@ -213,7 +214,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // 4. Pre Render
         foreach (MonoBehaviour effect in all)
-            effect.OnPreRender();
+            effect.OnPreRender(camera);
 
         // 5. Setup Lighting and Shadows
         SetupLightingAndShadows(buffer, forwardBuffer, cameraPosition, cullingMask);

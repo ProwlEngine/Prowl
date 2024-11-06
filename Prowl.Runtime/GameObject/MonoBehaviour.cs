@@ -240,17 +240,17 @@ public abstract class MonoBehaviour : EngineObject
     /// <summary>
     /// Called right before the camera starts rendering.
     /// </summary>
-    public virtual void OnPreCull() { }
+    public virtual void OnPreCull(Camera camera) { }
 
     /// <summary>
     /// Called right before the camera starts rendering the scene.
     /// </summary>
-    public virtual void OnPreRender() { }
+    public virtual void OnPreRender(Camera camera) { }
 
     /// <summary>
     /// Called after the camera has finished rendering the scene.
     /// </summary>
-    public virtual void OnPostRender() { }
+    public virtual void OnPostRender(Camera camera) { }
 
     /// <summary>
     /// Called when the MonoBehaviour will be destroyed.
