@@ -60,6 +60,12 @@ public static class SceneManager
         cam.Transform.position = new(0, 0, -10);
         Camera camComp = cam.AddComponent<Camera>();
         camComp.Depth = -1;
+        camComp.HDR = true;
+
+        cam.AddComponent<MotionBlurEffect>();
+        cam.AddComponent<KawaseBloomEffect>();
+        cam.AddComponent<ToneMapperEffect>();
+
         Current.Res!.Add(cam);
     }
 
