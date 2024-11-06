@@ -25,7 +25,7 @@ public enum DepthTextureMode
     None = 0,
     Depth = 1, // _CameraDepthTexture
     //Normal = 2, // _CameraNormalsTexture
-    //MotionVectors = 4, // _CameraMotionVectorsTexture
+    MotionVectors = 4, // _CameraMotionVectorsTexture
 }
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Camera}  Camera")]
@@ -77,6 +77,11 @@ public class Camera : MonoBehaviour
     private Matrix4x4 _nonJitteredProjectionMatrix;
     private bool _customProjectionMatrix;
 
+    private Matrix4x4 _previousViewMatrix;
+    private Matrix4x4 _previousProjectionMatrix;
+    private Matrix4x4 _previousViewProjectionMatrix;
+    private bool _firstFrame = true;
+
     public uint PixelWidth { get; private set; }
     public uint PixelHeight { get; private set; }
 
@@ -115,6 +120,15 @@ public class Camera : MonoBehaviour
     public Matrix4x4 ViewMatrix { get; private set; }
     public Matrix4x4 OriginViewMatrix { get; private set; }
 
+    public Matrix4x4 PreviousViewMatrix => _previousViewMatrix;
+    public Matrix4x4 PreviousProjectionMatrix => _previousProjectionMatrix;
+    public Matrix4x4 PreviousViewProjectionMatrix => _previousViewProjectionMatrix;
+
+    public override void OnEnable()
+    {
+        _firstFrame = true;
+    }
+
     public void Render(in RenderingData? data = null)
     {
         RenderPipeline pipeline = Pipeline.Res ?? DefaultRenderPipeline.Default;
@@ -123,6 +137,14 @@ public class Camera : MonoBehaviour
 
     public Veldrid.Framebuffer UpdateRenderData()
     {
+        if (!_firstFrame)
+        {
+            _previousViewMatrix = ViewMatrix;
+            _previousProjectionMatrix = _projectionMatrix;
+            _previousViewProjectionMatrix = ViewMatrix * _projectionMatrix;
+        }
+        _firstFrame = false;
+
         // Since Scene Updating is guranteed to execute before rendering, we can setup camera data for this frame here
         Veldrid.Framebuffer camTarget = Graphics.ScreenTarget;
 
@@ -158,6 +180,11 @@ public class Camera : MonoBehaviour
     {
         _projectionMatrix = _nonJitteredProjectionMatrix;
         _customProjectionMatrix = false;
+    }
+
+    public void ResetMotionHistory()
+    {
+        _firstFrame = true;
     }
 
     public Ray ScreenPointToRay(Vector2 screenPoint, Vector2 screenScale)
