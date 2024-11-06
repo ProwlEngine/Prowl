@@ -285,7 +285,6 @@ public class DefaultRenderPipeline : RenderPipeline
         RenderTexture? motionVectorBuffer = null;
         if (depthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
         {
-            Debug.Log("Motion Vector Matrices Count: " + s_prevModelMatrices.Count);
             motionVectorBuffer = RenderTexture.GetTemporaryRT(pixelWidth, pixelHeight, [PixelFormat.R16_G16_Float]);
             buffer.SetRenderTarget(motionVectorBuffer);
             buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
