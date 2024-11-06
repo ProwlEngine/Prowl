@@ -77,6 +77,8 @@ Pass "Standard"
             float4x4 Mat_ObjectToWorld;
             float4x4 Mat_WorldToObject;
             float4x4 Mat_MVP;
+            float4x4 _PrevObjectToWorld;
+            float4x4 _PrevViewProj;
 
             int _ObjectID;
         }
@@ -442,6 +444,8 @@ Pass "Shadow"
             float4x4 Mat_ObjectToWorld;
             float4x4 Mat_WorldToObject;
             float4x4 Mat_MVP;
+            float4x4 _PrevObjectToWorld;
+            float4x4 _PrevViewProj;
 
             int _ObjectID;
         }
@@ -464,6 +468,74 @@ Pass "Shadow"
             float3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
             projCoords = projCoords * 0.5 + 0.5;
             return projCoords.z;
+        }
+    ENDHLSL
+}
+
+Pass "MotionVectors"
+{
+    Tags { "LightMode" = "MotionVectors" }
+    
+    HLSLPROGRAM
+        #pragma vertex Vertex
+        #pragma fragment Fragment
+        
+        struct Attributes
+        {
+            float3 position : POSITION;
+            float2 uv : TEXCOORD0;
+            float3 normal : NORMAL;
+        };
+
+        struct Varyings
+        {
+            float4 position : SV_POSITION;
+            float4 currentPos : TEXCOORD0;
+            float4 previousPos : TEXCOORD1;
+        };
+
+        cbuffer _PerDraw
+        {
+            float4x4 Mat_V;
+            float4x4 Mat_P;
+            float4x4 Mat_ObjectToWorld;
+            float4x4 Mat_WorldToObject;
+            float4x4 Mat_MVP;
+            float4x4 _PrevObjectToWorld;
+            float4x4 _PrevViewProj;
+            int _ObjectID;
+        }
+
+        Varyings Vertex(Attributes input)
+        {
+            Varyings output = (Varyings)0;
+            
+            // Current frame positions
+            float4 worldPos = mul(Mat_ObjectToWorld, float4(input.position, 1.0));
+            output.position = mul(Mat_MVP, float4(input.position, 1.0));
+            output.currentPos = output.position;
+            
+            // Previous frame positions
+            float4 prevWorldPos = mul(_PrevObjectToWorld, float4(input.position, 1.0));
+            output.previousPos = mul(_PrevViewProj, prevWorldPos);
+            
+            return output;
+        }
+
+        float2 Fragment(Varyings input) : SV_Target
+        {
+            // Convert positions to NDC space [-1,1]
+            float2 currentPos = input.currentPos.xy / input.currentPos.w;
+            float2 previousPos = input.previousPos.xy / input.previousPos.w;
+            
+            // Calculate screen-space motion vector
+            // Scale from [-1,1] to [0,1] and then calculate difference
+            float2 motionVector = (currentPos - previousPos) * 0.5f;
+            
+            // Flip Y for correct motion vector direction in screen space
+            motionVector.y = -motionVector.y;
+            
+            return motionVector;
         }
     ENDHLSL
 }

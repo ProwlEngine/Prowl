@@ -36,6 +36,12 @@ public class DefaultRenderPipeline : RenderPipeline
 
     public static DefaultRenderPipeline Default { get; } = new();
 
+    private static Matrix4x4 s_prevViewProjMatrix;
+    private static Dictionary<int, Matrix4x4> s_prevModelMatrices = new();
+    private static HashSet<int> s_activeObjectIds = new();
+    private const int CLEANUP_INTERVAL_FRAMES = 120; // Clean up every 120 frames
+    private static int s_framesSinceLastCleanup = 0;
+
     #endregion
 
     #region Resource Management
@@ -55,6 +61,43 @@ public class DefaultRenderPipeline : RenderPipeline
 
             s_skyDome = renderer.Mesh.Res;
         }
+    }
+
+    private static void CleanupUnusedModelMatrices()
+    {
+        // Increment frame counter
+        s_framesSinceLastCleanup++;
+
+        // Only perform cleanup at specified interval
+        if (s_framesSinceLastCleanup < CLEANUP_INTERVAL_FRAMES)
+            return;
+
+        s_framesSinceLastCleanup = 0;
+
+        // Remove all matrices that weren't used in this frame
+        var unusedKeys = s_prevModelMatrices.Keys
+            .Where(key => !s_activeObjectIds.Contains(key))
+            .ToList();
+
+        foreach (var key in unusedKeys)
+            s_prevModelMatrices.Remove(key);
+
+        // Clear the active IDs set for next frame
+        s_activeObjectIds.Clear();
+    }
+
+    private static void TrackModelMatrix(CommandBuffer buffer, int objectId, Matrix4x4 currentModel)
+    {
+        // Mark this object ID as active this frame
+        s_activeObjectIds.Add(objectId);
+
+        // Store current model matrix for next frame
+        if (s_prevModelMatrices.TryGetValue(objectId, out Matrix4x4 prevModel))
+            buffer.SetMatrix("_PrevObjectToWorld", prevModel.ToFloat());
+        else
+            buffer.SetMatrix("_PrevObjectToWorld", currentModel.ToFloat()); // First frame, use current matrix
+
+        s_prevModelMatrices[objectId] = currentModel;
     }
 
     #endregion
@@ -78,6 +121,9 @@ public class DefaultRenderPipeline : RenderPipeline
         {
             // Main rendering with correct order of operations
             RenderScene(buffer, camera, data, forwardBuffer, opaqueEffects, all, ref isHDR);
+
+            // Clean up unused matrices after rendering
+            CleanupUnusedModelMatrices();
 
             // Final post-processing
             if (finalEffects.Count > 0)
@@ -208,7 +254,6 @@ public class DefaultRenderPipeline : RenderPipeline
         var depthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Depth, Normals, MotionVectors
         Texture2D? depthTexture = null;
 
-
         // 3. Cull Renderables based on Snapshot data
         HashSet<int> culledRenderableIndices = CullRenderables(cullingMask, worldFrustum);
 
@@ -224,7 +269,7 @@ public class DefaultRenderPipeline : RenderPipeline
             RenderSkybox(buffer, originView, projection);
 
         // 7. Opaque geometry
-        DrawRenderables("RenderOrder", "Opaque", buffer, cameraPosition, view, projection, culledRenderableIndices);
+        DrawRenderables("RenderOrder", "Opaque", buffer, cameraPosition, view, projection, culledRenderableIndices, false);
 
         // 7.1. If the camera has depth texture mode enabled, we need to copy the depth texture
         // TODO: Unity re-draws the world to create Depth (also for Normals) textures.
@@ -235,6 +280,31 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.CopyTexture(forwardBuffer.DepthBuffer, depthTexture);
             buffer.SetTexture("_CameraDepthTexture", depthTexture);
         }
+
+        // 7.2 Create motion vector buffer if requested by the camera
+        RenderTexture? motionVectorBuffer = null;
+        if (depthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
+        {
+            Debug.Log("Motion Vector Matrices Count: " + s_prevModelMatrices.Count);
+            motionVectorBuffer = RenderTexture.GetTemporaryRT(pixelWidth, pixelHeight, [PixelFormat.R16_G16_Float]);
+            buffer.SetRenderTarget(motionVectorBuffer);
+            buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
+
+            // Set matrices for motion vector calculation
+            buffer.SetMatrix("_PrevViewProj", camera.PreviousViewProjectionMatrix.ToFloat());
+
+            // Draw motion vectors for all visible objects
+            DrawRenderables("LightMode", "MotionVectors", buffer, cameraPosition, view, projection, culledRenderableIndices, true);
+
+            // Set the motion vector texture for use in post-processing
+            buffer.SetTexture("_CameraMotionVectorsTexture", motionVectorBuffer);
+
+            // Reset render target back to forward buffer
+            buffer.SetRenderTarget(forwardBuffer);
+        }
+
+        // Reset render target back to forward buffer
+        buffer.SetRenderTarget(forwardBuffer);
 
         // 8. Debug visualization
         if (data.DisplayGrid)
@@ -258,10 +328,15 @@ public class DefaultRenderPipeline : RenderPipeline
         }
 
         // 10. Transparent geometry
-        DrawRenderables("RenderOrder", "Transparent", buffer, cameraPosition, view, transparentProjection, culledRenderableIndices);
+        DrawRenderables("RenderOrder", "Transparent", buffer, cameraPosition, view, transparentProjection, culledRenderableIndices, false);
 
+        // Clean up depth texture Buffer
         if (depthTexture != null)
             depthTexture.DestroyLater();
+
+        // Clean up motion vector buffer
+        if (motionVectorBuffer != null)
+            RenderTexture.ReleaseTemporaryRT(motionVectorBuffer);
     }
 
     private static HashSet<int> CullRenderables(LayerMask cullingMask, BoundingFrustum? worldFrustum)
@@ -365,7 +440,7 @@ public class DefaultRenderPipeline : RenderPipeline
                         view.Translation = Vector3.zero;
 
                     HashSet<int> culledRenderableIndices = CullRenderables(cullingMask, frustum);
-                    DrawRenderables("LightMode", "ShadowCaster", buffer, light.GetLightPosition(), view, proj, culledRenderableIndices);
+                    DrawRenderables("LightMode", "ShadowCaster", buffer, light.GetLightPosition(), view, proj, culledRenderableIndices, false);
 
                     buffer.SetFullViewports();
                 }
@@ -545,9 +620,10 @@ public class DefaultRenderPipeline : RenderPipeline
         }
     }
 
-    private static void DrawRenderables(string tag, string tagValue, CommandBuffer buffer, Vector3 cameraPosition, Matrix4x4 view, Matrix4x4 proj, HashSet<int> culledRenderableIndices)
+    private static void DrawRenderables(string tag, string tagValue, CommandBuffer buffer, Vector3 cameraPosition, Matrix4x4 view, Matrix4x4 proj, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices)
     {
         bool hasRenderOrder = !string.IsNullOrWhiteSpace(tag);
+        Matrix4x4 viewProj = (view * proj);
 
         foreach (RenderBatch batch in EnumerateBatches())
         {
@@ -573,6 +649,12 @@ public class DefaultRenderPipeline : RenderPipeline
 
                     renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
 
+                    // Store previous model matrix mainly for motion vectors, however, the user can use it for other things
+                    if(updatePreviousMatrices && properties.TryGetInt("_ObjectID", out int instanceId))
+                    {
+                        TrackModelMatrix(buffer, instanceId, model);
+                    }
+
                     if (CAMERA_RELATIVE)
                         model.Translation -= cameraPosition;
 
@@ -584,7 +666,7 @@ public class DefaultRenderPipeline : RenderPipeline
                     buffer.SetMatrix("Mat_P", proj.ToFloat());
                     buffer.SetMatrix("Mat_ObjectToWorld", model.ToFloat());
                     buffer.SetMatrix("Mat_WorldToObject", model.Invert().ToFloat());
-                    buffer.SetMatrix("Mat_MVP", (model * (view * proj)).ToFloat());
+                    buffer.SetMatrix("Mat_MVP", (model * viewProj).ToFloat());
 
                     buffer.SetColor("_MainColor", Color.white);
 
