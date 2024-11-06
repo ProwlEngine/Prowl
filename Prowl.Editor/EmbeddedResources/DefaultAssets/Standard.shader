@@ -532,9 +532,6 @@ Pass "MotionVectors"
             // Scale from [-1,1] to [0,1] and then calculate difference
             float2 motionVector = (currentPos - previousPos) * 0.5f;
             
-            // Flip Y for correct motion vector direction in screen space
-            motionVector.y = -motionVector.y;
-            
             return motionVector;
         }
     ENDHLSL
