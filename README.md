@@ -110,6 +110,7 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
     - Transparency
     - Procedural Super Performant Skybox
     - Node-Based Visual Scripting (Working but pretty simple)
+    - Dynamic Resolutions Per Camera
 
 -   **Asset Pipeline:**
     - A Powerful Asset Pipeline with a very similar structure to unity
