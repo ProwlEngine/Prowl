@@ -59,6 +59,7 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     public ShaderPass GetPass(int passIndex)
     {
+        passIndex = Math.Clamp(passIndex, 0, _passes.Length - 1);
         return _passes[passIndex];
     }
 
