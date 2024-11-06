@@ -165,6 +165,17 @@ public class DefaultRenderPipeline : RenderPipeline
         // Set View Rect
         //buffer.SetViewports((int)(camera.Viewrect.x * target.Width), (int)(camera.Viewrect.y * target.Height), (int)(camera.Viewrect.width * target.Width), (int)(camera.Viewrect.height * target.Height), 0, 1000);
 
+        // Setup Default Uniforms for this frame
+        // Camera
+        buffer.SetVector("_WorldSpaceCameraPos", camera.Transform.position);
+        buffer.SetVector("_ProjectionParams", new Vector4(1.0f, camera.NearClipPlane, camera.FarClipPlane, 1.0f / camera.FarClipPlane));
+        buffer.SetVector("_ScreenParams", new Vector4(camera.PixelWidth, camera.PixelHeight, 1.0f + 1.0f / camera.PixelWidth, 1.0f + 1.0f / camera.PixelHeight));
+        // Time
+        buffer.SetVector("_Time", new Vector4(Time.time / 20, Time.time, Time.time * 2, Time.time * 3));
+        buffer.SetVector("_SinTime", new Vector4(Math.Sin(Time.time / 8), Math.Sin(Time.time / 4), Math.Sin(Time.time / 2), Math.Sin(Time.time)));
+        buffer.SetVector("_CosTime", new Vector4(Math.Cos(Time.time / 8), Math.Cos(Time.time / 4), Math.Cos(Time.time / 2), Math.Cos(Time.time)));
+        buffer.SetVector("prowl_DeltaTime", new Vector4(Time.deltaTime, 1.0f / Time.deltaTime, Time.smoothDeltaTime, 1.0f / Time.smoothDeltaTime));
+
         return buffer;
     }
 
