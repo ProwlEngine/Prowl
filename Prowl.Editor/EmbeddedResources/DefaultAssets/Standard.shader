@@ -435,13 +435,15 @@ Pass "Shadow"
             float3 vertPos : TEXCOORD1;
         };
 
-        cbuffer DefaultUniforms
+        cbuffer _PerDraw
         {
             float4x4 Mat_V;
             float4x4 Mat_P;
             float4x4 Mat_ObjectToWorld;
             float4x4 Mat_WorldToObject;
             float4x4 Mat_MVP;
+
+            int _ObjectID;
         }
 
         Texture2D<float4> _AlbedoTex;
