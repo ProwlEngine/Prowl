@@ -204,6 +204,9 @@ public class DefaultRenderPipeline : RenderPipeline
         var projection = Graphics.GetGPUProjectionMatrix(camera.ProjectionMatrix);
         var transparentProjection = camera.UseJitteredProjectionMatrixForTransparentRendering ? camera.ProjectionMatrix : camera.NonJitteredProjectionMatrix;
         var worldFrustum = new BoundingFrustum(camera.ViewMatrix * camera.ProjectionMatrix);
+        var depthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Depth, Normals, MotionVectors
+        Texture2D? depthTexture = null;
+
 
         // 3. Cull Renderables based on Snapshot data
         HashSet<int> culledRenderableIndices = CullRenderables(cullingMask, worldFrustum);
@@ -215,12 +218,22 @@ public class DefaultRenderPipeline : RenderPipeline
         // 5. Setup Lighting and Shadows
         SetupLightingAndShadows(buffer, forwardBuffer, cameraPosition, cullingMask);
 
-        // 6. Skybox (if enabled)
+        // 6. Skybox (if enabled) - TODO: Should be done after opaque and after Opaque Post-Processing
         if (clearFlags == CameraClearFlags.Skybox)
             RenderSkybox(buffer, originView, projection);
 
         // 7. Opaque geometry
         DrawRenderables("RenderOrder", "Opaque", buffer, cameraPosition, view, projection, culledRenderableIndices);
+
+        // 7.1. If the camera has depth texture mode enabled, we need to copy the depth texture
+        // TODO: Unity re-draws the world to create Depth (also for Normals) textures.
+        // Is it for platform-related reasons? Do some platforms not support sampling Depth formats?
+        if (depthTextureMode.HasFlag(DepthTextureMode.Depth))
+        {
+            depthTexture = new Texture2D(pixelWidth, pixelHeight, 1, forwardBuffer.DepthBuffer.Format);
+            buffer.CopyTexture(forwardBuffer.DepthBuffer, depthTexture);
+            buffer.SetTexture("_CameraDepthTexture", depthTexture);
+        }
 
         // 8. Debug visualization
         if (data.DisplayGrid)
@@ -245,6 +258,9 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // 10. Transparent geometry
         DrawRenderables("RenderOrder", "Transparent", buffer, cameraPosition, view, transparentProjection, culledRenderableIndices);
+
+        if (depthTexture != null)
+            depthTexture.DestroyLater();
     }
 
     private static HashSet<int> CullRenderables(LayerMask cullingMask, BoundingFrustum? worldFrustum)

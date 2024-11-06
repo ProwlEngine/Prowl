@@ -19,6 +19,15 @@ public enum CameraClearFlags
     Skybox,
 }
 
+[Flags]
+public enum DepthTextureMode
+{
+    None = 0,
+    Depth = 1, // _CameraDepthTexture
+    //Normal = 2, // _CameraNormalsTexture
+    //MotionVectors = 4, // _CameraMotionVectorsTexture
+}
+
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Camera}  Camera")]
 public class Camera : MonoBehaviour
 {
@@ -42,6 +51,9 @@ public class Camera : MonoBehaviour
     public float RenderScale = 1.0f;
 
     public bool IsOrthographic => projectionType == ProjectionType.Orthographic;
+
+    [HideInInspector, SerializeIgnore]
+    public DepthTextureMode DepthTextureMode = DepthTextureMode.None;
 
     private static WeakReference<Camera> s_mainCamera = new(null);
     public static Camera? Main
