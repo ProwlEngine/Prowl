@@ -53,4 +53,15 @@ float4x4 inverse(float4x4 m) {
 	return ret;
 }
 
+// Function to reconstruct view-space position from depth
+float3 GetViewPos(float2 uv, float depth)
+{
+    // Convert to NDC space
+    float4 clipPos = float4(uv * 2.0 - 1.0, depth, 1.0);
+    
+    // Reconstruct view space position
+    float4 viewPos = mul(inverse(_ProjectionMatrix), clipPos);
+    return viewPos.xyz / viewPos.w;
+}
+
 #endif
