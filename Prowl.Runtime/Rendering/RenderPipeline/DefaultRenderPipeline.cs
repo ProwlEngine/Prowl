@@ -284,7 +284,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // 6.1. If the camera has depth texture mode enabled, we need to draw a depth texture
         if (depthTextureMode.HasFlag(DepthTextureMode.Depth))
         {
-            depthTexture = RenderTexture.GetTemporaryRT(pixelWidth, pixelHeight, [PixelFormat.R16_Float]);
+            depthTexture = RenderTexture.GetTemporaryRT(pixelWidth, pixelHeight, [PixelFormat.R32_Float]);
             toRelease.Add(depthTexture);
             buffer.SetRenderTarget(depthTexture);
             buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));

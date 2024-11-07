@@ -34,7 +34,7 @@ public static class ShadowAtlas
         freeTiles = tileCount * tileCount;
         tiles = new int?[tileCount, tileCount];
 
-        atlas ??= new RenderTexture((uint)size, (uint)size, [PixelFormat.R16_Float], PixelFormat.D16_UNorm, true);
+        atlas ??= new RenderTexture((uint)size, (uint)size, [PixelFormat.R32_Float], PixelFormat.D16_UNorm, true);
     }
 
     public static int GetAtlasWidth() => tileCount;
