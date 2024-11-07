@@ -418,7 +418,7 @@ Pass "Standard"
 Pass "Shadow"
 {
     Tags { "LightMode" = "ShadowCaster" }
-    Cull Front
+    Cull Back
 
     HLSLPROGRAM
         #pragma vertex Vertex
