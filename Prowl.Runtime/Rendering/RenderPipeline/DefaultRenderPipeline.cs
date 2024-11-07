@@ -202,24 +202,32 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private static CommandBuffer PrepareCommandBuffer(Framebuffer target, Camera camera, bool isHDR, out RenderTexture forwardBuffer)
     {
-        var buffer = CommandBufferPool.Get("Rendering Command Buffer");
 
         bool clearColor = camera.ClearFlags == CameraClearFlags.ColorOnly || camera.ClearFlags == CameraClearFlags.DepthColor;
         bool clearDepth = camera.ClearFlags == CameraClearFlags.DepthOnly || camera.ClearFlags == CameraClearFlags.DepthColor;
         bool drawSkybox = camera.ClearFlags == CameraClearFlags.Skybox;
 
         forwardBuffer = RenderTexture.GetTemporaryRT(camera.PixelWidth, camera.PixelHeight, [isHDR ? PixelFormat.R16_G16_B16_A16_Float : PixelFormat.R8_G8_B8_A8_UNorm]);
+        var buffer = SetupNewCommandBuffer(camera.Transform.position, camera.NearClipPlane, camera.FarClipPlane, camera.PixelWidth, camera.PixelHeight);
         buffer.SetRenderTarget(forwardBuffer);
         buffer.ClearRenderTarget(clearDepth || drawSkybox, clearColor || drawSkybox, camera.ClearColor);
+
+        return buffer;
+    }
+
+    private static CommandBuffer SetupNewCommandBuffer(Vector3 camPosition, float nearClip, float farClip, uint pixelWidth, uint pixelHeight)
+    {
+        var buffer = CommandBufferPool.Get("Rendering Command Buffer");
 
         // Set View Rect
         //buffer.SetViewports((int)(camera.Viewrect.x * target.Width), (int)(camera.Viewrect.y * target.Height), (int)(camera.Viewrect.width * target.Width), (int)(camera.Viewrect.height * target.Height), 0, 1000);
 
         // Setup Default Uniforms for this frame
         // Camera
-        buffer.SetVector("_WorldSpaceCameraPos", camera.Transform.position);
-        buffer.SetVector("_ProjectionParams", new Vector4(1.0f, camera.NearClipPlane, camera.FarClipPlane, 1.0f / camera.FarClipPlane));
-        buffer.SetVector("_ScreenParams", new Vector4(camera.PixelWidth, camera.PixelHeight, 1.0f + 1.0f / camera.PixelWidth, 1.0f + 1.0f / camera.PixelHeight));
+        buffer.SetVector("_WorldSpaceCameraPos", camPosition);
+        bool flippedy = !Graphics.IsOpenGL && !Graphics.IsVulkan;
+        buffer.SetVector("_ProjectionParams", new Vector4(flippedy ? -1.0 : 1.0f, nearClip, farClip, 1.0f / farClip));
+        buffer.SetVector("_ScreenParams", new Vector4(pixelWidth, pixelHeight, 1.0f + 1.0f / pixelWidth, 1.0f + 1.0f / pixelHeight));
         // Time
         buffer.SetVector("_Time", new Vector4(Time.time / 20, Time.time, Time.time * 2, Time.time * 3));
         buffer.SetVector("_SinTime", new Vector4(Math.Sin(Time.time / 8), Math.Sin(Time.time / 4), Math.Sin(Time.time / 2), Math.Sin(Time.time)));
@@ -233,7 +241,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
     #region Scene Rendering
 
-    private static void RenderScene(CommandBuffer buffer, Camera camera, in RenderingData data, RenderTexture forwardBuffer, List<MonoBehaviour> effects, List<MonoBehaviour> all, ref bool isHDR)
+    private static void RenderScene(CommandBuffer buffer, Camera camera, in RenderingData data, RenderTexture forwardBuffer, List<MonoBehaviour> effects, List<MonoBehaviour> all, ref bool isHDR, List<RenderTexture> toRelease)
     {
         // 1. Pre Cull
         foreach (MonoBehaviour effect in all)
@@ -245,6 +253,7 @@ public class DefaultRenderPipeline : RenderPipeline
         var cameraForward = camera.Transform.forward;
         var cullingMask = camera.CullingMask;
         var clearFlags = camera.ClearFlags;
+        var nearClipPlane = camera.NearClipPlane;
         var farClipPlane = camera.FarClipPlane;
         var pixelWidth = camera.PixelWidth;
         var pixelHeight = camera.PixelHeight;
@@ -256,7 +265,7 @@ public class DefaultRenderPipeline : RenderPipeline
         var previousViewProj = camera.PreviousViewProjectionMatrix;
         var worldFrustum = new BoundingFrustum(camera.ViewMatrix * camera.ProjectionMatrix);
         var depthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Depth, Normals, MotionVectors
-        Texture2D? depthTexture = null;
+        RenderTexture? depthTexture = null;
 
         // 3. Cull Renderables based on Snapshot data
         HashSet<int> culledRenderableIndices = CullRenderables(cullingMask, worldFrustum);
@@ -272,20 +281,27 @@ public class DefaultRenderPipeline : RenderPipeline
         if (clearFlags == CameraClearFlags.Skybox)
             RenderSkybox(buffer, originView, projection);
 
+        // 6.1. If the camera has depth texture mode enabled, we need to draw a depth texture
+        if (depthTextureMode.HasFlag(DepthTextureMode.Depth))
+        {
+            depthTexture = RenderTexture.GetTemporaryRT(pixelWidth, pixelHeight, [PixelFormat.R16_Float]);
+            toRelease.Add(depthTexture);
+            buffer.SetRenderTarget(depthTexture);
+            buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
+
+            // Draw depth for all visible objects
+            DrawRenderables("LightMode", "ShadowCaster", buffer, cameraPosition, view, projection, culledRenderableIndices, false);
+
+            buffer.SetTexture("_CameraDepthTexture", depthTexture);
+
+            // Reset render target back to forward buffer
+            buffer.SetRenderTarget(forwardBuffer);
+        }
+
         // 7. Opaque geometry
         DrawRenderables("RenderOrder", "Opaque", buffer, cameraPosition, view, projection, culledRenderableIndices, false);
 
-        // 7.1. If the camera has depth texture mode enabled, we need to copy the depth texture
-        // TODO: Unity re-draws the world to create Depth (also for Normals) textures.
-        // Is it for platform-related reasons? Do some platforms not support sampling Depth formats?
-        if (depthTextureMode.HasFlag(DepthTextureMode.Depth))
-        {
-            depthTexture = new Texture2D(pixelWidth, pixelHeight, 1, forwardBuffer.DepthBuffer.Format);
-            buffer.CopyTexture(forwardBuffer.DepthBuffer, depthTexture);
-            buffer.SetTexture("_CameraDepthTexture", depthTexture);
-        }
-
-        // 7.2 Create motion vector buffer if requested by the camera
+        // 7.1 Create motion vector buffer if requested by the camera
         RenderTexture? motionVectorBuffer = null;
         if (depthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
         {
@@ -307,9 +323,6 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.SetRenderTarget(forwardBuffer);
         }
 
-        // Reset render target back to forward buffer
-        buffer.SetRenderTarget(forwardBuffer);
-
         // 8. Debug visualization
         if (data.DisplayGrid)
             RenderGrid(buffer, cameraPosition, farClipPlane, data, view, projection);
@@ -326,7 +339,7 @@ public class DefaultRenderPipeline : RenderPipeline
             DrawImageEffects(forwardBuffer, effects, ref isHDR);
 
             // Get new command buffer for remaining passes
-            buffer = CommandBufferPool.Get("Rendering Command Buffer");
+            buffer = SetupNewCommandBuffer(cameraPosition, nearClipPlane, farClipPlane, pixelWidth, pixelHeight);
             buffer.SetRenderTarget(forwardBuffer);
 
         }
