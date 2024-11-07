@@ -116,11 +116,12 @@ public class DefaultRenderPipeline : RenderPipeline
 
         var (all, opaqueEffects, finalEffects) = GatherImageEffects(camera, data.IsSceneViewCamera);
         var buffer = PrepareCommandBuffer(target, camera, isHDR, out RenderTexture? forwardBuffer);
+        List<RenderTexture> toRelease = [];
 
         try
         {
             // Main rendering with correct order of operations
-            RenderScene(buffer, camera, data, forwardBuffer, opaqueEffects, all, ref isHDR);
+            RenderScene(buffer, camera, data, forwardBuffer, opaqueEffects, all, ref isHDR, toRelease);
 
             // Clean up unused matrices after rendering
             CleanupUnusedModelMatrices();
@@ -152,6 +153,9 @@ public class DefaultRenderPipeline : RenderPipeline
                 CommandBufferPool.Release(buffer);
             }
             RenderTexture.ReleaseTemporaryRT(forwardBuffer);
+
+            foreach (var rt in toRelease)
+                RenderTexture.ReleaseTemporaryRT(rt);
 
             foreach (MonoBehaviour effect in all)
                 effect.OnPostRender(camera);
@@ -286,6 +290,7 @@ public class DefaultRenderPipeline : RenderPipeline
         if (depthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
         {
             motionVectorBuffer = RenderTexture.GetTemporaryRT(pixelWidth, pixelHeight, [PixelFormat.R16_G16_Float]);
+            toRelease.Add(motionVectorBuffer);
             buffer.SetRenderTarget(motionVectorBuffer);
             buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
 
@@ -328,14 +333,6 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // 10. Transparent geometry
         DrawRenderables("RenderOrder", "Transparent", buffer, cameraPosition, view, transparentProjection, culledRenderableIndices, false);
-
-        // Clean up depth texture Buffer
-        if (depthTexture != null)
-            depthTexture.DestroyLater();
-
-        // Clean up motion vector buffer
-        if (motionVectorBuffer != null)
-            RenderTexture.ReleaseTemporaryRT(motionVectorBuffer);
     }
 
     private static HashSet<int> CullRenderables(LayerMask cullingMask, BoundingFrustum? worldFrustum)
