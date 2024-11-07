@@ -194,7 +194,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
         if (depthFormat != null)
         {
-            TextureUsage depthUsage = sampled ? TextureUsage.Sampled | TextureUsage.DepthStencil : TextureUsage.DepthStencil;
+            TextureUsage depthUsage = TextureUsage.DepthStencil; // sampled ? TextureUsage.Sampled | TextureUsage.DepthStencil : TextureUsage.DepthStencil;
             DepthBuffer = new Texture2D(Width, Height, 1, depthFormat.Value, depthUsage)
             {
                 Name = $"RT Depth Buffer"

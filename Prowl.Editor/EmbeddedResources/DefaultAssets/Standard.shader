@@ -462,7 +462,7 @@ Pass "Shadow"
             return output;
         }
 
-        float Fragment(Varyings input) : SV_DEPTH
+        float Fragment(Varyings input)
         {
             float4 fragPosLightSpace = mul(mul(Mat_P, Mat_V), float4(input.vertPos, 1.0));
             float3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
