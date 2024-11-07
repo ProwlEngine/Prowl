@@ -365,9 +365,11 @@ public sealed class RenderTexture : EngineObject, ISerializable
     {
         if (pool.TryGetValue(description, out var list) && list.Count > 0)
         {
-            int i = list.Count - 1;
-            RenderTexture renderTexture = list[i].Item1;
-            list.RemoveAt(i);
+            (RenderTexture renderTexture, long _) = list[^1];
+            if(renderTexture == null) throw new Exception("RenderTexture is null inside pool list");
+            list.RemoveAt(list.Count - 1);
+            // Remove empty lists to prevent Dictionary bloat
+            if (list.Count == 0) pool.Remove(description);
             return renderTexture;
         }
 
@@ -376,6 +378,9 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
     public static void ReleaseTemporaryRT(RenderTexture renderTexture)
     {
+        ArgumentNullException.ThrowIfNull(renderTexture);
+        ArgumentNullException.ThrowIfNull(renderTexture.Framebuffer, "RenderTexture.FrameBuffer");
+
         var key = new RenderTextureDescription(renderTexture);
 
         if (!pool.TryGetValue(key, out var list))
@@ -389,17 +394,49 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
     public static void UpdatePool()
     {
-        foreach (var pair in pool)
+        // Keep track of keys to remove from the dictionary
+        var keysToRemove = new List<RenderTextureDescription>();
+
+        // First, find all textures that need to be destroyed and remove them
+        foreach (var kvp in pool)
         {
-            for (int i = pair.Value.Count - 1; i >= 0; i--)
+            var key = kvp.Key;
+            var list = kvp.Value;
+
+            // Create a new list for valid textures
+            var validTextures = new List<(RenderTexture, long)>();
+
+            for (int i = list.Count - 1; i >= 0; i--)
             {
-                var (renderTexture, frameCreated) = pair.Value[i];
-                if (Time.frameCount - frameCreated > MaxUnusedFrames)
+                var (renderTexture, frameCreated) = list[i];
+
+                // Check if texture is destroyed or too old
+                if (renderTexture == null || Time.frameCount - frameCreated > MaxUnusedFrames)
                 {
-                    renderTexture.DestroyLater();
-                    pair.Value.RemoveAt(i);
+                    if (renderTexture != null)
+                        renderTexture.DestroyLater();
+                }
+                else
+                {
+                    validTextures.Add((renderTexture, frameCreated));
                 }
             }
+
+            // Replace the old list with only valid textures
+            if (validTextures.Count == 0)
+            {
+                keysToRemove.Add(key);
+            }
+            else
+            {
+                pool[key] = validTextures;
+            }
+        }
+
+        // Remove empty pools
+        foreach (var key in keysToRemove)
+        {
+            pool.Remove(key);
         }
     }
 
