@@ -12,9 +12,9 @@ public class KawaseBloomEffect : MonoBehaviour
 {
     private static Material s_bloomMaterial;
 
-    public int Iterations = 4;
+    public int Iterations = 5;
     public float Radius = 1.0f;
-    public float Threshold = 1.0f;
+    public float Threshold = 2.0f;
     public float Intensity = 1.0f;
     public float SoftKnee = 0.5f;
 
