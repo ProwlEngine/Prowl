@@ -388,7 +388,7 @@ public class DefaultRenderPipeline : RenderPipeline
         CreateLightBuffer(buffer, cameraPosition, cullingMask, lights);
 
         buffer.SetRenderTarget(forwardBuffer);
-        buffer.SetTexture("_ShadowAtlas", ShadowMap.DepthBuffer);
+        buffer.SetTexture("_ShadowAtlas", ShadowMap.ColorBuffers[0]);
         buffer.SetBuffer("_Lights", LightBuffer);
         buffer.SetInt("_LightCount", LightCount);
         buffer.SetVector("_CameraWorldPos", cameraPosition);
