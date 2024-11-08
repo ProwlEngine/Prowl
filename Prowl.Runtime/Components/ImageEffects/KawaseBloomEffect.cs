@@ -12,11 +12,23 @@ public class KawaseBloomEffect : MonoBehaviour
 {
     private static Material s_bloomMaterial;
 
-    public int Iterations = 5;
-    public float Radius = 1.0f;
-    public float Threshold = 2.0f;
+    public enum Resolution
+    {
+        Full = 0,
+        Half = 1,
+        Quarter = 2,
+        Eighth = 3
+    }
+
+    public Resolution resolution = Resolution.Quarter;
+
+    public int Iterations = 2;
+    public float Radius = 16.0f;
+    public float Threshold = 1.0f;
     public float Intensity = 1.0f;
     public float SoftKnee = 0.5f;
+
+    public bool UseBlur = true;       // Toggle to enable/disable blur
 
     public override void OnRenderImage(RenderTexture src, RenderTexture dest)
     {
@@ -32,8 +44,31 @@ public class KawaseBloomEffect : MonoBehaviour
         s_bloomMaterial.SetVector("_Resolution", new System.Numerics.Vector2(src.Width, src.Height));
 
         // Create temporary RTs
-        RenderTexture tempA = RenderTexture.GetTemporaryRT(src.Width, src.Height, [src.ColorBuffers[0].Format]);
-        RenderTexture tempB = RenderTexture.GetTemporaryRT(src.Width, src.Height, [src.ColorBuffers[0].Format]);
+        float resScale = 1.0f;
+        switch (resolution)
+        {
+            case Resolution.Half:
+                resScale = 0.5f;
+                break;
+            case Resolution.Quarter:
+                resScale = 0.25f;
+                break;
+            case Resolution.Eighth:
+                resScale = 0.125f;
+                break;
+        }
+        uint width = (uint)MathD.Max(1, src.Width * resScale);
+        uint height = (uint)MathD.Max(1, src.Height * resScale);
+
+
+        RenderTexture tempA = RenderTexture.GetTemporaryRT(width, height, [src.ColorBuffers[0].Format]);
+        RenderTexture tempB = RenderTexture.GetTemporaryRT(width, height, [src.ColorBuffers[0].Format]);
+        CommandBuffer tmpClear = CommandBufferPool.Get("Clear");
+        tmpClear.SetRenderTarget(tempA);
+        tmpClear.ClearRenderTarget(true, true, Color.clear);
+        tmpClear.SetRenderTarget(tempB);
+        tmpClear.ClearRenderTarget(true, true, Color.clear);
+        Graphics.SubmitCommandBuffer(tmpClear);
 
         // blit the source into tempA with a threshold (Pass 0)
         Graphics.Blit(src, tempA, s_bloomMaterial, 0);
@@ -62,20 +97,31 @@ public class KawaseBloomEffect : MonoBehaviour
         }
 
         // If we ended on tempA, do one final blit to tempB
-        if ((Iterations - 1) % 2 == 0)
+        if (Iterations % 2 == 0)
         {
             float finalOffset = 1.0f;
             s_bloomMaterial.SetFloat("_Offset", finalOffset);
             Graphics.Blit(tempA, tempB, s_bloomMaterial, 1);
         }
 
-        //s_bloomMaterial.SetFloat("_Offset", 4.0f); Graphics.Blit(tempA, tempB, s_bloomMaterial, 1);
-        //s_bloomMaterial.SetFloat("_Offset", 2.0f); Graphics.Blit(tempB, tempA, s_bloomMaterial, 1);
-        //s_bloomMaterial.SetFloat("_Offset", 1.0f); Graphics.Blit(tempA, tempB, s_bloomMaterial, 1);
+        // After the kawase blur iterations, apply blur if enabled
+        if (UseBlur)
+        {
+            s_bloomMaterial.SetVector("_Resolution", new System.Numerics.Vector2(width, height));
 
-        s_bloomMaterial.SetTexture("_BloomTex", tempB);
-        Graphics.Blit(src, dest, s_bloomMaterial, 2);
-        //Graphics.Blit(tempB, dest);
+            Graphics.Blit(tempB, tempA, s_bloomMaterial, 2); // Horizontal
+            Graphics.Blit(tempA, tempB, s_bloomMaterial, 3); // Vertical
+
+            // Original composite without blur
+            s_bloomMaterial.SetTexture("_BloomTex", tempB);
+            Graphics.Blit(src, dest, s_bloomMaterial, 4);
+        }
+        else
+        {
+            // Original composite without blur
+            s_bloomMaterial.SetTexture("_BloomTex", tempB);
+            Graphics.Blit(src, dest, s_bloomMaterial, 4);
+        }
 
         // Release temporary RT
         RenderTexture.ReleaseTemporaryRT(tempA);

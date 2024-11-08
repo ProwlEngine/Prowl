@@ -35,8 +35,6 @@ Pass "KawaseBloomThreshold"
 		Texture2D<float4> _MainTex;
 		SamplerState sampler_MainTex;
 
-        float2 _Resolution;
-        
         float _Threshold;
         float _SoftKnee;
 
@@ -141,8 +139,142 @@ Pass "KawaseBloom"
             color += _MainTex.Sample(sampler_MainTex, input.uv + float2(offset.x, -offset.y)).rgb;
             
             color = color * 0.25 * _Intensity;
+			
+			color = (color + _MainTex.Sample(sampler_MainTex, input.uv)) / 2;
             
             return float4(color, 1.0);
+        }
+    ENDHLSL
+}
+
+Pass "BilateralBlurH"
+{
+    Tags { "RenderOrder" = "Composite" }
+
+    DepthStencil
+    {
+        DepthTest Off
+        DepthWrite Off
+    }
+    
+    Blend Override
+    Cull None
+
+    HLSLPROGRAM
+        #pragma vertex Vertex
+        #pragma fragment Fragment
+
+        struct Attributes
+        {
+            float3 position : POSITION;
+            float2 uv : TEXCOORD0;
+        };
+
+        struct Varyings
+        {
+            float4 position : SV_POSITION;
+            float2 uv : TEXCOORD0;
+        };
+
+        Texture2D<float4> _MainTex;
+        SamplerState sampler_MainTex;
+
+        float2 _Resolution;
+
+        static const int KERNEL_SIZE = 16;
+
+        Varyings Vertex(Attributes input)
+        {
+            Varyings output = (Varyings)0;
+            output.position = float4(input.position.xyz, 1.0);
+            output.uv = input.uv;
+            return output;
+        }
+
+        float4 Fragment(Varyings input) : SV_TARGET
+        {
+            float2 texelSize = 1.0 / _Resolution;
+            float3 centerColor = _MainTex.Sample(sampler_MainTex, input.uv).rgb;
+            
+            float3 color = 0;
+            
+            // Horizontal blur
+            for(int i = 0; i < KERNEL_SIZE; i++)
+            {
+                int offset = i - KERNEL_SIZE/2;
+                float2 uv = input.uv + float2(texelSize.x * offset, 0);
+                float3 sampleColor = _MainTex.Sample(sampler_MainTex, uv).rgb;
+                
+                color += sampleColor;
+            }
+            
+            return float4(color / KERNEL_SIZE, 1.0);
+        }
+    ENDHLSL
+}
+
+Pass "BilateralBlurV"
+{
+    Tags { "RenderOrder" = "Composite" }
+
+    DepthStencil
+    {
+        DepthTest Off
+        DepthWrite Off
+    }
+    
+    Blend Override
+    Cull None
+
+    HLSLPROGRAM
+        #pragma vertex Vertex
+        #pragma fragment Fragment
+
+        struct Attributes
+        {
+            float3 position : POSITION;
+            float2 uv : TEXCOORD0;
+        };
+
+        struct Varyings
+        {
+            float4 position : SV_POSITION;
+            float2 uv : TEXCOORD0;
+        };
+
+        Texture2D<float4> _MainTex;
+        SamplerState sampler_MainTex;
+
+        float2 _Resolution;
+
+        static const int KERNEL_SIZE = 16;
+
+        Varyings Vertex(Attributes input)
+        {
+            Varyings output = (Varyings)0;
+            output.position = float4(input.position.xyz, 1.0);
+            output.uv = input.uv;
+            return output;
+        }
+
+        float4 Fragment(Varyings input) : SV_TARGET
+        {
+            float2 texelSize = 1.0 / _Resolution;
+            float3 centerColor = _MainTex.Sample(sampler_MainTex, input.uv).rgb;
+            
+            float3 color = 0;
+            
+            // Vertical blur
+            for(int i = 0; i < KERNEL_SIZE; i++)
+            {
+                int offset = i - KERNEL_SIZE/2;
+                float2 uv = input.uv + float2(0, texelSize.y * offset);
+                float3 sampleColor = _MainTex.Sample(sampler_MainTex, uv).rgb;
+                
+                color += sampleColor;
+            }
+            
+            return float4(color / KERNEL_SIZE, 1.0);
         }
     ENDHLSL
 }
