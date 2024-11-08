@@ -9,7 +9,7 @@ Pass "ProceduralSky"
 	DepthStencil
 	{
 		DepthWrite Off
-        DepthTest Off
+        DepthTest LessEqual
 	}
 
 
@@ -273,6 +273,7 @@ Pass "ProceduralSky"
 
 			// Extract the rotational part of the view matrix
 			output.pos = mul(_Matrix_VP, float4(input.pos, 1));
+			output.pos.z = output.pos.w;  // This sets depth to 1.0 so its always in the background
 
 			ScatteringParams setting;
 
