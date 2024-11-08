@@ -50,54 +50,65 @@ public struct RenderTextureDescription
         sampleCount = texture.SampleCount;
     }
 
-    public override readonly bool Equals([NotNullWhen(true)] object? obj)
+    public readonly bool Equals(RenderTextureDescription other)
     {
-        if (obj is not RenderTextureDescription key)
+        if (width != other.width || height != other.height)
             return false;
 
-        if (width != key.width || height != key.height)
+        if (sampled != other.sampled || enableRandomWrite != other.enableRandomWrite)
             return false;
 
-        if (depthBufferFormat != key.depthBufferFormat)
+        if (sampleCount != other.sampleCount)
             return false;
 
-        if (colorBufferFormats != key.colorBufferFormats)
+        if (depthBufferFormat.HasValue != other.depthBufferFormat.HasValue)
             return false;
 
-        if (!colorBufferFormats.SequenceEqual(key.colorBufferFormats))
+        if (depthBufferFormat.HasValue && !depthBufferFormat.Equals(other.depthBufferFormat))
             return false;
 
-        if (key.sampled != sampled)
+        // Dont equals directly since that would be a reference equality check
+        if (colorBufferFormats == null && other.colorBufferFormats == null)
+            return true;
+
+        if (colorBufferFormats == null || other.colorBufferFormats == null)
             return false;
 
-        if (key.enableRandomWrite != enableRandomWrite)
+        if (colorBufferFormats.Length != other.colorBufferFormats.Length)
             return false;
 
-        if (key.sampleCount != sampleCount)
-            return false;
-
-        return true;
+        // Compare each format in the array
+        return colorBufferFormats.SequenceEqual(other.colorBufferFormats);
     }
 
-    public override int GetHashCode()
+    public override readonly bool Equals([NotNullWhen(true)] object? obj)
+    {
+        return obj is RenderTextureDescription other && Equals(other);
+    }
+
+    public override readonly int GetHashCode()
     {
         HashCode hash = new();
         hash.Add(width);
         hash.Add(height);
-        hash.Add(depthBufferFormat.GetValueOrDefault());
 
-        foreach (PixelFormat format in colorBufferFormats)
-            hash.Add(format.GetHashCode());
+        if (depthBufferFormat.HasValue)
+            hash.Add(depthBufferFormat.Value);
 
-        hash.Add(enableRandomWrite);
+        if (colorBufferFormats != null)
+        {
+            foreach (PixelFormat format in colorBufferFormats)
+                hash.Add(format);
+        }
+
         hash.Add(sampled);
+        hash.Add(enableRandomWrite);
         hash.Add(sampleCount);
 
         return hash.ToHashCode();
     }
 
     public static bool operator ==(RenderTextureDescription left, RenderTextureDescription right) => left.Equals(right);
-
     public static bool operator !=(RenderTextureDescription left, RenderTextureDescription right) => !(left == right);
 }
 
