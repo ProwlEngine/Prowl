@@ -68,7 +68,7 @@ Pass "MotionBlur"
 			color += _MainTex.Sample(sampler_MainTex, input.uv);
 			totalWeight += 1.0;
 			
-			[unroll]
+            [loop]
 			for(int i = 0; i < _SampleCount; i++)
 			{
 				float t = (float)i / (_SampleCount - 1);

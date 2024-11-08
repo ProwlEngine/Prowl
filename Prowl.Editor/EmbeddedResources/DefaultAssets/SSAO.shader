@@ -129,7 +129,8 @@ Pass "MotionBlur"
 	    	
             // Calculate occlusion
             float occlusion = 0.0;
-            
+
+            [loop]
             for (int i = 0; i < _SampleCount; i++)
             {
                 // Get sample position
