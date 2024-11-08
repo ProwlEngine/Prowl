@@ -79,7 +79,7 @@ public class DefaultRenderPipeline : RenderPipeline
             .Where(key => !s_activeObjectIds.Contains(key))
             .ToList();
 
-        foreach (var key in unusedKeys)
+        foreach (int key in unusedKeys)
             s_prevModelMatrices.Remove(key);
 
         // Clear the active IDs set for next frame
@@ -108,14 +108,14 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         ValidateDefaults();
 
-        var target = camera.UpdateRenderData();
+        Framebuffer target = camera.UpdateRenderData();
 
         bool isHDR = data.IsSceneViewCamera ?
             (Camera.Main?.HDR ?? camera.HDR) :
             camera.HDR;
 
-        var (all, opaqueEffects, finalEffects) = GatherImageEffects(camera, data.IsSceneViewCamera);
-        var buffer = PrepareCommandBuffer(target, camera, isHDR, out RenderTexture? forwardBuffer);
+        (List<MonoBehaviour> all, List<MonoBehaviour> opaqueEffects, List<MonoBehaviour> finalEffects) = GatherImageEffects(camera, data.IsSceneViewCamera);
+        CommandBuffer? buffer = PrepareCommandBuffer(target, camera, isHDR, out RenderTexture? forwardBuffer);
         List<RenderTexture> toRelease = [];
 
         try
@@ -154,7 +154,7 @@ public class DefaultRenderPipeline : RenderPipeline
             }
             RenderTexture.ReleaseTemporaryRT(forwardBuffer);
 
-            foreach (var rt in toRelease)
+            foreach (RenderTexture rt in toRelease)
                 RenderTexture.ReleaseTemporaryRT(rt);
 
             foreach (MonoBehaviour effect in all)
@@ -168,17 +168,17 @@ public class DefaultRenderPipeline : RenderPipeline
         var opaqueEffects = new List<MonoBehaviour>();
         var finalEffects = new List<MonoBehaviour>();
 
-        var components = camera.GetComponents<MonoBehaviour>();
+        IEnumerable<MonoBehaviour> components = camera.GetComponents<MonoBehaviour>();
         // If this is the Scene view camera, we need to include the Camera.Main effects
         if(isSceneView && Camera.Main != null)
             components = components.Concat(Camera.Main?.GetComponents<MonoBehaviour>() ?? Array.Empty<MonoBehaviour>());
 
-        foreach (var effect in components)
+        foreach (MonoBehaviour effect in components)
         {
             if (effect.EnabledInHierarchy == false) continue;
             if (effect is Camera) continue;
 
-            var type = effect.GetType();
+            Type type = effect.GetType();
 
             // if this is Scene view camera, then the effect needs the ImageEffectAllowedInSceneView attribute
             if (isSceneView && type.GetCustomAttributes(typeof(ImageEffectAllowedInSceneViewAttribute), false).Length == 0)
@@ -187,7 +187,7 @@ public class DefaultRenderPipeline : RenderPipeline
             // If they have OnRenderImage does not effect if they exist as a valid effect
             all.Add(effect);
 
-            var method = type.GetMethod("OnRenderImage");
+            MethodInfo? method = type.GetMethod("OnRenderImage");
             if (method?.DeclaringType == typeof(MonoBehaviour)) continue;
 
 
@@ -208,26 +208,26 @@ public class DefaultRenderPipeline : RenderPipeline
         bool drawSkybox = camera.ClearFlags == CameraClearFlags.Skybox;
 
         forwardBuffer = RenderTexture.GetTemporaryRT(camera.PixelWidth, camera.PixelHeight, [isHDR ? PixelFormat.R16_G16_B16_A16_Float : PixelFormat.R8_G8_B8_A8_UNorm]);
-        var buffer = SetupNewCommandBuffer(camera.Transform.position, camera.NearClipPlane, camera.FarClipPlane, camera.PixelWidth, camera.PixelHeight);
+        CommandBuffer buffer = SetupNewCommandBuffer(new(camera));
         buffer.SetRenderTarget(forwardBuffer);
         buffer.ClearRenderTarget(clearDepth || drawSkybox, clearColor || drawSkybox, camera.ClearColor);
 
         return buffer;
     }
 
-    private static CommandBuffer SetupNewCommandBuffer(Vector3 camPosition, float nearClip, float farClip, uint pixelWidth, uint pixelHeight)
+    private static CommandBuffer SetupNewCommandBuffer(CameraSnapshot css)
     {
-        var buffer = CommandBufferPool.Get("Rendering Command Buffer");
+        CommandBuffer buffer = CommandBufferPool.Get("Rendering Command Buffer");
 
         // Set View Rect
         //buffer.SetViewports((int)(camera.Viewrect.x * target.Width), (int)(camera.Viewrect.y * target.Height), (int)(camera.Viewrect.width * target.Width), (int)(camera.Viewrect.height * target.Height), 0, 1000);
 
         // Setup Default Uniforms for this frame
         // Camera
-        buffer.SetVector("_WorldSpaceCameraPos", camPosition);
+        buffer.SetVector("_WorldSpaceCameraPos", css.cameraPosition);
         bool flippedy = !Graphics.IsOpenGL && !Graphics.IsVulkan;
-        buffer.SetVector("_ProjectionParams", new Vector4(flippedy ? -1.0 : 1.0f, nearClip, farClip, 1.0f / farClip));
-        buffer.SetVector("_ScreenParams", new Vector4(pixelWidth, pixelHeight, 1.0f + 1.0f / pixelWidth, 1.0f + 1.0f / pixelHeight));
+        buffer.SetVector("_ProjectionParams", new Vector4(flippedy ? -1.0 : 1.0f, css.nearClipPlane, css.farClipPlane, 1.0f / css.farClipPlane));
+        buffer.SetVector("_ScreenParams", new Vector4(css.pixelWidth, css.pixelHeight, 1.0f + 1.0f / css.pixelWidth, 1.0f + 1.0f / css.pixelHeight));
         // Time
         buffer.SetVector("_Time", new Vector4(Time.time / 20, Time.time, Time.time * 2, Time.time * 3));
         buffer.SetVector("_SinTime", new Vector4(Math.Sin(Time.time / 8), Math.Sin(Time.time / 4), Math.Sin(Time.time / 2), Math.Sin(Time.time)));
@@ -241,6 +241,27 @@ public class DefaultRenderPipeline : RenderPipeline
 
     #region Scene Rendering
 
+    public struct CameraSnapshot(Camera camera)
+    {
+        public Vector3 cameraPosition = camera.Transform.position;
+        public Vector3 cameraUp = camera.Transform.up;
+        public Vector3 cameraForward = camera.Transform.forward;
+        public LayerMask cullingMask = camera.CullingMask;
+        public CameraClearFlags clearFlags = camera.ClearFlags;
+        public float nearClipPlane = camera.NearClipPlane;
+        public float farClipPlane = camera.FarClipPlane;
+        public uint pixelWidth = camera.PixelWidth;
+        public uint pixelHeight = camera.PixelHeight;
+        public float aspect = camera.Aspect;
+        public Matrix4x4 originView = camera.OriginViewMatrix;
+        public Matrix4x4 view = CAMERA_RELATIVE ? camera.OriginViewMatrix : camera.ViewMatrix;
+        public Matrix4x4 projection = Graphics.GetGPUProjectionMatrix(camera.ProjectionMatrix);
+        public Matrix4x4 transparentProjection = camera.UseJitteredProjectionMatrixForTransparentRendering ? camera.ProjectionMatrix : camera.NonJitteredProjectionMatrix;
+        public Matrix4x4 previousViewProj = camera.PreviousViewProjectionMatrix;
+        public BoundingFrustum worldFrustum = new(camera.ViewMatrix * camera.ProjectionMatrix);
+        public DepthTextureMode depthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Normals, MotionVectors
+    }
+
     private static void RenderScene(CommandBuffer buffer, Camera camera, in RenderingData data, RenderTexture forwardBuffer, List<MonoBehaviour> effects, List<MonoBehaviour> all, ref bool isHDR, List<RenderTexture> toRelease)
     {
         // 1. Pre Cull
@@ -248,34 +269,17 @@ public class DefaultRenderPipeline : RenderPipeline
             effect.OnPreCull(camera);
 
         // 2. Take a snapshot of all Camera data
-        var cameraPosition = camera.Transform.position;
-        var cameraUp = camera.Transform.up;
-        var cameraForward = camera.Transform.forward;
-        var cullingMask = camera.CullingMask;
-        var clearFlags = camera.ClearFlags;
-        var nearClipPlane = camera.NearClipPlane;
-        var farClipPlane = camera.FarClipPlane;
-        var pixelWidth = camera.PixelWidth;
-        var pixelHeight = camera.PixelHeight;
-        var aspect = camera.Aspect;
-        var originView = camera.OriginViewMatrix;
-        var view = CAMERA_RELATIVE ? originView : camera.ViewMatrix;
-        var projection = Graphics.GetGPUProjectionMatrix(camera.ProjectionMatrix);
-        var transparentProjection = camera.UseJitteredProjectionMatrixForTransparentRendering ? camera.ProjectionMatrix : camera.NonJitteredProjectionMatrix;
-        var previousViewProj = camera.PreviousViewProjectionMatrix;
-        var worldFrustum = new BoundingFrustum(camera.ViewMatrix * camera.ProjectionMatrix);
-        var depthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Depth, Normals, MotionVectors
-        RenderTexture? depthTexture = null;
+        CameraSnapshot css = new(camera);
 
         // 3. Cull Renderables based on Snapshot data
-        HashSet<int> culledRenderableIndices = CullRenderables(cullingMask, worldFrustum);
+        HashSet<int> culledRenderableIndices = CullRenderables(css.cullingMask, css.worldFrustum);
 
         // 4. Pre Render
         foreach (MonoBehaviour effect in all)
             effect.OnPreRender(camera);
 
         // 5. Setup Lighting and Shadows
-        SetupLightingAndShadows(buffer, forwardBuffer, cameraPosition, cullingMask);
+        SetupLightingAndShadows(buffer, forwardBuffer, css);
 
         // 6. Skybox (if enabled) - TODO: Should be done after opaque and after Opaque Post-Processing
         if (clearFlags == CameraClearFlags.Skybox)
@@ -299,13 +303,13 @@ public class DefaultRenderPipeline : RenderPipeline
         }
 
         // 7. Opaque geometry
-        DrawRenderables("RenderOrder", "Opaque", buffer, cameraPosition, view, projection, culledRenderableIndices, false);
+        DrawRenderables("RenderOrder", "Opaque", buffer, css.cameraPosition, css.view, css.projection, culledRenderableIndices, false);
 
         // 7.1 Create motion vector buffer if requested by the camera
         RenderTexture? motionVectorBuffer = null;
-        if (depthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
+        if (css.depthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
         {
-            motionVectorBuffer = RenderTexture.GetTemporaryRT(pixelWidth, pixelHeight, [PixelFormat.R16_G16_Float]);
+            motionVectorBuffer = RenderTexture.GetTemporaryRT(css.pixelWidth, css.pixelHeight, [PixelFormat.R16_G16_Float]);
             toRelease.Add(motionVectorBuffer);
             buffer.SetRenderTarget(motionVectorBuffer);
             buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
@@ -314,7 +318,7 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.SetMatrix("_PrevViewProj", camera.PreviousViewProjectionMatrix.ToFloat());
 
             // Draw motion vectors for all visible objects
-            DrawRenderables("LightMode", "MotionVectors", buffer, cameraPosition, view, projection, culledRenderableIndices, true);
+            DrawRenderables("LightMode", "MotionVectors", buffer, css.cameraPosition, css.view, css.projection, culledRenderableIndices, true);
 
             // Set the motion vector texture for use in post-processing
             buffer.SetTexture("_CameraMotionVectorsTexture", motionVectorBuffer);
@@ -325,10 +329,10 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // 8. Debug visualization
         if (data.DisplayGrid)
-            RenderGrid(buffer, cameraPosition, farClipPlane, data, view, projection);
+            RenderGrid(buffer, css, data);
 
         if (data.DisplayGizmo)
-            RenderGizmos(buffer, cameraPosition, cameraUp, cameraForward, view * projection);
+            RenderGizmos(buffer, css);
 
         // 9. Apply opaque post-processing effects
         if (effects.Count > 0)
@@ -339,13 +343,32 @@ public class DefaultRenderPipeline : RenderPipeline
             DrawImageEffects(forwardBuffer, effects, ref isHDR);
 
             // Get new command buffer for remaining passes
-            buffer = SetupNewCommandBuffer(cameraPosition, nearClipPlane, farClipPlane, pixelWidth, pixelHeight);
+            buffer = SetupNewCommandBuffer(css);
             buffer.SetRenderTarget(forwardBuffer);
 
         }
 
         // 10. Transparent geometry
-        DrawRenderables("RenderOrder", "Transparent", buffer, cameraPosition, view, transparentProjection, culledRenderableIndices, false);
+        DrawRenderables("RenderOrder", "Transparent", buffer, css.cameraPosition, css.view, css.transparentProjection, culledRenderableIndices, false);
+    }
+
+    private static void PreDepthPass(CommandBuffer buffer, RenderTexture forwardBuffer, List<RenderTexture> toRelease, CameraSnapshot css, HashSet<int> culledRenderableIndices)
+    {
+        // We draw objects to get the DepthBuffer but we also draw it into a ColorBuffer so we upload it as a Sampleable Texture
+        RenderTexture depthTexture = RenderTexture.GetTemporaryRT(css.pixelWidth, css.pixelHeight, [PixelFormat.R32_Float]);
+        toRelease.Add(depthTexture);
+        buffer.SetRenderTarget(depthTexture);
+        buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
+
+        // Draw depth for all visible objects
+        DrawRenderables("LightMode", "ShadowCaster", buffer, css.cameraPosition, css.view, css.projection, culledRenderableIndices, false);
+        // Set the depth texture for use in post-processing
+        buffer.SetTexture("_CameraDepthTexture", depthTexture);
+        // Copy the depth buffer to the forward buffer
+        buffer.CopyTexture(depthTexture.DepthBuffer, forwardBuffer.DepthBuffer);
+
+        // Reset render target back to forward buffer
+        buffer.SetRenderTarget(forwardBuffer);
     }
 
     private static HashSet<int> CullRenderables(LayerMask cullingMask, BoundingFrustum? worldFrustum)
@@ -379,19 +402,19 @@ public class DefaultRenderPipeline : RenderPipeline
         return culledRenderableIndices;
     }
 
-    private static void SetupLightingAndShadows(CommandBuffer buffer, RenderTexture forwardBuffer, Vector3 cameraPosition, LayerMask cullingMask)
+    private static void SetupLightingAndShadows(CommandBuffer buffer, RenderTexture forwardBuffer, CameraSnapshot css)
     {
-        var lights = GetLights();
-        var sunDirection = GetSunDirection(lights);
+        List<IRenderableLight> lights = GetLights();
+        Vector3 sunDirection = GetSunDirection(lights);
 
         PrepareShadowAtlas();
-        CreateLightBuffer(buffer, cameraPosition, cullingMask, lights);
+        CreateLightBuffer(buffer, css.cameraPosition, css.cullingMask, lights);
 
         buffer.SetRenderTarget(forwardBuffer);
         buffer.SetTexture("_ShadowAtlas", ShadowMap.ColorBuffers[0]);
         buffer.SetBuffer("_Lights", LightBuffer);
         buffer.SetInt("_LightCount", LightCount);
-        buffer.SetVector("_CameraWorldPos", cameraPosition);
+        buffer.SetVector("_CameraWorldPos", css.cameraPosition);
         buffer.SetVector("_SunDir", sunDirection);
     }
 
@@ -417,7 +440,7 @@ public class DefaultRenderPipeline : RenderPipeline
         int width = ShadowAtlas.GetAtlasWidth();
 
         List<GPULight> gpuLights = [];
-        foreach (var light in lights)
+        foreach (IRenderableLight light in lights)
         {
             // Calculate resolution based on distance
             int res = CalculateResolution(Vector3.Distance(cameraPosition, light.GetLightPosition())); // Directional lights are always 1024
@@ -426,10 +449,10 @@ public class DefaultRenderPipeline : RenderPipeline
 
             if (light.DoCastShadows())
             {
-                var gpu = light.GetGPULight(ShadowAtlas.GetSize(), CAMERA_RELATIVE, cameraPosition);
+                GPULight gpu = light.GetGPULight(ShadowAtlas.GetSize(), CAMERA_RELATIVE, cameraPosition);
 
                 // Find a slot for the shadow map
-                var slot = ShadowAtlas.ReserveTiles(res, res, light.GetLightID());
+                Vector2Int? slot = ShadowAtlas.ReserveTiles(res, res, light.GetLightID());
 
                 if (slot != null)
                 {
@@ -493,7 +516,7 @@ public class DefaultRenderPipeline : RenderPipeline
     private static int CalculateResolution(double distance)
     {
         double t = MathD.Clamp(distance / 16f, 0, 1);
-        var tileSize = ShadowAtlas.GetTileSize();
+        int tileSize = ShadowAtlas.GetTileSize();
         int resolution = MathD.RoundToInt(MathD.Lerp(ShadowAtlas.GetMaxShadowSize(), tileSize, t));
 
         // Round to nearest multiple of tile size
@@ -507,16 +530,17 @@ public class DefaultRenderPipeline : RenderPipeline
         return Vector3.up;
     }
 
-    private static void RenderSkybox(CommandBuffer buffer, Matrix4x4 originViewMatrix, Matrix4x4 projection)
+    private static void RenderSkybox(CommandBuffer buffer, CameraSnapshot css)
     {
         buffer.SetMaterial(s_skybox);
-        buffer.SetMatrix("_Matrix_VP", (originViewMatrix * projection).ToFloat());
+        buffer.SetMatrix("_Matrix_VP", (css.originView * css.projection).ToFloat());
         buffer.DrawSingle(s_skyDome);
     }
 
-    private static void RenderGizmos(CommandBuffer buffer, Vector3 cameraPosition, Vector3 cameraUp, Vector3 cameraForward, Matrix4x4 vp)
+    private static void RenderGizmos(CommandBuffer buffer, CameraSnapshot css)
     {
-        (Mesh? wire, Mesh? solid) = Debug.GetGizmoDrawData(CAMERA_RELATIVE, cameraPosition);
+        Matrix4x4 vp = (css.view * css.projection);
+        (Mesh? wire, Mesh? solid) = Debug.GetGizmoDrawData(CAMERA_RELATIVE, css.cameraPosition);
 
         if (wire != null || solid != null)
         {
@@ -538,8 +562,8 @@ public class DefaultRenderPipeline : RenderPipeline
             {
                 Vector3 center = icon.center;
                 if (CAMERA_RELATIVE)
-                    center -= cameraPosition;
-                Matrix4x4 billboard = Matrix4x4.CreateBillboard(center, Vector3.zero, cameraUp, cameraForward);
+                    center -= css.cameraPosition;
+                Matrix4x4 billboard = Matrix4x4.CreateBillboard(center, Vector3.zero, css.cameraUp, css.cameraForward);
 
                 buffer.SetMatrix("_Matrix_VP", (billboard * vp).ToFloat());
                 buffer.SetTexture("_MainTex", icon.texture);
@@ -549,17 +573,17 @@ public class DefaultRenderPipeline : RenderPipeline
         }
     }
 
-    private static void RenderGrid(CommandBuffer buffer, Vector3 cameraPosition, float farClipPlane, RenderingData data, Matrix4x4 view, Matrix4x4 projection)
+    private static void RenderGrid(CommandBuffer buffer, CameraSnapshot css, RenderingData data)
     {
         Matrix4x4 grid = Matrix4x4.CreateScale(GRID_SCALE);
 
         grid *= data.GridMatrix;
 
         if (CAMERA_RELATIVE)
-            grid.Translation -= cameraPosition;
+            grid.Translation -= css.cameraPosition;
 
-        Matrix4x4 MV = grid * view;
-        Matrix4x4 MVP = grid * view * projection;
+        Matrix4x4 MV = grid * css.view;
+        Matrix4x4 MVP = grid * css.view * css.projection;
 
         buffer.SetMatrix("_Matrix_MV", MV.ToFloat());
         buffer.SetMatrix("_Matrix_MVP", MVP.ToFloat());
@@ -569,7 +593,7 @@ public class DefaultRenderPipeline : RenderPipeline
         buffer.SetFloat("_PrimaryGridSize", 1 / (float)data.GridSizes.x * GRID_SCALE * 2);
         buffer.SetFloat("_SecondaryGridSize", 1 / (float)data.GridSizes.y * GRID_SCALE * 2);
         buffer.SetFloat("_Falloff", 15.0f);
-        buffer.SetFloat("_MaxDist", Math.Min(farClipPlane, GRID_SCALE));
+        buffer.SetFloat("_MaxDist", Math.Min(css.farClipPlane, GRID_SCALE));
 
         buffer.SetMaterial(s_gridMaterial, 0);
         buffer.DrawSingle(s_quadMesh);
