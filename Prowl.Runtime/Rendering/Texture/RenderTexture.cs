@@ -50,7 +50,7 @@ public struct RenderTextureDescription
         sampleCount = texture.SampleCount;
     }
 
-    public override bool Equals([NotNullWhen(true)] object? obj)
+    public override readonly bool Equals([NotNullWhen(true)] object? obj)
     {
         if (obj is not RenderTextureDescription key)
             return false;
@@ -61,7 +61,7 @@ public struct RenderTextureDescription
         if (depthBufferFormat != key.depthBufferFormat)
             return false;
 
-        if (colorBufferFormats == null != (key.colorBufferFormats == null))
+        if (colorBufferFormats != key.colorBufferFormats)
             return false;
 
         if (!colorBufferFormats.SequenceEqual(key.colorBufferFormats))
@@ -84,12 +84,14 @@ public struct RenderTextureDescription
         HashCode hash = new();
         hash.Add(width);
         hash.Add(height);
-        hash.Add(depthBufferFormat);
+        hash.Add(depthBufferFormat.GetValueOrDefault());
 
-        foreach (var format in colorBufferFormats)
+        foreach (PixelFormat format in colorBufferFormats)
             hash.Add(format.GetHashCode());
 
         hash.Add(enableRandomWrite);
+        hash.Add(sampled);
+        hash.Add(sampleCount);
 
         return hash.ToHashCode();
     }
@@ -330,9 +332,11 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
     #region Pool
 
-    private static readonly Dictionary<RenderTextureDescription, List<(RenderTexture, long frameCreated)>> pool = [];
+    private static readonly Dictionary<RenderTextureDescription, List<(RenderTexture, int)>> s_pool = [];
 
-    private const int MaxUnusedFrames = 10;
+
+    private const int TextureAliveTime = 10;
+
 
     public static RenderTexture GetTemporaryRT(
         uint width, uint height,
@@ -342,6 +346,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
         return GetTemporaryRT(new RenderTextureDescription(width, height, TextureUtility.GetBestSupportedDepthFormat(), [PixelFormat.R8_G8_B8_A8_UNorm], sampled, randomWrite, samples));
     }
 
+
     public static RenderTexture GetTemporaryRT(
         uint width, uint height,
         PixelFormat[] colorFormats,
@@ -350,6 +355,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
     {
         return GetTemporaryRT(new RenderTextureDescription(width, height, TextureUtility.GetBestSupportedDepthFormat(), colorFormats, sampled, randomWrite, samples));
     }
+
 
     public static RenderTexture GetTemporaryRT(
         uint width, uint height,
@@ -361,20 +367,29 @@ public sealed class RenderTexture : EngineObject, ISerializable
         return GetTemporaryRT(new RenderTextureDescription(width, height, depthFormat, colorFormats, sampled, randomWrite, samples));
     }
 
+
     public static RenderTexture GetTemporaryRT(RenderTextureDescription description)
     {
-        if (pool.TryGetValue(description, out var list) && list.Count > 0)
-        {
-            (RenderTexture renderTexture, long _) = list[^1];
-            if(renderTexture == null) throw new Exception("RenderTexture is null inside pool list");
-            list.RemoveAt(list.Count - 1);
-            // Remove empty lists to prevent Dictionary bloat
-            if (list.Count == 0) pool.Remove(description);
-            return renderTexture;
-        }
+        if (!s_pool.TryGetValue(description, out List<(RenderTexture, int)>? list))
+            return new RenderTexture(description);
 
-        return new RenderTexture(description);
+        if (list.Count < 1)
+            return new RenderTexture(description);
+
+        (RenderTexture renderTexture, int _) = list[^1];
+
+        if (renderTexture.IsDestroyed)
+            throw new Exception("RenderTexture is destroyed inside pool list");
+
+        list.RemoveAt(list.Count - 1);
+
+        // Remove empty lists to prevent Dictionary bloat
+        if (list.Count == 0)
+            s_pool.Remove(description);
+
+        return renderTexture;
     }
+
 
     public static void ReleaseTemporaryRT(RenderTexture renderTexture)
     {
@@ -383,60 +398,43 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
         var key = new RenderTextureDescription(renderTexture);
 
-        if (!pool.TryGetValue(key, out var list))
+        if (!s_pool.TryGetValue(key, out List<(RenderTexture, int)>? list))
         {
             list = [];
-            pool[key] = list;
+            s_pool[key] = list;
         }
 
-        list.Add((renderTexture, Time.frameCount));
+        list.Add((renderTexture, TextureAliveTime));
     }
+
 
     public static void UpdatePool()
     {
-        // Keep track of keys to remove from the dictionary
-        var keysToRemove = new List<RenderTextureDescription>();
-
-        // First, find all textures that need to be destroyed and remove them
-        foreach (var kvp in pool)
+        foreach (var kvp in s_pool.ToList())
         {
-            var key = kvp.Key;
-            var list = kvp.Value;
-
-            // Create a new list for valid textures
-            var validTextures = new List<(RenderTexture, long)>();
+            RenderTextureDescription key = kvp.Key;
+            List<(RenderTexture, int)> list = kvp.Value;
 
             for (int i = list.Count - 1; i >= 0; i--)
             {
-                var (renderTexture, frameCreated) = list[i];
+                (RenderTexture tex, int time) = list[i];
 
-                // Check if texture is destroyed or too old
-                if (renderTexture == null || Time.frameCount - frameCreated > MaxUnusedFrames)
+                if (time > 0 && tex != null)
                 {
-                    if (renderTexture != null)
-                        renderTexture.DestroyLater();
+                    time--;
+                    list[i] = (tex, time);
+
+                    continue;
                 }
-                else
-                {
-                    validTextures.Add((renderTexture, frameCreated));
-                }
+
+                list.RemoveAt(i);
+
+                if (tex != null)
+                    tex.DestroyLater();
             }
 
-            // Replace the old list with only valid textures
-            if (validTextures.Count == 0)
-            {
-                keysToRemove.Add(key);
-            }
-            else
-            {
-                pool[key] = validTextures;
-            }
-        }
-
-        // Remove empty pools
-        foreach (var key in keysToRemove)
-        {
-            pool.Remove(key);
+            if (list.Count < 1)
+                s_pool.Remove(key);
         }
     }
 
