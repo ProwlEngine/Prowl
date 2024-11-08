@@ -106,7 +106,7 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
     - Post Processing - Near Identical API to Unity
         - Tonemapping (Melon, Aces, Reinhard, Uncharted, Filmic)
         - Motion Blur
-        - Simple Kawase Bloom
+        - Very fast Kawase Bloom
     - Transparency
     - Procedural Super Performant Skybox
     - Node-Based Visual Scripting (Working but pretty simple)
