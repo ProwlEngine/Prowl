@@ -53,8 +53,13 @@ public class BindableResourceSet
                     break;
 
                 case ResourceKind.StructuredBufferReadOnly:
-                    (DeviceBuffer? buffer, int start, int length) = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
-                    buffer ??= GraphicsBuffer.Empty.Buffer;
+                    var bufferTuple = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
+                    if (bufferTuple.Item1 == null && bufferTuple.Item2 == 0 && bufferTuple.Item3 == -1)
+                        bufferTuple = PropertyState._globalBuffers.GetValueOrDefault(uniform.name, (null, 0, -1));
+
+                    DeviceBuffer buffer = bufferTuple.Item1 ?? GraphicsBuffer.Empty.Buffer;
+                    int start = bufferTuple.Item2;
+                    int length = bufferTuple.Item3;
 
                     if (!buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly) &&
                         !buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
@@ -65,8 +70,13 @@ public class BindableResourceSet
                     break;
 
                 case ResourceKind.StructuredBufferReadWrite:
-                    (DeviceBuffer? rwbuffer, int rwstart, int rwlength) = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
-                    rwbuffer ??= GraphicsBuffer.EmptyRW.Buffer;
+                    var rwBufferTuple = state._buffers.GetValueOrDefault(uniform.name, (null, 0, -1));
+                    if (rwBufferTuple.Item1 == null && rwBufferTuple.Item2 == 0 && rwBufferTuple.Item3 == -1)
+                        rwBufferTuple = PropertyState._globalBuffers.GetValueOrDefault(uniform.name, (null, 0, -1));
+
+                    DeviceBuffer rwbuffer = rwBufferTuple.Item1 ?? GraphicsBuffer.Empty.Buffer;
+                    int rwstart = rwBufferTuple.Item2;
+                    int rwlength = rwBufferTuple.Item3;
 
                     if (!rwbuffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
                         rwbuffer = GraphicsBuffer.EmptyRW.Buffer;
@@ -114,8 +124,11 @@ public class BindableResourceSet
     {
         Veldrid.Texture texture;
 
-        (Veldrid.Texture?, Veldrid.Sampler?) texturePair =
-            state._textures.GetValueOrDefault(name, (null, null));
+        (Veldrid.Texture?, Veldrid.Sampler?) texturePair = state._textures.GetValueOrDefault(name, (null, null));
+        if (texturePair.Item1 == null && texturePair.Item2 == null)
+        {
+            texturePair = PropertyState._globalTextures.GetValueOrDefault(name, (null, null));
+        }
 
         texture = texturePair.Item1 ?? defaultTex.InternalTexture;
         sampler = texturePair.Item2 ?? defaultTex.Sampler.InternalSampler;
@@ -152,8 +165,10 @@ public class BindableResourceSet
         for (int i = 0; i < uniform.members.Length; i++)
         {
             UniformMember member = uniform.members[i];
+            uint destStride = member.arrayStride;
 
-            if (state._values.TryGetValue(member.name, out ValueProperty value))
+            ValueProperty value;
+            if (state._values.TryGetValue(member.name, out value))
             {
                 if (value.type != member.type)
                     continue;
@@ -164,7 +179,25 @@ public class BindableResourceSet
                     continue;
                 }
 
-                uint destStride = member.arrayStride;
+                uint srcStride = Math.Min(destStride, (uint)value.width * value.height);
+                uint destLength = member.size / member.arrayStride;
+
+                for (int j = 0; j < Math.Min(destLength, value.arraySize); i++)
+                {
+                    Buffer.BlockCopy(value.data, (int)(j * srcStride), tempBuffer, (int)(member.bufferOffsetInBytes + (j * destStride)), (int)srcStride);
+                }
+            }
+            else if (PropertyState._globalValues.TryGetValue(member.name, out value))
+            {
+                if (value.type != member.type)
+                    continue;
+
+                if (member.arrayStride <= 0)
+                {
+                    Buffer.BlockCopy(value.data, 0, tempBuffer, (int)member.bufferOffsetInBytes, Math.Min((int)member.size, value.data.Length));
+                    continue;
+                }
+
                 uint srcStride = Math.Min(destStride, (uint)value.width * value.height);
                 uint destLength = member.size / member.arrayStride;
 

@@ -93,6 +93,28 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public void SetColorArray(string name, Color[] values) => _properties.SetColorArray(name, values);
     public void SetMatrixArray(string name, Matrix4x4F[] values) => _properties.SetMatrixArray(name, values);
 
+    #region Global Properties
+
+    public static void SetGlobalColor(string name, Color value) => PropertyState.SetGlobalColor(name, value);
+    public static void SetGlobalVector(string name, Vector2F value) => PropertyState.SetGlobalVector(name, value);
+    public static void SetGlobalVector(string name, Vector3F value) => PropertyState.SetGlobalVector(name, value);
+    public static void SetGlobalVector(string name, Vector4F value) => PropertyState.SetGlobalVector(name, value);
+    public static void SetGlobalFloat(string name, float value) => PropertyState.SetGlobalFloat(name, value);
+    public static void SetGlobalInt(string name, int value) => PropertyState.SetGlobalInt(name, value);
+    public static void SetGlobalMatrix(string name, Matrix4x4F value) => PropertyState.SetGlobalMatrix(name, value);
+    public static void SetGlobalTexture(string name, Texture value) => PropertyState.SetGlobalTexture(name, value);
+
+
+    public static void SetGlobalFloatArray(string name, float[] values) => PropertyState.SetGlobalFloatArray(name, values);
+    public static void SetGlobalIntArray(string name, int[] values) => PropertyState.SetGlobalIntArray(name, values);
+    public static void SetGlobalVectorArray(string name, Vector2F[] values) => PropertyState.SetGlobalVectorArray(name, values);
+    public static void SetGlobalVectorArray(string name, Vector3F[] values) => PropertyState.SetGlobalVectorArray(name, values);
+    public static void SetGlobalVectorArray(string name, Vector4F[] values) => PropertyState.SetGlobalVectorArray(name, values);
+    public static void SetGlobalColorArray(string name, Color[] values) => PropertyState.SetGlobalColorArray(name, values);
+    public static void SetGlobalMatrixArray(string name, Matrix4x4F[] values) => PropertyState.SetGlobalMatrixArray(name, values);
+
+    #endregion
+
     public void SetProperty(string name, ShaderProperty value)
     {
         if (_propertyLookup.TryGetValue(name, out int val))

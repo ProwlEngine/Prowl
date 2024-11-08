@@ -40,7 +40,6 @@ public class SSAOEffect : MonoBehaviour
         s_ssao.SetFloat("_MaxDistance", MaxDistance);
         s_ssao.SetInt("_SampleCount", SampleCount);
         s_ssao.SetMatrix("_ProjectionMatrix", cam.ProjectionMatrix.ToFloat());
-        s_ssao.SetVector("_ScreenParams", new Vector4(cam.PixelWidth, cam.PixelHeight, 1.0f + 1.0f / cam.PixelWidth, 1.0f + 1.0f / cam.PixelHeight));
 
         Graphics.Blit(src, dest, s_ssao);
     }

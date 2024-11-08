@@ -56,7 +56,6 @@ public partial class PropertyState
     internal Dictionary<string, (Veldrid.DeviceBuffer?, int, int)> _buffers;
 
 
-
     public PropertyState()
     {
         _values = [];
@@ -149,7 +148,6 @@ public partial class PropertyState
         _values.Clear();
         _buffers.Clear();
     }
-
 
     private unsafe void WriteData<T>(string name, T newData, ValueType type, int width, int height) where T : unmanaged
     {

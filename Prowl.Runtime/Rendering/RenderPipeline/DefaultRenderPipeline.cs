@@ -157,6 +157,9 @@ public class DefaultRenderPipeline : RenderPipeline
             foreach (RenderTexture rt in toRelease)
                 RenderTexture.ReleaseTemporaryRT(rt);
 
+            // Clear global data, As some values like _CameraDepthTexture and _CameraMotionVectorsTexture are now invalid
+            PropertyState.ClearGlobalData();
+
             foreach (MonoBehaviour effect in all)
                 effect.OnPostRender(camera);
         }
@@ -208,33 +211,29 @@ public class DefaultRenderPipeline : RenderPipeline
         bool drawSkybox = camera.ClearFlags == CameraClearFlags.Skybox;
 
         forwardBuffer = RenderTexture.GetTemporaryRT(camera.PixelWidth, camera.PixelHeight, [isHDR ? PixelFormat.R16_G16_B16_A16_Float : PixelFormat.R8_G8_B8_A8_UNorm]);
-        CommandBuffer buffer = SetupNewCommandBuffer(new(camera));
+        CommandBuffer buffer = CommandBufferPool.Get("Rendering Command Buffer");
         buffer.SetRenderTarget(forwardBuffer);
         buffer.ClearRenderTarget(clearDepth || drawSkybox, clearColor || drawSkybox, camera.ClearColor);
 
         return buffer;
     }
 
-    private static CommandBuffer SetupNewCommandBuffer(CameraSnapshot css)
+    private static void SetupGlobalUniforms(CameraSnapshot css)
     {
-        CommandBuffer buffer = CommandBufferPool.Get("Rendering Command Buffer");
-
         // Set View Rect
         //buffer.SetViewports((int)(camera.Viewrect.x * target.Width), (int)(camera.Viewrect.y * target.Height), (int)(camera.Viewrect.width * target.Width), (int)(camera.Viewrect.height * target.Height), 0, 1000);
 
         // Setup Default Uniforms for this frame
         // Camera
-        buffer.SetVector("_WorldSpaceCameraPos", css.cameraPosition);
+        PropertyState.SetGlobalVector("_WorldSpaceCameraPos", css.cameraPosition);
         bool flippedy = !Graphics.IsOpenGL && !Graphics.IsVulkan;
-        buffer.SetVector("_ProjectionParams", new Vector4(flippedy ? -1.0 : 1.0f, css.nearClipPlane, css.farClipPlane, 1.0f / css.farClipPlane));
-        buffer.SetVector("_ScreenParams", new Vector4(css.pixelWidth, css.pixelHeight, 1.0f + 1.0f / css.pixelWidth, 1.0f + 1.0f / css.pixelHeight));
+        PropertyState.SetGlobalVector("_ProjectionParams", new Vector4(flippedy ? -1.0 : 1.0f, css.nearClipPlane, css.farClipPlane, 1.0f / css.farClipPlane));
+        PropertyState.SetGlobalVector("_ScreenParams", new Vector4(css.pixelWidth, css.pixelHeight, 1.0f + 1.0f / css.pixelWidth, 1.0f + 1.0f / css.pixelHeight));
         // Time
-        buffer.SetVector("_Time", new Vector4(Time.time / 20, Time.time, Time.time * 2, Time.time * 3));
-        buffer.SetVector("_SinTime", new Vector4(Math.Sin(Time.time / 8), Math.Sin(Time.time / 4), Math.Sin(Time.time / 2), Math.Sin(Time.time)));
-        buffer.SetVector("_CosTime", new Vector4(Math.Cos(Time.time / 8), Math.Cos(Time.time / 4), Math.Cos(Time.time / 2), Math.Cos(Time.time)));
-        buffer.SetVector("prowl_DeltaTime", new Vector4(Time.deltaTime, 1.0f / Time.deltaTime, Time.smoothDeltaTime, 1.0f / Time.smoothDeltaTime));
-
-        return buffer;
+        PropertyState.SetGlobalVector("_Time", new Vector4(Time.time / 20, Time.time, Time.time * 2, Time.time * 3));
+        PropertyState.SetGlobalVector("_SinTime", new Vector4(Math.Sin(Time.time / 8), Math.Sin(Time.time / 4), Math.Sin(Time.time / 2), Math.Sin(Time.time)));
+        PropertyState.SetGlobalVector("_CosTime", new Vector4(Math.Cos(Time.time / 8), Math.Cos(Time.time / 4), Math.Cos(Time.time / 2), Math.Cos(Time.time)));
+        PropertyState.SetGlobalVector("prowl_DeltaTime", new Vector4(Time.deltaTime, 1.0f / Time.deltaTime, Time.smoothDeltaTime, 1.0f / Time.smoothDeltaTime));
     }
 
     #endregion
@@ -270,6 +269,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // 2. Take a snapshot of all Camera data
         CameraSnapshot css = new(camera);
+        SetupGlobalUniforms(css);
 
         // 3. Cull Renderables based on Snapshot data
         HashSet<int> culledRenderableIndices = CullRenderables(css.cullingMask, css.worldFrustum);
@@ -303,7 +303,7 @@ public class DefaultRenderPipeline : RenderPipeline
             DrawRenderables("LightMode", "MotionVectors", buffer, css.cameraPosition, css.view, css.projection, culledRenderableIndices, true);
 
             // Set the motion vector texture for use in post-processing
-            buffer.SetTexture("_CameraMotionVectorsTexture", motionVectorBuffer);
+            PropertyState.SetGlobalTexture("_CameraMotionVectorsTexture", motionVectorBuffer);
 
             // Reset render target back to forward buffer
             buffer.SetRenderTarget(forwardBuffer);
@@ -318,7 +318,7 @@ public class DefaultRenderPipeline : RenderPipeline
             DrawImageEffects(forwardBuffer, effects, ref isHDR);
 
             // Get new command buffer for remaining passes
-            buffer = SetupNewCommandBuffer(css);
+            buffer = CommandBufferPool.Get("Rendering Command Buffer");
             buffer.SetRenderTarget(forwardBuffer);
         }
 
@@ -349,7 +349,7 @@ public class DefaultRenderPipeline : RenderPipeline
         DrawRenderables("LightMode", "ShadowCaster", buffer, css.cameraPosition, css.view, css.projection, culledRenderableIndices, false);
 
         // Set the depth texture for use in post-processing
-        buffer.SetTexture("_CameraDepthTexture", depthTexture);
+        PropertyState.SetGlobalTexture("_CameraDepthTexture", depthTexture);
 
         // Copy the depth buffer to the forward buffer
         buffer.CopyTexture(depthTexture.DepthBuffer, forwardBuffer.DepthBuffer);

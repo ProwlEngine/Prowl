@@ -32,7 +32,6 @@ public class MotionBlurEffect : MonoBehaviour
 
         s_motionblur.SetFloat("_Intensity", Intensity);
         s_motionblur.SetInt("_SampleCount", SampleCount);
-        s_motionblur.SetVector("_ScreenParams", new Vector4(cam.PixelWidth, cam.PixelHeight, 1.0f + 1.0f / cam.PixelWidth, 1.0f + 1.0f / cam.PixelHeight));
         Graphics.Blit(src, dest, s_motionblur);
     }
 }
