@@ -281,12 +281,13 @@ public class DefaultRenderPipeline : RenderPipeline
         // 5. Setup Lighting and Shadows
         SetupLightingAndShadows(buffer, forwardBuffer, css);
 
+        // 6. Pre-Depth Pass
         PreDepthPass(buffer, forwardBuffer, toRelease, css, culledRenderableIndices);
 
         // 7. Opaque geometry
         DrawRenderables("RenderOrder", "Opaque", buffer, css.cameraPosition, css.view, css.projection, culledRenderableIndices, false);
 
-        // 7.1 Create motion vector buffer if requested by the camera
+        // 7.1. Create motion vector buffer if requested by the camera
         RenderTexture? motionVectorBuffer = null;
         if (css.depthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
         {
@@ -308,13 +309,6 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.SetRenderTarget(forwardBuffer);
         }
 
-        // 8. Debug visualization
-        if (data.DisplayGrid)
-            RenderGrid(buffer, css, data);
-
-        if (data.DisplayGizmo)
-            RenderGizmos(buffer, css);
-
         // 9. Apply opaque post-processing effects
         if (effects.Count > 0)
         {
@@ -326,8 +320,14 @@ public class DefaultRenderPipeline : RenderPipeline
             // Get new command buffer for remaining passes
             buffer = SetupNewCommandBuffer(css);
             buffer.SetRenderTarget(forwardBuffer);
-
         }
+
+        // 8. Debug visualization
+        if (data.DisplayGrid)
+            RenderGrid(buffer, css, data);
+
+        if (data.DisplayGizmo)
+            RenderGizmos(buffer, css);
 
         // 6. Skybox (if enabled)
         if (css.clearFlags == CameraClearFlags.Skybox)
