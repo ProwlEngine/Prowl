@@ -282,25 +282,11 @@ public class DefaultRenderPipeline : RenderPipeline
         SetupLightingAndShadows(buffer, forwardBuffer, css);
 
         // 6. Skybox (if enabled) - TODO: Should be done after opaque and after Opaque Post-Processing
-        if (clearFlags == CameraClearFlags.Skybox)
-            RenderSkybox(buffer, originView, projection);
+        if (css.clearFlags == CameraClearFlags.Skybox)
+            RenderSkybox(buffer, css);
 
-        // 6.1. If the camera has depth texture mode enabled, we need to draw a depth texture
-        if (depthTextureMode.HasFlag(DepthTextureMode.Depth))
-        {
-            depthTexture = RenderTexture.GetTemporaryRT(pixelWidth, pixelHeight, [PixelFormat.R32_Float]);
-            toRelease.Add(depthTexture);
-            buffer.SetRenderTarget(depthTexture);
-            buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
-
-            // Draw depth for all visible objects
-            DrawRenderables("LightMode", "ShadowCaster", buffer, cameraPosition, view, projection, culledRenderableIndices, false);
-
-            buffer.SetTexture("_CameraDepthTexture", depthTexture);
-
-            // Reset render target back to forward buffer
-            buffer.SetRenderTarget(forwardBuffer);
-        }
+        // Pre-Depth Pass
+        PreDepthPass(buffer, forwardBuffer, toRelease, css, culledRenderableIndices);
 
         // 7. Opaque geometry
         DrawRenderables("RenderOrder", "Opaque", buffer, css.cameraPosition, css.view, css.projection, culledRenderableIndices, false);
