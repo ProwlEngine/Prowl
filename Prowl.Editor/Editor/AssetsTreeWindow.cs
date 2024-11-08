@@ -14,7 +14,7 @@ namespace Prowl.Editor;
 
 public class AssetsTreeWindow : EditorWindow
 {
-    const double entryPadding = 4;
+    const double entryPadding = 1;
 
     private string _searchText = "";
     private readonly List<FileInfo> _found = new();
@@ -81,7 +81,7 @@ public class AssetsTreeWindow : EditorWindow
         }
 
 
-        using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column, false).Spacing(5).Clip().Scroll().Enter())
+        using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column, false).Spacing(entryPadding).Clip().Scroll().Enter())
         {
             //gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, 4);
 
@@ -295,7 +295,7 @@ public class AssetsTreeWindow : EditorWindow
             }
 
             expanded = gui.GetNodeStorage(root.RootDirectoryPath, defaultOpen);
-            using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
+            using (gui.Node("ExpandBtn").Top(1).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
             {
                 if (gui.IsNodePressed())
                 {
@@ -308,7 +308,7 @@ public class AssetsTreeWindow : EditorWindow
             var rect = gui.CurrentNode.LayoutData.InnerRect;
             var textSizeY = Font.DefaultFont.CalcTextSize(root.RootName, 20).y;
             var centerY = rect.y + (rect.height / 2) - (textSizeY / 2);
-            gui.Draw2D.DrawText(Font.DefaultFont, root.RootName, 20, new Vector2(rect.x + 40, centerY + 3), Color.white);
+            gui.Draw2D.DrawText(Font.DefaultFont, root.RootName, 20, new Vector2(rect.x + 25, centerY + 3), Color.white);
 
             _treeCounter++;
         }
