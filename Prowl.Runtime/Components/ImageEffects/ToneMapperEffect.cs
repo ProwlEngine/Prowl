@@ -20,8 +20,9 @@ public class ToneMapperEffect : MonoBehaviour
 
     public override void OnRenderImage(RenderTexture src, RenderTexture dest)
     {
-
-        s_tonemapper ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ToneMapper.shader"));
+        if (s_tonemapper == null)
+            s_tonemapper = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ToneMapper.shader"));
+        if (s_tonemapper == null) return;
 
         // Final tonemapping
         s_tonemapper.SetFloat("_Contrast", Contrast);

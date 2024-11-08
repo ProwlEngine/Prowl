@@ -30,7 +30,9 @@ public class SSAOEffect : MonoBehaviour
 
     public override void OnRenderImage(RenderTexture src, RenderTexture dest)
     {
-        s_ssao ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/SSAO.shader"));
+        if (s_ssao == null)
+            s_ssao = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/SSAO.shader"));
+        if (s_ssao == null) return;
 
         // Set shader parameters
         s_ssao.SetFloat("_Radius", Radius);

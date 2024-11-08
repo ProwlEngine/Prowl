@@ -26,7 +26,9 @@ public class MotionBlurEffect : MonoBehaviour
 
     public override void OnRenderImage(RenderTexture src, RenderTexture dest)
     {
-        s_motionblur ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/MotionBlur.shader"));
+        if (s_motionblur == null)
+            s_motionblur = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/MotionBlur.shader"));
+        if (s_motionblur == null) return;
 
         s_motionblur.SetFloat("_Intensity", Intensity);
         s_motionblur.SetInt("_SampleCount", SampleCount);

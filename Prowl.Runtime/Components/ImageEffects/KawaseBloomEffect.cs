@@ -20,7 +20,9 @@ public class KawaseBloomEffect : MonoBehaviour
 
     public override void OnRenderImage(RenderTexture src, RenderTexture dest)
     {
-        s_bloomMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/KawaseBloom.shader"));
+        if(s_bloomMaterial == null)
+            s_bloomMaterial = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/KawaseBloom.shader"));
+        if (s_bloomMaterial == null) return;
 
         // Set up material properties
         s_bloomMaterial.SetFloat("_Radius", Radius);
