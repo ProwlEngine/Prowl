@@ -14,7 +14,7 @@ namespace Prowl.Editor;
 public class HierarchyWindow : EditorWindow
 {
     private static double entryHeight => (float)EditorStylePrefs.Instance.ItemSize;
-    const double EntryPadding = 4;
+    const double EntryPadding = 1;
 
     private string _searchText = "";
     private GameObject? _renamingGO;
@@ -272,20 +272,16 @@ public class HierarchyWindow : EditorWindow
 
             Color col = (interact.IsHovered() ? EditorStylePrefs.Instance.Hovering : Color.white * 0.5f) * colMult;
             gui.Draw2D.DrawRectFilled(rect, (isSelected ? EditorStylePrefs.Instance.Highlighted : col), (float)EditorStylePrefs.Instance.ButtonRoundness);
-            gui.Draw2D.DrawRectFilled(rect.Min, new Vector2(entryHeight, entryHeight), EditorStylePrefs.Instance.Borders, (float)EditorStylePrefs.Instance.ButtonRoundness, 9);
+
+            // if (entity.children.Count > 0)
+            //     gui.Draw2D.DrawRectFilled(rect.Min, new Vector2(22, entryHeight), EditorStylePrefs.Instance.Borders, (float)EditorStylePrefs.Instance.ButtonRoundness, 9);
+
             if (isPrefab || isPartOfPrefab || !entity.enabledInHierarchy)
             {
                 Color lineColor = (isPrefab ? EditorStylePrefs.Orange : EditorStylePrefs.Yellow);
                 if (!entity.enabledInHierarchy)
                     lineColor = EditorStylePrefs.Instance.Warning;
                 gui.Draw2D.DrawLine(new Vector2(rect.x + entryHeight + 1, rect.y - 1), new Vector2(rect.x + entryHeight + 1, rect.y + entryHeight - 1), lineColor, 3);
-            }
-
-            using (gui.Node("VisibilityBtn").TopLeft(1).Scale(entryHeight).Enter())
-            {
-                if (gui.IsNodePressed())
-                    entity.enabled = !entity.enabled;
-                gui.Draw2D.DrawText(entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? Color.white : Color.white * (float)EditorStylePrefs.Instance.Disabled);
             }
 
             // if were pinging we need to open the tree to the pinged object
@@ -306,23 +302,29 @@ public class HierarchyWindow : EditorWindow
             if (entity.children.Count > 0)
             {
                 bool expanded = gui.GetNodeStorage<bool>(entity.InstanceID.ToString());
-                using (gui.Node("VisibilityBtn").TopLeft(maxwidth - entryHeight, 5).Scale(20).Enter())
+                using (gui.Node("VisibilityBtn").Top(1).Width(22).Height(entryHeight).Enter())
                 {
                     if (gui.IsNodePressed())
                     {
                         expanded = !expanded;
                         gui.SetNodeStorage(gui.CurrentNode.Parent, entity.InstanceID.ToString(), expanded);
                     }
-                    gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? Color.white : Color.white * (float)EditorStylePrefs.Instance.Disabled);
+
+                    Rect btnRect = gui.CurrentNode.LayoutData.Rect;
+                    // btnRect.x -= 1;
+                    gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, btnRect, entity.enabledInHierarchy ? Color.white : Color.white * (float)EditorStylePrefs.Instance.Disabled);
                 }
                 drawChildren = expanded;
             }
 
+            float leftOffset = entity.children.Count > 0 ? 25 : 7;
+
             // Name
             string name = entity.Name;
+
             if (_renamingGO == entity)
             {
-                Rect inputRect = new(rect.x + 33, rect.y, maxwidth - (entryHeight * 2.25), entryHeight);
+                Rect inputRect = new(rect.x + leftOffset, rect.y, maxwidth - (entryHeight * 2.25), entryHeight);
                 gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.ButtonRoundness);
                 gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 0, maxwidth - (entryHeight * 2.25), entryHeight, EditorGUI.GetInputStyle(), true);
                 if (_justStartedRename)
@@ -338,7 +340,7 @@ public class HierarchyWindow : EditorWindow
                 textRect.width -= entryHeight;
                 double textSizeY = Font.DefaultFont.CalcTextSize(name, 20).y;
                 double centerY = rect.y + (rect.height / 2) - (textSizeY / 2);
-                gui.Draw2D.DrawText(Font.DefaultFont, name, 20, new Vector2(rect.x + 40, centerY + 3), Color.white, 0, textRect);
+                gui.Draw2D.DrawText(Font.DefaultFont, name, 20, new Vector2(rect.x + leftOffset, centerY + 3), Color.white, 0, textRect);
             }
 
             index++;
@@ -364,7 +366,7 @@ public class HierarchyWindow : EditorWindow
                 go = original!.DeepClone();
                 go.AssetID = original!.AssetID; // Retain Asset ID
             }
-            if(entity != null)
+            if (entity != null)
                 go.SetParent(entity); // Also adds to scene
             else
             {
@@ -399,7 +401,7 @@ public class HierarchyWindow : EditorWindow
             var go = (obj.Target as GameObject);
             if (go == null) return;
             GameObject? cloned = go.DeepClone() ?? throw new Exception("Failed to clone GameObject");
-            if(go.parent != null)
+            if (go.parent != null)
                 cloned.SetParent(go.parent);
             else // SetParent adds to scene automatically so we only need to add ourselves if it doesnt have a parent
                 SceneManager.Scene.Add(cloned);
