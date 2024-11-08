@@ -12,6 +12,7 @@ Pass "Standard"
 {
     Tags { "RenderOrder" = "Opaque" }
     Cull Back
+    DepthStencil DepthLessEqualRead
 
     HLSLPROGRAM
         #pragma vertex Vertex

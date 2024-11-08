@@ -115,15 +115,15 @@ Pass "MotionBlur"
             //return float4(depth, depth, depth, 1.0);
             
             // Reconstruct view-space position
-            float3 viewPos = GetViewPos(input.uv, depth);
+            float3 viewPos = GetViewPos(input.uv, depth, _ProjectionMatrix);
             //return float4(viewPos.xyz, 1.0);
             
             // Reconstruct view-space normal from depth
             float2 texelSize = 1.0 / _ScreenParams.xy;
             float3 ddx = GetViewPos(input.uv + float2(texelSize.x, 0), 
-                _CameraDepthTexture.Sample(sampler_CameraDepthTexture, input.uv + float2(texelSize.x, 0))) - viewPos;
+                _CameraDepthTexture.Sample(sampler_CameraDepthTexture, input.uv + float2(texelSize.x, 0)), _ProjectionMatrix) - viewPos;
             float3 ddy = GetViewPos(input.uv + float2(0, texelSize.y),
-                _CameraDepthTexture.Sample(sampler_CameraDepthTexture, input.uv + float2(0, texelSize.y))) - viewPos;
+                _CameraDepthTexture.Sample(sampler_CameraDepthTexture, input.uv + float2(0, texelSize.y)), _ProjectionMatrix) - viewPos;
             float3 viewNormal = normalize(cross(ddy, ddx));
             //return float4(viewNormal.xyz, 1.0);
 	    	
@@ -148,7 +148,7 @@ Pass "MotionBlur"
                 
                 // Get sample depth
                 float sampleDepth = _CameraDepthTexture.Sample(sampler_CameraDepthTexture, offset.xy);
-                float3 sampleViewPos = GetViewPos(offset.xy, sampleDepth);
+                float3 sampleViewPos = GetViewPos(offset.xy, sampleDepth, _ProjectionMatrix);
                 
                 // Calculate occlusion factor
 	    	    if(sampleViewPos.z < samplePos.z && abs(sampleViewPos.z - samplePos.z) < _Radius)
