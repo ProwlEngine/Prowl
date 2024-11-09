@@ -93,9 +93,9 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // Store current model matrix for next frame
         if (s_prevModelMatrices.TryGetValue(objectId, out Matrix4x4 prevModel))
-            buffer.SetMatrix("_PrevObjectToWorld", prevModel.ToFloat());
+            buffer.SetMatrix("prowl_PrevObjectToWorld", prevModel.ToFloat());
         else
-            buffer.SetMatrix("_PrevObjectToWorld", currentModel.ToFloat()); // First frame, use current matrix
+            buffer.SetMatrix("prowl_PrevObjectToWorld", currentModel.ToFloat()); // First frame, use current matrix
 
         s_prevModelMatrices[objectId] = currentModel;
     }
@@ -304,7 +304,7 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
 
             // Set matrices for motion vector calculation
-            buffer.SetMatrix("_PrevViewProj", camera.PreviousViewProjectionMatrix.ToFloat());
+            buffer.SetMatrix("prowl_PrevViewProj", camera.PreviousViewProjectionMatrix.ToFloat());
 
             // Draw motion vectors for all visible objects
             DrawRenderables("LightMode", "MotionVectors", buffer, css.cameraPosition, culledRenderableIndices, true);

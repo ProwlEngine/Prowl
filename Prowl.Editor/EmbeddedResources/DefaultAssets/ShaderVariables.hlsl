@@ -6,8 +6,8 @@ cbuffer _PerDraw
 {
     float4x4 prowl_ObjectToWorld;
     float4x4 prowl_WorldToObject;
-    float4x4 _PrevObjectToWorld;
-    float4x4 _PrevViewProj;
+    float4x4 prowl_PrevObjectToWorld;
+    float4x4 prowl_PrevViewProj;
 
     int _ObjectID;
 }
@@ -18,10 +18,12 @@ float4x4 prowl_MatP;
 float4x4 prowl_MatVP;
 
 #define PROWL_MATRIX_V prowl_MatV
+#define PROWL_MATRIX_V_PREVIOUS prowl_PrevViewProj
 #define PROWL_MATRIX_I_V prowl_MatIV
 #define PROWL_MATRIX_P prowl_MatP
 #define PROWL_MATRIX_VP prowl_MatVP
 #define PROWL_MATRIX_M prowl_ObjectToWorld
+#define PROWL_MATRIX_M_PREVIOUS prowl_PrevObjectToWorld
 
 static float4x4 prowl_MatMV = mul(prowl_MatV, prowl_ObjectToWorld);
 static float4x4 prowl_MatMVP = mul(prowl_MatVP, prowl_ObjectToWorld);
