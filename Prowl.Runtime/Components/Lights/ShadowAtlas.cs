@@ -23,7 +23,13 @@ public static class ShadowAtlas
         maxShadowSize = 256;
         if (atlas != null) return;
 
-        size = 4096;
+        bool supports8k = false;
+        if (Graphics.Device.GetPixelFormatSupport(PixelFormat.R32_Float, TextureType.Texture2D, TextureUsage.RenderTarget, out var properties))
+        {
+            supports8k = properties.MaxWidth >= 8192 && properties.MaxHeight >= 8192;
+        }
+
+        size = supports8k ? 8192 : 4096;
         tileSize = 32;
         maxShadowSize = 1024;
 
