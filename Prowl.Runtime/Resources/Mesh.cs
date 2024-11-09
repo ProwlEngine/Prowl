@@ -271,14 +271,14 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         if (_changed == false &&
             _indexBuffer != null &&
             _vertexBuffer != null &&
-            (HasUV && _uvBuffer != null) &&
-            (HasUV2 && _uv2Buffer != null) &&
-            (HasNormals && _normalBuffer != null) &&
-            (HasTangents && _tangentBuffer != null) &&
-            (HasColors && _colorBuffer != null) &&
-            (HasBoneIndices && _boneIndexBuffer != null) &&
-            (HasBoneWeights && _boneWeightBuffer != null) &&
-            (HasBindPoses && _bindPoseBuffer != null))
+            (!HasUV || _uvBuffer != null) &&
+            (!HasUV2 || _uv2Buffer != null) &&
+            (!HasNormals || _normalBuffer != null) &&
+            (!HasTangents || _tangentBuffer != null) &&
+            (!HasColors || _colorBuffer != null) &&
+            (!HasBoneIndices || _boneIndexBuffer != null) &&
+            (!HasBoneWeights || _boneWeightBuffer != null) &&
+            (!HasBindPoses || _bindPoseBuffer != null))
             return;
 
         _changed = false;
