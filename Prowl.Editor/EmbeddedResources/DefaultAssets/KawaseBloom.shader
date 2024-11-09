@@ -132,16 +132,36 @@ Pass "KawaseBloom"
 			
 			offset *= hash22(pixelCoord) * 5.0 * _Radius;
 			
-            float3 color = 0;
-            color += _MainTex.Sample(sampler_MainTex, input.uv + float2(offset.x, offset.y)).rgb;
-            color += _MainTex.Sample(sampler_MainTex, input.uv + float2(-offset.x, offset.y)).rgb;
-            color += _MainTex.Sample(sampler_MainTex, input.uv + float2(-offset.x, -offset.y)).rgb;
-            color += _MainTex.Sample(sampler_MainTex, input.uv + float2(offset.x, -offset.y)).rgb;
-            
-            color = color * 0.25 * _Intensity;
+			float3 color = 0;
+			float sampleCount = 0;
+			float2 samples[4] = {
+				float2(offset.x, offset.y),
+				float2(-offset.x, offset.y),
+				float2(-offset.x, -offset.y),
+				float2(offset.x, -offset.y)
+			};
 			
-			color = (color + _MainTex.Sample(sampler_MainTex, input.uv)) / 2;
-            
+			// Sample center pixel
+			float3 centerColor = _MainTex.Sample(sampler_MainTex, input.uv);
+			
+			// Check and accumulate valid samples
+			[unroll]
+			for(int i = 0; i < 4; i++)
+			{
+				float2 sampleUV = input.uv + samples[i];
+				if(sampleUV.x >= 0 && sampleUV.x <= 1 && sampleUV.y >= 0 && sampleUV.y <= 1)
+				{
+					color += _MainTex.Sample(sampler_MainTex, sampleUV).rgb;
+					sampleCount++;
+				}
+			}
+			
+			// Average only valid samples
+			color = (sampleCount > 0) ? (color * _Intensity / sampleCount) : centerColor;
+			
+			// Blend with center color
+			color = (color + centerColor) / 2;
+			
             return float4(color, 1.0);
         }
     ENDHLSL
