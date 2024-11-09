@@ -483,8 +483,8 @@ Pass "MotionVectors"
             output.currentPos = output.position;
             
             // Previous frame positions
-            float4 prevWorldPos = mul(_PrevObjectToWorld, float4(input.position, 1.0));
-            output.previousPos = mul(_PrevViewProj, prevWorldPos);
+            float4 prevWorldPos = mul(PROWL_MATRIX_M_PREVIOUS, float4(input.position, 1.0));
+            output.previousPos = mul(PROWL_MATRIX_V_PREVIOUS, prevWorldPos);
             
             return output;
         }
