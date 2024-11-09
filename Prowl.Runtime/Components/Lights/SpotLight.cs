@@ -13,6 +13,8 @@ public class SpotLight : Light
     public float distance = 4.0f;
     public float angle = 0.97f;
     public float falloff = 0.96f;
+    public int qualitySamples = 8;
+    public float shadowRadius = 1f;
 
     public override void Update() => RenderPipeline.AddLight(this);
 
@@ -43,7 +45,7 @@ public class SpotLight : Light
             Color = color.GetUInt(),
             Intensity = intensity,
             SpotData = new Vector2(angle, falloff),
-            ShadowData = new Vector4(0, 0, shadowBias, shadowNormalBias),
+            ShadowData = new Vector4(shadowRadius, qualitySamples, shadowBias, shadowNormalBias),
             ShadowMatrix = (view * proj).ToFloat(),
             AtlasX = 0,
             AtlasY = 0,

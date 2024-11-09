@@ -59,12 +59,12 @@ public class DirectionalLight : Light
 
         return new GPULight
         {
-            PositionType = new Vector4(qualitySamples, blockerSamples, 0, 0),
+            PositionType = new Vector4(0, blockerSamples, 0, 0),
             DirectionRange = new Vector4(GameObject.Transform.forward, shadowDistance),
             Color = color.GetUInt(),
             Intensity = intensity,
             SpotData = new Vector2(ambientIntensity, 0),
-            ShadowData = new Vector4(shadowRadius, 0.0, shadowBias, shadowNormalBias),
+            ShadowData = new Vector4(shadowRadius, qualitySamples, shadowBias, shadowNormalBias),
             ShadowMatrix = (view * proj).ToFloat()
         };
     }

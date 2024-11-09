@@ -34,15 +34,22 @@ static float4x4 prowl_MatITMV = transpose(mul(prowl_WorldToObject, prowl_MatIV))
 #define PROWL_MATRIX_T_MV prowl_MatTMV
 #define PROWL_MATRIX_IT_MV prowl_MatITMV
 
-
+// Camera parameters
 float4 _WorldSpaceCameraPos;
 float4 _ProjectionParams;
 float4 _ScreenParams;
 
+// Time parameters
 float4 _Time;
 float4 _SinTime;
 float4 _CosTime;
 float4 prowl_DeltaTime;
+
+// Fog parameters
+
+// Ambient light parameters
+
+// Light parameters
 float2 prowl_ShadowAtlasSize;
 
 #endif

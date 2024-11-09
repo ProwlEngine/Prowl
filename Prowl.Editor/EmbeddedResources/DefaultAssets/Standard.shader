@@ -119,7 +119,7 @@ Pass "Standard"
 			float numBlockers = 0.0;
 			float maxBlockerDistance = 0.0;
 			
-			int blockerSamples = int(light.PositionType.y);
+			int blockerSamples = int(light.PositionType.y); // THIS ONLY WORKS FOR DIRECTIONAL
 			// Get rotated angle from screen position
 			float phi = InterleavedGradientNoise(screenPos) * 2.0 * PI;
 			
@@ -153,7 +153,7 @@ Pass "Standard"
 			float sum = 0.0;
 			float weightSum = 0.0;
 			
-			int qualitySamples = int(light.PositionType.x);
+			int qualitySamples = int(light.ShadowData.y);
 			// Get rotated angle from screen position
 			float phi = InterleavedGradientNoise(screenPos) * 2.0 * PI;
 			
