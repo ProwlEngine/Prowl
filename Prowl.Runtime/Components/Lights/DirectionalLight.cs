@@ -14,7 +14,8 @@ public class DirectionalLight : Light
     {
         _512 = 512,
         _1024 = 1024,
-        _2048 = 2048
+        _2048 = 2048,
+        _4096 = 4096,
     }
 
     public Resolution shadowResolution = Resolution._1024;
