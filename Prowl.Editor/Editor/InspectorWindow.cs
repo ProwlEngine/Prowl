@@ -195,7 +195,7 @@ public class InspectorWindow : EditorWindow
         while (_BackStack.Count > 0)
         {
             var peek = _BackStack.Peek();
-            if (peek == null || (peek is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
+            if (peek == null || (peek is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected?.Target))
                 _BackStack.Pop();
             else
                 break;
