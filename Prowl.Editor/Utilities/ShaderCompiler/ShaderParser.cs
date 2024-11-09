@@ -318,8 +318,6 @@ public static class ShaderParser
                 def.Name = last.Name;
                 def.DisplayName = last.DisplayName;
 
-                Debug.Log($"Parsing default {def.Name}");
-
                 properties[^1] = def;
 
                 tokenizer.MoveNext();
