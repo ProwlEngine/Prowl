@@ -471,7 +471,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
                     HashSet<int> culledRenderableIndices = CullRenderables(cullingMask, frustum);
                     SetGlobalCameraMatrices(view, proj);
-                    DrawRenderables("LightMode", "ShadowCaster", buffer, light.GetLightPosition(), culledRenderableIndices, false);
+                    DrawRenderables("LightMode", "ShadowCaster", buffer, light.GetLightPosition(), null, false);
 
                     buffer.SetFullViewports();
                 }
@@ -678,7 +678,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
                 foreach (int renderIndex in batch.renderIndices)
                 {
-                    if (culledRenderableIndices.Contains(renderIndex))
+                    if (culledRenderableIndices?.Contains(renderIndex) ?? false)
                         continue;
 
                     IRenderable renderable = GetRenderable(renderIndex);
