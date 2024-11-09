@@ -250,7 +250,7 @@ public class SceneViewWindow : EditorWindow
                     moveDir = Vector3.Normalize(moveDir);
                     if (gui.IsKeyDown(Key.LeftShift))
                         moveDir *= 2.0f;
-                    Cam.Transform.position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
+                    Cam.Transform.position += moveDir * (Time.deltaTimeF *2.5f) * moveSpeed;
 
                     // Get Exponentially faster
                     moveSpeed += Time.deltaTimeF * 0.0001;
