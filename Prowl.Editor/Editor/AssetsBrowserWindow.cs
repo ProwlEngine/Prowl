@@ -115,7 +115,7 @@ public class AssetsBrowserWindow : EditorWindow
 
     public void RenderHeader()
     {
-        using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(itemHeight).Clip().Enter())
+        using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(itemHeight).Enter())
         {
             bool cantGoUp = CurDirectoryNode.Parent == null;
 

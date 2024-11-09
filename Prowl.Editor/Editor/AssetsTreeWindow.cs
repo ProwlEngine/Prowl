@@ -47,7 +47,7 @@ public class AssetsTreeWindow : EditorWindow
         gui.CurrentNode.ScaleChildren();
         gui.CurrentNode.Padding(0, 10, 10, 10);
 
-        using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(EditorStylePrefs.Instance.ItemSize).Clip().Enter())
+        using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(EditorStylePrefs.Instance.ItemSize).Enter())
         {
             if (gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -EditorStylePrefs.Instance.ItemSize), EditorStylePrefs.Instance.ItemSize))
             {

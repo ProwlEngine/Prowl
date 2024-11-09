@@ -54,7 +54,7 @@ public class HierarchyWindow : EditorWindow
         gui.CurrentNode.Padding(0, 10, 10, 10);
 
 
-        using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Clip().Enter())
+        using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Enter())
         {
             gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight);
 

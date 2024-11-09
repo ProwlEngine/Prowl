@@ -72,7 +72,7 @@ public class IAssetRef_PropertyDrawer : PropertyDrawer
             }
         }
 
-        using (ActiveGUI.Node(ID + "Asset").ExpandHeight().Clip().Enter())
+        using (ActiveGUI.Node(ID + "Asset").ExpandHeight().Enter())
         {
             var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
             var centerY = (ActiveGUI.CurrentNode.LayoutData.InnerRect.height / 2) - (20 / 2);
@@ -84,12 +84,12 @@ public class IAssetRef_PropertyDrawer : PropertyDrawer
                 var col = Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
                 if (value.IsExplicitNull)
                     col = EditorStylePrefs.Red * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
-                ActiveGUI.Draw2D.DrawText(text, pos, col);
+                ActiveGUI.Draw2D.DrawText(Font.DefaultFont, text, 20, pos, col, 0, ActiveGUI.CurrentNode.LayoutData.Rect);
             }
             else if (AssetDatabase.TryGetFile(value.AssetID, out var assetPath))
             {
                 string name = value.IsAvailable ? value.Name : assetPath.Name;
-                ActiveGUI.Draw2D.DrawText(name, pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
+                ActiveGUI.Draw2D.DrawText(Font.DefaultFont, name, 20, pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f), 0, ActiveGUI.CurrentNode.LayoutData.Rect);
                 if (pressed)
                     AssetDatabase.Ping(value.AssetID);
             }

@@ -276,13 +276,13 @@ public abstract class PropertyDrawer
 
     public virtual void OnLabelGUI(Gui gui, string label)
     {
-        using (gui.Node("#_Label").ExpandHeight().Clip().Enter())
+        using (gui.Node("#_Label").ExpandHeight().Enter())
         {
             var pos = gui.CurrentNode.LayoutData.Rect.Min;
             pos.x += 28;
             pos.y += 5;
             string pretty = RuntimeUtils.Prettify(label);
-            gui.Draw2D.DrawText(pretty, pos, EditorStylePrefs.Instance.LesserText * 1.5f);
+            gui.Draw2D.DrawText(Font.DefaultFont, pretty, 20, pos, EditorStylePrefs.Instance.LesserText * 1.5f, 0, gui.CurrentNode.LayoutData.Rect);
         }
     }
 

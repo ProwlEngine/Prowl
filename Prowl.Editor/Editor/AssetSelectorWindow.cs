@@ -37,7 +37,7 @@ public class AssetSelectorWindow : EditorWindow
         gui.CurrentNode.ScaleChildren();
         gui.CurrentNode.Padding(0, 10, 10, 10);
 
-        using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Clip().Enter())
+        using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Enter())
         {
             gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), ItemSize);
         }
