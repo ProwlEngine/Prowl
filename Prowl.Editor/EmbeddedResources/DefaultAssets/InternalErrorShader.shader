@@ -20,15 +20,12 @@ Pass "InternalError"
     HLSLPROGRAM
         #pragma vertex Vertex
         #pragma fragment Fragment
-
-        cbuffer _PerDraw
-        {
-            float4x4 _Matrix_MVP;
-        }
+        
+        #include "Prowl.hlsl"
 
         float4 Vertex(float3 position : POSITION) : SV_POSITION
         {
-            return mul(_Matrix_MVP, float4(position, 1.0));
+            return mul(PROWL_MATRIX_MVP, float4(position, 1.0));
         }
 
         float4 Fragment() : SV_TARGET

@@ -26,6 +26,8 @@ Pass "Unlit"
 	HLSLPROGRAM
 		#pragma vertex Vertex
         #pragma fragment Fragment
+        
+        #include "Prowl.hlsl"
 
 		struct Attributes
 		{
@@ -43,20 +45,13 @@ Pass "Unlit"
 		Texture2D<float4> _AlbedoTex;
 		SamplerState sampler_AlbedoTex;
 
-        // Per-draw buffer. These only require an update to data in a uniform buffer, so it's good to group them depending on where their data changes.
-        // In this case, this buffer gets updated every draw call with new matrices, so it's appropriately named _PerDraw
-        cbuffer _PerDraw
-        {
-            float4x4 _Matrix_MVP;
-            float4 _MainColor;
-            int _ObjectID;
-        }
+        float4 _MainColor;
 
         Varyings Vertex(Attributes input)
         {
 			Varyings output = (Varyings)0;
 
-			output.position = mul(_Matrix_MVP, float4(input.position.xyz, 1.0));
+			output.position = mul(PROWL_MATRIX_MVP, float4(input.position.xyz, 1.0));
 			output.uv = input.uv;
 
             return output;

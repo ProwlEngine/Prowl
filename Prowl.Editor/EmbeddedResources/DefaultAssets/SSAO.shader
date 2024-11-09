@@ -18,6 +18,8 @@ Pass "MotionBlur"
     HLSLPROGRAM
         #pragma vertex Vertex
         #pragma fragment Fragment
+        
+        #include "Prowl.hlsl"
 
 		struct Attributes
 		{
@@ -38,7 +40,6 @@ Pass "MotionBlur"
         Texture2D<float> _CameraDepthTexture;
         SamplerState sampler_CameraDepthTexture;
         
-        float4x4 _ProjectionMatrix;
         float4 _ScreenParams;
         float _Radius;
         float _Bias;
@@ -56,7 +57,7 @@ Pass "MotionBlur"
             output.uv = input.uv;
 
 	    	// Generate view ray from vertex position
-	    	float fov = GetFovFromProjectionMatrix(_ProjectionMatrix); // Your camera's FOV, could be passed in
+	    	float fov = GetFovFromProjectionMatrix(PROWL_MATRIX_P); // Your camera's FOV, could be passed in
 	    	float aspect = _ScreenParams.x / _ScreenParams.y;
 	    	
 	    	// Create view ray from vertex position (which is in [-1,1] range)
@@ -115,15 +116,15 @@ Pass "MotionBlur"
             //return float4(depth, depth, depth, 1.0);
             
             // Reconstruct view-space position
-            float3 viewPos = GetViewPos(input.uv, depth, _ProjectionMatrix);
+            float3 viewPos = GetViewPos(input.uv, depth, PROWL_MATRIX_P);
             //return float4(viewPos.xyz, 1.0);
             
             // Reconstruct view-space normal from depth
             float2 texelSize = 1.0 / _ScreenParams.xy;
             float3 ddx = GetViewPos(input.uv + float2(texelSize.x, 0), 
-                _CameraDepthTexture.Sample(sampler_CameraDepthTexture, input.uv + float2(texelSize.x, 0)), _ProjectionMatrix) - viewPos;
+                _CameraDepthTexture.Sample(sampler_CameraDepthTexture, input.uv + float2(texelSize.x, 0)), PROWL_MATRIX_P) - viewPos;
             float3 ddy = GetViewPos(input.uv + float2(0, texelSize.y),
-                _CameraDepthTexture.Sample(sampler_CameraDepthTexture, input.uv + float2(0, texelSize.y)), _ProjectionMatrix) - viewPos;
+                _CameraDepthTexture.Sample(sampler_CameraDepthTexture, input.uv + float2(0, texelSize.y)), PROWL_MATRIX_P) - viewPos;
             float3 viewNormal = normalize(cross(ddy, ddx));
             //return float4(viewNormal.xyz, 1.0);
 	    	
@@ -143,13 +144,13 @@ Pass "MotionBlur"
                 
                 // Project sample position to screen space
                 float4 offset = float4(samplePos, 1.0);
-                offset = mul(_ProjectionMatrix, offset);
+                offset = mul(PROWL_MATRIX_P, offset);
                 offset.xy /= offset.w;
                 offset.xy = offset.xy * 0.5 + 0.5;
                 
                 // Get sample depth
                 float sampleDepth = _CameraDepthTexture.Sample(sampler_CameraDepthTexture, offset.xy);
-                float3 sampleViewPos = GetViewPos(offset.xy, sampleDepth, _ProjectionMatrix);
+                float3 sampleViewPos = GetViewPos(offset.xy, sampleDepth, PROWL_MATRIX_P);
                 
                 // Calculate occlusion factor
 	    	    if(sampleViewPos.z < samplePos.z && abs(sampleViewPos.z - samplePos.z) < _Radius)

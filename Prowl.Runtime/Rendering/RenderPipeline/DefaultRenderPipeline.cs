@@ -229,6 +229,10 @@ public class DefaultRenderPipeline : RenderPipeline
         bool flippedy = !Graphics.IsOpenGL && !Graphics.IsVulkan;
         PropertyState.SetGlobalVector("_ProjectionParams", new Vector4(flippedy ? -1.0 : 1.0f, css.nearClipPlane, css.farClipPlane, 1.0f / css.farClipPlane));
         PropertyState.SetGlobalVector("_ScreenParams", new Vector4(css.pixelWidth, css.pixelHeight, 1.0f + 1.0f / css.pixelWidth, 1.0f + 1.0f / css.pixelHeight));
+
+        // Its a waste to set these here, since Lighting can overwrite them immediately after anyway
+        //SetGlobalCameraMatrices(css.view, css.projection);
+
         // Time
         PropertyState.SetGlobalVector("_Time", new Vector4(Time.time / 20, Time.time, Time.time * 2, Time.time * 3));
         PropertyState.SetGlobalVector("_SinTime", new Vector4(Math.Sin(Time.time / 8), Math.Sin(Time.time / 4), Math.Sin(Time.time / 2), Math.Sin(Time.time)));
@@ -254,6 +258,7 @@ public class DefaultRenderPipeline : RenderPipeline
         public float aspect = camera.Aspect;
         public Matrix4x4 originView = camera.OriginViewMatrix;
         public Matrix4x4 view = CAMERA_RELATIVE ? camera.OriginViewMatrix : camera.ViewMatrix;
+        public Matrix4x4 viewInverse = (CAMERA_RELATIVE ? camera.OriginViewMatrix : camera.ViewMatrix).Invert();
         public Matrix4x4 projection = Graphics.GetGPUProjectionMatrix(camera.ProjectionMatrix);
         public Matrix4x4 transparentProjection = camera.UseJitteredProjectionMatrixForTransparentRendering ? camera.ProjectionMatrix : camera.NonJitteredProjectionMatrix;
         public Matrix4x4 previousViewProj = camera.PreviousViewProjectionMatrix;
@@ -280,12 +285,14 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // 5. Setup Lighting and Shadows
         SetupLightingAndShadows(buffer, forwardBuffer, css);
+        // Setting up shadows sets the camera matrices, so we set them here instead of earlier
+        SetGlobalCameraMatrices(css.view, css.projection);
 
         // 6. Pre-Depth Pass
         PreDepthPass(buffer, forwardBuffer, toRelease, css, culledRenderableIndices);
 
         // 7. Opaque geometry
-        DrawRenderables("RenderOrder", "Opaque", buffer, css.cameraPosition, css.view, css.projection, culledRenderableIndices, false);
+        DrawRenderables("RenderOrder", "Opaque", buffer, css.cameraPosition, culledRenderableIndices, false);
 
         // 7.1. Create motion vector buffer if requested by the camera
         RenderTexture? motionVectorBuffer = null;
@@ -300,7 +307,7 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.SetMatrix("_PrevViewProj", camera.PreviousViewProjectionMatrix.ToFloat());
 
             // Draw motion vectors for all visible objects
-            DrawRenderables("LightMode", "MotionVectors", buffer, css.cameraPosition, css.view, css.projection, culledRenderableIndices, true);
+            DrawRenderables("LightMode", "MotionVectors", buffer, css.cameraPosition, culledRenderableIndices, true);
 
             // Set the motion vector texture for use in post-processing
             PropertyState.SetGlobalTexture("_CameraMotionVectorsTexture", motionVectorBuffer);
@@ -334,7 +341,10 @@ public class DefaultRenderPipeline : RenderPipeline
             RenderSkybox(buffer, css);
 
         // 10. Transparent geometry
-        DrawRenderables("RenderOrder", "Transparent", buffer, css.cameraPosition, css.view, css.transparentProjection, culledRenderableIndices, false);
+        // Setup to use transparent projection matrix if its differant
+        if (css.projection != css.transparentProjection)
+            SetGlobalCameraMatrices(css.view, css.transparentProjection);
+        DrawRenderables("RenderOrder", "Transparent", buffer, css.cameraPosition, culledRenderableIndices, false);
     }
 
     private static void PreDepthPass(CommandBuffer buffer, RenderTexture forwardBuffer, List<RenderTexture> toRelease, CameraSnapshot css, HashSet<int> culledRenderableIndices)
@@ -346,7 +356,7 @@ public class DefaultRenderPipeline : RenderPipeline
         buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
 
         // Draw depth for all visible objects
-        DrawRenderables("LightMode", "ShadowCaster", buffer, css.cameraPosition, css.view, css.projection, culledRenderableIndices, false);
+        DrawRenderables("LightMode", "ShadowCaster", buffer, css.cameraPosition, culledRenderableIndices, false);
 
         // Set the depth texture for use in post-processing
         PropertyState.SetGlobalTexture("_CameraDepthTexture", depthTexture);
@@ -403,6 +413,7 @@ public class DefaultRenderPipeline : RenderPipeline
         buffer.SetInt("_LightCount", LightCount);
         buffer.SetVector("_CameraWorldPos", css.cameraPosition);
         buffer.SetVector("_SunDir", sunDirection);
+        buffer.SetVector("prowl_ShadowAtlasSize", new Vector2(ShadowAtlas.GetSize(), ShadowAtlas.GetSize()));
     }
 
     private static void PrepareShadowAtlas()
@@ -459,7 +470,8 @@ public class DefaultRenderPipeline : RenderPipeline
                         view.Translation = Vector3.zero;
 
                     HashSet<int> culledRenderableIndices = CullRenderables(cullingMask, frustum);
-                    DrawRenderables("LightMode", "ShadowCaster", buffer, light.GetLightPosition(), view, proj, culledRenderableIndices, false);
+                    SetGlobalCameraMatrices(view, proj);
+                    DrawRenderables("LightMode", "ShadowCaster", buffer, light.GetLightPosition(), culledRenderableIndices, false);
 
                     buffer.SetFullViewports();
                 }
@@ -498,6 +510,14 @@ public class DefaultRenderPipeline : RenderPipeline
 
             LightCount = lights.Count;
         }
+    }
+
+    private static void SetGlobalCameraMatrices(Matrix4x4 view, Matrix4x4 proj)
+    {
+        PropertyState.SetGlobalMatrix("prowl_MatV", view.ToFloat());
+        PropertyState.SetGlobalMatrix("prowl_MatIV", view.Invert().ToFloat());
+        PropertyState.SetGlobalMatrix("prowl_MatP", proj.ToFloat());
+        PropertyState.SetGlobalMatrix("prowl_MatVP", (view * proj).ToFloat());
     }
 
     private static int CalculateResolution(double distance)
@@ -569,11 +589,8 @@ public class DefaultRenderPipeline : RenderPipeline
         if (CAMERA_RELATIVE)
             grid.Translation -= css.cameraPosition;
 
-        Matrix4x4 MV = grid * css.view;
-        Matrix4x4 MVP = grid * css.view * css.projection;
-
-        buffer.SetMatrix("_Matrix_MV", MV.ToFloat());
-        buffer.SetMatrix("_Matrix_MVP", MVP.ToFloat());
+        buffer.SetMatrix("prowl_ObjectToWorld", grid.ToFloat());
+        buffer.UpdateBuffer("_PerDraw");
 
         buffer.SetColor("_GridColor", data.GridColor);
         buffer.SetFloat("_LineWidth", (float)data.GridSizes.z);
@@ -640,15 +657,15 @@ public class DefaultRenderPipeline : RenderPipeline
         }
     }
 
-    private static void DrawRenderables(string tag, string tagValue, CommandBuffer buffer, Vector3 cameraPosition, Matrix4x4 view, Matrix4x4 proj, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices)
+    private static void DrawRenderables(string tag, string tagValue, CommandBuffer buffer, Vector3 cameraPosition, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices)
     {
         bool hasRenderOrder = !string.IsNullOrWhiteSpace(tag);
-        Matrix4x4 viewProj = (view * proj);
 
         foreach (RenderBatch batch in EnumerateBatches())
         {
             if (batch.material.Shader.IsAvailable == false) continue;
 
+            buffer.ApplyPropertyState(batch.material._properties);
             foreach (ShaderPass pass in batch.material.Shader.Res.Passes)
             {
                 // Skip this pass if it doesn't have the expected tag
@@ -656,7 +673,6 @@ public class DefaultRenderPipeline : RenderPipeline
                     continue;
 
                 //buffer.SetMaterial(batch.material, pass); Below is the same as this but lets us set by pass instead of pass index
-                buffer.ApplyPropertyState(batch.material._properties);
                 buffer.SetPass(pass);
                 buffer.BindResources();
 
@@ -670,7 +686,7 @@ public class DefaultRenderPipeline : RenderPipeline
                     renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
 
                     // Store previous model matrix mainly for motion vectors, however, the user can use it for other things
-                    if(updatePreviousMatrices && properties.TryGetInt("_ObjectID", out int instanceId))
+                    if (updatePreviousMatrices && properties.TryGetInt("_ObjectID", out int instanceId))
                     {
                         TrackModelMatrix(buffer, instanceId, model);
                     }
@@ -678,15 +694,10 @@ public class DefaultRenderPipeline : RenderPipeline
                     if (CAMERA_RELATIVE)
                         model.Translation -= cameraPosition;
 
-                    // model = Graphics.GetGPUModelMatrix(model);
-
                     buffer.ApplyPropertyState(properties);
 
-                    buffer.SetMatrix("Mat_V", view.ToFloat());
-                    buffer.SetMatrix("Mat_P", proj.ToFloat());
-                    buffer.SetMatrix("Mat_ObjectToWorld", model.ToFloat());
-                    buffer.SetMatrix("Mat_WorldToObject", model.Invert().ToFloat());
-                    buffer.SetMatrix("Mat_MVP", (model * viewProj).ToFloat());
+                    buffer.SetMatrix("prowl_ObjectToWorld", model.ToFloat());
+                    buffer.SetMatrix("prowl_WorldToObject", model.Invert().ToFloat());
 
                     buffer.SetColor("_MainColor", Color.white);
 

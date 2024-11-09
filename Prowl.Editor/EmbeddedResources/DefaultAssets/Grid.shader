@@ -30,7 +30,8 @@ Pass "Grid"
 	HLSLPROGRAM
         #pragma vertex Vertex
         #pragma fragment Fragment
-
+        
+        #include "Prowl.hlsl"
 
         struct Attributes
         {
@@ -46,9 +47,6 @@ Pass "Grid"
             float2 uv : TEXCOORD0;
         };
 
-        float4x4 _Matrix_MVP;
-        float4x4 _Matrix_MV;
-
         float4 _GridColor;
 		float _PrimaryGridSize;
 		float _LineWidth;
@@ -61,8 +59,8 @@ Pass "Grid"
         {
             Varyings output = (Varyings)0;
 
-            output.pos = mul(_Matrix_MVP, float4(input.pos, 1.0));
-            output.vpos = mul(_Matrix_MV, float4(input.pos, 1.0)).xyz;
+            output.pos = mul(PROWL_MATRIX_MVP, float4(input.pos, 1.0));
+            output.vpos = mul(PROWL_MATRIX_MV, float4(input.pos, 1.0)).xyz;
             output.uv = input.uv;
 
             return output;

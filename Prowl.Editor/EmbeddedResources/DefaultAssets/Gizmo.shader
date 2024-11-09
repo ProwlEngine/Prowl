@@ -30,7 +30,8 @@ Pass "Gizmo"
 	HLSLPROGRAM
         #pragma vertex Vertex
         #pragma fragment Fragment
-
+        
+        #include "Prowl.hlsl"
 
         struct Attributes
         {
@@ -50,13 +51,11 @@ Pass "Gizmo"
 		Texture2D<float4> _MainTex;
 		SamplerState sampler_MainTex;
 
-        float4x4 _Matrix_VP;
-
         Varyings Vertex(Attributes input)
         {
             Varyings output = (Varyings)0;
 
-            output.pos = mul(_Matrix_VP, float4(input.pos, 1.0));
+            output.pos = mul(PROWL_MATRIX_VP, float4(input.pos, 1.0));
             output.col = input.col;
             output.uv = input.uv;
 

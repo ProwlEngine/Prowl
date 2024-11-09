@@ -70,20 +70,6 @@ Pass "Standard"
         int _LightCount;
         float4 _MainColor;
 
-        // Default uniforms buffer
-        cbuffer _PerDraw
-        {
-            float4x4 Mat_V;
-            float4x4 Mat_P;
-            float4x4 Mat_ObjectToWorld;
-            float4x4 Mat_WorldToObject;
-            float4x4 Mat_MVP;
-            float4x4 _PrevObjectToWorld;
-            float4x4 _PrevViewProj;
-
-            int _ObjectID;
-        }
-
         // Structured buffer for lights
         StructuredBuffer<Light> _Lights;
 
@@ -208,12 +194,13 @@ Pass "Standard"
 			float2 atlasCoords;
 			atlasCoords.x = AtlasX + (projCoords.x * AtlasWidth);
 			atlasCoords.y = AtlasY + ((1.0 - projCoords.y) * AtlasWidth);
-			
-			atlasCoords /= float2(4096.0, 4096.0);
+
+            float atlasSize = prowl_ShadowAtlasSize;
+			atlasCoords /= atlasSize;
 			atlasCoords.y = 1.0 - atlasCoords.y;
 			
 			float currentDepth = projCoords.z;
-			float2 lightPixelSize = 1.0 / float2(4096.0, 4096.0);
+			float2 lightPixelSize = 1.0 / atlasSize;
 			
 			//// STEP 1: Blocker search
 			//float blockerDistance = FindBlockerDistance(atlasCoords, lightPixelSize, currentDepth, light, screenPos);
@@ -238,18 +225,18 @@ Pass "Standard"
         {
             Varyings output = (Varyings)0;
             
-            float4 viewPos = mul(Mat_V, mul(Mat_ObjectToWorld, float4(input.position, 1.0)));
+            float4 viewPos = mul(PROWL_MATRIX_V, mul(PROWL_MATRIX_M, float4(input.position, 1.0)));
             output.fragPos = viewPos.xyz;
-            output.vertPos = mul(Mat_ObjectToWorld, float4(input.position, 1.0)).xyz;
+            output.vertPos = mul(PROWL_MATRIX_M, float4(input.position, 1.0)).xyz;
             
-            output.position = mul(Mat_MVP, float4(input.position, 1.0));
+            output.position = mul(PROWL_MATRIX_MVP, float4(input.position, 1.0));
             output.uv = input.uv;
             output.vertColor = input.color;
             output.normal = input.normal;
     
 			// Correctly transform normal and tangent to world space
-			float3 worldNormal = normalize(mul((float3x3)Mat_ObjectToWorld, input.normal));
-			float3 worldTangent = normalize(mul((float3x3)Mat_ObjectToWorld, input.tangent));
+			float3 worldNormal = normalize(mul((float3x3)PROWL_MATRIX_M, input.normal));
+			float3 worldTangent = normalize(mul((float3x3)PROWL_MATRIX_M, input.tangent));
 			
 			// Ensure tangent is perpendicular to normal using Gram-Schmidt
 			worldTangent = normalize(worldTangent - dot(worldTangent, worldNormal) * worldNormal);
@@ -288,7 +275,7 @@ Pass "Standard"
             float3 normal = _NormalTex.Sample(sampler_NormalTex, input.uv).rgb;
             normal = normal * 2.0 - 1.0;   
             normal = normalize(mul(normal, input.TBN));
-            output.Normal = mul((float3x3)Mat_V, normal);
+            output.Normal = mul((float3x3)PROWL_MATRIX_V, normal);
 
             // AO, Roughness, Metallic
             float3 surface = _SurfaceTex.Sample(sampler_SurfaceTex, input.uv).rgb;
@@ -324,7 +311,7 @@ Pass "Standard"
 
                 if (light.PositionType.w == 0.0) // Directional Light
                 {
-                    float3 L = normalize(-(mul((float3x3)Mat_V, light.DirectionRange.xyz)));
+                    float3 L = normalize(-(mul((float3x3)PROWL_MATRIX_V, light.DirectionRange.xyz)));
                     float3 H = normalize(V + L);
 
                     float3 kD;
@@ -345,7 +332,7 @@ Pass "Standard"
                 {
                     float radius = light.DirectionRange.w;
                     
-                    float3 lightPos = mul(Mat_V, float4(light.PositionType.xyz, 1)).xyz;
+                    float3 lightPos = mul(PROWL_MATRIX_V, float4(light.PositionType.xyz, 1)).xyz;
                     float3 L = normalize(lightPos - input.fragPos);
                     float3 H = normalize(V + L);
                     
@@ -368,10 +355,10 @@ Pass "Standard"
                 }
                 else // Spot Light
                 {
-                    float3 lightPos = mul(Mat_V, float4(light.PositionType.xyz, 1)).xyz;
+                    float3 lightPos = mul(PROWL_MATRIX_V, float4(light.PositionType.xyz, 1)).xyz;
                     float3 L = normalize(lightPos - input.fragPos);
                     float3 H = normalize(V + L);
-                    float theta = dot(L, normalize(-mul((float3x3)Mat_V, light.DirectionRange.xyz)));
+                    float theta = dot(L, normalize(-mul((float3x3)PROWL_MATRIX_V, light.DirectionRange.xyz)));
                 
                     // attenuation
                     float radius = light.DirectionRange.w;
@@ -425,6 +412,8 @@ Pass "Shadow"
         #pragma vertex Vertex
         #pragma fragment Fragment
 
+        #include "Prowl.hlsl"
+
         struct Attributes
         {
             float3 position : POSITION;
@@ -438,34 +427,21 @@ Pass "Shadow"
             float3 vertPos : TEXCOORD1;
         };
 
-        cbuffer _PerDraw
-        {
-            float4x4 Mat_V;
-            float4x4 Mat_P;
-            float4x4 Mat_ObjectToWorld;
-            float4x4 Mat_WorldToObject;
-            float4x4 Mat_MVP;
-            float4x4 _PrevObjectToWorld;
-            float4x4 _PrevViewProj;
-
-            int _ObjectID;
-        }
-
         Texture2D<float4> _AlbedoTex;
         SamplerState sampler_AlbedoTex;
 
         Varyings Vertex(Attributes input)
         {
             Varyings output = (Varyings)0;
-            output.position = mul(Mat_MVP, float4(input.position, 1.0));
-            output.vertPos = mul(Mat_ObjectToWorld, float4(input.position, 1.0)).xyz;
+            output.position = mul(PROWL_MATRIX_MVP, float4(input.position, 1.0));
+            output.vertPos = mul(PROWL_MATRIX_M, float4(input.position, 1.0)).xyz;
             output.uv = input.uv;
             return output;
         }
 
         float Fragment(Varyings input)
         {
-            float4 fragPosLightSpace = mul(mul(Mat_P, Mat_V), float4(input.vertPos, 1.0));
+            float4 fragPosLightSpace = mul(mul(PROWL_MATRIX_P, PROWL_MATRIX_V), float4(input.vertPos, 1.0));
             float3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
             projCoords = projCoords * 0.5 + 0.5;
             return projCoords.z;
@@ -480,7 +456,9 @@ Pass "MotionVectors"
     HLSLPROGRAM
         #pragma vertex Vertex
         #pragma fragment Fragment
-        
+
+        #include "Prowl.hlsl"
+
         struct Attributes
         {
             float3 position : POSITION;
@@ -495,25 +473,13 @@ Pass "MotionVectors"
             float4 previousPos : TEXCOORD1;
         };
 
-        cbuffer _PerDraw
-        {
-            float4x4 Mat_V;
-            float4x4 Mat_P;
-            float4x4 Mat_ObjectToWorld;
-            float4x4 Mat_WorldToObject;
-            float4x4 Mat_MVP;
-            float4x4 _PrevObjectToWorld;
-            float4x4 _PrevViewProj;
-            int _ObjectID;
-        }
-
         Varyings Vertex(Attributes input)
         {
             Varyings output = (Varyings)0;
             
             // Current frame positions
-            float4 worldPos = mul(Mat_ObjectToWorld, float4(input.position, 1.0));
-            output.position = mul(Mat_MVP, float4(input.position, 1.0));
+            float4 worldPos = mul(PROWL_MATRIX_M, float4(input.position, 1.0));
+            output.position = mul(PROWL_MATRIX_MVP, float4(input.position, 1.0));
             output.currentPos = output.position;
             
             // Previous frame positions

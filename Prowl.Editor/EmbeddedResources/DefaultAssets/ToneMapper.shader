@@ -220,7 +220,7 @@ Pass "ToneMapper"
 			
             // Gamma correction
             //float3 gcColor = pow(adjustedColor, (float3)1.0 / 2.2);
-            float3 gcColor = GammaToLinearSpace(adjustedColor);
+            float3 gcColor = LinearToGammaSpace(adjustedColor);
 			
 			gcColor = saturate(gcColor);
 			

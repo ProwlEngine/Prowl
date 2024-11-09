@@ -1,6 +1,7 @@
 ﻿#ifndef SHADER_PROWL
 #define SHADER_PROWL
 
+#include "ShaderVariables.hlsl"
 
 #define PROWL_PI            3.14159265359f
 #define PROWL_TWO_PI        6.28318530718f

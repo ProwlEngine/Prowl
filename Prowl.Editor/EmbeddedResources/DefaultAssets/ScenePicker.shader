@@ -17,22 +17,17 @@ Pass
 	HLSLPROGRAM
 		#pragma vertex Vertex
         #pragma fragment Fragment
+        
+        #include "Prowl.hlsl"
 
 		struct Varyings
 		{
 			float4 position : SV_POSITION;
 		};
 
-        cbuffer _PerDraw
-        {
-            float4x4 _Matrix_MVP;
-            int _ObjectID;
-        }
-
-
         float4 Vertex(float3 position : POSITION) : SV_POSITION
         {
-            return mul(_Matrix_MVP, float4(position.xyz, 1.0));
+            return mul(PROWL_MATRIX_MVP, float4(position.xyz, 1.0));
         }
 
 
