@@ -173,7 +173,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         IEnumerable<MonoBehaviour> components = camera.GetComponents<MonoBehaviour>();
         // If this is the Scene view camera, we need to include the Camera.Main effects
-        if(isSceneView && Camera.Main != null)
+        if (isSceneView && Camera.Main != null)
             components = components.Concat(Camera.Main?.GetComponents<MonoBehaviour>() ?? Array.Empty<MonoBehaviour>());
 
         foreach (MonoBehaviour effect in components)
@@ -351,6 +351,7 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         // We draw objects to get the DepthBuffer but we also draw it into a ColorBuffer so we upload it as a Sampleable Texture
         RenderTexture depthTexture = RenderTexture.GetTemporaryRT(css.pixelWidth, css.pixelHeight, [PixelFormat.R32_Float]);
+
         toRelease.Add(depthTexture);
         buffer.SetRenderTarget(depthTexture);
         buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
@@ -362,7 +363,7 @@ public class DefaultRenderPipeline : RenderPipeline
         PropertyState.SetGlobalTexture("_CameraDepthTexture", depthTexture);
 
         // Copy the depth buffer to the forward buffer
-        buffer.CopyTexture(depthTexture.DepthBuffer, forwardBuffer.DepthBuffer);
+        buffer.Blit(depthTexture.DepthBuffer, forwardBuffer, 1);
 
         // Reset render target back to forward buffer
         buffer.SetRenderTarget(forwardBuffer);
