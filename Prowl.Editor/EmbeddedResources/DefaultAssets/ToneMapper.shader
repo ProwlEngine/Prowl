@@ -19,6 +19,9 @@ Pass "ToneMapper"
         #pragma vertex Vertex
         #pragma fragment Fragment
 
+        #include "Prowl.hlsl"
+
+
 		struct Attributes
 		{
 			float3 position : POSITION;
@@ -216,7 +219,8 @@ Pass "ToneMapper"
 			adjustedColor.rgb = adjustedColor.rgb * _Contrast + t;
 			
             // Gamma correction
-            float3 gcColor = pow(adjustedColor, (float3)1.0 / 2.2);
+            //float3 gcColor = pow(adjustedColor, (float3)1.0 / 2.2);
+            float3 gcColor = GammaToLinearSpace(adjustedColor);
 			
 			gcColor = saturate(gcColor);
 			

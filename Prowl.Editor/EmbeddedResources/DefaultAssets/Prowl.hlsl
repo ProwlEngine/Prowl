@@ -1,6 +1,29 @@
 ﻿#ifndef SHADER_PROWL
 #define SHADER_PROWL
-		
+
+
+#define PROWL_PI            3.14159265359f
+#define PROWL_TWO_PI        6.28318530718f
+#define PROWL_FOUR_PI       12.56637061436f
+#define PROWL_INV_PI        0.31830988618f
+#define PROWL_INV_TWO_PI    0.15915494309f
+#define PROWL_INV_FOUR_PI   0.07957747155f
+#define PROWL_HALF_PI       1.57079632679f
+#define PROWL_INV_HALF_PI   0.636619772367f
+
+
+// Colors
+// http://chilliant.blogspot.com.au/2012/08/srgb-approximations-for-hlsl.html?m=1
+float3 LinearToGammaSpace(float3 lin)
+{
+	return max(1.055 * pow(max(lin, float3(0.0, 0.0, 0.0)), 0.416666667) - 0.055, 0.0);
+}
+// http://chilliant.blogspot.com.au/2012/08/srgb-approximations-for-hlsl.html?m=1
+float3 GammaToLinearSpace(float3 gamma)
+{
+    return gamma * (gamma * (gamma * 0.305306011 + 0.682171111) + 0.012522878);
+}
+
 float LinearizeDepth(float depth, float near, float far) 
 {
 	float z = depth * 2.0 - 1.0; // Back to NDC [-1,1] range
