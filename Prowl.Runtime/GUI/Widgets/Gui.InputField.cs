@@ -75,7 +75,6 @@ public partial class Gui
 
             interact.TakeFocus();
 
-            g.Draw2D.PushClip(g.CurrentNode.LayoutData.InnerRect);
             var ValueChanged = false;
             if (g.FocusID == interact.ID || g.ActiveID == interact.ID)
             {
@@ -102,9 +101,10 @@ public partial class Gui
                     render_pos.y -= g.CurrentNode.VScroll;
 
                 Color32 colb = style.TextColor;
-                g.Draw2D.DrawList.AddText(font, fontsize, render_pos, colb, value, 0, value.Length, 0.0f, null);
+                var rect = g.CurrentNode.LayoutData.InnerRect;
+                Vector4 clip = new(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
+                g.Draw2D.DrawList.AddText(font, fontsize, render_pos, colb, value, 0, value.Length, 0.0f, clip);
             }
-            g.Draw2D.PopClip();
 
             if (multiline)
             {
