@@ -671,7 +671,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 RenderTexture.ReleaseTemporaryRT(destBuffer);
             }
         }
-        catch (Exception e)
+        catch (Exception)
         {
             // Ensure we clean up resources even if an effect throws an exception
             if (sourceBuffer != forwardBuffer)
