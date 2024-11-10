@@ -354,16 +354,16 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.SetRenderTarget(forwardBuffer);
         }
 
-        // 8. Debug visualization
-        if (data.DisplayGrid)
-            RenderGrid(buffer, css, data);
-
         if (data.DisplayGizmo)
             RenderGizmos(buffer, css);
 
         // 6. Skybox (if enabled)
         if (css.clearFlags == CameraClearFlags.Skybox)
             RenderSkybox(buffer, css);
+
+        // 8. Debug visualization
+        if (data.DisplayGrid)
+            RenderGrid(buffer, css, data);
 
         // 10. Transparent geometry
         // Setup to use transparent projection matrix if its differant
