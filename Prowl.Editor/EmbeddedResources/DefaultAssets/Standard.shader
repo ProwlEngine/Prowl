@@ -39,6 +39,7 @@ Pass "Standard"
             float3x3 TBN : TEXCOORD2;
             float3 normal : NORMAL;
             float3 vertPos : TEXCOORD5;
+            PROWL_FOG_COORDS(3)
         };
 
         struct Light 
@@ -247,6 +248,8 @@ Pass "Standard"
 				worldBitangent,
 				worldNormal
 			);
+
+            PROWL_TRANSFER_FOG(output, output.position);
             
             return output;
         }
@@ -393,8 +396,11 @@ Pass "Standard"
             lighting *= (1.0 - surface.r);
             baseColor.rgb *= ambientStrength;
             baseColor.rgb += lighting;
+            
+            PROWL_APPLY_FOG(input, baseColor);
 
             output.Albedo = float4(baseColor.rgb, 1.0);
+
             return output;
         }
     ENDHLSL

@@ -46,6 +46,15 @@ float4 _CosTime;
 float4 prowl_DeltaTime;
 
 // Fog parameters
+float4 prowl_FogColor;  // RGB color of fog
+float4 prowl_FogParams; // Packed parameters:
+                        // x: density/sqrt(ln(2)) - for Exp2 fog
+                        // y: density/ln(2) - for Exp fog
+                        // z: -1/(end-start) - for Linear fog
+                        // w: end/(end-start) - for Linear fog
+float3 prowl_FogStates; // x: 1 if linear is enabled, 0 otherwise
+                        // y: 1 if exp fog, 0 otherwise
+                        // z: 1 if exp2 fog, 0 otherwise
 
 // Ambient light parameters
 

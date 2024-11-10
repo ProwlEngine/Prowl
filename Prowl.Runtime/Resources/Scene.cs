@@ -18,6 +18,30 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [CloneBehavior(typeof(GameObject), CloneBehavior.ChildObject)]
     private HashSet<GameObject> _allObj = new HashSet<GameObject>(ReferenceEqualityComparer.Instance);
 
+    public struct FogParams
+    {
+        public enum FogMode
+        {
+            Off,
+            Linear,
+            Exponential,
+            ExponentialSquared
+        }
+        public FogMode Mode = FogMode.ExponentialSquared;
+        public Vector4 Color = new(0.5, 0.5, 0.5, 1.0);
+        [ShowIf(nameof(IsFogLinear))] public float Start = 20;
+        [ShowIf(nameof(IsFogLinear))] public float End = 100;
+        public float Density = 0.01f;
+
+        public bool IsFogLinear => Mode == FogMode.Linear;
+
+        public FogParams()
+        {
+        }
+    }
+
+    public FogParams Fog = new();
+
     /// <summary> The number of registered objects. </summary>
     public int Count => _allObj.Count;
 
