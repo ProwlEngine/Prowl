@@ -253,6 +253,17 @@ public class DefaultRenderPipeline : RenderPipeline
             fog.Mode == Scene.FogParams.FogMode.Exponential ? 1 : 0,
             fog.Mode == Scene.FogParams.FogMode.ExponentialSquared ? 1 : 0
             ));
+
+        // Ambient Lighting
+        Scene.AmbientLightParams ambient = SceneManagement.SceneManager.Scene.Ambient;
+        PropertyState.SetGlobalVector("prowl_AmbientMode", new Vector2(
+            ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform ? 1 : 0,
+            ambient.Mode == Scene.AmbientLightParams.AmbientMode.Hemisphere ? 1 : 0
+        ));
+
+        PropertyState.SetGlobalVector("prowl_AmbientColor", ambient.Color);
+        PropertyState.SetGlobalVector("prowl_AmbientSkyColor", ambient.SkyColor);
+        PropertyState.SetGlobalVector("prowl_AmbientGroundColor", ambient.GroundColor);
     }
 
     #endregion

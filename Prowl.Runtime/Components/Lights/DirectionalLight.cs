@@ -20,7 +20,6 @@ public class DirectionalLight : Light
 
     public Resolution shadowResolution = Resolution._1024;
 
-    public float ambientIntensity = 0.05f;
     public int qualitySamples = 32;
     public int blockerSamples = 16;
     public float shadowDistance = 50f;
@@ -63,7 +62,7 @@ public class DirectionalLight : Light
             DirectionRange = new Vector4(GameObject.Transform.forward, shadowDistance),
             Color = color.GetUInt(),
             Intensity = intensity,
-            SpotData = new Vector2(ambientIntensity, 0),
+            SpotData = new Vector2(0, 0),
             ShadowData = new Vector4(shadowRadius, qualitySamples, shadowBias, shadowNormalBias),
             ShadowMatrix = (view * proj).ToFloat()
         };

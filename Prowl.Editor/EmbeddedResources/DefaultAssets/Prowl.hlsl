@@ -33,6 +33,28 @@
     }
 
 
+// Ambient Lighting
+float3 CalculateAmbient(float3 worldNormal)
+{
+    float3 ambient = 0;
+    
+    // Uniform ambient
+    ambient += prowl_AmbientColor.rgb * prowl_AmbientMode.x;
+    
+    // Hemisphere ambient
+    float upDot = dot(worldNormal, float3(0, 1, 0));
+    ambient += lerp(prowl_AmbientGroundColor.rgb, prowl_AmbientSkyColor.rgb, upDot * 0.5 + 0.5) * prowl_AmbientMode.y;
+    
+    return ambient;
+}
+
+// Usage in your surface shader:
+#define PROWL_AMBIENT(worldNormal, outColor) \
+    { \
+        outColor.rgb *= CalculateAmbient(worldNormal.xyz); \
+    }
+
+
 // Colors
 // http://chilliant.blogspot.com.au/2012/08/srgb-approximations-for-hlsl.html?m=1
 float3 LinearToGammaSpace(float3 lin)

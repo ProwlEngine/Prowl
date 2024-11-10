@@ -57,6 +57,10 @@ float3 prowl_FogStates; // x: 1 if linear is enabled, 0 otherwise
                         // z: 1 if exp2 fog, 0 otherwise
 
 // Ambient light parameters
+float2 prowl_AmbientMode;    // x: uniform, y: hemisphere
+float4 prowl_AmbientColor;
+float4 prowl_AmbientSkyColor;
+float4 prowl_AmbientGroundColor;
 
 // Light parameters
 float2 prowl_ShadowAtlasSize;

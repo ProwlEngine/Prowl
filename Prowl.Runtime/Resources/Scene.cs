@@ -6,6 +6,8 @@ using System.Linq;
 
 using Prowl.Runtime.Cloning;
 
+using Vortice.Direct3D11;
+
 namespace Prowl.Runtime;
 
 public class Scene : EngineObject, ISerializationCallbackReceiver
@@ -41,6 +43,33 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     public FogParams Fog = new();
+
+    public struct AmbientLightParams
+    {
+        public enum AmbientMode
+        {
+            Uniform,
+            Hemisphere
+        }
+
+        public AmbientMode Mode = AmbientMode.Uniform;
+
+        // Uniform ambient
+        [ShowIf(nameof(UseHemisphere), true)] public Vector4 Color = new(0.2f, 0.2f, 0.2f, 1.0f);
+
+        // Hemisphere ambient
+        [ShowIf(nameof(UseHemisphere))] public Vector4 SkyColor = new(0.3f, 0.3f, 0.4f, 1.0f);
+        [ShowIf(nameof(UseHemisphere))] public Vector4 GroundColor = new(0.2f, 0.2f, 0.2f, 1.0f);
+
+        public bool UseHemisphere => Mode == AmbientMode.Hemisphere;
+
+        public AmbientLightParams()
+        {
+        }
+    }
+
+    // Add this to your Scene class
+    public AmbientLightParams Ambient = new();
 
     /// <summary> The number of registered objects. </summary>
     public int Count => _allObj.Count;

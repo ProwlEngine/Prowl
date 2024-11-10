@@ -300,7 +300,6 @@ Pass "Standard"
             float3 V = normalize(-input.fragPos);
 
             float3 lighting = float3(0, 0, 0);
-            float ambientStrength = 0.0;
 
             [loop]
             for(uint i = 0; i < _LightCount; i++)
@@ -325,7 +324,6 @@ Pass "Standard"
                     float NdotL = max(dot(N, L), 0.0);
                     float3 color = ((kD * baseColor.rgb) / PI + specular) * radiance * (1.0 - shadow) * NdotL;
 
-                    ambientStrength += light.SpotData.x;
                     lighting += color;
                 }
                 else if(light.PositionType.w == 1.0) // Point Light
@@ -392,11 +390,11 @@ Pass "Standard"
                     lighting += color;
                 }
             }
-
-            lighting *= (1.0 - surface.r);
-            baseColor.rgb *= ambientStrength;
-            baseColor.rgb += lighting;
             
+            lighting *= (1.0 - surface.r);
+            PROWL_AMBIENT(output.Normal, baseColor);
+            baseColor.rgb += lighting;
+
             PROWL_APPLY_FOG(input, baseColor);
 
             output.Albedo = float4(baseColor.rgb, 1.0);
