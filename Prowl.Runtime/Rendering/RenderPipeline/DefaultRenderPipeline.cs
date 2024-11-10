@@ -614,6 +614,8 @@ public class DefaultRenderPipeline : RenderPipeline
         if (CAMERA_RELATIVE)
             grid.Translation -= css.cameraPosition;
 
+        buffer.SetMaterial(s_gridMaterial);
+
         buffer.SetMatrix("prowl_ObjectToWorld", grid.ToFloat());
         buffer.UpdateBuffer("_PerDraw");
 
