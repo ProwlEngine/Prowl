@@ -268,7 +268,7 @@ Pass "Standard"
 
             // Albedo & Cutout
             float4 baseColor = _AlbedoTex.Sample(sampler_AlbedoTex, input.uv);
-            clip(baseColor.a - _AlphaClip);
+            //clip(baseColor.a - _AlphaClip);
             baseColor.rgb = pow(baseColor.rgb, 2.2);
 
             // Normal
