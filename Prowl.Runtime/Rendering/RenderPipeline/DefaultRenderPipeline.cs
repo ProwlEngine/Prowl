@@ -599,7 +599,6 @@ public class DefaultRenderPipeline : RenderPipeline
         buffer.SetFloat("_Falloff", 15.0f);
         buffer.SetFloat("_MaxDist", Math.Min(css.farClipPlane, GRID_SCALE));
 
-        buffer.SetMaterial(s_gridMaterial, 0);
         buffer.DrawSingle(s_quadMesh);
     }
 
