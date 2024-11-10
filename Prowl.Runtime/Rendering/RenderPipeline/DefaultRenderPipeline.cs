@@ -173,7 +173,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         IEnumerable<MonoBehaviour> components = camera.GetComponents<MonoBehaviour>();
         // If this is the Scene view camera, we need to include the Camera.Main effects
-        if(isSceneView && Camera.Main != null)
+        if (isSceneView && Camera.Main != null)
             components = components.Concat(Camera.Main?.GetComponents<MonoBehaviour>() ?? Array.Empty<MonoBehaviour>());
 
         foreach (MonoBehaviour effect in components)
@@ -205,7 +205,6 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private static CommandBuffer PrepareCommandBuffer(Framebuffer target, Camera camera, bool isHDR, out RenderTexture forwardBuffer)
     {
-
         bool clearColor = camera.ClearFlags == CameraClearFlags.ColorOnly || camera.ClearFlags == CameraClearFlags.DepthColor;
         bool clearDepth = camera.ClearFlags == CameraClearFlags.DepthOnly || camera.ClearFlags == CameraClearFlags.DepthColor;
         bool drawSkybox = camera.ClearFlags == CameraClearFlags.Skybox;
@@ -356,16 +355,16 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.SetRenderTarget(forwardBuffer);
         }
 
-        // 8. Debug visualization
-        if (data.DisplayGrid)
-            RenderGrid(buffer, css, data);
-
         if (data.DisplayGizmo)
             RenderGizmos(buffer, css);
 
         // 6. Skybox (if enabled)
         if (css.clearFlags == CameraClearFlags.Skybox)
             RenderSkybox(buffer, css);
+
+        // 8. Debug visualization
+        if (data.DisplayGrid)
+            RenderGrid(buffer, css, data);
 
         // 10. Transparent geometry
         // Setup to use transparent projection matrix if its differant
@@ -380,7 +379,7 @@ public class DefaultRenderPipeline : RenderPipeline
         RenderTexture depthTexture = RenderTexture.GetTemporaryRT(css.pixelWidth, css.pixelHeight, [PixelFormat.R32_Float]);
         toRelease.Add(depthTexture);
         buffer.SetRenderTarget(depthTexture);
-        buffer.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
+        buffer.ClearRenderTarget(true, true, Color.white);
 
         // Draw depth for all visible objects
         DrawRenderables("LightMode", "ShadowCaster", buffer, css.cameraPosition, culledRenderableIndices, false);
@@ -389,7 +388,7 @@ public class DefaultRenderPipeline : RenderPipeline
         PropertyState.SetGlobalTexture("_CameraDepthTexture", depthTexture);
 
         // Copy the depth buffer to the forward buffer
-        buffer.CopyTexture(depthTexture.DepthBuffer, forwardBuffer.DepthBuffer);
+        buffer.Blit(depthTexture.DepthBuffer, forwardBuffer, 1);
 
         // Reset render target back to forward buffer
         buffer.SetRenderTarget(forwardBuffer);
@@ -616,6 +615,8 @@ public class DefaultRenderPipeline : RenderPipeline
         if (CAMERA_RELATIVE)
             grid.Translation -= css.cameraPosition;
 
+        buffer.SetMaterial(s_gridMaterial);
+
         buffer.SetMatrix("prowl_ObjectToWorld", grid.ToFloat());
         buffer.UpdateBuffer("_PerDraw");
 
@@ -673,7 +674,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 RenderTexture.ReleaseTemporaryRT(destBuffer);
             }
         }
-        catch (Exception e)
+        catch (Exception)
         {
             // Ensure we clean up resources even if an effect throws an exception
             if (sourceBuffer != forwardBuffer)
