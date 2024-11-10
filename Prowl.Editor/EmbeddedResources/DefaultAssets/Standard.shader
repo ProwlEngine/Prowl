@@ -130,10 +130,8 @@ Pass "Standard"
 				float2 sampleUV = uv + offset * lightPixelSize;
 				
 				float shadowMapDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, sampleUV).r;
-				float bias = BIAS_SCALE * tan(acos(dot(light.DirectionRange.xyz, float3(0, 1, 0))));
-				bias = clamp(bias, 0.0, 0.01);
 				
-				if(shadowMapDepth < currentDepth - light.ShadowData.z - bias)
+				if(shadowMapDepth < currentDepth - (light.ShadowData.z * BIAS_SCALE))
 				{
 					blockerSum += shadowMapDepth;
 					maxBlockerDistance = max(maxBlockerDistance, currentDepth - shadowMapDepth);
@@ -168,10 +166,8 @@ Pass "Standard"
 				weight = max(0.0, weight * weight); // Quadratic falloff
 				
 				float shadowMapDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, sampleUV).r;
-				float bias = BIAS_SCALE * tan(acos(dot(light.DirectionRange.xyz, float3(0, 1, 0))));
-				bias = clamp(bias, 0.0, 0.01);
 				
-				sum += ((currentDepth - light.ShadowData.z - bias) > shadowMapDepth ? 1.0 : 0.0) * weight;
+				sum += ((currentDepth - (light.ShadowData.z * BIAS_SCALE)) > shadowMapDepth ? 1.0 : 0.0) * weight;
 				weightSum += weight;
 			}
 			
