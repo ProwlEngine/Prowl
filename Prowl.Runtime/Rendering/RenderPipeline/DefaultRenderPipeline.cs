@@ -473,6 +473,45 @@ public class DefaultRenderPipeline : RenderPipeline
 
             if (light.DoCastShadows())
             {
+                Vector3 oldPos = Vector3.zero;
+                if (light is DirectionalLight dirLight)
+                {
+                    // Get light direction and create basis vectors for the projection plane
+                    Vector3 lightDir = dirLight.Transform.forward;
+
+                    // Create two perpendicular vectors that form the shadow projection plane
+                    Vector3 planeX, planeY;
+
+                    // Handle cases where light direction is aligned with world up
+                    if (Math.Abs(Vector3.Dot(lightDir, Vector3.up)) > 0.99999f)
+                    {
+                        planeX = Vector3.right;
+                        planeY = Vector3.forward;
+                    }
+                    else
+                    {
+                        planeX = Vector3.Cross(lightDir, Vector3.up).normalized;
+                        planeY = Vector3.Cross(planeX, lightDir).normalized;
+                    }
+
+                    // Project camera position onto the light's projection plane
+                    double texelSize = (dirLight.shadowDistance * 2) / res;
+
+                    // Project camera position onto our basis vectors
+                    double projX = Vector3.Dot(cameraPosition, planeX);
+                    double projY = Vector3.Dot(cameraPosition, planeY);
+
+                    // Snap these coordinates to texel-sized grid
+                    double snappedX = MathD.Round(projX / texelSize) * texelSize;
+                    double snappedY = MathD.Round(projY / texelSize) * texelSize;
+
+                    // Reconstruct world position from snapped coordinates
+                    Vector3 snappedPos = (planeX * snappedX) + (planeY * snappedY);
+
+                    oldPos = dirLight.Transform.position;
+                    dirLight.Transform.position = snappedPos;
+                }
+
                 GPULight gpu = light.GetGPULight(ShadowAtlas.GetSize(), CAMERA_RELATIVE, cameraPosition);
 
                 // Find a slot for the shadow map
@@ -491,6 +530,7 @@ public class DefaultRenderPipeline : RenderPipeline
                     buffer.SetViewports(slot.Value.x, slot.Value.y, res, res, 0, 1000);
 
                     light.GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 proj);
+
                     BoundingFrustum frustum = new(view * proj);
                     if (CAMERA_RELATIVE)
                         view.Translation = Vector3.zero;
@@ -509,6 +549,13 @@ public class DefaultRenderPipeline : RenderPipeline
                 }
 
                 gpuLights.Add(gpu);
+
+
+                if (light is DirectionalLight dirLight2)
+                {
+                    // Return the light to its original position
+                    dirLight2.Transform.position = oldPos;
+                }
             }
             else
             {
