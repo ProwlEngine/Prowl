@@ -23,6 +23,11 @@ public enum CameraClearFlags
 public enum DepthTextureMode
 {
     None = 0,
+    /// <summary>
+    /// When enabled rendering will draw a Pre-Depth pass before the main rendering pass.
+    /// This can improve overdrawing and sorting issues, but can be slower on some hardware and some cases.
+    /// This also enables the _CameraDepthTexture shader property.
+    /// </summary>
     Depth = 1, // _CameraDepthTexture
     //Normal = 2, // _CameraNormalsTexture
     MotionVectors = 4, // _CameraMotionVectorsTexture

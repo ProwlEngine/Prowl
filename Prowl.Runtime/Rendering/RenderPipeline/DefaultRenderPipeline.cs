@@ -315,7 +315,8 @@ public class DefaultRenderPipeline : RenderPipeline
         SetGlobalCameraMatrices(css.view, css.projection);
 
         // 6. Pre-Depth Pass
-        PreDepthPass(buffer, forwardBuffer, toRelease, css, culledRenderableIndices);
+        if (css.depthTextureMode.HasFlag(DepthTextureMode.Depth))
+            PreDepthPass(buffer, forwardBuffer, toRelease, css, culledRenderableIndices);
 
         // 7. Opaque geometry
         DrawRenderables("RenderOrder", "Opaque", buffer, css.cameraPosition, culledRenderableIndices, false);
