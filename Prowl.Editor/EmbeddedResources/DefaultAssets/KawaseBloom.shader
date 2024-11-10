@@ -48,6 +48,16 @@ Pass "KawaseBloomThreshold"
             return output;
         }
         
+		float3 SafeColor(float3 color)
+		{
+			// Check for NaN or Inf
+			if (any(isnan(color)) || any(isinf(color)))
+			{
+				return float3(1, 0, 1); // Bright magenta to make it obvious
+			}
+			return color;
+		}
+		
         // Quadratic threshold function
         float3 Threshold(float3 color) {
             float brightness = max(max(color.r, color.g), color.b);
@@ -56,7 +66,7 @@ Pass "KawaseBloomThreshold"
             soft = soft * soft / (4 * _SoftKnee + 0.00001);
             float contribution = max(soft, brightness - _Threshold);
             contribution /= max(brightness, 0.00001);
-            return color * contribution;
+            return SafeColor(color * contribution);
         }
 
         float4 Fragment(Varyings input) : SV_TARGET
