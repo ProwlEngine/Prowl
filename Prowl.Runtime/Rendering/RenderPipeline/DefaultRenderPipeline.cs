@@ -476,40 +476,39 @@ public class DefaultRenderPipeline : RenderPipeline
                 Vector3 oldPos = Vector3.zero;
                 if (light is DirectionalLight dirLight)
                 {
-                    // Get light direction and create basis vectors for the projection plane
+                    // Create light space transform matrices
                     Vector3 lightDir = dirLight.Transform.forward;
+                    Vector3 lightUp = dirLight.Transform.up;
+                    Vector3 lightRight = Vector3.Cross(lightUp, lightDir).normalized;
+                    lightUp = Vector3.Cross(lightDir, lightRight).normalized; // Recompute to ensure orthogonality
 
-                    // Create two perpendicular vectors that form the shadow projection plane
-                    Vector3 planeX, planeY;
+                    // Create light space matrix (world to light space transform)
+                    Matrix4x4 worldToLight = new Matrix4x4(
+                        new Vector4(lightRight.x, lightUp.x, lightDir.x, 0),
+                        new Vector4(lightRight.y, lightUp.y, lightDir.y, 0),
+                        new Vector4(lightRight.z, lightUp.z, lightDir.z, 0),
+                        new Vector4(0, 0, 0, 1)
+                    );
 
-                    // Handle cases where light direction is aligned with world up
-                    if (Math.Abs(Vector3.Dot(lightDir, Vector3.up)) > 0.99999f)
-                    {
-                        planeX = Vector3.right;
-                        planeY = Vector3.forward;
-                    }
-                    else
-                    {
-                        planeX = Vector3.Cross(lightDir, Vector3.up).normalized;
-                        planeY = Vector3.Cross(planeX, lightDir).normalized;
-                    }
+                    // Transform camera position to light space
+                    Vector3 lightSpacePos = Vector3.Transform(cameraPosition, worldToLight);
 
-                    // Project camera position onto the light's projection plane
-                    double texelSize = (dirLight.shadowDistance * 2) / res;
+                    // Calculate texel size in light space
+                    float texelSize = (dirLight.shadowDistance * 2) / res;
 
-                    // Project camera position onto our basis vectors
-                    double projX = Vector3.Dot(cameraPosition, planeX);
-                    double projY = Vector3.Dot(cameraPosition, planeY);
+                    // Snap in light space (only X and Y components, Z doesn't matter for directional light)
+                    Vector3 snappedLightPos = new Vector3(
+                        MathD.Round(lightSpacePos.x / texelSize) * texelSize,
+                        MathD.Round(lightSpacePos.y / texelSize) * texelSize,
+                        lightSpacePos.z
+                    );
 
-                    // Snap these coordinates to texel-sized grid
-                    double snappedX = MathD.Round(projX / texelSize) * texelSize;
-                    double snappedY = MathD.Round(projY / texelSize) * texelSize;
-
-                    // Reconstruct world position from snapped coordinates
-                    Vector3 snappedPos = (planeX * snappedX) + (planeY * snappedY);
+                    // Transform back to world space
+                    Matrix4x4 lightToWorld = worldToLight.Invert();
+                    Vector3 snappedWorldPos = Vector3.Transform(snappedLightPos, lightToWorld);
 
                     oldPos = dirLight.Transform.position;
-                    dirLight.Transform.position = snappedPos;
+                    dirLight.Transform.position = snappedWorldPos;
                 }
 
                 GPULight gpu = light.GetGPULight(ShadowAtlas.GetSize(), CAMERA_RELATIVE, cameraPosition);
