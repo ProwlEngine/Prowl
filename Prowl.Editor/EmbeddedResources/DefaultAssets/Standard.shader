@@ -316,7 +316,7 @@ Pass "Standard"
                     float3 specular;
                     CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular);
 
-                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
+                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (input.normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
                     float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
 
                     float3 radiance = lightColor * intensity;
@@ -379,7 +379,7 @@ Pass "Standard"
                     specular *= coneAttenuation;
                     
                     // shadows
-                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
+                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (input.normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
                     float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
                     
                     // add to outgoing radiance Lo
