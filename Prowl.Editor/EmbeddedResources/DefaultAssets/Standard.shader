@@ -86,6 +86,7 @@ Pass "Standard"
 		// Constants for shadow calculation
 		static const float MIN_PENUMBRA_SIZE = 0.5;
 		static const float BIAS_SCALE = 0.001;
+		static const float NORMAL_BIAS_SCALE = 0.01;
 		static const float _ShadowSoftness = 2.0;
 		static const int _PCFSamples = 32;
 		static const int _BlockerSearchSamples = 16;
@@ -314,7 +315,7 @@ Pass "Standard"
                     float3 specular;
                     CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular);
 
-                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * light.ShadowData.w), 1.0));
+                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
                     float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
 
                     float3 radiance = lightColor * intensity;
@@ -378,7 +379,7 @@ Pass "Standard"
                     specular *= coneAttenuation;
                     
                     // shadows
-                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * light.ShadowData.w), 1.0));
+                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
                     float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
                     
                     // add to outgoing radiance Lo
