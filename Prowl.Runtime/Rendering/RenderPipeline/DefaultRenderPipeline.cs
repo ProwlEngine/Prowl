@@ -238,6 +238,32 @@ public class DefaultRenderPipeline : RenderPipeline
         PropertyState.SetGlobalVector("_SinTime", new Vector4(Math.Sin(Time.time / 8), Math.Sin(Time.time / 4), Math.Sin(Time.time / 2), Math.Sin(Time.time)));
         PropertyState.SetGlobalVector("_CosTime", new Vector4(Math.Cos(Time.time / 8), Math.Cos(Time.time / 4), Math.Cos(Time.time / 2), Math.Cos(Time.time)));
         PropertyState.SetGlobalVector("prowl_DeltaTime", new Vector4(Time.deltaTime, 1.0f / Time.deltaTime, Time.smoothDeltaTime, 1.0f / Time.smoothDeltaTime));
+
+        // Fog
+        Scene.FogParams fog = SceneManagement.SceneManager.Scene.Fog;
+        Vector4 fogParams;
+        fogParams.x = fog.Density / MathD.Sqrt(0.693147181); // ln(2)
+        fogParams.y = fog.Density / 0.693147181; // ln(2)
+        fogParams.z = -1.0 / (fog.End - fog.Start);
+        fogParams.w = fog.End / (fog.End - fog.Start);
+        PropertyState.SetGlobalVector("prowl_FogColor", fog.Color);
+        PropertyState.SetGlobalVector("prowl_FogParams", fogParams);
+        PropertyState.SetGlobalVector("prowl_FogStates", new System.Numerics.Vector3(
+            fog.Mode == Scene.FogParams.FogMode.Linear ? 1 : 0,
+            fog.Mode == Scene.FogParams.FogMode.Exponential ? 1 : 0,
+            fog.Mode == Scene.FogParams.FogMode.ExponentialSquared ? 1 : 0
+            ));
+
+        // Ambient Lighting
+        Scene.AmbientLightParams ambient = SceneManagement.SceneManager.Scene.Ambient;
+        PropertyState.SetGlobalVector("prowl_AmbientMode", new Vector2(
+            ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform ? 1 : 0,
+            ambient.Mode == Scene.AmbientLightParams.AmbientMode.Hemisphere ? 1 : 0
+        ));
+
+        PropertyState.SetGlobalVector("prowl_AmbientColor", ambient.Color);
+        PropertyState.SetGlobalVector("prowl_AmbientSkyColor", ambient.SkyColor);
+        PropertyState.SetGlobalVector("prowl_AmbientGroundColor", ambient.GroundColor);
     }
 
     #endregion

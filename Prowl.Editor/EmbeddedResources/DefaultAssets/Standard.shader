@@ -39,6 +39,7 @@ Pass "Standard"
             float3x3 TBN : TEXCOORD2;
             float3 normal : NORMAL;
             float3 vertPos : TEXCOORD5;
+            PROWL_FOG_COORDS(3)
         };
 
         struct Light 
@@ -86,6 +87,7 @@ Pass "Standard"
 		// Constants for shadow calculation
 		static const float MIN_PENUMBRA_SIZE = 0.5;
 		static const float BIAS_SCALE = 0.001;
+		static const float NORMAL_BIAS_SCALE = 0.01;
 		static const float _ShadowSoftness = 2.0;
 		static const int _PCFSamples = 32;
 		static const int _BlockerSearchSamples = 16;
@@ -130,10 +132,8 @@ Pass "Standard"
 				float2 sampleUV = uv + offset * lightPixelSize;
 				
 				float shadowMapDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, sampleUV).r;
-				float bias = BIAS_SCALE * tan(acos(dot(light.DirectionRange.xyz, float3(0, 1, 0))));
-				bias = clamp(bias, 0.0, 0.01);
 				
-				if(shadowMapDepth < currentDepth - light.ShadowData.z - bias)
+				if(shadowMapDepth < currentDepth - (light.ShadowData.z * BIAS_SCALE))
 				{
 					blockerSum += shadowMapDepth;
 					maxBlockerDistance = max(maxBlockerDistance, currentDepth - shadowMapDepth);
@@ -168,10 +168,8 @@ Pass "Standard"
 				weight = max(0.0, weight * weight); // Quadratic falloff
 				
 				float shadowMapDepth = _ShadowAtlas.Sample(sampler_ShadowAtlas, sampleUV).r;
-				float bias = BIAS_SCALE * tan(acos(dot(light.DirectionRange.xyz, float3(0, 1, 0))));
-				bias = clamp(bias, 0.0, 0.01);
 				
-				sum += ((currentDepth - light.ShadowData.z - bias) > shadowMapDepth ? 1.0 : 0.0) * weight;
+				sum += ((currentDepth - (light.ShadowData.z * BIAS_SCALE)) > shadowMapDepth ? 1.0 : 0.0) * weight;
 				weightSum += weight;
 			}
 			
@@ -250,6 +248,8 @@ Pass "Standard"
 				worldBitangent,
 				worldNormal
 			);
+
+            PROWL_TRANSFER_FOG(output, output.position);
             
             return output;
         }
@@ -268,7 +268,7 @@ Pass "Standard"
 
             // Albedo & Cutout
             float4 baseColor = _AlbedoTex.Sample(sampler_AlbedoTex, input.uv);
-            clip(baseColor.a - _AlphaClip);
+            //clip(baseColor.a - _AlphaClip);
             baseColor.rgb = pow(baseColor.rgb, 2.2);
 
             // Normal
@@ -300,7 +300,6 @@ Pass "Standard"
             float3 V = normalize(-input.fragPos);
 
             float3 lighting = float3(0, 0, 0);
-            float ambientStrength = 0.0;
 
             [loop]
             for(uint i = 0; i < _LightCount; i++)
@@ -318,14 +317,13 @@ Pass "Standard"
                     float3 specular;
                     CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular);
 
-                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * light.ShadowData.w), 1.0));
+                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
                     float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
 
                     float3 radiance = lightColor * intensity;
                     float NdotL = max(dot(N, L), 0.0);
                     float3 color = ((kD * baseColor.rgb) / PI + specular) * radiance * (1.0 - shadow) * NdotL;
 
-                    ambientStrength += light.SpotData.x;
                     lighting += color;
                 }
                 else if(light.PositionType.w == 1.0) // Point Light
@@ -382,7 +380,7 @@ Pass "Standard"
                     specular *= coneAttenuation;
                     
                     // shadows
-                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * light.ShadowData.w), 1.0));
+                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
                     float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
                     
                     // add to outgoing radiance Lo
@@ -392,12 +390,15 @@ Pass "Standard"
                     lighting += color;
                 }
             }
-
+            
             lighting *= (1.0 - surface.r);
-            baseColor.rgb *= ambientStrength;
+            PROWL_AMBIENT(output.Normal, baseColor);
             baseColor.rgb += lighting;
 
+            PROWL_APPLY_FOG(input, baseColor);
+
             output.Albedo = float4(baseColor.rgb, 1.0);
+
             return output;
         }
     ENDHLSL

@@ -1,24 +1,75 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Runtime.Cloning;
-using Prowl.Runtime.SceneManagement;
+
+using Vortice.Direct3D11;
 
 namespace Prowl.Runtime;
 
 public class Scene : EngineObject, ISerializationCallbackReceiver
 {
-    [SerializeField]
+    [SerializeField, HideInInspector]
     private GameObject[] serializeObj = null;
 
     [SerializeIgnore]
     [CloneField(CloneFieldFlags.DontSkip)]
     [CloneBehavior(typeof(GameObject), CloneBehavior.ChildObject)]
     private HashSet<GameObject> _allObj = new HashSet<GameObject>(ReferenceEqualityComparer.Instance);
+
+    public struct FogParams
+    {
+        public enum FogMode
+        {
+            Off,
+            Linear,
+            Exponential,
+            ExponentialSquared
+        }
+        public FogMode Mode = FogMode.ExponentialSquared;
+        public Vector4 Color = new(0.5, 0.5, 0.5, 1.0);
+        [ShowIf(nameof(IsFogLinear))] public float Start = 20;
+        [ShowIf(nameof(IsFogLinear))] public float End = 100;
+        public float Density = 0.01f;
+
+        public bool IsFogLinear => Mode == FogMode.Linear;
+
+        public FogParams()
+        {
+        }
+    }
+
+    public FogParams Fog = new();
+
+    public struct AmbientLightParams
+    {
+        public enum AmbientMode
+        {
+            Uniform,
+            Hemisphere
+        }
+
+        public AmbientMode Mode = AmbientMode.Uniform;
+
+        // Uniform ambient
+        [ShowIf(nameof(UseHemisphere), true)] public Vector4 Color = new(0.2f, 0.2f, 0.2f, 1.0f);
+
+        // Hemisphere ambient
+        [ShowIf(nameof(UseHemisphere))] public Vector4 SkyColor = new(0.3f, 0.3f, 0.4f, 1.0f);
+        [ShowIf(nameof(UseHemisphere))] public Vector4 GroundColor = new(0.2f, 0.2f, 0.2f, 1.0f);
+
+        public bool UseHemisphere => Mode == AmbientMode.Hemisphere;
+
+        public AmbientLightParams()
+        {
+        }
+    }
+
+    // Add this to your Scene class
+    public AmbientLightParams Ambient = new();
 
     /// <summary> The number of registered objects. </summary>
     public int Count => _allObj.Count;

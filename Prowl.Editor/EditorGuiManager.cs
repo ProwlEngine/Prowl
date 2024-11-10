@@ -503,6 +503,7 @@ public static class EditorGuiManager
 
     #endregion
 
+    [MenuItem("Edit/Scene Settings")] public static void Edit_SceneSettings() => new SceneEditorWindow();
     [MenuItem("Edit/Project Settings")] public static void Edit_ProjectSettings() => new ProjectSettingsWindow();
     [MenuItem("Edit/Editor Preferences")] public static void Edit_Preferences() => new PreferencesWindow();
 
@@ -517,6 +518,7 @@ public static class EditorGuiManager
     [MenuItem("Windows/Editor Preferences")] public static void Window_Preferences() => new PreferencesWindow();
     [MenuItem("Windows/Blueprint Editor")] public static void Window_Blueprint () => new BlueprintWindow();
     // [MenuItem("Windows/Render Graph")] public static void Window_RenderGraph() => new RenderGraphWindow();
+    [MenuItem("Windows/Scene Settings")] public static void Window_SceneSettings() => new SceneEditorWindow();
 
 
 

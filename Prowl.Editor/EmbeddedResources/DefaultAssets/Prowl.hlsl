@@ -12,6 +12,48 @@
 #define PROWL_HALF_PI       1.57079632679f
 #define PROWL_INV_HALF_PI   0.636619772367f
 
+// Fog
+// Macro to declare fog coordinates in vertex shader output struct
+#define PROWL_FOG_COORDS(idx) float fogCoord : TEXCOORD##idx;
+
+// Initialize fog coords in vertex shader
+#define PROWL_TRANSFER_FOG(o, clipPos) \
+    { \
+        o.fogCoord = clipPos.z; \
+    }
+
+// Apply fog in fragment/pixel shader - Should match Unity's fog calculation
+#define PROWL_APPLY_FOG(i, col) \
+    { \
+        float prowlFog = 0.0; \
+            prowlFog += (i.fogCoord * prowl_FogParams.z + prowl_FogParams.w) * prowl_FogStates.x; \
+            prowlFog += exp2(-i.fogCoord * prowl_FogParams.y) * prowl_FogStates.y; \
+            prowlFog += exp2(-i.fogCoord * i.fogCoord * prowl_FogParams.x * prowl_FogParams.x) * prowl_FogStates.z; \
+        col.rgb = lerp(prowl_FogColor.rgb, col.rgb, saturate(prowlFog)); \
+    }
+
+
+// Ambient Lighting
+float3 CalculateAmbient(float3 worldNormal)
+{
+    float3 ambient = 0;
+    
+    // Uniform ambient
+    ambient += prowl_AmbientColor.rgb * prowl_AmbientMode.x;
+    
+    // Hemisphere ambient
+    float upDot = dot(worldNormal, float3(0, 1, 0));
+    ambient += lerp(prowl_AmbientGroundColor.rgb, prowl_AmbientSkyColor.rgb, upDot * 0.5 + 0.5) * prowl_AmbientMode.y;
+    
+    return ambient;
+}
+
+// Usage in your surface shader:
+#define PROWL_AMBIENT(worldNormal, outColor) \
+    { \
+        outColor.rgb *= CalculateAmbient(worldNormal.xyz); \
+    }
+
 
 // Colors
 // http://chilliant.blogspot.com.au/2012/08/srgb-approximations-for-hlsl.html?m=1
