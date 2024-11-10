@@ -56,14 +56,6 @@ Pass "Blit"
 
 Pass "BlitDepth"
 {
-	DepthStencil
-	{
-		DepthTest Off
-		DepthWrite On
-	}
-
-    Blend Override
-
     // Rasterizer culling mode
     Cull None
 
