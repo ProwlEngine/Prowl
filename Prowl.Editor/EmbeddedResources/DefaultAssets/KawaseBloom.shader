@@ -132,9 +132,7 @@ Pass "KawaseBloom"
 			
 			offset *= hash22(pixelCoord) * 5.0 * _Radius;
 			
-			float3 color = 0;
-			float sampleCount = 0;
-			float2 samples[4] = {
+			const float2 samples[4] = {
 				float2(offset.x, offset.y),
 				float2(-offset.x, offset.y),
 				float2(-offset.x, -offset.y),
@@ -142,25 +140,25 @@ Pass "KawaseBloom"
 			};
 			
 			// Sample center pixel
-			float3 centerColor = _MainTex.Sample(sampler_MainTex, input.uv);
-			
-			// Check and accumulate valid samples
-			[unroll]
-			for(int i = 0; i < 4; i++)
-			{
-				float2 sampleUV = input.uv + samples[i];
-				if(sampleUV.x >= 0 && sampleUV.x <= 1 && sampleUV.y >= 0 && sampleUV.y <= 1)
-				{
-					color += _MainTex.Sample(sampler_MainTex, sampleUV).rgb;
-					sampleCount++;
-				}
-			}
-			
-			// Average only valid samples
-			color = (sampleCount > 0) ? (color * _Intensity / sampleCount) : centerColor;
-			
-			// Blend with center color
-			color = (color + centerColor) / 2;
+            float3 centerColor = _MainTex.Sample(sampler_MainTex, input.uv).rgb;
+            float3 color = centerColor; // Initialize with center color
+            int sampleCount = 1;    // Start count at 1
+            
+            // Check and accumulate valid samples
+            [unroll]
+            for(int i = 0; i < 4; i++)
+            {
+                float2 sampleUV = input.uv + samples[i];
+                if(all(sampleUV >= 0) && all(sampleUV <= 1)) // Use all() for better vector comparison
+                {
+                    float3 sampleColor = _MainTex.Sample(sampler_MainTex, sampleUV).rgb;
+                    color += sampleColor;
+                    sampleCount++;
+                }
+            }
+            
+            // Safer averaging
+            color = (color / max(sampleCount, 1.0)) * _Intensity;
 			
             return float4(color, 1.0);
         }
