@@ -696,14 +696,14 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     }
 
     /// <summary>
-    /// Creates a perspective projection matrix based on a field of view, aspect ratio, and near and far view plane distances.
+    /// Creates a right-handed perspective projection matrix based on a field of view, aspect ratio, and near and far view plane distances.
     /// </summary>
     /// <param name="fieldOfView">Field of view in the y direction, in radians.</param>
     /// <param name="aspectRatio">Aspect ratio, defined as view space width divided by height.</param>
     /// <param name="nearPlaneDistance">Distance to the near view plane.</param>
     /// <param name="farPlaneDistance">Distance to the far view plane.</param>
     /// <returns>The perspective projection matrix.</returns>
-    public static Matrix4x4 CreatePerspectiveFieldOfView(double fieldOfView, double aspectRatio, double nearPlaneDistance, double farPlaneDistance)
+    public static Matrix4x4 CreatePerspectiveFieldOfViewRightHanded(double fieldOfView, double aspectRatio, double nearPlaneDistance, double farPlaneDistance)
     {
         if (fieldOfView <= 0.0 || fieldOfView >= Math.PI)
             throw new ArgumentOutOfRangeException(nameof(fieldOfView));
@@ -752,7 +752,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <paramref name="farPlaneDistance" /> is less than or equal to zero.
     /// -or-
     /// <paramref name="nearPlaneDistance" /> is greater than or equal to <paramref name="farPlaneDistance" />.</exception>
-    public static Matrix4x4 CreatePerspectiveFieldOfViewLeftHanded(double fieldOfView, double aspectRatio, double nearPlaneDistance, double farPlaneDistance)
+    public static Matrix4x4 CreatePerspectiveFieldOfView(double fieldOfView, double aspectRatio, double nearPlaneDistance, double farPlaneDistance)
     {
         // This implementation is based on the DirectX Math Library XMMatrixPerspectiveFovLH method
         // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
@@ -779,14 +779,14 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     }
 
     /// <summary>
-    /// Creates a perspective projection matrix from the given view volume dimensions.
+    /// Creates a right-handed perspective projection matrix from the given view volume dimensions.
     /// </summary>
     /// <param name="width">Width of the view volume at the near view plane.</param>
     /// <param name="height">Height of the view volume at the near view plane.</param>
     /// <param name="nearPlaneDistance">Distance to the near view plane.</param>
     /// <param name="farPlaneDistance">Distance to the far view plane.</param>
     /// <returns>The perspective projection matrix.</returns>
-    public static Matrix4x4 CreatePerspective(double width, double height, double nearPlaneDistance, double farPlaneDistance)
+    public static Matrix4x4 CreatePerspectiveRightHanded(double width, double height, double nearPlaneDistance, double farPlaneDistance)
     {
         if (nearPlaneDistance <= 0.0)
             throw new ArgumentOutOfRangeException(nameof(nearPlaneDistance));
@@ -826,7 +826,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <paramref name="farPlaneDistance" /> is less than or equal to zero.
     /// -or-
     /// <paramref name="nearPlaneDistance" /> is greater than or equal to <paramref name="farPlaneDistance" />.</exception>
-    public static Matrix4x4 CreatePerspectiveLeftHanded(double width, double height, double nearPlaneDistance, double farPlaneDistance)
+    public static Matrix4x4 CreatePerspective(double width, double height, double nearPlaneDistance, double farPlaneDistance)
     {
         // This implementation is based on the DirectX Math Library XMMatrixPerspectiveLH method
         // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
@@ -849,7 +849,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     }
 
     /// <summary>
-    /// Creates a customized, perspective projection matrix.
+    /// Creates a right-handed customized, perspective projection matrix.
     /// </summary>
     /// <param name="left">Minimum x-value of the view volume at the near view plane.</param>
     /// <param name="right">Maximum x-value of the view volume at the near view plane.</param>
@@ -858,45 +858,85 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="nearPlaneDistance">Distance to the near view plane.</param>
     /// <param name="farPlaneDistance">Distance to of the far view plane.</param>
     /// <returns>The perspective projection matrix.</returns>
-    public static Matrix4x4 CreatePerspectiveOffCenter(double left, double right, double bottom, double top, double nearPlaneDistance, double farPlaneDistance)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Matrix4x4 CreatePerspectiveOffCenterRightHanded(double left, double right, double bottom, double top, double nearPlaneDistance, double farPlaneDistance)
     {
-        if (nearPlaneDistance <= 0.0)
-            throw new ArgumentOutOfRangeException(nameof(nearPlaneDistance));
+        // This implementation is based on the DirectX Math Library XMMatrixPerspectiveOffCenterRH method
+        // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
 
-        if (farPlaneDistance <= 0.0)
-            throw new ArgumentOutOfRangeException(nameof(farPlaneDistance));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(nearPlaneDistance, 0.0f);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(farPlaneDistance, 0.0f);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(nearPlaneDistance, farPlaneDistance);
 
-        if (nearPlaneDistance >= farPlaneDistance)
-            throw new ArgumentOutOfRangeException(nameof(nearPlaneDistance));
+        double dblNearPlaneDistance = nearPlaneDistance + nearPlaneDistance;
+        double reciprocalWidth = 1.0 / (right - left);
+        double reciprocalHeight = 1.0 / (top - bottom);
+        double range = double.IsPositiveInfinity(farPlaneDistance) ? -1.0 : farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
 
-        Matrix4x4 result;
+        Matrix4x4 result = default;
 
-        result.M11 = 2.0 * nearPlaneDistance / (right - left);
-        result.M12 = result.M13 = result.M14 = 0.0;
-
-        result.M22 = 2.0 * nearPlaneDistance / (top - bottom);
-        result.M21 = result.M23 = result.M24 = 0.0;
-
-        result.M31 = (left + right) / (right - left);
-        result.M32 = (top + bottom) / (top - bottom);
-        result.M33 = farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
-        result.M34 = -1.0;
-
-        result.M43 = nearPlaneDistance * farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
-        result.M41 = result.M42 = result.M44 = 0.0;
+        result.M1 = new Vector4(dblNearPlaneDistance * reciprocalWidth, 0, 0, 0);
+        result.M2 = new Vector4(0, dblNearPlaneDistance * reciprocalHeight, 0, 0);
+        result.M3 = new Vector4(
+            (left + right) * reciprocalWidth,
+            (top + bottom) * reciprocalHeight,
+            range,
+            -1.0f
+        );
+        result.M4 = new Vector4(0, 0, range * nearPlaneDistance, 0);
 
         return result;
     }
 
     /// <summary>
-    /// Creates an orthographic perspective matrix from the given view volume dimensions.
+    /// Creates a left-handed customized, perspective projection matrix.
+    /// </summary>
+    /// <param name="left">Minimum x-value of the view volume at the near view plane.</param>
+    /// <param name="right">Maximum x-value of the view volume at the near view plane.</param>
+    /// <param name="bottom">Minimum y-value of the view volume at the near view plane.</param>
+    /// <param name="top">Maximum y-value of the view volume at the near view plane.</param>
+    /// <param name="nearPlaneDistance">Distance to the near view plane.</param>
+    /// <param name="farPlaneDistance">Distance to of the far view plane.</param>
+    /// <returns>The perspective projection matrix.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Matrix4x4 CreatePerspectiveOffCenter(double left, double right, double bottom, double top, double nearPlaneDistance, double farPlaneDistance)
+    {
+        // This implementation is based on the DirectX Math Library XMMatrixPerspectiveOffCenterLH method
+        // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
+
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(nearPlaneDistance, 0.0f);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(farPlaneDistance, 0.0f);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(nearPlaneDistance, farPlaneDistance);
+
+        double dblNearPlaneDistance = nearPlaneDistance + nearPlaneDistance;
+        double reciprocalWidth = 1.0 / (right - left);
+        double reciprocalHeight = 1.0 / (top - bottom);
+        double range = double.IsPositiveInfinity(farPlaneDistance) ? 1.0 : farPlaneDistance / (farPlaneDistance - nearPlaneDistance);
+
+        Matrix4x4 result = default;
+
+        result.M1 = new Vector4(dblNearPlaneDistance * reciprocalWidth, 0, 0, 0);
+        result.M2 = new Vector4(0, dblNearPlaneDistance * reciprocalHeight, 0, 0);
+        result.M3 = new Vector4(
+            -(left + right) * reciprocalWidth,
+            -(top + bottom) * reciprocalHeight,
+            range,
+            1.0f
+        );
+        result.M4 = new Vector4(0, 0, -range * nearPlaneDistance, 0);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Creates a right-handed orthographic perspective matrix from the given view volume dimensions.
     /// </summary>
     /// <param name="width">Width of the view volume.</param>
     /// <param name="height">Height of the view volume.</param>
     /// <param name="zNearPlane">Minimum Z-value of the view volume.</param>
     /// <param name="zFarPlane">Maximum Z-value of the view volume.</param>
     /// <returns>The orthographic projection matrix.</returns>
-    public static Matrix4x4 CreateOrthographic(double width, double height, double zNearPlane, double zFarPlane)
+    public static Matrix4x4 CreateOrthographicRightHanded(double width, double height, double zNearPlane, double zFarPlane)
     {
         Matrix4x4 result;
 
@@ -922,7 +962,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="zNearPlane">The minimum Z-value of the view volume.</param>
     /// <param name="zFarPlane">The maximum Z-value of the view volume.</param>
     /// <returns>The left-handed orthographic projection matrix.</returns>
-    public static Matrix4x4 CreateOrthographicLeftHanded(double width, double height, double zNearPlane, double zFarPlane)
+    public static Matrix4x4 CreateOrthographic(double width, double height, double zNearPlane, double zFarPlane)
     {
         // This implementation is based on the DirectX Math Library XMMatrixOrthographicLH method
         // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
@@ -948,7 +988,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     }
 
     /// <summary>
-    /// Builds a customized, orthographic projection matrix.
+    /// Builds a right-handed customized, orthographic projection matrix.
     /// </summary>
     /// <param name="left">Minimum X-value of the view volume.</param>
     /// <param name="right">Maximum X-value of the view volume.</param>
@@ -957,7 +997,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="zNearPlane">Minimum Z-value of the view volume.</param>
     /// <param name="zFarPlane">Maximum Z-value of the view volume.</param>
     /// <returns>The orthographic projection matrix.</returns>
-    public static Matrix4x4 CreateOrthographicOffCenter(double left, double right, double bottom, double top, double zNearPlane, double zFarPlane)
+    public static Matrix4x4 CreateOrthographicOffCenterRightHanded(double left, double right, double bottom, double top, double zNearPlane, double zFarPlane)
     {
         Matrix4x4 result;
 
@@ -986,7 +1026,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="zNearPlane">The minimum Z-value of the view volume.</param>
     /// <param name="zFarPlane">The maximum Z-value of the view volume.</param>
     /// <returns>The left-handed orthographic projection matrix.</returns>
-    public static Matrix4x4 CreateOrthographicOffCenterLeftHanded(double left, double right, double bottom, double top, double zNearPlane, double zFarPlane)
+    public static Matrix4x4 CreateOrthographicOffCenter(double left, double right, double bottom, double top, double zNearPlane, double zFarPlane)
     {
         // This implementation is based on the DirectX Math Library XMMatrixOrthographicOffCenterLH method
         // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
@@ -1015,12 +1055,12 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="cameraDirection">The direction in which the camera is pointing.</param>
     /// <param name="cameraUpVector">The direction that is "up" from the camera's point of view.</param>
     /// <returns>The right-handed view matrix.</returns>
-    public static Matrix4x4 CreateLookTo(in Vector3 cameraPosition, in Vector3 cameraDirection, in Vector3 cameraUpVector)
+    public static Matrix4x4 CreateLookToRightHanded(in Vector3 cameraPosition, in Vector3 cameraDirection, in Vector3 cameraUpVector)
     {
         // This implementation is based on the DirectX Math Library XMMatrixLookToRH method
         // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
 
-        return CreateLookToLeftHanded(cameraPosition, -cameraDirection, cameraUpVector);
+        return CreateLookTo(cameraPosition, -cameraDirection, cameraUpVector);
     }
 
     /// <summary>Creates a left-handed view matrix.</summary>
@@ -1028,7 +1068,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="cameraDirection">The direction in which the camera is pointing.</param>
     /// <param name="cameraUpVector">The direction that is "up" from the camera's point of view.</param>
     /// <returns>The left-handed view matrix.</returns>
-    public static Matrix4x4 CreateLookToLeftHanded(in Vector3 cameraPosition, in Vector3 cameraDirection, in Vector3 cameraUpVector)
+    public static Matrix4x4 CreateLookTo(in Vector3 cameraPosition, in Vector3 cameraDirection, in Vector3 cameraUpVector)
     {
         Vector3 axisZ = Vector3.Normalize(cameraDirection);
         Vector3 axisX = Vector3.Normalize(Vector3.Cross(cameraUpVector, axisZ));
@@ -1050,13 +1090,13 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     }
 
     /// <summary>
-    /// Creates a view matrix.
+    /// Creates a right-handed view matrix.
     /// </summary>
     /// <param name="cameraPosition">The position of the camera.</param>
     /// <param name="cameraTarget">The target towards which the camera is pointing.</param>
     /// <param name="cameraUpVector">The direction that is "up" from the camera's point of view.</param>
     /// <returns>The view matrix.</returns>
-    public static Matrix4x4 CreateLookAt(Vector3 cameraPosition, Vector3 cameraTarget, Vector3 cameraUpVector)
+    public static Matrix4x4 CreateLookAtRightHanded(Vector3 cameraPosition, Vector3 cameraTarget, Vector3 cameraUpVector)
     {
         Vector3 zaxis = Vector3.Normalize(cameraPosition - cameraTarget);
         Vector3 xaxis = Vector3.Normalize(Vector3.Cross(cameraUpVector, zaxis));
@@ -1074,6 +1114,19 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
         result.M44 = 1.0;
 
         return result;
+    }
+
+    /// <summary>
+    /// Creates a left-handed view matrix.
+    /// </summary>
+    /// <param name="cameraPosition">The position of the camera.</param>
+    /// <param name="cameraTarget">The target towards which the camera is pointing.</param>
+    /// <param name="cameraUpVector">The direction that is "up" from the camera's point of view.</param>
+    /// <returns>The view matrix.</returns>
+    public static Matrix4x4 CreateLookAt(Vector3 cameraPosition, Vector3 cameraTarget, Vector3 cameraUpVector)
+    {
+        Vector3 cameraDirection = cameraTarget - cameraPosition;
+        return CreateLookTo(in cameraPosition, in cameraDirection, in cameraUpVector);
     }
 
     /// <summary>

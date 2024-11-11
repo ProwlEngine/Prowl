@@ -23,6 +23,11 @@ public enum CameraClearFlags
 public enum DepthTextureMode
 {
     None = 0,
+    /// <summary>
+    /// When enabled rendering will draw a Pre-Depth pass before the main rendering pass.
+    /// This can improve overdrawing and sorting issues, but can be slower on some hardware and some cases.
+    /// This also enables the _CameraDepthTexture shader property.
+    /// </summary>
     Depth = 1, // _CameraDepthTexture
     //Normal = 2, // _CameraNormalsTexture
     MotionVectors = 4, // _CameraMotionVectorsTexture
@@ -164,8 +169,8 @@ public class Camera : MonoBehaviour
             _nonJitteredProjectionMatrix = _projectionMatrix;
         }
 
-        ViewMatrix = Matrix4x4.CreateLookToLeftHanded(Transform.position, Transform.forward, Transform.up);
-        OriginViewMatrix = Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Transform.forward, Transform.up);
+        ViewMatrix = Matrix4x4.CreateLookTo(Transform.position, Transform.forward, Transform.up);
+        OriginViewMatrix = Matrix4x4.CreateLookTo(Vector3.zero, Transform.forward, Transform.up);
 
         return camTarget;
     }
@@ -223,7 +228,7 @@ public class Camera : MonoBehaviour
     {
         Vector3 position = applyPosition ? Transform.position : Vector3.zero;
 
-        return Matrix4x4.CreateLookToLeftHanded(position, Transform.forward, Transform.up);
+        return Matrix4x4.CreateLookTo(position, Transform.forward, Transform.up);
     }
 
     private Matrix4x4 GetProjectionMatrix(float aspect, bool accomodateGPUCoordinateSystem = false)
@@ -231,9 +236,9 @@ public class Camera : MonoBehaviour
         Matrix4x4 proj;
 
         if (projectionType == ProjectionType.Orthographic)
-            proj = Matrix4x4.CreateOrthographicLeftHanded(OrthographicSize, OrthographicSize, NearClipPlane, FarClipPlane);
+            proj = Matrix4x4.CreateOrthographic(OrthographicSize, OrthographicSize, NearClipPlane, FarClipPlane);
         else
-            proj = Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), aspect, NearClipPlane, FarClipPlane);
+            proj = Matrix4x4.CreatePerspectiveFieldOfView(FieldOfView.ToRad(), aspect, NearClipPlane, FarClipPlane);
 
         if (accomodateGPUCoordinateSystem)
             proj = Graphics.GetGPUProjectionMatrix(proj);

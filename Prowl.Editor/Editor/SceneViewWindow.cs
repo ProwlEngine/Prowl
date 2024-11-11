@@ -115,11 +115,11 @@ public class SceneViewWindow : EditorWindow
 
             data.GridMatrix = SceneViewPreferences.Instance.GridType switch
             {
-                GridType.XZ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.right, Vector3.forward) *
+                GridType.XZ => Matrix4x4.CreateLookTo(Vector3.zero, Vector3.right, Vector3.forward) *
                     Matrix4x4.CreateTranslation(new Vector3(gX, 0, gZ)),
-                GridType.XY => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.forward, Vector3.up) *
+                GridType.XY => Matrix4x4.CreateLookTo(Vector3.zero, Vector3.forward, Vector3.up) *
                     Matrix4x4.CreateTranslation(new Vector3(gX, gY, 0)),
-                _ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.up, Vector3.right) *
+                _ => Matrix4x4.CreateLookTo(Vector3.zero, Vector3.up, Vector3.right) *
                     Matrix4x4.CreateTranslation(new Vector3(0, gY, gZ)),
             };
         }

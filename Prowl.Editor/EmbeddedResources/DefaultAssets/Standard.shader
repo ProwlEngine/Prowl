@@ -12,7 +12,7 @@ Pass "Standard"
 {
     Tags { "RenderOrder" = "Opaque" }
     Cull Back
-    DepthStencil DepthLessEqualRead
+    DepthStencil DepthLessEqual
 
     HLSLPROGRAM
         #pragma vertex Vertex
@@ -268,8 +268,7 @@ Pass "Standard"
 
             // Albedo & Cutout
             float4 baseColor = _AlbedoTex.Sample(sampler_AlbedoTex, input.uv);
-            //clip(baseColor.a - _AlphaClip);
-            baseColor.rgb = pow(baseColor.rgb, 2.2);
+            baseColor.rgb = GammaToLinearSpace(baseColor.rgb);
 
             // Normal
             float3 normal = _NormalTex.Sample(sampler_NormalTex, input.uv).rgb;
@@ -317,7 +316,7 @@ Pass "Standard"
                     float3 specular;
                     CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular);
 
-                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
+                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (input.normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
                     float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
 
                     float3 radiance = lightColor * intensity;
@@ -380,7 +379,7 @@ Pass "Standard"
                     specular *= coneAttenuation;
                     
                     // shadows
-                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
+                    float4 fragPosLightSpace = mul(light.ShadowMatrix, float4(input.vertPos + (input.normal * (light.ShadowData.w * NORMAL_BIAS_SCALE)), 1.0));
                     float shadow = ShadowCalculation(fragPosLightSpace, light, input.position.xy);
                     
                     // add to outgoing radiance Lo

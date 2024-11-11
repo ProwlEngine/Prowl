@@ -314,7 +314,8 @@ public class DefaultRenderPipeline : RenderPipeline
         SetGlobalCameraMatrices(css.view, css.projection);
 
         // 6. Pre-Depth Pass
-        PreDepthPass(buffer, forwardBuffer, toRelease, css, culledRenderableIndices);
+        if (css.depthTextureMode.HasFlag(DepthTextureMode.Depth))
+            PreDepthPass(buffer, forwardBuffer, toRelease, css, culledRenderableIndices);
 
         // 7. Opaque geometry
         DrawRenderables("RenderOrder", "Opaque", buffer, css.cameraPosition, culledRenderableIndices, false);
@@ -472,6 +473,44 @@ public class DefaultRenderPipeline : RenderPipeline
 
             if (light.DoCastShadows())
             {
+                Vector3 oldPos = Vector3.zero;
+                if (light is DirectionalLight dirLight)
+                {
+                    // Create light space transform matrices
+                    Vector3 lightDir = dirLight.Transform.forward;
+                    Vector3 lightUp = dirLight.Transform.up;
+                    Vector3 lightRight = Vector3.Cross(lightUp, lightDir).normalized;
+                    lightUp = Vector3.Cross(lightDir, lightRight).normalized; // Recompute to ensure orthogonality
+
+                    // Create light space matrix (world to light space transform)
+                    Matrix4x4 worldToLight = new Matrix4x4(
+                        new Vector4(lightRight.x, lightUp.x, lightDir.x, 0),
+                        new Vector4(lightRight.y, lightUp.y, lightDir.y, 0),
+                        new Vector4(lightRight.z, lightUp.z, lightDir.z, 0),
+                        new Vector4(0, 0, 0, 1)
+                    );
+
+                    // Transform camera position to light space
+                    Vector3 lightSpacePos = Vector3.Transform(cameraPosition, worldToLight);
+
+                    // Calculate texel size in light space
+                    float texelSize = (dirLight.shadowDistance * 2) / res;
+
+                    // Snap in light space (only X and Y components, Z doesn't matter for directional light)
+                    Vector3 snappedLightPos = new Vector3(
+                        MathD.Round(lightSpacePos.x / texelSize) * texelSize,
+                        MathD.Round(lightSpacePos.y / texelSize) * texelSize,
+                        lightSpacePos.z
+                    );
+
+                    // Transform back to world space
+                    Matrix4x4 lightToWorld = worldToLight.Invert();
+                    Vector3 snappedWorldPos = Vector3.Transform(snappedLightPos, lightToWorld);
+
+                    oldPos = dirLight.Transform.position;
+                    dirLight.Transform.position = snappedWorldPos;
+                }
+
                 GPULight gpu = light.GetGPULight(ShadowAtlas.GetSize(), CAMERA_RELATIVE, cameraPosition);
 
                 // Find a slot for the shadow map
@@ -490,6 +529,7 @@ public class DefaultRenderPipeline : RenderPipeline
                     buffer.SetViewports(slot.Value.x, slot.Value.y, res, res, 0, 1000);
 
                     light.GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 proj);
+
                     BoundingFrustum frustum = new(view * proj);
                     if (CAMERA_RELATIVE)
                         view.Translation = Vector3.zero;
@@ -508,6 +548,13 @@ public class DefaultRenderPipeline : RenderPipeline
                 }
 
                 gpuLights.Add(gpu);
+
+
+                if (light is DirectionalLight dirLight2)
+                {
+                    // Return the light to its original position
+                    dirLight2.Transform.position = oldPos;
+                }
             }
             else
             {

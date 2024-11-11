@@ -53,7 +53,7 @@ public class ViewManipulatorGizmo
             _gui.Draw2D.DrawCircleFilled(rect.Center, (float)rect.width / 2, new Color(0.1f, 0.1f, 0.1f, 0.5f), 48);
 
             // Create a View matrix looking at 0,0,0
-            Matrix4x4 view = Matrix4x4.CreateLookToLeftHanded(Vector3.zero, camForward, Vector3.up);
+            Matrix4x4 view = Matrix4x4.CreateLookTo(Vector3.zero, camForward, Vector3.up);
             //Matrix4x4 projection = Matrix4x4.CreatePerspectiveFieldOfView(Mathf.PI / 4, 1, 0.1f, 1000f);
             Matrix4x4 projection = System.Numerics.Matrix4x4.CreateOrthographicOffCenterLeftHanded(-2.25f, 2.25f, -2.25f, 2.25f, 0.1f, 1000f).ToDouble();
 
