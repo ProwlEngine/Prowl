@@ -696,7 +696,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     }
 
     /// <summary>
-    /// Creates a perspective projection matrix based on a field of view, aspect ratio, and near and far view plane distances.
+    /// Creates a right-handed perspective projection matrix based on a field of view, aspect ratio, and near and far view plane distances.
     /// </summary>
     /// <param name="fieldOfView">Field of view in the y direction, in radians.</param>
     /// <param name="aspectRatio">Aspect ratio, defined as view space width divided by height.</param>
@@ -779,7 +779,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     }
 
     /// <summary>
-    /// Creates a perspective projection matrix from the given view volume dimensions.
+    /// Creates a right-handed perspective projection matrix from the given view volume dimensions.
     /// </summary>
     /// <param name="width">Width of the view volume at the near view plane.</param>
     /// <param name="height">Height of the view volume at the near view plane.</param>
@@ -849,7 +849,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     }
 
     /// <summary>
-    /// Creates a customized, perspective projection matrix.
+    /// Creates a customized, right-handed perspective projection matrix.
     /// </summary>
     /// <param name="left">Minimum x-value of the view volume at the near view plane.</param>
     /// <param name="right">Maximum x-value of the view volume at the near view plane.</param>
@@ -889,7 +889,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     }
 
     /// <summary>
-    /// Creates a customized, perspective projection matrix.
+    /// Creates a customized, left-handed perspective projection matrix.
     /// </summary>
     /// <param name="left">Minimum x-value of the view volume at the near view plane.</param>
     /// <param name="right">Maximum x-value of the view volume at the near view plane.</param>
@@ -929,7 +929,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     }
 
     /// <summary>
-    /// Creates an orthographic perspective matrix from the given view volume dimensions.
+    /// Creates an right-handed orthographic perspective matrix from the given view volume dimensions.
     /// </summary>
     /// <param name="width">Width of the view volume.</param>
     /// <param name="height">Height of the view volume.</param>
