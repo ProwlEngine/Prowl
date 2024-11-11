@@ -290,7 +290,7 @@ public class Transform : ICloneExplicit
     public void LookAt(Vector3 worldPosition, Vector3 worldUp)
     {
         // Cheat using Matrix4x4.CreateLookAt
-        Matrix4x4 m = Matrix4x4.CreateLookAtRightHanded(position, worldPosition, worldUp);
+        Matrix4x4 m = Matrix4x4.CreateLookAt(position, worldPosition, worldUp);
         m_LocalRotation = Quaternion.NormalizeSafe(Quaternion.MatrixToQuaternion(m));
     }
 
