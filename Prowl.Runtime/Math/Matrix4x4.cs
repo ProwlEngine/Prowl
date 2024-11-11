@@ -1075,6 +1075,19 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
 
         return result;
     }
+    
+    /// <summary>
+    /// Creates a view matrix.
+    /// </summary>
+    /// <param name="cameraPosition">The position of the camera.</param>
+    /// <param name="cameraTarget">The target towards which the camera is pointing.</param>
+    /// <param name="cameraUpVector">The direction that is "up" from the camera's point of view.</param>
+    /// <returns>The view matrix.</returns>
+    public static Matrix4x4 CreateLookAtLeftHanded(Vector3 cameraPosition, Vector3 cameraTarget, Vector3 cameraUpVector)
+    {
+        Vector3 cameraDirection = cameraTarget - cameraPosition;
+        return CreateLookToLeftHanded(in cameraPosition, in cameraDirection, in cameraUpVector);
+    }
 
     /// <summary>
     /// Creates a world matrix with the specified parameters.
