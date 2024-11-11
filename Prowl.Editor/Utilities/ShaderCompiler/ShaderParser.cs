@@ -494,6 +494,12 @@ public static class ShaderParser
                     pass.Description.Keywords = ParseKeywords(tokenizer);
                     break;
 
+                case "ZClip":
+                    EnsureUndef(pass.Description.DepthClipEnabled, "'ZClip' in pass");
+                    ExpectToken("Z Clip", tokenizer, ShaderToken.Identifier);
+                    pass.Description.DepthClipEnabled = BoolParse(tokenizer.Token, "Z clip");
+                    break;
+
                 case "HLSLPROGRAM":
                     pass.ProgramStartLine = tokenizer.CurrentLine;
                     EnsureUndef(pass.Program, "'HLSLPROGRAM' in pass");
@@ -660,7 +666,7 @@ public static class ShaderParser
             {
                 case "DepthWrite":
                     ExpectToken("depth stencil", tokenizer, ShaderToken.Identifier);
-                    depthStencil.DepthWriteEnabled = ConvertToBoolean(tokenizer.Token.ToString());
+                    depthStencil.DepthWriteEnabled = BoolParse(tokenizer.Token, "depth stencil");
                     break;
 
                 case "DepthTest":
@@ -999,17 +1005,17 @@ public static class ShaderParser
         };
     }
 
-
-    // Convert string ("false", "0", "off", "no") or ("true", "1", "on", "yes") to boolean
-    private static bool ConvertToBoolean(string input)
+    private static bool BoolParse(ReadOnlySpan<char> text, string fieldName)
     {
-        input = input.Trim();
+        text = text.Trim();
 
-        return
-            input.Equals("true", StringComparison.OrdinalIgnoreCase) ||
-            !input.Equals("0", StringComparison.OrdinalIgnoreCase) || // For numerical booleans, anything other than 0 should be true.
-            input.Equals("on", StringComparison.OrdinalIgnoreCase) ||
-            input.Equals("yes", StringComparison.OrdinalIgnoreCase);
+        if (text.Equals("on", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (text.Equals("off", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        throw new ParseException(fieldName, "incorrect format");
     }
 }
 
