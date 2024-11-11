@@ -858,32 +858,72 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="nearPlaneDistance">Distance to the near view plane.</param>
     /// <param name="farPlaneDistance">Distance to of the far view plane.</param>
     /// <returns>The perspective projection matrix.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Matrix4x4 CreatePerspectiveOffCenter(double left, double right, double bottom, double top, double nearPlaneDistance, double farPlaneDistance)
     {
-        if (nearPlaneDistance <= 0.0)
-            throw new ArgumentOutOfRangeException(nameof(nearPlaneDistance));
+        // This implementation is based on the DirectX Math Library XMMatrixPerspectiveOffCenterRH method
+        // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
 
-        if (farPlaneDistance <= 0.0)
-            throw new ArgumentOutOfRangeException(nameof(farPlaneDistance));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(nearPlaneDistance, 0.0f);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(farPlaneDistance, 0.0f);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(nearPlaneDistance, farPlaneDistance);
 
-        if (nearPlaneDistance >= farPlaneDistance)
-            throw new ArgumentOutOfRangeException(nameof(nearPlaneDistance));
+        double dblNearPlaneDistance = nearPlaneDistance + nearPlaneDistance;
+        double reciprocalWidth = 1.0 / (right - left);
+        double reciprocalHeight = 1.0 / (top - bottom);
+        double range = double.IsPositiveInfinity(farPlaneDistance) ? -1.0 : farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
 
-        Matrix4x4 result;
+        Matrix4x4 result = default;
 
-        result.M11 = 2.0 * nearPlaneDistance / (right - left);
-        result.M12 = result.M13 = result.M14 = 0.0;
+        result.M1 = new Vector4(dblNearPlaneDistance * reciprocalWidth, 0, 0, 0);
+        result.M2 = new Vector4(0, dblNearPlaneDistance * reciprocalHeight, 0, 0);
+        result.M3 = new Vector4(
+            (left + right) * reciprocalWidth,
+            (top + bottom) * reciprocalHeight,
+            range,
+            -1.0f
+        );
+        result.M4 = new Vector4(0, 0, range * nearPlaneDistance, 0);
 
-        result.M22 = 2.0 * nearPlaneDistance / (top - bottom);
-        result.M21 = result.M23 = result.M24 = 0.0;
+        return result;
+    }
 
-        result.M31 = (left + right) / (right - left);
-        result.M32 = (top + bottom) / (top - bottom);
-        result.M33 = farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
-        result.M34 = -1.0;
+    /// <summary>
+    /// Creates a customized, perspective projection matrix.
+    /// </summary>
+    /// <param name="left">Minimum x-value of the view volume at the near view plane.</param>
+    /// <param name="right">Maximum x-value of the view volume at the near view plane.</param>
+    /// <param name="bottom">Minimum y-value of the view volume at the near view plane.</param>
+    /// <param name="top">Maximum y-value of the view volume at the near view plane.</param>
+    /// <param name="nearPlaneDistance">Distance to the near view plane.</param>
+    /// <param name="farPlaneDistance">Distance to of the far view plane.</param>
+    /// <returns>The perspective projection matrix.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Matrix4x4 CreatePerspectiveOffCenterLeftHanded(double left, double right, double bottom, double top, double nearPlaneDistance, double farPlaneDistance)
+    {
+        // This implementation is based on the DirectX Math Library XMMatrixPerspectiveOffCenterLH method
+        // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
 
-        result.M43 = nearPlaneDistance * farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
-        result.M41 = result.M42 = result.M44 = 0.0;
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(nearPlaneDistance, 0.0f);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(farPlaneDistance, 0.0f);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(nearPlaneDistance, farPlaneDistance);
+
+        double dblNearPlaneDistance = nearPlaneDistance + nearPlaneDistance;
+        double reciprocalWidth = 1.0 / (right - left);
+        double reciprocalHeight = 1.0 / (top - bottom);
+        double range = double.IsPositiveInfinity(farPlaneDistance) ? 1.0 : farPlaneDistance / (farPlaneDistance - nearPlaneDistance);
+
+        Matrix4x4 result = default;
+
+        result.M1 = new Vector4(dblNearPlaneDistance * reciprocalWidth, 0, 0, 0);
+        result.M2 = new Vector4(0, dblNearPlaneDistance * reciprocalHeight, 0, 0);
+        result.M3 = new Vector4(
+            -(left + right) * reciprocalWidth,
+            -(top + bottom) * reciprocalHeight,
+            range,
+            1.0f
+        );
+        result.M4 = new Vector4(0, 0, -range * nearPlaneDistance, 0);
 
         return result;
     }
