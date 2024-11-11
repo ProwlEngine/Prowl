@@ -34,26 +34,26 @@ public class DirectionalLight : Light
     public override void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection)
     {
         Vector3 forward = Transform.forward;
-        projection = Matrix4x4.CreateOrthographicLeftHanded(shadowDistance, shadowDistance, -shadowDistance, shadowDistance);
+        projection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, -shadowDistance, shadowDistance);
         projection = Graphics.GetGPUProjectionMatrix(projection);
-        view = Matrix4x4.CreateLookToLeftHanded(Transform.position, forward, Transform.up);
+        view = Matrix4x4.CreateLookTo(Transform.position, forward, Transform.up);
     }
 
     public override GPULight GetGPULight(int res, bool cameraRelative, Vector3 cameraPosition)
     {
         Vector3 forward = Transform.forward;
-        Matrix4x4 proj = Matrix4x4.CreateOrthographicLeftHanded(shadowDistance, shadowDistance, -shadowDistance, shadowDistance);
+        Matrix4x4 proj = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, -shadowDistance, shadowDistance);
         proj = Graphics.GetGPUProjectionMatrix(proj);
         Matrix4x4 view;
         Vector3 lightPos;
 
         if (cameraRelative)
         {
-            view = Matrix4x4.CreateLookToLeftHanded(Transform.position - cameraPosition, forward, Transform.up);
+            view = Matrix4x4.CreateLookTo(Transform.position - cameraPosition, forward, Transform.up);
         }
         else
         {
-            view = Matrix4x4.CreateLookToLeftHanded(Transform.position, forward, Transform.up);
+            view = Matrix4x4.CreateLookTo(Transform.position, forward, Transform.up);
         }
 
         return new GPULight
