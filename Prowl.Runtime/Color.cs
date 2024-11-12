@@ -165,6 +165,41 @@ public struct Color : IEquatable<Color>
         return color;
     }
 
+    public static void ToHSV(Color color, out float hue, out float saturation, out float value)
+    {
+        // Find the min and max values among r, g, and b
+        float max = Math.Max(color.r, Math.Max(color.g, color.b));
+        float min = Math.Min(color.r, Math.Min(color.g, color.b));
+        float delta = max - min;
+
+        float h;
+        if (delta == 0)
+        {
+            h = 0;
+        }
+        else if (max == color.r)
+        {
+            h = ((color.g - color.b) / delta) % 6;
+        }
+        else if (max == color.g)
+        {
+            h = ((color.b - color.r) / delta) + 2;
+        }
+        else
+        {
+            h = ((color.r - color.g) / delta) + 4;
+        }
+
+        h *= 60;
+        if (h < 0)
+            h += 360;
+
+        hue = h;
+        saturation = (max == 0) ? 0 : (delta / max);
+        value = max;
+    }
+
+
     public static Color operator +(Color a, Color b) => new(a.r + b.r, a.g + b.g, a.b + b.b, a.a + b.a);
 
     public static Color operator /(Color a, float b) => new(a.r / b, a.g / b, a.b / b, a.a / b);
