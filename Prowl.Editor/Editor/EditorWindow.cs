@@ -28,7 +28,7 @@ public class EditorWindow
     protected Gui gui => Gui.ActiveGUI;
 
     private double _width, _height;
-    public double _x, _y;
+    public double X, Y;
     private bool _wasDragged;
 
 
@@ -94,24 +94,24 @@ public class EditorWindow
             if (Center)
             {
                 var vp_size = gui.ScreenRect.Size / 2;
-                _x = vp_size.x - (_width / 2);
-                _y = vp_size.y - (_height / 2);
+                X = vp_size.x - (_width / 2);
+                Y = vp_size.y - (_height / 2);
             }
 
             var width = _width;
             var height = _height;
             if (IsDocked)
             {
-                _x = DockPosition.x;
-                _y = DockPosition.y;
+                X = DockPosition.x;
+                Y = DockPosition.y;
                 // Dock is Relative to Node, Convert to Screen Space
-                _x -= gui.CurrentNode.LayoutData.Rect.x;
-                _y -= gui.CurrentNode.LayoutData.Rect.y;
+                X -= gui.CurrentNode.LayoutData.Rect.x;
+                Y -= gui.CurrentNode.LayoutData.Rect.y;
                 width = DockSize.x;
                 height = DockSize.y;
             }
 
-            using (gui.Node("_" + Title, _id).Width(width).Height(height).Margin(EditorStylePrefs.Instance.DockSpacing).Left(_x).Top(_y).Layout(LayoutType.Column).ScaleChildren().Enter())
+            using (gui.Node("_" + Title, _id).Width(width).Height(height).Margin(EditorStylePrefs.Instance.DockSpacing).Left(X).Top(Y).Layout(LayoutType.Column).ScaleChildren().Enter())
             {
                 gui.BlockInteractables(gui.CurrentNode.LayoutData.Rect);
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
@@ -303,16 +303,16 @@ public class EditorWindow
                 {
                     _wasDragged = true;
 
-                    _x += gui.PointerDelta.x;
-                    _y += gui.PointerDelta.y;
+                    X += gui.PointerDelta.x;
+                    Y += gui.PointerDelta.y;
                     EditorGuiManager.DraggingWindow = this;
 
                     if (gui.IsPointerMoving && IsDocked)
                     {
                         EditorGuiManager.Container.DetachWindow(this);
                         // Position the window so the mouse is over the title bar
-                        _x = gui.PointerPos.x - (_width / 2);
-                        _y = gui.PointerPos.y - 10;
+                        X = gui.PointerPos.x - (_width / 2);
+                        Y = gui.PointerPos.y - 10;
                     }
 
                     if (IsDockable && !IsDocked)
