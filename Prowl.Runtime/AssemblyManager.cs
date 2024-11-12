@@ -101,6 +101,9 @@ public static class AssemblyManager
 
         OnAssemblyUnloadAttribute.Invoke();
 
+        OnAssemblyUnloadAttribute.Clear();
+        OnAssemblyLoadAttribute.Clear();
+
         InvokeUnloadDelegate();
 
         UnloadInternal(out WeakReference externalAssemblyLoadContextRef);

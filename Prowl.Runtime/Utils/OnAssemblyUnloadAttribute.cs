@@ -25,8 +25,12 @@ public class OnAssemblyUnloadAttribute : Attribute
         }
     }
 
+    public static void Clear() => methodInfos.Clear();
+
     public static void FindAll()
     {
+        methodInfos.Clear();
+
         var assemblies = AppDomain.CurrentDomain.GetAssemblies();
         foreach (var assembly in assemblies)
         {
@@ -62,8 +66,12 @@ public class OnAssemblyLoadAttribute(int order = 0) : Attribute
         }
     }
 
+    public static void Clear() => methodInfos.Clear();
+
     public static void FindAll()
     {
+        methodInfos.Clear();
+
         var assemblies = AppDomain.CurrentDomain.GetAssemblies();
         List<(MethodInfo, int)> attribMethods = [];
         foreach (var assembly in assemblies)
