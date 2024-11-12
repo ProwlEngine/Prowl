@@ -46,10 +46,10 @@ public static class VariantCompiler
     {
         ShaderDescription[]? compiledSPIRV = ShaderCompiler.Compile(args, state, includer, messages);
 
-        if (compiledSPIRV == null)
+        if (!Validate(compiledSPIRV))
             return null;
 
-        ReflectedResourceInfo info = ShaderCrossCompiler.Reflect(ctx, compiledSPIRV);
+        ReflectedResourceInfo info = ShaderCrossCompiler.Reflect(ctx, compiledSPIRV!);
 
         ShaderVariant variant = new ShaderVariant(state)
         {
@@ -57,13 +57,25 @@ public static class VariantCompiler
             UniformStages = info.stages,
             VertexInputs = info.vertexInputs,
 
-            Direct3D11Shaders = ShaderCrossCompiler.CrossCompile(ctx, GraphicsBackend.Direct3D11, compiledSPIRV),
-            OpenGLShaders = ShaderCrossCompiler.CrossCompile(ctx, GraphicsBackend.OpenGL, compiledSPIRV),
-            OpenGLESShaders = ShaderCrossCompiler.CrossCompile(ctx, GraphicsBackend.OpenGLES, compiledSPIRV),
-            MetalShaders = ShaderCrossCompiler.CrossCompile(ctx, GraphicsBackend.Metal, compiledSPIRV),
+            Direct3D11Shaders = ShaderCrossCompiler.CrossCompile(ctx, GraphicsBackend.Direct3D11, compiledSPIRV!),
+            OpenGLShaders = ShaderCrossCompiler.CrossCompile(ctx, GraphicsBackend.OpenGL, compiledSPIRV!),
+            OpenGLESShaders = ShaderCrossCompiler.CrossCompile(ctx, GraphicsBackend.OpenGLES, compiledSPIRV!),
+            MetalShaders = ShaderCrossCompiler.CrossCompile(ctx, GraphicsBackend.Metal, compiledSPIRV!),
 
-            VulkanShaders = compiledSPIRV
+            VulkanShaders = compiledSPIRV!
         };
+
+        if (!Validate(variant.Direct3D11Shaders))
+            return null;
+
+        if (!Validate(variant.OpenGLShaders))
+            return null;
+
+        if (!Validate(variant.OpenGLESShaders))
+            return null;
+
+        if (!Validate(variant.MetalShaders))
+            return null;
 
         return variant;
     }
@@ -98,4 +110,8 @@ public static class VariantCompiler
 
         return variant;
     }
+
+
+    private static bool Validate(Array? array)
+        => array != null && array.Length > 0;
 }

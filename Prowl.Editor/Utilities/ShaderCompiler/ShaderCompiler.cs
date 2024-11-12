@@ -259,7 +259,7 @@ public static partial class ShaderCompiler
 
             CheckMessages(program.GetSPIRVMessages(), keywords.Count, includer, messages);
 
-            if (!generatedSPIRV)
+            if (!generatedSPIRV || SPIRVWords == null || SPIRVWords.Length == 0)
                 return null;
 
             outputs[i].EntryPoint = "main";
