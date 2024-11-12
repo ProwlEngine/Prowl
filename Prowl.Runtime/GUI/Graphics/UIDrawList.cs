@@ -64,6 +64,14 @@ namespace Prowl.Runtime.GUI.Graphics
     // This is essentially a port of the ImGui ImDrawList class to C#. Rendering is handled in UIDrawListRenderer.cs
     public class UIDrawList
     {
+        private static List<Color32> _singleColorBuffer = [Color.clear];
+
+        private static List<Color32> SingleColor(Color color)
+        {
+            _singleColorBuffer[0] = color;
+            return _singleColorBuffer;
+        }
+
         private static readonly Vector4 s_gNullClipRect = new Vector4(-8192.0f, -8192.0f, +8192.0f, +8192.0f);
 
         // This is what you have to render
@@ -232,34 +240,42 @@ namespace Prowl.Runtime.GUI.Graphics
 
 
         // Primitives
-        public void AddLine(Vector2 a, Vector2 b, Color32 col, float thickness = 1.0f)
+        public void AddLine(Vector2 a, Vector2 b, List<Color32> colors, float thickness = 1.0f)
         {
             PathLineTo(a + new Vector2(0.5f, 0.5f));
             PathLineTo(b + new Vector2(0.5f, 0.5f));
-            PathStroke(col, false, thickness);
+            PathStroke(colors, false, thickness);
+        }
+
+
+        public void AddLine(Vector2 a, Vector2 b, Color32 color, float thickness = 1.0f)
+        {
+            PathLineTo(a + new Vector2(0.5f, 0.5f));
+            PathLineTo(b + new Vector2(0.5f, 0.5f));
+            PathStroke(SingleColor(color), false, thickness);
         }
 
 
         // a: upper-left, b: lower-right
-        public void AddRect(Vector2 a, Vector2 b, Color32 col, float rounding = 0.0f, int corners = CornerRounding.None, float thickness = 1.0f)
+        public void AddRect(Vector2 a, Vector2 b, Color32 color, float rounding = 0.0f, int corners = CornerRounding.None, float thickness = 1.0f)
         {
             PathRect(a + new Vector2(0.5f, 0.5f), b - new Vector2(0.5f, 0.5f), rounding, corners);
-            PathStroke(col, true, thickness);
+            PathStroke(SingleColor(color), true, thickness);
         }
 
 
         // a: upper-left, b: lower-right
-        public void AddRectFilled(Vector2 a, Vector2 b, Color32 col, float rounding = 0.0f, int corners = CornerRounding.None)
+        public void AddRectFilled(Vector2 a, Vector2 b, Color32 color, float rounding = 0.0f, int corners = CornerRounding.None)
         {
             if (rounding > 0.0f)
             {
                 PathRect(a, b, rounding, corners);
-                PathFill(col);
+                PathFill(SingleColor(color));
             }
             else
             {
                 PrimReserve(6, 4);
-                PrimRect(a, b, col);
+                PrimRect(a, b, color);
             }
         }
 
@@ -281,37 +297,45 @@ namespace Prowl.Runtime.GUI.Graphics
         }
 
 
-        public void AddTriangle(Vector2 a, Vector2 b, Vector2 c, Color32 col, float thickness = 1.0f)
+        public void AddTriangle(Vector2 a, Vector2 b, Vector2 c, List<Color32> colors, float thickness = 1.0f)
         {
             PathLineTo(a);
             PathLineTo(b);
             PathLineTo(c);
-            PathStroke(col, true, thickness);
+            PathStroke(colors, true, thickness);
         }
 
 
-        public void AddTriangleFilled(Vector2 a, Vector2 b, Vector2 c, Color32 col)
+        public void AddTriangleFilled(Vector2 a, Vector2 b, Vector2 c, List<Color32> colors)
         {
             PathLineTo(a);
             PathLineTo(b);
             PathLineTo(c);
-            PathFill(col);
+            PathFill(colors);
         }
 
 
-        public void AddCircle(Vector2 centre, float radius, Color32 col, int num_segments = 12, float thickness = 1.0f)
+        public void AddCircle(Vector2 centre, float radius, List<Color32> colors, int num_segments = 12, float thickness = 1.0f)
         {
             float a_max = MathF.PI * 2.0f * (num_segments - 1.0f) / num_segments;
             PathArcTo(centre, radius - 0.5f, 0.0f, a_max, num_segments);
-            PathStroke(col, true, thickness);
+            PathStroke(colors, true, thickness);
         }
 
 
-        public void AddCircleFilled(Vector2 centre, float radius, Color32 col, int num_segments = 12)
+        public void AddCircleMultiColor(Vector2 centre, float radius, List<Color32> colors, int num_segments = 12, float thickness = 1.0f)
+        {
+            float a_max = MathF.PI * 2.0f * (num_segments - 1.0f) / num_segments;
+            PathArcTo(centre, radius - 0.5f, 0.0f, a_max, num_segments);
+            PathStroke(colors, true, thickness);
+        }
+
+
+        public void AddCircleFilled(Vector2 centre, float radius, List<Color32> colors, int num_segments = 12)
         {
             float a_max = MathF.PI * 2.0f * ((num_segments - 1.0f) / num_segments);
             PathArcTo(centre, radius, 0.0f, a_max, num_segments);
-            PathFill(col);
+            PathFill(colors);
         }
 
 
@@ -395,7 +419,12 @@ namespace Prowl.Runtime.GUI.Graphics
         private Vector2[] _tempNormals;
         private Vector2[] _tempPoints;
 
-        public void AddPolyline(List<Vector2> points, int pointsCount, Color32 col, bool closed, float thickness)
+
+        public void AddPolyline(List<Vector2> points, int pointsCount, Color32 color, bool closed, float thickness)
+            => AddPolyline(points, pointsCount, SingleColor(color), closed, thickness);
+
+
+        public void AddPolyline(List<Vector2> points, int pointsCount, List<Color32> colors, bool closed, float thickness)
         {
             if (pointsCount < 2)
                 return;
@@ -413,7 +442,6 @@ namespace Prowl.Runtime.GUI.Graphics
             if (_antiAliasing)
             {
                 float AA_SIZE = 1.0f;
-                Color32 col_trans = new Color32(col.r, col.g, col.b, 0);
 
                 int idx_count = thickLine ? count * 18 : count * 12;
                 int vtx_count = thickLine ? pointsCount * 4 : pointsCount * 3;
@@ -477,9 +505,12 @@ namespace Prowl.Runtime.GUI.Graphics
                     // Add vertexes
                     for (int i = 0; i < pointsCount; i++)
                     {
+                        Color32 col = colors[Math.Min(i, colors.Count - 1)];
+                        Color32 colTrans = new Color32(col.r, col.g, col.b, 0);
+
                         _vertices[_vertexWritePos++] = new UIVertex(new(points[i], _primitiveCount), uv, col);
-                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 2 + 0], _primitiveCount), uv, col_trans);
-                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 2 + 1], _primitiveCount), uv, col_trans);
+                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 2 + 0], _primitiveCount), uv, colTrans);
+                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 2 + 1], _primitiveCount), uv, colTrans);
                     }
                 }
                 else
@@ -536,10 +567,13 @@ namespace Prowl.Runtime.GUI.Graphics
                     // Add vertexes
                     for (int i = 0; i < pointsCount; i++)
                     {
-                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 4 + 0], _primitiveCount), uv, col_trans);
+                        Color32 col = colors[Math.Min(i, colors.Count - 1)];
+                        Color32 colTrans = new Color32(col.r, col.g, col.b, 0);
+
+                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 4 + 0], _primitiveCount), uv, colTrans);
                         _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 4 + 1], _primitiveCount), uv, col);
                         _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 4 + 2], _primitiveCount), uv, col);
-                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 4 + 3], _primitiveCount), uv, col_trans);
+                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 4 + 3], _primitiveCount), uv, colTrans);
                         //_VtxWritePtr += 4;
                     }
                 }
@@ -565,6 +599,8 @@ namespace Prowl.Runtime.GUI.Graphics
                     double dx = diff.x * (thickness * 0.5f);
                     double dy = diff.y * (thickness * 0.5f);
 
+                    Color32 col = colors[Math.Min(i1, colors.Count - 1)];
+
                     _vertices[_vertexWritePos++] = new UIVertex(new Vector3(p1.x + dy, p1.y - dx, _primitiveCount), uv, col);
                     _vertices[_vertexWritePos++] = new UIVertex(new Vector3(p2.x + dy, p2.y - dx, _primitiveCount), uv, col);
                     _vertices[_vertexWritePos++] = new UIVertex(new Vector3(p2.x - dy, p2.y + dx, _primitiveCount), uv, col);
@@ -581,28 +617,29 @@ namespace Prowl.Runtime.GUI.Graphics
         }
 
 
-        public void AddConvexPolyFilled(List<Vector2> points, int points_count, Color32 col)
-        {
+        public void AddConvexPolyFilled(List<Vector2> points, int pointsCount, Color32 color)
+            => AddConvexPolyFilled(points, pointsCount, SingleColor(color));
 
-            if (points_count < 3)
+
+        public void AddConvexPolyFilled(List<Vector2> points, int pointsCount, List<Color32> colors)
+        {
+            if (pointsCount < 3)
                 return;
 
-            //Vector2 uv = ImGui.Instance.FontTexUvWhitePixel;
             Vector2 uv = Font.DefaultFont.TexUvWhitePixel;
 
             if (_antiAliasing)
             {
                 // Anti-aliased Fill
                 float AA_SIZE = 1.0f;
-                Color32 col_trans = new Color32(col.r, col.g, col.b, 0);
-                int idx_count = (points_count - 2) * 3 + points_count * 6;
-                int vtx_count = points_count * 2;
+                int idx_count = (pointsCount - 2) * 3 + pointsCount * 6;
+                int vtx_count = pointsCount * 2;
                 PrimReserve(idx_count, vtx_count);
 
                 // Add indexes for fill
                 uint vtx_inner_idx = _currentVertexIndex;
                 uint vtx_outer_idx = _currentVertexIndex + 1;
-                for (int i = 2; i < points_count; i++)
+                for (int i = 2; i < pointsCount; i++)
                 {
                     _indices[_indexWritePos++] = vtx_inner_idx;
                     _indices[_indexWritePos++] = (uint)(vtx_inner_idx + (i - 1 << 1));
@@ -610,9 +647,9 @@ namespace Prowl.Runtime.GUI.Graphics
                 }
 
                 // Compute normals
-                Vector2[] temp_normals = new Vector2[points_count];
+                Vector2[] temp_normals = new Vector2[pointsCount];
 
-                for (int i0 = points_count - 1, i1 = 0; i1 < points_count; i0 = i1++)
+                for (int i0 = pointsCount - 1, i1 = 0; i1 < pointsCount; i0 = i1++)
                 {
                     Vector2 p0 = points[i0];
                     Vector2 p1 = points[i1];
@@ -626,7 +663,7 @@ namespace Prowl.Runtime.GUI.Graphics
                     temp_normals[i0].y = -diff.x;
                 }
 
-                for (int i0 = points_count - 1, i1 = 0; i1 < points_count; i0 = i1++)
+                for (int i0 = pointsCount - 1, i1 = 0; i1 < pointsCount; i0 = i1++)
                 {
                     // Average normals
                     Vector2 n0 = temp_normals[i0];
@@ -641,9 +678,12 @@ namespace Prowl.Runtime.GUI.Graphics
                     }
                     dm *= AA_SIZE * 0.5f;
 
+                    Color32 col = colors[Math.Min(i1, colors.Count - 1)];
+                    Color32 colTrans = new Color32(col.r, col.g, col.b, 0);
+
                     // Add vertices
                     _vertices[_vertexWritePos++] = new UIVertex() { Position = new(points[i1] - dm, _primitiveCount), UV = uv, Color = col };
-                    _vertices[_vertexWritePos++] = new UIVertex() { Position = new(points[i1] + dm, _primitiveCount), UV = uv, Color = col_trans };
+                    _vertices[_vertexWritePos++] = new UIVertex() { Position = new(points[i1] + dm, _primitiveCount), UV = uv, Color = colTrans };
 
                     // Add indexes for fringes
 
@@ -654,13 +694,13 @@ namespace Prowl.Runtime.GUI.Graphics
             }
             else
             {
-                int idx_count = (points_count - 2) * 3;
-                int vtx_count = points_count;
+                int idx_count = (pointsCount - 2) * 3;
+                int vtx_count = pointsCount;
                 PrimReserve(idx_count, vtx_count);
                 for (int i = 0; i < vtx_count; i++)
-                    _vertices[_vertexWritePos++] = new UIVertex() { Position = new(points[i], _primitiveCount), UV = uv, Color = col };
+                    _vertices[_vertexWritePos++] = new UIVertex() { Position = new(points[i], _primitiveCount), UV = uv, Color = colors[i] };
 
-                for (uint i = 2u; i < points_count; i++)
+                for (uint i = 2u; i < pointsCount; i++)
                 {
                     _indices[_indexWritePos++] = _currentVertexIndex; _indices[_indexWritePos++] = _currentVertexIndex + i - 1u; _indices[_indexWritePos++] = _currentVertexIndex + i;
                 }
@@ -671,11 +711,11 @@ namespace Prowl.Runtime.GUI.Graphics
         }
 
 
-        public void AddBezierCurve(Vector2 pos0, Vector2 cp0, Vector2 cp1, Vector2 pos1, Color32 col, float thickness, int num_segments = 0)
+        public void AddBezierCurve(Vector2 pos0, Vector2 cp0, Vector2 cp1, Vector2 pos1, List<Color32> colors, float thickness, int num_segments = 0)
         {
             PathLineTo(pos0);
             PathBezierCurveTo(cp0, cp1, pos1, num_segments);
-            PathStroke(col, false, thickness);
+            PathStroke(colors, false, thickness);
         }
 
 
@@ -693,16 +733,16 @@ namespace Prowl.Runtime.GUI.Graphics
         }
 
 
-        public void PathFill(Color32 col)
+        public void PathFill(List<Color32> colors)
         {
-            AddConvexPolyFilled(_buildingPath, _buildingPath.Count, col);
+            AddConvexPolyFilled(_buildingPath, _buildingPath.Count, colors);
             _buildingPath.Clear();
         }
 
 
-        public void PathStroke(Color32 col, bool closed, float thickness = 1.0f)
+        public void PathStroke(List<Color32> colors, bool closed, float thickness = 1.0f)
         {
-            AddPolyline(_buildingPath, _buildingPath.Count, col, closed, thickness);
+            AddPolyline(_buildingPath, _buildingPath.Count, colors, closed, thickness);
             _buildingPath.Clear();
         }
 
@@ -723,17 +763,13 @@ namespace Prowl.Runtime.GUI.Graphics
         public void PathArcToFast(Vector2 centre, float radius, int amin, int amax)
         {
             Vector2[] circle_vtx = new Vector2[12];
-            bool circle_vtx_builds = false;
             int circle_vtx_count = circle_vtx.Length;
-            if (!circle_vtx_builds)
+
+            for (int i = 0; i < circle_vtx_count; i++)
             {
-                for (int i = 0; i < circle_vtx_count; i++)
-                {
-                    float a = i / (float)circle_vtx_count * 2 * MathF.PI;
-                    circle_vtx[i].x = MathD.Cos(a);
-                    circle_vtx[i].y = MathD.Sin(a);
-                }
-                circle_vtx_builds = true;
+                float a = i / (float)circle_vtx_count * 2 * MathF.PI;
+                circle_vtx[i].x = MathD.Cos(a);
+                circle_vtx[i].y = MathD.Sin(a);
             }
 
             if (amin > amax) return;

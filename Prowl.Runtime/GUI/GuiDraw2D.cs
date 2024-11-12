@@ -6,6 +6,7 @@ using System.Linq;
 
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.GUI.Graphics;
+using System;
 
 namespace Prowl.Runtime.GUI;
 
@@ -19,7 +20,16 @@ public class GuiDraw2D
 
     private readonly Gui _gui;
     private bool _AntiAliasing;
+    private static List<Color32> _singleColorBuffer = [Color.clear];
     readonly List<UIDrawList> drawListsOrdered = new();
+
+    private static List<Color32> SingleColor(Color color)
+    {
+        _singleColorBuffer[0] = color;
+        return _singleColorBuffer;
+    }
+
+
 
     public GuiDraw2D(Gui gui, bool antiAliasing)
     {
@@ -27,6 +37,7 @@ public class GuiDraw2D
         _AntiAliasing = antiAliasing;
         _drawList[0] = new UIDrawList(_AntiAliasing); // Root Draw List
     }
+
 
     public void BeginFrame(bool antiAliasing)
     {
@@ -46,23 +57,28 @@ public class GuiDraw2D
         }
     }
 
+
     public void EndFrame(Veldrid.CommandList commandList, Rect screenRect)
     {
-        UIDrawListRenderer.Draw(commandList, drawListsOrdered.ToArray(), new(screenRect.width, screenRect.height), _gui.UIScale);
+        UIDrawListRenderer.Draw(commandList, [.. drawListsOrdered], new(screenRect.width, screenRect.height), _gui.UIScale);
     }
+
 
     /// <summary>
     /// Push a Clipping/Scissoring Rect
     /// This will Intersect with the last active clip rect
     /// All drawing operations applied after this will be cut off by the clip rect and only draw inside it
     /// </summary>
+    /// <param name="rect">The clip rect to push</param>
     /// <param name="overwrite">Overwrite all current clip rects instead of using Intersection</param>
     public void PushClip(Rect rect, bool overwrite = false) =>
         _drawList[currentZIndex].PushClipRect(new(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), overwrite);
 
+
     /// <summary> Pop the last clip rect </summary>
     public void PopClip() =>
         _drawList[currentZIndex].PopClipRect();
+
 
     /// <summary> Peek at the current clip rect </summary>
     public Rect PeekClip()
@@ -70,6 +86,7 @@ public class GuiDraw2D
         Vector4 clip = _drawList[currentZIndex].PeekClipRect();
         return new(clip.x, clip.y, clip.z - clip.x, clip.w - clip.y);
     }
+
 
     public void SetZIndex(int index, bool keepClipSpace)
     {
@@ -88,20 +105,19 @@ public class GuiDraw2D
     }
 
     public void DrawVerticalGradient(Vector2 top, Vector2 bottom, float right, Color a, Color b)
-    {
-        _drawList[currentZIndex].AddRectFilledMultiColor(new(top.x, top.y), new(bottom.x + right, bottom.y), a, b, b, a);
-    }
+        => _drawList[currentZIndex].AddRectFilledMultiColor(new(top.x, top.y), new(bottom.x + right, bottom.y), a, b, b, a);
+
 
     public void DrawHorizontalGradient(Vector2 left, Vector2 right, float down, Color a, Color b)
-    {
-        _drawList[currentZIndex].AddRectFilledMultiColor(new(left.x, left.y), new(right.x, right.y + down), b, b, a, a);
-    }
+        => _drawList[currentZIndex].AddRectFilledMultiColor(new(left.x, left.y), new(right.x, right.y + down), b, b, a, a);
+
 
     public void DrawVerticalBlackGradient(Vector2 top, Vector2 bottom, float right, float strength)
     {
         Color col = new Color(0, 0, 0, strength);
         _drawList[currentZIndex].AddRectFilledMultiColor(new(top.x, top.y), new(bottom.x + right, bottom.y), col, Color.clear, Color.clear, col);
     }
+
 
     public void DrawHorizontalBlackGradient(Vector2 left, Vector2 right, float down, float strength)
     {
@@ -111,24 +127,52 @@ public class GuiDraw2D
 
     public void DrawRect(Rect screenRect, Color color, float thickness = 1f, float roundness = 0.0f, int corners = CornerRounding.All)
         => DrawRect(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, thickness, roundness, corners);
+
+
     public void DrawRect(Vector2 topleft, Vector2 size, Color color, float thickness = 1f, float roundness = 0.0f, int corners = CornerRounding.All)
         => _drawList[currentZIndex].AddRect(topleft, topleft + size, color, roundness, corners, thickness);
+
+
     public void DrawRectFilled(Rect screenRect, Color color, float roundness = 0.0f, int corners = CornerRounding.All)
         => DrawRectFilled(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, roundness, corners);
+
+
     public void DrawRectFilled(Vector2 topleft, Vector2 size, Color color, float roundness = 0.0f, int corners = CornerRounding.All)
         => _drawList[currentZIndex].AddRectFilled(topleft, topleft + size, color, roundness, corners);
+
+
+    public void DrawRectFilledMultiColor(Vector2 topleft, Vector2 size, Color upperLeft, Color upperRight, Color bottomRight, Color bottomLeft)
+        => _drawList[currentZIndex].AddRectFilledMultiColor(topleft, topleft + size, upperLeft, upperRight, bottomLeft, bottomRight);
+
+
     public void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1f)
-        => _drawList[currentZIndex].AddLine(start, end, color, thickness);
+        => _drawList[currentZIndex].AddLine(start, end, SingleColor(color), thickness);
+
+
     public void DrawBezierLine(Vector2 start, Vector2 startControl, Vector2 end, Vector2 endControl, Color color, float thickness = 1f, int segments = 0)
-        => _drawList[currentZIndex].AddBezierCurve(start, startControl, endControl, end, color, thickness, segments);
+        => _drawList[currentZIndex].AddBezierCurve(start, startControl, endControl, end, SingleColor(color), thickness, segments);
+
+
     public void DrawCircle(Vector2 center, float radius, Color color, int segments = 12, float thickness = 1f)
-        => _drawList[currentZIndex].AddCircle(center, radius, color, segments, thickness);
+        => _drawList[currentZIndex].AddCircle(center, radius, SingleColor(color), segments, thickness);
+
+
+    public void DrawCircle(Vector2 center, float radius, List<Color32> colors, int segments = 12, float thickness = 1f)
+        => _drawList[currentZIndex].AddCircle(center, radius, colors, segments, thickness);
+
+
     public void DrawCircleFilled(Vector2 center, float radius, Color color, int segments = 12)
-        => _drawList[currentZIndex].AddCircleFilled(center, radius, color, segments);
+        => _drawList[currentZIndex].AddCircleFilled(center, radius, SingleColor(color), segments);
+
+
     public void DrawTriangle(Vector2 a, Vector2 b, Vector2 c, Color color, float thickness = 1f)
-        => _drawList[currentZIndex].AddTriangle(a, b, c, color, thickness);
+        => _drawList[currentZIndex].AddTriangle(a, b, c, SingleColor(color), thickness);
+
+
     public void DrawTriangleFilled(Vector2 a, Vector2 b, Vector2 c, Color color)
-        => _drawList[currentZIndex].AddTriangleFilled(a, b, c, color);
+        => _drawList[currentZIndex].AddTriangleFilled(a, b, c, SingleColor(color));
+
+
     public void DrawTriangle(Vector2 center, Vector2 dir, float width, Color color, float thickness = 1f)
     {
         Vector2 offset = -dir * width;
@@ -138,8 +182,10 @@ public class GuiDraw2D
         Vector2 a = center + normalizedDir * width * 1.75f;
         Vector2 b = center + right * width;
         Vector2 c = center - right * width;
-        _drawList[currentZIndex].AddTriangle(a + offset, b + offset, c + offset, color, thickness);
+        _drawList[currentZIndex].AddTriangle(a + offset, b + offset, c + offset, SingleColor(color), thickness);
     }
+
+
     public void DrawTriangleFilled(Vector2 center, Vector2 dir, float width, Color color)
     {
         Vector2 offset = -dir * width;
@@ -149,7 +195,7 @@ public class GuiDraw2D
         Vector2 a = center + normalizedDir * width * 1.75f;
         Vector2 b = center + right * width;
         Vector2 c = center - right * width;
-        _drawList[currentZIndex].AddTriangleFilled(a + offset, b + offset, c + offset, color);
+        _drawList[currentZIndex].AddTriangleFilled(a + offset, b + offset, c + offset, SingleColor(color));
     }
 
 
@@ -157,14 +203,23 @@ public class GuiDraw2D
 
     public void DrawImage(Texture2D texture, Rect src, Rect dest, bool keepAspect = false)
         => DrawImage(texture, dest.Position, dest.Size, src.Position, src.Size, Color.white, keepAspect);
+
+
     public void DrawImage(Texture2D texture, Rect rect, bool keepAspect = false)
         => DrawImage(texture, rect.Position, rect.Size, new(0, 1), new(1, 0), Color.white, keepAspect);
+
+
     public void DrawImage(Texture2D texture, Rect rect, Color color, bool keepAspect = false)
         => DrawImage(texture, rect.Position, rect.Size, new(0, 1), new(1, 0), color, keepAspect);
+
+
     public void DrawImage(Texture2D texture, Vector2 position, Vector2 size, bool keepAspect = false)
         => DrawImage(texture, position, size, new(0, 1), new(1, 0), Color.white, keepAspect);
+
+
     public void DrawImage(Texture2D texture, Vector2 position, Vector2 size, Color color, bool keepAspect = false)
         => DrawImage(texture, position, size, new(0, 1), new(1, 0), color, keepAspect);
+
 
     public void DrawImage(Texture2D texture, Vector2 position, Vector2 size, Vector2 uv0, Vector2 uv1, Color color, bool keepAspect = false)
     {
@@ -199,14 +254,19 @@ public class GuiDraw2D
 
     public void DrawText(string text, Rect rect, Color color, bool dowrap = true, bool doclip = true)
         => DrawText(Font.DefaultFont, text, 20, rect, color, dowrap, doclip);
+
+
     public void DrawText(string text, Rect rect, bool dowrap = true, bool doclip = true)
         => DrawText(Font.DefaultFont, text, 20, rect, Color.white, dowrap, doclip);
+
 
     public void DrawText(string text, double fontSize, Rect rect, bool dowrap = true, bool doclip = true)
         => DrawText(Font.DefaultFont, text, fontSize, rect, Color.white, dowrap, doclip);
 
+
     public void DrawText(string text, double fontSize, Rect rect, Color color, bool dowrap = true, bool doclip = true)
         => DrawText(Font.DefaultFont, text, fontSize, rect, color, dowrap, doclip);
+
 
     public void DrawText(Font font, string text, double fontSize, Rect rect, Color color, bool dowrap = true, bool doclip = true)
     {
@@ -218,17 +278,22 @@ public class GuiDraw2D
         DrawText(font, text, fontSize, pos, color, dowrap ? wrap : 0, doclip ? rect : null);
     }
 
+
     public void DrawText(string text, Vector2 position, double wrapwidth = 0.0f)
         => DrawText(Font.DefaultFont, text, 20, position, Color.white, wrapwidth);
+
 
     public void DrawText(string text, Vector2 position, Color color, double wrapwidth = 0.0f)
         => DrawText(Font.DefaultFont, text, 20, position, color, wrapwidth);
 
+
     public void DrawText(string text, double fontSize, Vector2 position, double wrapwidth = 0.0f)
         => DrawText(Font.DefaultFont, text, fontSize, position, Color.white, wrapwidth);
 
+
     public void DrawText(string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f)
         => _drawList[currentZIndex].AddText((float)fontSize, position, color, text, wrap_width: (float)wrapwidth);
+
 
     public void DrawText(Font font, string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f, Rect? clip = null)
     {
@@ -240,6 +305,7 @@ public class GuiDraw2D
             _drawList[currentZIndex].AddText(font, (float)fontSize, position, color, text, wrap_width: (float)wrapwidth);
         _drawList[currentZIndex].PopTexture();
     }
+
 
     public void LoadingIndicatorCircle(Vector2 center, double radius, Vector4 mainColor, Vector4 backdropColor, int circleCount, float speed)
     {
@@ -255,20 +321,19 @@ public class GuiDraw2D
             double y = updatedIndicatorRadius * MathD.Cos(degreeOffset * i);
             double growth = MathD.Max(0.0f, MathD.Sin(t * speed * 8 - i * degreeOffset));
 
-            Vector4 color = new Vector4
+            Color color = new Color
             {
-                x = mainColor.x * growth + backdropColor.x * (1.0f - growth),
-                y = mainColor.y * growth + backdropColor.y * (1.0f - growth),
-                z = mainColor.z * growth + backdropColor.z * (1.0f - growth),
-                w = 1.0f
+                r = (float)(mainColor.x * growth + backdropColor.x * (1.0f - growth)),
+                g = (float)(mainColor.y * growth + backdropColor.y * (1.0f - growth)),
+                b = (float)(mainColor.z * growth + backdropColor.z * (1.0f - growth)),
+                a = 1.0f
             };
 
             _drawList[currentZIndex].AddCircleFilled(
                 new Vector2(center.x + x, center.y - y),
                 (float)(circleRadius + growth * circleRadius),
-                (Color)color
+                SingleColor(color)
             );
         }
     }
-
 }
