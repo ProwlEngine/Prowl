@@ -468,7 +468,7 @@ namespace Prowl.Runtime
             return projectedVector;
         }
 
-        public Vector3 Perpendicular(Vector3 vector)
+        public static Vector3 Perpendicular(Vector3 vector)
         {
             vector = vector.normalized; // line from a to b
             if (Mathf.Approximately(Mathf.Abs(Vector3.Dot(vector, Vector3.up)), 1f))
