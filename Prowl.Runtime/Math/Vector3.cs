@@ -468,6 +468,14 @@ namespace Prowl.Runtime
             return projectedVector;
         }
 
+        public Vector3 Perpendicular(Vector3 vector)
+        {
+            vector = vector.normalized; // line from a to b
+            if (Mathf.Approximately(Mathf.Abs(Vector3.Dot(vector, Vector3.up)), 1f))
+                return Vector3.Cross(vector, Vector3.right).normalized;
+            else
+                return Vector3.Cross(vector, Vector3.up).normalized;
+        }
         #endregion Public Static Methods
 
         #region Public Static Operators
