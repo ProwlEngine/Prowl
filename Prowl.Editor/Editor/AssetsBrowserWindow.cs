@@ -265,7 +265,7 @@ public class AssetsBrowserWindow : EditorWindow
                 using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
                     AssetsTreeWindow.DrawContextMenu(entry.Directory, null, true, popupHolder);
 
-            if (interact.TakeFocus())
+            if (interact.TakeFocus(true))
             {
                 var old = CurDirectoryNode;
                 AssetsTreeWindow.SelectHandler.Select(entry.Directory);

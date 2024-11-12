@@ -323,7 +323,7 @@ public struct Interactable
 
         // If we are hovered and active, we are focused
         //if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerDown(Veldrid.MouseButton.Left))
-        if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(focusBtn))
+        if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(focusBtn, onrelease))
         {
             _gui.FocusID = _id;
             return true;

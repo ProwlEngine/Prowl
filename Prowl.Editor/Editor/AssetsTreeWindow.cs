@@ -102,7 +102,7 @@ public class AssetsTreeWindow : EditorWindow
                     {
                         SelectHandler.AddSelectableAtIndex(_treeCounter, file);
                         var interact = gui.GetInteractable();
-                        if (interact.TakeFocus())
+                        if (interact.TakeFocus(true))
                             SelectHandler.Select(_treeCounter, file);
 
                         if (SelectHandler.IsSelected(file))
@@ -277,7 +277,7 @@ public class AssetsTreeWindow : EditorWindow
 
             SelectHandler.AddSelectableAtIndex(_treeCounter, root.Root);
             var interact = gui.GetInteractable();
-            if (interact.TakeFocus())
+            if (interact.TakeFocus(true))
                 SelectHandler.Select(_treeCounter, root.Root);
 
             if (SelectHandler.IsSelected(root.Root))
@@ -342,7 +342,7 @@ public class AssetsTreeWindow : EditorWindow
 
                 SelectHandler.AddSelectableAtIndex(_treeCounter, subDirectory);
                 var interact = gui.GetInteractable();
-                if (interact.TakeFocus())
+                if (interact.TakeFocus(true))
                     SelectHandler.Select(_treeCounter, subDirectory);
 
                 if (SelectHandler.IsSelected(subDirectory))
