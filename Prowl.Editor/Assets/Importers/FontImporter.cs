@@ -28,7 +28,7 @@ public class FontImporter : ScriptedImporter
 public class FontEditor : ScriptedEditor
 {
     private readonly int numberOfProperties = 0;
-    public bool InputFloat(string name, ref float val)
+    public bool InputFloat(string name, object target, string fieldName)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
@@ -45,11 +45,11 @@ public class FontEditor : ScriptedEditor
 
             // Value
             using (gui.Node("#_Value").ExpandHeight().Enter())
-                return EditorGUI.DrawProperty(0, name, ref val);
+                return EditorGUI.DrawProperty(0, name, target, fieldName);
         }
     }
 
-    public bool InputInt<T>(string name, ref T val) where T : struct
+    public bool InputInt(string name, object target, string fieldName)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
@@ -66,7 +66,7 @@ public class FontEditor : ScriptedEditor
 
             // Value
             using (gui.Node("#_Value").ExpandHeight().Enter())
-                return EditorGUI.DrawProperty(0, name, ref val);
+                return EditorGUI.DrawProperty(0, name, target, fieldName);
         }
     }
 
@@ -103,11 +103,11 @@ public class FontEditor : ScriptedEditor
 
         gui.CurrentNode.Layout(LayoutType.Column);
 
-        if (InputFloat("Font Size", ref importer.fontSize))
+        if (InputFloat("Font Size", importer, "fontSize"))
             changes.Add(importer, nameof(FontImporter.fontSize));
-        if (InputInt("Width", ref importer.width))
+        if (InputInt("Width", importer, "width"))
             changes.Add(importer, nameof(FontImporter.width));
-        if (InputInt("Height", ref importer.height))
+        if (InputInt("Height", importer, "height"))
             changes.Add(importer, nameof(FontImporter.height));
 
         using (gui.Node("Ranges").ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())

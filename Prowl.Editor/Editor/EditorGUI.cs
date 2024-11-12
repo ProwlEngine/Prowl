@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 
 using Prowl.Editor.Preferences;
 using Prowl.Editor.PropertyDrawers;
+using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
@@ -328,7 +329,8 @@ public static class EditorGUI
             // Update the value
             if (propChange)
             {
-                field.SetValue(target, fieldValue);
+                UndoRedoManager.SetMember(target, field, fieldValue);
+
                 if (changes != null && field is FieldInfo f)
                     changes.Add(target, f);
             }
@@ -341,12 +343,37 @@ public static class EditorGUI
         return changed;
     }
 
-    public static bool DrawProperty<T>(int index, string name, ref T? value, PropertyGridConfig config = PropertyGridConfig.None)
+    public static bool DrawPropertyNoUndo<T>(int index, string name, ref T? value, PropertyGridConfig config = PropertyGridConfig.None)
     {
         object? obj = value;
         bool changed = DrawerAttribute.DrawProperty(ActiveGUI, name, index, typeof(T), ref obj, config);
         value = (T?)obj;
         return changed;
+    }
+
+    public static bool DrawProperty(int index, string name, object target, string field, PropertyGridConfig config = PropertyGridConfig.None)
+    {
+        FieldInfo? fieldInfo = target.GetType().GetField(field, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (fieldInfo != null)
+        {
+            object? obj = fieldInfo.GetValue(target);
+            bool changed = DrawerAttribute.DrawProperty(ActiveGUI, name, index, fieldInfo.FieldType, ref obj, config);
+            if (changed)
+                UndoRedoManager.SetMember(target, fieldInfo, obj);
+            return changed;
+        }
+
+        PropertyInfo? propInfo = target.GetType().GetProperty(field, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (propInfo != null)
+        {
+            object? obj = propInfo.GetValue(target);
+            bool changed = DrawerAttribute.DrawProperty(ActiveGUI, name, index, propInfo.PropertyType, ref obj, config);
+            if (changed)
+                UndoRedoManager.SetMember(target, propInfo, obj);
+            return changed;
+        }
+
+        return false;
     }
 
     static bool HandleBeginGUIAttributes(string id, object target, IEnumerable<InspectorUIAttribute> attribs)

@@ -8,6 +8,7 @@ using Prowl.Runtime.GUI;
 
 namespace Prowl.Editor.PropertyDrawers;
 
+#warning TODO: Undo/Redo for PropertyDrawerEnumerable
 public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : class
 {
     public static ulong selectedDrawer;

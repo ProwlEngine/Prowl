@@ -66,20 +66,21 @@ public class GameObjectEditor : ScriptedEditor
         int tagIndex = go.tagIndex;
         if (gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 3)), 0, ItemSize, ItemSize, null, null, FontAwesome6.Tag))
         {
+            UndoRedoManager.SetMember(go, nameof(GameObject.tagIndex), (byte)tagIndex);
             go.tagIndex = (byte)tagIndex;
             Prefab.OnFieldChange(go, nameof(GameObject.tagIndex));
         }
         int layerIndex = go.layerIndex;
         if (gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, null, null, FontAwesome6.LayerGroup))
         {
-            go.layerIndex = (byte)layerIndex;
+            UndoRedoManager.SetMember(go, nameof(GameObject.layerIndex), (byte)layerIndex);
             Prefab.OnFieldChange(go, nameof(GameObject.layerIndex));
         }
 
         bool isStatic = go.isStatic;
         if (gui.Checkbox("IsStaticChk", ref isStatic, Offset.Percentage(1f, -(ItemSize)), 0, out _, GetInputStyle()))
         {
-            go.isStatic = isStatic;
+            UndoRedoManager.SetMember(go, go.GetType().GetProperty(nameof(GameObject.isStatic), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic), isStatic);
             Prefab.OnFieldChange(go, nameof(GameObject.isStatic));
         }
         gui.Tooltip("Is Static");
@@ -198,30 +199,24 @@ public class GameObjectEditor : ScriptedEditor
                     Transform t = go.Transform;
                     using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
-                        Vector3 tpos = t.localPosition;
-                        if (DrawProperty(0, "Position", ref tpos))
+                        if (DrawProperty(0, "Position", t, nameof(t.localPosition)))
                         {
-                            t.localPosition = tpos;
                             Prefab.OnFieldChange(go, "_transform");
                         }
                     }
 
                     using (ActiveGUI.Node("RotParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
-                        Vector3 tpos = t.localEulerAngles;
-                        if (DrawProperty(1, "Rotation", ref tpos))
+                        if (DrawProperty(1, "Rotation", t, nameof(t.localEulerAngles)))
                         {
-                            t.localEulerAngles = tpos;
                             Prefab.OnFieldChange(go, "_transform");
                         }
                     }
 
                     using (ActiveGUI.Node("ScaleParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
-                        Vector3 tpos = t.localScale;
-                        if (DrawProperty(2, "Scale", ref tpos))
+                        if (DrawProperty(2, "Scale", t, nameof(t.localScale)))
                         {
-                            t.localScale = tpos;
                             Prefab.OnFieldChange(go, "_transform");
                         }
                     }

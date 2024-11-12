@@ -14,6 +14,7 @@ using Prowl.Runtime.Utils.NodeSystem.Nodes;
 using Prowl.Runtime.Rendering;
 
 using static Prowl.Runtime.NodeSystem.Node;
+using Prowl.Editor.Utilities;
 
 namespace Prowl.Editor;
 
@@ -457,7 +458,7 @@ public class DefaultNodeEditor : ScriptedNodeEditor
             {
                 changed |= true;
 
-                fieldInfo.SetValue(node, value);
+                UndoRedoManager.SetMember(node, fieldInfo, value);
             }
         }
         return changed;

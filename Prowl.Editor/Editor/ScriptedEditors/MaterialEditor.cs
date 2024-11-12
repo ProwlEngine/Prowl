@@ -27,10 +27,8 @@ public class MaterialEditor : ScriptedEditor
         bool changed = false;
         using (gui.Node("Shader").ExpandWidth().MaxHeight(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
         {
-            AssetRef<Shader> assetref = mat.Shader;
-            changed |= EditorGUI.DrawProperty(0, "Shader", ref assetref);
+            changed |= EditorGUI.DrawProperty(0, "Shader", mat, "Shader");
             if (changed) changes.Add(mat, nameof(Material.Shader));
-            mat.Shader = assetref;
         }
 
         if (mat.Shader.IsAvailable)
@@ -59,6 +57,7 @@ public class MaterialEditor : ScriptedEditor
     {
         bool changed = false;
 
+#warning TODO: Undo/Redo support for Material properties
 
         if (!mat.GetProperty(property.Name, out ShaderProperty value))
             return false;
@@ -67,49 +66,49 @@ public class MaterialEditor : ScriptedEditor
         {
             case ShaderPropertyType.Float:
                 float f = (float)value;
-                changed = EditorGUI.DrawProperty(0, property.DisplayName, ref f);
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref f);
                 value = f;
 
                 break;
 
             case ShaderPropertyType.Vector2:
                 Vector2 v2 = value;
-                changed = EditorGUI.DrawProperty(0, property.DisplayName, ref v2);
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref v2);
                 value = v2;
 
                 break;
 
             case ShaderPropertyType.Vector3:
                 Vector3 v3 = value;
-                changed = EditorGUI.DrawProperty(0, property.DisplayName, ref v3);
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref v3);
                 value = v3;
 
                 break;
 
             case ShaderPropertyType.Vector4:
                 Vector4 v4 = value;
-                changed = EditorGUI.DrawProperty(0, property.DisplayName, ref v4);
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref v4);
                 value = v4;
 
                 break;
 
             case ShaderPropertyType.Color:
                 Color color = value;
-                changed = EditorGUI.DrawProperty(0, property.DisplayName, ref color);
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref color);
                 value = color;
 
                 break;
 
             case ShaderPropertyType.Texture2D:
                 AssetRef<Texture2D> tex2D = value;
-                changed = EditorGUI.DrawProperty(0, property.DisplayName, ref tex2D);
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref tex2D);
                 value = tex2D;
 
                 break;
 
             case ShaderPropertyType.Texture3D:
                 AssetRef<Texture3D> tex3D = value;
-                changed = EditorGUI.DrawProperty(0, property.DisplayName, ref tex3D);
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref tex3D);
                 value = tex3D;
 
                 break;

@@ -717,20 +717,20 @@ public class ModelEditor : ScriptedEditor
 
 #warning TODO: Implement FieldChanges for all this
 
-        EditorGUI.DrawProperty(0, "Merge Objects", ref importer.OptimizeGraph);
-        EditorGUI.DrawProperty(1, "Generate Mesh Colliders", ref importer.GenerateColliders);
-        EditorGUI.DrawProperty(2, "Generate Normals", ref importer.GenerateNormals);
+        EditorGUI.DrawProperty(0, "Merge Objects", importer, "OptimizeGraph");
+        EditorGUI.DrawProperty(1, "Generate Mesh Colliders", importer, "GenerateColliders");
+        EditorGUI.DrawProperty(2, "Generate Normals", importer, "GenerateNormals");
         if (importer.GenerateNormals)
-            EditorGUI.DrawProperty(3, "Generate Smooth Normals", ref importer.GenerateSmoothNormals);
-        EditorGUI.DrawProperty(4, "Calculate Tangent Space", ref importer.CalculateTangentSpace);
-        EditorGUI.DrawProperty(5, "Make Left Handed", ref importer.MakeLeftHanded);
-        EditorGUI.DrawProperty(6, "Flip UVs", ref importer.FlipUVs);
-        EditorGUI.DrawProperty(7, "Optimize Meshes", ref importer.OptimizeMeshes);
-        EditorGUI.DrawProperty(8, "Flip Winding Order", ref importer.FlipWindingOrder);
-        EditorGUI.DrawProperty(9, "Weld Vertices", ref importer.WeldVertices);
-        EditorGUI.DrawProperty(10, "Invert Normals", ref importer.InvertNormals);
-        EditorGUI.DrawProperty(11, "GlobalScale", ref importer.GlobalScale);
-        EditorGUI.DrawProperty(12, "UnitScale", ref importer.UnitScale);
+            EditorGUI.DrawProperty(3, "Generate Smooth Normals", importer, "GenerateSmoothNormals");
+        EditorGUI.DrawProperty(4, "Calculate Tangent Space", importer, "CalculateTangentSpace");
+        EditorGUI.DrawProperty(5, "Make Left Handed", importer, "MakeLeftHanded");
+        EditorGUI.DrawProperty(6, "Flip UVs", importer, "FlipUVs");
+        EditorGUI.DrawProperty(7, "Optimize Meshes", importer, "OptimizeMeshes");
+        EditorGUI.DrawProperty(8, "Flip Winding Order", importer, "FlipWindingOrder");
+        EditorGUI.DrawProperty(9, "Weld Vertices", importer, "WeldVertices");
+        EditorGUI.DrawProperty(10, "Invert Normals", importer, "InvertNormals");
+        EditorGUI.DrawProperty(11, "GlobalScale", importer, "GlobalScale");
+        EditorGUI.DrawProperty(12, "UnitScale", importer, "UnitScale");
 
         var meshes = serialized.SubAssets.Where(x => x is Mesh);
         gui.TextNode("mCount", $"Mesh Count: {meshes.Count()}").ExpandWidth().Height(ItemSize);
@@ -750,8 +750,8 @@ public class ModelEditor : ScriptedEditor
         GameObject root = serialized.Main as GameObject;
 
         gui.TextNode("goCount", $"GameObject Count: {CountNodes(root)}").ExpandWidth().Height(ItemSize);
-        EditorGUI.DrawProperty(0, "Merge Objects", ref importer.OptimizeGraph);
-        EditorGUI.DrawProperty(1, "Cull Empty Objects", ref importer.CullEmpty);
+        EditorGUI.DrawProperty(0, "Merge Objects", importer, "OptimizeGraph");
+        EditorGUI.DrawProperty(1, "Cull Empty Objects", importer, "CullEmpty");
 
         // TODO: Draw Scene Graph as Tree similarly to Hierarchy
 

@@ -88,7 +88,7 @@ public class GameWindow : EditorWindow
             bool changed = false;
 
             PropertyGridConfig config = PropertyGridConfig.NoLabel;
-            if (DrawProperty(0, "Width", ref GeneralPreferences.Instance.CurrentWidth, config))
+            if (DrawProperty(0, "Width", GeneralPreferences.Instance, "CurrentWidth", config))
             {
                 GeneralPreferences.Instance.CurrentWidth = Math.Clamp(GeneralPreferences.Instance.CurrentWidth, 1, 7680);
                 GeneralPreferences.Instance.Resolution = Resolutions.custom;
@@ -96,7 +96,7 @@ public class GameWindow : EditorWindow
                 RefreshRenderTexture();
             }
             gui.PreviousNode.Width(50);
-            if (DrawProperty(1, "Height", ref GeneralPreferences.Instance.CurrentHeight, config))
+            if (DrawProperty(1, "Height", GeneralPreferences.Instance, "CurrentHeight", config))
             {
                 GeneralPreferences.Instance.CurrentHeight = Math.Clamp(GeneralPreferences.Instance.CurrentHeight, 1, 4320);
                 GeneralPreferences.Instance.Resolution = Resolutions.custom;
@@ -105,7 +105,7 @@ public class GameWindow : EditorWindow
             }
             gui.PreviousNode.Width(50);
 
-            if (DrawProperty(2, "Resolution", ref GeneralPreferences.Instance.Resolution, config))
+            if (DrawProperty(2, "Resolution", GeneralPreferences.Instance, "Resolution", config))
             {
                 UpdateResolution(GeneralPreferences.Instance.Resolution);
                 changed = true;
