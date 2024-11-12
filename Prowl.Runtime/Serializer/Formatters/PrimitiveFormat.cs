@@ -16,6 +16,7 @@ public class PrimitiveFormat : ISerializationFormat
     {
         return value switch
         {
+            char c => new(PropertyType.Byte, (byte)c), // Char is serialized as a byte
             byte b => new(PropertyType.Byte, b),
             sbyte sb => new(PropertyType.sByte, sb),
             short s => new(PropertyType.Short, s),
@@ -38,6 +39,9 @@ public class PrimitiveFormat : ISerializationFormat
     {
         try
         {
+            if (value.TagType == PropertyType.ByteArray && targetType == typeof(byte[]))
+                return value.Value;
+
             return Convert.ChangeType(value.Value, targetType);
         }
         catch
