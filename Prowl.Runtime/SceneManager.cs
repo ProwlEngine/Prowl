@@ -40,6 +40,8 @@ public static class SceneManager
         deserialized.AssetID = StoredSceneID;
         Current = deserialized;
         Current.Res!.HandlePrefabs();
+
+        OnSceneLoadAttribute.Invoke();
     }
 
     public static void ClearStoredScene()
@@ -50,6 +52,8 @@ public static class SceneManager
 
     public static void InstantiateNewScene()
     {
+        SceneManager.Clear();
+
         GameObject go = new("Directional Light");
         go.AddComponent<DirectionalLight>(); // Will auto add Transform as DirectionLight requires it
         go.Transform.localEulerAngles = new System.Numerics.Vector3(130, 45, 0);
@@ -67,11 +71,14 @@ public static class SceneManager
         cam.AddComponent<ToneMapperEffect>();
 
         Current.Res!.Add(cam);
+
+        OnSceneLoadAttribute.Invoke();
     }
 
     [OnAssemblyUnload]
     public static void Clear()
     {
+        OnSceneUnloadAttribute.Invoke();
         if (Current.Res != null)
         {
             Camera.Main = null; // Clear the main camera so it will re-find itself and be updated
@@ -163,6 +170,7 @@ public static class SceneManager
         Clear();
         Current = scene;
         Scene.HandlePrefabs();
+        OnSceneLoadAttribute.Invoke();
         IEnumerable<GameObject> activeGOs = Scene.ActiveObjects;
         ForeachComponent(activeGOs, (x) => x.Do(x.OnLevelWasLoaded));
     }
@@ -173,6 +181,7 @@ public static class SceneManager
         Clear();
         Current = scene.Res;
         Scene.HandlePrefabs();
+        OnSceneLoadAttribute.Invoke();
         IEnumerable<GameObject> activeGOs = Scene.ActiveObjects;
         ForeachComponent(activeGOs, (x) => x.Do(x.OnLevelWasLoaded));
     }

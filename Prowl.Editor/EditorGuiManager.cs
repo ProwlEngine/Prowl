@@ -295,7 +295,6 @@ public static class EditorGuiManager
     [MenuItem("File/New Scene")]
     public static void NewScene()
     {
-        SceneManager.Clear();
         SceneManager.InstantiateNewScene();
     }
 

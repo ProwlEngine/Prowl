@@ -101,8 +101,7 @@ public static class AssemblyManager
 
         OnAssemblyUnloadAttribute.Invoke();
 
-        OnAssemblyUnloadAttribute.Clear();
-        OnAssemblyLoadAttribute.Clear();
+        AssemblyMethodAttributeBase.Clear();
 
         InvokeUnloadDelegate();
 

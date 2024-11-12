@@ -234,7 +234,7 @@ public static class Program
                 }
                 finally
                 {
-                    OnAssemblyLoadAttribute.FindAll();
+                    AssemblyMethodAttributeBase.FindAll();
                     OnAssemblyLoadAttribute.Invoke();
 
                     SceneManager.RestoreScene();
