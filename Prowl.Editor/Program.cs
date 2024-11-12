@@ -9,7 +9,7 @@ using Prowl.Editor.Assets;
 using Prowl.Editor.Editor.CLI;
 using Prowl.Editor.Preferences;
 using Prowl.Editor.ProjectSettings;
-
+using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.SceneManagement;
@@ -120,6 +120,11 @@ public static class Program
                     Graphics.VSync = GeneralPreferences.Instance.VSync;
                     Screen.FramesPerSecond = 0;
                 }
+
+                if (Hotkeys.IsHotkeyDown("Undo", new() { Key = Key.Z, Ctrl = true }))
+                    UndoRedoManager.Undo();
+                else if (Hotkeys.IsHotkeyDown("Redo", new() { Key = Key.Y, Ctrl = true }))
+                    UndoRedoManager.Redo();
 
                 if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
                     EditorGuiManager.SaveSceneAs();
