@@ -12,7 +12,10 @@
 #define PROWL_HALF_PI       1.57079632679f
 #define PROWL_INV_HALF_PI   0.636619772367f
 
-// Fog
+
+
+
+// Fog ===========================================================
 // Macro to declare fog coordinates in vertex shader output struct
 #define PROWL_FOG_COORDS(idx) float fogCoord : TEXCOORD##idx;
 
@@ -31,9 +34,12 @@
             prowlFog += exp2(-i.fogCoord * i.fogCoord * prowl_FogParams.x * prowl_FogParams.x) * prowl_FogStates.z; \
         col.rgb = lerp(prowl_FogColor.rgb, col.rgb, saturate(prowlFog)); \
     }
+// ============================================================================
 
 
-// Ambient Lighting
+
+
+// Ambient Lighting ===========================================================
 float3 CalculateAmbient(float3 worldNormal)
 {
     float3 ambient = 0;
@@ -48,24 +54,29 @@ float3 CalculateAmbient(float3 worldNormal)
     return ambient;
 }
 
-// Usage in your surface shader:
 #define PROWL_AMBIENT(worldNormal, outColor) \
     { \
         outColor.rgb *= CalculateAmbient(worldNormal.xyz); \
     }
+// ============================================================================
 
 
-// Colors
+
+// Colors ===========================================================
 // http://chilliant.blogspot.com.au/2012/08/srgb-approximations-for-hlsl.html?m=1
 float3 LinearToGammaSpace(float3 lin)
 {
 	return max(1.055 * pow(max(lin, float3(0.0, 0.0, 0.0)), 0.416666667) - 0.055, 0.0);
 }
+
 // http://chilliant.blogspot.com.au/2012/08/srgb-approximations-for-hlsl.html?m=1
 float3 GammaToLinearSpace(float3 gamma)
 {
     return gamma * (gamma * (gamma * 0.305306011 + 0.682171111) + 0.012522878);
 }
+// ============================================================================
+
+
 
 float LinearizeDepth(float depth, float near, float far) 
 {

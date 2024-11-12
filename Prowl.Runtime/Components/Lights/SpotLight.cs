@@ -30,7 +30,7 @@ public class SpotLight : Light
 
         return new GPULight
         {
-            PositionType = new Vector4(lightPos, 2),
+            PositionType = new Vector4(lightPos, 3),
             DirectionRange = new Vector4(forward, distance),
             Color = color.GetUInt(),
             Intensity = intensity,

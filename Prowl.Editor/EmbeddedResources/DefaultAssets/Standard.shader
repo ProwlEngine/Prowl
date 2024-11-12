@@ -218,6 +218,44 @@ Pass "Standard"
 		{
 			return PCSS(fragPosLightSpace, light, screenPos);
 		}
+		
+		//This code is from "Rectangular Area Light" by Tsone,
+		//used under CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/).
+		//Source: https://www.shadertoy.com/view/lsfGDN
+		float RectLight_CalcWeight(float3 P, float3 R, float3 lightPos, float3 lightDir, 
+								float3 lightRight, float3 lightUp, float2 lightSize, 
+								float attenuation, float theta)
+		{
+			// Intersect ray and light plane
+			float RoPlN = dot(R, lightDir);
+			float d = dot(lightDir, lightPos - P) / RoPlN;
+			
+			if (d < 0.0 || RoPlN > 0.0) {
+				return 0.0;
+			}
+			
+			// Point on plane
+			float3 PlC = P + d*R - lightPos;
+			
+			// UV coordinate on plane
+			float2 PlUV = float2(dot(PlC, lightRight), dot(PlC, lightUp));
+			
+			// Radius of cone at distance d
+			float r = d * tan(theta);
+			
+			// Rect size shifted by radius for weight 1 inside rect
+			float2 s = max(lightSize - 0.5*r, 0.0);
+			
+			// Distance from rect on plane
+			float h = length(max(abs(PlUV) - s, 0.0));
+			
+			// Steradians from sphere cap
+			float sr = 2.0* 3.14159265359 * (1.0 - cos(theta));
+			
+			// Gaussian distribution with variance v^2 = 1/2
+			float x = (3.0 * 0.70710678118 / 2.0) * (h/r);
+			return exp(-(x * x)) / (attenuation + (d * d) * sr);
+		}
 
         Varyings Vertex(Attributes input)
         {
@@ -349,6 +387,61 @@ Pass "Standard"
                     float3 color = (kD * baseColor.rgb / PI + specular) * radiance * NdotL;
                     
                     lighting += color;
+                }
+                else if(light.PositionType.w == 2.0) // Area Light
+                {
+					// Unpack width and height
+					uint packedSize = asuint(light.DirectionRange.w);
+					float width = float(packedSize & 0xFFFF) / 512.0;
+					float height = float(packedSize >> 16) / 512.0;
+					float2 lightSize = float2(width, height);
+					
+					float3 lightPos = mul(PROWL_MATRIX_V, float4(light.PositionType.xyz, 1)).xyz;
+					float3 lightDir = normalize(mul((float3x3)PROWL_MATRIX_V, light.DirectionRange.xyz));
+					bool twoSided = light.SpotData.x > 0.5;
+					
+					// Calculate basis vectors for the light
+					float3 lightRight = normalize(cross(lightDir, mul((float3x3)PROWL_MATRIX_V, float3(0, 1, 0))));
+					float3 lightUp = normalize(cross(lightRight, lightDir));
+					
+					float3 N = normalize(output.Normal);
+					float3 V = normalize(-input.fragPos);
+					float3 R = reflect(-V, N);
+					float NoR = max(dot(N, R), 0.0);
+					
+					// Schlick Fresnel
+					float3 F = F0 + (1.0 - F0) * pow(1.0 - NoR, 5.0);
+					
+					// Calculate specular contribution
+					float specTheta = lerp(PI * 0.003, PI/6.0, surface.g); // surface.g is roughness
+					float Cs = RectLight_CalcWeight(input.fragPos, R, lightPos, lightDir, 
+												lightRight, lightUp, lightSize, 1.0, specTheta);
+					
+					// Calculate wider specular tail for roughness
+					float tailTheta = PI/3.0;
+					float Cst = RectLight_CalcWeight(input.fragPos, R, lightPos, lightDir, 
+												lightRight, lightUp, lightSize, 1.0, tailTheta);
+					
+					// Calculate diffuse contribution
+					float3 W = normalize(N - lightDir);
+					float Cd = RectLight_CalcWeight(input.fragPos, W, lightPos, lightDir, 
+												lightRight, lightUp, lightSize, 1.0, PI/4.0);
+					
+					// Combine contributions
+					float diffuseWeight = Cd * max(dot(N, W), 0.0);
+					float specularWeight = lerp(Cs, Cst, surface.g * 0.5) * NoR;
+					
+					// Final light contribution
+					float3 diffuse = (baseColor.rgb / PI) * diffuseWeight * (1.0 - F);
+					float3 specular = specularWeight * F;
+					
+					//if (!twoSided && dot(-lightDir, N) <= 0.0) {
+					//	diffuse = 0.0;
+					//	specular = 0.0;
+					//}
+					
+					float3 radiance = lightColor * intensity;
+					lighting += (diffuse + specular) * radiance;
                 }
                 else // Spot Light
                 {
