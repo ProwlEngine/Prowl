@@ -52,6 +52,7 @@ public static partial class AssetDatabase
     {
         if (Screen.IsFocused)
         {
+            // This could probably be improved to process more asyncronously
             RefreshTimer += Time.deltaTime;
             if (!lastFocused || RefreshTimer > 5f)
                 Update();
