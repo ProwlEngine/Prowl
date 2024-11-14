@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -246,6 +246,7 @@ public partial class Gui
         {
             Color pure = new Color(color.r, color.g, color.b, 1);
             Color transparent = new Color(1, 1, 1, color.a);
+            Color newColor = color;
 
             Rect rect = CurrentNode.LayoutData.Rect;
 
@@ -271,12 +272,12 @@ public partial class Gui
                     saturation = GetNodeStorage(popupNode, "SaturationStore", saturation);
                 }
 
-                using (popupNode.Scale(256, 382).Layout(LayoutType.Column).Padding(10).Enter())
+                using (popupNode.Scale(256, 400).Padding(10).Enter())
                 {
                     Rect rootRect = CurrentNode.LayoutData.Rect;
-                    double minHeight = Math.Min(rootRect.width, rootRect.height);
+                    double minHeight = Math.Min(rootRect.width, rootRect.height) - 20;
 
-                    using (Node("HueWheel").Width(minHeight - 20).Height(minHeight - 20).Padding(55).Enter())
+                    using (Node("HueWheel").Width(minHeight).Height(minHeight).Padding(55).Enter())
                     {
                         const float wheelWidth = 24;
 
@@ -322,19 +323,22 @@ public partial class Gui
                         }
                     }
 
-                    using (Node("ColorDisplay").Width(80).Top(10).Height(40).Enter())
-                    {
-                        Rect display = CurrentNode.LayoutData.Rect;
+                    hue = Math.Clamp(hue, 0, 360);
+                    saturation = Math.Clamp(saturation, 0, 1);
+                    value = Math.Clamp(value, 0, 1);
+                    alpha = Math.Clamp(alpha, 0, 1);
+                    newColor = Color.FromHSV(hue, saturation, value, alpha);
 
-                        Draw2D.DrawVerticalGradient(display.TopLeft, display.BottomLeft, 80, pure, color);
+                    using (Node("ColorValueEditor").ExpandWidth().Layout(LayoutType.Column).Spacing(10).Height(rootRect.height - 20 - (minHeight + 10)).Top(minHeight + 10).Padding(10).Enter())
+                    {
+                        FloatSlider("RedSlider", "R", ref newColor.r, 0, 1, 0, 0, Size.Percentage(1), 20, style);
+                        FloatSlider("GreenSlider", "G", ref newColor.g, 0, 1, 0, 0, Size.Percentage(1), 20, style);
+                        FloatSlider("BlueSlider", "B", ref newColor.b, 0, 1, 0, 0, Size.Percentage(1), 20, style);
+
+                        if (hasAlpha)
+                            FloatSlider("AlphaSlider", "A", ref newColor.a, 0, 1, 0, 0, Size.Percentage(1), 20, style);
                     }
                 }
-
-                hue = Math.Clamp(hue, 0, 360);
-                saturation = Math.Clamp(saturation, 0, 1);
-                value = Math.Clamp(value, 0, 1);
-                alpha = Math.Clamp(alpha, 0, 1);
-                Color newColor = Color.FromHSV(hue, saturation, value, alpha);
 
                 if (color != newColor)
                 {
