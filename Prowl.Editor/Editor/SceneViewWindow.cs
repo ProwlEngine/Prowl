@@ -504,7 +504,7 @@ public class SceneViewWindow : EditorWindow
             GridType gridType = SceneViewPreferences.Instance.GridType;
             int gridTypeIndex = (int)gridType;
 
-            Gui.WidgetStyle style = EditorGUI.GetInputStyle();
+            Gui.WidgetStyle style = EditorGUI.InputStyle;
             style.BGColor = Color.clear;
             style.BorderColor = Color.clear;
 

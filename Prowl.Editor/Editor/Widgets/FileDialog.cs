@@ -170,7 +170,7 @@ public class FileDialog : EditorWindow
                     double pathWidth = gui.CurrentNode.LayoutData.Rect.width - left + 10;
                     using (gui.Node("Path").ExpandHeight().Left(left).Width(pathWidth).Enter())
                     {
-                        Gui.WidgetStyle style = EditorGUI.GetInputStyle();
+                        Gui.WidgetStyle style = EditorGUI.InputStyle;
 
                         style.Roundness = 8f;
                         style.BorderThickness = 1f;

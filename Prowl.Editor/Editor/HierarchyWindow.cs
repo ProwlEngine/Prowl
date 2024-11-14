@@ -326,7 +326,7 @@ public class HierarchyWindow : EditorWindow
             {
                 Rect inputRect = new(rect.x + leftOffset, rect.y, maxwidth - (entryHeight * 2.25), entryHeight);
                 gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.ButtonRoundness);
-                gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 0, maxwidth - (entryHeight * 2.25), entryHeight, EditorGUI.GetInputStyle(), true);
+                gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 0, maxwidth - (entryHeight * 2.25), entryHeight, EditorGUI.InputStyle, true);
                 if (_justStartedRename)
                     gui.FocusPreviousInteractable();
                 if (!gui.PreviousInteractableIsFocus())

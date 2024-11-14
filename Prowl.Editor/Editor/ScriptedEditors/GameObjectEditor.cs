@@ -45,14 +45,14 @@ public class GameObjectEditor : ScriptedEditor
             gui.Draw2D.DrawText("This GameObject is not editable", gui.CurrentNode.LayoutData.InnerRect);
 
         bool isEnabled = go.enabled;
-        if (gui.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _, GetInputStyle()))
+        if (gui.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _, InputStyle))
         {
             go.enabled = isEnabled;
             Prefab.OnFieldChange(go, nameof(GameObject.enabled));
         }
         gui.Tooltip("Is Enabled");
 
-        WidgetStyle style = GetInputStyle();
+        WidgetStyle style = InputStyle;
         style.Roundness = 8f;
         style.BorderThickness = 1f;
         string name = go.Name;
@@ -62,7 +62,7 @@ public class GameObjectEditor : ScriptedEditor
             Prefab.OnFieldChange(go, nameof(GameObject.Name));
         }
 
-        WidgetStyle invisStyle = GetInputStyle() with { BorderColor = new Color(0, 0, 0, 0) };
+        WidgetStyle invisStyle = InputStyle with { BorderColor = new Color(0, 0, 0, 0) };
         int tagIndex = go.tagIndex;
         if (gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 3)), 0, ItemSize, ItemSize, null, null, FontAwesome6.Tag))
         {
@@ -78,7 +78,7 @@ public class GameObjectEditor : ScriptedEditor
         }
 
         bool isStatic = go.isStatic;
-        if (gui.Checkbox("IsStaticChk", ref isStatic, Offset.Percentage(1f, -(ItemSize)), 0, out _, GetInputStyle()))
+        if (gui.Checkbox("IsStaticChk", ref isStatic, Offset.Percentage(1f, -(ItemSize)), 0, out _, InputStyle))
         {
             UndoRedoManager.SetMember(go, go.GetType().GetProperty(nameof(GameObject.isStatic), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic), isStatic);
             Prefab.OnFieldChange(go, nameof(GameObject.isStatic));
@@ -265,7 +265,7 @@ public class GameObjectEditor : ScriptedEditor
                     gui.Draw2D.DrawText(cname, 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, centerY + 2));
 
                     isEnabled = comp.Enabled;
-                    if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -30), 0, out LayoutNode? chkNode, GetInputStyle()))
+                    if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -30), 0, out LayoutNode? chkNode, InputStyle))
                         comp.Enabled = isEnabled;
 
                     gui.Tooltip("Is Component Enabled?");

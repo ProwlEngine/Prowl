@@ -243,8 +243,6 @@ public partial class Gui
 
         using (Node(ID).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
         {
-            Interactable interact = GetInteractable();
-
             Color pure = new Color(color.r, color.g, color.b, 1);
             Color transparent = new Color(1, 1, 1, color.a);
 
@@ -258,7 +256,7 @@ public partial class Gui
 
             Draw2D.DrawRectFilled(footer, transparent, style.Roundness, CornerRounding.Bottom);
 
-            if (interact.TakeFocus())
+            if (GetInteractable().TakeFocus())
                 OpenPopup(popupName);
 
             if (BeginPopup(popupName, out LayoutNode? popupNode, inputstyle: pickerstyle ?? style))
@@ -271,8 +269,6 @@ public partial class Gui
                     Rect rootRect = CurrentNode.LayoutData.Rect;
                     double minHeight = Math.Min(rootRect.width, rootRect.height);
 
-                    Draw2D.DrawRect(rootRect, Color.red);
-
                     using (Node("HueWheel").Width(minHeight - 20).Height(minHeight - 20).Padding(55).Enter())
                     {
                         const float wheelWidth = 24;
@@ -280,8 +276,6 @@ public partial class Gui
                         Rect cRect = CurrentNode.LayoutData.Rect;
                         double size = Math.Min(cRect.width, cRect.height) / 2;
                         float wheelRadius = (float)size - (wheelWidth / 2);
-
-                        Draw2D.DrawRect(cRect, Color.green);
 
                         Draw2D.DrawCircle(cRect.Center, wheelRadius, ColorHues, HueWheelSegments, wheelWidth);
 
@@ -302,18 +296,11 @@ public partial class Gui
                         {
                             Rect svRect = CurrentNode.LayoutData.Rect;
 
-                            Interactable rectInteract = GetInteractable(svRect);
-                            rectInteract.TakeFocus();
-
                             DrawHSVInterpolationRect(hue, svRect);
 
                             Draw2D.DrawCircle(new Vector2(saturation * svRect.width, value * -1 * svRect.height) + svRect.BottomLeft, 6, Color.white, thickness: 2);
 
-                            rectInteract.TakeFocus();
-
-                            Draw2D.DrawRect(svRect, Color.blue);
-
-                            if (rectInteract.IsActive())
+                            if (GetInteractable().IsActive())
                             {
                                 relativePtr = PointerPos - svRect.BottomLeft;
 
