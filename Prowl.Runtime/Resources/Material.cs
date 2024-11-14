@@ -35,7 +35,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
 
     [SerializeField]
-    internal AssetRef<Shader> _shader;
+    private AssetRef<Shader> _shader;
 
     public AssetRef<Shader> Shader
     {
@@ -44,7 +44,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     }
 
     [SerializeField]
-    internal List<ShaderProperty> _serializedProperties;
+    private List<ShaderProperty> _serializedProperties;
 
     [SerializeIgnore]
     // DO NOT RENAME, its name is used in MaterialEditor to find the property "_propertyLookup", NameOf is not used since its private
