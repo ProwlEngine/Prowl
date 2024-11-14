@@ -257,12 +257,18 @@ public partial class Gui
             Draw2D.DrawRectFilled(footer, transparent, style.Roundness, CornerRounding.Bottom);
 
             if (GetInteractable().TakeFocus())
-                OpenPopup(popupName);
+                TogglePopup(popupName, rect.BottomLeft);
 
             if (BeginPopup(popupName, out LayoutNode? popupNode, inputstyle: pickerstyle ?? style))
             {
                 float alpha = color.a;
                 Color.ToHSV(color, out float hue, out float saturation, out float value);
+
+                if (Color.IsGrayscale(color))
+                {
+                    hue = GetNodeStorage(popupNode, "HueStore", hue);
+                    saturation = GetNodeStorage(popupNode, "SaturationStore", saturation);
+                }
 
                 using (popupNode.Scale(256, 382).Layout(LayoutType.Column).Padding(10).Enter())
                 {
@@ -290,7 +296,10 @@ public partial class Gui
                         Interactable wheelInteract = GetInteractable(cRect, (x, y) => len <= size && len >= size - wheelWidth);
 
                         if (wheelInteract.IsActive())
+                        {
                             hue = (float)(Math.Atan2(-ptrDir.y, -ptrDir.x) * MathD.Rad2Deg) + 180;
+                            SetNodeStorage(popupNode, "HueStore", hue);
+                        }
 
                         using (Node("SaturationValueRect").Expand().Enter())
                         {
@@ -305,6 +314,8 @@ public partial class Gui
                                 relativePtr = PointerPos - svRect.BottomLeft;
 
                                 saturation = (float)MathD.Clamp01(relativePtr.x / svRect.width);
+                                SetNodeStorage(popupNode, "SaturationStore", saturation);
+
                                 value = (float)MathD.Clamp01((relativePtr.y / svRect.height) * -1);
                             }
                         }
@@ -370,6 +381,15 @@ public partial class Gui
     public void OpenPopup(string id, Vector2? topleft = null, LayoutNode? popupHolder = null)
     {
         SetNodeStorage(popupHolder ?? CurrentNode, "Popup", true);
+        SetNodeStorage(popupHolder ?? CurrentNode, "Popup_ID", id.GetHashCode());
+        SetNodeStorage(popupHolder ?? CurrentNode, "Popup_Frame", Time.frameCount);
+        SetNodeStorage(popupHolder ?? CurrentNode, "PU_POS_" + id, topleft ?? PointerPos);
+    }
+
+
+    public void TogglePopup(string id, Vector2? topleft = null, LayoutNode? popupHolder = null)
+    {
+        SetNodeStorage(popupHolder ?? CurrentNode, "Popup", !GetNodeStorage(popupHolder ?? CurrentNode, "Popup", false));
         SetNodeStorage(popupHolder ?? CurrentNode, "Popup_ID", id.GetHashCode());
         SetNodeStorage(popupHolder ?? CurrentNode, "Popup_Frame", Time.frameCount);
         SetNodeStorage(popupHolder ?? CurrentNode, "PU_POS_" + id, topleft ?? PointerPos);

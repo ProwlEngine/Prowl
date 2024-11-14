@@ -200,6 +200,12 @@ public struct Color : IEquatable<Color>
     }
 
 
+    public static bool IsGrayscale(Color color)
+    {
+        return Mathf.ApproximatelyEquals(color.r, color.g) && Mathf.ApproximatelyEquals(color.g, color.b);
+    }
+
+
     public static Color operator +(Color a, Color b) => new(a.r + b.r, a.g + b.g, a.b + b.b, a.a + b.a);
 
     public static Color operator /(Color a, float b) => new(a.r / b, a.g / b, a.b / b, a.a / b);
