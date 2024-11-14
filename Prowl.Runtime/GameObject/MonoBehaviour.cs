@@ -22,6 +22,9 @@ public abstract class MonoBehaviour : EngineObject
     private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
 
     [SerializeField, HideInInspector]
+    private Guid _identifier = Guid.NewGuid();
+
+    [SerializeField, HideInInspector]
     protected internal bool _enabled = true;
     [SerializeField, HideInInspector]
     protected internal bool _enabledInHierarchy = true;
@@ -44,6 +47,11 @@ public abstract class MonoBehaviour : EngineObject
     private bool _hasAwoken = false;
     [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
     private bool _hasStarted = false;
+
+    /// <summary>
+    /// Gets the identifier for this MonoBehaviour.
+    /// </summary>
+    public Guid Identifier => _identifier;
 
     /// <summary>
     /// Gets the GameObject this MonoBehaviour is attached to.
@@ -546,6 +554,7 @@ public abstract class MonoBehaviour : EngineObject
             System.Diagnostics.Debugger.Break();
 
         MonoBehaviour target = targetObj as MonoBehaviour;
+        target._identifier = _identifier;
         target._enabled = _enabled;
         target._enabledInHierarchy = _enabledInHierarchy;
         this.OnCopyDataTo(targetObj, operation);

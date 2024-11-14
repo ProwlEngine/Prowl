@@ -24,6 +24,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     private OrderedDictionary<Type, MonoBehaviour> _components = [];
 
+    private Guid _identifier = Guid.NewGuid();
+
     private bool _static = false;
 
     private bool _enabled = true;
@@ -87,6 +89,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         set => _static = value;
     }
 
+    /// <summary> The Identifier of this GameObject </summary>
+    public Guid Identifier => _identifier;
 
     /// <summary> The Parent of this GameObject, Can be null </summary>
     public GameObject? parent => _parent;
@@ -975,6 +979,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         SerializedProperty compoundTag = SerializedProperty.NewCompound();
         compoundTag.Add("Name", new SerializedProperty(Name));
 
+        compoundTag.Add("Identifier", new SerializedProperty(_identifier.ToString()));
         compoundTag.Add("Static", new SerializedProperty((byte)(_static ? 1 : 0)));
 
         compoundTag.Add("Enabled", new SerializedProperty((byte)(_enabled ? 1 : 0)));
@@ -1016,6 +1021,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
     {
         Name = value["Name"].StringValue;
+        if (Guid.TryParse(value["Identifier"]?.StringValue ?? "", out var identifier))
+            _identifier = identifier;
         _static = value["Static"]?.ByteValue == 1;
         _enabled = value["Enabled"]?.ByteValue == 1;
         _enabledInHierarchy = value["EnabledInHierarchy"]?.ByteValue == 1;
@@ -1205,16 +1212,20 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     {
         GameObject target = targetObj as GameObject;
 
+        // InstanceID is special and should not be copied
+        // Its a value guranteed to be unique to each instance of an EngineObject
+        //target._instanceID = _instanceID;
+
         // Copy plain old data
         target.Name = Name;
+        if (!operation.Context.PreserveIdentity)
+            target._identifier = _identifier;
         target._static = _static;
         target._enabled = _enabled;
         target._enabledInHierarchy = _enabledInHierarchy;
         target.tagIndex = tagIndex;
         target.layerIndex = layerIndex;
         target.hideFlags = hideFlags;
-        if (!operation.Context.PreserveIdentity)
-            target._instanceID = _instanceID;
 
         target.AssetID = AssetID;
         target.FileID = FileID;
