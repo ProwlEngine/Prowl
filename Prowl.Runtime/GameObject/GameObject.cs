@@ -1211,13 +1211,25 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         {
             // Destroy all Components in the target GameObject
             for (int i = target._components.Count - 1; i >= 0; i--)
-                target._components.ElementAt(i).DestroyImmediate();
+            {
+                var targetsIdentifier = target._components[i].Identifier;
+                // If we dont have that identifier then we can delete it
+                if (GetComponentInChildrenByIdentifier(targetsIdentifier) == null)
+                    target._components.ElementAt(i).DestroyImmediate();
+            }
 
             // Destroy all child objects in the target GameObject
             if (target.children != null)
             {
                 for (int i = target.children.Count - 1; i >= 0; i--)
-                    target.children[i].DestroyImmediate();
+                {
+                    var targetsIdentifier = target.children[i].Identifier;
+                    var ourComp = FindChildByIdentifier(targetsIdentifier);
+                    int? index = ourComp.GetSiblingIndex();
+                    // If we dont have that identifier then we can delete it
+                    if (ourComp == null)
+                        target.children[i].DestroyImmediate();
+                }
             }
         }
 
