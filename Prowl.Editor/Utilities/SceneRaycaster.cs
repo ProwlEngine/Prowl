@@ -18,7 +18,7 @@ public static class SceneRaycaster
 
     public static MeshHitInfo? Raycast(Camera cam, Vector2 rayUV, Vector2 screenScale)
     {
-        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out Guid id))
+        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out int id))
             return new MeshHitInfo(EngineObject.FindObjectByID<MeshRenderer>(id)?.GameObject, pos);
 
         return null;
@@ -27,7 +27,7 @@ public static class SceneRaycaster
 
     public static GameObject? GetObject(Camera cam, Vector2 rayUV, Vector2 screenScale)
     {
-        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out Guid id))
+        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out int id))
             return EngineObject.FindObjectByID<MeshRenderer>(id)?.GameObject;
 
         return null;
@@ -36,7 +36,7 @@ public static class SceneRaycaster
 
     public static Vector3? GetPosition(Camera cam, Vector2 rayUV, Vector2 screenScale)
     {
-        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out Guid id))
+        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out int id))
             return pos;
 
         return null;
@@ -49,7 +49,7 @@ public static class SceneRaycaster
     }
 
 
-    private static bool RenderRaycast(Camera camera, Vector2 rayUV, Vector2 screenScale, out Vector3 position, out Guid objectID)
+    private static bool RenderRaycast(Camera camera, Vector2 rayUV, Vector2 screenScale, out Vector3 position, out int objectID)
     {
         camera.UpdateRenderData();
         Ray ray = camera.ScreenPointToRay(rayUV, screenScale);
@@ -79,7 +79,7 @@ public static class SceneRaycaster
         if (hits.Count == 0)
         {
             position = Vector3.zero;
-            objectID = Guid.Empty;
+            objectID = -1;
             return false;
         }
 
@@ -89,7 +89,7 @@ public static class SceneRaycaster
         // Track closest intersection across all meshes
         double closestDistance = double.MaxValue;
         Vector3 closestPosition = Vector3.zero;
-        Guid closestObjectId = Guid.Empty;
+        int closestObjectId = -1;
         bool foundAny = false;
 
         foreach ((double, MeshRenderer) hit in hits)
@@ -148,13 +148,8 @@ public static class SceneRaycaster
         }
 
         position = Vector3.zero;
-        objectID = Guid.Empty;
+        objectID = -1;
         return false;
-
-        //(double, Guid) hit = hits[0];
-        //position = ray.Position(hit.Item1);
-        //objectID = hit.Item2;
-        //return true;
     }
 
 

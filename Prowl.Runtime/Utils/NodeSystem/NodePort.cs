@@ -83,7 +83,7 @@ public class NodePort
     [SerializeField] private Node.TypeConstraint _typeConstraint;
     [SerializeField] private bool _dynamic;
     [SerializeField] private bool _onHeader;
-    [SerializeField] public Guid InstanceID = Guid.Empty;
+    [SerializeField] public int InstanceID = 0;
 
     public NodePort() { } // For Serialization
 
@@ -117,7 +117,7 @@ public class NodePort
             }
         }
         _node = node;
-        InstanceID = Guid.NewGuid();
+        InstanceID = node?.graph.NextID ?? 0;
     }
 
     /// <summary> Copy a nodePort but assign it to another node. </summary>
@@ -131,7 +131,7 @@ public class NodePort
         _connectionType = nodePort._connectionType;
         _typeConstraint = nodePort._typeConstraint;
         _node = node;
-        InstanceID = Guid.NewGuid();
+        InstanceID = _node.graph.NextID;
     }
 
     /// <summary> Construct a dynamic port. Dynamic ports are not forgotten on reimport, and is ideal for runtime-created ports. </summary>
@@ -145,7 +145,7 @@ public class NodePort
         _onHeader = onHeader;
         _connectionType = connectionType;
         _typeConstraint = typeConstraint;
-        InstanceID = Guid.NewGuid();
+        InstanceID = _node.graph.NextID;
     }
 
     /// <summary> Checks all connections for invalid references, and removes them. </summary>
@@ -332,7 +332,7 @@ public class NodePort
     }
 
     /// <summary> Get instance id of the connection connecting this</summary>
-    public Guid GetConnectionInstanceID(int i)
+    public int GetConnectionInstanceID(int i)
     {
         return _connections[i].InstanceID;
     }
@@ -516,7 +516,7 @@ public class NodePort
     {
         [SerializeField] public string fieldName;
         [SerializeField] public Node node;
-        [SerializeField] public Guid InstanceID = Guid.Empty;
+        [SerializeField] public int InstanceID = 0;
         public NodePort Port { get { return _port ??= GetPort(); } }
 
         [SerializeIgnore] private NodePort _port;
@@ -530,7 +530,7 @@ public class NodePort
             _port = port;
             node = port.node;
             fieldName = port.fieldName;
-            InstanceID = Guid.NewGuid();
+            InstanceID = node.graph.NextID;
         }
 
         /// <summary> Returns the port that this <see cref="PortConnection"/> points to </summary>

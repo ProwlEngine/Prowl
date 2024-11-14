@@ -22,6 +22,9 @@ public abstract class MonoBehaviour : EngineObject
     private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
 
     [SerializeField, HideInInspector]
+    private Guid _identifier = Guid.NewGuid();
+
+    [SerializeField, HideInInspector]
     protected internal bool _enabled = true;
     [SerializeField, HideInInspector]
     protected internal bool _enabledInHierarchy = true;
@@ -44,6 +47,11 @@ public abstract class MonoBehaviour : EngineObject
     private bool _hasAwoken = false;
     [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
     private bool _hasStarted = false;
+
+    /// <summary>
+    /// Gets the identifier for this MonoBehaviour.
+    /// </summary>
+    public Guid Identifier => _identifier;
 
     /// <summary>
     /// Gets the GameObject this MonoBehaviour is attached to.
@@ -113,23 +121,43 @@ public abstract class MonoBehaviour : EngineObject
 
     #region Component API
     // This is used to make the Component API more similar to Unity's, Its generally recommended to use the GameObject instead
+    /// <inheritdoc cref="GameObject.AddComponent{T}"/>"
     public T AddComponent<T>() where T : MonoBehaviour, new() => (T)AddComponent(typeof(T));
+    /// <inheritdoc cref="GameObject.AddComponent(Type)"/>"
     public MonoBehaviour AddComponent(Type type) => GameObject.AddComponent(type);
+    /// <inheritdoc cref="GameObject.RemoveComponent{T}"/>"
     public void RemoveComponent<T>(T component) where T : MonoBehaviour => GameObject.RemoveComponent(component);
+    /// <inheritdoc cref="GameObject.RemoveComponent(Type)"/>"
     public void RemoveComponent(MonoBehaviour component) => GameObject.RemoveComponent(component);
+    /// <inheritdoc cref="GameObject.RemoveComponent(MonoBehaviour)"/>"
     public void RemoveSelf() => GameObject.RemoveComponent(this);
+    /// <inheritdoc cref="GameObject.GetComponent{T}"/>"
     public T? GetComponent<T>() where T : MonoBehaviour => GameObject.GetComponent<T>();
+    /// <inheritdoc cref="GameObject.GetComponent(Type)"/>"
     public MonoBehaviour? GetComponent(Type type) => GameObject.GetComponent(type);
+    /// <inheritdoc cref="GameObject.GetComponentByIdentifier(Guid)"/>"
+    public MonoBehaviour? GetComponentByIdentifier(Guid identifier) => GameObject.GetComponentByIdentifier(identifier);
+    /// <inheritdoc cref="GameObject.TryGetComponent{T}(out T)"/>"
     public bool TryGetComponent<T>(out T component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
+    /// <inheritdoc cref="GameObject.GetComponents{T}"/>"
     public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour => GameObject.GetComponents<T>();
+    /// <inheritdoc cref="GameObject.GetComponents(Type)"/>"
     public IEnumerable<MonoBehaviour> GetComponents(Type type) => GameObject.GetComponents(type);
+    /// <inheritdoc cref="GameObject.GetComponentInParent{T}"/>"
     public T? GetComponentInParent<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentInParent<T>(includeSelf);
+    /// <inheritdoc cref="GameObject.GetComponentInParent(Type, bool, bool)"/>"
     public MonoBehaviour? GetComponentInParent(Type componentType, bool includeSelf = true) => GameObject.GetComponentInParent(componentType, includeSelf);
+    /// <inheritdoc cref="GameObject.GetComponentsInParent{T}"/>"
     public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInParent<T>(includeSelf);
+    /// <inheritdoc cref="GameObject.GetComponentsInParent(Type, bool, bool)"/>"
     public IEnumerable<MonoBehaviour> GetComponentsInParent(Type type, bool includeSelf = true) => GameObject.GetComponentsInParent(type, includeSelf);
+    /// <inheritdoc cref="GameObject.GetComponentInChildren{T}"/>"
     public T? GetComponentInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentInChildren<T>(includeSelf);
+    /// <inheritdoc cref="GameObject.GetComponentInChildren(Type, bool, bool)"/>"
     public MonoBehaviour? GetComponentInChildren(Type componentType, bool includeSelf = true) => GameObject.GetComponentInChildren(componentType, includeSelf);
+    /// <inheritdoc cref="GameObject.GetComponentsInChildren{T}"/>"
     public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInChildren<T>(includeSelf);
+    /// <inheritdoc cref="GameObject.GetComponentsInChildren(Type, bool, bool)"/>"
     public IEnumerable<MonoBehaviour> GetComponentsInChildren(Type type, bool includeSelf = true) => GameObject.GetComponentsInChildren(type, includeSelf);
     #endregion
 
@@ -546,6 +574,7 @@ public abstract class MonoBehaviour : EngineObject
             System.Diagnostics.Debugger.Break();
 
         MonoBehaviour target = targetObj as MonoBehaviour;
+        target._identifier = _identifier;
         target._enabled = _enabled;
         target._enabledInHierarchy = _enabledInHierarchy;
         this.OnCopyDataTo(targetObj, operation);
