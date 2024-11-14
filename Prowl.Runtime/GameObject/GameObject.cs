@@ -428,6 +428,27 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     }
 
     /// <summary>
+    /// Finds child a GameObject by its identifier.
+    /// </summary>
+    /// <param name="identifier"></param>
+    /// <returns></returns>
+    public GameObject FindChildByIdentifier(Guid identifier)
+    {
+        if (_identifier == identifier)
+            return this;
+
+        foreach (GameObject child in children)
+        {
+            if (child.Identifier == identifier)
+                return child;
+            GameObject found = child.FindChildByIdentifier(identifier);
+            if (found != null)
+                return found;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Performs pre-update operations on the GameObject's components.
     /// </summary>
     internal void PreUpdate()
