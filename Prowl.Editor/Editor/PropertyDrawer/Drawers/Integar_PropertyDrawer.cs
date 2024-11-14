@@ -13,7 +13,7 @@ public class Integar_PropertyDrawer<T> : PropertyDrawer
     public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
     {
         long val = Convert.ToInt64(value);
-        bool changed = EditorGUI.InputLong(ID + "Val", ref val, 0, 0, Size.Percentage(1f), EditorGUI.InputFieldStyle);
+        bool changed = gui.InputLong(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
         if (changed)
             value = (T)Convert.ChangeType(val, typeof(T));
         return changed;

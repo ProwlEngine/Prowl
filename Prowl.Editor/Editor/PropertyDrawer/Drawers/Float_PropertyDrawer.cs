@@ -14,7 +14,7 @@ public class Float_PropertyDrawer : PropertyDrawer
     public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
     {
         float val = (float)value!;
-        bool changed = EditorGUI.InputFloat(ID + "Val", ref val, 0, 0, Size.Percentage(1f), EditorGUI.InputFieldStyle);
+        bool changed = gui.InputFloat(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
         value = val;
         return changed;
     }
