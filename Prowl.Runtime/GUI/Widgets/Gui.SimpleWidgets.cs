@@ -92,7 +92,7 @@ public partial class Gui
 
                 popupWidth = Math.Max(popupWidth, longestText + 20);
 
-                using (popupNode.Width(popupWidth).Height(items.Length * style.ItemSize).MaxHeight(250).Scroll().Layout(LayoutType.Column).Clip().Enter())
+                using (popupNode.Width(popupWidth).Height(items.Length * style.ItemSize).MaxHeight(250).Scroll(inputstyle: style).Layout(LayoutType.Column).Clip().Enter())
                 {
                     for (int i = 0; i < items.Length; ++i)
                     {

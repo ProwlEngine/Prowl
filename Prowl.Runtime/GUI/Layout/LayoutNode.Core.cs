@@ -102,8 +102,11 @@ public partial class LayoutNode
     private Offset _paddingRight = Offset.Default;
     private Offset _paddingTop = Offset.Default;
     private Offset _paddingBottom = Offset.Default;
+
+    private Gui.WidgetStyle _scrollStyle;
     private bool _showVScroll = false;
     private bool _showHScroll = false;
+
     private bool _ignore = false;
     private bool _fitContentX = false;
     private double _fitContentXPerc = 1f;
@@ -313,8 +316,6 @@ public partial class LayoutNode
         // Draw Scroll bars
         if (_data.IsVScrollVisible)
         {
-            Gui.WidgetStyle style = new(30);
-
             LayoutNode n;
             using ((n = AppendNode("_VScroll")).Width(ScrollBarSize).Height(Size.Percentage(1f)).Left(Offset.Percentage(1f)).IgnoreLayout().Enter())
             {
@@ -332,14 +333,14 @@ public partial class LayoutNode
 
                 if (interact.TakeFocus() || interact.IsActive())
                 {
-                    Gui.Draw2D.DrawRectFilled(barRect, style.ActiveColor, style.Roundness);
+                    Gui.Draw2D.DrawRectFilled(barRect, _scrollStyle.ActiveColor, _scrollStyle.Roundness);
                     {
                         VScroll += Gui.PointerDelta.y / scrollRatio;
                         Gui.layoutDirty = true;
                     }
                 }
-                else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.HoveredColor, style.Roundness);
-                else Gui.Draw2D.DrawRectFilled(barRect, style.BGColor * 1.8f, style.Roundness);
+                else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, _scrollStyle.HoveredColor, _scrollStyle.Roundness);
+                else Gui.Draw2D.DrawRectFilled(barRect, _scrollStyle.BGColor * 1.8f, _scrollStyle.Roundness);
 
                 if (Gui.IsPointerHovering(LayoutData.InnerRect) && Gui.PointerWheel != 0)
                 {

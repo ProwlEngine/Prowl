@@ -88,7 +88,7 @@ public class InspectorWindow : EditorWindow
             }
         }
 
-        using (gui.Node("Content").ExpandWidth().Padding(5, 10, 10, 10).Clip().Scroll().Enter())
+        using (gui.Node("Content").ExpandWidth().Padding(5, 10, 10, 10).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             if (Selected == null)
             {

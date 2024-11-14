@@ -106,9 +106,11 @@ public partial class LayoutNode
         return this;
     }
 
-    public LayoutNode Scroll(bool vertical = true, bool horizontal = true)
+    public LayoutNode Scroll(bool vertical = true, bool horizontal = true, Gui.WidgetStyle? inputstyle = null)
     {
         Gui.ScollableNodes.Add(this);
+
+        _scrollStyle = inputstyle ?? new(30);
         _showVScroll = vertical;
         _showHScroll = horizontal;
         return this;

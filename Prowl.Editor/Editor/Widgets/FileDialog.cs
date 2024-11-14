@@ -189,7 +189,7 @@ public class FileDialog : EditorWindow
 
                 if (Dialog.parentDirectory.Exists)
                 {
-                    using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).Height(Size.Percentage(1f, -ItemSize * 2)).Top(ItemSize).PaddingTop(10).Clip().Scroll().Enter())
+                    using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).Height(Size.Percentage(1f, -ItemSize * 2)).Top(ItemSize).PaddingTop(10).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
                     {
                         // name = 50%, size = 20%, date = 20%, type = 10%
 

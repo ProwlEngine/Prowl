@@ -684,7 +684,7 @@ public class ModelEditor : ScriptedEditor
         }
 
 
-        using (gui.Node("Content").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Scroll().Enter())
+        using (gui.Node("Content").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             switch (_selectedTab)
             {
@@ -794,7 +794,7 @@ public class ModelEditor : ScriptedEditor
 
         if (animations.Count() <= 0) return;
 
-        using (gui.Node("AnimationList").Padding(10).ExpandWidth().MaxHeight(300).Clip().FitContentHeight().Layout(LayoutType.Column).Scroll().Enter())
+        using (gui.Node("AnimationList").Padding(10).ExpandWidth().MaxHeight(300).Clip().FitContentHeight().Layout(LayoutType.Column).Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
             for (int i = 0; i < animations.Count(); i++)
@@ -817,7 +817,7 @@ public class ModelEditor : ScriptedEditor
 
             if (anim.Bones.Count <= 0) return;
 
-            using (gui.Node("BoneList").Padding(10).ExpandWidth().MaxHeight(300).Clip().FitContentHeight().Layout(LayoutType.Column).Scroll().Enter())
+            using (gui.Node("BoneList").Padding(10).ExpandWidth().MaxHeight(300).Clip().FitContentHeight().Layout(LayoutType.Column).Scroll(inputstyle: EditorGUI.InputStyle).Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
                 for (int i = 0; i < anim.Bones.Count; i++)

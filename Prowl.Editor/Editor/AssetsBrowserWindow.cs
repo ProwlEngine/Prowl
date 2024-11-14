@@ -196,7 +196,7 @@ public class AssetsBrowserWindow : EditorWindow
 
     public void RenderBody()
     {
-        using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Grid).Clip().Scroll().Enter())
+        using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Grid).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
             var dropInteract = gui.GetInteractable();

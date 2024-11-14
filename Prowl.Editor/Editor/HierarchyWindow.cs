@@ -77,7 +77,7 @@ public class HierarchyWindow : EditorWindow
         }
 
 
-        using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Scroll().Enter())
+        using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             //gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
 

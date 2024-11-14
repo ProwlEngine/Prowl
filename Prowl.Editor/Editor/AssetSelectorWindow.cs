@@ -42,7 +42,7 @@ public class AssetSelectorWindow : EditorWindow
             gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), ItemSize, EditorGUI.InputFieldStyle);
         }
 
-        using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Clip().Scroll().Enter())
+        using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             double xPos = gui.CurrentNode.LayoutData.InnerRect.x + 3;
             using (gui.Node("None", -1).Width(Size.Percentage(1f)).Height(ItemSize).Enter())

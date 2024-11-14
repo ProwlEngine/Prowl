@@ -159,7 +159,7 @@ public class ProjectsWindow : EditorWindow
 
             using (gui.Node("Projects").ExpandWidth(-7.5).ExpandHeight().Enter())
             {
-                using (gui.Node("List").TopLeft(25, 45).ExpandWidth(-7.5).ExpandHeight(-45).Layout(LayoutType.Column).Spacing(5).Clip().Scroll().Enter())
+                using (gui.Node("List").TopLeft(25, 45).ExpandWidth(-7.5).ExpandHeight(-45).Layout(LayoutType.Column).Spacing(5).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
                 {
                     for (int i = 0; i < ProjectCache.Instance.ProjectsCount; i++)
                     {

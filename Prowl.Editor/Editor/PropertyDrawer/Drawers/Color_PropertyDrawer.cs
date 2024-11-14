@@ -17,7 +17,7 @@ public class Color_PropertyDrawer : PropertyDrawer
     public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
     {
         Color color = (Color)value;
-        bool changed = gui.ColorPicker(ID, $"{ID}_ColorPopup", ref color, false, 0, 0, Size.Percentage(1), Size.Percentage(1), EditorGUI.InputStyle);
+        bool changed = gui.ColorPicker(ID, $"{ID}_ColorPopup", ref color, true, 0, 0, Size.Percentage(1), Size.Percentage(1), EditorGUI.InputStyle);
         value = color;
 
         return changed;

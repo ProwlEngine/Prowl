@@ -180,7 +180,7 @@ public class ConsoleWindow : EditorWindow
 
         using (gui.Node("LogContent").ExpandHeight().ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Spacing(10).Padding(0, 5, 5, 5).Enter())
         {
-            using (gui.Node("List").ExpandHeight().Layout(LayoutType.Column).Scroll(true, false).Clip().Enter())
+            using (gui.Node("List").ExpandHeight().Layout(LayoutType.Column).Scroll(true, false, EditorGUI.InputStyle).Clip().Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
 
@@ -205,7 +205,7 @@ public class ConsoleWindow : EditorWindow
             if (_selectedMessage == null)
                 return;
 
-            using (gui.Node("Expanded").ExpandHeight().Layout(LayoutType.Column).Spacing(5).Scroll().Clip().Enter())
+            using (gui.Node("Expanded").ExpandHeight().Layout(LayoutType.Column).Spacing(5).Scroll(inputstyle: EditorGUI.InputStyle).Clip().Enter())
             {
                 if (DrawExpandedMessage(_selectedMessage))
                     _selectedMessage = null;

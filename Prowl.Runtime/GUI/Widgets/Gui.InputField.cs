@@ -111,7 +111,7 @@ public partial class Gui
                 Vector2 textSize = (style.Font.IsAvailable ? style.Font.Res : Font.DefaultFont).CalcTextSize(value, 0, g.CurrentNode.LayoutData.InnerRect.width);
                 // Dummy node to update ContentRect
                 g.Node(ID).Width(textSize.x).Height(textSize.y).IgnoreLayout();
-                g.CurrentNode.Scroll();
+                g.CurrentNode.Scroll(inputstyle: style);
             }
 
             return ValueChanged;

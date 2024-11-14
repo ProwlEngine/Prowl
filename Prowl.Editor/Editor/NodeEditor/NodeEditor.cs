@@ -1149,7 +1149,7 @@ public class NodeEditor
                             largestWidth = width;
                     }
 
-                    using (node!.Width(largestWidth).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().MaxHeight(400).Scroll().Clip().Enter())
+                    using (node!.Width(largestWidth).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().MaxHeight(400).Scroll(inputstyle: EditorGUI.InputStyle).Clip().Enter())
                     {
                         DrawMenuItems(item, g);
                     }
