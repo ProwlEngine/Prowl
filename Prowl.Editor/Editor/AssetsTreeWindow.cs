@@ -388,7 +388,7 @@ public class AssetsTreeWindow : EditorWindow
                     var inputRect = new Rect(rect.x + 33, rect.y, rect.width - 40, EditorStylePrefs.Instance.ItemSize);
                     gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, 8);
                     var name = Path.GetFileNameWithoutExtension(subDirectory.Name);
-                    bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), EditorStylePrefs.Instance.ItemSize, EditorGUI.GetInputStyle(), true);
+                    bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), EditorStylePrefs.Instance.ItemSize, EditorGUI.InputStyle, true);
                     if (justStartedRename)
                         gui.FocusPreviousInteractable();
                     if (!gui.PreviousInteractableIsFocus())
@@ -477,7 +477,7 @@ public class AssetsTreeWindow : EditorWindow
                     var inputRect = new Rect(rect.x + 33, rect.y + 4, rect.width - 40, 30 - 8);
                     gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, 8);
                     var name = Path.GetFileNameWithoutExtension(subFile.Name);
-                    bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), null, EditorGUI.GetInputStyle(), true);
+                    bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), null, EditorGUI.InputStyle, true);
                     if (justStartedRename)
                         gui.FocusPreviousInteractable();
                     if (!gui.PreviousInteractableIsFocus())

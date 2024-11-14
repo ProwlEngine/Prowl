@@ -124,7 +124,7 @@ public static class EditorGUI
         if (changed)
         {
             // Try parse directly
-            if (Double.TryParse(textValue, out value)) return true;
+            if (double.TryParse(textValue, out value)) return true;
             // Failed try parsing using an arithmetic parser
             try
             {
@@ -184,11 +184,49 @@ public static class EditorGUI
     }
 
 
-    public static WidgetStyle VectorXStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Red, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
-    public static WidgetStyle VectorYStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Emerald, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
-    public static WidgetStyle VectorZStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Blue, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
+    public static WidgetStyle VectorXStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize)
+    {
+        TextColor = EditorStylePrefs.Red,
+        BGColor = EditorStylePrefs.Instance.WindowBGOne,
+        BorderColor = EditorStylePrefs.Instance.Borders,
+        BorderThickness = 1,
+        Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness
+    };
 
-    public static WidgetStyle InputFieldStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Emerald, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
+    public static WidgetStyle VectorYStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize)
+    {
+        TextColor = EditorStylePrefs.Emerald,
+        BGColor = EditorStylePrefs.Instance.WindowBGOne,
+        BorderColor = EditorStylePrefs.Instance.Borders,
+        BorderThickness = 1,
+        Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness
+    };
+
+    public static WidgetStyle VectorZStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize)
+    {
+        TextColor = EditorStylePrefs.Blue,
+        BGColor = EditorStylePrefs.Instance.WindowBGOne,
+        BorderColor = EditorStylePrefs.Instance.Borders,
+        BorderThickness = 1,
+        Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness
+    };
+
+    public static WidgetStyle InputStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize)
+    {
+        BGColor = EditorStylePrefs.Instance.WindowBGOne,
+        BorderColor = EditorStylePrefs.Instance.Borders,
+        BorderThickness = 1,
+        Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness
+    };
+
+    public static WidgetStyle InputFieldStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize)
+    {
+        TextColor = EditorStylePrefs.Emerald,
+        BGColor = EditorStylePrefs.Instance.WindowBGOne,
+        BorderColor = EditorStylePrefs.Instance.Borders,
+        BorderThickness = 1,
+        Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness
+    };
 
 
     #region PropertyGrid
@@ -465,11 +503,6 @@ public static class EditorGUI
                 }
         }
         return false;
-    }
-
-    internal static WidgetStyle GetInputStyle()
-    {
-        return new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
     }
 
     #endregion

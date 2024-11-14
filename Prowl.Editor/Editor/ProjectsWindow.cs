@@ -111,7 +111,7 @@ public class ProjectsWindow : EditorWindow
         {
             using (gui.Node("TopBar").ExpandWidth().MaxHeight(40).Enter())
             {
-                gui.Search("SearchInput", ref _searchText, 30, 10, 150, null, EditorGUI.GetInputStyle());
+                gui.Search("SearchInput", ref _searchText, 30, 10, 150, null, EditorGUI.InputStyle);
 
                 if (!_createTabOpen)
                 {
@@ -342,7 +342,7 @@ public class ProjectsWindow : EditorWindow
         {
             gui.Draw2D.DrawText("Project Name", 20, gui.CurrentNode.LayoutData.Rect.Position, color: Color.white * 0.65f);
 
-            gui.InputField("SearchInput", ref _createName, 0x100, Gui.InputFieldFlags.None, 0, 20, gui.CurrentNode.LayoutData.Rect.width, null, EditorGUI.GetInputStyle());
+            gui.InputField("SearchInput", ref _createName, 0x100, Gui.InputFieldFlags.None, 0, 20, gui.CurrentNode.LayoutData.Rect.width, null, EditorGUI.InputStyle);
         }
 
         if (Input.GetKeyDown(Key.Escape))

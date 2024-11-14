@@ -98,7 +98,7 @@ public class BuildWindow : EditorWindow
 
         using (gui.Node("BuildTargets").ExpandWidth().Height(75).Enter())
         {
-            gui.InputField("CreateInput", ref buildName, 0x100, Gui.InputFieldFlags.None, 0, 15, 400, null, EditorGUI.GetInputStyle());
+            gui.InputField("CreateInput", ref buildName, 0x100, Gui.InputFieldFlags.None, 0, 15, 400, null, EditorGUI.InputStyle);
 
             string path = Path.Combine(Project.Active.ProjectPath, "Builds", buildName);
             string displayPath = path;
