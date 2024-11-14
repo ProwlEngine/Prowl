@@ -250,7 +250,7 @@ public class SceneViewWindow : EditorWindow
                     moveDir = Vector3.Normalize(moveDir);
                     if (gui.IsKeyDown(Key.LeftShift))
                         moveDir *= 2.0f;
-                    Cam.Transform.position += moveDir * (Time.deltaTimeF *2.5f) * moveSpeed;
+                    Cam.Transform.position += moveDir * (Time.deltaTimeF * 2.5f) * moveSpeed;
 
                     // Get Exponentially faster
                     moveSpeed += Time.deltaTimeF * 0.0001;
@@ -499,7 +499,7 @@ public class SceneViewWindow : EditorWindow
                 if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
             }
-            gui.Tooltip("Select Editor Camera", align: Gui.TooltipAlign.Right);
+            gui.Tooltip("Select Editor Camera", align: TooltipAlign.Right);
 
             GridType gridType = SceneViewPreferences.Instance.GridType;
             int gridTypeIndex = (int)gridType;
@@ -523,7 +523,7 @@ public class SceneViewWindow : EditorWindow
                 if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
             }
-            gui.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"), align: Gui.TooltipAlign.Right);
+            gui.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"), align: TooltipAlign.Right);
 
             using (gui.Node("OpenPreferences").Scale(buttonSize).Enter())
             {
@@ -534,7 +534,7 @@ public class SceneViewWindow : EditorWindow
                 if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
             }
-            gui.Tooltip("Open Editor Preferences", align: Gui.TooltipAlign.Right);
+            gui.Tooltip("Open Editor Preferences", align: TooltipAlign.Right);
         }
     }
 

@@ -45,7 +45,7 @@ public partial class Gui
         _oldinteractables.Clear();
         _oldblockers.Clear();
         _oldinteractables = new(_interactables);
-        _oldblockers = [.._blockers];
+        _oldblockers = [.. _blockers];
         _interactables.Clear();
         _blockers.Clear();
         _zInteractableCounter.Clear();
@@ -87,7 +87,8 @@ public partial class Gui
     /// Otherwise returned the existing one found on this node
     /// </summary>
     /// <returns></returns>
-    public Interactable GetInteractable(Rect? interactArea = null) => GetInteractable(CurrentNode, interactArea);
+    public Interactable GetInteractable(Rect? interactArea = null, Func<Vector2, Interactable, bool>? contains = null)
+        => GetInteractable(CurrentNode, interactArea, contains);
 
     /// <summary>
     /// Get an interactable for the current node
@@ -95,7 +96,7 @@ public partial class Gui
     /// Otherwise returned the existing one found on this node
     /// </summary>
     /// <returns></returns>
-    public Interactable GetInteractable(LayoutNode target, Rect? interactArea = null)
+    public Interactable GetInteractable(LayoutNode target, Rect? interactArea = null, Func<Vector2, Interactable, bool>? contains = null)
     {
         Rect rect = interactArea ?? target.LayoutData.Rect;
 
@@ -105,11 +106,12 @@ public partial class Gui
             return _interactables[target.ID];
 
         if (!_oldinteractables.TryGetValue(target.ID, out Interactable interact))
-            interact = new(this, target.ID, rect, GetNextInteractableLayer(CurrentZIndex));
+            interact = new(this, target.ID, rect, GetNextInteractableLayer(CurrentZIndex), contains);
         else
         {
-            interact._rect = rect;
-            interact.zIndex = GetNextInteractableLayer(CurrentZIndex);
+            interact._interactRect = rect;
+            interact._contains = contains;
+            interact._zIndex = GetNextInteractableLayer(CurrentZIndex);
         }
 
         _interactables[target.ID] = interact;
@@ -137,7 +139,7 @@ public partial class Gui
         bool isObstructed = false;
         foreach (var interactable in _oldinteractables.Values)
         {
-            if (interactable._id != ignoreID && interactable.zIndex > zIndex && interactable._rect.Contains(pos))
+            if (interactable._id != ignoreID && interactable._zIndex > zIndex && interactable.Contains(pos))
             {
                 isObstructed = true;
                 break;
@@ -160,8 +162,10 @@ public partial class Gui
     }
 
     internal bool IsPointerOver(Rect rect) => PointerPos.x >= rect.x && PointerPos.x <= rect.x + rect.width && PointerPos.y >= rect.y && PointerPos.y <= rect.y + rect.height;
+
     /// <inheritdoc cref="IsPointerHovering(Rect)"/>
     public bool IsPointerHovering() => IsPointerHovering(CurrentNode.LayoutData.Rect);
+
     /// <summary>
     /// Checks if the pointer is hovering over the given rect
     /// Taking into account the current clip rect
@@ -263,22 +267,32 @@ public partial class Gui
 
 public struct Interactable
 {
+    public Rect Rect => _interactRect;
     public ulong ID => _id;
-    public Rect Rect => _rect;
-    public double ZIndex => zIndex;
+    public double ZIndex => _zIndex;
 
     private readonly Gui _gui;
-    internal ulong _id;
-    internal Rect _rect;
-    internal double zIndex;
 
-    internal Interactable(Gui gui, ulong id, Rect rect, double z)
+    internal Func<Vector2, Interactable, bool>? _contains;
+    internal Rect _interactRect;
+    internal ulong _id;
+    internal double _zIndex;
+
+
+    internal Interactable(Gui gui, ulong id, Rect rect, double z, Func<Vector2, Interactable, bool> contains = null)
     {
         _gui = gui;
         _id = id;
-        _rect = rect;
-        zIndex = z;
+        _interactRect = rect;
+        _contains = contains;
+        _zIndex = z;
     }
+
+
+
+    public bool Contains(Vector2 point)
+        => _contains == null ? _interactRect.Contains(point) : _contains.Invoke(point, this);
+
 
     internal void UpdateContext(bool onlyHovered = false)
     {
@@ -290,22 +304,23 @@ public struct Interactable
         }
 
         // Check if mouse is inside the clip rect
-        var clip = _gui.Draw2D.PeekClip();
-        var overClip = _gui.IsPointerOver(clip);
+        Rect clip = _gui.Draw2D.PeekClip();
+        bool overClip = _gui.IsPointerOver(clip);
+
         if (!overClip)
             return;
 
         // Make sure mouse is also over our rect
-        if (_gui.IsPointerOver(_rect))
+        if (Contains(_gui.PointerPos))
         {
-            if (!_gui.IsBlockedByInteractable(_gui.PointerPos, zIndex, _id))
+            if (!_gui.IsBlockedByInteractable(_gui.PointerPos, _zIndex, _id))
             {
                 _gui.HoveredID = _id;
 
                 if (_gui.ActiveID == 0 && _gui.IsPointerDown(MouseButton.Left) && !onlyHovered)
                 {
                     _gui.ActiveID = _id;
-                    _gui.ActiveRect = _rect;
+                    _gui.ActiveRect = _interactRect;
                 }
             }
         }
