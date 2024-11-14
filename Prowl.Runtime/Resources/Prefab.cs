@@ -570,26 +570,35 @@ public sealed class PrefabLink
     /// </summary>
     /// <param name="objEnum">An enumeration of all GameObjects containing PrefabLinks that are to apply.</param>
     /// <param name="predicate">An optional predicate. If set, only PrefabLinks meeting its requirements are applied.</param>
+    /// <param name="canDelete">Can this apply delete components/gameobjects, Usefull to revert to base prefab state.</param>
     /// <returns>A List of all PrefabLinks that have been applied.</returns>
-    public static HashSet<PrefabLink> ApplyAllLinks(IEnumerable<GameObject> objEnum, Predicate<PrefabLink> predicate = null)
+    public static HashSet<PrefabLink> ApplyAllLinks(IEnumerable<GameObject> objEnum, Predicate<PrefabLink> predicate = null, bool canDelete = false)
     {
-        predicate ??= p => true;
-        HashSet<PrefabLink> appliedLinks = [];
+        try
+        {
+            ApplyPrefabContext.IsRevert = canDelete;
+            predicate ??= p => true;
+            HashSet<PrefabLink> appliedLinks = [];
 
-        var sortedQuery = from obj in objEnum
-                          where obj.PrefabLink != null && predicate(obj.PrefabLink)
-                          group obj by GetObjectHierarchyLevel(obj) into g
-                          orderby g.Key
-                          select g;
+            var sortedQuery = from obj in objEnum
+                              where obj.PrefabLink != null && predicate(obj.PrefabLink)
+                              group obj by GetObjectHierarchyLevel(obj) into g
+                              orderby g.Key
+                              select g;
 
-        foreach (var group in sortedQuery)
-            foreach (GameObject obj in group)
-            {
-                obj.PrefabLink.Apply();
-                appliedLinks.Add(obj.PrefabLink);
-            }
+            foreach (var group in sortedQuery)
+                foreach (GameObject obj in group)
+                {
+                    obj.PrefabLink.Apply();
+                    appliedLinks.Add(obj.PrefabLink);
+                }
 
-        return appliedLinks;
+            return appliedLinks;
+        }
+        finally
+        {
+            ApplyPrefabContext.IsRevert = false;
+        }
     }
 
     private static int GetObjectHierarchyLevel(GameObject obj)
@@ -603,8 +612,9 @@ public sealed class PrefabLink
 
 public class ApplyPrefabContext : CloneProviderContext
 {
+    internal static bool IsRevert;
+
     public ApplyPrefabContext() : base(false)
     {
-
     }
 }

@@ -1207,7 +1207,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
         // We don't destroy anything when Applying a prefab
         // Since the user could have added new components or children those should stay
-        if (!isPrefabApply)
+        if (!isPrefabApply || ApplyPrefabContext.IsRevert)
         {
             // Destroy all Components in the target GameObject
             for (int i = target._components.Count - 1; i >= 0; i--)
