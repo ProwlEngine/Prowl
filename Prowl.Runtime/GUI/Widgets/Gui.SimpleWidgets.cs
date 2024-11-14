@@ -1,8 +1,9 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Icons;
 using Prowl.Runtime.GUI.Layout;
@@ -25,6 +26,14 @@ public enum TooltipAlign
 
 public partial class Gui
 {
+    const int HueWheelSegments = 128;
+
+    private static List<Color32>? s_colorHues;
+    private static List<Color32> ColorHues => s_colorHues ??= Enumerable.Range(0, HueWheelSegments)
+        .Select(x => (Color32)Color.FromHSV((float)x / HueWheelSegments * 360f, 1f, 1f))
+        .ToList();
+
+
     public LayoutNode TextNode(string id, string text, Font? font = null)
     {
         using (Node("#_Text_" + id).Enter())
@@ -33,6 +42,7 @@ public partial class Gui
             return CurrentNode;
         }
     }
+
 
     public bool Combo(string ID,
         string popupName,
@@ -47,30 +57,29 @@ public partial class Gui
         itemIndex = Math.Clamp(itemIndex, 0, items.Length - 1);
 
         WidgetStyle style = inputstyle ?? new(30);
-        Gui g = ActiveGUI;
-        using (g.Node(ID).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
+        using (Node(ID).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
         {
-            Interactable interact = g.GetInteractable();
+            Interactable interact = GetInteractable();
 
-            Color col = g.ActiveID == interact.ID ? style.ActiveColor :
-                g.HoveredID == interact.ID ? style.HoveredColor : style.BGColor;
+            Color col = ActiveID == interact.ID ? style.ActiveColor :
+                HoveredID == interact.ID ? style.HoveredColor : style.BGColor;
 
-            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.Roundness);
-            g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, style.BorderColor, style.BorderThickness, style.Roundness);
+            Draw2D.DrawRectFilled(CurrentNode.LayoutData.Rect, col, style.Roundness);
+            Draw2D.DrawRect(CurrentNode.LayoutData.Rect, style.BorderColor, style.BorderThickness, style.Roundness);
 
             if (label == null)
-                g.Draw2D.DrawText(items[itemIndex], g.CurrentNode.LayoutData.InnerRect, false);
+                Draw2D.DrawText(items[itemIndex], CurrentNode.LayoutData.InnerRect, false);
             else
-                g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.InnerRect, false);
+                Draw2D.DrawText(label, CurrentNode.LayoutData.InnerRect, false);
 
-            double popupWidth = g.CurrentNode.LayoutData.Rect.width;
+            double popupWidth = CurrentNode.LayoutData.Rect.width;
             if (interact.TakeFocus())
-                g.OpenPopup(popupName, g.CurrentNode.LayoutData.Rect.BottomLeft);
+                OpenPopup(popupName, CurrentNode.LayoutData.Rect.BottomLeft);
 
             y.PixelOffset = 1;
             int NewIndex = itemIndex;
-            LayoutNode popupHolder = g.CurrentNode;
-            if (g.BeginPopup(popupName, out LayoutNode? popupNode, inputstyle: popupstyle ?? style))
+            LayoutNode popupHolder = CurrentNode;
+            if (BeginPopup(popupName, out LayoutNode? popupNode, inputstyle: popupstyle ?? style))
             {
                 int longestText = 0;
                 for (int i = 0; i < items.Length; ++i)
@@ -86,17 +95,17 @@ public partial class Gui
                 {
                     for (int i = 0; i < items.Length; ++i)
                     {
-                        using (g.Node(popupName + "_Item_" + i).ExpandWidth().Height(style.ItemSize).Enter())
+                        using (Node(popupName + "_Item_" + i).ExpandWidth().Height(style.ItemSize).Enter())
                         {
-                            if (g.IsNodePressed())
+                            if (IsNodePressed())
                             {
                                 NewIndex = i;
-                                g.CloseAllPopups();
+                                CloseAllPopups();
                             }
-                            else if (g.IsNodeHovered())
-                                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.HoveredColor, style.Roundness);
+                            else if (IsNodeHovered())
+                                Draw2D.DrawRectFilled(CurrentNode.LayoutData.Rect, style.HoveredColor, style.Roundness);
 
-                            g.Draw2D.DrawText(items[i], g.CurrentNode.LayoutData.Rect);
+                            Draw2D.DrawText(items[i], CurrentNode.LayoutData.Rect);
                         }
                     }
                 }
@@ -110,8 +119,8 @@ public partial class Gui
 
             return false;
         }
-
     }
+
 
     public bool Checkbox(string ID, ref bool value, Offset x, Offset y, out LayoutNode node, WidgetStyle? inputstyle = null)
     {
@@ -227,6 +236,150 @@ public partial class Gui
         }
     }
 
+
+    public bool ColorPicker(string ID, string popupName, ref Color color, bool hasAlpha, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null, WidgetStyle? pickerstyle = null)
+    {
+        WidgetStyle style = inputstyle ?? new(30);
+
+        using (Node(ID).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
+        {
+            Interactable interact = GetInteractable();
+
+            Color pure = new Color(color.r, color.g, color.b, 1);
+            Color transparent = new Color(1, 1, 1, color.a);
+
+            Rect rect = CurrentNode.LayoutData.Rect;
+
+            Draw2D.DrawRectFilled(rect, pure, style.Roundness);
+
+            Rect footer = rect;
+            footer.y += footer.height - 3;
+            footer.height = 3;
+
+            Draw2D.DrawRectFilled(footer, transparent, style.Roundness, CornerRounding.Bottom);
+
+            if (interact.TakeFocus())
+                OpenPopup(popupName);
+
+            if (BeginPopup(popupName, out LayoutNode? popupNode, inputstyle: pickerstyle ?? style))
+            {
+                float alpha = color.a;
+                Color.ToHSV(color, out float hue, out float saturation, out float value);
+
+                using (popupNode.Scale(256, 382).Layout(LayoutType.Column).Padding(10).Enter())
+                {
+                    Rect rootRect = CurrentNode.LayoutData.Rect;
+                    double minHeight = Math.Min(rootRect.width, rootRect.height);
+
+                    Draw2D.DrawRect(rootRect, Color.red);
+
+                    using (Node("HueWheel").Width(minHeight - 20).Height(minHeight - 20).Padding(55).Enter())
+                    {
+                        const float wheelWidth = 24;
+
+                        Rect cRect = CurrentNode.LayoutData.Rect;
+                        double size = Math.Min(cRect.width, cRect.height) / 2;
+                        float wheelRadius = (float)size - (wheelWidth / 2);
+
+                        Draw2D.DrawRect(cRect, Color.green);
+
+                        Draw2D.DrawCircle(cRect.Center, wheelRadius, ColorHues, HueWheelSegments, wheelWidth);
+
+                        Vector2 dir = new Vector2(MathD.Cos(hue * MathD.Deg2Rad), MathD.Sin(hue * MathD.Deg2Rad));
+
+                        Draw2D.DrawCircle(cRect.Center + dir * wheelRadius, wheelWidth / 2, Color.white, thickness: 2);
+
+                        Vector2 relativePtr = PointerPos - cRect.Center;
+                        double len = relativePtr.magnitude;
+                        Vector2 ptrDir = relativePtr / len;
+
+                        Interactable wheelInteract = GetInteractable(cRect, (x, y) => len <= size && len >= size - wheelWidth);
+
+                        if (wheelInteract.IsActive())
+                            hue = (float)(Math.Atan2(-ptrDir.y, -ptrDir.x) * MathD.Rad2Deg) + 180;
+
+                        using (Node("SaturationValueRect").Expand().Enter())
+                        {
+                            Rect svRect = CurrentNode.LayoutData.Rect;
+
+                            Interactable rectInteract = GetInteractable(svRect);
+                            rectInteract.TakeFocus();
+
+                            DrawHSVInterpolationRect(hue, svRect);
+
+                            Draw2D.DrawCircle(new Vector2(saturation * svRect.width, value * -1 * svRect.height) + svRect.BottomLeft, 6, Color.white, thickness: 2);
+
+                            rectInteract.TakeFocus();
+
+                            Draw2D.DrawRect(svRect, Color.blue);
+
+                            if (rectInteract.IsActive())
+                            {
+                                relativePtr = PointerPos - svRect.BottomLeft;
+
+                                saturation = (float)MathD.Clamp01(relativePtr.x / svRect.width);
+                                value = (float)MathD.Clamp01((relativePtr.y / svRect.height) * -1);
+                            }
+                        }
+                    }
+
+                    using (Node("ColorDisplay").Width(80).Top(10).Height(40).Enter())
+                    {
+                        Rect display = CurrentNode.LayoutData.Rect;
+
+                        Draw2D.DrawVerticalGradient(display.TopLeft, display.BottomLeft, 80, pure, color);
+                    }
+                }
+
+                hue = Math.Clamp(hue, 0, 360);
+                saturation = Math.Clamp(saturation, 0, 1);
+                value = Math.Clamp(value, 0, 1);
+                alpha = Math.Clamp(alpha, 0, 1);
+                Color newColor = Color.FromHSV(hue, saturation, value, alpha);
+
+                if (color != newColor)
+                {
+                    color = newColor;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+
+    // Hardware interpolation doesn't do HSV values, so manually interpolate multiple rects to help it along.
+    private void DrawHSVInterpolationRect(float hue, Rect rect)
+    {
+        int resolution = 4;
+
+        float xOffset = (float)rect.width / resolution;
+        float yOffset = (float)rect.height / resolution;
+
+        Vector2 size = new(xOffset, yOffset);
+
+        for (int x = 0; x < resolution; x++)
+        {
+            for (int y = 0; y < resolution; y++)
+            {
+                float satA = (float)x / resolution;
+                float satB = ((float)x + 1) / resolution;
+
+                float valA = 1 - ((float)y / resolution);
+                float valB = 1 - (((float)y + 1) / resolution);
+
+                Vector2 offset = new Vector2(xOffset * x, yOffset * y);
+                Draw2D.DrawRectFilledMultiColor(rect.Position + offset, size,
+                    Color.FromHSV(hue, satA, valA),
+                    Color.FromHSV(hue, satB, valA),
+                    Color.FromHSV(hue, satA, valB),
+                    Color.FromHSV(hue, satB, valB));
+            }
+        }
+    }
+
+
     public void OpenPopup(string id, Vector2? topleft = null, LayoutNode? popupHolder = null)
     {
         SetNodeStorage(popupHolder ?? CurrentNode, "Popup", true);
@@ -252,7 +405,7 @@ public partial class Gui
             // Append to Root
             using ((node = rootNode.AppendNode("PU_" + id)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
             {
-                SetZIndex(50000 + nextPopupIndex, false);
+                SetZIndex(50000 + s_nextPopupIndex, false);
                 BlockInteractables(CurrentNode.LayoutData.Rect);
 
                 // Clamp node position so that its always in screen bounds
@@ -274,10 +427,11 @@ public partial class Gui
                 long frame = GetNodeStorage<long>(parentNode, "Popup_Frame");
                 if (frame < Time.frameCount)
                 {
-                    if (IsPointerClick(MouseButton.Left) || IsPointerClick(MouseButton.Middle) || IsPointerClick(MouseButton.Right)) {
+                    if (IsPointerClick(MouseButton.Left) || IsPointerClick(MouseButton.Middle) || IsPointerClick(MouseButton.Right))
+                    {
                         bool isMouseContained = node.LayoutData.Rect.Contains(PointerPos); // Mouse not in Popup
-                        bool isMouseBlocked = IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex); // Not blocked by any interactables above this popup
-                                                                                                           //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
+                        bool isMouseBlocked = IsBlockedByInteractable(PointerPos, 50000 + s_nextPopupIndex); // Not blocked by any interactables above this popup
+                                                                                                             //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
                         if (!IsPointerMoving && !isMouseContained && !isMouseBlocked)
                         {
                             CloseAllPopups();
@@ -294,11 +448,12 @@ public partial class Gui
                     Draw2D.PopClip();
                 }
 
-                nextPopupIndex++;
+                s_nextPopupIndex++;
             }
         }
         return show;
     }
+
 
     public void CloseAllPopups()
     {
@@ -322,6 +477,7 @@ public partial class Gui
             }
         }
     }
+
 
     public bool Search(string ID, ref string searchText, Offset x, Offset y, Size width, Size? height = null, WidgetStyle? inputstyle = null, bool enterReturnsTrue = true)
     {
