@@ -128,6 +128,7 @@ public abstract class MonoBehaviour : EngineObject
     public void RemoveSelf() => GameObject.RemoveComponent(this);
     public T? GetComponent<T>() where T : MonoBehaviour => GameObject.GetComponent<T>();
     public MonoBehaviour? GetComponent(Type type) => GameObject.GetComponent(type);
+    public MonoBehaviour? GetComponentByIdentifier(Guid identifier) => GameObject.GetComponentByIdentifier(identifier);
     public bool TryGetComponent<T>(out T component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
     public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour => GameObject.GetComponents<T>();
     public IEnumerable<MonoBehaviour> GetComponents(Type type) => GameObject.GetComponents(type);

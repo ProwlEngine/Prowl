@@ -618,6 +618,20 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     }
 
     /// <summary>
+    /// Gets the component with the specified identifier attached to the GameObject.
+    /// </summary>
+    /// <param name="identifier">The identifier of the component to get.</param>
+    /// <returns>The MonoBehaviour component with the specified identifier, or null if not found.</returns>
+    public MonoBehaviour? GetComponentByIdentifier(Guid identifier)
+    {
+        if (identifier == Guid.Empty) return null;
+        foreach (MonoBehaviour component in _components.Values)
+            if (component.Identifier == identifier)
+                return component;
+        return null;
+    }
+
+    /// <summary>
     /// Gets all components attached to the GameObject.
     /// </summary>
     /// <returns>An IEnumerable of all MonoBehaviour components.</returns>
