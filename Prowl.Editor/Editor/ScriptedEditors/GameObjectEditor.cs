@@ -64,14 +64,14 @@ public class GameObjectEditor : ScriptedEditor
 
         WidgetStyle invisStyle = InputStyle with { BorderColor = new Color(0, 0, 0, 0) };
         int tagIndex = go.tagIndex;
-        if (gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 3)), 0, ItemSize, ItemSize, null, null, FontAwesome6.Tag))
+        if (gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 3)), 0, ItemSize, ItemSize, EditorGUI.InputStyle, null, FontAwesome6.Tag))
         {
             UndoRedoManager.SetMember(go, nameof(GameObject.tagIndex), (byte)tagIndex);
             go.tagIndex = (byte)tagIndex;
             Prefab.OnFieldChange(go, nameof(GameObject.tagIndex));
         }
         int layerIndex = go.layerIndex;
-        if (gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, null, null, FontAwesome6.LayerGroup))
+        if (gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, EditorGUI.InputStyle, null, FontAwesome6.LayerGroup))
         {
             UndoRedoManager.SetMember(go, nameof(GameObject.layerIndex), (byte)layerIndex);
             Prefab.OnFieldChange(go, nameof(GameObject.layerIndex));
@@ -278,7 +278,7 @@ public class GameObjectEditor : ScriptedEditor
                         gui.SetGlobalStorage("RightClickComp", comp.InstanceID);
                     }
 
-                    if (gui.BeginPopup("RightClickComp", out LayoutNode? node))
+                    if (gui.BeginPopup("RightClickComp", out LayoutNode? node, false, EditorGUI.InputStyle))
                     {
                         using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                         {
@@ -348,7 +348,7 @@ public class GameObjectEditor : ScriptedEditor
                     gui.OpenPopup("AddComponentPopup", null, gui.CurrentNode);
 
                 LayoutNode popupHolder = gui.CurrentNode;
-                if (gui.BeginPopup("AddComponentPopup", out LayoutNode? node))
+                if (gui.BeginPopup("AddComponentPopup", out LayoutNode? node, false, EditorGUI.InputStyle))
                 {
                     using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                     {
@@ -477,7 +477,7 @@ public class GameObjectEditor : ScriptedEditor
                     ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
                 }
 
-                if (ActiveGUI.BeginPopup(item.Name + "Popup", out LayoutNode? node))
+                if (ActiveGUI.BeginPopup(item.Name + "Popup", out LayoutNode? node, false, EditorGUI.InputStyle))
                 {
                     double largestWidth = 0;
                     foreach (MenuItemInfo child in item.Children)

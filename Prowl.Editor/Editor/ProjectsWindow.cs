@@ -444,7 +444,7 @@ public class ProjectsWindow : EditorWindow
     private void DrawProjectContextMenu(Project project)
     {
         bool closePopup = false;
-        if (gui.BeginPopup("ProjectOptionsContextMenu", out LayoutNode? popupHolder) && popupHolder != null)
+        if (gui.BeginPopup("ProjectOptionsContextMenu", out LayoutNode? popupHolder, false, EditorGUI.InputStyle) && popupHolder != null)
         {
             using (popupHolder.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
             {

@@ -26,7 +26,7 @@ public class Enum_PropertyDrawer : PropertyDrawer
             names[i] = RuntimeUtils.Prettify(attribute != null ? attribute.text : fieldInfo.Name);
         }
 
-        bool changed = gui.Combo("#_PropID", "#_PropPopupID", ref selectedIndex, names, 0, 0, Size.Percentage(1f), EditorStylePrefs.Instance.ItemSize);
+        bool changed = gui.Combo("#_PropID", "#_PropPopupID", ref selectedIndex, names, 0, 0, Size.Percentage(1f), EditorStylePrefs.Instance.ItemSize, EditorGUI.InputStyle);
 
         if (selectedIndex >= 0 && selectedIndex < values.Length)
         {

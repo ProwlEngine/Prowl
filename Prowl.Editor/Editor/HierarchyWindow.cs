@@ -65,7 +65,7 @@ public class HierarchyWindow : EditorWindow
                 if (gui.IsNodePressed())
                     gui.OpenPopup("CreateGameObject");
 
-                if (gui.BeginPopup("CreateGameObject", out LayoutNode? node))
+                if (gui.BeginPopup("CreateGameObject", out LayoutNode? node, false, EditorGUI.InputStyle))
                 {
                     using (node!.Width(150).Layout(LayoutType.Column).Spacing(5).Padding(5).FitContentHeight().Enter())
                     {
@@ -107,7 +107,7 @@ public class HierarchyWindow : EditorWindow
                 height += entryHeight;
             }
 
-            if (gui.BeginPopup("RightClickGameObject", out LayoutNode? node))
+            if (gui.BeginPopup("RightClickGameObject", out LayoutNode? node, false, EditorGUI.InputStyle))
             {
                 using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                 {

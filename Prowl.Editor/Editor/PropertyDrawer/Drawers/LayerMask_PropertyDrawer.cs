@@ -57,7 +57,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
             if (interact.TakeFocus())
                 g.OpenPopup("LayerMask_Popup_" + ID, g.CurrentNode.LayoutData.Rect.BottomLeft);
 
-            if (g.BeginPopup("LayerMask_Popup_" + ID, out var popupNode))
+            if (g.BeginPopup("LayerMask_Popup_" + ID, out var popupNode, false, EditorGUI.InputStyle))
             {
                 int longestText = 0;
                 for (var Index = 0; Index < layers.Length; ++Index)

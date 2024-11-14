@@ -213,6 +213,9 @@ public static class EditorGUI
 
     public static WidgetStyle InputStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize)
     {
+        TextColor = EditorStylePrefs.Instance.LesserText,
+        ActiveColor = EditorStylePrefs.Instance.Highlighted,
+        HoveredColor = EditorStylePrefs.Instance.Hovering,
         BGColor = EditorStylePrefs.Instance.WindowBGOne,
         BorderColor = EditorStylePrefs.Instance.Borders,
         BorderThickness = 1,

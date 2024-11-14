@@ -247,7 +247,7 @@ public class DefaultNodeEditor : ScriptedNodeEditor
             g.OpenPopup("NodeContextPopup", g.PointerPos);
 
         Runtime.GUI.Layout.LayoutNode popupHolder = g.CurrentNode;
-        if (g.BeginPopup("NodeContextPopup", out Runtime.GUI.Layout.LayoutNode? popup))
+        if (g.BeginPopup("NodeContextPopup", out Runtime.GUI.Layout.LayoutNode? popup, false, EditorGUI.InputStyle))
         {
             SelectHandler.SelectIfNot(new WeakReference(node));
             using (popup.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
@@ -1049,7 +1049,7 @@ public class NodeEditor
                 g.OpenPopup("NodeCreatePopup", g.PointerPos);
         }
 
-        if (g.BeginPopup("NodeCreatePopup", out Runtime.GUI.Layout.LayoutNode? popup))
+        if (g.BeginPopup("NodeCreatePopup", out Runtime.GUI.Layout.LayoutNode? popup, false, EditorGUI.InputStyle))
         {
             using (popup!.Width(200).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
             {
@@ -1137,7 +1137,7 @@ public class NodeEditor
                     g.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
                 }
 
-                if (g.BeginPopup(item.Name + "Popup", out Runtime.GUI.Layout.LayoutNode? node))
+                if (g.BeginPopup(item.Name + "Popup", out Runtime.GUI.Layout.LayoutNode? node, false, EditorGUI.InputStyle))
                 {
                     double largestWidth = 0;
                     foreach (NodeMenuItemInfo child in item.Children)

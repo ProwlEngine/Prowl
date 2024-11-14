@@ -145,7 +145,7 @@ public class DrawerAttribute(Type type) : Attribute
                 gui.Draw2D.DrawText(FontAwesome6.Plus, 20, gui.CurrentNode.LayoutData.InnerRect, Color.white);
 
 
-                if (gui.BeginPopup("Create_Interface", out var popupNode))
+                if (gui.BeginPopup("Create_Interface", out var popupNode, false, EditorGUI.InputStyle))
                     using (popupNode.Width(200).FitContentHeight().Layout(LayoutType.Column).Padding(5).Enter())
                     {
                         foreach (var t in implementationTypes)

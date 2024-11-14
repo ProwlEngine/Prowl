@@ -79,7 +79,7 @@ public partial class Gui
             y.PixelOffset = 1;
             int NewIndex = itemIndex;
             LayoutNode popupHolder = CurrentNode;
-            if (BeginPopup(popupName, out LayoutNode? popupNode, inputstyle: popupstyle ?? style))
+            if (BeginPopup(popupName, out LayoutNode? popupNode, false, popupstyle ?? style))
             {
                 int longestText = 0;
                 for (int i = 0; i < items.Length; ++i)
@@ -259,7 +259,7 @@ public partial class Gui
             if (GetInteractable().TakeFocus())
                 TogglePopup(popupName, rect.BottomLeft);
 
-            if (BeginPopup(popupName, out LayoutNode? popupNode, inputstyle: pickerstyle ?? style))
+            if (BeginPopup(popupName, out LayoutNode? popupNode, false, pickerstyle ?? style))
             {
                 float alpha = color.a;
                 Color.ToHSV(color, out float hue, out float saturation, out float value);
