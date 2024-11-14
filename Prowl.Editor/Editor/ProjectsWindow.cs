@@ -386,7 +386,7 @@ public class ProjectsWindow : EditorWindow
 
                     Vector2 warningPos = gui.CurrentNode.LayoutData.Rect.Position;
                     warningPos.y += gui.CurrentNode.LayoutData.Rect.height / 2;
-                    gui.Tooltip("Project is invalid and may not open correctly.", warningPos, align: Gui.TooltipAlign.BottomRight);
+                    gui.Tooltip("Project is invalid and may not open correctly.", warningPos, align: TooltipAlign.BottomRight);
                 }
             }
 

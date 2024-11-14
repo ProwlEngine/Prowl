@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -8,6 +8,20 @@ using Prowl.Icons;
 using Prowl.Runtime.GUI.Layout;
 
 namespace Prowl.Runtime.GUI;
+
+
+public enum TooltipAlign
+{
+    TopLeft,
+    TopMiddle,
+    TopRight,
+    Left,
+    Right,
+    BottomLeft,
+    BottomMiddle,
+    BottomRight,
+}
+
 
 public partial class Gui
 {
@@ -130,17 +144,6 @@ public partial class Gui
         }
     }
 
-    public enum TooltipAlign
-    {
-        TopLeft,
-        TopMiddle,
-        TopRight,
-        Left,
-        Right,
-        BottomLeft,
-        BottomMiddle,
-        BottomRight,
-    }
 
     public void Tooltip(string tip, Vector2? topleft = null, float wrapWidth = -1, TooltipAlign align = TooltipAlign.TopRight)
     {
