@@ -794,6 +794,24 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         return null;
     }
 
+    public MonoBehaviour GetComponentInChildrenByIdentifier(Guid identifier, bool includeSelf = true)
+    {
+        if (includeSelf)
+        {
+            MonoBehaviour component = GetComponentByIdentifier(identifier);
+            if (component != null)
+                return component;
+        }
+
+        foreach (GameObject child in children)
+        {
+            MonoBehaviour component = child.GetComponentByIdentifier(identifier);
+            if (component != null)
+                return component;
+        }
+        return null;
+    }
+
     /// <summary>
     /// Gets all components of type T in the GameObject and its children.
     /// </summary>
