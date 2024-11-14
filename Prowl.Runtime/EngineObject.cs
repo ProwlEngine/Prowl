@@ -15,7 +15,7 @@ public abstract class EngineObject : ICloneExplicit
     private static readonly Stack<EngineObject> s_destroyed = new();
     private static int s_nextID = 1;
 
-    [CloneField(CloneFieldFlags.Skip)]
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
     protected int _instanceID;
     public int InstanceID => _instanceID;
 
