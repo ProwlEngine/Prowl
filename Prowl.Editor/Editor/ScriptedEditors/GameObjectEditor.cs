@@ -352,7 +352,7 @@ public class GameObjectEditor : ScriptedEditor
                 {
                     using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                     {
-                        gui.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f));
+                        gui.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f), null, EditorGUI.InputFieldStyle);
 
                         Separator();
 

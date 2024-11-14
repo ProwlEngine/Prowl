@@ -257,7 +257,7 @@ public class FileDialog : EditorWindow
 
                         using (gui.Node("SearchName").ExpandHeight().Width(Size.Percentage(1f, -100)).Enter())
                         {
-                            gui.Search(name, ref Dialog.resultName, 0, 0, Size.Percentage(1f), ItemSize);
+                            gui.Search(name, ref Dialog.resultName, 0, 0, Size.Percentage(1f), ItemSize, EditorGUI.InputFieldStyle);
                         }
 
                         using (gui.Node("PromptBtn").ExpandHeight().Left(Offset.Percentage(1f, -90)).Width(100).Enter())

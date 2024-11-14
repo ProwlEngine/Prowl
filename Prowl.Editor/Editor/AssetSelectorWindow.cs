@@ -39,7 +39,7 @@ public class AssetSelectorWindow : EditorWindow
 
         using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Enter())
         {
-            gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), ItemSize);
+            gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), ItemSize, EditorGUI.InputFieldStyle);
         }
 
         using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Clip().Scroll().Enter())

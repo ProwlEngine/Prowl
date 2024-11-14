@@ -49,7 +49,7 @@ public class AssetsTreeWindow : EditorWindow
 
         using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(EditorStylePrefs.Instance.ItemSize).Enter())
         {
-            if (gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -EditorStylePrefs.Instance.ItemSize), EditorStylePrefs.Instance.ItemSize))
+            if (gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -EditorStylePrefs.Instance.ItemSize), EditorStylePrefs.Instance.ItemSize, EditorGUI.InputFieldStyle))
             {
                 SelectHandler.Clear();
                 _found.Clear();

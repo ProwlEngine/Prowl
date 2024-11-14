@@ -56,7 +56,7 @@ public class HierarchyWindow : EditorWindow
 
         using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Enter())
         {
-            gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight);
+            gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight, EditorGUI.InputFieldStyle);
 
             using (gui.Node("CreateGOBtn").Left(Offset.Percentage(1f, -entryHeight + 3)).Scale(entryHeight).Enter())
             {

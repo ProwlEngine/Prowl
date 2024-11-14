@@ -44,12 +44,12 @@ public partial class Gui
         {
             ItemSize = itemSize;
             TextColor = Color.white;
-            ActiveColor = new(84, 21, 241);
-            HoveredColor = new Color(255, 255, 255) * 0.8f;
-            BGColor = new(31, 33, 40);
-            BorderColor = new(49, 52, 66);
+            ActiveColor = Color.blue * 0.4f;
+            HoveredColor = Color.blue * 0.6f;
+            BGColor = Color.black;
+            BorderColor = Color.white * 0.6f;
             BorderThickness = 1;
-            Roundness = 5;
+            Roundness = 3;
             Font = Runtime.Font.DefaultFont;
             FontSize = 20;
         }
@@ -59,8 +59,8 @@ public partial class Gui
     {
         var style = inputstyle ?? new WidgetStyle(30);
         var g = ActiveGUI;
-        bool multiline = ((flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
-        Size h = (multiline ? style.FontSize * 8 : style.ItemSize);
+        bool multiline = (flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline;
+        Size h = multiline ? style.FontSize * 8 : style.ItemSize;
         if (height != null) h = height.Value;
         using (g.Node(ID).Left(x).Top(y).Width(width).Height(h).Padding(5).Enter())
         {

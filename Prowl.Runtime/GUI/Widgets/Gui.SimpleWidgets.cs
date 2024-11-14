@@ -239,9 +239,9 @@ public partial class Gui
 
     public bool ColorPicker(string ID, string popupName, ref Color color, bool hasAlpha, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null, WidgetStyle? pickerstyle = null)
     {
-        WidgetStyle style = inputstyle ?? new(30);
+        WidgetStyle style = inputstyle ??= new(30);
 
-        using (Node(ID).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
+        using (Node(ID).Left(x).Top(y).Width(width).Height(height).Enter())
         {
             Color pure = new Color(color.r, color.g, color.b, 1);
             Color transparent = new Color(1, 1, 1, color.a);
@@ -378,6 +378,29 @@ public partial class Gui
     }
 
 
+    public bool DrawSlider(string id, ref double value, double min, double max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    {
+        WidgetStyle style = inputstyle ?? new(30);
+
+        using (Node(id).Left(x).Top(y).Width(width).Height(height).Enter())
+        {
+            Rect nodeRect = CurrentNode.LayoutData.Rect;
+
+            if (value < max && value > min)
+            {
+                const int knobRadius = 5;
+
+                using (Node("SliderKnob").Top((nodeRect.height * 0.5) - knobRadius).Scale(knobRadius).Enter())
+                {
+                    Draw2D.DrawCircleFilled(CurrentNode.LayoutData.Rect.Center, knobRadius * 0.5f, style.TextColor);
+                }
+            }
+        }
+
+        return false;
+    }
+
+
     public void OpenPopup(string id, Vector2? topleft = null, LayoutNode? popupHolder = null)
     {
         SetNodeStorage(popupHolder ?? CurrentNode, "Popup", true);
@@ -492,9 +515,8 @@ public partial class Gui
         searchText ??= "";
         Gui g = ActiveGUI;
 
-        style.Roundness = 8f;
-        style.BorderThickness = 1f;
         bool changed = InputField(ID, ref searchText, 32, enterReturnsTrue ? InputFieldFlags.EnterReturnsTrue : InputFieldFlags.None, x, y, width, height, style);
+
         if (string.IsNullOrWhiteSpace(searchText) && !g.PreviousInteractableIsFocus())
         {
             Vector2 pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);
@@ -502,6 +524,7 @@ public partial class Gui
             pos.y += (g.PreviousNode.LayoutData.InnerRect.height - style.FontSize) / 2;
             g.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.MagnifyingGlass + " Search...", style.FontSize, pos, Color.white * 0.6f);
         }
+
         return changed;
     }
 

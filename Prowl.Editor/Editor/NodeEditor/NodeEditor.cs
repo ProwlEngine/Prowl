@@ -1053,7 +1053,7 @@ public class NodeEditor
         {
             using (popup!.Width(200).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
             {
-                g.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f));
+                g.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f), null, EditorGUI.InputFieldStyle);
 
                 EditorGUI.Separator();
 
@@ -1223,7 +1223,8 @@ public class NodeEditor
 
     private static void SortChildren(NodeMenuItemInfo node)
     {
-        node.Children.Sort((x, y) => {
+        node.Children.Sort((x, y) =>
+        {
             if (x.Type == null && y.Type == null) return 0;  // Both null, equal
             if (x.Type == null) return -1;                   // x null comes first
             if (y.Type == null) return 1;                    // y null comes second

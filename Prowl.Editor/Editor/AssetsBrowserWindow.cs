@@ -126,7 +126,7 @@ public class AssetsBrowserWindow : EditorWindow
                 gui.Draw2D.DrawText(FontAwesome6.ArrowUp, 30, gui.CurrentNode.LayoutData.Rect, cantGoUp ? EditorStylePrefs.Instance.LesserText : (gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering : Color.white));
             }
 
-            if (gui.Search("SearchInput", ref _searchText, itemHeight + itemPadding, 0, 200, itemHeight, null, false))
+            if (gui.Search("SearchInput", ref _searchText, itemHeight + itemPadding, 0, 200, itemHeight, EditorGUI.InputFieldStyle, false))
             {
                 _found = CurDirectoryNode.Search(_searchText).ToList();
             }

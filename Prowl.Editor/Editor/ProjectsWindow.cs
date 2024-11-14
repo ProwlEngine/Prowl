@@ -111,7 +111,7 @@ public class ProjectsWindow : EditorWindow
         {
             using (gui.Node("TopBar").ExpandWidth().MaxHeight(40).Enter())
             {
-                gui.Search("SearchInput", ref _searchText, 30, 10, 150, null, EditorGUI.InputStyle);
+                gui.Search("SearchInput", ref _searchText, 30, 10, 150, null, EditorGUI.InputFieldStyle);
 
                 if (!_createTabOpen)
                 {
