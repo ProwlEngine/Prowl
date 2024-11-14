@@ -82,7 +82,7 @@ public abstract class Node
     [SerializeField, HideInInspector] public Vector2 position;
     /// <summary> It is recommended not to modify these at hand. Instead, see <see cref="InputAttribute"/> and <see cref="OutputAttribute"/> </summary>
     [SerializeField, HideInInspector] private NodePortDictionary _ports = new();
-    [HideInInspector] public Guid InstanceID;
+    [HideInInspector] public int InstanceID;
 
     public string Error { get; set; } = "";
 
@@ -93,7 +93,7 @@ public abstract class Node
     public void OnEnable()
     {
         _ports ??= new NodePortDictionary();
-        InstanceID = Guid.NewGuid();
+        InstanceID = graph.NextID;
         NodeDataCache.UpdatePorts(this, _ports);
         Init();
     }
@@ -199,7 +199,7 @@ public abstract class Node
         else return null;
     }
 
-    public NodePort GetPort(Guid instanceID)
+    public NodePort GetPort(int instanceID)
     {
         return _ports.Values.Where(p => p.InstanceID == instanceID).FirstOrDefault();
     }

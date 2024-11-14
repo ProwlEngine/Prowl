@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime.Rendering.Pipelines;
@@ -12,7 +11,7 @@ public interface IRenderable
 
     public byte GetLayer();
 
-    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model, out Matrix4x4 prevModel);
+    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
 
     public void GetCullingData(out bool isRenderable, out Bounds bounds);
 }
@@ -29,7 +28,7 @@ public enum LightType
 
 public interface IRenderableLight
 {
-    public Guid GetLightID();
+    public int GetLightID();
     public LightType GetLightType();
     public Vector3 GetLightPosition();
     public Vector3 GetLightDirection();

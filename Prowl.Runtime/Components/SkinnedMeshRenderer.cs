@@ -27,7 +27,6 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
     private System.Numerics.Matrix4x4[] _boneTransforms;
     private SkinnedMesh _skinnedMesh;
 
-    private Matrix4x4? _prevTransform;
 
     private void GetBoneMatrices()
     {
@@ -53,6 +52,8 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
 
         Properties ??= new();
         _skinnedMesh ??= new(Mesh);
+
+        Properties.SetInt("_ObjectID", InstanceID);
 
         _skinnedMesh.RecomputeSkinning(_boneTransforms);
 
@@ -84,13 +85,11 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
     public byte GetLayer() => GameObject.layerIndex;
 
 
-    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model, out Matrix4x4 prevModel)
+    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
     {
         properties = Properties;
         drawData = _skinnedMesh;
         model = Transform.localToWorldMatrix;
-        prevModel = _prevTransform ?? model;
-        _prevTransform = model;
     }
 
 

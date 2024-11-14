@@ -38,6 +38,9 @@ public class GraphParameter
 
 public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiver
 {
+    [SerializeField] int _nextID = 0;
+    public int NextID => _nextID++;
+
     /// <summary> All nodes in the graph. <para/>
     /// See: <see cref="AddNode{T}"/> </summary>
     public List<Node> nodes = [];
@@ -98,7 +101,7 @@ public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiv
         return nodes.Where(n => n.GetType() == typeof(T)).Cast<T>();
     }
 
-    public virtual Node GetNode(Guid instanceID)
+    public virtual Node GetNode(int instanceID)
     {
         return nodes.Where(n => n.InstanceID == instanceID).FirstOrDefault();
     }

@@ -21,18 +21,14 @@ public static partial class Graphics
         private AssetRef<Mesh> _mesh;
         private AssetRef<Material> _material;
         private Matrix4x4 _transform;
-        private Matrix4x4 _prevTransform;
         private byte _layerIndex;
         private PropertyState _properties;
 
-        public MeshRenderable(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, byte layerIndex, PropertyState? propertyBlock = null) : this(mesh, material, matrix, Matrix4x4.Identity, layerIndex, propertyBlock) { }
-
-        public MeshRenderable(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, Matrix4x4 prevMatrix, byte layerIndex, PropertyState? propertyBlock = null)
+        public MeshRenderable(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, byte layerIndex, PropertyState? propertyBlock = null)
         {
             _mesh = mesh;
             _material = material;
             _transform = matrix;
-            _prevTransform = prevMatrix;
             _layerIndex = layerIndex;
             _properties = propertyBlock ?? new();
         }
@@ -40,12 +36,11 @@ public static partial class Graphics
         public Material GetMaterial() => _material.Res;
         public byte GetLayer() => _layerIndex;
 
-        public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model, out Matrix4x4 prevModel)
+        public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
         {
             drawData = _mesh.Res;
             properties = _properties;
             model = _transform;
-            prevModel = _prevTransform;
         }
 
         public void GetCullingData(out bool isRenderable, out Bounds bounds)
@@ -130,11 +125,6 @@ public static partial class Graphics
     public static void DrawMesh(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, byte layerIndex, PropertyState? propertyBlock = null)
     {
         RenderPipeline.AddRenderable(new MeshRenderable(mesh, material, matrix, layerIndex, propertyBlock));
-    }
-
-    public static void DrawMesh(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, Matrix4x4 prevMatrix, byte layerIndex, PropertyState? propertyBlock = null)
-    {
-        RenderPipeline.AddRenderable(new MeshRenderable(mesh, material, matrix, prevMatrix, layerIndex, propertyBlock));
     }
 
     public static void Blit(Texture2D source, Framebuffer dest, Material mat = null, int pass = 0)
