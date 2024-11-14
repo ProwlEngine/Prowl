@@ -205,7 +205,7 @@ public class AssetsBrowserWindow : EditorWindow
             if (gui.IsNodeHovered() && gui.IsPointerClick(MouseButton.Right))
                 gui.OpenPopup("RightClickBodyBrowser");
             var popupHolder = gui.CurrentNode;
-            if (gui.BeginPopup("RightClickBodyBrowser", out var node))
+            if (gui.BeginPopup("RightClickBodyBrowser", out var node, false, EditorGUI.InputStyle))
                 using (node.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                     AssetsTreeWindow.DrawContextMenu(null, CurDirectoryNode.Directory, true, popupHolder);
 
@@ -261,7 +261,7 @@ public class AssetsBrowserWindow : EditorWindow
             if (gui.IsNodeHovered() && gui.IsPointerClick(MouseButton.Right))
                 gui.OpenPopup("RightClickFileBrowser");
             var popupHolder = gui.CurrentNode;
-            if (gui.BeginPopup("RightClickFileBrowser", out var node))
+            if (gui.BeginPopup("RightClickFileBrowser", out var node, false, EditorGUI.InputStyle))
                 using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
                     AssetsTreeWindow.DrawContextMenu(entry.Directory, null, true, popupHolder);
 

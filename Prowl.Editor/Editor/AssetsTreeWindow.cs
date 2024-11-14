@@ -69,7 +69,7 @@ public class AssetsTreeWindow : EditorWindow
                 gui.Draw2D.DrawText(FontAwesome6.CirclePlus, 30, gui.CurrentNode.LayoutData.InnerRect, (gui.IsNodeHovered() ? Color.white : EditorStylePrefs.Instance.LesserText));
 
                 var popupHolder = gui.CurrentNode;
-                if (gui.BeginPopup("CreateOrImportAsset", out var node))
+                if (gui.BeginPopup("CreateOrImportAsset", out var node, false, EditorGUI.InputStyle))
                 {
                     using (node.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                     {
@@ -130,7 +130,7 @@ public class AssetsTreeWindow : EditorWindow
         }
     }
 
-    public static void DrawContextMenu(FileSystemInfo? fileInfo, DirectoryInfo? directory = null, bool fromAssetBrowser = false, LayoutNode popupHolder = null)
+    public static void DrawContextMenu(FileSystemInfo? fileInfo, DirectoryInfo? directory = null, bool fromAssetBrowser = false, LayoutNode? popupHolder = null)
     {
         bool closePopup = false;
 
@@ -355,7 +355,7 @@ public class AssetsTreeWindow : EditorWindow
                 if (gui.IsNodeHovered() && gui.IsPointerClick(MouseButton.Right))
                     gui.OpenPopup("TreeRightClickAsset");
                 var popupHolder = gui.CurrentNode;
-                if (gui.BeginPopup("TreeRightClickAsset", out var node))
+                if (gui.BeginPopup("TreeRightClickAsset", out var node, false, EditorGUI.InputStyle))
                     using (node.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                         DrawContextMenu(subDirectory, null, false, popupHolder);
 
@@ -573,7 +573,7 @@ public class AssetsTreeWindow : EditorWindow
         if (interact.IsHovered() && Gui.ActiveGUI.IsPointerClick(MouseButton.Right))
             Gui.ActiveGUI.OpenPopup("RightClickFile");
         var popupHolder = Gui.ActiveGUI.CurrentNode;
-        if (Gui.ActiveGUI.BeginPopup("RightClickFile", out var node2))
+        if (Gui.ActiveGUI.BeginPopup("RightClickFile", out var node2, false, EditorGUI.InputStyle))
             using (node2.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                 DrawContextMenu(entry, null, fromAssetBrowser, popupHolder);
 

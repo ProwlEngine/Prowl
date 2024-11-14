@@ -150,7 +150,7 @@ public class FontEditor : ScriptedEditor
             if (gui.IsNodePressed())
                 gui.OpenPopup("AddRangePopup");
 
-            if (gui.BeginPopup("AddRangePopup", out var popupNode))
+            if (gui.BeginPopup("AddRangePopup", out var popupNode, false, EditorGUI.InputStyle))
             {
                 using (popupNode.Width(250).FitContentHeight().Layout(LayoutType.Column).Padding(5).Enter())
                 {
