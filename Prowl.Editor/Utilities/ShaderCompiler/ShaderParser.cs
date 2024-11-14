@@ -380,6 +380,9 @@ public static class ShaderParser
                 return new Vector3(v3[0], v3[1], v3[2]);
 
             case ShaderPropertyType.Color:
+                double[] col = VectorParse(tokenizer, 4);
+                return new Color((float)col[0], (float)col[1], (float)col[2], (float)col[3]);
+
             case ShaderPropertyType.Vector4:
                 double[] v4 = VectorParse(tokenizer, 4);
                 return new Vector4(v4[0], v4[1], v4[2], v4[3]);
