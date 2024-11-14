@@ -451,6 +451,31 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         return null;
     }
 
+    public int? GetSiblingIndex()
+    {
+        if (parent == null) return null;
+
+        for(int i=0; i<parent.children.Count; i++)
+            if (parent.children[i] == this)
+                return i;
+
+        throw new Exception($"This gameobject appears to be in Limbo, This should never happen!, The gameobject believes its a child of {parent.Name} but parent doesnt have it as a child!");
+    }
+
+    public void SetSiblingIndex(int index)
+    {
+        if (parent == null) return;
+
+        // Remove this object from current position
+        parent.children.Remove(this);
+
+        // Ensure index is within bounds
+        index = Math.Max(0, Math.Min(index, parent.children.Count));
+
+        // Insert at new position
+        parent.children.Insert(index, this);
+    }
+
     /// <summary>
     /// Performs pre-update operations on the GameObject's components.
     /// </summary>
