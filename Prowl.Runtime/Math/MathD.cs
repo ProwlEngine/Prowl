@@ -154,6 +154,10 @@ public static class MathD
 
     [MethodImpl(IN)] public static double LerpSmooth(double a, double b, double t) => Lerp(a, b, Smooth01(Clamp01(t)));
 
+    [MethodImpl(IN)] public static double InverseLerp(double a, double b, double t) => (t - a) / (b - a);
+
+    [MethodImpl(IN)] public static double InverseLerpClamped(double a, double b, double t) => InverseLerp(a, b, Clamp(t, a, b));
+
     public static double MoveTowards(double current, double target, double maxDelta)
     {
         if (Math.Abs(target - current) <= maxDelta)
