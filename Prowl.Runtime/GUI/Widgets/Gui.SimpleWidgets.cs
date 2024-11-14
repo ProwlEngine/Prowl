@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -7,6 +7,7 @@ using System.Linq;
 
 using Prowl.Icons;
 using Prowl.Runtime.GUI.Layout;
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime.GUI;
 
@@ -378,25 +379,173 @@ public partial class Gui
     }
 
 
-    public bool DrawSlider(string id, ref double value, double min, double max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    public bool DoubleSlider(string id, ref double value, double min, double max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
     {
         WidgetStyle style = inputstyle ?? new(30);
 
+        bool hasChanged = false;
+
         using (Node(id).Left(x).Top(y).Width(width).Height(height).Enter())
         {
-            Rect nodeRect = CurrentNode.LayoutData.Rect;
+            const float knobRadius = 6f;
 
-            if (value < max && value > min)
+            using (Node("SliderRect").Left(knobRadius).Top(Offset.Percentage(0.5, -2.5)).Height(5).Width(Size.Percentage(1, -knobRadius * 2)).Enter())
             {
-                const int knobRadius = 5;
+                Rect sliderRect = CurrentNode.LayoutData.Rect;
 
-                using (Node("SliderKnob").Top((nodeRect.height * 0.5) - knobRadius).Scale(knobRadius).Enter())
+                Draw2D.DrawRectFilled(sliderRect, style.BorderColor, style.Roundness);
+
+                double relativeX = Math.Clamp(PointerPos.x - sliderRect.x, 0, sliderRect.width) / sliderRect.width;
+
+                Rect interactRect = sliderRect;
+                interactRect.Expand(knobRadius);
+
+                if (GetInteractable(interactRect).IsActive())
                 {
-                    Draw2D.DrawCircleFilled(CurrentNode.LayoutData.Rect.Center, knobRadius * 0.5f, style.TextColor);
+                    double newValue = MathD.Lerp(min, max, relativeX);
+
+                    if (newValue != value)
+                    {
+                        value = newValue;
+                        hasChanged = true;
+                    }
+                }
+
+                if (value <= max && value >= min)
+                {
+                    using (Node("SliderKnob").Left((MathD.InverseLerp(min, max, value) * sliderRect.width) - knobRadius).Top(Offset.Percentage(0.5, -knobRadius)).Scale(knobRadius * 2).Enter())
+                    {
+                        Draw2D.DrawCircleFilled(CurrentNode.LayoutData.Rect.Center, knobRadius, style.TextColor);
+                    }
                 }
             }
         }
 
+        return hasChanged;
+    }
+
+
+    public bool DoubleSlider(string id, string prefix, ref double value, double min, double max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    {
+        WidgetStyle style = inputstyle ?? new(30);
+        bool changed = false;
+
+        using (Node(id).TopLeft(x, y).Scale(width, height).Enter())
+        {
+            using (Node("SliderPrefix").Width(20).ExpandHeight().Enter())
+            {
+                Draw2D.DrawText(style.Font.Res, prefix, style.FontSize, CurrentNode.LayoutData.Rect, style.TextColor);
+            }
+
+            changed |= DoubleSlider("SliderField", ref value, 0, 1, 20, 0, Size.Percentage(1, -60), Size.Percentage(1), style);
+            changed |= InputDouble("NumberField", ref value, Offset.Percentage(1, -40), Offset.Percentage(0.5, -style.ItemSize * 0.5), 40, style.ItemSize, style);
+        }
+
+        return changed;
+    }
+
+
+    public bool FloatSlider(string id, ref float value, float min, float max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    {
+        double dbValue = value;
+        bool changed = DoubleSlider(id, ref dbValue, min, max, x, y, width, height, inputstyle);
+        value = (float)dbValue;
+        return changed;
+    }
+
+
+    public bool FloatSlider(string id, string prefix, ref float value, float min, float max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    {
+        double dbValue = value;
+        bool changed = DoubleSlider(id, prefix, ref dbValue, min, max, x, y, width, height, inputstyle);
+        value = (float)dbValue;
+        return changed;
+    }
+
+
+    public bool IntSlider(string id, ref int value, int min, int max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    {
+        double dbValue = value;
+        bool changed = DoubleSlider(id, ref dbValue, min, max, x, y, width, height, inputstyle);
+        value = (int)dbValue;
+        return changed;
+    }
+
+
+    public bool IntSlider(string id, string prefix, ref int value, int min, int max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    {
+        double dbValue = value;
+        bool changed = DoubleSlider(id, prefix, ref dbValue, min, max, x, y, width, height, inputstyle);
+        value = (int)dbValue;
+        return changed;
+    }
+
+
+    public bool InputDouble(string ID, ref double value, Offset x, Offset y, Size width, Size height, WidgetStyle? style = null)
+    {
+        string textValue = value.ToString();
+        var changed = InputField(ID, ref textValue, 255, InputFieldFlags.None, x, y, width, height, style);
+
+        if (changed)
+        {
+            // Try parse directly
+            if (double.TryParse(textValue, out value)) return true;
+            // Failed try parsing using an arithmetic parser
+            try
+            {
+                value = TinyMathParser.Parse(textValue);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    public bool InputFloat(string ID, ref float value, Offset x, Offset y, Size width, Size height, WidgetStyle? style = null)
+    {
+        string textValue = value.ToString();
+        var changed = InputField(ID, ref textValue, 255, InputFieldFlags.None, x, y, width, null, style);
+        if (changed)
+        {
+            // Try parse directly
+            if (float.TryParse(textValue, out value)) return true;
+            // Failed try parsing using an arithmetic parser
+            try
+            {
+                value = (float)TinyMathParser.Parse(textValue);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    public bool InputLong(string ID, ref long value, Offset x, Offset y, Size width, Size height, WidgetStyle? style = null)
+    {
+        string textValue = value.ToString();
+        var changed = InputField(ID, ref textValue, 255, InputFieldFlags.None, x, y, width, height, style);
+        if (changed)
+        {
+            // Try parse directly
+            if (long.TryParse(textValue, out value)) return true;
+            // Failed try parsing using an arithmetic parser
+            try
+            {
+                value = (long)TinyMathParser.Parse(textValue);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
         return false;
     }
 
