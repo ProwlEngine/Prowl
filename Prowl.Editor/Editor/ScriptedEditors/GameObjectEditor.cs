@@ -116,7 +116,7 @@ public class GameObjectEditor : ScriptedEditor
                         // Clear all changes and re-apply Prefabs
                         //go.PrefabLink!.ApplyPrefab();
                         go.PrefabLink!.ClearChanges();
-                        PrefabLink.ApplyAllLinks([go]);
+                        PrefabLink.ApplyAllLinks([go], null, true);
                     }
                     else if (gui.IsNodeHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f);
