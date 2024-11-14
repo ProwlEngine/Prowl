@@ -25,7 +25,7 @@ public class GameObjectEditor : ScriptedEditor
 {
     private string _searchText = string.Empty;
     private static MenuItemInfo rootMenuItem;
-    private readonly Dictionary<int, ScriptedEditor> compEditors = new();
+    private readonly Dictionary<Guid, ScriptedEditor> compEditors = new();
 
     [OnAssemblyUnload]
     public static void ClearCache() => rootMenuItem = null;
@@ -226,7 +226,7 @@ public class GameObjectEditor : ScriptedEditor
             gui.Node("#_TransformPadding").ExpandWidth().Height(10);
 
             // Draw Components
-            HashSet<int> editorsNeeded = [];
+            HashSet<Guid> editorsNeeded = [];
 
             IEnumerable<MonoBehaviour> allComps = go.GetComponents<MonoBehaviour>();
             foreach (MonoBehaviour comp in allComps)
@@ -282,7 +282,7 @@ public class GameObjectEditor : ScriptedEditor
                     {
                         using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                         {
-                            int instanceID = gui.GetGlobalStorage<int>("RightClickComp");
+                            Guid instanceID = gui.GetGlobalStorage<Guid>("RightClickComp");
                             if (instanceID == comp.InstanceID)
                                 HandleComponentContextMenu(go, comp);
                         }
@@ -330,7 +330,7 @@ public class GameObjectEditor : ScriptedEditor
                     }
                 }
 
-                gui.Node("#_CompPadding", comp.InstanceID).ExpandWidth().Height(10);
+                gui.Node("#_CompPadding", comp.InstanceID.GetHashCode()).ExpandWidth().Height(10);
 
                 //HandleComponentContextMenu(go, comp, ref toDelete);
             }
@@ -384,9 +384,9 @@ public class GameObjectEditor : ScriptedEditor
         return addToMenuAttribute != null ? Path.GetFileName(addToMenuAttribute.Path) : cType.Name;
     }
 
-    private void HandleUnusedEditors(HashSet<int> editorsNeeded)
+    private void HandleUnusedEditors(HashSet<Guid> editorsNeeded)
     {
-        foreach (int key in compEditors.Keys)
+        foreach (Guid key in compEditors.Keys)
             if (!editorsNeeded.Contains(key))
             {
                 compEditors[key].OnDisable();

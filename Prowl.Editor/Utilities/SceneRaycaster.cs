@@ -3,6 +3,7 @@
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Pipelines;
+using Prowl.Runtime.SceneManagement;
 
 using Veldrid;
 
@@ -12,16 +13,12 @@ namespace Prowl.Editor;
 
 public static class SceneRaycaster
 {
-    private static Material s_scenePickMaterial;
-
     public record MeshHitInfo(GameObject? gameObject, Vector3 worldPosition);
-
-    private static List<IRenderable> intersectRenderables = [];
 
 
     public static MeshHitInfo? Raycast(Camera cam, Vector2 rayUV, Vector2 screenScale)
     {
-        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out int id))
+        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out Guid id))
             return new MeshHitInfo(EngineObject.FindObjectByID<MeshRenderer>(id)?.GameObject, pos);
 
         return null;
@@ -30,7 +27,7 @@ public static class SceneRaycaster
 
     public static GameObject? GetObject(Camera cam, Vector2 rayUV, Vector2 screenScale)
     {
-        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out int id))
+        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out Guid id))
             return EngineObject.FindObjectByID<MeshRenderer>(id)?.GameObject;
 
         return null;
@@ -39,7 +36,7 @@ public static class SceneRaycaster
 
     public static Vector3? GetPosition(Camera cam, Vector2 rayUV, Vector2 screenScale)
     {
-        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out int id))
+        if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out Guid id))
             return pos;
 
         return null;
@@ -52,78 +49,112 @@ public static class SceneRaycaster
     }
 
 
-    private static bool RenderRaycast(Camera camera, Vector2 rayUV, Vector2 screenScale, out Vector3 position, out int objectID)
+    private static bool RenderRaycast(Camera camera, Vector2 rayUV, Vector2 screenScale, out Vector3 position, out Guid objectID)
     {
-        s_scenePickMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ScenePicker.shader"));
-
-        RenderTexture temporary = RenderTexture.GetTemporaryRT((uint)screenScale.x, (uint)screenScale.y, [PixelFormat.R8_G8_B8_A8_UNorm]);
-
-        camera.Target = temporary;
         camera.UpdateRenderData();
-
         Ray ray = camera.ScreenPointToRay(rayUV, screenScale);
+        List<(double, MeshRenderer)> hits = new();
 
-        intersectRenderables.Clear();
-
-        foreach (IRenderable renderable in RenderPipeline.GetRenderables())
+        MeshRenderer?[] meshRenderers = EngineObject.FindObjectsOfType<MeshRenderer>();
+        foreach (MeshRenderer? obj in meshRenderers)
         {
-            renderable.GetCullingData(out bool isRenderable, out Bounds bounds);
+            if (obj is MonoBehaviour mb)
+                if (!mb.EnabledInHierarchy) continue;
 
-            if (!isRenderable)
+            obj.GetCullingData(out bool isRenderable, out Bounds bounds);
+            if (isRenderable)
+            {
+                // Ignore bounds the camera is inside of
+                //if (bounds.Contains(camera.Transform.position) != ContainmentType.Disjoint)
+                //    continue;
+
+                var dist = bounds.Intersects(ray);
+                if (dist.HasValue)
+                {
+                    hits.Add((dist.Value, obj));
+                }
+            }
+        }
+
+        if (hits.Count == 0)
+        {
+            position = Vector3.zero;
+            objectID = Guid.Empty;
+            return false;
+        }
+
+        // Find the closest hit
+        hits.Sort((a, b) => a.Item1.CompareTo(b.Item1));
+
+        // Track closest intersection across all meshes
+        double closestDistance = double.MaxValue;
+        Vector3 closestPosition = Vector3.zero;
+        Guid closestObjectId = Guid.Empty;
+        bool foundAny = false;
+
+        foreach ((double, MeshRenderer) hit in hits)
+        {
+            // If we've found an intersection and this bound is farther than our closest hit, we can skip
+            if (foundAny && hit.Item1 > closestDistance)
+                break;
+
+            var mesh = hit.Item2.Mesh.Res;
+            if (mesh == null) continue;
+
+            var vertices = mesh.Vertices;
+
+            if (vertices == null || vertices.Length == 0)
                 continue;
 
-            intersectRenderables.Add(renderable);
+            int[] indices = mesh.IndexFormat == IndexFormat.UInt16 ?
+                mesh.Indices16?.Select(x => (int)x).ToArray() :
+                mesh.Indices32?.Select(x => (int)x).ToArray();
+
+            if (indices == null || indices.Length < 3)
+                continue;
+
+            Matrix4x4 matrix = hit.Item2.Transform.localToWorldMatrix;
+
+            // Cache transformed vertices to avoid repeated calculations
+            var transformedVerts = new Vector3[vertices.Length];
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                transformedVerts[i] = matrix.MultiplyPoint(vertices[i]);
+            }
+
+            for (int i = 0; i < indices.Length; i += 3)
+            {
+                Vector3 v0 = transformedVerts[indices[i]];
+                Vector3 v1 = transformedVerts[indices[i + 1]];
+                Vector3 v2 = transformedVerts[indices[i + 2]];
+
+                var distance = ray.Intersects(v0, v1, v2);
+                if (distance.HasValue)
+                {
+                    // Found a closer intersection
+                    closestDistance = distance.Value;
+                    closestPosition = ray.Position(distance.Value);
+                    closestObjectId = hit.Item2.InstanceID;
+                    foundAny = true;
+                }
+            }
         }
 
-        CommandBuffer buffer = CommandBufferPool.Get("Scene Picking Command Buffer");
-
-        buffer.SetRenderTarget(temporary);
-        buffer.ClearRenderTarget(true, true, Color.clear);
-
-        Matrix4x4 view = camera.OriginViewMatrix;
-        Vector3 cameraPosition = camera.Transform.position;
-
-        Matrix4x4 projection = camera.ProjectionMatrix;
-        projection = Graphics.GetGPUProjectionMatrix(projection);
-        Matrix4x4 vp = view * projection;
-        System.Numerics.Matrix4x4 floatVP = vp.ToFloat();
-
-        buffer.SetMaterial(s_scenePickMaterial);
-
-        foreach (IRenderable renderable in intersectRenderables)
+        if (foundAny)
         {
-            renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
-
-            model.Translation -= cameraPosition;
-            // model = Graphics.GetGPUModelMatrix(model);
-
-            buffer.SetMatrix("_Matrix_MVP", model.ToFloat() * floatVP);
-
-            buffer.ApplyPropertyState(properties);
-
-            buffer.UpdateBuffer("_PerDraw");
-
-            buffer.SetDrawData(drawData);
-            buffer.DrawIndexed((uint)drawData.IndexCount, 0, 1, 0, 0);
+            position = closestPosition;
+            objectID = closestObjectId;
+            return true;
         }
 
-        using GraphicsFence fence = new();
-        Graphics.SubmitCommandBuffer(buffer, fence);
-        Graphics.WaitForFence(fence);
+        position = Vector3.zero;
+        objectID = Guid.Empty;
+        return false;
 
-        CommandBufferPool.Release(buffer);
-
-        uint x = (uint)rayUV.x;
-        uint y = (uint)screenScale.y - (uint)rayUV.y;
-
-        // ID is packed into 8-bit 4-channel vector
-        Color32 id = temporary.ColorBuffers[0].GetPixel<Color32>(x, y);
-        float depth = GetDepth(temporary.DepthBuffer, x, y, camera.NearClipPlane, camera.FarClipPlane);
-
-        objectID = id.r | id.g << 8 | id.b << 16 | id.a << 24;
-        position = ray.Position(depth);
-
-        return objectID > 0;
+        //(double, Guid) hit = hits[0];
+        //position = ray.Position(hit.Item1);
+        //objectID = hit.Item2;
+        //return true;
     }
 
 
