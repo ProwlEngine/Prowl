@@ -37,10 +37,6 @@ public class DefaultRenderPipeline : RenderPipeline
     public static DefaultRenderPipeline Default { get; } = new();
 
     private static Matrix4x4 s_prevViewProjMatrix;
-    private static Dictionary<int, Matrix4x4> s_prevModelMatrices = new();
-    private static HashSet<int> s_activeObjectIds = new();
-    private const int CLEANUP_INTERVAL_FRAMES = 120; // Clean up every 120 frames
-    private static int s_framesSinceLastCleanup = 0;
 
     #endregion
 
@@ -61,43 +57,6 @@ public class DefaultRenderPipeline : RenderPipeline
 
             s_skyDome = renderer.Mesh.Res;
         }
-    }
-
-    private static void CleanupUnusedModelMatrices()
-    {
-        // Increment frame counter
-        s_framesSinceLastCleanup++;
-
-        // Only perform cleanup at specified interval
-        if (s_framesSinceLastCleanup < CLEANUP_INTERVAL_FRAMES)
-            return;
-
-        s_framesSinceLastCleanup = 0;
-
-        // Remove all matrices that weren't used in this frame
-        var unusedKeys = s_prevModelMatrices.Keys
-            .Where(key => !s_activeObjectIds.Contains(key))
-            .ToList();
-
-        foreach (int key in unusedKeys)
-            s_prevModelMatrices.Remove(key);
-
-        // Clear the active IDs set for next frame
-        s_activeObjectIds.Clear();
-    }
-
-    private static void TrackModelMatrix(CommandBuffer buffer, int objectId, Matrix4x4 currentModel)
-    {
-        // Mark this object ID as active this frame
-        s_activeObjectIds.Add(objectId);
-
-        // Store current model matrix for next frame
-        if (s_prevModelMatrices.TryGetValue(objectId, out Matrix4x4 prevModel))
-            buffer.SetMatrix("prowl_PrevObjectToWorld", prevModel.ToFloat());
-        else
-            buffer.SetMatrix("prowl_PrevObjectToWorld", currentModel.ToFloat()); // First frame, use current matrix
-
-        s_prevModelMatrices[objectId] = currentModel;
     }
 
     #endregion
@@ -122,9 +81,6 @@ public class DefaultRenderPipeline : RenderPipeline
         {
             // Main rendering with correct order of operations
             RenderScene(buffer, camera, data, forwardBuffer, opaqueEffects, all, ref isHDR, toRelease);
-
-            // Clean up unused matrices after rendering
-            CleanupUnusedModelMatrices();
 
             // Final post-processing
             if (finalEffects.Count > 0)
@@ -457,6 +413,8 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private static void CreateLightBuffer(CommandBuffer buffer, Vector3 cameraPosition, LayerMask cullingMask, List<IRenderableLight> lights)
     {
+#warning TODO: Update shadow maps once per frame, instead of once per camera & per frame
+
         // We have AtlasWidth slots for shadow maps
         // a single shadow map can consume multiple slots if its larger then 128x128
         // We need to distribute these slots and resolutions out to lights
@@ -756,13 +714,8 @@ public class DefaultRenderPipeline : RenderPipeline
 
                     IRenderable renderable = GetRenderable(renderIndex);
 
-                    renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
+                    renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model, out Matrix4x4 prevModel);
 
-                    // Store previous model matrix mainly for motion vectors, however, the user can use it for other things
-                    if (updatePreviousMatrices && properties.TryGetInt("_ObjectID", out int instanceId))
-                    {
-                        TrackModelMatrix(buffer, instanceId, model);
-                    }
 
                     if (CAMERA_RELATIVE)
                         model.Translation -= cameraPosition;
@@ -771,6 +724,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
                     buffer.SetMatrix("prowl_ObjectToWorld", model.ToFloat());
                     buffer.SetMatrix("prowl_WorldToObject", model.Invert().ToFloat());
+                    buffer.SetMatrix("prowl_PrevObjectToWorld", prevModel.ToFloat());
 
                     buffer.SetColor("_MainColor", Color.white);
 

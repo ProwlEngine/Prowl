@@ -13,11 +13,10 @@ namespace Prowl.Runtime;
 public abstract class EngineObject : ICloneExplicit
 {
     private static readonly Stack<EngineObject> s_destroyed = new();
-    private static int s_nextID = 1;
 
-    [CloneField(CloneFieldFlags.Skip)]
-    protected int _instanceID;
-    public int InstanceID => _instanceID;
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
+    protected Guid _instanceID;
+    public Guid InstanceID => _instanceID;
 
     // Asset path if we have one
     [HideInInspector]
@@ -40,7 +39,7 @@ public abstract class EngineObject : ICloneExplicit
 
     public EngineObject(string? name = "New Object")
     {
-        _instanceID = s_nextID++;
+        _instanceID = Guid.NewGuid();
         Name = "New" + GetType().Name;
         CreatedInstance();
         Name = name ?? Name;
@@ -65,7 +64,7 @@ public abstract class EngineObject : ICloneExplicit
         return objects.ToArray();
     }
 
-    public static T? FindObjectByID<T>(int id) where T : EngineObject
+    public static T? FindObjectByID<T>(Guid id) where T : EngineObject
     {
         foreach (GameObject go in SceneManagement.SceneManager.Current.Res!.AllObjects)
         {

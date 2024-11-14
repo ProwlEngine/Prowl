@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Runtime.InteropServices;
 
 using Prowl.Runtime.Rendering.Pipelines;
@@ -22,7 +23,7 @@ public abstract class Light : MonoBehaviour, IRenderableLight
         RenderPipeline.AddLight(this);
     }
 
-    public virtual int GetLightID() => this.InstanceID;
+    public virtual Guid GetLightID() => this.InstanceID;
     public abstract LightType GetLightType();
     public virtual Vector3 GetLightPosition() => Transform.position;
     public virtual Vector3 GetLightDirection() => Transform.forward;

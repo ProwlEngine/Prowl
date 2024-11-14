@@ -95,7 +95,7 @@ public class HierarchyWindow : EditorWindow
             {
                 // POpup holder is our parent, since thats the Tree node
                 gui.OpenPopup("RightClickGameObject");
-                gui.SetGlobalStorage("RightClickGameObject", -1);
+                gui.SetGlobalStorage("RightClickGameObject", Guid.Empty);
             }
 
             double height = 0;
@@ -111,9 +111,9 @@ public class HierarchyWindow : EditorWindow
             {
                 using (node!.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                 {
-                    int instanceID = gui.GetGlobalStorage<int>("RightClickGameObject");
+                    Guid instanceID = gui.GetGlobalStorage<Guid>("RightClickGameObject");
                     GameObject? go = null;
-                    if (instanceID != -1)
+                    if (instanceID != Guid.Empty)
                         go = EngineObject.FindObjectByID<GameObject>(instanceID);
                     DrawContextMenu(go);
                 }

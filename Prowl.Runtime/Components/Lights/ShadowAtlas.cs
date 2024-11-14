@@ -13,7 +13,7 @@ public static class ShadowAtlas
 {
     private static int size, freeTiles, tileSize, tileCount;
     private static int maxShadowSize;
-    private static int?[,] tiles;
+    private static Guid?[,] tiles;
 
     private static RenderTexture? atlas;
 
@@ -38,7 +38,7 @@ public static class ShadowAtlas
 
         tileCount = size / tileSize;
         freeTiles = tileCount * tileCount;
-        tiles = new int?[tileCount, tileCount];
+        tiles = new Guid?[tileCount, tileCount];
 
         atlas ??= new RenderTexture((uint)size, (uint)size, [PixelFormat.R32_Float], PixelFormat.D16_UNorm, true);
     }
@@ -51,7 +51,7 @@ public static class ShadowAtlas
 
     public static RenderTexture? GetAtlas() => atlas;
 
-    public static Vector2Int? ReserveTiles(int width, int height, int lightID)
+    public static Vector2Int? ReserveTiles(int width, int height, Guid lightID)
     {
         int tileWidth = width / tileSize;
         int tileHeight = height / tileSize;
@@ -76,7 +76,7 @@ public static class ShadowAtlas
         return null;
     }
 
-    private static void ReserveTile(int x, int y, int width, int height, int lightID)
+    private static void ReserveTile(int x, int y, int width, int height, Guid lightID)
     {
         if (x < 0 || y < 0 || x + width > tileCount || y + height > tileCount)
             throw new ArgumentException("Tile is out of bounds");
@@ -93,7 +93,7 @@ public static class ShadowAtlas
     }
 
 
-    public static void FreeTiles(int lightID)
+    public static void FreeTiles(Guid lightID)
     {
         for (int i = 0; i < tileCount; i++)
             for (int j = 0; j < tileCount; j++)

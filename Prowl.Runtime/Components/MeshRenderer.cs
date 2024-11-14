@@ -18,6 +18,8 @@ public class MeshRenderer : MonoBehaviour, IRenderable
 
     public PropertyState Properties;
 
+    private Matrix4x4? _prevTransform;
+
     public override void Update()
     {
         if (!Mesh.IsAvailable) return;
@@ -25,19 +27,19 @@ public class MeshRenderer : MonoBehaviour, IRenderable
 
         Properties ??= new();
 
-        Properties.SetInt("_ObjectID", InstanceID);
-
         RenderPipeline.AddRenderable(this);
     }
 
     public Material GetMaterial() => Material.Res;
     public byte GetLayer() => GameObject.layerIndex;
-
-    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
+    
+    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model, out Matrix4x4 prevModel)
     {
-        drawData = Mesh.Res;
         properties = Properties;
+        drawData = Mesh.Res;
         model = Transform.localToWorldMatrix;
+        prevModel = _prevTransform ?? model;
+        _prevTransform = model;
     }
 
     public void GetCullingData(out bool isRenderable, out Bounds bounds)
