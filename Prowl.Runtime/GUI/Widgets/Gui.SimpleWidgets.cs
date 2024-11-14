@@ -235,7 +235,8 @@ public partial class Gui
         SetNodeStorage(popupHolder ?? CurrentNode, "PU_POS_" + id, topleft ?? PointerPos);
     }
 
-    private static int nextPopupIndex;
+
+    private static int s_nextPopupIndex;
 
     public bool BeginPopup(string id, out LayoutNode? node, bool invisible = false, WidgetStyle? inputstyle = null)
     {

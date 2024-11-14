@@ -65,7 +65,7 @@ public partial class Gui
 
         ScollableNodes.Clear();
 
-        nextPopupIndex = 0;
+        s_nextPopupIndex = 0;
 
         Draw2D.BeginFrame(antiAliasing);
 
