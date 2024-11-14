@@ -304,8 +304,8 @@ Pass "ProceduralSky"
 
 		float4 Fragment(Varyings input) : SV_TARGET
 		{
-			float3 sunDisc = (float3)(1 - step(dot(normalize(input.vDir), normalize(-_SunDir)), 0.9995));
-
+			float dotProduct = dot(normalize(input.vDir), normalize(-_SunDir));
+			float sunDisc = smoothstep(0.9993, 0.9995, dotProduct);
 			return float4(sunDisc + input.vCol, 1);
 		}
 	ENDHLSL
