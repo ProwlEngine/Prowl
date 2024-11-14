@@ -441,19 +441,18 @@ public sealed class PrefabLink
         MonoBehaviour targetComp = target as MonoBehaviour;
         if (targetObj == null && targetComp != null) targetObj = targetComp.GameObject;
 
-        var field = targetObj.GetType().GetInstanceField(fieldName);
-
-        if (field == null)
-            throw new ArgumentException("Target field not found in GameObject", nameof(fieldName));
         if (targetObj == null)
             throw new ArgumentException("Target object is not a valid child of this PrefabLinks GameObject", nameof(target));
+
+        FieldInfo field = (target is GameObject) ? targetObj.GetType().GetInstanceField(fieldName) : targetComp.GetType().GetInstanceField(fieldName);
+
         if (value == null && field.FieldType.GetTypeInfo().IsValueType)
             throw new ArgumentException("Target field cannot be assigned from null value.", nameof(value));
         if (value != null && !field.FieldType.GetTypeInfo().IsInstanceOfType(value))
             throw new ArgumentException("Target field not assignable from Type " + value.GetType().Name + ".", nameof(value));
 
         VarMod change;
-        change.identifier = (targetComp != null) ? targetComp.Identifier : targetObj.Identifier;
+        change.identifier = (target is GameObject) ? targetObj.Identifier : targetComp.Identifier;
         change.fieldName = fieldName;
         change.val = value;
 
@@ -602,4 +601,10 @@ public sealed class PrefabLink
     }
 }
 
-public class ApplyPrefabContext : CloneProviderContext { }
+public class ApplyPrefabContext : CloneProviderContext
+{
+    public ApplyPrefabContext() : base(false)
+    {
+
+    }
+}

@@ -444,20 +444,14 @@ public class GameObjectEditor : ScriptedEditor
 
                 if (StyledButton(item.Name))
                 {
-                    if (go.GetComponent(item.Type) is not null)
-                    {
-                        Debug.LogError($"Component {item.Type.Name} already exists on GameObject");
-                        return;
-                    }
-
 #warning TODO: If they Add, then change a field, then remove, then add again, it will not be track the field change as the instance is different so the field change will not hold the reference to the new instance, is there anything we can do about this?
-                    UndoRedoManager.AddOrRemoveItem(
-                        (type) => { go.AddComponent(type).OnValidate(); },
-                        (type) => go.RemoveComponent(type),
-                        item.Type
-                    );
-                    //MonoBehaviour comp = go.AddComponent(item.Type);
-                    //comp.OnValidate();
+                    //UndoRedoManager.AddOrRemoveItem(
+                    //    (type) => { go.AddComponent(type).OnValidate(); },
+                    //    (type) => go.RemoveComponent(type),
+                    //    item.Type
+                    //);
+                    MonoBehaviour comp = go.AddComponent(item.Type);
+                    comp.OnValidate();
                 }
 
             }
@@ -518,19 +512,13 @@ public class GameObjectEditor : ScriptedEditor
                 Type? type = Type.GetType($"{EditorUtils.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
                 if (type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
                 {
-                    if (go.GetComponent(type) is not null)
-                    {
-                        Debug.LogError($"Script {type.Name} already exists on GameObject");
-                        return;
-                    }
-
-                    UndoRedoManager.AddOrRemoveItem(
-                        (t) => { go.AddComponent(t).OnValidate(); },
-                        (t) => go.RemoveComponent(t),
-                        type
-                    );
-                    //MonoBehaviour comp = go.AddComponent(type);
-                    //comp.OnValidate();
+                    //UndoRedoManager.AddOrRemoveItem(
+                    //    (t) => { go.AddComponent(t).OnValidate(); },
+                    //    (t) => go.RemoveComponent(t),
+                    //    type
+                    //);
+                    MonoBehaviour comp = go.AddComponent(type);
+                    comp.OnValidate();
                 }
             }
         }
