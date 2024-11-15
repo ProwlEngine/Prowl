@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices.Marshalling;
 
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.SceneManagement;
@@ -22,7 +23,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 {
     #region Private Fields/Properties
 
-    private List<MonoBehaviour> _components = new();
+    internal List<MonoBehaviour> _components = new();
     private MultiValueDictionary<Type, MonoBehaviour> _componentCache = new();
 
     private Guid _identifier = Guid.NewGuid();
@@ -451,6 +452,11 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         return null;
     }
 
+    /// <summary>
+    /// Gets the index of this GameObject in its parent's children list.
+    /// </summary>
+    /// <returns>The index of this GameObject in its parent's children list, or null if it has no parent.</returns>
+    /// <exception cref="Exception">Thrown if the GameObject is not found in its parent's children list.</exception>q
     public int? GetSiblingIndex()
     {
         if (parent == null) return null;
@@ -462,6 +468,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         throw new Exception($"This gameobject appears to be in Limbo, This should never happen!, The gameobject believes its a child of {parent.Name} but parent doesnt have it as a child!");
     }
 
+    /// <summary>
+    /// Sets the index of this GameObject in its parent's children list.
+    /// </summary>
+    /// <param name="index">The new index of this GameObject.</param>
     public void SetSiblingIndex(int index)
     {
         if (parent == null) return;
@@ -1207,14 +1217,23 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
         // We don't destroy anything when Applying a prefab
         // Since the user could have added new components or children those should stay
-        if (!isPrefabApply || ApplyPrefabContext.IsRevert)
+        // 15/11/2024 - For now we destroy everything when applying a prefab
+        // This is to ensure the editor acts reliably and consistently
+        // Otherwise theres some weird edge cases like for example:
+        // 1. Create prefab with a child
+        // 2. Spawn in twice
+        // 3. In one instance delete the child and apply
+        // The other instance will not delete the child but will disconnect it from the prefab
+        // GameObject & Component adding/removing should be VarMods, so they can be re-applied
+        // after everything has been reset
+        //if (!isPrefabApply || ApplyPrefabContext.IsRevert)
         {
             // Destroy all Components in the target GameObject
             for (int i = target._components.Count - 1; i >= 0; i--)
             {
                 var targetsIdentifier = target._components[i].Identifier;
                 // If we dont have that identifier then we can delete it
-                if (GetComponentInChildrenByIdentifier(targetsIdentifier) == null)
+                if (GetComponentByIdentifier(targetsIdentifier) == null)
                     target._components.ElementAt(i).DestroyImmediate();
             }
 
@@ -1224,10 +1243,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                 for (int i = target.children.Count - 1; i >= 0; i--)
                 {
                     var targetsIdentifier = target.children[i].Identifier;
-                    var ourComp = FindChildByIdentifier(targetsIdentifier);
-                    int? index = ourComp.GetSiblingIndex();
+                    var ourGO = FindChildByIdentifier(targetsIdentifier, false);
+
                     // If we dont have that identifier then we can delete it
-                    if (ourComp == null)
+                    if (ourGO == null)
                         target.children[i].DestroyImmediate();
                 }
             }
@@ -1240,6 +1259,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             if (targetComp == null)
                 targetComp = target.AddComponent(myComp.GetType());
 
+            int? index = myComp.GetSiblingIndex();
+            if (index.HasValue && index != targetComp.GetSiblingIndex())
+                targetComp.SetSiblingIndex(index.Value);
+
             setup.HandleObject(myComp, targetComp, CloneBehavior.ChildObject);
         }
 
@@ -1248,12 +1271,17 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         {
             for (int i = 0; i < children.Count; i++)
             {
-                GameObject targetChild = target.FindChildByIdentifier(children[i].Identifier);
+                GameObject targetChild = target.FindChildByIdentifier(children[i].Identifier, false);
                 if(targetChild == null)
                 {
                     targetChild = new GameObject();
+                    targetChild._identifier = children[i]._identifier;
                     targetChild.SetParent(target);
                 }
+
+                int? index = children[i].GetSiblingIndex();
+                if (index.HasValue && index != targetChild.GetSiblingIndex())
+                    targetChild.SetSiblingIndex(index.Value);
 
                 setup.HandleObject(children[i], targetChild, CloneBehavior.ChildObject);
             }
