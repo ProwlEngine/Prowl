@@ -257,7 +257,21 @@ public class GameObjectEditor : ScriptedEditor
                     DragnDrop.Drag(comp, comp!.GetType());
 
                     Rect rect = gui.CurrentNode.LayoutData.InnerRect;
-                    string cname = GetComponentDisplayName(cType);
+
+                    string displayName = GetComponentDisplayName(cType);
+                    string cname = displayName;
+                    if (comp.IsOnPrefabInstance)
+                    {
+                        if (comp.IsPrefabSource)
+                        {
+                            if (comp.HasPrefabMod)
+                                cname += "*";
+                            cname += "   " + FontAwesome6.CircleCheck;
+                        }
+                        else
+                            cname += " - Unsaved!";
+                    }
+
                     double textSizeY = Font.DefaultFont.CalcTextSize(cname, 20).y;
                     double centerY = (rect.height / 2) - (textSizeY / 2);
                     gui.Draw2D.DrawText(compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, centerY + 3));
