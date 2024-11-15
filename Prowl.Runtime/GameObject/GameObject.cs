@@ -1047,6 +1047,16 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     }
 
     /// <summary>
+    /// Is true if this GameObject is a part of the prefab source, False if not.
+    /// </summary>
+    public bool IsPrefabSource => AffectedByPrefabLink != null && AffectedByPrefabLink.IsSource(this);
+
+    /// <summary>
+    /// Is true if this GameObject is a part of a prefab instance, False if not.
+    /// </summary>
+    public bool IsOnPrefabInstance => AffectedByPrefabLink != null;
+
+    /// <summary>
     /// Serializes the GameObject to a SerializedProperty.
     /// </summary>
     /// <param name="ctx">The serialization context.</param>

@@ -578,6 +578,18 @@ public abstract class MonoBehaviour : EngineObject
     public void SendMessage(string methodName, params object[] objs) => GameObject.SendMessage(methodName, objs);
 
     /// <summary>
+    /// Is true if this MonoBehaviour is a part of the prefab source, False if not.
+    /// </summary>
+    public bool IsPrefabSource => GameObject.AffectedByPrefabLink != null && GameObject.AffectedByPrefabLink.IsSource(this);
+
+    /// <summary>
+    /// Is true if this MonoBehaviour is a part of a prefab instance, False if not.
+    /// </summary>
+    public bool IsOnPrefabInstance => GameObject.AffectedByPrefabLink != null;
+
+    public bool HasPrefabMod => GameObject.AffectedByPrefabLink != null && GameObject.AffectedByPrefabLink.HasChange(this, null);
+
+    /// <summary>
     /// Creates a deep copy of this Component.
     /// </summary>
     /// <returns>A reference to a newly created deep copy of this Component.</returns>
