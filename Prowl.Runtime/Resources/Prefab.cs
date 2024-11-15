@@ -518,7 +518,7 @@ public sealed class PrefabLink
     /// <param name="target">The target object in which the change has been made. Must be a GameObject or Component.</param>
     /// <param name="fieldName">The target objects <see cref="System.Reflection.FieldInfo">Field's</see> name that has been changed.</param>
     /// <returns>True, if such change list entry exists, false if not.</returns>
-    public bool HasChange(object target, string fieldName)
+    public bool HasChange(object target, string? fieldName)
     {
         if (_changes == null || _changes.Count == 0) return false;
 
@@ -528,7 +528,7 @@ public sealed class PrefabLink
         Guid identifier = (targetComp != null) ? targetComp.Identifier : targetObj.Identifier;
         for (int i = 0; i < _changes.Count; i++)
         {
-            if (_changes[i].identifier == identifier && _changes[i].fieldName == fieldName)
+            if (_changes[i].identifier == identifier && (fieldName == null || _changes[i].fieldName == fieldName))
                 return true;
         }
 
