@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -13,7 +14,7 @@ namespace Prowl.Runtime;
 [CloneBehavior(CloneBehavior.Reference)]
 public abstract class EngineObject : ICloneExplicit
 {
-    private static readonly Stack<EngineObject> s_destroyed = new();
+    private static readonly ConcurrentStack<EngineObject> s_destroyed = new();
     private static int s_nextID = 1;
 
     [CloneField(CloneFieldFlags.IdentityRelevant)]
