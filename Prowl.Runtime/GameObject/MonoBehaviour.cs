@@ -159,6 +159,41 @@ public abstract class MonoBehaviour : EngineObject
     public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInChildren<T>(includeSelf);
     /// <inheritdoc cref="GameObject.GetComponentsInChildren(Type, bool, bool)"/>"
     public IEnumerable<MonoBehaviour> GetComponentsInChildren(Type type, bool includeSelf = true) => GameObject.GetComponentsInChildren(type, includeSelf);
+
+
+    /// <summary>
+    /// Gets the index of this Component in its GameObject's Component list.
+    /// </summary>
+    /// <returns>The index of this Component in its GameObject's Component list, or null if it has no GameObject.</returns>
+    /// <exception cref="Exception">Thrown if the Component is not found in its GameObject's Component list.</exception>q
+    public int? GetSiblingIndex()
+    {
+        if (GameObject == null) return null;
+
+        for (int i = 0; i < GameObject._components.Count; i++)
+            if (object.ReferenceEquals(GameObject._components[i], this))
+                return i;
+
+        throw new Exception($"This Component appears to be in Limbo, This should never happen!, The Component believes its a child of {GameObject.Name} but they don't have it as an attatched component!");
+    }
+
+    /// <summary>
+    /// Sets the index of this Component in its GameObject's Component list.
+    /// </summary>
+    /// <param name="index">The new index of this Component.</param>
+    public void SetSiblingIndex(int index)
+    {
+        if (GameObject == null) return;
+
+        // Remove this object from current position
+        GameObject._components.Remove(this);
+
+        // Ensure index is within bounds
+        index = Math.Max(0, Math.Min(index, GameObject._components.Count));
+
+        // Insert at new position
+        GameObject._components.Insert(index, this);
+    }
     #endregion
 
     /// <summary>
