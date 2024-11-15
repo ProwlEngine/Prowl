@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 using Prowl.Runtime.Cloning;
 
@@ -40,7 +41,8 @@ public abstract class EngineObject : ICloneExplicit
 
     public EngineObject(string? name = "New Object")
     {
-        _instanceID = s_nextID++;
+        _instanceID = s_nextID;
+        s_nextID = Interlocked.Increment(ref s_nextID);
         Name = "New" + GetType().Name;
         CreatedInstance();
         Name = name ?? Name;
