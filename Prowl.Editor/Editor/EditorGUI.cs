@@ -295,8 +295,12 @@ public static class EditorGUI
             var fieldType = field is FieldInfo ? (field as FieldInfo)!.FieldType : (field as PropertyInfo)!.PropertyType;
             var fieldValue = field.GetValue(target);
 
+            bool isPrefabModified = false;
+            if (target is MonoBehaviour comp)
+                isPrefabModified = comp.GameObject.AffectedByPrefabLink != null && comp.GameObject.AffectedByPrefabLink.HasChange(comp, field.Name);
+
             // Draw the property
-            bool propChange = DrawerAttribute.DrawProperty(ActiveGUI, field.Name, i++, fieldType, ref fieldValue, config);
+            bool propChange = DrawerAttribute.DrawProperty(ActiveGUI, field.Name + (isPrefabModified ? "*" : ""), i++, fieldType, ref fieldValue, config);
 
             HandleEndAttributes(imGuiAttributes);
 
