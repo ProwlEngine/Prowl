@@ -48,6 +48,8 @@ public class GameObjectEditor : ScriptedEditor
         bool isEnabled = go.enabled;
         if (gui.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _, InputStyle))
         {
+            UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, nameof(GameObject.enabled), isEnabled));
+            //UndoRedoManager.SetMember(go, nameof(GameObject.enabled), isEnabled);
             go.enabled = isEnabled;
             Prefab.OnFieldChange(go, nameof(GameObject.enabled));
         }
@@ -59,6 +61,8 @@ public class GameObjectEditor : ScriptedEditor
         string name = go.Name;
         if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, ItemSize, 0, Size.Percentage(1f, -(ItemSize * 4)), ItemSize, style))
         {
+            UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, nameof(GameObject.Name), name.Trim()));
+            //UndoRedoManager.SetMember(go, nameof(GameObject.Name), name.Trim());
             go.Name = name.Trim();
             Prefab.OnFieldChange(go, nameof(GameObject.Name));
         }
@@ -67,21 +71,25 @@ public class GameObjectEditor : ScriptedEditor
         int tagIndex = go.tagIndex;
         if (gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 3)), 0, ItemSize, ItemSize, EditorGUI.InputStyle, null, FontAwesome6.Tag))
         {
-            UndoRedoManager.SetMember(go, nameof(GameObject.tagIndex), (byte)tagIndex);
+            UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, nameof(GameObject.tagIndex), (byte)tagIndex));
+            //UndoRedoManager.SetMember(go, nameof(GameObject.tagIndex), (byte)tagIndex);
             go.tagIndex = (byte)tagIndex;
             Prefab.OnFieldChange(go, nameof(GameObject.tagIndex));
         }
         int layerIndex = go.layerIndex;
         if (gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, EditorGUI.InputStyle, null, FontAwesome6.LayerGroup))
         {
-            UndoRedoManager.SetMember(go, nameof(GameObject.layerIndex), (byte)layerIndex);
+            UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, nameof(GameObject.layerIndex), (byte)layerIndex));
+            //UndoRedoManager.SetMember(go, nameof(GameObject.layerIndex), (byte)layerIndex);
             Prefab.OnFieldChange(go, nameof(GameObject.layerIndex));
         }
 
         bool isStatic = go.isStatic;
         if (gui.Checkbox("IsStaticChk", ref isStatic, Offset.Percentage(1f, -(ItemSize)), 0, out _, InputStyle))
         {
-            UndoRedoManager.SetMember(go, go.GetType().GetProperty(nameof(GameObject.isStatic), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic), isStatic);
+            var prop = go.GetType().GetProperty(nameof(GameObject.isStatic), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, prop, isStatic));
+            //UndoRedoManager.SetMember(go, go.GetType().GetProperty(nameof(GameObject.isStatic), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic), isStatic);
             Prefab.OnFieldChange(go, nameof(GameObject.isStatic));
         }
         gui.Tooltip("Is Static");
@@ -197,11 +205,13 @@ public class GameObjectEditor : ScriptedEditor
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, btnRoundness, 12);
 
-                    Transform t = go.Transform;
+                    Transform t = go.Transform.DeepClone();
+                    bool transformChanged = false;
                     using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
                         if (DrawProperty(0, "Position", t, nameof(t.localPosition)))
                         {
+                            transformChanged = true;
                             Prefab.OnFieldChange(go, "_transform");
                         }
                     }
@@ -210,6 +220,7 @@ public class GameObjectEditor : ScriptedEditor
                     {
                         if (DrawProperty(1, "Rotation", t, nameof(t.localEulerAngles)))
                         {
+                            transformChanged = true;
                             Prefab.OnFieldChange(go, "_transform");
                         }
                     }
@@ -218,8 +229,15 @@ public class GameObjectEditor : ScriptedEditor
                     {
                         if (DrawProperty(2, "Scale", t, nameof(t.localScale)))
                         {
+                            transformChanged = true;
                             Prefab.OnFieldChange(go, "_transform");
                         }
+                    }
+
+                    if (transformChanged)
+                    {
+                        UndoRedoManager.RecordAction(new ChangeTransformAction(go, t.localPosition, t.localRotation, t.localScale));
+                        //UndoRedoManager.SetMember(go, "_transform", t);
                     }
                 }
             }
@@ -281,7 +299,11 @@ public class GameObjectEditor : ScriptedEditor
 
                     isEnabled = comp.Enabled;
                     if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -30), 0, out LayoutNode? chkNode, InputStyle))
-                        comp.Enabled = isEnabled;
+                    {
+                        //comp.Enabled = isEnabled;
+                        UndoRedoManager.RecordAction(new ChangeFieldOnComponentAction(comp, typeof(MonoBehaviour).GetProperty(nameof(MonoBehaviour.Enabled)), isEnabled));
+
+                    }
 
                     gui.Tooltip("Is Component Enabled?");
 
