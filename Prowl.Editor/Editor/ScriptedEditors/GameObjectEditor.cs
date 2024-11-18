@@ -205,13 +205,11 @@ public class GameObjectEditor : ScriptedEditor
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, btnRoundness, 12);
 
-                    Transform t = go.Transform.DeepClone();
-                    bool transformChanged = false;
+                    Transform t = go.Transform;
                     using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
                         if (DrawProperty(0, "Position", t, nameof(t.localPosition)))
                         {
-                            transformChanged = true;
                             Prefab.OnFieldChange(go, "_transform");
                         }
                     }
@@ -220,7 +218,6 @@ public class GameObjectEditor : ScriptedEditor
                     {
                         if (DrawProperty(1, "Rotation", t, nameof(t.localEulerAngles)))
                         {
-                            transformChanged = true;
                             Prefab.OnFieldChange(go, "_transform");
                         }
                     }
@@ -229,15 +226,8 @@ public class GameObjectEditor : ScriptedEditor
                     {
                         if (DrawProperty(2, "Scale", t, nameof(t.localScale)))
                         {
-                            transformChanged = true;
                             Prefab.OnFieldChange(go, "_transform");
                         }
-                    }
-
-                    if (transformChanged)
-                    {
-                        UndoRedoManager.RecordAction(new ChangeTransformAction(go, t.localPosition, t.localRotation, t.localScale));
-                        //UndoRedoManager.SetMember(go, "_transform", t);
                     }
                 }
             }

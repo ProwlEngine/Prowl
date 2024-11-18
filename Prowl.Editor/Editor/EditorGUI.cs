@@ -313,7 +313,24 @@ public static class EditorGUI
                 }
                 else if (target is GameObject go)
                 {
-                    //UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, field, fieldValue));
+                    UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, field, fieldValue));
+                }
+                else if (target is Transform transform)
+                {
+                    var pos = transform.localPosition;
+                    var rot = transform.localRotation;
+                    var scale = transform.localScale;
+
+                    if (field.Name.Contains("position", StringComparison.OrdinalIgnoreCase))
+                        pos = (Vector3)fieldValue;
+                    else if (field.Name.Contains("rotation", StringComparison.OrdinalIgnoreCase))
+                        rot = (Quaternion)fieldValue;
+                    else if (field.Name.Contains("euler", StringComparison.OrdinalIgnoreCase))
+                        rot = Quaternion.Euler((Vector3)fieldValue);
+                    else if (field.Name.Contains("scale", StringComparison.OrdinalIgnoreCase))
+                        scale = (Vector3)fieldValue;
+
+                    UndoRedoManager.RecordAction(new ChangeTransformAction(transform.gameObject, pos, rot, scale));
                 }
                 else
                 {
@@ -355,7 +372,24 @@ public static class EditorGUI
                 }
                 else if (target is GameObject go)
                 {
-                    //UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, fieldInfo, obj));
+                    UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, fieldInfo, obj));
+                }
+                else if (target is Transform transform)
+                {
+                    var pos = transform.localPosition;
+                    var rot = transform.localRotation;
+                    var scale = transform.localScale;
+
+                    if (fieldInfo.Name.Contains("position", StringComparison.OrdinalIgnoreCase))
+                        pos = (Vector3)obj;
+                    else if (fieldInfo.Name.Contains("rotation", StringComparison.OrdinalIgnoreCase))
+                        rot = (Quaternion)obj;
+                    else if (fieldInfo.Name.Contains("euler", StringComparison.OrdinalIgnoreCase))
+                        rot = Quaternion.Euler((Vector3)obj);
+                    else if (fieldInfo.Name.Contains("scale", StringComparison.OrdinalIgnoreCase))
+                        scale = (Vector3)obj;
+
+                    UndoRedoManager.RecordAction(new ChangeTransformAction(transform.gameObject, pos, rot, scale));
                 }
                 else
                 {
@@ -379,7 +413,24 @@ public static class EditorGUI
                 }
                 else if (target is GameObject go)
                 {
-                    //UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, propInfo, obj));
+                    UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, propInfo, obj));
+                }
+                else if (target is Transform transform)
+                {
+                    var pos = transform.localPosition;
+                    var rot = transform.localRotation;
+                    var scale = transform.localScale;
+
+                    if (propInfo.Name.Contains("position", StringComparison.OrdinalIgnoreCase))
+                        pos = (Vector3)obj;
+                    else if (propInfo.Name.Contains("rotation", StringComparison.OrdinalIgnoreCase))
+                        rot = (Quaternion)obj;
+                    else if (propInfo.Name.Contains("euler", StringComparison.OrdinalIgnoreCase))
+                        rot = Quaternion.Euler((Vector3)obj);
+                    else if (propInfo.Name.Contains("scale", StringComparison.OrdinalIgnoreCase))
+                        scale = (Vector3)obj;
+
+                    UndoRedoManager.RecordAction(new ChangeTransformAction(transform.gameObject, pos, rot, scale));
                 }
                 else
                 {
