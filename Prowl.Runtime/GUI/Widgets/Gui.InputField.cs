@@ -561,8 +561,15 @@ public partial class Gui
         Pos.y += g.CurrentNode.VScroll;
         if (g.IsPointerClick(MouseButton.Left))
         {
-            StbTextEdit.Click(stb, (float)Pos.x, (float)Pos.y);
-            stb.cursorAnim = 0f;
+            if (g.IsNodeHovered())
+            {
+                StbTextEdit.Click(stb, (float)Pos.x, (float)Pos.y);
+                stb.cursorAnim = 0f;
+            }
+            else
+            {
+                g.ClearFocus();
+            }
         }
         if (g.IsPointerDown(MouseButton.Left) && g.IsPointerMoving)
         {
