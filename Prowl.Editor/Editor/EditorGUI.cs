@@ -307,7 +307,18 @@ public static class EditorGUI
             // Update the value
             if (propChange)
             {
-                UndoRedoManager.SetMember(target, field, fieldValue);
+                if(target is MonoBehaviour comp2)
+                {
+                    UndoRedoManager.RecordAction(new ChangeFieldOnComponentAction(comp2, field, fieldValue));
+                }
+                else if (target is GameObject go)
+                {
+                    //UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, field, fieldValue));
+                }
+                else
+                {
+                    UndoRedoManager.SetMember(target, field, fieldValue);
+                }
 
                 if (changes != null && field is FieldInfo f)
                     changes.Add(target, f);
@@ -337,7 +348,21 @@ public static class EditorGUI
             object? obj = fieldInfo.GetValue(target);
             bool changed = DrawerAttribute.DrawProperty(ActiveGUI, name, index, fieldInfo.FieldType, ref obj, config);
             if (changed)
-                UndoRedoManager.SetMember(target, fieldInfo, obj);
+            {
+                if (target is MonoBehaviour comp2)
+                {
+                    UndoRedoManager.RecordAction(new ChangeFieldOnComponentAction(comp2, fieldInfo, obj));
+                }
+                else if (target is GameObject go)
+                {
+                    //UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, fieldInfo, obj));
+                }
+                else
+                {
+                    UndoRedoManager.SetMember(target, fieldInfo, obj);
+                }
+                //UndoRedoManager.SetMember(target, fieldInfo, obj);
+            }
             return changed;
         }
 
@@ -347,7 +372,21 @@ public static class EditorGUI
             object? obj = propInfo.GetValue(target);
             bool changed = DrawerAttribute.DrawProperty(ActiveGUI, name, index, propInfo.PropertyType, ref obj, config);
             if (changed)
-                UndoRedoManager.SetMember(target, propInfo, obj);
+            {
+                if (target is MonoBehaviour comp2)
+                {
+                    UndoRedoManager.RecordAction(new ChangeFieldOnComponentAction(comp2, propInfo, obj));
+                }
+                else if (target is GameObject go)
+                {
+                    //UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(go, propInfo, obj));
+                }
+                else
+                {
+                    UndoRedoManager.SetMember(target, propInfo, obj);
+                }
+                //UndoRedoManager.SetMember(target, propInfo, obj);
+            }
             return changed;
         }
 

@@ -50,8 +50,9 @@ public abstract class MonoBehaviour : EngineObject
 
     /// <summary>
     /// Gets the identifier for this MonoBehaviour.
+    /// Generally shouldnt be set manually
     /// </summary>
-    public Guid Identifier => _identifier;
+    public Guid Identifier { get => _identifier; set => _identifier = value; }
 
     /// <summary>
     /// Gets the GameObject this MonoBehaviour is attached to.

@@ -8,6 +8,7 @@ using Prowl.Editor.Preferences;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Cloning;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
@@ -416,21 +417,18 @@ public class GameObjectEditor : ScriptedEditor
 
         if (go == null) return;
 
-        //if (StyledButton("Duplicate"))
-        //{
-        //    MonoBehaviour cloned = comp.DeepClone();
-        //    go.AddComponent(cloned);
-        //    cloned.OnValidate();
-        //    closePopup = true;
-        //}
+        if (StyledButton("Duplicate"))
+        {
+            UndoRedoManager.RecordAction(new AddComponentAction(go.Identifier, comp.DeepClone()));
+            //MonoBehaviour cloned = comp.DeepClone();
+            //go.AddComponent(cloned);
+            //cloned.OnValidate();
+            closePopup = true;
+        }
 
         if (StyledButton("Delete"))
         {
-            UndoRedoManager.AddOrRemoveItem(
-                (c) => { go.RemoveComponent(c); },
-                (c) => go.AddComponent(c),
-                comp
-            );
+            UndoRedoManager.RecordAction(new RemoveComponentAction(go.Identifier, comp.Identifier));
             //go!.RemoveComponent(comp);
             closePopup = true;
         }
@@ -458,14 +456,9 @@ public class GameObjectEditor : ScriptedEditor
 
                 if (StyledButton(item.Name))
                 {
-#warning TODO: If they Add, then change a field, then remove, then add again, it will not be track the field change as the instance is different so the field change will not hold the reference to the new instance, is there anything we can do about this?
-                    //UndoRedoManager.AddOrRemoveItem(
-                    //    (type) => { go.AddComponent(type).OnValidate(); },
-                    //    (type) => go.RemoveComponent(type),
-                    //    item.Type
-                    //);
-                    MonoBehaviour comp = go.AddComponent(item.Type);
-                    comp.OnValidate();
+                    UndoRedoManager.RecordAction(new AddComponentAction<MonoBehaviour>(go.Identifier, item.Type));
+                    //MonoBehaviour comp = go.AddComponent(item.Type);
+                    //comp.OnValidate();
                 }
 
             }
@@ -526,13 +519,9 @@ public class GameObjectEditor : ScriptedEditor
                 Type? type = Type.GetType($"{EditorUtils.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
                 if (type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
                 {
-                    //UndoRedoManager.AddOrRemoveItem(
-                    //    (t) => { go.AddComponent(t).OnValidate(); },
-                    //    (t) => go.RemoveComponent(t),
-                    //    type
-                    //);
-                    MonoBehaviour comp = go.AddComponent(type);
-                    comp.OnValidate();
+                    UndoRedoManager.RecordAction(new AddComponentAction<MonoBehaviour>(go.Identifier, type));
+                    //MonoBehaviour comp = go.AddComponent(type);
+                    //comp.OnValidate();
                 }
             }
         }

@@ -94,5 +94,6 @@ public static class UndoRedoManager
     public static void SetMember(object target, FieldInfo field, object? fieldValue) => RecordAction(new SetMember(target, field, fieldValue));
     public static void SetMember(object target, MemberInfo field, object? fieldValue) => RecordAction(new SetMember(target, field, fieldValue));
     public static void AddOrRemoveItem<T>(Action<T> perform, Action<T> undo, T item) => RecordAction(new AddItemAction<T>(perform, undo, item));
+    public static void AddOrRemoveIdentifiedItem<T>(Func<T, Guid> perform, Action<Guid> undo, T item) => RecordAction(new AddIdentifiedItemAction<T>(perform, undo, item));
     public static void CallMethod(Action perform, Action undo) => RecordAction(new CallMethodAction(perform, undo));
 }

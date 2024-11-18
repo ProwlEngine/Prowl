@@ -15,3 +15,17 @@ public class AddItemAction<T> : AbstractAction
     protected override void Do() => _add(_item);
     protected override void Undo() => _remove(_item);
 }
+
+public class AddIdentifiedItemAction<T> : AbstractAction
+{
+    private readonly Func<T, Guid> _add;
+    private readonly Action<Guid> _remove;
+    private readonly T _item;
+    private Guid _identifier;
+
+    public AddIdentifiedItemAction(Func<T, Guid> add, Action<Guid> remove, T item) =>
+        (_add, _remove, _item) = (add, remove, item);
+
+    protected override void Do() => _identifier = _add(_item);
+    protected override void Undo() => _remove(_identifier);
+}

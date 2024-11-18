@@ -81,6 +81,19 @@ public abstract class EngineObject : ICloneExplicit
         return null;
     }
 
+    public static T? FindObjectByIdentifier<T>(Guid identifier) where T : EngineObject
+    {
+        foreach (GameObject go in SceneManagement.SceneManager.Current.Res!.AllObjects)
+        {
+            if (go.Identifier == identifier)
+                return go as T;
+            foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
+                if (comp.Identifier == identifier)
+                    return comp as T;
+        }
+        return null;
+    }
+
     public static EngineObject Instantiate(EngineObject obj, bool keepAssetID = false)
     {
         if (obj.IsDestroyed) throw new Exception(obj.Name + " has been destroyed.");

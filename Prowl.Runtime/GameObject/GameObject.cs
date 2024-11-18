@@ -643,6 +643,17 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     }
 
     /// <summary>
+    /// Removes a specific component from the GameObject By its Identifier.
+    /// </summary>
+    /// <param name="component">The component identifier to remove.</param>
+    public void RemoveComponent(Guid component)
+    {
+        MonoBehaviour? comp = GetComponentByIdentifier(component);
+        if (comp != null)
+            RemoveComponent(comp);
+    }
+
+    /// <summary>
     /// Gets the first component of type T attached to the GameObject.
     /// </summary>
     /// <typeparam name="T">The type of component to get.</typeparam>

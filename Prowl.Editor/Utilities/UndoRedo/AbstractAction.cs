@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Runtime;
+
 namespace Prowl.Editor.Utilities;
 
 public abstract class AbstractAction : IAction
@@ -9,19 +11,33 @@ public abstract class AbstractAction : IAction
 
     public virtual void Execute()
     {
-        if (CanExecute())
+        try
         {
-            Do();
-            ExecuteCount++;
+            if (CanExecute())
+            {
+                Do();
+                ExecuteCount++;
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Action.Do() Failed: " + e.Message);
         }
     }
 
     public virtual void UnExecute()
     {
-        if (CanUnExecute())
+        try
         {
-            Undo();
-            ExecuteCount--;
+            if (CanUnExecute())
+            {
+                Undo();
+                ExecuteCount--;
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Action.Undo() Failed: " + e.Message);
         }
     }
 
