@@ -371,6 +371,8 @@ public class Transform : ICloneExplicit
 
         Transform target = targetObj as Transform;
 
+        target.gameObject = gameObject;
+
         target.position = position;
         target.rotation = rotation;
         target.localScale = localScale;
