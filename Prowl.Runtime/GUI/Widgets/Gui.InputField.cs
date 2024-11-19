@@ -57,6 +57,8 @@ public partial class Gui
 
     public bool InputField(string ID, ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, Size? height = null, WidgetStyle? inputstyle = null, bool invisible = false)
     {
+        value ??= "";
+
         var style = inputstyle ?? new WidgetStyle(30);
         var g = ActiveGUI;
         bool multiline = (flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline;
