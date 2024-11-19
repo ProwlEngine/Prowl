@@ -385,11 +385,13 @@ public static class EditorGuiManager
         var original = Application.AssetProvider.LoadAsset<GameObject>($"Defaults/{name}.obj");
         if (original.IsAvailable)
         {
+            UndoRedoManager.RecordAction(new AddGameObjectToSceneAction(original.Res!, null)); // AddGameObjectToSceneAction clones the object so we can safely use it here
+#warning TODO: A way to select the gameobject created via the Undo Action
             var go = GameObject.Instantiate(original.Res!);
-            go.Transform.position = GetPosition();
-            if (component != null)
-                go.AddComponent(component);
-            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            //go.Transform.position = GetPosition();
+            //if (component != null)
+            //    go.AddComponent(component);
+            //HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
     }
 
@@ -400,8 +402,10 @@ public static class EditorGuiManager
         go.AddComponent<DirectionalLight>();
         go.Transform.position = GetPosition();
         go.Transform.localEulerAngles = new System.Numerics.Vector3(45, 70, 0);
-        SceneManager.Scene.Add(go);
-        HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+        UndoRedoManager.RecordAction(new AddGameObjectToSceneAction(go, null));
+#warning TODO: A way to select the gameobject created via the Undo Action
+        //SceneManager.Scene.Add(go);
+        //HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
     }
 
     [MenuItem("Create/Light/Point Light")]
@@ -410,8 +414,10 @@ public static class EditorGuiManager
         var go = new GameObject("Point Light");
         go.AddComponent<PointLight>();
         go.Transform.position = GetPosition();
-        SceneManager.Scene.Add(go);
-        HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+        UndoRedoManager.RecordAction(new AddGameObjectToSceneAction(go, null));
+#warning TODO: A way to select the gameobject created via the Undo Action
+        //SceneManager.Scene.Add(go);
+        //HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
     }
 
     [MenuItem("Create/Light/Spot Light")]
@@ -420,8 +426,10 @@ public static class EditorGuiManager
         var go = new GameObject("Spot Light");
         go.AddComponent<SpotLight>();
         go.Transform.position = GetPosition();
-        SceneManager.Scene.Add(go);
-        HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+        UndoRedoManager.RecordAction(new AddGameObjectToSceneAction(go, null));
+#warning TODO: A way to select the gameobject created via the Undo Action
+        //SceneManager.Scene.Add(go);
+        //HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
     }
 
     #endregion
