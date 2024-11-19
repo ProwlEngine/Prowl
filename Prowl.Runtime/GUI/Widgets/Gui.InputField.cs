@@ -20,7 +20,7 @@ public partial class Gui
         Multiline = 1 << 1,
         AllowTab = 1 << 2,
         NoSelection = 1 << 3,
-        AutoSelectAll = 1 << 4,
+        DontAutoSelectAll = 1 << 4,
         EnterReturnsTrue = 1 << 5,
         OnlyDisplay = 1 << 6,
         Readonly = 1 << 7,
@@ -157,7 +157,7 @@ public partial class Gui
         HandleKeyEvent(stb, MaxLength, Flags);
         HandleMouseEvent(stb);
 
-        if (justSelected && (Flags & InputFieldFlags.AutoSelectAll) == InputFieldFlags.AutoSelectAll)
+        if (justSelected && (Flags & InputFieldFlags.DontAutoSelectAll) != InputFieldFlags.DontAutoSelectAll)
         {
             stb.SelectStart = 0;
             stb.SelectEnd = Text.Length;
@@ -279,7 +279,8 @@ public partial class Gui
 
             float bg_offy_up = is_multiline ? 0.0f : -1.0f;    // FIXME: those offsets should be part of the style? they don't play so well with multi-line selection.
             float bg_offy_dn = is_multiline ? 0.0f : 2.0f;
-            Color32 bg_color = style.ActiveColor;
+            Color32 bg_color = Color.blue;
+            bg_color.b = (byte)(bg_color.b * 0.9f);
             Vector2 rect_pos = render_pos + select_start_offset - render_scroll;
             for (int p = text_selected_begin; p < text_selected_end;)
             {
