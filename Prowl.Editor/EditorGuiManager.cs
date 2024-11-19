@@ -387,7 +387,7 @@ public static class EditorGuiManager
         {
             UndoRedoManager.RecordAction(new AddGameObjectToSceneAction(original.Res!, null)); // AddGameObjectToSceneAction clones the object so we can safely use it here
 #warning TODO: A way to select the gameobject created via the Undo Action
-            var go = GameObject.Instantiate(original.Res!);
+            //var go = GameObject.Instantiate(original.Res!);
             //go.Transform.position = GetPosition();
             //if (component != null)
             //    go.AddComponent(component);
