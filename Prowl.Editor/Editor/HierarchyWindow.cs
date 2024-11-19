@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Editor.Preferences;
+using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Cloning;
@@ -18,6 +19,7 @@ public class HierarchyWindow : EditorWindow
 
     private string _searchText = "";
     private GameObject? _renamingGO;
+    private string _renamingText;
     public static SelectHandler<WeakReference> SelectHandler { get; private set; } = new((item) => !item.IsAlive || (item.Target is EngineObject eObj && eObj.IsDestroyed), (a, b) => ReferenceEquals(a.Target, b.Target));
 
     private const float PingDuration = 3f;
@@ -129,12 +131,14 @@ public class HierarchyWindow : EditorWindow
         if (EditorGUI.StyledButton("New GameObject"))
         {
             var go = new GameObject("New GameObject");
-            if (parent != null)
-                go.SetParent(parent);
-            else // SetParent adds to scene automatically so we only need to add if it doesnt have a parent
-                SceneManager.Scene.Add(go);
-            go.Transform.localPosition = Vector3.zero;
-            SelectHandler.SetSelection(new WeakReference(go));
+#warning TODO: Need a way to Select the new GameObject
+            UndoRedoManager.RecordAction(new AddGameObjectToSceneAction(go, parent));
+            //if (parent != null)
+            //    go.SetParent(parent);
+            //else // SetParent adds to scene automatically so we only need to add if it doesnt have a parent
+            //    SceneManager.Scene.Add(go);
+            //go.Transform.localPosition = Vector3.zero;
+            //SelectHandler.SetSelection(new WeakReference(go));
             closePopup = true;
         }
 
@@ -149,6 +153,7 @@ public class HierarchyWindow : EditorWindow
             if (EditorGUI.StyledButton("Rename"))
             {
                 _renamingGO = parent;
+                _renamingText = parent.Name;
                 _justStartedRename = true;
                 closePopup = true;
             }
@@ -159,17 +164,21 @@ public class HierarchyWindow : EditorWindow
             }
             if (EditorGUI.StyledButton("Delete"))
             {
-                parent.DestroyLater();
+                UndoRedoManager.RecordAction(new DeleteGameObjectAction(parent.Identifier));
+                //parent.DestroyLater();
                 closePopup = true;
             }
 
             if (SelectHandler.Count > 1 && EditorGUI.StyledButton("Delete All"))
             {
-                SelectHandler.Foreach((go) =>
+                using (UndoRedoManager.CreateTransaction())
                 {
-                    if (go.Target is GameObject g)
-                        g.DestroyLater();
-                });
+                    SelectHandler.Foreach((go) =>
+                    {
+                        if (go.Target is GameObject g)
+                            UndoRedoManager.RecordAction(new DeleteGameObjectAction(parent.Identifier));
+                    });
+                }
                 SelectHandler.Clear();
                 closePopup = true;
             }
@@ -253,6 +262,7 @@ public class HierarchyWindow : EditorWindow
             {
                 _justStartedRename = true;
                 _renamingGO = entity;
+                _renamingText = entity.Name;
             }
             else if (gui.IsPointerClick(MouseButton.Right) && interact.IsHovered())
             {
@@ -263,7 +273,8 @@ public class HierarchyWindow : EditorWindow
 
             if (IsFocused)
                 if (isSelected && Input.GetKeyDown(Key.Delete))
-                    entity.DestroyLater();
+                    UndoRedoManager.RecordAction(new DeleteGameObjectAction(entity.Identifier));
+                    //entity.DestroyLater();
 
             // Drag n Drop
             // Dropping uses the current nodes rect by default
@@ -326,12 +337,16 @@ public class HierarchyWindow : EditorWindow
             {
                 Rect inputRect = new(rect.x + leftOffset, rect.y, maxwidth - (entryHeight * 2.25), entryHeight);
                 gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.ButtonRoundness);
-                gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 0, maxwidth - (entryHeight * 2.25), entryHeight, EditorGUI.InputStyle, true);
+                gui.InputField("RenameInput", ref _renamingText, 64, Gui.InputFieldFlags.None, 30, 0, maxwidth - (entryHeight * 2.25), entryHeight, EditorGUI.InputStyle, true);
                 if (_justStartedRename)
                     gui.FocusPreviousInteractable();
                 if (!gui.PreviousInteractableIsFocus())
+                {
                     _renamingGO = null;
-                entity.Name = name;
+                    if (_renamingText != entity.Name)
+                        UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(entity, nameof(GameObject.Name), name.Trim()));
+                }
+                //entity.Name = name;
                 _justStartedRename = false;
             }
             else
@@ -365,27 +380,34 @@ public class HierarchyWindow : EditorWindow
             {
                 go = original!.DeepClone();
                 go.AssetID = original!.AssetID; // Retain Asset ID
+                UndoRedoManager.RecordAction(new AddGameObjectToSceneAction(go, entity));
             }
-            if (entity != null)
-                go.SetParent(entity); // Also adds to scene
             else
             {
-                go.SetParent(null); // null is root - doesnt add to scene as SetParent has no idea what scene to add to
-                SceneManager.Scene.Add(go);
+                UndoRedoManager.RecordAction(new SetParentAction(go.Identifier, entity.Identifier));
             }
-            SelectHandler.SetSelection(new WeakReference(go));
+
+            //if (entity != null)
+            //    go.SetParent(entity); // Also adds to scene
+            //else
+            //{
+            //    go.SetParent(null); // null is root - doesnt add to scene as SetParent has no idea what scene to add to
+            //    SceneManager.Scene.Add(go);
+            //}
+            //SelectHandler.SetSelection(new WeakReference(go));
         }
         else if (DragnDrop.Drop<Prefab>(out Prefab? prefab))
         {
             var go = prefab!.Instantiate();
-            if (entity != null)
-                go.SetParent(entity); // Also adds to scene
-            else
-            {
-                go.SetParent(null); // null is root - doesnt add to scene as SetParent has no idea what scene to add to
-                SceneManager.Scene.Add(go);
-            }
-            SelectHandler.SetSelection(new WeakReference(go));
+            UndoRedoManager.RecordAction(new AddGameObjectToSceneAction(go, entity));
+            //if (entity != null)
+            //    go.SetParent(entity); // Also adds to scene
+            //else
+            //{
+            //    go.SetParent(null); // null is root - doesnt add to scene as SetParent has no idea what scene to add to
+            //    SceneManager.Scene.Add(go);
+            //}
+            //SelectHandler.SetSelection(new WeakReference(go));
         }
         else if (DragnDrop.Drop<Scene>(out Scene? scene))
         {
@@ -395,20 +417,25 @@ public class HierarchyWindow : EditorWindow
 
     public static void DuplicateSelected()
     {
-        var newGO = new List<WeakReference>();
-        SelectHandler.Foreach((obj) =>
+        using (UndoRedoManager.CreateTransaction())
         {
-            var go = (obj.Target as GameObject);
-            if (go == null) return;
-            GameObject? cloned = go.DeepClone() ?? throw new Exception("Failed to clone GameObject");
-            if (go.parent != null)
-                cloned.SetParent(go.parent);
-            else // SetParent adds to scene automatically so we only need to add ourselves if it doesnt have a parent
-                SceneManager.Scene.Add(cloned);
-            newGO.Add(new WeakReference(cloned));
-        });
-        SelectHandler.Clear();
-        SelectHandler.SetSelection([.. newGO]);
+            var newGO = new List<WeakReference>();
+            SelectHandler.Foreach((obj) =>
+            {
+                var go = (obj.Target as GameObject);
+                if (go == null) return;
+                UndoRedoManager.RecordAction(new CloneGameObjectAction(go.Identifier));
+                //GameObject? cloned = go.DeepClone() ?? throw new Exception("Failed to clone GameObject");
+                //if (go.parent != null)
+                //    cloned.SetParent(go.parent);
+                //else // SetParent adds to scene automatically so we only need to add ourselves if it doesnt have a parent
+                //    SceneManager.Scene.Add(cloned);
+                //newGO.Add(new WeakReference(cloned));
+            });
+            SelectHandler.Clear();
+#warning TODO: Need a way to Select the new GameObjects
+            //SelectHandler.SetSelection([.. newGO]);
+        }
     }
 
 }

@@ -12,23 +12,80 @@ namespace Prowl.Editor.Utilities;
 public class AddGameObjectToSceneAction : AbstractAction
 {
     private readonly GameObject GameObject;
+    private readonly Guid Parent;
+    private GameObject backup;
     private Guid? identifier;
 
-    public AddGameObjectToSceneAction(GameObject gameObject) =>
-        (GameObject) = (gameObject);
+    public AddGameObjectToSceneAction(GameObject gameObject, GameObject parent) =>
+        (GameObject, Parent) = (gameObject, parent?.Identifier ?? Guid.Empty);
 
 
     protected override void Do()
     {
-        SceneManager.Scene.Add(GameObject.DeepClone(new(false)));
-        identifier = GameObject.Identifier;
+        if(backup == null)
+            backup = GameObject.DeepClone(new(false));
+
+        var go = backup.DeepClone(new(false));
+        GameObject parent = EngineObject.FindObjectByIdentifier<GameObject>(Parent);
+        if (parent != null)
+        {
+            go.SetParent(parent);
+        }
+        else
+        {
+            SceneManager.Scene.Add(go);
+        }
+
+        identifier = go.Identifier;
     }
 
     protected override void Undo()
     {
-        GameObject? go = EngineObject.FindObjectByIdentifier<GameObject>(identifier.Value);
+        GameObject go = EngineObject.FindObjectByIdentifier<GameObject>(identifier.Value);
         if (go == null)
             throw new InvalidOperationException("Could not find GameObject with identifier: " + GameObject);
+
+        go.DestroyImmediate();
+    }
+}
+
+public class CloneGameObjectAction : AbstractAction
+{
+    private readonly Guid GameObject;
+    private GameObject? _gameObject;
+    private Guid _parent;
+    private Guid _clone;
+
+    public CloneGameObjectAction(Guid gameObject) =>
+        (GameObject) = (gameObject);
+
+    protected override void Do()
+    {
+        GameObject? go = EngineObject.FindObjectByIdentifier<GameObject>(GameObject);
+        if (go == null)
+            throw new InvalidOperationException("Could not find GameObject with identifier: " + GameObject);
+
+        _gameObject = go.DeepClone(new(false));
+        _parent = go.parent?.Identifier ?? Guid.Empty;
+
+        var clone = _gameObject.DeepClone();
+        _clone = clone.Identifier;
+        GameObject? parent = EngineObject.FindObjectByIdentifier<GameObject>(_parent);
+        if (parent != null)
+        {
+            clone.SetParent(parent);
+        }
+        else
+        {
+            SceneManager.Scene.Add(clone);
+        }
+    }
+
+    protected override void Undo()
+    {
+        GameObject? go = EngineObject.FindObjectByIdentifier<GameObject>(_clone);
+        if (go == null)
+            throw new InvalidOperationException("Could not find GameObject with identifier: " + _clone);
 
         go.DestroyImmediate();
     }
@@ -38,17 +95,21 @@ public class DeleteGameObjectAction : AbstractAction
 {
     private readonly Guid GameObject;
     private GameObject? _gameObject;
+    private Guid _parent;
 
     public DeleteGameObjectAction(Guid gameObject) =>
         (GameObject) = (gameObject);
 
     protected override void Do()
     {
-        _gameObject = EngineObject.FindObjectByIdentifier<GameObject>(GameObject);
-        if (_gameObject == null)
+        var go = EngineObject.FindObjectByIdentifier<GameObject>(GameObject);
+        if (go == null)
             throw new InvalidOperationException("Could not find GameObject with identifier: " + GameObject);
 
-        _gameObject.DestroyImmediate();
+        _gameObject = go.DeepClone(new(false));
+        _parent = go.parent?.Identifier ?? Guid.Empty;
+
+        go.DestroyImmediate();
     }
 
     protected override void Undo()
@@ -56,7 +117,16 @@ public class DeleteGameObjectAction : AbstractAction
         if (_gameObject == null)
             throw new InvalidOperationException("GameObject is null");
 
-        SceneManager.Scene.Add(_gameObject.DeepClone(new(false)));
+        var go = _gameObject.DeepClone(new(false));
+        GameObject? parent = EngineObject.FindObjectByIdentifier<GameObject>(_parent);
+        if (parent != null)
+        {
+            go.SetParent(parent);
+        }
+        else
+        {
+            SceneManager.Scene.Add(go);
+        }
     }
 }
 
