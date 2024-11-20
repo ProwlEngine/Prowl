@@ -266,3 +266,36 @@ public class ChangeTransformAction : AbstractAction
         transform.localScale = _oldScale;
     }
 }
+
+public class BreakPrefabLinkAction : AbstractAction
+{
+    private readonly Guid _target;
+    private PrefabLink _prefab;
+
+    public BreakPrefabLinkAction(GameObject target)
+    {
+        _target = target?.Identifier ?? throw new ArgumentNullException(nameof(target));
+    }
+
+    protected override void Do()
+    {
+        GameObject? go = EngineObject.FindObjectByIdentifier<GameObject>(_target);
+        if (go == null)
+            throw new InvalidOperationException("Could not find gameobject with identifier: " + _target);
+
+        _prefab ??= go.AffectedByPrefabLink.DeepClone(new(false));
+
+        go.BreakPrefabLink();
+    }
+
+    protected override void Undo()
+    {
+        GameObject? go = EngineObject.FindObjectByIdentifier<GameObject>(_target);
+        if (go == null)
+            throw new InvalidOperationException("Could not find gameobject with identifier: " + _target);
+
+        go.LinkToPrefab(_prefab.Prefab);
+        _prefab.DeepCopyTo(go.PrefabLink);
+    }
+}
+

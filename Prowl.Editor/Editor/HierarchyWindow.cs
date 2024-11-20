@@ -208,11 +208,14 @@ public class HierarchyWindow : EditorWindow
 
             if (SelectHandler.Count > 0 && SelectHandler.Selected.Any(x => (x.Target as GameObject)?.PrefabLink != null) && EditorGUI.StyledButton("Break Prefab Connection"))
             {
-                SelectHandler.Foreach((go) =>
+                using (UndoRedoManager.CreateTransaction())
                 {
-                    if (go.Target is GameObject g)
-                        g.BreakPrefabLink();
-                });
+                    SelectHandler.Foreach((go) =>
+                    {
+                        if (go.Target is GameObject g)
+                            UndoRedoManager.RecordAction(new BreakPrefabLinkAction(g));
+                    });
+                }
                 closePopup = true;
             }
         }
