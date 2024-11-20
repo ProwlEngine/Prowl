@@ -123,9 +123,9 @@ public class GameObjectEditor : ScriptedEditor
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
 
                         // Clear all changes and re-apply Prefabs
-                        //go.PrefabLink!.ApplyPrefab();
-                        go.PrefabLink!.ClearChanges();
-                        PrefabLink.ApplyAllLinks([go], null, true);
+                        //go.PrefabLink!.ClearChanges();
+                        //PrefabLink.ApplyAllLinks([go], null, true);
+                        UndoRedoManager.RecordAction(new ResetPrefabLinkAction(go));
                     }
                     else if (gui.IsNodeHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f);

@@ -299,3 +299,39 @@ public class BreakPrefabLinkAction : AbstractAction
     }
 }
 
+public class ResetPrefabLinkAction : AbstractAction
+{
+    private readonly Guid _target;
+    private GameObject _backup;
+    private PrefabLink _prefab;
+
+    public ResetPrefabLinkAction(GameObject target)
+    {
+        if(target.PrefabLink == null)
+            throw new InvalidOperationException("GameObject does not have a prefab link");
+        _target = target?.Identifier ?? throw new ArgumentNullException(nameof(target));
+    }
+
+    protected override void Do()
+    {
+        GameObject? go = EngineObject.FindObjectByIdentifier<GameObject>(_target);
+        if (go == null)
+            throw new InvalidOperationException("Could not find gameobject with identifier: " + _target);
+
+        _backup ??= go.DeepClone(new(false));
+        _prefab ??= go.AffectedByPrefabLink.DeepClone(new(false));
+
+        go.PrefabLink.ClearChanges();
+        PrefabLink.ApplyAllLinks([go]);
+    }
+
+    protected override void Undo()
+    {
+        GameObject? go = EngineObject.FindObjectByIdentifier<GameObject>(_target);
+        if (go == null)
+            throw new InvalidOperationException("Could not find gameobject with identifier: " + _target);
+
+        _backup.DeepCopyTo(go);
+        _prefab.DeepCopyTo(go.PrefabLink);
+    }
+}
