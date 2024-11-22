@@ -1,49 +1,47 @@
-using Prowl.Runtime.Utils;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Pipelines;
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime.SceneManagement;
 
 public static class SceneManager
 {
-    private static readonly List<GameObject> _gameObjects = new();
-    internal static HashSet<int> _dontDestroyOnLoad = new();
+    public static AssetRef<Scene> Current { get; private set; } = new Scene();
 
-    public static Scene MainScene { get; private set; } = new();
-
-    public static List<GameObject> AllGameObjects => _gameObjects;
-
-    public static bool AllowGameObjectConstruction = true;
-
-    public static event Action PreFixedUpdate;
-    public static event Action PostFixedUpdate;
+    public static Scene Scene => Current.Res!;
 
     private static SerializedProperty? StoredScene;
     private static Guid StoredSceneID;
 
     public static void Initialize()
     {
-        GameObject.Internal_Constructed += OnGameObjectConstructed;
-        GameObject.Internal_DestroyCommitted += OnGameObjectDestroyCommitted;
     }
 
     public static void StoreScene()
     {
         Debug.If(StoredScene != null, "Scene is already stored.");
-        // Serialize the Scene manually to save its state
-        // exclude objects with the DontSave hideFlag
-        GameObject[] GameObjects = AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
-        StoredScene = Serializer.Serialize(GameObjects);
-        StoredSceneID = MainScene.AssetID;
+        StoredScene = Serializer.Serialize(Current.Res!);
+        StoredSceneID = Current.AssetID;
     }
 
     public static void RestoreScene()
     {
         Debug.IfNull(StoredScene, "Scene is not stored.");
         Clear();
-        var deserialized = Serializer.Deserialize<GameObject[]>(StoredScene);
-        MainScene.AssetID = StoredSceneID;
+        Scene? deserialized = Serializer.Deserialize<Scene>(StoredScene);
+        Debug.IfNull(deserialized, "Scene could not be restored! Deserialized object is null.");
+        deserialized.AssetID = StoredSceneID;
+        Current = deserialized;
+        Current.Res!.HandlePrefabs();
+
+        OnSceneLoadAttribute.Invoke();
     }
 
     public static void ClearStoredScene()
@@ -54,119 +52,138 @@ public static class SceneManager
 
     public static void InstantiateNewScene()
     {
-        var go = new GameObject("Directional Light");
+        SceneManager.Clear();
+
+        GameObject go = new("Directional Light");
         go.AddComponent<DirectionalLight>(); // Will auto add Transform as DirectionLight requires it
         go.Transform.localEulerAngles = new System.Numerics.Vector3(130, 45, 0);
-        var alGo = new GameObject("Ambient Light");
-        var al = alGo.AddComponent<AmbientLight>();
-        al.skyIntensity = 0.4f;
-        al.groundIntensity = 0.1f;
+        Current.Res!.Add(go);
 
-        var cam = new GameObject("Main Camera");
+        GameObject cam = new("Main Camera");
         cam.tag = "Main Camera";
         cam.Transform.position = new(0, 0, -10);
-        cam.AddComponent<Camera>();
-    }
+        Camera camComp = cam.AddComponent<Camera>();
+        camComp.Depth = -1;
+        camComp.HDR = true;
 
-    private static void OnGameObjectConstructed(GameObject go)
-    {
-        if (!AllowGameObjectConstruction) return;
-        lock (_gameObjects)
-            _gameObjects.Add(go);
-    }
+        cam.AddComponent<MotionBlurEffect>();
+        cam.AddComponent<KawaseBloomEffect>();
+        cam.AddComponent<ToneMapperEffect>();
 
-    private static void OnGameObjectDestroyCommitted(GameObject go)
-    {
-        lock (_gameObjects)
-            _gameObjects.Remove(go);
+        Current.Res!.Add(cam);
 
-        go.parent?.children.Remove(go);
+        OnSceneLoadAttribute.Invoke();
     }
 
     [OnAssemblyUnload]
     public static void Clear()
-    { 
-        List<GameObject> toRemove = new List<GameObject>();
-        for (int i = 0; i < _gameObjects.Count; i++)
-            if (!_dontDestroyOnLoad.Contains(_gameObjects[i].InstanceID)) {
-                _gameObjects[i].Destroy();
-                toRemove.Add(_gameObjects[i]);
-            }
+    {
+        OnSceneUnloadAttribute.Invoke();
+        if (Current.Res != null)
+        {
+            Camera.Main = null; // Clear the main camera so it will re-find itself and be updated
 
-        EngineObject.HandleDestroyed();
+            Physics.Dispose();
+            // The act of Destroying a active scene sets the current scene to an new one
+            // During this period the previous scene is Destroyed, making Res return null, hence the ? here
+            Current.Res.DestroyImmediate();
 
-        for (int i = 0; i < toRemove.Count; i++)
-            _gameObjects.Remove(toRemove[i]);
+            EngineObject.HandleDestroyed();
 
-        Physics.Dispose();
-        Physics.Initialize();
-        MainScene = new();
+            Current = new Scene();
+
+            Physics.Initialize();
+        }
     }
 
     public static void Update()
     {
         EngineObject.HandleDestroyed();
 
-        for (int i = 0; i < _gameObjects.Count; i++)
-            if (_gameObjects[i].enabledInHierarchy)
-                _gameObjects[i].PreUpdate();
+        List<GameObject> activeGOs = Scene.ActiveObjects.ToList();
+        foreach (GameObject go in activeGOs)
+            go.PreUpdate();
 
-        if (Application.isPlaying)
+        if (Application.IsPlaying)
             Physics.Update();
 
-        ForeachComponent((x) => {
-
+        ForeachComponent(activeGOs, (x) =>
+        {
             x.Do(x.UpdateCoroutines);
             x.Do(x.Update);
         });
 
-        ForeachComponent((x) => x.Do(x.LateUpdate));
-        ForeachComponent((x) => x.Do(x.UpdateEndOfFrameCoroutines));
+        ForeachComponent(activeGOs, (x) => x.Do(x.LateUpdate));
+        ForeachComponent(activeGOs, (x) => x.Do(x.UpdateEndOfFrameCoroutines));
     }
 
-    public static void ForeachComponent(Action<MonoBehaviour> action)
+    public static void ForeachComponent(IEnumerable<GameObject> objs, Action<MonoBehaviour> action)
     {
-        for (int i = 0; i < _gameObjects.Count; i++)
-            if (_gameObjects[i].enabledInHierarchy)
-                foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
-                    if (comp.EnabledInHierarchy)
-                        action.Invoke(comp);
+        foreach (var go in objs)
+            foreach (var comp in go.GetComponents(typeof(MonoBehaviour)))
+                if (comp.EnabledInHierarchy)
+                    action.Invoke(comp);
     }
 
     public static void PhysicsUpdate()
     {
-        PreFixedUpdate?.Invoke();
-        ForeachComponent((x) => {
+        List<GameObject> activeGOs = Scene.ActiveObjects.ToList();
+        ForeachComponent(activeGOs, (x) =>
+        {
             x.Do(x.UpdateFixedUpdateCoroutines);
             x.Do(x.FixedUpdate);
         });
-        PostFixedUpdate?.Invoke();
     }
 
-    public static void Draw()
+    public static bool Draw(RenderTexture? target = null)
     {
-        var Cameras = MonoBehaviour.FindObjectsOfType<Camera>().ToList();
-        Cameras.Sort((a, b) => a.RenderOrder.CompareTo(b.DrawOrder));
-        foreach (var cam in Cameras)
-            if (cam.EnabledInHierarchy)
-                cam.Render(-1, -1);
+        var Cameras = Scene.ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
+
+        Cameras.Sort((a, b) => a.Depth.CompareTo(b.Depth));
+
+        if (Cameras.Count == 0)
+            return false;
+
+        foreach (Camera? cam in Cameras)
+        {
+            RenderPipeline pipeline = cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
+
+            // If we have a target and the Camera doesnt, draw into the target
+            if (target != null && cam.Target == null)
+            {
+                cam.Target = target;
+                pipeline.Render(cam, new());
+                cam.Target = null;
+            }
+            else
+            {
+                // Have no target or the camera has its own target
+                pipeline.Render(cam, new());
+            }
+        }
+
+        return true;
     }
 
     public static void LoadScene(Scene scene)
     {
         Clear();
-        MainScene = scene;
-        MainScene.InstantiateScene();
-        ForeachComponent((x) => x.Do(x.OnLevelWasLoaded));
+        Current = scene;
+        Scene.HandlePrefabs();
+        OnSceneLoadAttribute.Invoke();
+        IEnumerable<GameObject> activeGOs = Scene.ActiveObjects;
+        ForeachComponent(activeGOs, (x) => x.Do(x.OnLevelWasLoaded));
     }
 
     public static void LoadScene(AssetRef<Scene> scene)
     {
         if (scene.IsAvailable == false) throw new Exception("Scene is not available.");
         Clear();
-        MainScene = scene.Res;
-        MainScene.InstantiateScene();
-        ForeachComponent((x) => x.Do(x.OnLevelWasLoaded));
+        Current = scene.Res;
+        Scene.HandlePrefabs();
+        OnSceneLoadAttribute.Invoke();
+        IEnumerable<GameObject> activeGOs = Scene.ActiveObjects;
+        ForeachComponent(activeGOs, (x) => x.Do(x.OnLevelWasLoaded));
     }
 
     /// <summary>
@@ -174,18 +191,8 @@ public static class SceneManager
     /// </summary>
     public static bool Has(GameObject original)
     {
-        foreach (var go in _gameObjects)
-            if (Has(go, original.InstanceID))
-                return true;
-        return false;
-    }
-
-    static bool Has(GameObject curr, int instanceID)
-    {
-        if(curr.InstanceID == instanceID)
-            return true;
-        foreach (var child in curr.children)
-            if (Has(child, instanceID))
+        foreach (GameObject go in Scene.AllObjects)
+            if (go.InstanceID == original.InstanceID)
                 return true;
         return false;
     }

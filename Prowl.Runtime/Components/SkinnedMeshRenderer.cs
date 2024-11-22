@@ -1,87 +1,65 @@
-﻿using Prowl.Icons;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Collections.Generic;
-using Material = Prowl.Runtime.Material;
-using Mesh = Prowl.Runtime.Mesh;
+
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Pipelines;
+
+using Prowl.Icons;
+using Veldrid;
+using System;
 
 namespace Prowl.Runtime;
 
-[ExecuteAlways, AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Skinned Mesh Renderer")]
-public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
-{
-    public override RenderingOrder RenderOrder => RenderingOrder.Opaque;
 
+[ExecuteAlways, AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Skinned Mesh Renderer")]
+public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
+{
     public AssetRef<Mesh> Mesh;
     public AssetRef<Material> Material;
+
+    public PropertyState Properties;
 
     [HideInInspector]
     public Transform[] Bones = [];
 
-    private System.Numerics.Matrix4x4[] boneTransforms;
+    private System.Numerics.Matrix4x4[] _boneTransforms;
+    private SkinnedMesh _skinnedMesh;
 
-    void GetBoneMatrices()
+
+    private void GetBoneMatrices()
     {
-        boneTransforms = new System.Numerics.Matrix4x4[Bones.Length];
+        _boneTransforms = new System.Numerics.Matrix4x4[Bones.Length];
         for (int i = 0; i < Bones.Length; i++)
         {
-            var t = Bones[i];
+            Transform t = Bones[i];
+
             if (t == null)
-            {
-                boneTransforms[i] = System.Numerics.Matrix4x4.Identity;
-            }
+                _boneTransforms[i] = System.Numerics.Matrix4x4.Identity;
             else
-            {
-                boneTransforms[i] = (t.localToWorldMatrix * this.GameObject.Transform.worldToLocalMatrix).ToFloat();
-            }
+                _boneTransforms[i] = (t.localToWorldMatrix * GameObject.Transform.worldToLocalMatrix).ToFloat();
         }
     }
 
-    private Dictionary<int, Matrix4x4> prevMats = new();
 
-    public override void OnRenderObject()
+    public override void Update()
     {
-        var mat = GameObject.GlobalCamRelative;
-        int camID = Camera.Current.InstanceID;
-        if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.GlobalCamRelative;
-        var prevMat = prevMats[camID];
-        
-        if (Mesh.IsAvailable && Material.IsAvailable)
-        {
-            GetBoneMatrices();
-            Material.Res!.EnableKeyword("SKINNED");
-            Material.Res!.SetInt("ObjectID", GameObject.InstanceID);
-            Material.Res!.SetMatrices("bindPoses", Mesh.Res.bindPoses);
-            Material.Res!.SetMatrices("boneTransforms", boneTransforms);
-            for (int i = 0; i < Material.Res!.PassCount; i++)
-            {
-                Material.Res!.SetPass(i);
-                Graphics.DrawMeshNow(Mesh.Res!, mat, Material.Res!, prevMat);
-            }
-            Material.Res!.DisableKeyword("SKINNED");
-        }
+        if (!Mesh.IsAvailable) return;
+        if (!Material.IsAvailable) return;
 
-        prevMats[camID] = mat;
+        GetBoneMatrices();
+
+        Properties ??= new();
+        _skinnedMesh ??= new(Mesh);
+
+        Properties.SetInt("_ObjectID", InstanceID);
+
+        _skinnedMesh.RecomputeSkinning(_boneTransforms);
+
+        RenderPipeline.AddRenderable(this);
     }
 
-    public override void OnRenderObjectDepth()
-    {
-        if (Mesh.IsAvailable && Material.IsAvailable)
-        {
-            GetBoneMatrices();
-            Material.Res!.EnableKeyword("SKINNED");
-            Material.Res!.SetMatrices("bindPoses", Mesh.Res.bindPoses);
-            Material.Res!.SetMatrices("boneTransforms", boneTransforms);
-
-            var mvp = Matrix4x4.Identity;
-            mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
-            mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
-            mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
-            Material.Res!.SetMatrix("mvp", mvp);
-            Material.Res!.SetShadowPass(true);
-            Graphics.DrawMeshNowDirect(Mesh.Res!);
-
-            Material.Res!.DisableKeyword("SKINNED");
-        }
-    }
 
     public SerializedProperty Serialize(Serializer.SerializationContext ctx)
     {
@@ -93,10 +71,37 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         return compoundTag;
     }
 
+
     public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
     {
         Mesh = Serializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
         Material = Serializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
         Bones = Serializer.Deserialize<Transform[]>(value["Bones"], ctx);
+    }
+
+
+    public Material GetMaterial() => Material.Res;
+
+    public byte GetLayer() => GameObject.layerIndex;
+
+
+    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
+    {
+        properties = Properties;
+        drawData = _skinnedMesh;
+        model = Transform.localToWorldMatrix;
+    }
+
+
+    public void GetCullingData(out bool isRenderable, out Bounds bounds)
+    {
+        isRenderable = _enabledInHierarchy;
+        bounds = new Bounds() { size = Vector3.infinity };
+    }
+
+
+    public override void OnDestroy()
+    {
+        _skinnedMesh.Dispose();
     }
 }

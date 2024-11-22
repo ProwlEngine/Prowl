@@ -1,125 +1,402 @@
-﻿using Prowl.Editor.Preferences;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
 
-namespace Prowl.Editor
+using Debug = Prowl.Runtime.Debug;
+using Prowl.Editor.Assets;
+
+namespace Prowl.Editor;
+
+public record class LogMessage(string message, DebugStackTrace? trace, LogSeverity severity)
 {
-    public class ConsoleWindow : EditorWindow
+    public int DuplicateCount;
+}
+
+public class ConsoleWindow : EditorWindow
+{
+    // Errors with this string prefix will require a project recompile/reimport to clear.
+    // Only really meaningful for c# script compilation errors.
+    internal static readonly string UnclearableErrorPrefix = "$__PERR__";
+
+    private const int MaxLogs = 1000;
+
+    protected override double Width { get; } = 512 + (512 / 2);
+    protected override double Height { get; } = 256;
+
+    private readonly List<LogMessage> _logMessages;
+    private readonly List<LogMessage> _messagesToRender;
+
+    private LogMessage? _selectedMessage = null;
+
+
+    public ConsoleWindow() : base()
     {
-        protected override double Width { get; } = 512 + (512 / 2);
-        protected override double Height { get; } = 256;
+        Title = FontAwesome6.Terminal + " Console";
 
-        private uint _logCount;
-        private readonly List<LogMessage> _logMessages;
-        private int _maxLogs = 100;
+        _logMessages = [];
+        _messagesToRender = [];
 
-        public ConsoleWindow() : base()
+        Debug.OnLog += OnLog;
+    }
+
+
+    private static bool FastCompareMessage(LogMessage log, string message, DebugStackTrace? stackTrace, LogSeverity severity)
+    {
+        // Fastest checks first
+        if (log.severity != severity)
+            return false;
+
+        if ((log.trace == null) != (stackTrace == null))
+            return false;
+
+        if (log.trace != null && log.trace.stackFrames.Length != stackTrace.stackFrames.Length)
+            return false;
+
+        // Slower checks later
+        // Check stack frame 0 earlier since it potentially avoids comparing big messages.
+        if (stackTrace != null && stackTrace.stackFrames.Length > 0)
         {
-            Title = FontAwesome6.Terminal + " Console";
-            _logMessages = new List<LogMessage>();
-            Debug.OnLog += OnLog;
+            DebugStackFrame frame = log.trace.stackFrames[0];
+            DebugStackFrame frame2 = stackTrace.stackFrames[0];
+
+            if (frame.line != frame2.line && frame.column != frame2.column)
+                return false;
+
+            if (frame.fileName != frame2.fileName)
+                return false;
         }
 
-        private void OnLog(string message, LogSeverity logSeverity)
-        {
-            _logMessages.Add(new LogMessage(message, logSeverity));
-            if (_logMessages.Count > _maxLogs)
-                _logMessages.RemoveAt(0);
-            _logCount++;
-        }
+        if (log.message != message)
+            return false;
 
-        protected override void Draw()
+        // Potentially slowest check last
+        if (log.trace != null)
         {
-            gui.CurrentNode.Layout(LayoutType.Column);
-            gui.CurrentNode.ScaleChildren();
-
-            using(gui.Node("Header").Width(Size.Percentage(1f)).MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
+            for (int i = 1; i < log.trace.stackFrames.Length; i++)
             {
-                if (EditorGUI.StyledButton(FontAwesome6.TrashCan + " Clear", 75, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
+                DebugStackFrame frame = log.trace.stackFrames[i];
+                DebugStackFrame frame2 = stackTrace.stackFrames[i];
+
+                if (frame.line != frame2.line && frame.column != frame2.column)
+                    return false;
+
+                if (frame.fileName != frame2.fileName)
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+
+    private bool SearchDuplicate(string message, DebugStackTrace? stackTrace, LogSeverity severity)
+    {
+        // Slow, but not slow enough for it to not be nice to have.
+        // Takes around a millisecond if every check is a perfect match and has a stack trace of depth 15.
+        foreach (LogMessage msg in _logMessages)
+        {
+            if (FastCompareMessage(msg, message, stackTrace, severity))
+            {
+                msg.DuplicateCount++;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    private void OnLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity)
+    {
+        if (SearchDuplicate(message, stackTrace, logSeverity))
+            return;
+
+        _logMessages.Add(new LogMessage(message, stackTrace, logSeverity));
+
+        if (_logMessages.Count > MaxLogs)
+            _logMessages.RemoveAt(0);
+    }
+
+
+    protected override void Draw()
+    {
+        gui.CurrentNode.Layout(LayoutType.Column);
+        gui.CurrentNode.ScaleChildren();
+
+        using (gui.Node("Header").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
+        {
+            if (EditorGUI.StyledButton(FontAwesome6.TrashCan + "  Clear", 75, EditorStylePrefs.Instance.ItemSize, false, tooltip: "Clear all logs"))
+            {
+                _logMessages.RemoveAll(x => !x.message.StartsWith(UnclearableErrorPrefix));
+                _selectedMessage = null;
+            }
+
+            Color disabled = Color.white * 0.45f;
+            Color enabled = Color.white;
+
+            gui.Node("Padding").Width(gui.CurrentNode.LayoutData.Rect.width - (75 + (30 * 4)));
+
+            void DrawMessageButton(string text, ref bool value, string tooltip)
+            {
+                Color color = value ? enabled : disabled;
+
+                if (EditorGUI.StyledButton(text, 30, EditorStylePrefs.Instance.ItemSize, false, textcolor: color, tooltip: tooltip))
+                    value = !value;
+            }
+
+            DrawMessageButton(FontAwesome6.Terminal, ref GeneralPreferences.Instance.ShowDebugLogs, "Logs");
+            DrawMessageButton(FontAwesome6.TriangleExclamation, ref GeneralPreferences.Instance.ShowDebugWarnings, "Warnings");
+            DrawMessageButton(FontAwesome6.CircleExclamation, ref GeneralPreferences.Instance.ShowDebugErrors, "Errors");
+            DrawMessageButton(FontAwesome6.CircleCheck, ref GeneralPreferences.Instance.ShowDebugSuccess, "Success");
+        }
+
+        _messagesToRender.Clear();
+
+        LogSeverity mask = 0;
+
+        if (GeneralPreferences.Instance.ShowDebugLogs)
+            mask |= LogSeverity.Normal;
+
+        if (GeneralPreferences.Instance.ShowDebugWarnings)
+            mask |= LogSeverity.Warning;
+
+        if (GeneralPreferences.Instance.ShowDebugSuccess)
+            mask |= LogSeverity.Success;
+
+        if (GeneralPreferences.Instance.ShowDebugErrors)
+            mask |= LogSeverity.Error | LogSeverity.Exception;
+
+        foreach (LogMessage message in _logMessages)
+        {
+            if (!((mask & message.severity) == message.severity))
+                continue;
+
+            _messagesToRender.Add(message);
+        }
+
+        using (gui.Node("LogContent").ExpandHeight().ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Spacing(10).Padding(0, 5, 5, 5).Enter())
+        {
+            using (gui.Node("List").ExpandHeight().Layout(LayoutType.Column).Scroll(true, false, EditorGUI.InputStyle).Clip().Enter())
+            {
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
+
+                double viewHeight = gui.CurrentNode.LayoutData.Rect.height;
+
+                int messageBottom = Math.Max(0, (int)Math.Floor(gui.CurrentNode.LayoutData.VScroll / MessageHeight));
+                int messageTop = Math.Min((int)Math.Ceiling((gui.CurrentNode.LayoutData.VScroll + viewHeight) / MessageHeight), _messagesToRender.Count);
+
+                gui.Node("TopPadding").Height(messageBottom * MessageHeight);
+
+                for (int i = messageBottom; i < Math.Min(messageTop, MaxLogs); i++)
                 {
-                    _logMessages.Clear();
-                    _logCount = 0;
+                    using (gui.Node("ConsoleMessage", i).ExpandWidth().Height(MessageHeight).Enter())
+                    {
+                        DrawMessage(_messagesToRender[i], i);
+                    }
                 }
 
-                // Logs
-                if (EditorGUI.StyledButton(FontAwesome6.Terminal, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
-                    GeneralPreferences.Instance.ShowDebugLogs = !GeneralPreferences.Instance.ShowDebugLogs;
-                DrawHand(GeneralPreferences.Instance.ShowDebugLogs);
-                // Warnings
-                if (EditorGUI.StyledButton(FontAwesome6.TriangleExclamation, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
-                    GeneralPreferences.Instance.ShowDebugWarnings = !GeneralPreferences.Instance.ShowDebugWarnings;
-                DrawHand(GeneralPreferences.Instance.ShowDebugWarnings);
-                // Errors
-                if (EditorGUI.StyledButton(FontAwesome6.CircleExclamation, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
-                    GeneralPreferences.Instance.ShowDebugErrors = !GeneralPreferences.Instance.ShowDebugErrors;
-                DrawHand(GeneralPreferences.Instance.ShowDebugErrors);
-                // Success
-                if (EditorGUI.StyledButton(FontAwesome6.CircleCheck, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
-                    GeneralPreferences.Instance.ShowDebugSuccess = !GeneralPreferences.Instance.ShowDebugSuccess;
-                DrawHand(GeneralPreferences.Instance.ShowDebugSuccess);
+                gui.Node("BottomPadding").Height((_messagesToRender.Count - messageTop) * MessageHeight);
             }
 
-            using (gui.Node("List").Width(Size.Percentage(1f)).Padding(0, 3, 3, 3).Clip().Scroll().Enter())
+            if (_selectedMessage == null)
+                return;
+
+            using (gui.Node("Expanded").ExpandHeight().Layout(LayoutType.Column).Spacing(5).Scroll(inputstyle: EditorGUI.InputStyle).Clip().Enter())
             {
-                double height = 0;
-                for (int i = _logMessages.Count; i-- > 0;)
+                if (DrawExpandedMessage(_selectedMessage))
+                    _selectedMessage = null;
+            }
+        }
+    }
+
+
+    private const float MessageHeight = 40;
+
+    private void DrawMessage(LogMessage message, int index)
+    {
+        Interactable interact = gui.GetInteractable();
+
+        if (interact.TakeFocus())
+            _selectedMessage = message;
+
+        Color bgColor = Color.clear;
+
+        if (interact.IsFocused())
+            bgColor = EditorStylePrefs.Instance.Highlighted * 0.7f;
+        else if (interact.IsHovered())
+            bgColor = EditorStylePrefs.Instance.Hovering;
+        else if (index % 2 == 1)
+            bgColor = EditorStylePrefs.Instance.WindowBGOne * 0.9f;
+
+        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, bgColor, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+        GetSeverityStyles(message.severity, out string icon, out Color color);
+
+        Rect rect = gui.CurrentNode.LayoutData.Rect;
+
+        Rect textRect = rect;
+
+        textRect.x += 7.5;
+
+        bool hasTrace = message.trace != null && message.trace.stackFrames.Length > 0;
+
+        Vector2 textPos = textRect.Position;
+        textPos.y += (rect.height / 2) - (7.5 + (hasTrace ? 5 : 0));
+
+        Rect mainRect = textRect;
+        mainRect.y = textPos.y;
+        mainRect.height = 22;
+
+        gui.Draw2D.DrawText(Font.DefaultFont, icon + " " + message.message, 20, textPos, color, 0, mainRect);
+
+        if (message.DuplicateCount > 0)
+        {
+            using (gui.Node("DuplicateCounter", index).Scale(35, 15).Top((MessageHeight / 2) - 7.5).Enter())
+            {
+                gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 10));
+
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, Color.white * 0.6f, 8);
+
+                string counter = message.DuplicateCount > 1000 ? "999+" : (message.DuplicateCount + 1).ToString();
+
+                gui.Draw2D.DrawText(counter, 20, gui.CurrentNode.LayoutData.Rect);
+            }
+        }
+
+        if (hasTrace)
+        {
+            textPos.y += 15;
+
+            DebugStackFrame frame = message.trace!.stackFrames[0];
+
+            string frameText = frame.ToString();
+
+            gui.Draw2D.DrawText(Font.DefaultFont, frameText, 17.5, textPos, Color.gray, 0, textRect);
+
+            if (interact.IsHovered() && gui.IsPointerDoubleClick())
+                OpenStackFrame(frame);
+        }
+
+        Vector2 left = rect.Position;
+        left.y += rect.height;
+
+        Vector2 right = left;
+        right.x += rect.width;
+
+        left.x += 5;
+        right.x -= 5;
+
+        gui.Draw2D.DrawLine(left, right, EditorStylePrefs.Instance.Borders, 1);
+    }
+
+
+    private bool DrawExpandedMessage(LogMessage message)
+    {
+        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
+
+        GetSeverityStyles(message.severity, out string icon, out Color color);
+        string selMsg = icon + " " + message.message;
+
+        Vector2 msgSize = Font.DefaultFont.CalcTextSize(selMsg, font_size: 22, 0);
+
+        using (gui.Node("Header").Width(msgSize.x).Height(msgSize.y).Margin(10, 0, 0, 10).Enter())
+        {
+            Rect headerRect = gui.CurrentNode.LayoutData.Rect;
+            Vector2 textPos = headerRect.Position;
+
+            gui.Draw2D.DrawText(Font.DefaultFont, selMsg, 20, textPos, color);
+        }
+
+        if (message.trace != null && message.trace.stackFrames.Length != 0)
+        {
+            for (int i = 0; i < message.trace.stackFrames.Length; i++)
+            {
+                DebugStackFrame frame = message.trace.stackFrames[i];
+                string frameText = frame.ToString();
+                Vector2 frameSize = Font.DefaultFont.CalcTextSize(frameText, font_size: 21, 0);
+
+                using (gui.Node("StackFrame", i).Margin(0, 0, 0, 10).Width(frameSize.x).Height(15).Enter())
                 {
-                    var logSeverity = _logMessages[i].LogSeverity;
-                    if (logSeverity == LogSeverity.Normal && !GeneralPreferences.Instance.ShowDebugLogs) continue;
-                    else if (logSeverity == LogSeverity.Warning && !GeneralPreferences.Instance.ShowDebugWarnings) continue;
-                    else if (logSeverity == LogSeverity.Error && !GeneralPreferences.Instance.ShowDebugErrors) continue;
-                    else if (logSeverity == LogSeverity.Success && !GeneralPreferences.Instance.ShowDebugSuccess) continue;
+                    Interactable interact = gui.GetInteractable();
+                    Color col = Color.white * 0.65f;
 
-                    int width = (int)gui.CurrentNode.LayoutData.InnerRect.width;
-                    var pos = gui.CurrentNode.LayoutData.InnerRect.Position;
-                    pos.y -= gui.CurrentNode.LayoutData.VScroll;
-                    var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, 0, width - 24);
+                    if (interact.IsHovered())
+                    {
+                        col = EditorStylePrefs.Instance.Highlighted * 0.7f;
 
-                    gui.Draw2D.DrawLine(new(pos.x + 12, pos.y + height), new(pos.x + width - 12, pos.y + height), EditorStylePrefs.Instance.Borders, 1);
+                        if (gui.IsPointerClick())
+                            OpenStackFrame(frame);
+                    }
 
-                    _logMessages[i].Draw(pos + new Vector2(12, height + 8), width - 24);
-                    height += size.y + 8;
+                    Rect frameRect = gui.CurrentNode.LayoutData.Rect;
+                    gui.Draw2D.DrawText(Font.DefaultFont, frameText, 19, frameRect.Position, col, 0, frameRect);
                 }
-
-                // Dummy node to set the height of the scroll area
-                gui.Node("Dummy").Width(5).Height(height);
             }
         }
 
-        private void DrawHand(bool v)
+        using (gui.Node("CloseBtn").IgnoreLayout().Scale(18).Top(10).Enter())
         {
-            if (v) return;
-            using (gui.PreviousNode.Enter())
-            {
-                var rect = gui.CurrentNode.LayoutData.Rect;
-                rect.Expand(-10);
-                rect.Min += new Vector2(7, -7);
-                rect.Max += new Vector2(7, -7);
+            gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 10));
 
-                gui.Draw2D.DrawText(FontAwesome6.Hand, 20, rect, EditorStylePrefs.Instance.Warning, false, false);
+            Interactable interact = gui.GetInteractable();
+
+            Rect closeRect = gui.CurrentNode.LayoutData.Rect;
+
+            if (interact.TakeFocus())
+            {
+                gui.Draw2D.DrawRectFilled(closeRect, EditorStylePrefs.Instance.Highlighted, 5, CornerRounding.All);
+                return true;
             }
+            else if (interact.IsHovered())
+                gui.Draw2D.DrawRectFilled(closeRect, EditorStylePrefs.Instance.Hovering, 5, CornerRounding.All);
+
+            closeRect.y += 1;
+            gui.Draw2D.DrawText(FontAwesome6.Xmark, 23, closeRect);
         }
 
-        private record LogMessage(string Message, LogSeverity LogSeverity)
+        return false;
+    }
+
+
+    private static void OpenStackFrame(DebugStackFrame frame)
+    {
+        if (frame.fileName == null)
+            return;
+
+        AssetDatabase.OpenPath(new FileInfo(frame.fileName), frame.line ?? 0, frame.column ?? 0);
+    }
+
+
+    private static void GetSeverityStyles(LogSeverity severity, out string icon, out Color color)
+    {
+        color = Color.white;
+        icon = FontAwesome6.Terminal;
+
+        switch (severity)
         {
-            public readonly string Message = Message;
-            public readonly LogSeverity LogSeverity = LogSeverity;
+            case LogSeverity.Success:
+                color = Color.green;
+                icon = FontAwesome6.CircleCheck;
+                break;
 
-            public void Draw(Vector2 position, double wrapWidth)
-            {
-                var color = ToColor(LogSeverity);
-                Gui.ActiveGUI.Draw2D.DrawText(UIDrawList.DefaultFont, Message, 20, position, color, wrapWidth);
-            }
+            case LogSeverity.Warning:
+                color = Color.yellow;
+                icon = FontAwesome6.TriangleExclamation;
+                break;
 
-            private static System.Numerics.Vector4 ToColor(LogSeverity logSeverity) => logSeverity switch {
-                LogSeverity.Normal => new System.Numerics.Vector4(1, 1, 1, 1),
-                LogSeverity.Success => new System.Numerics.Vector4(0, 1, 0, 1),
-                LogSeverity.Warning => new System.Numerics.Vector4(1, 1, 0, 1),
-                LogSeverity.Error => new System.Numerics.Vector4(1, 0, 0, 1),
-                _ => throw new NotImplementedException("log level not implemented")
-            };
-        }
+            case LogSeverity.Error:
+                color = Color.red;
+                icon = FontAwesome6.CircleExclamation;
+                break;
+
+            case LogSeverity.Exception:
+                color = Color.red;
+                icon = FontAwesome6.TriangleExclamation; // Triangles are a bit more 'danger'y than circles, so use them for exceptions too.
+                break;
+        };
     }
 }

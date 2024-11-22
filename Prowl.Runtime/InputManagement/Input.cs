@@ -1,5 +1,6 @@
-﻿using Prowl.Runtime;
-using Silk.NET.Input;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 
@@ -13,16 +14,28 @@ public class Input
     public static void PushHandler(IInputHandler handler) => Handlers.Push(handler);
     public static void PopHandler() => Handlers.Pop();
 
+    public static bool CursorVisible
+    {
+        get => Current.CursorVisible;
+        set => Current.CursorVisible = value;
+    }
+
+    public static bool CursorLocked
+    {
+        get => Current.CursorLocked;
+        set => Current.CursorLocked = value;
+    }
+
     public static string Clipboard
     {
         get => Current.Clipboard;
         set => Current.Clipboard = value;
     }
 
-    public static char? LastPressedChar
+    public static IReadOnlyList<char> InputString
     {
-        get => Current.LastPressedChar;
-        set => Current.LastPressedChar = value;
+        get => Current.InputString;
+        set => Current.InputString = value;
     }
 
     public static event Action<Key, bool> OnKeyEvent
@@ -49,8 +62,7 @@ public class Input
     public static bool GetKey(Key key) => Current.GetKey(key);
     public static bool GetKeyDown(Key key) => Current.GetKeyDown(key);
     public static bool GetKeyUp(Key key) => Current.GetKeyUp(key);
-    public static bool GetMouseButton(int button) => Current.GetMouseButton(button);
-    public static bool GetMouseButtonDown(int button) => Current.GetMouseButtonDown(button);
-    public static bool GetMouseButtonUp(int button) => Current.GetMouseButtonUp(button);
-    public static void SetCursorVisible(bool visible, int miceIndex = 0) => Current.SetCursorVisible(visible, miceIndex);
+    public static bool GetMouseButton(MouseButton button) => Current.GetMouseButton(button);
+    public static bool GetMouseButtonDown(MouseButton button) => Current.GetMouseButtonDown(button);
+    public static bool GetMouseButtonUp(MouseButton button) => Current.GetMouseButtonUp(button);
 }

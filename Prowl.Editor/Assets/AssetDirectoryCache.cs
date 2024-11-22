@@ -1,126 +1,147 @@
-﻿namespace Prowl.Editor.Assets
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+namespace Prowl.Editor.Assets;
+
+public class AssetDirectoryCache(DirectoryInfo root)
 {
-    public class AssetDirectoryCache(DirectoryInfo root)
+    public class DirNode(DirectoryInfo directory, DirNode parent)
     {
-        public class DirNode(DirectoryInfo directory, DirNode parent)
-        {
-            public DirectoryInfo Directory = directory;
-            public DirNode Parent = parent;
-            public List<DirNode> SubDirectories = [];
-            public List<FileNode> Files = [];
-        }
+        public DirectoryInfo Directory = directory;
+        public DirNode Parent = parent;
+        public List<DirNode> SubDirectories = [];
+        public List<FileNode> Files = [];
 
-        public class FileNode
+        public IEnumerable<FileNode> Search(string searchPattern, bool recursive = false)
         {
-            public FileInfo File;
-            public Guid AssetID;
-            public AssetDatabase.SubAssetCache[] SubAssets;
-
-            public FileNode(FileInfo file)
+            foreach (FileNode file in Files)
             {
-                File = file;
+                if (file.File.Name.Contains(searchPattern, StringComparison.OrdinalIgnoreCase))
+                    yield return file;
+            }
 
-                AssetID = Guid.Empty;
-                SubAssets = Array.Empty<AssetDatabase.SubAssetCache>();
-                if (AssetDatabase.TryGetGuid(file, out var guid))
+            if (recursive)
+            {
+                foreach (DirNode subDir in SubDirectories)
                 {
-                    AssetID = guid;
-                    SubAssets = AssetDatabase.GetSubAssetsCache(guid);
+                    foreach (FileNode file in subDir.Search(searchPattern, true))
+                        yield return file;
                 }
             }
         }
 
-        public DirNode RootNode => _rootNode;
-        public DirectoryInfo Root => _rootNode.Directory;
-        public string RootName => _rootNode.Directory.Name;
-        public string RootDirectoryPath => _rootNode.Directory.FullName;
+    }
 
+    public class FileNode
+    {
+        public FileInfo File;
+        public Guid AssetID;
+        public AssetDatabase.SubAssetCache[] SubAssets;
 
-        private DirNode _rootNode;
-        private DirectoryInfo _rootDir = root;
-
-        public bool PathToNode(string path, out DirNode node)
+        public FileNode(FileInfo file)
         {
-            node = _rootNode;
+            File = file;
 
-            if (!IsPathInsideDirectory(path, node.Directory, out var relativePath))
+            AssetID = Guid.Empty;
+            SubAssets = [];
+            if (AssetDatabase.TryGetGuid(file, out var guid))
+            {
+                AssetID = guid;
+                SubAssets = AssetDatabase.GetSubAssetsCache(guid);
+            }
+        }
+    }
+
+    public DirNode RootNode => _rootNode;
+    public DirectoryInfo Root => _rootNode.Directory;
+    public string RootName => _rootNode.Directory.Name;
+    public string RootDirectoryPath => _rootNode.Directory.FullName;
+
+
+    private DirNode _rootNode;
+    private readonly DirectoryInfo _rootDir = root;
+
+    public bool PathToNode(string path, out DirNode node)
+    {
+        node = _rootNode;
+
+        if (!IsPathInsideDirectory(path, node.Directory, out var relativePath))
+            return false;
+
+        string[] pathParts = relativePath.Split(Path.DirectorySeparatorChar);
+        for (int i = 0; i < pathParts.Length; i++)
+        {
+            string part = pathParts[i];
+            if (string.IsNullOrEmpty(part))
+                continue;
+
+            DirNode nextNode = node.SubDirectories.Find(n =>
+                n.Directory.Name.Equals(part, StringComparison.OrdinalIgnoreCase));
+            if (nextNode is null)
                 return false;
 
-            string[] pathParts = relativePath.Split(Path.DirectorySeparatorChar);
-            for (int i = 0; i < pathParts.Length; i++)
+            node = nextNode;
+        }
+
+        return true;
+    }
+
+    static bool IsPathInsideDirectory(string path, DirectoryInfo directoryInfo, out string relativePath)
+    {
+        relativePath = string.Empty;
+        ArgumentException.ThrowIfNullOrEmpty(path, "Path cannot be null or empty.");
+
+        ArgumentNullException.ThrowIfNull(nameof(directoryInfo), "DirectoryInfo cannot be null.");
+
+        // Get the absolute paths
+        string directoryFullPath = Path.GetFullPath(directoryInfo.FullName);
+        string fullPath = Path.GetFullPath(path);
+
+        // Check if the fullPath starts with the directoryFullPath
+        bool result = fullPath.StartsWith(directoryFullPath, StringComparison.OrdinalIgnoreCase);
+        if (result) // Get the relative path
+            relativePath = fullPath.Substring(directoryFullPath.Length);
+        return result;
+    }
+
+    public void Refresh()
+    {
+        _rootNode = BuildDirectoryTree(_rootDir, null);
+    }
+
+    private DirNode BuildDirectoryTree(DirectoryInfo directory, DirNode parent)
+    {
+        DirNode node = new(directory, parent);
+        try
+        {
+            var directories = directory.GetDirectories();
+            foreach (DirectoryInfo subDirectory in directories)
             {
-                string part = pathParts[i];
-                if (string.IsNullOrEmpty(part))
+                if (!subDirectory.Exists)
                     continue;
 
-                DirNode nextNode = node.SubDirectories.Find(n => n.Directory.Name.Equals(part, StringComparison.OrdinalIgnoreCase));
-                if (nextNode is null)
-                    return false;
-
-                node = nextNode;
+                DirNode subNode = BuildDirectoryTree(subDirectory, node);
+                node.SubDirectories.Add(subNode);
             }
-            return true;
-        }
 
-        static bool IsPathInsideDirectory(string path, DirectoryInfo directoryInfo, out string relativePath)
-        {
-            relativePath = string.Empty;
-            if (string.IsNullOrEmpty(path))
-                throw new ArgumentNullException(nameof(path), "Path cannot be null or empty.");
-
-            if (directoryInfo == null)
-                throw new ArgumentNullException(nameof(directoryInfo), "DirectoryInfo cannot be null.");
-
-            // Get the absolute paths
-            string directoryFullPath = Path.GetFullPath(directoryInfo.FullName);
-            string fullPath = Path.GetFullPath(path);
-
-            // Check if the fullPath starts with the directoryFullPath
-            bool result = fullPath.StartsWith(directoryFullPath, StringComparison.OrdinalIgnoreCase);
-            if (result) // Get the relative path
-                relativePath = fullPath.Substring(directoryFullPath.Length);
-            return result;
-        }
-
-        public void Refresh()
-        {
-            _rootNode = BuildDirectoryTree(_rootDir, null);
-        }
-
-        private DirNode BuildDirectoryTree(DirectoryInfo directory, DirNode parent)
-        {
-            DirNode node = new(directory, parent);
-            try
+            var files = directory.GetFiles();
+            foreach (FileInfo file in files)
             {
-                var directories = directory.GetDirectories();
-                foreach (DirectoryInfo subDirectory in directories)
-                {
-                    if (!subDirectory.Exists)
-                        continue;
+                if (!File.Exists(file.FullName))
+                    continue;
 
-                    DirNode subNode = BuildDirectoryTree(subDirectory, node);
-                    node.SubDirectories.Add(subNode);
-                }
+                // Ignore ".meta" files
+                if (file.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase))
+                    continue;
 
-                var files = directory.GetFiles();
-                foreach (FileInfo file in files)
-                {
-                    if (!File.Exists(file.FullName))
-                        continue;
-
-                    // Ignore ".meta" files
-                    if (file.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    node.Files.Add(new(file));
-                }
+                node.Files.Add(new(file));
             }
-            catch (Exception)
-            {
-                // Handle any exceptions that occur during directory traversal
-            }
-
-            return node;
         }
+        catch (Exception)
+        {
+            // Handle any exceptions that occur during directory traversal
+        }
+
+        return node;
     }
 }

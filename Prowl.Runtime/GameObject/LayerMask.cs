@@ -1,7 +1,16 @@
-﻿namespace Prowl.Runtime;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+namespace Prowl.Runtime;
+
+/// <summary>
+/// A struct that represents a layer mask.
+/// </summary>
 public struct LayerMask
 {
+    public readonly static LayerMask Everything = new() { mask = uint.MaxValue };
+    public readonly static LayerMask Nothing = new() { mask = 0 };
+
     [SerializeField]
     private uint mask;
 

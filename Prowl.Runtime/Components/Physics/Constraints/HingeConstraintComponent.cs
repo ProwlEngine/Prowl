@@ -1,8 +1,11 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.Rotate}  Hinge Constraint")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.Rotate}  Hinge Constraint")]
 public sealed class HingeConstraintComponent : TwoBodyConstraintComponent<Hinge>
 {
 
@@ -99,7 +102,8 @@ public sealed class HingeConstraintComponent : TwoBodyConstraintComponent<Hinge>
 
     internal override Hinge CreateConstraint()
     {
-        return new Hinge {
+        return new Hinge
+        {
             LocalOffsetA = _localOffsetA,
             LocalHingeAxisA = _localHingeAxisA,
             LocalOffsetB = _localOffsetB,

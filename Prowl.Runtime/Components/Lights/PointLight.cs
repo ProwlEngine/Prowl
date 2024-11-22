@@ -1,59 +1,99 @@
-﻿using Prowl.Icons;
-using Material = Prowl.Runtime.Material;
-using Mesh = Prowl.Runtime.Mesh;
-using Shader = Prowl.Runtime.Shader;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+
+using Prowl.Icons;
+using Prowl.Runtime.Rendering.Pipelines;
 
 namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Point Light")]
-public class PointLight : MonoBehaviour
+[ExecuteAlways]
+public class PointLight : Light
 {
-    public override RenderingOrder RenderOrder => RenderingOrder.Lighting;
-
-    public Color color = Color.white;
     public float radius = 4.0f;
-    public float intensity = 1.0f;
 
-    Material lightMat;
-    Mesh mesh;
-    int lastCamID = -1;
+    public override void Update() => RenderPipeline.AddLight(this);
 
-    public override void OnRenderObject()
+    public override LightType GetLightType() => LightType.Point;
+
+    public override GPULight GetGPULight(int res, bool cameraRelative, Vector3 cameraPosition)
     {
-        if (mesh == null)
-            mesh = Mesh.CreateSphere(1f, 16, 16);
-
-        var mat = Matrix4x4.CreateScale(radius) * GameObject.GlobalCamRelative;
-        if (lightMat == null)
+        Vector3 lightPos;
+        if (cameraRelative)
         {
-            lightMat = new Material(Shader.Find("Defaults/Pointlight.shader"));
+            lightPos = Transform.position - cameraPosition;
         }
         else
         {
-            if (lastCamID != Camera.Current.InstanceID)
-            {
-                lastCamID = Camera.Current.InstanceID;
-                lightMat.SetTexture("gAlbedoAO", Camera.Current.gBuffer.AlbedoAO);
-                lightMat.SetTexture("gNormalMetallic", Camera.Current.gBuffer.NormalMetallic);
-                lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
-            }
-
-            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.Transform.position - Camera.Current.GameObject.Transform.position, Graphics.MatView));
-            lightMat.SetColor("LightColor", color);
-            lightMat.SetFloat("LightRadius", radius);
-            lightMat.SetFloat("LightIntensity", intensity);
-
-            //Camera.Current.Stop3D();
-            lightMat.SetPass(0);
-            //Camera.Current.DrawFullScreenTexture(Camera.Current.gBuffer.depth);
-            //Raylib.DrawRectangle(0, 0, 9999, 9999, Color.white);
-            // set matrix scale to radius
-            Graphics.DrawMeshNow(mesh, mat, lightMat);
-            //Camera.Current.Start3D();
+            lightPos = Transform.position;
         }
 
-        Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-        Gizmos.Color = Color.yellow;
-        Gizmos.DrawSphere(Vector3.zero, radius);
+        return new GPULight
+        {
+            PositionType = new Vector4(lightPos, 1),
+            DirectionRange = new Vector4(0, 0, 0, radius),
+            Color = color.GetUInt(),
+            Intensity = intensity,
+            SpotData = new Vector2(0, 0),
+            ShadowData = new Vector4(0, 0, 0, 0),
+            AtlasX = 0,
+            AtlasY = 0,
+            AtlasWidth = 0
+        };
+    }
+    
+    public override void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection)
+    {
+        view = Matrix4x4.Identity; projection = Matrix4x4.Identity;
+    }
+}
+
+[AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Area Light")]
+[ExecuteAlways]
+public class AreaLight : Light
+{
+    public float width = 1.0f;
+    public float height = 1.0f;
+    public bool twoSided = true;
+
+    public override void Update() => RenderPipeline.AddLight(this);
+    public override LightType GetLightType() => LightType.Area;
+
+    public override GPULight GetGPULight(int res, bool cameraRelative, Vector3 cameraPosition)
+    {
+        Vector3 lightPos;
+        if (cameraRelative)
+        {
+            lightPos = Transform.position - cameraPosition;
+        }
+        else
+        {
+            lightPos = Transform.position;
+        }
+
+        // Pack width and height into DirectionRange.w as 2 half floats
+        uint packedSize = ((uint)(width * 512) & 0xFFFF) | (((uint)(height * 512) & 0xFFFF) << 16);
+        float packedSizeFloat = BitConverter.Int32BitsToSingle((int)packedSize);
+
+        return new GPULight
+        {
+            PositionType = new Vector4(lightPos, 2), // Type 2 for area light
+            DirectionRange = new Vector4(Transform.forward, packedSizeFloat),
+            Color = color.GetUInt(),
+            Intensity = intensity,
+            SpotData = new Vector2(twoSided ? 1 : 0, 0),
+            ShadowData = new Vector4(0, 0, 0, 0),
+            AtlasX = 0,
+            AtlasY = 0,
+            AtlasWidth = 0
+        };
+    }
+
+    public override void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection)
+    {
+        view = Matrix4x4.Identity;
+        projection = Matrix4x4.Identity;
     }
 }

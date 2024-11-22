@@ -1,8 +1,11 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.LocationPin}  Weld Constraint")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.LocationPin}  Weld Constraint")]
 public sealed class WeldConstraintComponent : TwoBodyConstraintComponent<Weld>
 {
     [SerializeField, HideInInspector] private Vector3 _localOffset;
@@ -69,7 +72,8 @@ public sealed class WeldConstraintComponent : TwoBodyConstraintComponent<Weld>
 
     internal override Weld CreateConstraint()
     {
-        return new Weld {
+        return new Weld
+        {
             LocalOffset = _localOffset,
             LocalOrientation = _localOrientation,
             SpringSettings = new SpringSettings(_springFrequency, _springDampingRatio)

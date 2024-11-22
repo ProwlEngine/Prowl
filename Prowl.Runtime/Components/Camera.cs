@@ -1,262 +1,212 @@
-﻿using Prowl.Icons;
-using Prowl.Runtime.Rendering.Primitives;
-using Prowl.Runtime.Resources.RenderPipeline;
-using Prowl.Runtime.SceneManagement;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
-using System.Collections.Generic;
+using System.Linq;
+
+using Prowl.Icons;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Pipelines;
 
 namespace Prowl.Runtime;
 
+public enum CameraClearFlags
+{
+    None,
+    DepthOnly,
+    ColorOnly,
+    DepthColor,
+    Skybox,
+}
+
+[Flags]
+public enum DepthTextureMode
+{
+    None = 0,
+    /// <summary>
+    /// When enabled rendering will draw a Pre-Depth pass before the main rendering pass.
+    /// This can improve overdrawing and sorting issues, but can be slower on some hardware and some cases.
+    /// This also enables the _CameraDepthTexture shader property.
+    /// </summary>
+    Depth = 1, // _CameraDepthTexture
+    //Normal = 2, // _CameraNormalsTexture
+    MotionVectors = 4, // _CameraMotionVectorsTexture
+}
+
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Camera}  Camera")]
-[ExecuteAlways]
 public class Camera : MonoBehaviour
 {
-    public static Camera? Current;
-
-    public AssetRef<RenderPipeline> RenderPipeline;
-    public bool DoClear = true;
-    public Color ClearColor = new Color(0f, 0f, 0f, 1f);
-    public float FieldOfView = 60f;
-    public float OrthographicSize = 0.5f;
-    public int DrawOrder = 0;
-    public float NearClip = 0.01f;
-    public float FarClip = 1000f;
-
-    public float RenderResolution = 1f;
-
-    public bool ShowGizmos = false;
+    public CameraClearFlags ClearFlags = CameraClearFlags.Skybox;
+    public Color ClearColor = new(0f, 0f, 0f, 1f);
+    public LayerMask CullingMask = LayerMask.Everything;
 
     public enum ProjectionType { Perspective, Orthographic }
     public ProjectionType projectionType = ProjectionType.Perspective;
 
-    public event Action<int, int> Resize;
+    [ShowIf(nameof(IsOrthographic), true)] public float FieldOfView = 60f;
+    [ShowIf(nameof(IsOrthographic))] public float OrthographicSize = 0.5f;
+    public float NearClipPlane = 0.01f;
+    public float FarClipPlane = 1000f;
+    //public Rect Viewrect = new(0, 0, 1, 1); // Not Implemented
+    public int Depth = -1;
 
+    public AssetRef<RenderPipeline> Pipeline;
     public AssetRef<RenderTexture> Target;
+    public bool HDR = false;
+    public float RenderScale = 1.0f;
 
-    public event Action<int, int> PostRender;
+    public bool IsOrthographic => projectionType == ProjectionType.Orthographic;
 
-    public GBuffer gBuffer { get; private set; }
+    [HideInInspector, SerializeIgnore]
+    public DepthTextureMode DepthTextureMode = DepthTextureMode.None;
 
-    public enum DebugDraw { Off, Albedo, Normals, Depth, Velocity, ObjectID }
-    public DebugDraw debugDraw = DebugDraw.Off;
-
-    public Matrix4x4 GetProjectionMatrix(float width, float height)
+    private static WeakReference<Camera> s_mainCamera = new(null);
+    public static Camera? Main
     {
-        if (projectionType == ProjectionType.Orthographic)
-            //return System.Numerics.Matrix4x4.CreateOrthographicLeftHanded(width, height, NearClip, FarClip).ToDouble();
-            return System.Numerics.Matrix4x4.CreateOrthographicOffCenterLeftHanded(-OrthographicSize, OrthographicSize, -OrthographicSize, OrthographicSize, NearClip, FarClip).ToDouble();
-        else
-            return System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), width / height, NearClip, FarClip).ToDouble();
+        get
+        {
+            if (s_mainCamera.TryGetTarget(out Camera? camera) && camera != null)
+                return camera;
+
+            camera = GameObject.FindGameObjectWithTag("Main Camera")?.GetComponent<Camera>() ?? GameObject.FindObjectsOfType<Camera>().FirstOrDefault();
+            if(camera != null)
+                s_mainCamera.SetTarget(camera);
+            return camera;
+        }
+        internal set => s_mainCamera.SetTarget(value);
     }
 
+    private float _aspect;
+    private bool _customAspect;
+    private Matrix4x4 _projectionMatrix;
+    private Matrix4x4 _nonJitteredProjectionMatrix;
+    private bool _customProjectionMatrix;
 
-    private Vector2 GetRenderTargetSize()
+    private Matrix4x4 _previousViewMatrix;
+    private Matrix4x4 _previousProjectionMatrix;
+    private Matrix4x4 _previousViewProjectionMatrix;
+    private bool _firstFrame = true;
+
+    public uint PixelWidth { get; private set; }
+    public uint PixelHeight { get; private set; }
+
+    public float Aspect
     {
-        if (Target.IsAvailable) return new Vector2(Target.Res!.Width, Target.Res!.Height);
-        return new Vector2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
+        get => _aspect;
+        set
+        {
+            _aspect = value;
+            _customAspect = true;
+        }
     }
 
-    private void CheckGBuffer()
+    public Matrix4x4 ProjectionMatrix
     {
-        RenderResolution = Math.Clamp(RenderResolution, 0.1f, 4.0f);
-
-        Vector2 size = GetRenderTargetSize() * RenderResolution;
-        if (gBuffer == null)
+        get => _projectionMatrix;
+        set
         {
-            gBuffer = new GBuffer((int)size.x, (int)size.y);
-            Resize?.Invoke(gBuffer.Width, gBuffer.Height);
-        }
-        else if (gBuffer.Width != (int)size.x || gBuffer.Height != (int)size.y)
-        {
-            gBuffer.UnloadGBuffer();
-            gBuffer = new GBuffer((int)size.x, (int)size.y);
-            Resize?.Invoke(gBuffer.Width, gBuffer.Height);
+            _projectionMatrix = value;
+            _customProjectionMatrix = true;
         }
     }
 
-    internal void RenderAllOfOrder(RenderingOrder order)
+    public Matrix4x4 NonJitteredProjectionMatrix
     {
-        foreach (var go in SceneManager.AllGameObjects)
-            if (go.enabledInHierarchy)
-                foreach (var comp in go.GetComponents())
-                    if (comp.Enabled && comp.RenderOrder == order)
-                        comp.OnRenderObject();
+        get => _nonJitteredProjectionMatrix;
+        set
+        {
+            _nonJitteredProjectionMatrix = value;
+            _customProjectionMatrix = true;
+        }
     }
 
-    private void OpaquePass()
+    public bool UseJitteredProjectionMatrixForTransparentRendering { get; set; }
+
+    public Matrix4x4 ViewMatrix { get; private set; }
+    public Matrix4x4 OriginViewMatrix { get; private set; }
+
+    public Matrix4x4 PreviousViewMatrix => _previousViewMatrix;
+    public Matrix4x4 PreviousProjectionMatrix => _previousProjectionMatrix;
+    public Matrix4x4 PreviousViewProjectionMatrix => _previousViewProjectionMatrix;
+
+    public override void OnEnable()
     {
-        SceneManager.ForeachComponent((x) => x.Do(x.OnPreRender));
-        gBuffer.Begin();                            // Start
-        RenderAllOfOrder(RenderingOrder.Opaque);    // Render
-        gBuffer.End();                              // End
-        SceneManager.ForeachComponent((x) => x.Do(x.OnPostRender));
+        _firstFrame = true;
     }
 
-    Matrix4x4? oldView = null;
-    Matrix4x4? oldProjection = null;
-
-    public Matrix4x4 View => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, GameObject.Transform.forward, GameObject.Transform.up);
-
-    public void Render(int width, int height)
+    public void Render(in RenderingData? data = null)
     {
-        if (RenderPipeline.IsAvailable == false)
-        {
-            Debug.LogError($"Camera on {GameObject.Name} has no RenderPipeline assigned, Falling back to default.");
-            RenderPipeline = Application.AssetProvider.LoadAsset<RenderPipeline>("Defaults/DefaultRenderPipeline.scriptobj");
-            if (RenderPipeline.IsAvailable == false)
-            {
-                Debug.LogError($"Camera on {GameObject.Name} cannot render, Missing Default Render Pipeline!");
-                return;
-            }
-        }
-
-        var rp = RenderPipeline;
-        if (Target.IsAvailable)
-        {
-            width = Target.Res!.Width;
-            height = Target.Res!.Height;
-        }
-        else if (width == -1 || height == -1)
-        {
-            width = Window.InternalWindow.FramebufferSize.X;
-            height = Window.InternalWindow.FramebufferSize.Y;
-        }
-
-        width = (int)(width * RenderResolution);
-        height = (int)(height * RenderResolution);
-
-        CheckGBuffer();
-
-
-        Current = this;
-
-        Graphics.MatView = View;
-        Graphics.MatProjection = Current.GetProjectionMatrix(width, height);
-        Graphics.OldMatView = oldView ?? Graphics.MatView;
-        Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;
-
-        // Set default jitter to false, this is set to true in a TAA pass
-        rp.Res!.Prepare("Deferred", width, height);
-
-        Matrix4x4.Invert(Graphics.MatProjection, out Graphics.MatProjectionInverse);
-
-        OpaquePass();
-
-        var outputNode = rp.Res!.GetNode<OutputNode>();
-        if (outputNode == null)
-        {
-            EarlyEndRender();
-
-            Debug.LogError("RenderPipeline has no OutputNode!");
-            return;
-        }
-
-        RenderTexture? result = rp.Res!.Render();
-
-        if (result == null)
-        {
-            EarlyEndRender();
-
-            Debug.LogError("RenderPipeline OutputNode failed to return a RenderTexture!");
-            return;
-        }
-
-        //LightingPass();
-        //
-        //PostProcessStagePreCombine?.Invoke(gBuffer);
-        //
-        //if (debugDraw == DebugDraw.Off)
-        //    CombinePass();
-        //
-        //PostProcessStagePostCombine?.Invoke(gBuffer);
-
-        // Draw to Screen
-        if (debugDraw == DebugDraw.Off)
-        {
-            Graphics.Blit(Target.Res ?? null, result.InternalTextures[0], DoClear);
-            Graphics.BlitDepth(gBuffer.buffer, Target.Res ?? null);
-        }
-        else if (debugDraw == DebugDraw.Albedo)
-            Graphics.Blit(Target.Res ?? null, gBuffer.AlbedoAO, DoClear);
-        else if (debugDraw == DebugDraw.Normals)
-            Graphics.Blit(Target.Res ?? null, gBuffer.NormalMetallic, DoClear);
-        else if (debugDraw == DebugDraw.Depth)
-            Graphics.Blit(Target.Res ?? null, gBuffer.Depth, DoClear);
-        else if (debugDraw == DebugDraw.Velocity)
-            Graphics.Blit(Target.Res ?? null, gBuffer.Velocity, DoClear);
-        else if (debugDraw == DebugDraw.ObjectID)
-            Graphics.Blit(Target.Res ?? null, gBuffer.ObjectIDs, DoClear);
-
-        Target.Res?.Begin();
-        PostRender?.Invoke(width, height);
-        Target.Res?.End();
-
-        oldView = Graphics.MatView;
-        oldProjection = Graphics.MatProjection;
-
-        if (ShowGizmos)
-        {
-            Target.Res?.Begin();
-            if (Graphics.UseJitter)
-                Graphics.MatProjection = Current.GetProjectionMatrix(width, height); // Cancel out jitter if there is any
-            Gizmos.Render();
-            Target.Res?.End();
-        }
-#warning TODO: Atm gizmos is handled in a RenderObject method, but it should all be inside Update() including rendering but that will happen over the rendering overhaul, so for now reset every render (when rendering overhaul, it should be once per frame)
-        Gizmos.Clear();
-
-        Current = null;
-        Graphics.UseJitter = false;
+        RenderPipeline pipeline = Pipeline.Res ?? DefaultRenderPipeline.Default;
+        pipeline.Render(this, data ?? new());
     }
 
-    private void EarlyEndRender()
+    public Veldrid.Framebuffer UpdateRenderData()
     {
-        Graphics.UseJitter = false;
-        if (DoClear)
+        if (!_firstFrame)
         {
-            Target.Res?.Begin();
-            Graphics.Clear(ClearColor.r, ClearColor.g, ClearColor.b, ClearColor.a);
-            Target.Res?.End();
+            _previousViewMatrix = ViewMatrix;
+            _previousProjectionMatrix = _projectionMatrix;
+            _previousViewProjectionMatrix = ViewMatrix * _projectionMatrix;
         }
-        Current = null;
+        _firstFrame = false;
+
+        // Since Scene Updating is guranteed to execute before rendering, we can setup camera data for this frame here
+        Veldrid.Framebuffer camTarget = Graphics.ScreenTarget;
+
+        if (Target.Res != null)
+            camTarget = Target.Res.Framebuffer;
+
+        float renderScale = Math.Clamp(RenderScale, 0.1f, 2.0f);
+        PixelWidth = (uint)Math.Max(1, (int)(camTarget.Width * renderScale));
+        PixelHeight = (uint)Math.Max(1, (int)(camTarget.Height * renderScale));
+
+        if (!_customAspect)
+            _aspect = PixelWidth / (float)PixelHeight;
+
+        if (!_customProjectionMatrix)
+        {
+            _projectionMatrix = GetProjectionMatrix(_aspect, true);
+            _nonJitteredProjectionMatrix = _projectionMatrix;
+        }
+
+        ViewMatrix = Matrix4x4.CreateLookTo(Transform.position, Transform.forward, Transform.up);
+        OriginViewMatrix = Matrix4x4.CreateLookTo(Vector3.zero, Transform.forward, Transform.up);
+
+        return camTarget;
     }
 
-    public override void LateUpdate()
+    public void ResetAspect()
     {
-        UpdateCachedRT();
+        _aspect = PixelWidth / (float)PixelHeight;
+        _customAspect = false;
     }
 
-    public override void OnDisable()
+    public void ResetProjectionMatrix()
     {
-        gBuffer?.UnloadGBuffer();
-
-        // Clear the Cached RenderTextures
-        foreach (var (name, (renderTexture, frameCreated)) in cachedRenderTextures)
-            renderTexture.Destroy();
-        cachedRenderTextures.Clear();
+        _projectionMatrix = _nonJitteredProjectionMatrix;
+        _customProjectionMatrix = false;
     }
 
-    public Ray ScreenPointToRay(Vector2 screenPoint)
+    public void ResetMotionHistory()
     {
-        // Get the render target size
-        Vector2 renderTargetSize = GetRenderTargetSize();
+        _firstFrame = true;
+    }
 
+    public Ray ScreenPointToRay(Vector2 screenPoint, Vector2 screenScale)
+    {
         // Normalize screen coordinates to [-1, 1]
         Vector2 ndc = new Vector2(
-            (screenPoint.x / renderTargetSize.x) * 2.0f - 1.0f,
-            1.0f - (screenPoint.y / renderTargetSize.y) * 2.0f
+            (screenPoint.x / screenScale.x) * 2.0f - 1.0f,
+            1.0f - (screenPoint.y / screenScale.y) * 2.0f
         );
 
         // Create the near and far points in NDC
         Vector4 nearPointNDC = new Vector4(ndc.x, ndc.y, 0.0f, 1.0f);
         Vector4 farPointNDC = new Vector4(ndc.x, ndc.y, 1.0f, 1.0f);
 
-        // Get the view and projection matrices
-        Matrix4x4 viewMatrix = Matrix4x4.CreateLookToLeftHanded(GameObject.Transform.position, GameObject.Transform.forward, GameObject.Transform.up);
-        Matrix4x4 projectionMatrix = GetProjectionMatrix((int)renderTargetSize.x, (int)renderTargetSize.y);
-
         // Calculate the inverse view-projection matrix
-        Matrix4x4 viewProjectionMatrix = viewMatrix * projectionMatrix;
+        double aspect = screenScale.x / screenScale.y;
+        Matrix4x4 viewProjectionMatrix = GetViewMatrix() * GetProjectionMatrix((float)aspect);
         Matrix4x4.Invert(viewProjectionMatrix, out Matrix4x4 inverseViewProjectionMatrix);
 
         // Unproject the near and far points to world space
@@ -274,40 +224,25 @@ public class Camera : MonoBehaviour
         return new Ray(rayOrigin, rayDirection);
     }
 
-
-    #region RT Cache
-
-    private readonly Dictionary<string, (RenderTexture, long frameCreated)> cachedRenderTextures = [];
-    private const int MaxUnusedFrames = 10;
-
-    public RenderTexture GetCachedRT(string name, int width, int height, TextureImageFormat[] format)
+    public Matrix4x4 GetViewMatrix(bool applyPosition = true)
     {
-        if (cachedRenderTextures.ContainsKey(name))
-        {
-            // Update the frame created
-            var cached = cachedRenderTextures[name];
-            cachedRenderTextures[name] = (cached.Item1, Time.frameCount);
-            return cached.Item1;
-        }
-        RenderTexture rt = new(width, height, 1, false, format);
-        rt.Name = name;
-        cachedRenderTextures[name] = (rt, Time.frameCount);
-        return rt;
+        Vector3 position = applyPosition ? Transform.position : Vector3.zero;
+
+        return Matrix4x4.CreateLookTo(position, Transform.forward, Transform.up);
     }
 
-    public void UpdateCachedRT()
+    private Matrix4x4 GetProjectionMatrix(float aspect, bool accomodateGPUCoordinateSystem = false)
     {
-        var disposableTextures = new List<(RenderTexture, string)>();
-        foreach (var (name, (renderTexture, frameCreated)) in cachedRenderTextures)
-            if (Time.frameCount - frameCreated > MaxUnusedFrames)
-                disposableTextures.Add((renderTexture, name));
+        Matrix4x4 proj;
 
-        foreach (var renderTexture in disposableTextures)
-        {
-            cachedRenderTextures.Remove(renderTexture.Item2);
-            renderTexture.Item1.Destroy();
-        }
+        if (projectionType == ProjectionType.Orthographic)
+            proj = Matrix4x4.CreateOrthographic(OrthographicSize, OrthographicSize, NearClipPlane, FarClipPlane);
+        else
+            proj = Matrix4x4.CreatePerspectiveFieldOfView(FieldOfView.ToRad(), aspect, NearClipPlane, FarClipPlane);
+
+        if (accomodateGPUCoordinateSystem)
+            proj = Graphics.GetGPUProjectionMatrix(proj);
+
+        return proj;
     }
-
-    #endregion
 }

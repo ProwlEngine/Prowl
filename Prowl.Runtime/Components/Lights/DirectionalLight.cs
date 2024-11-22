@@ -1,123 +1,70 @@
-﻿using Prowl.Icons;
-using Prowl.Runtime.SceneManagement;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Icons;
+using Prowl.Runtime.Rendering.Pipelines;
 
 namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Directional Light")]
 [ExecuteAlways]
-public class DirectionalLight : MonoBehaviour
+public class DirectionalLight : Light
 {
-    public override RenderingOrder RenderOrder => RenderingOrder.Lighting;
-
     public enum Resolution : int
     {
         _512 = 512,
         _1024 = 1024,
         _2048 = 2048,
-        _4096 = 4096
+        _4096 = 4096,
     }
 
     public Resolution shadowResolution = Resolution._1024;
 
-    public Color color = Color.white;
-    public float intensity = 8f;
-    public float qualitySamples = 16;
-    public float blockerSamples = 16;
+    public int qualitySamples = 32;
+    public int blockerSamples = 16;
     public float shadowDistance = 50f;
-    public float shadowRadius = 0.02f;
-    public float shadowPenumbra = 80f;
-    public float shadowMinimumPenumbra = 0.02f;
-    public float shadowBias = 0.00004f;
-    public float shadowNormalBias = 0.02f;
-    public bool castShadows = true;
+    public float shadowRadius = 1f;
 
-    Material lightMat;
-
-    RenderTexture? shadowMap;
-    Matrix4x4 depthMVP;
-
-    public override void OnPreRender()
+    public override void Update()
     {
-        UpdateShadowmap();
+        RenderPipeline.AddLight(this);
     }
 
-    public override void OnRenderObject()
+    public override LightType GetLightType() => LightType.Directional;
+    public override void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection)
     {
-        lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
-        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Transform.forward, Graphics.MatView));
-        lightMat.SetColor("LightColor", color);
-        lightMat.SetFloat("LightIntensity", intensity);
+        Vector3 forward = Transform.forward;
+        projection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, -shadowDistance, shadowDistance);
+        projection = Graphics.GetGPUProjectionMatrix(projection);
+        view = Matrix4x4.CreateLookTo(Transform.position, forward, Transform.up);
+    }
 
-        lightMat.SetTexture("gAlbedoAO", Camera.Current.gBuffer.AlbedoAO);
-        lightMat.SetTexture("gNormalMetallic", Camera.Current.gBuffer.NormalMetallic);
-        lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
+    public override GPULight GetGPULight(int res, bool cameraRelative, Vector3 cameraPosition)
+    {
+        Vector3 forward = Transform.forward;
+        Matrix4x4 proj = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, -shadowDistance, shadowDistance);
+        proj = Graphics.GetGPUProjectionMatrix(proj);
+        Matrix4x4 view;
+        Vector3 lightPos;
 
-        if (castShadows)
+        if (cameraRelative)
         {
-            lightMat.EnableKeyword("CASTSHADOWS");
-            lightMat.SetTexture("shadowMap", shadowMap.InternalDepth);
-
-            Matrix4x4.Invert(Graphics.MatView, out var viewInverse);
-
-            lightMat.SetMatrix("matCamViewInverse", viewInverse);
-            lightMat.SetMatrix("matShadowView", Graphics.MatDepthView);
-            lightMat.SetMatrix("matShadowSpace", depthMVP);
-
-            lightMat.SetFloat("u_Radius", shadowRadius);
-            lightMat.SetFloat("u_Penumbra", shadowPenumbra);
-            lightMat.SetFloat("u_MinimumPenumbra", shadowMinimumPenumbra);
-            lightMat.SetInt("u_QualitySamples", (int)qualitySamples);
-            lightMat.SetInt("u_BlockerSamples", (int)blockerSamples);
-            lightMat.SetFloat("u_Bias", shadowBias);
-            lightMat.SetFloat("u_NormalBias", shadowNormalBias);
+            view = Matrix4x4.CreateLookTo(Transform.position - cameraPosition, forward, Transform.up);
         }
         else
         {
-            lightMat.DisableKeyword("CASTSHADOWS");
+            view = Matrix4x4.CreateLookTo(Transform.position, forward, Transform.up);
         }
 
-        Graphics.Blit(lightMat);
-
-        Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-        Gizmos.Color = Color.yellow;
-        Gizmos.DrawDirectionalLight(Vector3.zero);
-    }
-
-    public void UpdateShadowmap()
-    {
-        // Populate Shadowmap
-        if (castShadows)
+        return new GPULight
         {
-            int res = (int)shadowResolution;
-            shadowMap ??= new RenderTexture(res, res, 0);
-
-            // Compute the MVP matrix from the light's point of view
-            //Graphics.MatDepthProjection = Matrix4x4.CreateOrthographicOffCenter(-25, 25, -25, 25, 1, 256);
-            Graphics.MatDepthProjection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, shadowDistance*2);
-
-            var forward = GameObject.Transform.forward;
-            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-forward * shadowDistance, -forward, GameObject.Transform.up);
-
-            depthMVP = Matrix4x4.Identity;
-            depthMVP = Matrix4x4.Multiply(depthMVP, Graphics.MatDepthView);
-            depthMVP = Matrix4x4.Multiply(depthMVP, Graphics.MatDepthProjection);
-
-            //Graphics.MatDepth = depthMVP;
-
-            shadowMap.Begin();
-            Graphics.Clear(1, 1, 1, 1);
-            foreach (var go in SceneManager.AllGameObjects)
-                if (go.enabledInHierarchy)
-                    foreach (var comp in go.GetComponents())
-                        if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)
-                            comp.OnRenderObjectDepth();
-            shadowMap.End();
-        }
-        else
-        {
-            shadowMap?.DestroyImmediate();
-            shadowMap = null;
-        }
+            PositionType = new Vector4(0, blockerSamples, 0, 0),
+            DirectionRange = new Vector4(GameObject.Transform.forward, shadowDistance),
+            Color = color.GetUInt(),
+            Intensity = intensity,
+            SpotData = new Vector2(0, 0),
+            ShadowData = new Vector4(shadowRadius, qualitySamples, shadowBias, shadowNormalBias),
+            ShadowMatrix = (view * proj).ToFloat()
+        };
     }
-
 }

@@ -1,55 +1,58 @@
-﻿using Silk.NET.OpenAL;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 
-namespace Prowl.Runtime.Audio.OpenAL
+using Silk.NET.OpenAL;
+
+namespace Prowl.Runtime.Audio.OpenAL;
+
+public class OpenALAudioBuffer : AudioBuffer, IDisposable
 {
-    public class OpenALAudioBuffer : AudioBuffer, IDisposable
+    public uint ID { get; }
+    public int ByteCount { get; private set; }
+
+    public OpenALAudioBuffer()
     {
-        public uint ID { get; }
-        public int ByteCount { get; private set; }
+        ID = OpenALEngine.al.GenBuffer();
+        ByteCount = 0;
+    }
 
-        public OpenALAudioBuffer()
+    public override void BufferData(byte[] buffer, BufferAudioFormat format, int sampleRate)
+    {
+        unsafe
         {
-            ID = OpenALEngine.al.GenBuffer();
-            ByteCount = 0;
-        }
-
-        public override void BufferData(byte[] buffer, BufferAudioFormat format, int sampleRate)
-        {
-            unsafe
+            fixed (void* bufferptr = buffer)
             {
-                fixed (void* bufferptr = buffer)
-                {
-                    OpenALEngine.al.BufferData(ID, MapAudioFormat(format), bufferptr, buffer.Length, sampleRate);
-                    ByteCount = buffer.Length;
-                }
+                OpenALEngine.al.BufferData(ID, MapAudioFormat(format), bufferptr, buffer.Length, sampleRate);
+                ByteCount = buffer.Length;
             }
         }
+    }
 
-        private BufferFormat MapAudioFormat(BufferAudioFormat format)
+    private BufferFormat MapAudioFormat(BufferAudioFormat format)
+    {
+        switch (format)
         {
-            switch (format)
-            {
-                case BufferAudioFormat.Mono8:
-                    return BufferFormat.Mono8;
-                case BufferAudioFormat.Mono16:
-                    return BufferFormat.Mono16;
-                case BufferAudioFormat.Stereo8:
-                    return BufferFormat.Stereo8;
-                case BufferAudioFormat.Stereo16:
-                    return BufferFormat.Stereo16;
-                case BufferAudioFormat.MonoF:
-                    return (BufferFormat)65552;
-                case BufferAudioFormat.StereoF:
-                    return (BufferFormat)65553;
-                default:
-                    throw new InvalidOperationException("Illegal BufferAudioFormat: " + format);
-            }
+            case BufferAudioFormat.Mono8:
+                return BufferFormat.Mono8;
+            case BufferAudioFormat.Mono16:
+                return BufferFormat.Mono16;
+            case BufferAudioFormat.Stereo8:
+                return BufferFormat.Stereo8;
+            case BufferAudioFormat.Stereo16:
+                return BufferFormat.Stereo16;
+            case BufferAudioFormat.MonoF:
+                return (BufferFormat)65552;
+            case BufferAudioFormat.StereoF:
+                return (BufferFormat)65553;
+            default:
+                throw new InvalidOperationException("Illegal BufferAudioFormat: " + format);
         }
+    }
 
-        public override void Dispose()
-        {
-            OpenALEngine.al.DeleteBuffer(ID);
-        }
+    public override void Dispose()
+    {
+        OpenALEngine.al.DeleteBuffer(ID);
     }
 }

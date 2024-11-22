@@ -1,113 +1,125 @@
-﻿using Prowl.Editor.Assets;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
-using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.Rendering.OpenGL;
-using System;
+using Prowl.Runtime.Rendering;
 
-namespace Prowl.Editor.ScriptedEditors
+namespace Prowl.Editor.ScriptedEditors;
+
+[CustomEditor(typeof(Material))]
+public class MaterialEditor : ScriptedEditor
 {
-    [CustomEditor(typeof(Material))]
-    public class MaterialEditor : ScriptedEditor
+    public Action onChange;
+
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
     {
-        private Action onChange;
-        public static Guid assignedGUID;
-        public static ushort assignedFileID;
-        public static ulong guidAssignedToID = 0;
-        public static ulong Selected = 0;
+        double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
-        public MaterialEditor() { }
+        var mat = (Material)target;
+        mat ??= Material.CreateDefaultMaterial();
 
-        public MaterialEditor(Material mat, Action onChange)
+        gui.CurrentNode.Layout(LayoutType.Column);
+        gui.CurrentNode.ScaleChildren();
+
+        bool changed = false;
+        using (gui.Node("Shader").ExpandWidth().MaxHeight(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
         {
-            target = mat;
-            this.onChange = onChange;
+            changed |= EditorGUI.DrawProperty(0, "Shader", mat, "Shader");
+            if (changed) changes.Add(mat, nameof(Material.Shader));
         }
 
-        public override void OnInspectorGUI()
+        if (mat.Shader.IsAvailable)
         {
-            double ItemSize = EditorStylePrefs.Instance.ItemSize;
-
-            var mat = (Material)target;
-            mat ??= new Material();
-
-            var g = Gui.ActiveGUI;
-
-            g.CurrentNode.Layout(LayoutType.Column);
-            g.CurrentNode.ScaleChildren();
-
-            bool changed = false;
-            using (g.Node("Shader").ExpandWidth().MaxHeight(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
+            using (gui.Node("Properties").ExpandWidth().Layout(LayoutType.Column).Enter())
             {
-                IAssetRef assetref = mat.Shader;
-                changed |= EditorGUI.DrawProperty(0, "Shader", ref assetref);
-                mat.Shader = new(assetref.AssetID, assetref.FileID);
-            }
-
-            if (mat.Shader.IsAvailable)
-            {
-                using (g.Node("Properties").ExpandWidth().Layout(LayoutType.Column).Enter())
+                int id = 1;
+                foreach (ShaderProperty property in mat.Shader.Res.Properties)
                 {
-                    int id = 1;
-                    foreach (var property in mat.Shader.Res.Properties)
+                    using (gui.Node("prop", id++).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
-                        using (g.Node("prop", id++).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
-                        {
-                            int index = 0;
-                            switch (property.Type)
-                            {
-                                case Shader.Property.PropertyType.FLOAT:
-                                    // Value
-                                    float f = mat.PropertyBlock.GetFloat(property.Name);
-                                    changed |= EditorGUI.DrawProperty(index++, property.DisplayName, ref f);
-                                    if (changed) mat.PropertyBlock.SetFloat(property.Name, f);
-
-                                    break;
-                                case Shader.Property.PropertyType.INTEGER:
-                                    int i = mat.PropertyBlock.GetInt(property.Name);
-                                    changed |= EditorGUI.DrawProperty(index++, property.DisplayName, ref i);
-                                    if (changed) mat.PropertyBlock.SetInt(property.Name, i);
-                                    break;
-                                case Shader.Property.PropertyType.VEC2:
-                                    Vector2 v2 = mat.PropertyBlock.GetVector2(property.Name).ToFloat();
-                                    changed |= EditorGUI.DrawProperty(index++, property.DisplayName, ref v2);
-                                    if (changed) mat.PropertyBlock.SetVector(property.Name, v2);
-                                    break;
-                                case Shader.Property.PropertyType.VEC3:
-                                    Vector3 v3 = mat.PropertyBlock.GetVector3(property.Name).ToFloat();
-                                    changed |= EditorGUI.DrawProperty(index++, property.DisplayName, ref v3);
-                                    if (changed) mat.PropertyBlock.SetVector(property.Name, v3);
-                                    break;
-                                case Shader.Property.PropertyType.VEC4:
-                                    Vector4 v4 = mat.PropertyBlock.GetVector4(property.Name).ToFloat();
-                                    changed |= EditorGUI.DrawProperty(index++, property.DisplayName, ref v4);
-                                    if (changed) mat.PropertyBlock.SetVector(property.Name, v4);
-                                    break;
-                                case Shader.Property.PropertyType.COLOR:
-                                    Color c = mat.PropertyBlock.GetVector4(property.Name).ToFloat();
-                                    changed |= EditorGUI.DrawProperty(index++, property.DisplayName, ref c);
-                                    if (changed) mat.PropertyBlock.SetVector(property.Name, c);
-                                    break;
-
-                                case Shader.Property.PropertyType.TEXTURE2D:
-
-                                    AssetRef<Texture2D> tex2D = mat.PropertyBlock.GetTexture(property.Name);
-                                    changed |= EditorGUI.DrawProperty(index++, property.DisplayName, ref tex2D);
-                                    if (changed) mat.PropertyBlock.SetTexture(property.Name, tex2D);
-                                    break;
-                            }
-                        }
+                        changed |= DrawProperty(property, mat, changes);
                     }
                 }
             }
-
-            if (changed)
-            {
-                onChange?.Invoke();
-            }
-
         }
 
+        if (changed)
+        {
+            onChange?.Invoke();
+        }
+    }
+
+
+    private bool DrawProperty(ShaderProperty property, Material mat, EditorGUI.FieldChanges changes)
+    {
+        bool changed = false;
+
+#warning TODO: Undo/Redo support for Material properties
+
+        if (!mat.GetProperty(property.Name, out ShaderProperty value))
+            return false;
+
+        switch (property.PropertyType)
+        {
+            case ShaderPropertyType.Float:
+                float f = (float)value;
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref f);
+                value = f;
+
+                break;
+
+            case ShaderPropertyType.Vector2:
+                Vector2 v2 = value;
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref v2);
+                value = v2;
+
+                break;
+
+            case ShaderPropertyType.Vector3:
+                Vector3 v3 = value;
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref v3);
+                value = v3;
+
+                break;
+
+            case ShaderPropertyType.Vector4:
+                Vector4 v4 = value;
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref v4);
+                value = v4;
+
+                break;
+
+            case ShaderPropertyType.Color:
+                Color color = value;
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref color);
+                value = color;
+
+                break;
+
+            case ShaderPropertyType.Texture2D:
+                AssetRef<Texture2D> tex2D = value;
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref tex2D);
+                value = tex2D;
+
+                break;
+
+            case ShaderPropertyType.Texture3D:
+                AssetRef<Texture3D> tex3D = value;
+                changed = EditorGUI.DrawPropertyNoUndo(0, property.DisplayName, ref tex3D);
+                value = tex3D;
+
+                break;
+        }
+
+        if (changed)
+        {
+            mat.SetProperty(property.Name, value);
+            changes.Add(mat, "_propertyLookup");
+        }
+
+        return changed;
     }
 }

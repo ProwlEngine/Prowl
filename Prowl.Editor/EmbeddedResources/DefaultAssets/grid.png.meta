@@ -1,0 +1,25 @@
+{
+  "$id": 1,
+  "$type": "Prowl.Editor.Assets.MetaFile",
+  "version": 1,
+  "guid": "a77265ea-64d6-4edb-8b05-0b038d76d877",
+  "assetNames": [
+    "grid"
+  ],
+  "assetTypes": [
+    "Prowl.Runtime.Texture2D"
+  ],
+  "lastModified": 5250261254786904653L,
+  "importer": {
+    "$id": 2,
+    "$type": "Prowl.Editor.Assets.TextureImporter",
+    "generateMipmaps": true,
+    "textureWrap": 0,
+    "textureMinFilter": 0,
+    "textureMagFilter": 0,
+    "textureMipFilter": 0
+  },
+  "dependencies": [
+
+  ]
+}

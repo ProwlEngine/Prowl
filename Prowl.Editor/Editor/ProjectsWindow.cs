@@ -1,222 +1,508 @@
-﻿using Prowl.Editor.Preferences;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Xml.Linq;
+
+using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.GUI.Layout;
 
-namespace Prowl.Editor
+namespace Prowl.Editor;
+
+public class ProjectsWindow : EditorWindow
 {
-    public class ProjectsWindow : EditorWindow
+    public Project? SelectedProject;
+
+    private string _searchText = "";
+
+    private string _createName = "";
+
+    private readonly (string, Action)[] _tabs;
+    private int _currentTab;
+    private bool _createTabOpen;
+
+    private FileDialog _dialog;
+    private FileDialogContext _dialogContext;
+
+
+    protected override bool Center { get; } = true;
+    protected override double Width { get; } = 1024;
+    protected override double Height { get; } = 640;
+    protected override bool BackgroundFade { get; } = true;
+    protected override bool TitleBar { get; } = false;
+    protected override bool RoundCorners => false;
+    protected override bool LockSize => true;
+    protected override double Padding => 0;
+
+    public ProjectsWindow()
     {
-        public static bool WindowDrawnThisFrame = false;
-        public string SelectedProject = "";
-        private string _searchText = "";
-        private string createName = "";
-        private string[] tabNames = [FontAwesome6.RectangleList + "  Projects", FontAwesome6.PuzzlePiece + "  Create", FontAwesome6.BookOpen + "  Learn", FontAwesome6.DoorOpen + "  Quit"];
-        private int currentTab = 0;
+        Title = FontAwesome6.Book + " Project Window";
 
-        protected override bool Center { get; } = true;
-        protected override double Width { get; } = 512 + (512 / 2);
-        protected override double Height { get; } = 512;
-        protected override bool BackgroundFade { get; } = true;
-        protected override bool TitleBar { get; } = false;
-        protected override bool RoundCorners => false;
-        protected override bool LockSize => true;
-        protected override double Padding => 0;
+        _tabs = [
+            (FontAwesome6.RectangleList + "  Projects", DrawProjectsTab),
+            (FontAwesome6.BookOpen + "  Learn", () => {})
+        ];
+    }
 
-        public ProjectsWindow() : base()
+    protected override void Draw()
+    {
+        if (Project.HasProject)
+            isOpened = false;
+
+        using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Enter())
         {
-            Title = FontAwesome6.Book + " Project Window";
-        }
-
-        protected override void Draw()
-        {
-            if (Project.HasProject)
-                isOpened = false;
-
-            gui.CurrentNode.Layout(LayoutType.Row);
-            gui.CurrentNode.ScaleChildren();
-
-            using (gui.Node("Side").Height(Size.Percentage(1f)).MaxWidth(150).Layout(LayoutType.Column).Spacing(5).Enter())
+            using (gui.Node("Side").ExpandHeight().MaxWidth(150).Layout(LayoutType.Column).Spacing(5).Enter())
             {
+                using (gui.Node("Name").Scale(150, 50).Enter())
+                {
+                    Rect rect = gui.CurrentNode.LayoutData.Rect;
+                    gui.Draw2D.DrawText(Font.DefaultFont, "Prowl", 40, rect, Color.white);
+                }
+
                 DrawSidePanel();
             }
 
-            using (gui.Node("Main").Height(Size.Percentage(1f)).Enter())
+            gui.PushID((ulong)_currentTab);
+
+            using (gui.Node("TabContent").ExpandHeight().Enter())
             {
-                gui.PushID((ulong)currentTab);
-                if (currentTab == 0) // Projects tab
-                    DrawProjectsTab();
-                else if (currentTab == 1) // Create tab
-                    CreateProjectTab();
-                gui.PopID();
+                _tabs[_currentTab].Item2.Invoke();
             }
 
+            gui.PopID();
         }
-        private void DrawProjectsTab()
+    }
+
+
+    private void DrawProjectsTab()
+    {
+        Rect rect = gui.CurrentNode.LayoutData.Rect;
+        gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
+
+        Vector2 shadowA = new(rect.x, rect.y);
+        Vector2 shadowB = new(rect.x, rect.y + (rect.height - 60));
+
+        gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
+
+        Rect footer = new(shadowB.x, shadowB.y, rect.width, 60);
+        gui.Draw2D.DrawRectFilled(footer, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
+
+        shadowA = shadowB;
+        shadowB = new(rect.x, rect.y + rect.height);
+        gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 20, 0.25f);
+
+        shadowA = rect.TopRight;
+        shadowB = rect.BottomRight;
+
+        gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
+
+        if (_createTabOpen)
         {
-            var rect = gui.CurrentNode.LayoutData.Rect;
-            gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.WindowBGOne * 0.25f, (float)EditorStylePrefs.Instance.WindowRoundness);
-            Vector2 shadowA = new(rect.x, rect.y);
-            Vector2 shadowB = new(rect.x, rect.y + (rect.height - 60));
-            gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
-            Rect footer = new(shadowB.x, shadowB.y, rect.width, 60);
-            gui.Draw2D.DrawRectFilled(footer, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
-            Vector2 shadowC = new(rect.x, rect.y + rect.height);
-            gui.Draw2D.DrawVerticalBlackGradient(shadowB, shadowC, 20, 0.25f);
+            shadowA = new(rect.x + rect.width - 250, rect.y);
+            shadowB = new(rect.x + rect.width - 250, rect.y + (rect.height - 60));
 
-            gui.InputField("SearchInput", ref _searchText, 0x100, Gui.InputFieldFlags.None, 25, 50, 150, null, EditorGUI.GetInputStyle());
+            gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, -30, 0.15f);
+        }
 
-            using (gui.Node("List").Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Spacing(5).Clip().Scroll().Enter())
+        using (gui.Node("ProjectsContent").Top(50).ExpandWidth(_createTabOpen ? -250 : 0).ExpandHeight(-60).Layout(LayoutType.Column).Enter())
+        {
+            using (gui.Node("TopBar").ExpandWidth().MaxHeight(40).Enter())
             {
-                Directory.CreateDirectory(Project.Projects_Directory);
-                var folders = new DirectoryInfo(Project.Projects_Directory).EnumerateDirectories();
-                folders = folders.OrderByDescending((x) => x.LastWriteTimeUtc);
+                gui.Search("SearchInput", ref _searchText, 30, 10, 150, null, EditorGUI.InputFieldStyle);
 
-                foreach (var projectFolder in folders)
-                    if (string.IsNullOrEmpty(_searchText) || projectFolder.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
-                        DisplayProject(projectFolder.Name);
+                if (!_createTabOpen)
+                {
+                    using (gui.Node("Add").Top(7.5).Scale(75, 30).Enter())
+                    {
+                        gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 87.5));
+
+                        Interactable interact = gui.GetInteractable();
+
+                        Color openCol = Color.white * 0.4f;
+
+                        if (interact.TakeFocus())
+                        {
+                            openCol = EditorStylePrefs.Instance.Highlighted;
+                            OpenDialog("Add Existing Project", (x) => ProjectCache.Instance.AddProject(new Project(new DirectoryInfo(x))));
+                        }
+                        else if (interact.IsHovered())
+                            openCol = EditorStylePrefs.Instance.Hovering;
+
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, openCol, (float)EditorStylePrefs.Instance.ButtonRoundness, CornerRounding.All);
+
+                        gui.Draw2D.DrawText("Add", 20, gui.CurrentNode.LayoutData.Rect);
+                    }
+
+
+                    using (gui.Node("Create").Top(7.5).Scale(75, 30).Enter())
+                    {
+                        gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 7.5));
+
+                        Interactable interact = gui.GetInteractable();
+
+                        Color createCol = EditorStylePrefs.Instance.Highlighted;
+
+                        if (interact.TakeFocus())
+                            _createTabOpen = true;
+                        else if (interact.IsHovered())
+                            createCol = EditorStylePrefs.Instance.Hovering;
+
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, createCol, (float)EditorStylePrefs.Instance.ButtonRoundness, CornerRounding.All);
+
+                        gui.Draw2D.DrawText("Create", 20, gui.CurrentNode.LayoutData.Rect);
+                    }
+                }
             }
 
-            using (gui.Node("OpenBtn").TopLeft(Offset.Percentage(1f, -162), Offset.Percentage(1f, -60)).Scale(162, 60).Enter())
+            using (gui.Node("Projects").ExpandWidth(-7.5).ExpandHeight().Enter())
             {
-                if (!string.IsNullOrEmpty(SelectedProject))
+                using (gui.Node("List").TopLeft(25, 45).ExpandWidth(-7.5).ExpandHeight(-45).Layout(LayoutType.Column).Spacing(5).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
                 {
-                    if (gui.IsNodePressed())
+                    for (int i = 0; i < ProjectCache.Instance.ProjectsCount; i++)
                     {
-                        Project.Open(SelectedProject);
+                        Project? project = ProjectCache.Instance.GetProject(i);
+
+                        if (project == null)
+                            continue;
+
+                        if (string.IsNullOrEmpty(_searchText) || project.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                            DisplayProject(project);
+                    }
+                }
+            }
+        }
+
+        if (_createTabOpen)
+        {
+            using (gui.Node("Sidebar").Width(250).ExpandHeight(-60).Enter())
+            {
+                gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x));
+
+                rect = gui.CurrentNode.LayoutData.Rect;
+
+                shadowA = new(rect.x, rect.y + 20);
+                shadowB = new(rect.x + rect.width, rect.y + 20);
+
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne);
+                gui.Draw2D.DrawHorizontalBlackGradient(shadowA, shadowB, -20, 0.25f);
+
+                shadowA = new(rect.x, rect.y + rect.height - 20);
+                shadowB = new(rect.x + rect.width, rect.y + rect.height - 20);
+                gui.Draw2D.DrawHorizontalBlackGradient(shadowA, shadowB, 20, 0.25f);
+
+                DrawCreateProject();
+            }
+        }
+
+        using (gui.Node("Footer").TopLeft(Offset.Percentage(1f, -162), Offset.Percentage(1f, -60)).Scale(162, 60).Enter())
+        {
+            Color col = Color.white * 0.4f;
+
+            bool isSelectable = _createTabOpen ? !string.IsNullOrEmpty(_createName) && Directory.Exists(ProjectCache.Instance.SavedProjectsFolder) && !Path.Exists(_createName) :
+                SelectedProject != null;
+
+            string text = _createTabOpen ? "Create" : "Open";
+
+            if (isSelectable)
+            {
+                if (gui.IsNodePressed())
+                {
+                    if (_createTabOpen)
+                    {
+                        Project project = Project.CreateNew(new DirectoryInfo(Path.Join(ProjectCache.Instance.SavedProjectsFolder, _createName)));
+                        ProjectCache.Instance.AddProject(project);
+                        _createTabOpen = false;
+                    }
+                    else if (Project.Open(SelectedProject))
+                    {
                         isOpened = false;
                     }
-
-                    var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
-                              gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
-
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
-                    gui.Draw2D.DrawText("Open", gui.CurrentNode.LayoutData.Rect);
                 }
-                else
-                {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
-                    gui.Draw2D.DrawText("Open", gui.CurrentNode.LayoutData.Rect);
-                }
+
+                col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
+                    gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
             }
+
+            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
+            gui.Draw2D.DrawText(text, gui.CurrentNode.LayoutData.Rect);
         }
-        private void DisplayProject(string name)
+    }
+
+
+    private void OpenDialog(string title, Action<string> onComplete)
+    {
+        _dialogContext ??= new();
+
+        _dialogContext.title = "Open Existing Project";
+        _dialogContext.parentDirectory = new DirectoryInfo(ProjectCache.Instance.SavedProjectsFolder);
+        _dialogContext.OnComplete = onComplete;
+        _dialogContext.OnCancel = () => _dialogContext.OnComplete = (x) => { };
+
+        EditorGuiManager.Remove(_dialog);
+        _dialog = new FileDialog(_dialogContext);
+        EditorGuiManager.FocusWindow(_dialog);
+    }
+
+
+    private void DrawCreateProject()
+    {
+        gui.CurrentNode.Layout(LayoutType.Column);
+        gui.CurrentNode.ScaleChildren();
+        gui.CurrentNode.Padding(5);
+        gui.CurrentNode.Spacing(15);
+
+        using (gui.Node("TopBar").ExpandWidth().MaxHeight(20).Enter())
         {
-            var proj = Project.GetPath(name);
-            using (gui.Node(name).Height(48).Width(Size.Percentage(1f, -17)).Margin(5).Enter())
+            using (gui.Node("Close").Scale(20).Enter())
             {
-                var rect = gui.CurrentNode.LayoutData.Rect;
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, rect.Position + new Vector2(8, 5), Color.white);
-                string path = proj.FullName;
-                // Cut of the path if it's too long
-                if (path.Length > 48)
-                    path = string.Concat("...", path.AsSpan(path.Length - 48));
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, path, 20, rect.Position + new Vector2(8, 22), Color.white * 0.5f);
+                gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x));
 
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, GetFormattedLastModifiedTime(proj.LastWriteTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
+                Interactable closeInteract = gui.GetInteractable();
 
-                var interact = gui.GetInteractable();
-                if (interact.TakeFocus() || SelectedProject == name)
+                Rect rect = gui.CurrentNode.LayoutData.Rect;
+
+                if (closeInteract.TakeFocus())
                 {
-                    SelectedProject = name;
-                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.Rect, new(0.7f, 0.7f, 0.7f, 1f), 1, 2);
+                    gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
+                    _createTabOpen = false;
                 }
-                else if (interact.IsHovered())
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new(0.1f, 0.1f, 0.1f, 0.4f), 2);
-                //else if (interact.IsDoubleClicked())
-                //{
-                //    Project.Open(name);
-                //    isOpened = false;
-                //}
-            }
+                else if (closeInteract.IsHovered())
+                    gui.Draw2D.DrawRectFilled(rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
 
-        }
-
-        private string GetFormattedLastModifiedTime(DateTime lastModified)
-        {
-            TimeSpan timeSinceLastModified = DateTime.Now - lastModified;
-
-            if (timeSinceLastModified.TotalMinutes < 1)
-                return "Just now";
-            else if (timeSinceLastModified.TotalMinutes < 60)
-                return $"{(int)timeSinceLastModified.TotalMinutes} minutes ago";
-            else if (timeSinceLastModified.TotalHours < 24)
-                return $"{(int)timeSinceLastModified.TotalHours} hours ago";
-            else
-                return $"{(int)timeSinceLastModified.TotalDays} days ago";
-        }
-
-        private void CreateProjectTab()
-        {
-            var rect = gui.CurrentNode.LayoutData.Rect;
-            gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.WindowBGOne * 0.25f, (float)EditorStylePrefs.Instance.WindowRoundness);
-            Vector2 shadowA = new(rect.x, rect.y);
-            Vector2 shadowB = new(rect.x, rect.y + (rect.height - 77));
-            gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
-            Rect footer = new(shadowB.x, shadowB.y, rect.width, 77);
-            gui.Draw2D.DrawRectFilled(footer, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
-            Vector2 shadowC = new(rect.x, rect.y + rect.height);
-            gui.Draw2D.DrawVerticalBlackGradient(shadowB, shadowC, 20, 0.25f);
-
-            gui.InputField("CreateInput", ref createName, 0x100, Gui.InputFieldFlags.None, 30, 450, 340, null, EditorGUI.GetInputStyle());
-            string path = Project.GetPath(createName).FullName;
-            if (path.Length > 48)
-                path = string.Concat("...", path.AsSpan(path.Length - 48));
-            gui.Draw2D.DrawText(UIDrawList.DefaultFont, path, 20, rect.Position + new Vector2(30, 480), Color.white * 0.5f);
-
-            using (gui.Node("CreateBtn").TopLeft(Offset.Percentage(1f, -172), Offset.Percentage(1f, -77)).Scale(172, 77).Enter())
-            {
-                if (!string.IsNullOrEmpty(createName))
-                {
-                    if (gui.IsNodePressed())
-                    {
-                        Project.CreateNew(createName);
-                        currentTab = 0;
-                    }
-                    var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
-                              gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
-
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
-                    gui.Draw2D.DrawText("Create", gui.CurrentNode.LayoutData.Rect);
-                }
-                else
-                {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
-                    gui.Draw2D.DrawText("Create", gui.CurrentNode.LayoutData.Rect);
-                }
+                Rect xrect = gui.CurrentNode.LayoutData.Rect;
+                xrect.x += 1;
+                xrect.y += 1;
+                gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.Xmark, 30, xrect, Color.white);
             }
         }
 
-        private void DrawSidePanel()
+        using (gui.Node("Banner").ExpandWidth().MaxHeight(200).Enter())
         {
-            using (gui.Node("Name").Height(40).Width(Size.Percentage(1f)).Enter())
+            using (gui.Node("CreateProjectLabel").Expand().Enter())
             {
                 Rect rect = gui.CurrentNode.LayoutData.Rect;
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, "Prowl", 40, rect, Color.white);
+
+                gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.WindowRoundness);
+
+                Vector2 gradLeft = rect.Position;
+                gradLeft.y += rect.height * 0.05;
+                Vector2 gradRight = rect.Position;
+                gradRight.x += rect.width;
+                gradRight.y += rect.height * 0.05;
+
+                Color gradBottom = EditorStylePrefs.Instance.Highlighted * 0.6f;
+                gradBottom.a = 1.0f;
+
+                gui.Draw2D.DrawHorizontalGradient(gradLeft, gradRight, (float)rect.height * 0.9f, gradBottom, EditorStylePrefs.Instance.Highlighted);
+
+                gui.Draw2D.DrawRectFilled(new(rect.Position.x, rect.Position.y + rect.height * 0.94f, rect.width, rect.height * 0.06f), gradBottom, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.Bottom);
+
+                gui.Draw2D.DrawText(FontAwesome6.PuzzlePiece, 50, rect);
+            }
+        }
+
+        using (gui.Node("ProjectFolder").ExpandWidth().MaxHeight(40).Enter())
+        {
+            gui.Draw2D.DrawText("Location", 20, gui.CurrentNode.LayoutData.Rect.Position, color: Color.white * 0.65f);
+
+            Vector2 pos = gui.CurrentNode.LayoutData.Rect.Position;
+            pos.y += 20;
+
+            string path = ProjectCache.Instance.SavedProjectsFolder;
+
+            if (path.Length > 32)
+                path = string.Concat("...", path.AsSpan(path.Length - 32));
+
+            gui.Draw2D.DrawText(path, pos);
+
+            using (gui.Node("SelectProject").Top(20).Scale(10, 20).Enter())
+            {
+                gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x));
+
+                Interactable closeInteract = gui.GetInteractable();
+
+                Rect rect = gui.CurrentNode.LayoutData.Rect;
+
+                if (closeInteract.TakeFocus())
+                {
+                    gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, 5, CornerRounding.All);
+                    OpenDialog("Select Folder", (x) => ProjectCache.Instance.SavedProjectsFolder = x);
+                }
+                else if (closeInteract.IsHovered())
+                    gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Hovering, 5, CornerRounding.All);
+
+                gui.Draw2D.DrawText(FontAwesome6.EllipsisVertical, 20, rect);
+            }
+        }
+
+        using (gui.Node("NameInput").ExpandWidth().MaxHeight(50).Enter())
+        {
+            gui.Draw2D.DrawText("Project Name", 20, gui.CurrentNode.LayoutData.Rect.Position, color: Color.white * 0.65f);
+
+            gui.InputField("SearchInput", ref _createName, 0x100, Gui.InputFieldFlags.None, 0, 20, gui.CurrentNode.LayoutData.Rect.width, null, EditorGUI.InputStyle);
+        }
+
+        if (Input.GetKeyDown(Key.Escape))
+            _createTabOpen = false;
+    }
+
+    Project contextMenuProject = null;
+    private void DisplayProject(Project project)
+    {
+        Rect rootRect = gui.CurrentNode.LayoutData.Rect;
+        using (gui.Node(project.Name).Height(40).Width(Size.Percentage(1f, -17)).Layout(LayoutType.Row).Enter())
+        {
+            Interactable interact = gui.GetInteractable();
+
+            if (interact.TakeFocus() || SelectedProject == project)
+            {
+                SelectedProject = project;
+                gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.Rect, new(0.7f, 0.7f, 0.7f, 1f), 1, 2);
             }
 
-            for (int i = 0; i < tabNames.Length; i++)
+            if (interact.IsHovered())
             {
-                bool isQuit = i == tabNames.Length - 1;
-                using (gui.Node(tabNames[i]).Height(40).Width(Size.Percentage(1f)).Top(Offset.Percentage(isQuit ? 1 : 0, isQuit ? -40 : 0)).Enter())
+                if (gui.IsPointerDoubleClick(MouseButton.Left))
                 {
-                    if (isQuit) gui.CurrentNode.IgnoreLayout();
-                    var interact = gui.GetInteractable();
-                    if (interact.TakeFocus() || currentTab == i)
-                    {
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
-                        currentTab = i;
-                        if (i == 3)
-                            Application.Quit();
-                    }
-                    else if (interact.IsHovered())
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, i == 3 ? (float)EditorStylePrefs.Instance.WindowRoundness : 0, 8);
+                    Project.Open(project);
+                    isOpened = false;
+                }
 
-                    Rect rect = gui.CurrentNode.LayoutData.Rect;
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, tabNames[i], 20, rect, Color.white);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new(0.1f, 0.1f, 0.1f, 0.4f), 2);
+            }
+
+            if (!project.IsValid())
+            {
+                using (gui.Node("WarningLabel").Width(40).ExpandHeight().Enter())
+                {
+                    Interactable warnInteract = gui.GetInteractable();
+
+                    Rect wrect = gui.CurrentNode.LayoutData.Rect;
+                    wrect.y += 1;
+                    gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.TriangleExclamation, 35, wrect, Color.yellow);
+
+                    Vector2 warningPos = gui.CurrentNode.LayoutData.Rect.Position;
+                    warningPos.y += gui.CurrentNode.LayoutData.Rect.height / 2;
+                    gui.Tooltip("Project is invalid and may not open correctly.", warningPos, align: TooltipAlign.BottomRight);
+                }
+            }
+
+            using (gui.Node("ProjectText").ExpandWidth(-35).ExpandHeight().Enter())
+            {
+                Rect rect = gui.CurrentNode.LayoutData.Rect;
+
+                gui.Draw2D.DrawText(Font.DefaultFont, project.Name, 20, rect.Position + new Vector2(8, 5), Color.white);
+
+                string path = project.ProjectPath;
+
+                // Cut off the path if it's too long
+                if (path.Length > 48)
+                    path = string.Concat("...", path.AsSpan(path.Length - 48));
+
+                gui.Draw2D.DrawText(Font.DefaultFont, path, 20, rect.Position + new Vector2(8, 22), Color.white * 0.5f);
+
+                if (project.IsValid())
+                    gui.Draw2D.DrawText(Font.DefaultFont, GetFormattedLastModifiedTime(project.ProjectDirectory.LastAccessTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
+            }
+
+            using (gui.Node("ProjectOptionsBtn").Scale(20).Top(10).Enter())
+            {
+                gui.CurrentNode.IgnoreLayout();
+                gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 10));
+
+                Rect rect = gui.CurrentNode.LayoutData.Rect;
+
+                Interactable optionsInteract = gui.GetInteractable();
+
+                bool focused = optionsInteract.TakeFocus();
+
+                if (optionsInteract.TakeFocus())
+                {
+                    gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
+                    contextMenuProject = project;
+                    gui.OpenPopup("ProjectOptionsContextMenu", null, gui.CurrentNode.Parent);
+                }
+                else if (optionsInteract.IsHovered())
+                {
+                    gui.Draw2D.DrawRectFilled(rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
+                }
+
+                gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.Ellipsis, 20, rect, Color.white);
+            }
+
+            // Outside ProjectOptionsBtn node as it wouldn't render (or too small in size?)
+            if (contextMenuProject != null && contextMenuProject.Equals(project))
+            {
+                DrawProjectContextMenu(project);
+            }
+        }
+    }
+
+    private void DrawProjectContextMenu(Project project)
+    {
+        bool closePopup = false;
+        if (gui.BeginPopup("ProjectOptionsContextMenu", out LayoutNode? popupHolder, false, EditorGUI.InputStyle) && popupHolder != null)
+        {
+            using (popupHolder.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
+            {
+                // Add options
+                // - Delete project (with popup confirmation)
+                if (EditorGUI.StyledButton("Show In Explorer"))
+                {
+                    AssetDatabase.OpenPath(project.ProjectDirectory, type: FileOpenType.FileExplorer);
+                    closePopup = true;
+                }
+                if (EditorGUI.StyledButton("Remove from list"))
+                {
+                    ProjectCache.Instance.RemoveProject(project);
+                    closePopup = true;
                 }
             }
         }
+        if (closePopup)
+        {
+            contextMenuProject = null;
+            gui.CloseAllPopups();
+        }
+    }
+
+    private void DrawSidePanel()
+    {
+        for (int i = 0; i < _tabs.Length; i++)
+        {
+            using (gui.Node(_tabs[i].Item1).Height(40).Width(Size.Percentage(1f)).Top(Offset.Percentage(0, 0)).Enter())
+            {
+                Interactable interact = gui.GetInteractable();
+
+                if (interact.TakeFocus() || _currentTab == i)
+                {
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
+                    _currentTab = i;
+                }
+                else if (interact.IsHovered())
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, 0);
+
+                Rect rect = gui.CurrentNode.LayoutData.Rect;
+                gui.Draw2D.DrawText(Font.DefaultFont, _tabs[i].Item1, 20, rect, Color.white);
+            }
+        }
+    }
+
+
+    private static string GetFormattedLastModifiedTime(DateTime lastModified)
+    {
+        TimeSpan timeSinceLastModified = DateTime.Now - lastModified;
+
+        if (timeSinceLastModified.TotalMinutes < 1)
+            return "Just now";
+        else if (timeSinceLastModified.TotalMinutes < 60)
+            return $"{(int)timeSinceLastModified.TotalMinutes} minutes ago";
+        else if (timeSinceLastModified.TotalHours < 24)
+            return $"{(int)timeSinceLastModified.TotalHours} hours ago";
+        else
+            return $"{(int)timeSinceLastModified.TotalDays} days ago";
     }
 }

@@ -1,9 +1,12 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.LinesLeaning}  Linear Axis Servo")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.LinesLeaning}  Linear Axis Servo")]
 public sealed class LinearAxisServoConstraintComponent : TwoBodyConstraintComponent<LinearAxisServo>
 {
     [SerializeField, HideInInspector] private Vector3 _localOffsetA;
@@ -19,27 +22,33 @@ public sealed class LinearAxisServoConstraintComponent : TwoBodyConstraintCompon
     [SerializeField, HideInInspector] private float _springDampingRatio = 5;
 
     [ShowInInspector]
-    public Vector3 LocalOffsetA {
+    public Vector3 LocalOffsetA
+    {
         get => _localOffsetA;
-        set {
+        set
+        {
             _localOffsetA = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public Vector3 LocalOffsetB {
+    public Vector3 LocalOffsetB
+    {
         get => _localOffsetB;
-        set {
+        set
+        {
             _localOffsetB = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public Vector3 LocalPlaneNormal {
+    public Vector3 LocalPlaneNormal
+    {
         get => _localPlaneNormal;
-        set {
+        set
+        {
             _localPlaneNormal = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -102,22 +111,28 @@ public sealed class LinearAxisServoConstraintComponent : TwoBodyConstraintCompon
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -125,12 +140,14 @@ public sealed class LinearAxisServoConstraintComponent : TwoBodyConstraintCompon
 
     internal override LinearAxisServo CreateConstraint()
     {
-        return new LinearAxisServo {
+        return new LinearAxisServo
+        {
             LocalOffsetA = LocalOffsetA,
             LocalOffsetB = LocalOffsetB,
             LocalPlaneNormal = LocalPlaneNormal,
             TargetOffset = TargetOffset,
-            ServoSettings = new ServoSettings {
+            ServoSettings = new ServoSettings
+            {
                 MaximumSpeed = ServoMaximumSpeed,
                 BaseSpeed = ServoBaseSpeed,
                 MaximumForce = ServoMaximumForce

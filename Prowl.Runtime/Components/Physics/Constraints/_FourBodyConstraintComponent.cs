@@ -1,4 +1,7 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -32,5 +35,5 @@ public abstract class FourBodyConstraintComponent<T> : ConstraintComponent<T> wh
         set => this[3] = value;
     }
 
-    public FourBodyConstraintComponent() : base(4){ }
+    public FourBodyConstraintComponent() : base(4) { }
 }

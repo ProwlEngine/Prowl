@@ -1,9 +1,14 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Reflection;
+
 using Prowl.Editor.Preferences;
 using Prowl.Editor.ProjectSettings;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using System.Reflection;
+
 using static Prowl.Editor.EditorGUI;
 
 namespace Prowl.Editor;
@@ -17,7 +22,7 @@ public class ProjectSettingsWindow : SingletonEditorWindow
     public override void RenderSideView()
     {
         RenderSideViewElement(PhysicsSetting.Instance);
-        RenderSideViewElement(BuildProjectSetting.Instance);
+        RenderSideViewElement(BuildProjectSettings.Instance);
     }
 }
 
@@ -64,7 +69,7 @@ public abstract class SingletonEditorWindow : EditorWindow
             RenderSideView();
         }
 
-        using (gui.Node("ContentPanel").PaddingRight(10).ExpandHeight().Scroll().Enter())
+        using (gui.Node("ContentPanel").PaddingRight(10).ExpandHeight().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             RenderBody();
         }
@@ -72,7 +77,7 @@ public abstract class SingletonEditorWindow : EditorWindow
 
     public abstract void RenderSideView();
 
-    private int elementCounter = 0;
+    private int elementCounter;
     protected void RenderSideViewElement<T>(T elementInstance)
     {
         Type settingType = elementInstance.GetType();
@@ -105,7 +110,7 @@ public abstract class SingletonEditorWindow : EditorWindow
         object setting = currentSingleton;
 
         string name = currentType.Name.Replace("Preferences", "");
-        if (PropertyGrid(name, ref setting, TargetFields.Serializable | EditorGUI.TargetFields.Properties, PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
+        if (PropertyGrid(name, ref setting, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
         {
             // Use reflection to find a method "protected void Save()" and OnValidate
             MethodInfo? validateMethod = setting.GetType().GetMethod("OnValidate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);

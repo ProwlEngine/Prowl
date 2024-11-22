@@ -1,60 +1,65 @@
-﻿using Prowl.Editor.Preferences;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Preferences;
 using Prowl.Editor.ScriptedEditors;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
-namespace Prowl.Editor.Assets
+namespace Prowl.Editor.Assets;
+
+[Importer("FileIcon.png", typeof(Material), ".mat")]
+public class MaterialImporter : ScriptedImporter
 {
-
-    [Importer("FileIcon.png", typeof(Material), ".mat")]
-    public class MaterialImporter : ScriptedImporter
+    public override void Import(SerializedAsset ctx, FileInfo assetPath)
     {
-        public override void Import(SerializedAsset ctx, FileInfo assetPath)
+        Material? mat;
+        try
         {
-            // Load the Texture into a TextureData Object and serialize to Asset Folder
-            Material? mat;
-            try
-            {
-                string json = File.ReadAllText(assetPath.FullName);
-                var tag = StringTagConverter.Read(json);
-                mat = Serializer.Deserialize<Material>(tag);
-            }
-            catch
-            {
-                // something went wrong, lets just create a new material and save it
-                mat = new Material();
-                string json = StringTagConverter.Write(Serializer.Serialize(mat));
-                File.WriteAllText(assetPath.FullName, json);
-            }
-
-            ctx.SetMainObject(mat);
+            string json = File.ReadAllText(assetPath.FullName);
+            var tag = StringTagConverter.Read(json);
+            mat = Serializer.Deserialize<Material>(tag);
         }
+        catch
+        {
+            // something went wrong, lets just create a new material and save it
+            mat = Material.CreateDefaultMaterial();
+            string json = StringTagConverter.Write(Serializer.Serialize(mat));
+            File.WriteAllText(assetPath.FullName, json);
+        }
+
+        ctx.SetMainObject(mat);
+    }
+}
+
+[CustomEditor(typeof(MaterialImporter))]
+public class MaterialImporterEditor : ScriptedEditor
+{
+    private Material? _editingMaterial;
+    private ScriptedEditor? _editor;
+
+
+    public override void OnEnable()
+    {
+        SerializedProperty tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
+        _editingMaterial = Serializer.Deserialize<Material>(tag);
+
+        _editor = CreateEditor(_editingMaterial);
+
+        if (_editor is MaterialEditor matEditor)
+            matEditor.onChange = OnChange;
     }
 
-    [CustomEditor(typeof(MaterialImporter))]
-    public class MaterialImporterEditor : ScriptedEditor
+
+    private void OnChange()
     {
-        public override void OnInspectorGUI()
-        {
-            var importer = (MaterialImporter)(target as MetaFile).importer;
-
-            try
-            {
-                var tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
-                Material mat = Serializer.Deserialize<Material>(tag);
-
-                MaterialEditor editor = new MaterialEditor(mat, () => {
-                    StringTagConverter.WriteToFile(Serializer.Serialize(mat), (target as MetaFile).AssetPath);
-                    AssetDatabase.Reimport((target as MetaFile).AssetPath);
-                });
-                editor.OnInspectorGUI();
-            }
-            catch (Exception e)
-            {
-                gui.Node("DummyForText").ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize * 10);
-                gui.Draw2D.DrawText("Failed to Deserialize Material: " + e.Message + "\n" + e.StackTrace, gui.CurrentNode.LayoutData.Rect);
-            }
-        }
+        StringTagConverter.WriteToFile(Serializer.Serialize(_editingMaterial), (target as MetaFile).AssetPath);
+        AssetDatabase.Reimport((target as MetaFile).AssetPath);
     }
 
+
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
+    {
+        _editor?.OnInspectorGUI(changes);
+    }
 }

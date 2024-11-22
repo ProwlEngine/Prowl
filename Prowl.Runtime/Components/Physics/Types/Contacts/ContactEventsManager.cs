@@ -1,12 +1,17 @@
-﻿using BepuPhysics;
-using BepuPhysics.Collidables;
-using BepuPhysics.CollisionDetection;
-using BepuUtilities;
-using BepuUtilities.Collections;
-using BepuUtilities.Memory;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+using BepuPhysics;
+using BepuPhysics.Collidables;
+using BepuPhysics.CollisionDetection;
+
+using BepuUtilities;
+using BepuUtilities.Collections;
+using BepuUtilities.Memory;
 
 namespace Prowl.Runtime.Contacts;
 
@@ -33,7 +38,7 @@ internal class ContactEventsManager : IDisposable
         public int FeatureId3;
     }
 
-    IThreadDispatcher? threadDispatcher;
+    readonly IThreadDispatcher? threadDispatcher;
     BufferPool? pool;
 
     //We'll use a handle->index mapping in a CollidableProperty to point at our contiguously stored listeners (in the later listeners array).
@@ -87,7 +92,6 @@ internal class ContactEventsManager : IDisposable
     /// <summary>
     /// Initializes the contact events system with a simulation.
     /// </summary>
-    /// <param name="simulation">Simulation to use with the contact events demo.</param>
     /// <remarks>The constructor and initialization are split because of how this class is expected to be used.
     /// It will be passed into a simulation's constructor as a part of its contact callbacks, so there is no simulation available at the time of construction.</remarks>
     public void Initialize()

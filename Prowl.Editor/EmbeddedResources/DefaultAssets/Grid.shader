@@ -1,125 +1,117 @@
 ﻿Shader "Default/Grid"
 
-Pass 0
+Pass "Grid"
 {
-	DepthTest Off
-	DepthWrite Off
-	Blend On
-	BlendSrc SrcAlpha
-	BlendDst OneMinusSrcAlpha
-	BlendMode Add
-	Cull Off
+	Blend
+    {
+        Src Color SourceAlpha
+        Src Alpha SourceAlpha
 
-	Vertex
-	{
-		in vec3 vertexPosition;
-		in vec2 vertexTexCoord;
-		
-		out vec2 TexCoords;
-        out vec3 vPosition;
+        Dest Color InverseSourceAlpha
+        Dest Alpha InverseSourceAlpha
 
-		uniform mat4 mvpInverse;
+        Mode Color Add
+        Mode Alpha Add
+    }
 
-		void main() 
-		{
-			gl_Position =vec4(vertexPosition, 1.0);
-            // vertexPosition is in screen space, convert it into world space
-            vPosition = (mvpInverse * vec4(vertexPosition, 1.0)).xyz;
-			TexCoords = vertexTexCoord;
-		}
-	}
+    // Stencil state
+    DepthStencil
+    {
+        // Depth write
+        DepthWrite On
 
-	Fragment
-	{
-		layout(location = 0) out vec4 OutputColor;
-		
-        in vec3 vPosition;
-		in vec2 TexCoords;
+        // Comparison kind
+        DepthTest LessEqual
+    }
 
-		uniform vec2 Resolution;
-		uniform vec3 Camera_WorldPosition;
-		
-		uniform sampler2D gPositionRoughness; // Pos
-		
-		uniform float u_lineWidth; 
-		uniform float u_primaryGridSize; 
-		uniform float u_secondaryGridSize; 
-		
+    // Rasterizer culling mode
+    Cull None
+
+	HLSLPROGRAM
+        #pragma vertex Vertex
+        #pragma fragment Fragment
+        
+        #include "Prowl.hlsl"
+
+        struct Attributes
+        {
+            float3 pos : POSITION;
+            float2 uv : TEXCOORD0;
+        };
+
+
+        struct Varyings
+        {
+            float4 pos : SV_POSITION;
+            float3 vpos : POSITION;
+            float2 uv : TEXCOORD0;
+        };
+
+        float4 _GridColor;
+		float _PrimaryGridSize;
+		float _LineWidth;
+		float _SecondaryGridSize;
+        float _Falloff;
+        float _MaxDist;
+
+
+        Varyings Vertex(Attributes input)
+        {
+            Varyings output = (Varyings)0;
+
+            output.pos = mul(PROWL_MATRIX_MVP, float4(input.pos, 1.0));
+            output.vpos = mul(PROWL_MATRIX_MV, float4(input.pos, 1.0)).xyz;
+            output.uv = input.uv;
+
+            return output;
+        }
+
+
 		// https://bgolus.medium.com/the-best-darn-grid-shader-yet-727f9278b9d8
-		float pristineGrid( in vec2 uv, vec2 lineWidth)
-		{
-			vec2 ddx = dFdx(uv);
-			vec2 ddy = dFdy(uv);
-			vec2 uvDeriv = vec2(length(vec2(ddx.x, ddy.x)), length(vec2(ddx.y, ddy.y)));
-			bvec2 invertLine = bvec2(lineWidth.x > 0.5, lineWidth.y > 0.5);
-			vec2 targetWidth = vec2(
-				invertLine.x ? 1.0 - lineWidth.x : lineWidth.x,
-				invertLine.y ? 1.0 - lineWidth.y : lineWidth.y
-			);
-			vec2 drawWidth = clamp(targetWidth, uvDeriv, vec2(0.5));
-			vec2 lineAA = uvDeriv * 1.5;
-			vec2 gridUV = abs(fract(uv) * 2.0 - 1.0);
-			gridUV.x = invertLine.x ? gridUV.x : 1.0 - gridUV.x;
-			gridUV.y = invertLine.y ? gridUV.y : 1.0 - gridUV.y;
-			vec2 grid2 = smoothstep(drawWidth + lineAA, drawWidth - lineAA, gridUV);
-		
-			grid2 *= clamp(targetWidth / drawWidth, 0.0, 1.0);
-			grid2 = mix(grid2, targetWidth, clamp(uvDeriv * 2.0 - 1.0, 0.0, 1.0));
-			grid2.x = invertLine.x ? 1.0 - grid2.x : grid2.x;
-			grid2.y = invertLine.y ? 1.0 - grid2.y : grid2.y;
-			return mix(grid2.x, 1.0, grid2.y);
-		}
-		
-		float Grid(vec3 ro, float scale, vec3 rd, float lineWidth, out float d) {
-			ro /= scale;
-			#ifdef GRID_YZ
-			    d = -ro.x / rd.x;
-			    if (d <= 0.0) return 0.0;
-			    vec2 p = (ro.zy + rd.zy * d);
-			#elif defined(GRID_XY)
-			    d = -ro.z / rd.z;
-			    if (d <= 0.0) return 0.0;
-			    vec2 p = (ro.xy + rd.xy * d);
-			#else
-			    d = -ro.y / rd.y;
-			    if (d <= 0.0) return 0.0;
-			    vec2 p = (ro.xz + rd.xz * d);
-			#endif
-			
-			return pristineGrid(p, vec2(lineWidth * u_lineWidth));
-		}
+        float pristineGrid(float2 uv, float2 _lineWidth)
+        {
+            _lineWidth = saturate(_lineWidth);
 
-		void main()
-		{
-            vec3 gPos = textureLod(gPositionRoughness, TexCoords, 0).rgb;
-			
-			float d = 0.0;
-			float bd = 0.0;
-			float sg = Grid(Camera_WorldPosition, u_primaryGridSize, normalize(vPosition), 0.02, d);
-			float bg = Grid(Camera_WorldPosition, u_secondaryGridSize, normalize(vPosition), 0.02, bd);
-			
-			float depth = length(gPos.xyz);
-			
-			// Do not attempt to move this into Grid() It doesnt work, Why? idk compiler black magic
-			bool drawGrid = false;
-			#ifdef GRID_YZ
-			if(abs(dot(normalize(vPosition), vec3(1.0, 0.0, 0.0))) > 0.005)
-				drawGrid = true;
-			#elif defined(GRID_XY)
-			if(abs(dot(normalize(vPosition), vec3(0.0, 0.0, 1.0))) > 0.005)
-				drawGrid = true;
-			#else
-			if(abs(dot(normalize(vPosition), vec3(0.0, 1.0, 0.0))) > 0.005)
-				drawGrid = true;
-			#endif
-			
-			if((depth > d || depth == 0.0) && drawGrid)
-			{ 
-				OutputColor = vec4(1.0, 1.0, 1.0, sg);
-				OutputColor += vec4(1.0, 1.0, 1.0, bg * 0.5);
-				//OutputColor *= mix(1.0, 0.0, min(1.0, d / 10000.0));
-            }
-		}
+            float4 uvDDXY = float4(ddx(uv), ddy(uv));
+            float2 uvDeriv = float2(length(uvDDXY.xz), length(uvDDXY.yw));
 
-	}
+            bool2 invertLine = _lineWidth > 0.5;
+
+            float2 targetWidth;
+            targetWidth.x = invertLine.x ? 1.0 - _lineWidth.x : _lineWidth.x;
+            targetWidth.y = invertLine.y ? 1.0 - _lineWidth.y : _lineWidth.y;
+
+            float2 drawWidth = clamp(targetWidth, uvDeriv, 0.5);
+
+            float2 lineAA = max(uvDeriv, 0.000001) * 1.5;
+            float2 gridUV = abs(frac(uv) * 2.0 - 1.0);
+
+            gridUV.x = invertLine.x ? gridUV.x : 1.0 - gridUV.x;
+            gridUV.y = invertLine.y ? gridUV.y : 1.0 - gridUV.y;
+
+            float2 grid2 = smoothstep(drawWidth + lineAA, drawWidth - lineAA, gridUV);
+
+            grid2 *= saturate(targetWidth / drawWidth);
+            grid2 = lerp(grid2, targetWidth, saturate(uvDeriv * 2.0 - 1.0));
+
+            grid2.x = invertLine.x ? 1.0 - grid2.x : grid2.x;
+            grid2.y = invertLine.y ? 1.0 - grid2.y : grid2.y;
+
+            return lerp(grid2.x, 1.0, grid2.y);
+        }
+
+
+		float4 Fragment(Varyings input) : SV_TARGET
+		{
+			float sg = pristineGrid(input.uv * _PrimaryGridSize, (float2)_LineWidth);
+			float bg = pristineGrid(input.uv * _SecondaryGridSize, (float2)_LineWidth);
+
+			float4 output = float4(_GridColor.xyz, max(sg, bg));
+
+            output.w *= _GridColor.w;
+            output.w *= 1 - pow((length(input.vpos) / _MaxDist), _Falloff);
+
+            return output;
+		}
+	ENDHLSL
 }

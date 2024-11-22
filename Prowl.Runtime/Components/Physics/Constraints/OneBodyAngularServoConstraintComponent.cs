@@ -1,9 +1,12 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.LinesLeaning}  One Body Angular Servo")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.LinesLeaning}  One Body Angular Servo")]
 public sealed class OneBodyAngularServoConstraintComponent : OneBodyConstraintComponent<OneBodyAngularServo>
 {
     [SerializeField, HideInInspector] private Quaternion _targetOrientation = Quaternion.identity;
@@ -31,55 +34,70 @@ public sealed class OneBodyAngularServoConstraintComponent : OneBodyConstraintCo
     }
 
     [ShowInInspector]
-    public float ServoMaximumSpeed {
-        get {
+    public float ServoMaximumSpeed
+    {
+        get
+        {
             return _servoMaximumSpeed;
         }
-        set {
+        set
+        {
             _servoMaximumSpeed = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float ServoBaseSpeed {
-        get {
+    public float ServoBaseSpeed
+    {
+        get
+        {
             return _servoBaseSpeed;
         }
-        set {
+        set
+        {
             _servoBaseSpeed = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float ServoMaximumForce {
-        get {
+    public float ServoMaximumForce
+    {
+        get
+        {
             return _servoMaximumForce;
         }
-        set {
+        set
+        {
             _servoMaximumForce = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -87,7 +105,8 @@ public sealed class OneBodyAngularServoConstraintComponent : OneBodyConstraintCo
 
     internal override OneBodyAngularServo CreateConstraint()
     {
-        return new OneBodyAngularServo {
+        return new OneBodyAngularServo
+        {
             TargetOrientation = _targetOrientation,
             ServoSettings = new ServoSettings(_servoMaximumSpeed, _servoBaseSpeed, _servoMaximumForce),
             SpringSettings = new SpringSettings(_springFrequency, _springDampingRatio)

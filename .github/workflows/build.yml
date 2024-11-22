@@ -1,28 +1,69 @@
 # This workflow will build a .NET project
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
 
-name: Build
+name: Build and Test
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
-
 jobs:
-  build:
-
+  test:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: 8.0.x
-        
-    - name: Restore dependencies
-      run: dotnet restore
-      
-    - name: Build
-      run: dotnet build --no-restore
+      # Clone repo and submodules
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # Install .NET
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+
+      # For caching purposes, restore dependencies in a dedicated step
+      - name: Restore dependencies
+        run: dotnet restore
+
+      # Build
+      - name: Build
+        run: dotnet build --no-restore
+
+      # Test
+      - name: Test
+        run: dotnet test
+
+  publish:
+    runs-on: ubuntu-latest
+
+    needs: test
+
+    strategy:
+      matrix:
+        runtime: [linux-x64, win-x64, osx-x64]
+
+    steps:
+      # Clone repo and submodules
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # Install .NET
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+
+      # Publish
+      - name: Publish
+        run: dotnet publish ./Prowl.Editor/Prowl.Editor.csproj --configuration Release --output ./publish/${{ matrix.runtime }}/Prowl --runtime ${{ matrix.runtime }} --framework net8.0
+
+      # Save the resulting folder as artifacts
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.runtime }}
+          path: ./publish/${{ matrix.runtime }}/Prowl
+          retention-days: 30

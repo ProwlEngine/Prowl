@@ -1,65 +1,65 @@
-﻿using Prowl.Runtime;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.Rendering.Primitives;
 using Prowl.Runtime.Utils;
+using Prowl.Runtime.Rendering;
 
-namespace Prowl.Editor.Assets
+namespace Prowl.Editor.Assets;
+
+[Importer("FileIcon.png", typeof(Texture2D), ".png", ".bmp", ".jpg", ".jpeg", ".tga", ".dds", ".pbm", ".webp", ".tif", ".tiff", ".gif")]
+public class TextureImporter : ScriptedImporter
 {
-    [Importer("FileIcon.png", typeof(Texture2D), ".png", ".bmp", ".jpg", ".jpeg", ".qoi", ".psd", ".tga", ".dds", ".hdr", ".ktx", ".pkm", ".pvr")]
-    public class TextureImporter : ScriptedImporter
+    public static readonly string[] Supported = [".png", ".bmp", ".jpg", ".jpeg", ".tga", ".dds", ".pbm", ".webp", ".tif", ".tiff", ".gif"];
+
+    public bool generateMipmaps = true;
+
+    public TextureWrapMode textureWrap = TextureWrapMode.Wrap;
+
+    public FilterType textureMinFilter = FilterType.Linear;
+    public FilterType textureMagFilter = FilterType.Linear;
+    public FilterType textureMipFilter = FilterType.Linear;
+
+    public override void Import(SerializedAsset ctx, FileInfo assetPath)
     {
-        public static readonly string[] Supported = { ".png", ".bmp", ".jpg", ".jpeg", ".qoi", ".psd", ".tga", ".dds", ".hdr", ".ktx", ".pkm", ".pvr" };
+        // Load the Texture into a TextureData Object and serialize to Asset Folder
+        Texture2D texture = Texture2DLoader.FromFile(assetPath.FullName, generateMipmaps);
 
-        public bool generateMipmaps = true;
-        public TextureWrap textureWrap = TextureWrap.Repeat;
-        public TextureMin textureMinFilter = TextureMin.LinearMipmapLinear;
-        public TextureMag textureMagFilter = TextureMag.Linear;
+        texture.Name = Path.GetFileNameWithoutExtension(assetPath.Name);
 
-        public override void Import(SerializedAsset ctx, FileInfo assetPath)
-        {
-            // Load the Texture into a TextureData Object and serialize to Asset Folder
-            Texture2D texture = Texture2DLoader.FromFile(assetPath.FullName);
-            texture.Name = Path.GetFileNameWithoutExtension(assetPath.Name);
+        texture.Sampler.SetFilter(textureMinFilter, textureMagFilter, textureMipFilter);
+        texture.Sampler.SetWrapMode(SamplerAxis.U | SamplerAxis.V | SamplerAxis.W, textureWrap);
 
-            texture.SetTextureFilters(textureMinFilter, textureMagFilter);
-            texture.SetWrapModes(textureWrap, textureWrap);
+        if (generateMipmaps)
+            texture.GenerateMipmaps();
 
-            if (generateMipmaps)
-                texture.GenerateMipmaps();
-
-            ctx.SetMainObject(texture);
-        }
+        ctx.SetMainObject(texture);
     }
+}
 
-    public class ScriptedEditor
+
+[CustomEditor(typeof(TextureImporter))]
+public class TextureImporterEditor : ScriptedEditor
+{
+    public override void OnInspectorGUI(EditorGUI.FieldChanges changes)
     {
-        public Gui gui => Gui.ActiveGUI;
+        var importer = (TextureImporter)(target as MetaFile).importer;
 
-        public object target { get; internal set; }
-        public virtual void OnEnable() { }
-        public virtual void OnInspectorGUI() { }
-        public virtual void OnDisable() { }
-    }
+        gui.CurrentNode.Layout(LayoutType.Column);
 
-    [CustomEditor(typeof(TextureImporter))]
-    public class TextureEditor : ScriptedEditor
-    {
-        public override void OnInspectorGUI()
+        if (EditorGUI.DrawProperty(0, "Generate Mipmaps", importer, "generateMipmaps"))
+            changes.Add(importer, nameof(TextureImporter.generateMipmaps));
+        if (EditorGUI.DrawProperty(1, "Min Filter", importer, "textureMinFilter"))
+            changes.Add(importer, nameof(TextureImporter.textureMinFilter));
+        if (EditorGUI.DrawProperty(2, "Mag Filter", importer, "textureMagFilter"))
+            changes.Add(importer, nameof(TextureImporter.textureMagFilter));
+        if (EditorGUI.DrawProperty(3, "Wrap Mode", importer, "textureWrap"))
+            changes.Add(importer, nameof(TextureImporter.textureWrap));
+
+        if (EditorGUI.StyledButton("Save"))
         {
-            var importer = (TextureImporter)(target as MetaFile).importer;
-
-            gui.CurrentNode.Layout(LayoutType.Column);
-
-            EditorGUI.DrawProperty(0, "Generate Mipmaps", ref importer.generateMipmaps);
-            EditorGUI.DrawProperty(1, "Min Filter", ref importer.textureMinFilter);
-            EditorGUI.DrawProperty(2, "Mag Filter", ref importer.textureMagFilter);
-            EditorGUI.DrawProperty(3, "Wrap Mode", ref importer.textureWrap);
-
-            if (EditorGUI.StyledButton("Save"))
-            {
-                (target as MetaFile).Save();
-                AssetDatabase.Reimport((target as MetaFile).AssetPath);
-            }
+            (target as MetaFile).Save();
+            AssetDatabase.Reimport((target as MetaFile).AssetPath);
         }
     }
 }

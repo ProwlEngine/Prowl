@@ -1,83 +1,48 @@
-﻿using Prowl.Icons;
-using System.Collections.Generic;
-using Material = Prowl.Runtime.Material;
-using Mesh = Prowl.Runtime.Mesh;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Icons;
+
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Pipelines;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
-public class MeshRenderer : MonoBehaviour, ISerializable
-{
-    public override RenderingOrder RenderOrder => RenderingOrder.Opaque;
 
+[ExecuteAlways]
+[AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
+public class MeshRenderer : MonoBehaviour, IRenderable
+{
     public AssetRef<Mesh> Mesh;
     public AssetRef<Material> Material;
-    public Color mainColor = Color.white;
 
-    private Dictionary<int, Matrix4x4> prevMats = new();
+    public PropertyState Properties;
 
-    private static Material? InvalidMat;
-
-    public override void OnRenderObject()
+    public override void Update()
     {
-        Matrix4x4 mat = GameObject.GlobalCamRelative;
+        if (!Mesh.IsAvailable) return;
+        if (!Material.IsAvailable) return;
 
-        int camID = Camera.Current.InstanceID;
-        if (!prevMats.ContainsKey(camID)) prevMats[camID] = mat;
-        var prevMat = prevMats[camID];
+        Properties ??= new();
 
-        var material = Material.Res;
-        if (material == null)
-        {
-            InvalidMat ??= new Material(Shader.Find("Defaults/Invalid.shader"));
-            material = InvalidMat;
-        }
+        Properties.SetInt("_ObjectID", InstanceID);
 
-        if (Mesh.IsAvailable && material != null)
-        {
-            material.SetColor("_MainColor", mainColor);
-            material.SetInt("ObjectID", GameObject.InstanceID);
-            for (int i = 0; i < material.PassCount; i++)
-            {
-
-                material.SetPass(i);
-                Graphics.DrawMeshNow(Mesh.Res!, mat, material, prevMat);
-            }
-        }
-
-        prevMats[camID] = mat;
+        RenderPipeline.AddRenderable(this);
     }
 
-    public override void OnRenderObjectDepth()
+    public Material GetMaterial() => Material.Res;
+    public byte GetLayer() => GameObject.layerIndex;
+
+    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
     {
-        if (Mesh.IsAvailable && Material.IsAvailable)
-        {
-
-            Matrix4x4 mat = GameObject.GlobalCamRelative;
-
-            var mvp = Matrix4x4.Identity;
-            mvp = Matrix4x4.Multiply(mvp, mat);
-            mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
-            mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
-            Material.Res!.SetMatrix("mvp", mvp);
-            Material.Res!.SetShadowPass(true);
-            Graphics.DrawMeshNowDirect(Mesh.Res!);
-        }
+        drawData = Mesh.Res;
+        properties = Properties;
+        model = Transform.localToWorldMatrix;
     }
 
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public void GetCullingData(out bool isRenderable, out Bounds bounds)
     {
-        SerializedProperty compoundTag = SerializedProperty.NewCompound();
-        compoundTag.Add("Mesh", Serializer.Serialize(Mesh, ctx));
-        compoundTag.Add("Material", Serializer.Serialize(Material, ctx));
-        compoundTag.Add("mainColor", Serializer.Serialize(mainColor, ctx));
-        return compoundTag;
-    }
-
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
-    {
-        Mesh = Serializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
-        Material = Serializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
-        mainColor = Serializer.Deserialize<Color>(value["mainColor"], ctx);
+        isRenderable = _enabledInHierarchy;
+        bounds = Mesh.Res.bounds.Transform(Transform.localToWorldMatrix);
     }
 }

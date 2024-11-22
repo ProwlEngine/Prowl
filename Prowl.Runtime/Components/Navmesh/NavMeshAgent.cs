@@ -1,16 +1,20 @@
-﻿using DotRecast.Core.Numerics;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using DotRecast.Core.Numerics;
 using DotRecast.Detour;
 using DotRecast.Detour.Crowd;
-using System.Collections.Generic;
 
 namespace Prowl.Runtime;
 
 public class NavMeshAgent : MonoBehaviour
 {
     [ShowInInspector]
-    public NavMeshSurface Surface {
+    public NavMeshSurface Surface
+    {
         get => surface;
-        set {
+        set
+        {
             if (InternalAgent != null)
                 surface?.UnregisterAgent(this);
             surface = value;
@@ -101,7 +105,7 @@ public class NavMeshAgent : MonoBehaviour
 
     public override void OnDisable()
     {
-        if(InternalAgent != null && surface != null)
+        if (InternalAgent != null && surface != null)
             surface.UnregisterAgent(this);
     }
 
@@ -109,14 +113,14 @@ public class NavMeshAgent : MonoBehaviour
     {
         if (InternalAgent == null)
         {
-            if(surface != null && surface.IsReady)
+            if (surface != null && surface.IsReady)
                 surface.RegisterAgent(this);
         }
         else
         {
             // calculate position
             Vector3 pos = surface.Transform.TransformPoint(new(InternalAgent.npos.X, InternalAgent.npos.Y, InternalAgent.npos.Z));
-            this.Transform.position = pos;
+            Transform.position = pos;
         }
 
     }

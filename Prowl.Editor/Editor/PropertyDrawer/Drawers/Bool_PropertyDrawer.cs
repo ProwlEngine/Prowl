@@ -1,17 +1,21 @@
-﻿using Prowl.Runtime.GUI;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-namespace Prowl.Editor.PropertyDrawers
+using Prowl.Editor.Preferences;
+using Prowl.Runtime.GUI;
+
+namespace Prowl.Editor.PropertyDrawers;
+
+[Drawer(typeof(bool))]
+public class Bool_PropertyDrawer : PropertyDrawer
 {
-    [Drawer(typeof(bool))]
-    public class Bool_PropertyDrawer : PropertyDrawer
-    {
-        public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
-        {
-            bool val = (bool)value;
-            bool changed = Gui.ActiveGUI.Checkbox(ID + "Val", ref val, -5, 0, out _, EditorGUI.GetInputStyle());
-            value = val;
-            return changed;
-        }
-    }
+    public override double MinWidth => EditorStylePrefs.Instance.ItemSize;
 
+    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
+    {
+        bool val = (bool)value;
+        bool changed = Gui.ActiveGUI.Checkbox(ID + "Val", ref val, 0, 0, out _, EditorGUI.InputStyle);
+        value = val;
+        return changed;
+    }
 }

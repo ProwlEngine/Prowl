@@ -1,6 +1,12 @@
-﻿using BepuPhysics.Collidables;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Collidables;
+
 using BepuUtilities.Memory;
+
 using Prowl.Icons;
+
 using NRigidPose = BepuPhysics.RigidPose;
 
 namespace Prowl.Runtime;
@@ -47,9 +53,9 @@ public sealed class TriangleCollider : Collider
 
     internal override void AddToCompoundBuilder(BufferPool pool, ref CompoundBuilder builder, NRigidPose localPose)
     {
-        var localA = A * this.Transform.lossyScale;
-        var localB = B * this.Transform.lossyScale;
-        var localC = C * this.Transform.lossyScale;
+        var localA = A * Transform.lossyScale;
+        var localB = B * Transform.lossyScale;
+        var localC = C * Transform.lossyScale;
         builder.Add(new Triangle(localA, localB, localC), localPose, Mass);
     }
 }

@@ -1,70 +1,82 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>disable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+	  <TargetType>library</TargetType>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>8600;8601;8618;8602;8603;8604;8625;1591</NoWarn>
+    <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <OutputPath>../Build/Runtime/Debug/</OutputPath>
   </PropertyGroup>
+
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <OutputPath>../Build/Runtime/Release/</OutputPath>
   </PropertyGroup>
 
-    <ItemGroup>
-      <Content Remove="C:\Users\acer1\.nuget\packages\pictime.sharpfont.dependencies\2.6.0\build\..\bin\msvc12\x64\freetype6.dll" />
-    </ItemGroup>
+  <ItemGroup>
+    <None Remove="EmbeddedResources\**\*.*" />
+  </ItemGroup>
 
-    <ItemGroup>
-      <None Remove="EmbeddedResources\fa-regular-400.ttf" />
-      <None Remove="EmbeddedResources\fa-solid-900.ttf" />
-      <None Remove="EmbeddedResources\font.ttf" />
-      <None Remove="Resources/AudioIcon.png" />
-      <None Remove="Resources/Checkerboard.png" />
-      <None Remove="Resources/CSharpIcon.png" />
-      <None Remove="Resources/default.glsl" />
-      <None Remove="Resources/diffuse.glsl" />
-      <None Remove="Resources/directionallight.glsl" />
-      <None Remove="Resources/fa-regular-400.ttf" />
-      <None Remove="Resources/fa-solid-900.ttf" />
-      <None Remove="Resources/FileIcon.png" />
-      <None Remove="Resources/FolderIcon.png" />
-      <None Remove="Resources/FolderOpenIcon.png" />
-      <None Remove="Resources/font.ttf" />
-      <None Remove="Resources/fontawesome-webfont.ttf" />
-      <None Remove="Resources/GameObjectIcon.png" />
-      <None Remove="Resources/gbuffercombine.glsl" />
-      <None Remove="Resources/HierarchyIcon.png" />
-      <None Remove="Resources/invalid.glsl" />
-      <None Remove="Resources/ModelIcon.png" />
-      <None Remove="Resources/pointlightshader.glsl" />
-      <None Remove="Resources/ScreenShader.glsl" />
-      <None Remove="Resources/ShaderIcon.png" />
-      <None Remove="Resources/standard.glsl" />
-    </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="EmbeddedResources\*.*" />
 
-    <ItemGroup>
-      <EmbeddedResource Include="EmbeddedResources\fa-regular-400.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\fa-solid-900.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\font.ttf" />
-    </ItemGroup>
-    
-    <ItemGroup>
-      <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
-      <PackageReference Include="BepuPhysics" Version="2.5.0-beta.23" />
-      <PackageReference Include="Silk.NET" Version="2.20.0" />
-      <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
-      <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
-    </ItemGroup>
-    
-    <ItemGroup>
-      <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Core\DotRecast.Core.csproj" />
-      <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Detour\DotRecast.Detour.csproj" />
-      <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast.Toolset\DotRecast.Recast.Toolset.csproj" />
-      <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast\DotRecast.Recast.csproj" />
-    </ItemGroup>
+        <!--
+        <EmbeddedResource Include="EmbeddedResources/GUI/GLSL/gui-vertex.glsl" LogicalName="gui-vertex.glsl" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/GLSL/gui-vertex-linear.glsl" LogicalName="gui-vertex-linear.glsl" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/GLSL/gui-frag.glsl" LogicalName="gui-frag.glsl" />
+
+        <EmbeddedResource Include="EmbeddedResources/GUI/GLSLES/gui-vertex.glsles" LogicalName="gui-vertex.glsles" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/GLSLES/gui-vertex-linear.glsles" LogicalName="gui-vertex-linear.glsles" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/GLSLES/gui-frag.glsles" LogicalName="gui-frag.glsles" />
+
+        <EmbeddedResource Include="EmbeddedResources/GUI/HLSL/gui-vertex.hlsl" LogicalName="gui-vertex.hlsl" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/HLSL/gui-vertex-linear.hlsl" LogicalName="gui-vertex-linear.hlsl" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/HLSL/gui-frag.hlsl" LogicalName="gui-frag.hlsl" />
+
+        <EmbeddedResource Include="EmbeddedResources/GUI/SPIR-V/gui-vertex.spv" LogicalName="gui-vertex.spv" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/SPIR-V/gui-vertex-linear.spv" LogicalName="gui-vertex-linear.spv" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/SPIR-V/gui-frag.spv" LogicalName="gui-frag.spv" />
+
+        <EmbeddedResource Include="EmbeddedResources/GUI/Metal/gui-vertex.metal" LogicalName="gui-vertex.metal" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/Metal/gui-vertex-linear.metal" LogicalName="gui-vertex-linear.metal" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/Metal/gui-frag.metal" LogicalName="gui-frag.metal" />
+        -->
+
+    <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-vertex.*">
+      <LogicalName>%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-vertex-linear.*">
+      <LogicalName>%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-frag.*">
+      <LogicalName>%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
+    <PackageReference Include="BepuPhysics" Version="2.5.0-beta.23" />
+    <PackageReference Include="Silk.NET.OpenAL" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
+    <PackageReference Include="SoftCircuits.OrderedDictionary" Version="3.2.0" />
+    <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Core\DotRecast.Core.csproj" />
+    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Detour\DotRecast.Detour.csproj" />
+    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast.Toolset\DotRecast.Recast.Toolset.csproj" />
+    <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast\DotRecast.Recast.csproj" />
+
+    <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
+    <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid.SDL2\Veldrid.SDL2.csproj" />
+    <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj" />
+  </ItemGroup>
 
 </Project>

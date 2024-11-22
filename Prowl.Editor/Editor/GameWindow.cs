@@ -1,9 +1,13 @@
-using Prowl.Editor.Assets;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Rendering;
+
 using static Prowl.Editor.EditorGUI;
 
 namespace Prowl.Editor;
@@ -31,7 +35,7 @@ public class GameWindow : EditorWindow
     const int HeaderHeight = 27;
 
     RenderTexture RenderTarget;
-    bool previouslyPlaying = false;
+    bool hasFrame;
 
     public static WeakReference LastFocused;
     public static Vector2 FocusedPosition;
@@ -43,10 +47,11 @@ public class GameWindow : EditorWindow
         Title = FontAwesome6.Gamepad + " Game";
         GeneralPreferences.Instance.CurrentWidth = (int)Width;
         GeneralPreferences.Instance.CurrentHeight = (int)Height - HeaderHeight;
+
         RefreshRenderTexture();
 
         LastFocused = new WeakReference(this);
-        InputHandler = new GameViewInputHandler(Window.InternalInput, this);
+        InputHandler = new GameViewInputHandler(this);
     }
 
     ~GameWindow()
@@ -56,19 +61,25 @@ public class GameWindow : EditorWindow
 
     public void RefreshRenderTexture()
     {
-        RenderTarget?.Dispose();
-        RenderTarget = new RenderTexture(GeneralPreferences.Instance.CurrentWidth, GeneralPreferences.Instance.CurrentHeight);
+        RenderTarget?.DestroyImmediate();
+
+        RenderTarget = new RenderTexture(
+            (uint)GeneralPreferences.Instance.CurrentWidth,
+            (uint)GeneralPreferences.Instance.CurrentHeight,
+            true);
+
+        hasFrame = false;
     }
 
     protected override void Draw()
     {
         if (!Project.HasProject) return;
 
-        if(IsFocused)
+        if (IsFocused)
             LastFocused = new WeakReference(this);
-        InputHandler.LateUpdate();
+        InputHandler.EarlyUpdate();
 
-        gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
+        gui.CurrentNode.Layout(LayoutType.Column).ScaleChildren();
 
         using (gui.Node("MenuBar").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
         {
@@ -77,7 +88,7 @@ public class GameWindow : EditorWindow
             bool changed = false;
 
             PropertyGridConfig config = PropertyGridConfig.NoLabel;
-            if (EditorGUI.DrawProperty(0, "Width", ref GeneralPreferences.Instance.CurrentWidth, config))
+            if (DrawProperty(0, "Width", GeneralPreferences.Instance, "CurrentWidth", config))
             {
                 GeneralPreferences.Instance.CurrentWidth = Math.Clamp(GeneralPreferences.Instance.CurrentWidth, 1, 7680);
                 GeneralPreferences.Instance.Resolution = Resolutions.custom;
@@ -85,7 +96,7 @@ public class GameWindow : EditorWindow
                 RefreshRenderTexture();
             }
             gui.PreviousNode.Width(50);
-            if (EditorGUI.DrawProperty(1, "Height", ref GeneralPreferences.Instance.CurrentHeight, config))
+            if (DrawProperty(1, "Height", GeneralPreferences.Instance, "CurrentHeight", config))
             {
                 GeneralPreferences.Instance.CurrentHeight = Math.Clamp(GeneralPreferences.Instance.CurrentHeight, 1, 4320);
                 GeneralPreferences.Instance.Resolution = Resolutions.custom;
@@ -94,7 +105,7 @@ public class GameWindow : EditorWindow
             }
             gui.PreviousNode.Width(50);
 
-            if (EditorGUI.DrawProperty(2, "Resolution", ref GeneralPreferences.Instance.Resolution, config))
+            if (DrawProperty(2, "Resolution", GeneralPreferences.Instance, "Resolution", config))
             {
                 UpdateResolution(GeneralPreferences.Instance.Resolution);
                 changed = true;
@@ -122,26 +133,11 @@ public class GameWindow : EditorWindow
 
             gui.Draw2D.DrawRectFilled(innerRect, Color.black);
 
-            var renderSize = innerRect.Size;
-            renderSize.x = MathD.Max(renderSize.x, 1);
-            renderSize.y = MathD.Max(renderSize.y, 1);
-
-            // Find Camera to render
-            var allCameras = EngineObject.FindObjectsOfType<Camera>();
-            // Remove disabled ones
-            allCameras = allCameras.Where(c => c.EnabledInHierarchy && !c.GameObject.Name.Equals("Editor-Camera", StringComparison.OrdinalIgnoreCase)).ToArray();
-            // Find MainCamera
-            var mainCam = allCameras.FirstOrDefault(c => c.GameObject.CompareTag("Main Camera") && c.Target.IsExplicitNull, allCameras.Length > 0 ? allCameras[0] : null);
-
-            if (mainCam == null)
-            {
-                gui.Draw2D.DrawRect(innerRect, Color.red, 2);
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
-                return;
-            }
-
             if (GeneralPreferences.Instance.Resolution == Resolutions.fit)
             {
+                var renderSize = innerRect.Size;
+                renderSize.x = MathD.Max(renderSize.x, 1);
+                renderSize.y = MathD.Max(renderSize.y, 1);
                 if (renderSize.x != RenderTarget.Width || renderSize.y != RenderTarget.Height)
                 {
                     GeneralPreferences.Instance.CurrentWidth = (int)renderSize.x;
@@ -150,34 +146,26 @@ public class GameWindow : EditorWindow
                 }
             }
 
-            // We got a camera to visualize
-            if (GeneralPreferences.Instance.AutoRefreshGameView)
+            if (GeneralPreferences.Instance.AutoRefreshGameView || !hasFrame)
             {
-                //if (Application.isPlaying || Time.frameCount % 8 == 0)
+                if (!SceneManager.Draw(RenderTarget))
                 {
-                    var tmp = mainCam.Target;
-                    try
-                    {
-                        mainCam.Target = RenderTarget;
-                        mainCam.Render((int)renderSize.x, (int)renderSize.y);
-                    }
-                    finally
-                    {
-                        mainCam.Target = tmp;
-                    }
-                    
+                    gui.Draw2D.DrawRect(innerRect, Color.red, 2);
+                    gui.Draw2D.DrawText(Font.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
+                    return;
                 }
             }
 
-            // Letter box the image into the render size
-            gui.Draw2D.DrawImage(RenderTarget.InternalTextures[0], innerRect.Position, innerRect.Size, Color.white, true);
+            hasFrame = true;
 
-            if(IsFocused || LastFocused.Target == this)
+            // Letter box the image into the render size
+            gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], innerRect.Position, innerRect.Size, Color.white, true);
+
+            if (IsFocused || LastFocused.Target == this)
             {
                 FocusedPosition = innerRect.Position;
             }
         }
-
     }
 
     void UpdateResolution(Resolutions resolution)

@@ -1,61 +1,85 @@
-﻿using Prowl.Runtime;
+﻿using System.IO.Compression;
+
+using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.IO.Compression;
+
+namespace Prowl.Desktop;
 
 public class StandaloneAssetProvider : IAssetProvider
 {
-    AssetBundle[] packages;
+    readonly AssetBundle[] packages;
 
     public StandaloneAssetProvider()
     {
         int packageIndex = 0;
-        FileInfo firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
-        List<AssetBundle> packages = new();
-        while (File.Exists(firstPackage.FullName)) {
-            packages.Add(new AssetBundle(firstPackage.OpenRead(), ZipArchiveMode.Read));
-            firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
+        FileInfo firstPackage = new FileInfo(Path.Combine(DesktopPlayer.Data.FullName, $"Data{packageIndex++}.prowl"));
+        List<AssetBundle> assetBundles = [];
+        while (File.Exists(firstPackage.FullName))
+        {
+            assetBundles.Add(new AssetBundle(firstPackage.OpenRead(), ZipArchiveMode.Read));
+            firstPackage = new FileInfo(Path.Combine(DesktopPlayer.Data.FullName, $"Data{packageIndex++}.prowl"));
         }
-        this.packages = packages.ToArray();
+        packages = assetBundles.ToArray();
     }
 
-    Dictionary<Guid, SerializedAsset> _loaded = [];
+    readonly Dictionary<Guid, SerializedAsset> _loaded = [];
 
     public bool HasAsset(Guid assetID) => _loaded.ContainsKey(assetID);
 
     public AssetRef<T> LoadAsset<T>(string relativeAssetPath, ushort fileID = 0) where T : EngineObject
     {
         Guid guid = GetGuidFromPath(relativeAssetPath);
-        if (_loaded.ContainsKey(guid))
-            return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID - 1]);
+        if (_loaded.TryGetValue(guid, out SerializedAsset? value))
+            return (T)(fileID == 0 ? value.Main! : value.SubAssets[fileID - 1]);
 
         foreach (AssetBundle package in packages)
-            if (package.TryGetAsset(relativeAssetPath, out var asset)) {
-                _loaded[guid] = asset;
-                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1]);
+            if (package.TryGetAsset(relativeAssetPath, out SerializedAsset? asset))
+            {
+                _loaded[guid] = asset!;
+                return (T)(fileID == 0 ? asset!.Main! : asset!.SubAssets[fileID - 1]);
             }
         throw new FileNotFoundException($"Asset with path {relativeAssetPath} not found.");
     }
 
     public AssetRef<T> LoadAsset<T>(Guid guid, ushort fileID = 0) where T : EngineObject
     {
-        if (_loaded.ContainsKey(guid))
-            return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID - 1]);
+        if (_loaded.TryGetValue(guid, out SerializedAsset? value))
+            return (T)(fileID == 0 ? value.Main! : value.SubAssets[fileID - 1]);
 
         foreach (AssetBundle package in packages)
-            if (package.TryGetAsset(guid, out var asset)) {
-                _loaded[guid] = asset;
-                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1]);
+            if (package.TryGetAsset(guid, out SerializedAsset? asset))
+            {
+                _loaded[guid] = asset!;
+                return (T)(fileID == 0 ? asset!.Main! : asset!.SubAssets[fileID - 1]);
             }
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
     }
 
     public AssetRef<T> LoadAsset<T>(IAssetRef assetID) where T : EngineObject
     {
-        if (assetID == null) return null;
+        if (assetID == null)
+            return new AssetRef<T>(null);
+
         return LoadAsset<T>(assetID.AssetID, assetID.FileID);
     }
 
-    public SerializedAsset? LoadAsset(Guid guid)
+    public SerializedAsset? LoadAssetRaw(string relativeAssetPath)
+    {
+        Guid guid = GetGuidFromPath(relativeAssetPath);
+        if (_loaded.ContainsKey(guid))
+            return _loaded[guid];
+
+        foreach (AssetBundle package in packages)
+            if (package.TryGetAsset(relativeAssetPath, out SerializedAsset? asset))
+            {
+                if (asset != null)
+                    _loaded[guid] = asset;
+                return asset;
+            }
+        throw new FileNotFoundException($"Asset with path {relativeAssetPath} not found.");
+    }
+
+    public SerializedAsset? LoadAssetRaw(Guid guid)
     {
         if (_loaded.ContainsKey(guid))
             return _loaded[guid];
@@ -63,7 +87,8 @@ public class StandaloneAssetProvider : IAssetProvider
         foreach (AssetBundle package in packages)
             if (package.TryGetAsset(guid, out var asset))
             {
-                _loaded[guid] = asset;
+                if (asset != null)
+                    _loaded[guid] = asset;
                 return asset;
             }
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
@@ -72,16 +97,18 @@ public class StandaloneAssetProvider : IAssetProvider
     public string GetPathFromGUID(Guid guid)
     {
         foreach (AssetBundle package in packages)
-            if (package.TryGetPath(guid, out var path))
-                return path;
+            if (package.TryGetPath(guid, out string? path))
+                return path!;
+
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
     }
 
     public Guid GetGuidFromPath(string relativeAssetPath)
     {
         foreach (AssetBundle package in packages)
-            if (package.TryGetGuid(relativeAssetPath, out var guid))
+            if (package.TryGetGuid(relativeAssetPath, out Guid guid))
                 return guid;
+
         throw new FileNotFoundException($"Asset with path {relativeAssetPath} not found.");
     }
 }
