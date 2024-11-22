@@ -5,10 +5,12 @@ using System.Reflection;
 
 using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
+using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Utilities;
 
 namespace Prowl.Editor;
 
@@ -225,7 +227,7 @@ public class AssetsBrowserWindow : EditorWindow
                     AssetDatabase.Update();
                     AssetDatabase.Ping(file);
 
-                    go.LinkToPrefab(AssetDatabase.LoadAsset<Prefab>(file, 0));
+                    PrefabUtility.LinkToPrefab(go, AssetDatabase.LoadAsset<Prefab>(file, 0));
                 }
             }
 

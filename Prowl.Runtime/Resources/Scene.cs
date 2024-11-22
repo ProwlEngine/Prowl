@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Runtime.Cloning;
+using Prowl.Runtime.Utilities;
 
 using Vortice.Direct3D11;
 
@@ -108,7 +109,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // When running the game, break prefab links
         if (Application.IsPlaying)
             foreach (GameObject obj in AllObjects)
-                obj.BreakPrefabLink();
+                PrefabUtility.BreakPrefabLink(obj);
     }
 
     /// <summary>

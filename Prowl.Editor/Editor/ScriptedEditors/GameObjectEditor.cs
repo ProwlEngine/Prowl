@@ -11,6 +11,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
+using Prowl.Runtime.Utilities;
 using Prowl.Runtime.Utils;
 
 using static Prowl.Editor.EditorGUI;
@@ -145,7 +146,7 @@ public class GameObjectEditor : ScriptedEditor
                         {
                             prefab.Inject(go);
                             if (go.PrefabLink == null)
-                                go.LinkToPrefab(prefab);
+                                PrefabUtility.LinkToPrefab(go, prefab);
 
                             // Save prefab asset
                             AssetDatabase.SaveAsset(prefab);
@@ -269,11 +270,11 @@ public class GameObjectEditor : ScriptedEditor
 
                     string displayName = GetComponentDisplayName(cType);
                     string cname = displayName;
-                    if (comp.IsOnPrefabInstance)
+                    if (PrefabUtility.IsOnPrefabInstance(comp))
                     {
-                        if (comp.IsPrefabSource)
+                        if (PrefabUtility.IsPrefabSource(comp))
                         {
-                            if (comp.HasPrefabMod)
+                            if (PrefabUtility.HasPrefabMod(comp))
                                 cname += "*";
                             cname += "   " + FontAwesome6.CircleCheck;
                         }

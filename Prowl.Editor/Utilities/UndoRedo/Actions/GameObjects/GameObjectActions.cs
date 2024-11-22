@@ -6,6 +6,7 @@ using System.Reflection;
 using Prowl.Runtime;
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Utilities;
 
 namespace Prowl.Editor.Utilities;
 
@@ -285,7 +286,7 @@ public class BreakPrefabLinkAction : AbstractAction
 
         _prefab ??= go.AffectedByPrefabLink.DeepClone(new(false));
 
-        go.BreakPrefabLink();
+        PrefabUtility.BreakPrefabLink(go);
     }
 
     protected override void Undo()
@@ -294,10 +295,15 @@ public class BreakPrefabLinkAction : AbstractAction
         if (go == null)
             throw new InvalidOperationException("Could not find gameobject with identifier: " + _target);
 
-        go.LinkToPrefab(_prefab.Prefab);
+        PrefabUtility.LinkToPrefab(go, _prefab.Prefab);
         _prefab.DeepCopyTo(go.PrefabLink);
     }
 }
+
+// TODO: Implement ApplyPrefabLinkAction
+//public class ApplyPrefabLinkAction : AbstractAction
+//{
+//}
 
 public class ResetPrefabLinkAction : AbstractAction
 {

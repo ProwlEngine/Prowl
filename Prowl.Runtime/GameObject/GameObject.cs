@@ -9,6 +9,7 @@ using System.Runtime.InteropServices.Marshalling;
 
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Utilities;
 
 using SoftCircuits.Collections;
 
@@ -281,13 +282,12 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         }
         else
         {
-            this.LinkToPrefab(prefab);
+            PrefabUtility.LinkToPrefab(this, prefab);
             PrefabLink.Apply();
         }
     }
 
     #endregion
-
 
     /// <summary> Recursive function to check if this GameObject is a parent of another GameObject </summary>
     public bool IsParentOf(GameObject go)
@@ -300,46 +300,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                 return true;
 
         return false;
-    }
-
-    /// <summary>
-    /// Sets or alters this GameObject's <see cref="PrefabLink"/> to reference the specified <see cref="Prefab"/>.
-    /// </summary>
-    /// <param name="prefab">The Prefab that will be linked to.</param>
-    public void LinkToPrefab(AssetRef<Prefab> prefab)
-    {
-        if (prefabLink == null)
-        {
-            // Not affected by another (higher) PrefabLink
-            if (AffectedByPrefabLink == null)
-            {
-                prefabLink = new PrefabLink(this, prefab);
-                // If a nested object is already PrefabLinked, add it to the change list
-                foreach (GameObject child in GetChildrenDeep())
-                {
-                    if (child.PrefabLink != null && child.PrefabLink.ParentLink == prefabLink)
-                    {
-                        prefabLink.PushChange(child, nameof(prefabLink), child.PrefabLink.Clone());
-                    }
-                }
-            }
-            // Already affected by another (higher) PrefabLink
-            else
-            {
-                prefabLink = new PrefabLink(this, prefab);
-                prefabLink.ParentLink.RelocateChanges(prefabLink);
-            }
-        }
-        else
-            prefabLink = prefabLink.Clone(this, prefab);
-    }
-
-    /// <summary>
-    /// Breaks this GameObject's <see cref="PrefabLink"/>
-    /// </summary>
-    public void BreakPrefabLink()
-    {
-        prefabLink = null;
     }
 
     /// <summary>
@@ -1056,16 +1016,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             method?.Invoke(c, objs);
         }
     }
-
-    /// <summary>
-    /// Is true if this GameObject is a part of the prefab source, False if not.
-    /// </summary>
-    public bool IsPrefabSource => AffectedByPrefabLink != null && AffectedByPrefabLink.IsSource(this);
-
-    /// <summary>
-    /// Is true if this GameObject is a part of a prefab instance, False if not.
-    /// </summary>
-    public bool IsOnPrefabInstance => AffectedByPrefabLink != null;
 
     /// <summary>
     /// Serializes the GameObject to a SerializedProperty.

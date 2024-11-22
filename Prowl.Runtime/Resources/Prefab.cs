@@ -8,6 +8,7 @@ using System.Reflection;
 
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Utilities;
 
 namespace Prowl.Runtime;
 
@@ -61,12 +62,12 @@ public class Prefab : EngineObject
                 _objTree = obj.Clone();
 
             // Cleanup any leftover prefab links that might have been copied
-            _objTree.BreakPrefabLink();
+            PrefabUtility.BreakPrefabLink(_objTree);
 
             // Prevent recursion
             foreach (GameObject child in _objTree.GetChildrenDeep())
                 if (child.PrefabLink != null && child.PrefabLink.Prefab == this)
-                    child.BreakPrefabLink();
+                    PrefabUtility.BreakPrefabLink(child);
         }
     }
 
