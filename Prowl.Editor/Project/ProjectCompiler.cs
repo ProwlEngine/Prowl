@@ -66,7 +66,7 @@ public static class ProjectCompiler
 
     public static int CompileCSProject(FileInfo project, DotnetCompileOptions options)
     {
-        if (!CheckForSDKInstallation("8.0"))
+        if (!CheckForSDKInstallation("9.0"))
             return 1;
 
         ProcessStartInfo startInfo = new()

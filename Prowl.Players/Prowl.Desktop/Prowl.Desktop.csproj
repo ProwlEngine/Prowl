@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <!-- For IntelliSense purposes, leave some project defaults to be removed here - these should be overwritten in an actual build -->
   <PropertyGroup Label="RemoveFromBuild">
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <AssemblyName>DesktopPlayer</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsAotCompatible>true</IsAotCompatible>

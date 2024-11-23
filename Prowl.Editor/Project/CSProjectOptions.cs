@@ -108,7 +108,7 @@ public struct CSProjectOptions()
 
         propertyGroupXML.RemoveNodes();
 
-        propertyGroupXML.Add(new XElement("TargetFramework", "net8.0"));
+        propertyGroupXML.Add(new XElement("TargetFramework", "net9.0"));
 
         propertyGroupXML.Add(new XElement("OutputType", OutputExecutable ? "Exe" : "Library"));
 
