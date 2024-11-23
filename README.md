@@ -26,7 +26,7 @@
 
 # <span align="center">📝 About The Project 📝
 
-Prowl is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** game engine developed in **pure C# in latest .NET**, (which surprisingly has **no runtime fees** believe it or not! 😮).
+Prowl is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** game engine developed in **pure C# in latest .NET**.
 
 It aims to provide a seamless transition for developers familiar with _Unity_ by maintaining a similar API while also following KISS and staying as small and customizable as possible. Ideally, _Unity_ projects can port over with as little resistance as possible.
 
@@ -57,14 +57,14 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Colliders: Box, Sphere, Capsule, Cylinder, ~~Mesh Collider~~ - Needs to be re-implemented
         - Triggers
         - Raycasts and Sweeps
-        - Non-Kinematic Character Controller (Just a fancy rigidbody)
+        - Rigidbody-based Character Controller
             - Supports Moving Platforms
         - A ton of physical constraints (All of Bepu's constraints)
     - Unity-like Coroutines
     - Playtest directly in the Editor
     - ScriptableObjects
     - Projects & Project Settings
-    - Unity-like Serializer to create In-Memory Graphs
+    - Powerful Serializer to create In-Memory Graphs
         - Graph → Custom Text Format
         - Graph → Binary
     - Fully 64-bit using Doubles
@@ -105,7 +105,7 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Spot & Directional Light Shadows - Point shadows is not implemented
         - Shadow Atlas
         - Dynamic Shadow Resolutions
-    - Post Processing - Near Identical API to Unity
+    - Post Processing
         - Tonemapping (Melon, Aces, Reinhard, Uncharted, Filmic)
         - Motion Blur
         - Very fast Kawase Bloom
@@ -115,7 +115,7 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
     - Dynamic Resolutions Per Camera
 
 -   **Asset Pipeline:**
-    - A Powerful Asset Pipeline with a very similar structure to unity
+    - A Powerful Asset Pipeline
     - Meta Files & Reference by GUID
     - Import Caching
     - Support for Custom Importers
