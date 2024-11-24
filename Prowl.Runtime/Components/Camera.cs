@@ -53,7 +53,7 @@ public class Camera : MonoBehaviour
     public AssetRef<RenderPipeline> Pipeline;
     public AssetRef<RenderTexture> Target;
     public bool HDR = false;
-    [Range(0, 2)]
+    [Range(0, 2, true)]
     public float RenderScale = 1.0f;
 
     public bool IsOrthographic => projectionType == ProjectionType.Orthographic;

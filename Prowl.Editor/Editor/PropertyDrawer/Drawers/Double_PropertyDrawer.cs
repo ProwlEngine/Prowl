@@ -16,13 +16,15 @@ public class Double_PropertyDrawer : PropertyDrawer
 
         double val = (double)value!;
         bool changed;
-        if (range == null)
+        if (range != null && range.IsSlider)
         {
-            changed = gui.InputDouble(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            changed = gui.DoubleSlider(ID + "Val", ref val, range.Min, range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
         }
         else
         {
-            changed = gui.DoubleSlider(ID + "Val", ref val, range.Min, range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            changed = gui.InputDouble(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            if (range != null)
+                val = Math.Max(range.Min, Math.Min(range.Max, val));
         }
         value = val;
         return changed;

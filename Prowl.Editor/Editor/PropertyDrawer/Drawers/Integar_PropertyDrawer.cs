@@ -18,13 +18,15 @@ public class Integar_PropertyDrawer<T> : PropertyDrawer
 
         bool changed;
         long val = Convert.ToInt64(value);
-        if (range == null)
+        if (range != null && range.IsSlider)
         {
-            changed = gui.InputLong(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            changed = gui.LongSlider(ID + "Val", ref val, (int)range.Min, (int)range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
         }
         else
         {
-            changed = gui.LongSlider(ID + "Val", ref val, (int)range.Min, (int)range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            changed = gui.InputLong(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            if (range != null)
+                val = Math.Max((int)range.Min, Math.Min((int)range.Max, val));
         }
         if (changed)
             value = (T)Convert.ChangeType(val, typeof(T));

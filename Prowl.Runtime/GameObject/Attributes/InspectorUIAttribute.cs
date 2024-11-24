@@ -129,7 +129,7 @@ public class ShowInInspectorAttribute : Attribute { }
 /// A Numerical Value Clamping Attribute.
 /// </summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
-public class RangeAttribute(double min, double max) : Attribute
+public class RangeAttribute(double min, double max, bool IsSlider = false) : Attribute
 {
     /// <summary>
     /// The minimum value of the field.
@@ -140,6 +140,11 @@ public class RangeAttribute(double min, double max) : Attribute
     /// The maximum value of the field.
     /// </summary>
     public double Max = max;
+
+    /// <summary>
+    /// Draws a slider for the field in the inspector.
+    /// </summary>
+    public bool IsSlider = true;
 }
 
 /// <summary>

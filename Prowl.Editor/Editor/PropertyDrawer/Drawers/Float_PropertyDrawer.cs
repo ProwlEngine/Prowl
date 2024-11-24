@@ -17,13 +17,15 @@ public class Float_PropertyDrawer : PropertyDrawer
 
         float val = (float)value!;
         bool changed;
-        if (range == null)
+        if (range != null && range.IsSlider)
         {
-            changed = gui.InputFloat(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            changed = gui.FloatSlider(ID + "Val", ref val, (float)range.Min, (float)range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
         }
         else
         {
-            changed = gui.FloatSlider(ID + "Val", ref val, (float)range.Min, (float)range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            changed = gui.InputFloat(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            if (range != null)
+                val = Math.Max((float)range.Min, Math.Min((float)range.Max, val));
         }
         value = val;
         return changed;
