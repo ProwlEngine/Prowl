@@ -35,6 +35,7 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     /// <summary>
     /// Array of available layers for GameObjects.
     /// </summary>
+    [ListDrawer(false, false)]
     public string[] layers =
     [
         "Default",
