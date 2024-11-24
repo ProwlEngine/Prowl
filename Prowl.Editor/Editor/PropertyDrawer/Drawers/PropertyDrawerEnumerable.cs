@@ -24,7 +24,7 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
     protected abstract void RemoveElement(ref T value, int index);
     protected abstract void AddElement(ref T value);
 
-    public override bool PropertyLayout(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config)
+    public override bool PropertyLayout(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, List<Attribute>? attributes = null)
     {
         bool changed = false;
 

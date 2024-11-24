@@ -12,7 +12,7 @@ namespace Prowl.Editor.PropertyDrawers;
 [Drawer(typeof(Enum))]
 public class Enum_PropertyDrawer : PropertyDrawer
 {
-    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
+    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value, List<Attribute>? attributes = null)
     {
         Enum enumValue = (Enum)value;
         Array values = Enum.GetValues(targetType);

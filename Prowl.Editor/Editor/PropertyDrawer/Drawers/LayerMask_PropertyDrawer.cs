@@ -15,7 +15,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
 {
     public override double MinWidth => 125;
 
-    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
+    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value, List<Attribute>? attributes = null)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 

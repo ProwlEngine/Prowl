@@ -23,15 +23,15 @@ public class DrawerAttribute(Type type) : Attribute
 
     private static List<Type> implementationTypes = [];
 
-    public static bool DrawProperty(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config)
+    public static bool DrawProperty(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, List<Attribute>? attributes = null)
     {
         bool changed = false;
         if (cachedDrawers.TryGetValue(propertyType, out var cached))
         {
             if (cached != null)
-                return cached.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config);
+                return cached.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config, attributes);
 
-            FallbackDrawer(gui, label, index, propertyType, ref propertyValue, config, ref changed);
+            FallbackDrawer(gui, label, index, propertyType, ref propertyValue, config, ref changed, attributes);
             return changed;
         }
         else
@@ -39,7 +39,7 @@ public class DrawerAttribute(Type type) : Attribute
             // Interfaces and Abstract classes need a drawer for them that override other drawers
             if (propertyType.IsInterface || propertyType.IsAbstract)
             {
-                InterfaceDrawer(gui, label, index, propertyType, ref propertyValue, config, ref changed);
+                InterfaceDrawer(gui, label, index, propertyType, ref propertyValue, config, ref changed, attributes);
                 return changed;
             }
 
@@ -47,7 +47,7 @@ public class DrawerAttribute(Type type) : Attribute
             if (knownDrawers.TryGetValue(propertyType, out var drawer))
             {
                 cachedDrawers[propertyType] = drawer;
-                return drawer.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config);
+                return drawer.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config, attributes);
             }
 
             // No direct drawer found, try to find a drawer for the base type
@@ -55,18 +55,18 @@ public class DrawerAttribute(Type type) : Attribute
                 if (propertyType.IsAssignableTo(kvp.Key))
                 {
                     cachedDrawers[propertyType] = kvp.Value;
-                    return kvp.Value.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config);
+                    return kvp.Value.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config, attributes);
                 }
 
 
             // No drawer found, Fallback to Default Drawer
             cachedDrawers[propertyType] = null;
-            FallbackDrawer(gui, label, index, propertyType, ref propertyValue, config, ref changed);
+            FallbackDrawer(gui, label, index, propertyType, ref propertyValue, config, ref changed, attributes);
             return changed;
         }
     }
 
-    private static void FallbackDrawer(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, ref bool changed)
+    private static void FallbackDrawer(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, ref bool changed, List<Attribute>? attributes = null)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
         if (propertyValue == null)
@@ -124,7 +124,7 @@ public class DrawerAttribute(Type type) : Attribute
         }
     }
 
-    private static void InterfaceDrawer(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, ref bool changed)
+    private static void InterfaceDrawer(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, ref bool changed, List<Attribute>? attributes = null)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
@@ -252,7 +252,7 @@ public abstract class PropertyDrawer
 {
     public virtual double MinWidth => 75;
 
-    public virtual bool PropertyLayout(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config)
+    public virtual bool PropertyLayout(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, List<Attribute>? attributes = null)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
@@ -266,15 +266,15 @@ public abstract class PropertyDrawer
 
             // Label
             if (!config.HasFlag(EditorGUI.PropertyGridConfig.NoLabel))
-                OnLabelGUI(gui, label);
+                OnLabelGUI(gui, label, attributes);
 
             // Value
             using (gui.Node("#_Value").Height(ItemSize).Enter())
-                return OnValueGUI(gui, $"#{label}_{index}", propertyType, ref propertyValue);
+                return OnValueGUI(gui, $"#{label}_{index}", propertyType, ref propertyValue, attributes);
         }
     }
 
-    public virtual void OnLabelGUI(Gui gui, string label)
+    public virtual void OnLabelGUI(Gui gui, string label, List<Attribute>? attributes = null)
     {
         using (gui.Node("#_Label").ExpandHeight().Enter())
         {
@@ -286,7 +286,7 @@ public abstract class PropertyDrawer
         }
     }
 
-    public virtual bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue)
+    public virtual bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue, List<Attribute>? attributes = null)
     {
         var col = EditorStylePrefs.Instance.Warning * (gui.IsNodeHovered() ? 1f : 0.8f);
         var pos = gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(0, 8);

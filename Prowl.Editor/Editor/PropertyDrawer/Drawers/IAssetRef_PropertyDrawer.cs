@@ -20,7 +20,7 @@ public class IAssetRef_PropertyDrawer : PropertyDrawer
     public static ushort assignedFileID;
     public static ulong guidAssignedToID;
 
-    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue)
+    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue, List<Attribute>? attributes = null)
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
