@@ -387,7 +387,7 @@ public class HierarchyWindow : EditorWindow
             }
             else
             {
-                UndoRedoManager.RecordAction(new SetParentAction(go.Identifier, entity.Identifier));
+                UndoRedoManager.RecordAction(new SetParentAction(go.Identifier, entity?.Identifier ?? Guid.Empty));
             }
 
             //if (entity != null)
