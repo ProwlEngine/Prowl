@@ -106,4 +106,12 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     /// </summary>
     /// <returns>A new array containing all layer names.</returns>
     public static IReadOnlyList<string> GetLayers() => Instance.layers;
+
+    [GUIButton("Reset to Default")]
+    public static void ResetDefault()
+    {
+        // Shortcut to reset values
+        _instance = new TagLayerManager();
+        _instance.Save();
+    }
 }
