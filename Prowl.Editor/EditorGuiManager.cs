@@ -10,6 +10,7 @@ using Prowl.Editor.Preferences;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Cloning;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.SceneManagement;
 
@@ -385,7 +386,8 @@ public static class EditorGuiManager
         var original = Application.AssetProvider.LoadAsset<GameObject>($"Defaults/{name}.obj");
         if (original.IsAvailable)
         {
-            UndoRedoManager.RecordAction(new AddGameObjectToSceneAction(original.Res!, null)); // AddGameObjectToSceneAction clones the object so we can safely use it here
+            var go = original.Res!.DeepClone();
+            UndoRedoManager.RecordAction(new AddGameObjectToSceneAction(go, null)); // AddGameObjectToSceneAction clones the object so we can safely use it here
 #warning TODO: A way to select the gameobject created via the Undo Action
             //var go = GameObject.Instantiate(original.Res!);
             //go.Transform.position = GetPosition();
