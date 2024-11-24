@@ -53,10 +53,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     #region Public Fields/Properties
 
     /// <summary> The Tag Index of this GameObject </summary>
-    public byte tagIndex;
+    public int tagIndex;
 
     /// <summary> The Layer Index of this GameObject </summary>
-    public byte layerIndex;
+    public int layerIndex;
 
     /// <summary> The Hide Flags of this GameObject, Used to hide the GameObject from a variety of places like Serializing, Inspector or Hierarchy </summary>
     public HideFlags hideFlags = HideFlags.None;
@@ -304,6 +304,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     /// <summary>
     /// Checks if this GameObject's tag matches the given tag.
+    /// This is preferred over manually checking the Tag/Layer indices.
+    /// This takes into account if layers/tags are moved/changed
     /// </summary>
     /// <param name="otherTag">The tag to compare against.</param>
     /// <returns>True if the tags match, false otherwise.</returns>

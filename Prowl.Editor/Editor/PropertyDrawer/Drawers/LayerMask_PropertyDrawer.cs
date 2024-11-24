@@ -20,7 +20,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
         LayerMask maskValue = (LayerMask)value!;
-        string[] layers = TagLayerManager.GetLayers();
+        var layers = TagLayerManager.GetLayers();
 
         var g = Gui.ActiveGUI;
         using (g.Node(ID).ExpandWidth().Height(ItemSize).Enter())
@@ -37,7 +37,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
             bool everything = maskValue.Mask == LayerMask.Everything.Mask;
             if (!everything)
             {
-                for (int i = 0; i < layers.Length; i++)
+                for (int i = 0; i < layers.Count; i++)
                 {
                     if (maskValue.HasLayer((byte)i) && layers[i].Length > 0)
                     {
@@ -60,7 +60,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
             if (g.BeginPopup("LayerMask_Popup_" + ID, out var popupNode, false, EditorGUI.InputStyle))
             {
                 int longestText = 0;
-                for (var Index = 0; Index < layers.Length; ++Index)
+                for (var Index = 0; Index < layers.Count; ++Index)
                 {
                     var textSize = Font.DefaultFont.CalcTextSize(layers[Index], 0);
                     if (textSize.x > longestText)
@@ -72,9 +72,9 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
                 using (popupNode.Width(popupWidth).FitContentHeight().Layout(LayoutType.Column).Enter())
                 {
                     NothingButton(ItemSize, ref maskValue, g);
-                    EverythingButton(ItemSize, ref maskValue, g, layers);
+                    EverythingButton(ItemSize, ref maskValue, g);
 
-                    for (int i = 0; i < layers.Length; i++)
+                    for (int i = 0; i < layers.Count; i++)
                     {
                         if (string.IsNullOrEmpty(layers[i]))
                             continue;
@@ -94,7 +94,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
         }
     }
 
-    private static void LayerButton(double ItemSize, ref LayerMask maskValue, string[] layers, Gui g, int i)
+    private static void LayerButton(double ItemSize, ref LayerMask maskValue, IReadOnlyList<string> layers, Gui g, int i)
     {
         using (g.Node("Item_" + i).ExpandWidth().Height(ItemSize).Enter())
         {
@@ -133,7 +133,7 @@ public class LayerMask_PropertyDrawer : PropertyDrawer
         }
     }
 
-    private static void EverythingButton(double ItemSize, ref LayerMask maskValue, Gui g, string[] layers)
+    private static void EverythingButton(double ItemSize, ref LayerMask maskValue, Gui g)
     {
         using (g.Node("EverythingBtn").ExpandWidth().Height(ItemSize).Enter())
         {
