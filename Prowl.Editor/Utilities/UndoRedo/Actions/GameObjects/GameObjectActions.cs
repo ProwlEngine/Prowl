@@ -252,6 +252,10 @@ public class ChangeTransformAction : AbstractAction
         transform.localPosition = _position;
         transform.localRotation = _rotation;
         transform.localScale = _scale;
+
+        // Trigger OnValidate on all components
+        foreach (var comp in go.GetComponents())
+            comp.OnValidate();
     }
 
     protected override void Undo()
@@ -265,6 +269,10 @@ public class ChangeTransformAction : AbstractAction
         transform.localPosition = _oldPosition;
         transform.localRotation = _oldRotation;
         transform.localScale = _oldScale;
+
+        // Trigger OnValidate on all components
+        foreach (var comp in go.GetComponents())
+            comp.OnValidate();
     }
 
     public override bool TryMerge(IAction action)
@@ -284,6 +292,10 @@ public class ChangeTransformAction : AbstractAction
             transform.localPosition = _position;
             transform.localRotation = _rotation;
             transform.localScale = _scale;
+
+            // Trigger OnValidate on all components
+            foreach (var comp in go.GetComponents())
+                comp.OnValidate();
             return true;
         }
         return false;

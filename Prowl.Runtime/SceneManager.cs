@@ -83,7 +83,6 @@ public static class SceneManager
         {
             Camera.Main = null; // Clear the main camera so it will re-find itself and be updated
 
-            Physics.Dispose();
             // The act of Destroying a active scene sets the current scene to an new one
             // During this period the previous scene is Destroyed, making Res return null, hence the ? here
             Current.Res.DestroyImmediate();
@@ -91,8 +90,6 @@ public static class SceneManager
             EngineObject.HandleDestroyed();
 
             Current = new Scene();
-
-            Physics.Initialize();
         }
     }
 

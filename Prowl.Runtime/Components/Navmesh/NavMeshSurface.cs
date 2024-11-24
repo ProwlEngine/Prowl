@@ -25,7 +25,7 @@ public class NavMeshSurface : MonoBehaviour
     public LayerMask GeometryLayers;
 
     [ShowIf("useStaticGeometry")]
-    public List<Staticbody> staticGeometry = new();
+    public List<Rigidbody3D> staticGeometry = new();
 
     [ShowIf("useStaticGeometry", true)]
     public List<MeshRenderer> meshGeometry = new();
@@ -229,7 +229,7 @@ public class NavMeshSurface : MonoBehaviour
         if (useStaticGeometry)
         {
             staticGeometry.Clear();
-            foreach (var sBody in FindObjectsOfType<Staticbody>())
+            foreach (var sBody in FindObjectsOfType<Rigidbody3D>())
             {
                 if (SceneManagement.SceneManager.Has(sBody.GameObject))
                     staticGeometry.Add(sBody);
@@ -424,25 +424,25 @@ public class NavMeshSurface : MonoBehaviour
             Mesh mesh = null;
             if (collider is SphereCollider sph)
             {
-                mesh = Mesh.CreateSphere(sph.WorldRadius, 8, 8);
+                mesh = Mesh.CreateSphere(sph.radius, 8, 8);
             }
             else if (collider is BoxCollider box)
             {
-                mesh = Mesh.CreateCube(box.Size);
+                mesh = Mesh.CreateCube(box.size);
             }
             else if (collider is CylinderCollider cylinder)
             {
-                mesh = Mesh.CreateCylinder(cylinder.Radius, cylinder.Length, 8);
+                mesh = Mesh.CreateCylinder(cylinder.radius, cylinder.height, 8);
             }
             else if (collider is CapsuleCollider capsule)
             {
 #warning TODO: We need to implement a capsule mesh generator - cylinder sorta works for now
-                mesh = Mesh.CreateCylinder(capsule.Radius, capsule.Length, 8);
+                mesh = Mesh.CreateCylinder(capsule.radius, capsule.LateUpdate, 8);
             }
-            else if (collider is TriangleCollider triangle)
-            {
-                mesh = Mesh.CreateTriangle(triangle.A, triangle.B, triangle.C);
-            }
+            //else if (collider is TriangleCollider triangle)
+            //{
+            //    mesh = Mesh.CreateTriangle(triangle.A, triangle.B, triangle.C);
+            //}
 
             if (mesh != null)
             {
