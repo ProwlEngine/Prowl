@@ -146,7 +146,7 @@ public class GameWindow : EditorWindow
                 }
             }
 
-            if (GeneralPreferences.Instance.AutoRefreshGameView || !hasFrame)
+            if ((GeneralPreferences.Instance.AutoRefreshGameView || !hasFrame) && PlayMode.Current != PlayMode.Mode.Paused)
             {
                 Input.PushHandler(InputHandler);
                 if (!SceneManager.Draw(RenderTarget))
