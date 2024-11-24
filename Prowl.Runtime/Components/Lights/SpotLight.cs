@@ -11,9 +11,13 @@ namespace Prowl.Runtime;
 public class SpotLight : Light
 {
     public float distance = 4.0f;
+    [Range(0, 1)]
     public float angle = 0.97f;
+    [Range(0, 1)]
     public float falloff = 0.96f;
+    [Range(8, 32)]
     public int qualitySamples = 8;
+    [Range(0.001f, 4f)]
     public float shadowRadius = 1f;
 
     public override void Update() => RenderPipeline.AddLight(this);

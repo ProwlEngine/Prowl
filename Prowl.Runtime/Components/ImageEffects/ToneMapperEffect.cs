@@ -15,7 +15,9 @@ public class ToneMapperEffect : MonoBehaviour
 {
     private static Material s_tonemapper;
 
+    [Range(0, 2)]
     public float Contrast = 1f;
+    [Range(0, 2)]
     public float Saturation = 1f;
 
     public override void OnRenderImage(RenderTexture src, RenderTexture dest)
