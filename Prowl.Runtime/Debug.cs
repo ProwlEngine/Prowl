@@ -203,6 +203,16 @@ public static class Debug
         return s_gizmoBuilder.GetIcons();
     }
 
+    public static void PushMatrix(Matrix4x4 matrix)
+    {
+        s_gizmoBuilder.PushMatrix(matrix);
+    }
+
+    public static void PopMatrix()
+    {
+        s_gizmoBuilder.PopMatrix();
+    }
+
     public static void DrawLine(Vector3 start, Vector3 end, Color color) => s_gizmoBuilder.DrawLine(start, end, color);
     public static void DrawTriangle(Vector3 a, Vector3 b, Vector3 c, Color color) => s_gizmoBuilder.DrawTriangle(a, b, c, color);
     public static void DrawWireCube(Vector3 center, Vector3 halfExtents, Color color) => s_gizmoBuilder.DrawWireCube(center, halfExtents, color);
@@ -255,6 +265,8 @@ public class GizmoBuilder
 
     private List<IconDrawCall> _icons = [];
 
+    private Stack<Matrix4x4> _matrix4X4s = new();
+
 
     public void Clear()
     {
@@ -265,10 +277,19 @@ public class GizmoBuilder
         _solid?.Clear();
 
         _icons.Clear();
+
+        _matrix4X4s.Clear();
     }
 
     private void AddLine(Vector3 a, Vector3 b, Color color)
     {
+        if (_matrix4X4s.Count > 0)
+        {
+            var m = _matrix4X4s.Peek();
+            a = Vector3.Transform(a, m);
+            b = Vector3.Transform(b, m);
+        }
+
         int index = _wireData.s_vertices.Count;
         _wireData.s_vertices.Add(a);
         _wireData.s_vertices.Add(b);
@@ -282,6 +303,14 @@ public class GizmoBuilder
 
     private void AddTriangle(Vector3 a, Vector3 b, Vector3 c, Vector2 a_uv, Vector2 b_uv, Vector2 c_uv, Color color)
     {
+        if (_matrix4X4s.Count > 0)
+        {
+            var m = _matrix4X4s.Peek();
+            a = Vector3.Transform(a, m);
+            b = Vector3.Transform(b, m);
+            c = Vector3.Transform(c, m);
+        }
+
         int index = _solidData.s_vertices.Count;
 
         _solidData.s_vertices.Add(a);
@@ -299,6 +328,16 @@ public class GizmoBuilder
         _solidData.s_indices.Add(index);
         _solidData.s_indices.Add(index + 1);
         _solidData.s_indices.Add(index + 2);
+    }
+
+    public void PushMatrix(Matrix4x4 matrix)
+    {
+        _matrix4X4s.Push(matrix);
+    }
+
+    public void PopMatrix()
+    {
+        _matrix4X4s.Pop();
     }
 
     public void DrawLine(Vector3 start, Vector3 end, Color color) => AddLine(start, end, color);
