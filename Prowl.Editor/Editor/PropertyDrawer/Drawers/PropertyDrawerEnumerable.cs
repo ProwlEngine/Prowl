@@ -69,17 +69,25 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
 
             gui.TextNode("H_Text", RuntimeUtils.Prettify(label)).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).IgnoreLayout();
 
-            bool enumexpanded = gui.GetNodeStorage("enumexpanded", false);
-            using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
+            bool enumexpanded = true;
+            if (drawer.CanCollapse)
             {
-                if (gui.IsNodePressed())
+                enumexpanded = gui.GetNodeStorage("enumexpanded", false);
+                using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                 {
-                    enumexpanded = !enumexpanded;
-                    gui.SetNodeStorage(gui.CurrentNode.Parent, "enumexpanded", enumexpanded);
+                    if (gui.IsNodePressed())
+                    {
+                        enumexpanded = !enumexpanded;
+                        gui.SetNodeStorage(gui.CurrentNode.Parent, "enumexpanded", enumexpanded);
+                    }
+                    gui.Draw2D.DrawText(enumexpanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.InnerRect, gui.IsNodeHovered() ? EditorStylePrefs.Instance.LesserText : Color.white);
                 }
-                gui.Draw2D.DrawText(enumexpanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.InnerRect, gui.IsNodeHovered() ? EditorStylePrefs.Instance.LesserText : Color.white);
             }
-
+            else
+            {
+                // For padding
+                gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize);
+            }
 
             float scaleAnimContent = gui.AnimateBool(enumexpanded, 0.15f, EaseType.Linear);
             if (enumexpanded || scaleAnimContent > 0)

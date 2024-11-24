@@ -146,8 +146,9 @@ public class RangeAttribute(double min, double max) : Attribute
 /// A Numerical Value Clamping Attribute.
 /// </summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
-public class ListDrawerAttribute(bool allowReorder = true, bool allowResize = true) : Attribute
+public class ListDrawerAttribute(bool allowReorder = true, bool allowResize = true, bool canCollapse = true) : Attribute
 {
     public bool AllowReorder = allowReorder;
     public bool AllowResize = allowResize;
+    public bool CanCollapse = canCollapse;
 }
