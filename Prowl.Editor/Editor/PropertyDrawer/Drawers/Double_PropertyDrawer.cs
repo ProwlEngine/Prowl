@@ -12,8 +12,18 @@ public class Double_PropertyDrawer : PropertyDrawer
     public override double MinWidth => EditorStylePrefs.Instance.ItemSize * 2;
     public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value, List<Attribute>? attributes = null)
     {
-        double val = (double)value;
-        bool changed = gui.InputDouble(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+        Prowl.Runtime.RangeAttribute? range = attributes?.OfType<Prowl.Runtime.RangeAttribute>().FirstOrDefault();
+
+        double val = (double)value!;
+        bool changed;
+        if (range == null)
+        {
+            changed = gui.InputDouble(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+        }
+        else
+        {
+            changed = gui.DoubleSlider(ID + "Val", ref val, (int)range.Min, (int)range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+        }
         value = val;
         return changed;
     }

@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.ComponentModel.DataAnnotations;
+
 using Prowl.Editor.Preferences;
 using Prowl.Runtime.GUI;
 
@@ -12,8 +14,18 @@ public class Integar_PropertyDrawer<T> : PropertyDrawer
 
     public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value, List<Attribute>? attributes = null)
     {
+        Prowl.Runtime.RangeAttribute? range = attributes?.OfType<Prowl.Runtime.RangeAttribute>().FirstOrDefault();
+
+        bool changed;
         long val = Convert.ToInt64(value);
-        bool changed = gui.InputLong(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+        if (range == null)
+        {
+            changed = gui.InputLong(ID + "Val", ref val, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+        }
+        else
+        {
+            changed = gui.LongSlider(ID + "Val", ref val, (int)range.Min, (int)range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+        }
         if (changed)
             value = (T)Convert.ChangeType(val, typeof(T));
         return changed;

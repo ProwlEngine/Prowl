@@ -124,3 +124,19 @@ public class HideInInspectorAttribute : Attribute { }
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
 public class ShowInInspectorAttribute : Attribute { }
+
+/// <summary>
+/// A Numerical Value Clamping Attribute.
+/// </summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
+public class RangeAttribute(double min, double max) : Attribute
+{
+    /// <summary>
+    /// The minimum value of the field.
+    /// </summary>
+    public double Min = min;
+    /// <summary>
+    /// The maximum value of the field.
+    /// </summary>
+    public double Max = max;
+}
