@@ -898,7 +898,12 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <param name="original">The original GameObject to clone.</param>
     /// <returns>A new instance of the GameObject.</returns>
-    public static GameObject Instantiate(GameObject original) => Internal_Instantiate(original);
+    public static GameObject Instantiate(GameObject original)
+    {
+        var clone = Internal_Instantiate(original);
+        SceneManager.Scene.Add(clone);
+        return clone;
+    }
 
     /// <inheritdoc cref="Instantiate(GameObject)"/>
     public static GameObject Instantiate(AssetRef<Prefab> original)
