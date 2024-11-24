@@ -383,7 +383,7 @@ public partial class Gui
     }
 
 
-    public bool DoubleSlider(string id, ref double value, double min, double max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    private bool Internal_DoubleSlider(string id, ref double value, double min, double max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
     {
         WidgetStyle style = inputstyle ?? new(30);
 
@@ -395,6 +395,8 @@ public partial class Gui
 
             using (Node("SliderRect").Left(knobRadius).Top(Offset.Percentage(0.5, -2.5)).Height(5).Width(Size.Percentage(1, -knobRadius * 2)).Enter())
             {
+                if (CurrentNode.HasLayoutData) return false; // Without layout data sliderRect.width is 0 and the following code will throw an error
+
                 Rect sliderRect = CurrentNode.LayoutData.Rect;
 
                 Draw2D.DrawRectFilled(sliderRect, style.BorderColor, style.Roundness);
@@ -428,6 +430,19 @@ public partial class Gui
         return hasChanged;
     }
 
+    public bool DoubleSlider(string id, ref double value, double min, double max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    {
+        WidgetStyle style = inputstyle ?? new(30);
+        bool changed = false;
+
+        using (Node(id).TopLeft(x, y).Scale(width, height).Enter())
+        {
+            changed |= Internal_DoubleSlider("SliderField", ref value, min, max, 0, 0, Size.Percentage(1, -40), Size.Percentage(1), style);
+            changed |= InputDouble("NumberField", ref value, Offset.Percentage(1, -40), Offset.Percentage(0.5, -style.ItemSize * 0.5), 40, style.ItemSize, style);
+        }
+
+        return changed;
+    }
 
     public bool DoubleSlider(string id, string prefix, ref double value, double min, double max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
     {
@@ -441,8 +456,88 @@ public partial class Gui
                 Draw2D.DrawText(style.Font.Res, prefix, style.FontSize, CurrentNode.LayoutData.Rect, style.TextColor);
             }
 
-            changed |= DoubleSlider("SliderField", ref value, 0, 1, 20, 0, Size.Percentage(1, -60), Size.Percentage(1), style);
+            changed |= Internal_DoubleSlider("SliderField", ref value, min, max, 20, 0, Size.Percentage(1, -60), Size.Percentage(1), style);
             changed |= InputDouble("NumberField", ref value, Offset.Percentage(1, -40), Offset.Percentage(0.5, -style.ItemSize * 0.5), 40, style.ItemSize, style);
+        }
+
+        return changed;
+    }
+
+    private bool Internal_LongSlider(string id, ref long value, long min, long max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    {
+        WidgetStyle style = inputstyle ?? new(30);
+
+        bool hasChanged = false;
+
+        using (Node(id).Left(x).Top(y).Width(width).Height(height).Enter())
+        {
+            const float knobRadius = 6f;
+
+            using (Node("SliderRect").Left(knobRadius).Top(Offset.Percentage(0.5, -2.5)).Height(5).Width(Size.Percentage(1, -knobRadius * 2)).Enter())
+            {
+                if (CurrentNode.HasLayoutData) return false; // Without layout data sliderRect.width is 0 and the following code will throw an error
+
+                Rect sliderRect = CurrentNode.LayoutData.Rect;
+
+                Draw2D.DrawRectFilled(sliderRect, style.BorderColor, style.Roundness);
+
+                double relativeX = Math.Clamp(PointerPos.x - sliderRect.x, 0, sliderRect.width) / sliderRect.width;
+
+                Rect interactRect = sliderRect;
+                interactRect.Expand(knobRadius);
+
+                if (GetInteractable(interactRect).IsActive())
+                {
+                    long newValue = (long)MathD.Round(MathD.Lerp(min, max, relativeX));
+
+                    if (newValue != value)
+                    {
+                        value = newValue;
+                        hasChanged = true;
+                    }
+                }
+
+                if (value <= max && value >= min)
+                {
+                    using (Node("SliderKnob").Left((MathD.InverseLerp(min, max, value) * sliderRect.width) - knobRadius).Top(Offset.Percentage(0.5, -knobRadius)).Scale(knobRadius * 2).Enter())
+                    {
+                        Draw2D.DrawCircleFilled(CurrentNode.LayoutData.Rect.Center, knobRadius, style.TextColor);
+                    }
+                }
+            }
+        }
+
+        return hasChanged;
+    }
+
+    public bool LongSlider(string id, ref long value, long min, long max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    {
+        WidgetStyle style = inputstyle ?? new(30);
+        bool changed = false;
+
+        using (Node(id).TopLeft(x, y).Scale(width, height).Enter())
+        {
+            changed |= Internal_LongSlider("SliderField", ref value, min, max, 0, 0, Size.Percentage(1, -40), Size.Percentage(1), style);
+            changed |= InputLong("NumberField", ref value, Offset.Percentage(1, -40), Offset.Percentage(0.5, -style.ItemSize * 0.5), 40, style.ItemSize, style);
+        }
+
+        return changed;
+    }
+
+    public bool LongSlider(string id, string prefix, ref long value, long min, long max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    {
+        WidgetStyle style = inputstyle ?? new(30);
+        bool changed = false;
+
+        using (Node(id).TopLeft(x, y).Scale(width, height).Enter())
+        {
+            using (Node("SliderPrefix").Width(20).ExpandHeight().Enter())
+            {
+                Draw2D.DrawText(style.Font.Res, prefix, style.FontSize, CurrentNode.LayoutData.Rect, style.TextColor);
+            }
+
+            changed |= Internal_LongSlider("SliderField", ref value, min, max, 20, 0, Size.Percentage(1, -60), Size.Percentage(1), style);
+            changed |= InputLong("NumberField", ref value, Offset.Percentage(1, -40), Offset.Percentage(0.5, -style.ItemSize * 0.5), 40, style.ItemSize, style);
         }
 
         return changed;
@@ -466,24 +561,21 @@ public partial class Gui
         return changed;
     }
 
-
     public bool IntSlider(string id, ref int value, int min, int max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
     {
-        double dbValue = value;
-        bool changed = DoubleSlider(id, ref dbValue, min, max, x, y, width, height, inputstyle);
+        long dbValue = value;
+        bool changed = LongSlider(id, ref dbValue, min, max, x, y, width, height, inputstyle);
         value = (int)dbValue;
         return changed;
     }
 
-
-    public bool IntSlider(string id, string prefix, ref int value, int min, int max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
+    public bool IntSlider(string id, string prefix, ref long value, long min, long max, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null)
     {
-        double dbValue = value;
-        bool changed = DoubleSlider(id, prefix, ref dbValue, min, max, x, y, width, height, inputstyle);
+        long dbValue = value;
+        bool changed = LongSlider(id, prefix, ref dbValue, min, max, x, y, width, height, inputstyle);
         value = (int)dbValue;
         return changed;
     }
-
 
     public bool InputDouble(string ID, ref double value, Offset x, Offset y, Size width, Size height, WidgetStyle? style = null)
     {
