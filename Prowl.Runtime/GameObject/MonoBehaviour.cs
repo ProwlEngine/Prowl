@@ -618,7 +618,8 @@ public abstract class MonoBehaviour : EngineObject
             System.Diagnostics.Debugger.Break();
 
         MonoBehaviour target = targetObj as MonoBehaviour;
-        target._identifier = _identifier;
+        if (!operation.Context.PreserveIdentity)
+            target._identifier = _identifier;
         target._enabled = _enabled;
         target._enabledInHierarchy = _enabledInHierarchy;
         this.OnCopyDataTo(targetObj, operation);
