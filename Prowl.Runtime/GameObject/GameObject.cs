@@ -1107,8 +1107,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         _static = value["Static"]?.ByteValue == 1;
         _enabled = value["Enabled"]?.ByteValue == 1;
         _enabledInHierarchy = value["EnabledInHierarchy"]?.ByteValue == 1;
-        tagIndex = value["TagIndex"]?.ByteValue ?? 0;
-        layerIndex = value["LayerIndex"]?.ByteValue ?? 0;
+        tagIndex = value["TagIndex"]?.IntValue ?? 0;
+        layerIndex = value["LayerIndex"]?.IntValue ?? 0;
         hideFlags = (HideFlags)value["HideFlags"]?.IntValue!;
 
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
