@@ -26,8 +26,9 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
 
     public override bool PropertyLayout(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, List<Attribute>? attributes = null)
     {
-        bool changed = false;
+        Prowl.Runtime.ListDrawerAttribute? drawer = attributes?.OfType<Prowl.Runtime.ListDrawerAttribute>().FirstOrDefault();
 
+        bool changed = false;
 
         if (propertyValue == null)
         {
@@ -83,7 +84,7 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
             float scaleAnimContent = gui.AnimateBool(enumexpanded, 0.15f, EaseType.Linear);
             if (enumexpanded || scaleAnimContent > 0)
             {
-                using (gui.Node("_EnumDrawer").ExpandWidth().FitContentHeight(scaleAnimContent).Layout(LayoutType.Column).Spacing(5).Padding(10).Clip().Enter())
+                using (gui.Node("_EnumDrawer").ExpandWidth().FitContentHeight(scaleAnimContent).Layout(LayoutType.Column).Spacing(2).Padding(10).Clip().Enter())
                 {
 
                     bool isPrimitive = ElementType(list).IsPrimitive || ElementType(list) == typeof(string);
@@ -91,7 +92,7 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
                     for (int i = 0; i < GetCount(list); i++)
                     {
                         var element = GetElement(list, i);
-                        using (gui.Node("_EnumElement", i).ExpandWidth().FitContentHeight().Padding(5).Enter())
+                        using (gui.Node("_EnumElement", i).ExpandWidth().FitContentHeight().Enter())
                         {
                             if (gui.IsPointerPressed() && gui.IsPointerHovering())
                             {
@@ -118,93 +119,102 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
                         }
                     }
 
-                    using (gui.Node("_Footer").ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.RowReversed).Enter())
+                    if (drawer.AllowResize || drawer.AllowReorder)
                     {
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
-
-                        using (gui.Node("AddBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
+                        using (gui.Node("_Footer").ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.RowReversed).Enter())
                         {
-                            if (gui.IsNodePressed())
-                            {
-                                AddElement(ref list);
-                                changed = true;
-                            }
-                            else if (gui.IsNodeHovered())
-                            {
-                                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
-                            }
-                            gui.Draw2D.DrawText(FontAwesome6.Plus, gui.CurrentNode.LayoutData.Rect);
-                        }
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
 
-                        using (gui.Node("RemoveBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
-                        {
-                            if (drawerID == selectedDrawer && selectedElement >= 0)
+                            if (drawer.AllowResize)
                             {
-                                if (gui.IsNodePressed())
+                                using (gui.Node("AddBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                                 {
-                                    RemoveElement(ref list, selectedElement);
-                                    changed = true;
+                                    if (gui.IsNodePressed())
+                                    {
+                                        AddElement(ref list);
+                                        changed = true;
+                                    }
+                                    else if (gui.IsNodeHovered())
+                                    {
+                                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
+                                    }
+                                    gui.Draw2D.DrawText(FontAwesome6.Plus, gui.CurrentNode.LayoutData.Rect);
                                 }
-                                else if (gui.IsNodeHovered())
-                                {
-                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
-                                }
-                                gui.Draw2D.DrawText(FontAwesome6.Minus, gui.CurrentNode.LayoutData.Rect);
-                            }
-                            else
-                            {
-                                gui.Draw2D.DrawText(FontAwesome6.Minus, gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText);
-                            }
-                        }
 
-                        using (gui.Node("MoveDownBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
-                        {
-                            if (drawerID == selectedDrawer && selectedElement >= 0 && selectedElement < GetCount(list) - 1)
-                            {
-                                if (gui.IsNodePressed())
+                                using (gui.Node("RemoveBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                                 {
-                                    var element = GetElement(list, selectedElement);
-                                    var movedelement = GetElement(list, selectedElement + 1);
-                                    SetElement(list, selectedElement, movedelement);
-                                    SetElement(list, selectedElement + 1, element);
-                                    selectedElement++;
-                                    changed = true;
+                                    if (drawerID == selectedDrawer && selectedElement >= 0)
+                                    {
+                                        if (gui.IsNodePressed())
+                                        {
+                                            RemoveElement(ref list, selectedElement);
+                                            changed = true;
+                                        }
+                                        else if (gui.IsNodeHovered())
+                                        {
+                                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
+                                        }
+                                        gui.Draw2D.DrawText(FontAwesome6.Minus, gui.CurrentNode.LayoutData.Rect);
+                                    }
+                                    else
+                                    {
+                                        gui.Draw2D.DrawText(FontAwesome6.Minus, gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText);
+                                    }
                                 }
-                                else if (gui.IsNodeHovered())
-                                {
-                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
-                                }
-                                gui.Draw2D.DrawText(FontAwesome6.ArrowDown, gui.CurrentNode.LayoutData.Rect);
                             }
-                            else
-                            {
-                                gui.Draw2D.DrawText(FontAwesome6.ArrowDown, gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText);
-                            }
-                        }
 
-                        using (gui.Node("MoveUpBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
-                        {
-                            if (drawerID == selectedDrawer && selectedElement > 0)
+                            if (drawer.AllowReorder)
                             {
-                                if (gui.IsNodePressed())
+                                using (gui.Node("MoveDownBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                                 {
-                                    var element = GetElement(list, selectedElement);
-                                    var movedelement = GetElement(list, selectedElement - 1);
-                                    SetElement(list, selectedElement, movedelement);
-                                    SetElement(list, selectedElement - 1, element);
+                                    if (drawerID == selectedDrawer && selectedElement >= 0 && selectedElement < GetCount(list) - 1)
+                                    {
+                                        if (gui.IsNodePressed())
+                                        {
+                                            var element = GetElement(list, selectedElement);
+                                            var movedelement = GetElement(list, selectedElement + 1);
+                                            SetElement(list, selectedElement, movedelement);
+                                            SetElement(list, selectedElement + 1, element);
+                                            selectedElement++;
+                                            changed = true;
+                                        }
+                                        else if (gui.IsNodeHovered())
+                                        {
+                                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
+                                        }
+                                        gui.Draw2D.DrawText(FontAwesome6.ArrowDown, gui.CurrentNode.LayoutData.Rect);
+                                    }
+                                    else
+                                    {
+                                        gui.Draw2D.DrawText(FontAwesome6.ArrowDown, gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText);
+                                    }
+                                }
 
-                                    selectedElement--;
-                                    changed = true;
-                                }
-                                else if (gui.IsNodeHovered())
+                                using (gui.Node("MoveUpBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                                 {
-                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
+                                    if (drawerID == selectedDrawer && selectedElement > 0)
+                                    {
+                                        if (gui.IsNodePressed())
+                                        {
+                                            var element = GetElement(list, selectedElement);
+                                            var movedelement = GetElement(list, selectedElement - 1);
+                                            SetElement(list, selectedElement, movedelement);
+                                            SetElement(list, selectedElement - 1, element);
+
+                                            selectedElement--;
+                                            changed = true;
+                                        }
+                                        else if (gui.IsNodeHovered())
+                                        {
+                                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
+                                        }
+                                        gui.Draw2D.DrawText(FontAwesome6.ArrowUp, gui.CurrentNode.LayoutData.Rect);
+                                    }
+                                    else
+                                    {
+                                        gui.Draw2D.DrawText(FontAwesome6.ArrowUp, gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText);
+                                    }
                                 }
-                                gui.Draw2D.DrawText(FontAwesome6.ArrowUp, gui.CurrentNode.LayoutData.Rect);
-                            }
-                            else
-                            {
-                                gui.Draw2D.DrawText(FontAwesome6.ArrowUp, gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText);
                             }
                         }
                     }

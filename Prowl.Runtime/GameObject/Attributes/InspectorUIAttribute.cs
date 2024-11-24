@@ -135,8 +135,19 @@ public class RangeAttribute(double min, double max) : Attribute
     /// The minimum value of the field.
     /// </summary>
     public double Min = min;
+
     /// <summary>
     /// The maximum value of the field.
     /// </summary>
     public double Max = max;
+}
+
+/// <summary>
+/// A Numerical Value Clamping Attribute.
+/// </summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
+public class ListDrawerAttribute(bool allowReorder = true, bool allowResize = true) : Attribute
+{
+    public bool AllowReorder = allowReorder;
+    public bool AllowResize = allowResize;
 }
