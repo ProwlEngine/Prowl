@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Editor.Preferences;
+using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Cloning;
@@ -386,28 +387,29 @@ public class SceneViewWindow : EditorWindow
         {
             foreach (GameObject selectedGo in selectedGOs)
             {
-                if (result.Value.TranslationDelta.HasValue)
-                    selectedGo.Transform.position += result.Value.TranslationDelta.Value;
-
-                if (result.Value.RotationDelta.HasValue && result.Value.RotationAxis.HasValue)
-                {
-                    Vector3 centerToSelected = selectedGo.Transform.position - centerOfAll;
-                    Vector3 rotated =
-                        Quaternion.AngleAxis(result.Value.RotationDelta.Value, result.Value.RotationAxis.Value) *
-                        centerToSelected;
-                    selectedGo.Transform.position = centerOfAll + rotated;
-                    Quaternion rotationDelta = Quaternion.AngleAxis(result.Value.RotationDelta.Value,
-                        result.Value.RotationAxis.Value);
-
-                    selectedGo.Transform.rotation = rotationDelta * selectedGo.Transform.rotation;
-                }
-
-                if (result.Value.ScaleDelta.HasValue)
-                    selectedGo.Transform.localScale *= result.Value.ScaleDelta.Value;
-
                 if (result.Value.TranslationDelta.HasValue || result.Value.RotationDelta.HasValue ||
                     result.Value.ScaleDelta.HasValue)
                 {
+                    var newPos = selectedGo.Transform.position + (result.Value.TranslationDelta ?? Vector3.zero);
+
+                    Quaternion newRot = selectedGo.Transform.rotation;
+                    if (result.Value.RotationDelta.HasValue && result.Value.RotationAxis.HasValue)
+                    {
+                        Vector3 centerToSelected = selectedGo.Transform.position - centerOfAll;
+                        Vector3 rotated =
+                            Quaternion.AngleAxis(result.Value.RotationDelta.Value, result.Value.RotationAxis.Value) *
+                            centerToSelected;
+                        selectedGo.Transform.position = centerOfAll + rotated;
+                        Quaternion rotationDelta = Quaternion.AngleAxis(result.Value.RotationDelta.Value,
+                            result.Value.RotationAxis.Value);
+
+                        newRot = rotationDelta * selectedGo.Transform.rotation;
+                    }
+
+                    Vector3 newScale = selectedGo.Transform.localScale * (result.Value.ScaleDelta ?? Vector3.one);
+
+                    UndoRedoManager.RecordAction(new ChangeTransformAction(selectedGo, newPos, newRot, newScale));
+
                     Prefab.OnFieldChange(selectedGo, "_transform");
                 }
             }

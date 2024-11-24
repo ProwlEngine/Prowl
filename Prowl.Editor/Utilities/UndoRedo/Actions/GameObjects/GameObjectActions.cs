@@ -221,9 +221,9 @@ public class ChangeTransformAction : AbstractAction
 {
     private readonly Guid _target;
 
-    private readonly Vector3 _position;
-    private readonly Quaternion _rotation;
-    private readonly Vector3 _scale;
+    private Vector3 _position;
+    private Quaternion _rotation;
+    private Vector3 _scale;
 
     private Vector3 _oldPosition;
     private Quaternion _oldRotation;
@@ -265,6 +265,28 @@ public class ChangeTransformAction : AbstractAction
         transform.localPosition = _oldPosition;
         transform.localRotation = _oldRotation;
         transform.localScale = _oldScale;
+    }
+
+    public override bool TryMerge(IAction action)
+    {
+        if (action is ChangeTransformAction next && next._target == _target)
+        {
+            _position = next._position;
+            _rotation = next._rotation;
+            _scale = next._scale;
+
+            GameObject? go = EngineObject.FindObjectByIdentifier<GameObject>(_target);
+            if (go == null)
+                throw new InvalidOperationException("Could not find gameobject with identifier: " + _target);
+
+            var transform = go.Transform;
+
+            transform.localPosition = _position;
+            transform.localRotation = _rotation;
+            transform.localScale = _scale;
+            return true;
+        }
+        return false;
     }
 }
 
