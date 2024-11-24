@@ -115,7 +115,7 @@ public class ChangeFieldOnComponentAction : AbstractAction
 {
     private readonly Guid _target;
     private readonly MemberInfo _field;
-    private readonly object _newValue;
+    private object _newValue;
     private object? _oldValue;
 
     public ChangeFieldOnComponentAction(MonoBehaviour target, MemberInfo field, object newValue)
@@ -159,5 +159,26 @@ public class ChangeFieldOnComponentAction : AbstractAction
             property.SetValue(comp, _oldValue);
 
         comp.OnValidate();
+    }
+
+    public override bool TryMerge(IAction followingAction)
+    {
+        ChangeFieldOnComponentAction next = followingAction as ChangeFieldOnComponentAction;
+        if (next != null && next._target == this._target && next._field == this._field)
+        {
+            _newValue = next._newValue;
+
+            MonoBehaviour? comp = EngineObject.FindObjectByIdentifier<MonoBehaviour>(_target);
+            if (comp == null)
+                throw new InvalidOperationException("Could not find component with identifier: " + _target);
+
+            if (_field is FieldInfo field)
+                field.SetValue(comp, _newValue);
+            else if (_field is PropertyInfo property)
+                property.SetValue(comp, _newValue);
+
+            return true;
+        }
+        return false;
     }
 }
