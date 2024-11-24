@@ -22,7 +22,7 @@ public class Double_PropertyDrawer : PropertyDrawer
         }
         else
         {
-            changed = gui.DoubleSlider(ID + "Val", ref val, (int)range.Min, (int)range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            changed = gui.DoubleSlider(ID + "Val", ref val, range.Min, range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
         }
         value = val;
         return changed;

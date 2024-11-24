@@ -23,7 +23,7 @@ public class Float_PropertyDrawer : PropertyDrawer
         }
         else
         {
-            changed = gui.FloatSlider(ID + "Val", ref val, (int)range.Min, (int)range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
+            changed = gui.FloatSlider(ID + "Val", ref val, (float)range.Min, (float)range.Max, 0, 0, Size.Percentage(1f), Size.Percentage(1f), EditorGUI.InputFieldStyle);
         }
         value = val;
         return changed;
