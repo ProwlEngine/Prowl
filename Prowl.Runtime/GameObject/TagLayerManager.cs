@@ -21,6 +21,7 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     /// <summary>
     /// List of available tags for GameObjects.
     /// </summary>
+    [ListDrawer(false, true, false)]
     public List<string> tags =
     [
         "Untagged",
@@ -35,7 +36,7 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     /// <summary>
     /// Array of available layers for GameObjects.
     /// </summary>
-    [ListDrawer(false, false)]
+    [ListDrawer(false, false, false)]
     public string[] layers =
     [
         "Default",
