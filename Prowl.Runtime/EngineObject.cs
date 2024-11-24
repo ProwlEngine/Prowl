@@ -94,16 +94,6 @@ public abstract class EngineObject : ICloneExplicit
         return null;
     }
 
-    public static EngineObject Instantiate(EngineObject obj, bool keepAssetID = false)
-    {
-        if (obj.IsDestroyed) throw new Exception(obj.Name + " has been destroyed.");
-        // Don't need to assign ID the constructor will do that automatically
-        EngineObject newObj = obj.Clone();
-        // Need to make sure to set GUID to empty so the engine knows this isn't the original Asset file
-        if (!keepAssetID) newObj.AssetID = Guid.Empty;
-        return newObj;
-    }
-
     /// <summary>
     /// Creates a deep copy of this EngineObject.
     /// </summary>

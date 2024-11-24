@@ -885,12 +885,20 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         return false;
     }
 
+    private static GameObject Internal_Instantiate(GameObject obj)
+    {
+        if (obj.IsDestroyed) throw new Exception(obj.Name + " has been destroyed.");
+        GameObject newObj = obj.Clone();
+        newObj.AssetID = Guid.Empty;
+        return newObj;
+    }
+
     /// <summary>
     /// Instantiates a new GameObject from the original and adds it to the scene.
     /// </summary>
     /// <param name="original">The original GameObject to clone.</param>
     /// <returns>A new instance of the GameObject.</returns>
-    public static GameObject Instantiate(GameObject original) => Instantiate(original, null);
+    public static GameObject Instantiate(GameObject original) => Internal_Instantiate(original);
 
     /// <inheritdoc cref="Instantiate(GameObject)"/>
     public static GameObject Instantiate(AssetRef<Prefab> original)
@@ -909,7 +917,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <returns>A new instance of the GameObject.</returns>
     public static GameObject Instantiate(GameObject original, GameObject? parent)
     {
-        GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
+        GameObject clone = Internal_Instantiate(original);
         clone.SetParent(parent);
         return clone;
     }
@@ -934,7 +942,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <returns>A new instance of the GameObject.</returns>
     public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent)
     {
-        GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
+        GameObject clone = Internal_Instantiate(original);
         clone.Transform.position = position;
         clone.Transform.rotation = rotation;
         clone.SetParent(parent, true);
