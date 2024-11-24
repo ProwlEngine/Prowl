@@ -395,9 +395,8 @@ public partial class Gui
 
             using (Node("SliderRect").Left(knobRadius).Top(Offset.Percentage(0.5, -2.5)).Height(5).Width(Size.Percentage(1, -knobRadius * 2)).Enter())
             {
-                if (!CurrentNode.HasLayoutData) return false; // Without layout data sliderRect.width is 0 and the following code will throw an error
-
                 Rect sliderRect = CurrentNode.LayoutData.Rect;
+                if (!CurrentNode.HasLayoutData || sliderRect.width <= 0) return false; // Without layout data sliderRect.width is 0 and the following code will throw an error
 
                 Draw2D.DrawRectFilled(sliderRect, style.BorderColor, style.Roundness);
 
@@ -475,9 +474,9 @@ public partial class Gui
 
             using (Node("SliderRect").Left(knobRadius).Top(Offset.Percentage(0.5, -2.5)).Height(5).Width(Size.Percentage(1, -knobRadius * 2)).Enter())
             {
-                if (!CurrentNode.HasLayoutData) return false; // Without layout data sliderRect.width is 0 and the following code will throw an error
-
                 Rect sliderRect = CurrentNode.LayoutData.Rect;
+                if (!CurrentNode.HasLayoutData || sliderRect.width <= 0) return false; // Without layout data sliderRect.width is 0 and the following code will throw an error
+
 
                 Draw2D.DrawRectFilled(sliderRect, style.BorderColor, style.Roundness);
 
