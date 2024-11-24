@@ -886,14 +886,23 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     }
 
     /// <summary>
-    /// Instantiates a new GameObject from the original.
+    /// Instantiates a new GameObject from the original and adds it to the scene.
     /// </summary>
     /// <param name="original">The original GameObject to clone.</param>
     /// <returns>A new instance of the GameObject.</returns>
     public static GameObject Instantiate(GameObject original) => Instantiate(original, null);
 
+    /// <inheritdoc cref="Instantiate(GameObject)"/>
+    public static GameObject Instantiate(AssetRef<Prefab> original)
+    {
+        if (!original.IsAvailable) return null;
+        GameObject clone = original.Res.Instantiate();
+        SceneManager.Scene.Add(clone);
+        return clone;
+    }
+
     /// <summary>
-    /// Instantiates a new GameObject from the original with the specified parent.
+    /// Instantiates a new GameObject from the original with the specified parent and adds it to the scene.
     /// </summary>
     /// <param name="original">The original GameObject to clone.</param>
     /// <param name="parent">The parent GameObject for the new instance.</param>
@@ -902,22 +911,21 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     {
         GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
         clone.SetParent(parent);
+        return clone;
+    }
+
+    /// <inheritdoc cref="Instantiate(GameObject)"/>
+    public static GameObject Instantiate(AssetRef<Prefab> original, GameObject? parent)
+    {
+        if (!original.IsAvailable) return null;
+        GameObject clone = original.Res.Instantiate();
+        clone.SetParent(parent);
         SceneManager.Scene.Add(clone);
         return clone;
     }
 
     /// <summary>
-    /// Instantiates a new GameObject from the original with the specified parent, position, and rotation.
-    /// </summary>
-    /// <param name="original">The original GameObject to clone.</param>
-    /// <param name="parent">The parent GameObject for the new instance.</param>
-    /// <param name="position">The position for the new instance.</param>
-    /// <param name="rotation">The rotation for the new instance.</param>
-    /// <returns>A new instance of the GameObject.</returns>
-    public static GameObject Instantiate(GameObject original, GameObject? parent, Vector3 position, Quaternion rotation) => Instantiate(original, position, rotation, parent);
-
-    /// <summary>
-    /// Instantiates a new GameObject from the original with the specified position, rotation, and parent.
+    /// Instantiates a new GameObject from the original with the specified position, rotation, parent, and adds it to the scene.
     /// </summary>
     /// <param name="original">The original GameObject to clone.</param>
     /// <param name="position">The position for the new instance.</param>
@@ -930,7 +938,17 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         clone.Transform.position = position;
         clone.Transform.rotation = rotation;
         clone.SetParent(parent, true);
-        SceneManager.Scene.Add(clone);
+        return clone;
+    }
+
+    /// <inheritdoc cref="Instantiate(GameObject)"/>
+    public static GameObject Instantiate(AssetRef<Prefab> original, GameObject? parent, Vector3 position, Quaternion rotation)
+    {
+        if (!original.IsAvailable) return null;
+        GameObject clone = original.Res.Instantiate();
+        clone.Transform.position = position;
+        clone.Transform.rotation = rotation;
+        clone.SetParent(parent, true);
         return clone;
     }
 
