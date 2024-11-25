@@ -64,7 +64,7 @@
     <PackageReference Include="BepuPhysics" Version="2.5.0-beta.23" />
     <PackageReference Include="Jitter2.Double" Version="2.4.8-alpha" />
     <PackageReference Include="Prowl.Echo" Version="1.0.1" />
-    <PackageReference Include="Silk.NET.OpenAL" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.OpenAL" Version="2.22.0" />
     <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
     <PackageReference Include="SoftCircuits.OrderedDictionary" Version="3.2.0" />
     <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
