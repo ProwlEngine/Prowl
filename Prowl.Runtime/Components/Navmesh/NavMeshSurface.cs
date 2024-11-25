@@ -437,7 +437,7 @@ public class NavMeshSurface : MonoBehaviour
             else if (collider is CapsuleCollider capsule)
             {
 #warning TODO: We need to implement a capsule mesh generator - cylinder sorta works for now
-                mesh = Mesh.CreateCylinder(capsule.radius, capsule.LateUpdate, 8);
+                mesh = Mesh.CreateCylinder(capsule.radius, capsule.height, 8);
             }
             //else if (collider is TriangleCollider triangle)
             //{
