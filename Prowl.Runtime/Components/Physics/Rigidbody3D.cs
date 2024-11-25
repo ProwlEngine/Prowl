@@ -159,7 +159,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         Transform.rotation = new Quaternion(_body.Orientation.X, _body.Orientation.Y, _body.Orientation.Z, _body.Orientation.W);
     }
 
-    public override void DrawGizmos()
+    public override void DrawGizmosSelected()
     {
         if (_body == null || _body.Handle.IsZero || !Application.IsEditor) return;
 
