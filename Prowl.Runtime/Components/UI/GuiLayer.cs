@@ -10,7 +10,7 @@ using Prowl.Runtime.SceneManagement;
 
 using Veldrid;
 
-namespace Prowl.Runtime.Components.UI;
+namespace Prowl.Runtime;
 
 [RequireComponent(typeof(Camera))]
 [AddComponentMenu($"{FontAwesome6.MoneyCheck}  GUI/{FontAwesome6.WindowMaximize}  GUI Layer")]

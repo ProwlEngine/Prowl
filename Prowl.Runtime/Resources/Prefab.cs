@@ -8,7 +8,7 @@ using System.Reflection;
 
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utilities;
+using Prowl.Runtime.Utils;
 using Prowl.Echo;
 
 namespace Prowl.Runtime;

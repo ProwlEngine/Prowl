@@ -9,7 +9,7 @@ using System.Runtime.InteropServices.Marshalling;
 
 using Prowl.Runtime.Cloning;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utilities;
+using Prowl.Runtime.Utils;
 
 using SoftCircuits.Collections;
 using Prowl.Echo;
