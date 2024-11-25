@@ -48,8 +48,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void OnValidate()
     {
-        if (Application.IsPlaying) return;
-        if (_body == null)
+        if (_body == null || _body.Handle.IsZero)
             _body = Physics.World.CreateRigidBody();
 
         UpdateProperties(_body);
