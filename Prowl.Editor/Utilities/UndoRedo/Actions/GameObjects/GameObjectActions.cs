@@ -66,10 +66,10 @@ public class CloneGameObjectAction : AbstractAction
         if (go == null)
             throw new InvalidOperationException("Could not find GameObject with identifier: " + GameObject);
 
-        _gameObject = go.DeepClone(new(false));
+        _gameObject = go.DeepClone();
         _parent = go.parent?.Identifier ?? Guid.Empty;
 
-        var clone = _gameObject.DeepClone();
+        var clone = _gameObject.DeepClone(new(false));
         _clone = clone.Identifier;
         GameObject? parent = EngineObject.FindObjectByIdentifier<GameObject>(_parent);
         if (parent != null)
