@@ -53,7 +53,7 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Immediate Mode with retained properties
     - .NET 8
     - Editor with support for Editor Scripts and Custom Editors
-    - Physing using [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
+    - Physics using [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
         - Colliders: Box, Sphere, Capsule, Cylinder, Cone, Convex Mesh
         - Collision Layers
     - Unity-like Coroutines
