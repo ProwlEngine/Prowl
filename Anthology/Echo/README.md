@@ -123,8 +123,17 @@ public class MyClass
 ```
 
 ## Limitations
-  - Does not serialize Properties
+  - Properties are not serialized (only fields)
   - No benchmarks exist but performance is expected to be lacking
+
+## Performance
+
+Echo prioritizes simplicity over raw performance.
+If your looking for an ultra-fast serializer you may want to consider alternatives.
+However, If you're using Echo and need better performance:
+  1. Implement `ISerializable` for your critical types - this can significantly outperform the default reflection-based approach
+  2. Minimize deep object graphs when possible
+  3. Consider using binary format instead of text, as the text format is significantly slower
 
 ## License
 
