@@ -3,24 +3,24 @@
 
 namespace Prowl.Echo;
 
-public sealed partial class Echo
+public sealed partial class EchoObject
 {
-    public List<Echo> List => (Value as List<Echo>)!;
+    public List<EchoObject> List => (Value as List<EchoObject>)!;
 
-    public Echo this[int tagIdx]
+    public EchoObject this[int tagIdx]
     {
         get { return Get(tagIdx); }
         set { List[tagIdx] = value; }
     }
 
-    public Echo Get(int tagIdx)
+    public EchoObject Get(int tagIdx)
     {
         if (TagType != PropertyType.List)
             throw new System.InvalidOperationException("Cannot get tag from non-list tag");
         return List[tagIdx];
     }
 
-    public void ListAdd(Echo tag)
+    public void ListAdd(EchoObject tag)
     {
         if (TagType != PropertyType.List)
             throw new System.InvalidOperationException("Cannot add tag to non-list tag");
@@ -28,7 +28,7 @@ public sealed partial class Echo
         tag.Parent = this;
     }
 
-    public void ListRemove(Echo tag)
+    public void ListRemove(EchoObject tag)
     {
         if (TagType != PropertyType.List)
             throw new System.InvalidOperationException("Cannot remove tag from non-list tag");

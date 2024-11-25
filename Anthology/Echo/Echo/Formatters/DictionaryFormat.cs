@@ -11,7 +11,7 @@ internal sealed class DictionaryFormat : ISerializationFormat
         type.IsAssignableTo(typeof(IDictionary)) &&
         type.IsGenericType;
 
-    public Echo Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(object value, SerializationContext context)
     {
         var dict = (IDictionary)value;
         var type = value.GetType();
@@ -20,7 +20,7 @@ internal sealed class DictionaryFormat : ISerializationFormat
         if (keyType == typeof(string))
         {
             // string-key behavior
-            var tag = Echo.NewCompound();
+            var tag = EchoObject.NewCompound();
             foreach (DictionaryEntry kvp in dict)
                 tag.Add((string)kvp.Key, Serializer.Serialize(kvp.Value, context));
             return tag;
@@ -28,24 +28,24 @@ internal sealed class DictionaryFormat : ISerializationFormat
         else
         {
             // Non-string key behavior
-            var compound = Echo.NewCompound();
-            var entries = new List<Echo>();
+            var compound = EchoObject.NewCompound();
+            var entries = new List<EchoObject>();
 
             foreach (DictionaryEntry kvp in dict)
             {
-                var entryCompound = Echo.NewCompound();
+                var entryCompound = EchoObject.NewCompound();
                 entryCompound.Add("key", Serializer.Serialize(kvp.Key, context));
                 entryCompound.Add("value", Serializer.Serialize(kvp.Value, context));
                 entries.Add(entryCompound);
             }
 
-            compound.Add("$type", new Echo(PropertyType.String, type.FullName));
-            compound.Add("entries", new Echo(entries));
+            compound.Add("$type", new EchoObject(PropertyType.String, type.FullName));
+            compound.Add("entries", new EchoObject(entries));
             return compound;
         }
     }
 
-    public object? Deserialize(Echo value, Type targetType, SerializationContext context)
+    public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
         Type keyType = targetType.GetGenericArguments()[0];
         Type valueType = targetType.GetGenericArguments()[1];
@@ -56,7 +56,7 @@ internal sealed class DictionaryFormat : ISerializationFormat
         if (keyType == typeof(string))
         {
             // string-key behavior
-            foreach (KeyValuePair<string, Echo> tag in value.Tags)
+            foreach (KeyValuePair<string, EchoObject> tag in value.Tags)
                 dict.Add(tag.Key, Serializer.Deserialize(tag.Value, valueType, context));
         }
         else

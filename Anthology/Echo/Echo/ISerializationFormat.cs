@@ -6,6 +6,6 @@ namespace Prowl.Echo;
 public interface ISerializationFormat
 {
     bool CanHandle(Type type);
-    Echo Serialize(object value, SerializationContext context);
-    object? Deserialize(Echo value, Type targetType, SerializationContext context);
+    EchoObject Serialize(object value, SerializationContext context);
+    object? Deserialize(EchoObject value, Type targetType, SerializationContext context);
 }

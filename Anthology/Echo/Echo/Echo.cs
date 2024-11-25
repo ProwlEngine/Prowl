@@ -28,11 +28,11 @@ public enum PropertyType
 
 public class PropertyChangeEventArgs : EventArgs
 {
-    public Echo Property { get; }
+    public EchoObject Property { get; }
     public object? OldValue { get; }
     public object? NewValue { get; }
 
-    public PropertyChangeEventArgs(Echo property, object? oldValue, object? newValue)
+    public PropertyChangeEventArgs(EchoObject property, object? oldValue, object? newValue)
     {
         Property = property;
         OldValue = oldValue;
@@ -40,7 +40,7 @@ public class PropertyChangeEventArgs : EventArgs
     }
 }
 
-public sealed partial class Echo
+public sealed partial class EchoObject
 {
     public event EventHandler<PropertyChangeEventArgs>? PropertyChanged;
 
@@ -49,52 +49,52 @@ public sealed partial class Echo
 
     public PropertyType TagType { get; private set; }
 
-    public Echo? Parent { get; private set; }
+    public EchoObject? Parent { get; private set; }
 
-    public Echo() { }
-    public Echo(byte i) { _value = i; TagType = PropertyType.Byte; }
-    public Echo(sbyte i) { _value = i; TagType = PropertyType.sByte; }
-    public Echo(short i) { _value = i; TagType = PropertyType.Short; }
-    public Echo(int i) { _value = i; TagType = PropertyType.Int; }
-    public Echo(long i) { _value = i; TagType = PropertyType.Long; }
-    public Echo(ushort i) { _value = i; TagType = PropertyType.UShort; }
-    public Echo(uint i) { _value = i; TagType = PropertyType.UInt; }
-    public Echo(ulong i) { _value = i; TagType = PropertyType.ULong; }
-    public Echo(float i) { _value = i; TagType = PropertyType.Float; }
-    public Echo(double i) { _value = i; TagType = PropertyType.Double; }
-    public Echo(decimal i) { _value = i; TagType = PropertyType.Decimal; }
-    public Echo(string i) { _value = i; TagType = PropertyType.String; }
-    public Echo(byte[] i) { _value = i; TagType = PropertyType.ByteArray; }
-    public Echo(bool i) { _value = i; TagType = PropertyType.Bool; }
-    public Echo(PropertyType type, object? value)
+    public EchoObject() { }
+    public EchoObject(byte i) { _value = i; TagType = PropertyType.Byte; }
+    public EchoObject(sbyte i) { _value = i; TagType = PropertyType.sByte; }
+    public EchoObject(short i) { _value = i; TagType = PropertyType.Short; }
+    public EchoObject(int i) { _value = i; TagType = PropertyType.Int; }
+    public EchoObject(long i) { _value = i; TagType = PropertyType.Long; }
+    public EchoObject(ushort i) { _value = i; TagType = PropertyType.UShort; }
+    public EchoObject(uint i) { _value = i; TagType = PropertyType.UInt; }
+    public EchoObject(ulong i) { _value = i; TagType = PropertyType.ULong; }
+    public EchoObject(float i) { _value = i; TagType = PropertyType.Float; }
+    public EchoObject(double i) { _value = i; TagType = PropertyType.Double; }
+    public EchoObject(decimal i) { _value = i; TagType = PropertyType.Decimal; }
+    public EchoObject(string i) { _value = i; TagType = PropertyType.String; }
+    public EchoObject(byte[] i) { _value = i; TagType = PropertyType.ByteArray; }
+    public EchoObject(bool i) { _value = i; TagType = PropertyType.Bool; }
+    public EchoObject(PropertyType type, object? value)
     {
         TagType = type;
         if (type == PropertyType.List && value == null)
-            _value = new List<Echo>();
+            _value = new List<EchoObject>();
         else if (type == PropertyType.Compound && value == null)
-            _value = new Dictionary<string, Echo>();
+            _value = new Dictionary<string, EchoObject>();
         else
             _value = value;
     }
-    public Echo(List<Echo> tags)
+    public EchoObject(List<EchoObject> tags)
     {
         TagType = PropertyType.List;
         _value = tags;
     }
 
-    public static Echo NewCompound() => new(PropertyType.Compound, new Dictionary<string, Echo>());
-    public static Echo NewList() => new(PropertyType.List, new List<Echo>());
+    public static EchoObject NewCompound() => new(PropertyType.Compound, new Dictionary<string, EchoObject>());
+    public static EchoObject NewList() => new(PropertyType.List, new List<EchoObject>());
 
     public void GetAllAssetRefs(ref HashSet<Guid> refs)
     {
         if (TagType == PropertyType.List)
         {
-            foreach (var tag in (List<Echo>)Value!)
+            foreach (var tag in (List<EchoObject>)Value!)
                 tag.GetAllAssetRefs(ref refs);
         }
         else if (TagType == PropertyType.Compound)
         {
-            var dict = (Dictionary<string, Echo>)Value!;
+            var dict = (Dictionary<string, EchoObject>)Value!;
             if (TryGet("$type", out var typeName))
             {
                 // This isnt a perfect solution since maybe theres a class named AssetRefCollection or something
@@ -111,22 +111,22 @@ public sealed partial class Echo
         }
     }
 
-    public Echo Clone()
+    public EchoObject Clone()
     {
         if (TagType == PropertyType.Null) return new(PropertyType.Null, null);
         else if (TagType == PropertyType.List)
         {
             // Value is a List<Tag>
-            var list = (List<Echo>)Value!;
-            var newList = new List<Echo>(list.Count);
+            var list = (List<EchoObject>)Value!;
+            var newList = new List<EchoObject>(list.Count);
             foreach (var tag in list)
                 newList.Add(tag.Clone());
         }
         else if (TagType == PropertyType.Compound)
         {
             // Value is a Dictionary<string, Tag>
-            var dict = (Dictionary<string, Echo>)Value!;
-            var newDict = new Dictionary<string, Echo>(dict.Count);
+            var dict = (Dictionary<string, EchoObject>)Value!;
+            var newDict = new Dictionary<string, EchoObject>(dict.Count);
             foreach (var (key, tag) in dict)
                 newDict.Add(key, tag.Clone());
         }
@@ -149,8 +149,8 @@ public sealed partial class Echo
     {
         get
         {
-            if (TagType == PropertyType.Compound) return ((Dictionary<string, Echo>)Value!).Count;
-            else if (TagType == PropertyType.List) return ((List<Echo>)Value!).Count;
+            if (TagType == PropertyType.Compound) return ((Dictionary<string, EchoObject>)Value!).Count;
+            else if (TagType == PropertyType.List) return ((List<EchoObject>)Value!).Count;
             else return 0;
         }
     }

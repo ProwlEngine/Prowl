@@ -9,7 +9,7 @@ internal sealed class EnumFormat : ISerializationFormat
 {
     public bool CanHandle(Type type) => type.IsEnum;
 
-    public Echo Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(object value, SerializationContext context)
     {
         if (value is Enum e)
             return new(PropertyType.Int, Convert.ToInt32(e));
@@ -17,7 +17,7 @@ internal sealed class EnumFormat : ISerializationFormat
         throw new NotSupportedException($"Type '{value.GetType()}' is not supported by EnumFormat.");
     }
 
-    public object? Deserialize(Echo value, Type targetType, SerializationContext context)
+    public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
         if (value.TagType != PropertyType.Int)
             throw new Exception($"Expected Int type for Enum, got {value.TagType}");

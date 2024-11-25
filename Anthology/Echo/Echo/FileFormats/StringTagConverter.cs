@@ -9,24 +9,24 @@ public static partial class StringTagConverter
 {
     // Writing:
 
-    public static void WriteToFile(Echo tag, FileInfo file)
+    public static void WriteToFile(EchoObject tag, FileInfo file)
     {
         File.WriteAllText(file.FullName, Write(tag));
     }
 
-    public static string Write(Echo prop)
+    public static string Write(EchoObject prop)
     {
         using var writer = new StringWriter();
         Serialize(prop, writer, 0);
         return writer.ToString();
     }
 
-    public static Echo ReadFromFile(FileInfo file)
+    public static EchoObject ReadFromFile(FileInfo file)
     {
         return Read(File.ReadAllText(file.FullName));
     }
 
-    public static Echo Read(string input)
+    public static EchoObject Read(string input)
     {
         StringTagTokenizer parser = new(input.ToCharArray());
 
@@ -44,7 +44,7 @@ public static partial class StringTagConverter
         }
     }
 
-    private static void Serialize(Echo prop, TextWriter writer, int indentLevel)
+    private static void Serialize(EchoObject prop, TextWriter writer, int indentLevel)
     {
         var indent = new string(' ', indentLevel * 2);
 
@@ -107,7 +107,7 @@ public static partial class StringTagConverter
                 break;
             case PropertyType.List:
                 writer.WriteLine("[");
-                var list = (List<Echo>)prop.Value!;
+                var list = (List<EchoObject>)prop.Value!;
                 for (int i = 0; i < list.Count; i++)
                 {
                     writer.Write(indent);
@@ -124,7 +124,7 @@ public static partial class StringTagConverter
                 writer.Write("]");
                 break;
             case PropertyType.Compound:
-                WriteCompound(writer, (Dictionary<string, Echo>)prop.Value!, indentLevel);
+                WriteCompound(writer, (Dictionary<string, EchoObject>)prop.Value!, indentLevel);
                 break;
         }
     }
@@ -166,7 +166,7 @@ public static partial class StringTagConverter
         writer.Write(']');
     }
 
-    private static void WriteCompound(TextWriter writer, Dictionary<string, Echo> dict, int indentLevel)
+    private static void WriteCompound(TextWriter writer, Dictionary<string, EchoObject> dict, int indentLevel)
     {
         var indent = new string(' ', indentLevel * 2);
 
@@ -217,7 +217,7 @@ public static partial class StringTagConverter
         writer.Write("}");
     }
 
-    private static void WriteCompoundElement(string key, TextWriter writer, Dictionary<string, Echo> dict, int indentLevel, string indent)
+    private static void WriteCompoundElement(string key, TextWriter writer, Dictionary<string, EchoObject> dict, int indentLevel, string indent)
     {
         writer.Write(indent);
         writer.Write("  ");
@@ -241,7 +241,7 @@ public static partial class StringTagConverter
         Value
     }
 
-    private static Echo ReadTag(StringTagTokenizer parser)
+    private static EchoObject ReadTag(StringTagTokenizer parser)
     {
         return parser.TokenType switch
         {
@@ -254,17 +254,17 @@ public static partial class StringTagConverter
         };
     }
 
-    private static Echo ReadCompoundTag(StringTagTokenizer parser)
+    private static EchoObject ReadCompoundTag(StringTagTokenizer parser)
     {
         var startPosition = parser.TokenPosition;
 
-        var dict = new Dictionary<string, Echo>();
+        var dict = new Dictionary<string, EchoObject>();
         while (parser.MoveNext())
         {
             switch (parser.TokenType)
             {
                 case TextTokenType.EndCompound:
-                    return new Echo(PropertyType.Compound, dict);
+                    return new EchoObject(PropertyType.Compound, dict);
                 case TextTokenType.Separator:
                     continue;
                 case TextTokenType.Value:
@@ -292,18 +292,18 @@ public static partial class StringTagConverter
         throw new InvalidDataException($"End of input reached while reading a compound property starting at position {startPosition}");
     }
 
-    private static Echo ReadListTag(StringTagTokenizer parser)
+    private static EchoObject ReadListTag(StringTagTokenizer parser)
     {
         var startPosition = parser.TokenPosition;
 
-        var items = new List<Echo>();
+        var items = new List<EchoObject>();
 
         while (parser.MoveNext())
         {
             switch (parser.TokenType)
             {
                 case TextTokenType.EndList:
-                    return new Echo(PropertyType.List, items);
+                    return new EchoObject(PropertyType.List, items);
                 case TextTokenType.Separator:
                     continue;
             }
@@ -316,7 +316,7 @@ public static partial class StringTagConverter
         throw new InvalidDataException($"End of input reached while reading a list property starting at position {startPosition}");
     }
 
-    private static Echo ReadArrayTag(StringTagTokenizer parser)
+    private static EchoObject ReadArrayTag(StringTagTokenizer parser)
     {
         return parser.Token[1] switch
         {
@@ -325,7 +325,7 @@ public static partial class StringTagConverter
         };
     }
 
-    private static Echo ReadByteArrayTag(StringTagTokenizer parser)
+    private static EchoObject ReadByteArrayTag(StringTagTokenizer parser)
     {
         var startPosition = parser.TokenPosition;
 
@@ -335,7 +335,7 @@ public static partial class StringTagConverter
             switch (parser.TokenType)
             {
                 case TextTokenType.EndList:
-                    return new Echo(arr!);
+                    return new EchoObject(arr!);
                 case TextTokenType.Separator:
                     continue;
                 case TextTokenType.Value:
@@ -349,21 +349,21 @@ public static partial class StringTagConverter
         throw new InvalidDataException($"End of input reached while reading a byte array starting at position {startPosition}");
     }
 
-    private static Echo ReadValueTag(StringTagTokenizer parser)
+    private static EchoObject ReadValueTag(StringTagTokenizer parser)
     {
         // null
-        if (parser.Token.SequenceEqual("NULL")) return new Echo(PropertyType.Null, null);
+        if (parser.Token.SequenceEqual("NULL")) return new EchoObject(PropertyType.Null, null);
 
         // boolean
-        if (parser.Token.SequenceEqual("false")) return new Echo(false);
-        if (parser.Token.SequenceEqual("true")) return new Echo(true);
+        if (parser.Token.SequenceEqual("false")) return new EchoObject(false);
+        if (parser.Token.SequenceEqual("true")) return new EchoObject(true);
 
         // string
         if (parser.Token[0] is '"' or '\'')
-            return new Echo(parser.ParseQuotedStringValue());
+            return new EchoObject(parser.ParseQuotedStringValue());
 
         if (char.IsLetter(parser.Token[0]))
-            return new Echo(new string(parser.Token));
+            return new EchoObject(new string(parser.Token));
 
         // number
         if (parser.Token[0] >= '0' && parser.Token[0] <= '9' || parser.Token[0] is '+' or '-' or '.')
@@ -372,25 +372,25 @@ public static partial class StringTagConverter
         throw new InvalidDataException($"Invalid value \"{parser.Token}\" found while reading a tag at position {parser.TokenPosition}");
     }
 
-    private static Echo ReadNumberTag(StringTagTokenizer parser)
+    private static EchoObject ReadNumberTag(StringTagTokenizer parser)
     {
         static T ParsePrimitive<T>(StringTagTokenizer parser) where T : unmanaged
             => (T)Convert.ChangeType(new string(parser.Token[..^1]), typeof(T));
 
         return parser.Token[^1] switch
         {
-            'B' => new Echo(ParsePrimitive<byte>(parser)),
-            'N' => new Echo(ParsePrimitive<sbyte>(parser)),
-            'S' => new Echo(ParsePrimitive<short>(parser)),
-            'I' => new Echo(ParsePrimitive<int>(parser)),
-            'L' => new Echo(ParsePrimitive<long>(parser)),
-            'V' => new Echo(ParsePrimitive<ushort>(parser)),
-            'U' => new Echo(ParsePrimitive<uint>(parser)),
-            'C' => new Echo(ParsePrimitive<ulong>(parser)),
-            'F' => new Echo(ParsePrimitive<float>(parser)),
-            'D' => new Echo(ParsePrimitive<double>(parser)),
-            'M' => new Echo(ParsePrimitive<decimal>(parser)),
-            >= '0' and <= '9' => new Echo((int)Convert.ChangeType(new string(parser.Token), typeof(int))),
+            'B' => new EchoObject(ParsePrimitive<byte>(parser)),
+            'N' => new EchoObject(ParsePrimitive<sbyte>(parser)),
+            'S' => new EchoObject(ParsePrimitive<short>(parser)),
+            'I' => new EchoObject(ParsePrimitive<int>(parser)),
+            'L' => new EchoObject(ParsePrimitive<long>(parser)),
+            'V' => new EchoObject(ParsePrimitive<ushort>(parser)),
+            'U' => new EchoObject(ParsePrimitive<uint>(parser)),
+            'C' => new EchoObject(ParsePrimitive<ulong>(parser)),
+            'F' => new EchoObject(ParsePrimitive<float>(parser)),
+            'D' => new EchoObject(ParsePrimitive<double>(parser)),
+            'M' => new EchoObject(ParsePrimitive<decimal>(parser)),
+            >= '0' and <= '9' => new EchoObject((int)Convert.ChangeType(new string(parser.Token), typeof(int))),
             _ => throw new InvalidDataException($"Invalid number type indicator found while reading a number \"{parser.Token}\" at position {parser.TokenPosition}")
         };
     }

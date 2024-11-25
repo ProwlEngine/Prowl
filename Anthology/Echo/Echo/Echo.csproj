@@ -15,6 +15,7 @@
     <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Echo</PackageProjectUrl>
     <PackageTags>serialization;serializer;gamedev;game-engine;prowl;dotnet;csharp;binary-serialization;text-serialization;object-graph;state-serialization</PackageTags>
     <Description>A lightweight, flexible .net serializer, with support for complex object graphs, circular references, and much more.</Description>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>

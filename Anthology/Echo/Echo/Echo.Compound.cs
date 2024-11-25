@@ -3,11 +3,11 @@
 
 namespace Prowl.Echo;
 
-public sealed partial class Echo
+public sealed partial class EchoObject
 {
-    public Dictionary<string, Echo> Tags => (Value as Dictionary<string, Echo>)!;
+    public Dictionary<string, EchoObject> Tags => (Value as Dictionary<string, EchoObject>)!;
 
-    public Echo this[string tagName]
+    public EchoObject this[string tagName]
     {
         get { return Get(tagName); }
         set
@@ -27,9 +27,9 @@ public sealed partial class Echo
     public IEnumerable<string> GetNames() => Tags.Keys;
 
     /// <summary> Gets a collection containing all tags in this CompoundTag. </summary>
-    public IEnumerable<Echo> GetAllTags() => Tags.Values;
+    public IEnumerable<EchoObject> GetAllTags() => Tags.Values;
 
-    public Echo? Get(string tagName)
+    public EchoObject? Get(string tagName)
     {
         if (TagType != PropertyType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
@@ -38,7 +38,7 @@ public sealed partial class Echo
         return Tags.TryGetValue(tagName, out var result) ? result : null;
     }
 
-    public bool TryGet(string tagName, out Echo? result)
+    public bool TryGet(string tagName, out EchoObject? result)
     {
         if (TagType != PropertyType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
@@ -52,7 +52,7 @@ public sealed partial class Echo
         return tagName != null ? Tags.ContainsKey(tagName) : throw new ArgumentNullException(nameof(tagName));
     }
 
-    public void Add(string name, Echo newTag)
+    public void Add(string name, EchoObject newTag)
     {
         if (TagType != PropertyType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
@@ -73,22 +73,22 @@ public sealed partial class Echo
         return Tags.Remove(name);
     }
 
-    public bool TryFind(string path, out Echo? tag)
+    public bool TryFind(string path, out EchoObject? tag)
     {
         tag = Find(path);
         return tag != null;
     }
 
-    public Echo? Find(string path)
+    public EchoObject? Find(string path)
     {
         if (TagType != PropertyType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
-        Echo currentTag = this;
+        EchoObject currentTag = this;
         while (true)
         {
             var i = path.IndexOf('/');
             var name = i < 0 ? path : path[..i];
-            if (!currentTag.TryGet(name, out Echo? tag) || tag == null)
+            if (!currentTag.TryGet(name, out EchoObject? tag) || tag == null)
                 return null;
 
             if (i < 0)
