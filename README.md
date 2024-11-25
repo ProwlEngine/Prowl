@@ -26,7 +26,7 @@
 
 # <span align="center">📝 About The Project 📝
 
-Prowl is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** game engine developed in **pure C# in latest .NET**, (which surprisingly has **no runtime fees** believe it or not! 😮).
+Prowl is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** game engine developed in **pure C# in latest .NET**.
 
 It aims to provide a seamless transition for developers familiar with _Unity_ by maintaining a similar API while also following KISS and staying as small and customizable as possible. Ideally, _Unity_ projects can port over with as little resistance as possible.
 
@@ -53,18 +53,14 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Immediate Mode with retained properties
     - .NET 8
     - Editor with support for Editor Scripts and Custom Editors
-    - Physics ([Bepu Physics 2](https://github.com/bepu/bepuphysics2))
-        - Colliders: Box, Sphere, Capsule, Cylinder, ~~Mesh Collider~~ - Needs to be re-implemented
-        - Triggers
-        - Raycasts and Sweeps
-        - Non-Kinematic Character Controller (Just a fancy rigidbody)
-            - Supports Moving Platforms
-        - A ton of physical constraints (All of Bepu's constraints)
+    - Physing using [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
+        - Colliders: Box, Sphere, Capsule, Cylinder, Cone, Convex Mesh
+        - Collision Layers
     - Unity-like Coroutines
     - Playtest directly in the Editor
     - ScriptableObjects
     - Projects & Project Settings
-    - Unity-like Serializer to create In-Memory Graphs
+    - Powerful Serializer to create In-Memory Graphs
         - Graph → Custom Text Format
         - Graph → Binary
     - Fully 64-bit using Doubles
@@ -82,6 +78,7 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Only exports used assets
         - Supports Windows, Mac & Linux
     - Navmesh and AI Agents (Recast & Detour)
+    - Node Graph (Based on Unity's xNode)
 
 -   **Graphics Rendering:**
     - Near Identical API to Unity
@@ -105,17 +102,16 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Spot & Directional Light Shadows - Point shadows is not implemented
         - Shadow Atlas
         - Dynamic Shadow Resolutions
-    - Post Processing - Near Identical API to Unity
+    - Post Processing
         - Tonemapping (Melon, Aces, Reinhard, Uncharted, Filmic)
         - Motion Blur
         - Very fast Kawase Bloom
     - Transparency
     - Procedural Super Performant Skybox
-    - Node-Based Visual Scripting (Working but pretty simple)
     - Dynamic Resolutions Per Camera
 
 -   **Asset Pipeline:**
-    - A Powerful Asset Pipeline with a very similar structure to unity
+    - A Powerful Asset Pipeline
     - Meta Files & Reference by GUID
     - Import Caching
     - Support for Custom Importers
@@ -173,9 +169,7 @@ Getting Prowl up and running is super easy!
 
 ### Editor
 
-- 🛠️ Package Manager (Packages partially implemented)
 - ❌ Animation Tools
-- ✔️ Visual Scripting
 - ❌ Material Node Editor
 - ❌ 2D Support
 
@@ -216,12 +210,12 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 - [Prowl.DotRecast](https://github.com/ProwlEngine/Prowl.DotRecast)
 - [Prowl.Veldrid](https://github.com/ProwlEngine/Prowl.Veldrid)
 - [Silk.NET](https://github.com/dotnet/Silk.NET)
-- [Bepu Physics](https://github.com/bepu/bepuphysics2)
+- [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
 
 ### Editor
 
 - [Assimp](https://github.com/assimp/assimp) via [Assimp.NET](https://bitbucket.org/Starnick/assimpnet)
-- [ImageMagick](http://www.imagemagick.org/) via [Magick.NET](https://github.com/dlemstra/Magick.NET)
+- [Image Sharp](https://github.com/SixLabors/ImageSharp)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
