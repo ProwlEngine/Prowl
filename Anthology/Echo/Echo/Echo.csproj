@@ -4,6 +4,28 @@
     <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <NeutralLanguage>en-AU</NeutralLanguage>
+    <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <Title>Prowl.Echo</Title>
+    <Authors>Wulferis</Authors>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Echo</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Echo</PackageProjectUrl>
+    <PackageTags>serialization;serializer;gamedev;game-engine;prowl;dotnet;csharp;binary-serialization;text-serialization;object-graph;state-serialization</PackageTags>
+    <Description>A lightweight, flexible .net serializer, with support for complex object graphs, circular references, and much more.</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
 
 </Project>
