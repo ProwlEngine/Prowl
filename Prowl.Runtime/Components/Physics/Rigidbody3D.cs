@@ -28,7 +28,7 @@ public sealed class Rigidbody3D : MonoBehaviour
    [SerializeField] private bool isSpeculative;
    [SerializeField] private bool useGravity = true;
    [SerializeField] private double mass = 1;
-   [SerializeField, Range(0, 1] private double friction = 0.2f;
+   [SerializeField, Range(0, 1)] private double friction = 0.2f;
    [SerializeField, Range(0, 1)] private double restitution = 0;
     //public Vector3Int translationConstraints = Vector3Int.one;
     //public Vector3Int rotationConstraints = Vector3Int.one;
