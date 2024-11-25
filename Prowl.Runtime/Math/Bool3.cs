@@ -2,14 +2,10 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace Prowl.Runtime.Math;
+namespace Prowl.Runtime;
 
 /// <summary>
 /// A memory-efficient structure for storing three boolean values.
@@ -165,26 +161,29 @@ public struct Bool3 : IEquatable<Bool3>
 
     #region Operators
 
-    // Logical operators
-    public static Bool3 operator &(Bool3 left, Bool3 right) =>
-        new((left._data & right._data & X_MASK) != 0,
-            (left._data & right._data & Y_MASK) != 0,
-            (left._data & right._data & Z_MASK) != 0);
+    public static Bool3 operator &(Bool3 left, Bool3 right) => new Bool3(
+        left.x && right.x,
+        left.y && right.y,
+        left.z && right.z
+    );
 
-    public static Bool3 operator |(Bool3 left, Bool3 right) =>
-        new((left._data | right._data & X_MASK) != 0,
-            (left._data | right._data & Y_MASK) != 0,
-            (left._data | right._data & Z_MASK) != 0);
+    public static Bool3 operator |(Bool3 left, Bool3 right) => new Bool3(
+        left.x || right.x,
+        left.y || right.y,
+        left.z || right.z
+    );
 
-    public static Bool3 operator ^(Bool3 left, Bool3 right) =>
-        new((left._data ^ right._data & X_MASK) != 0,
-            (left._data ^ right._data & Y_MASK) != 0,
-            (left._data ^ right._data & Z_MASK) != 0);
+    public static Bool3 operator ^(Bool3 left, Bool3 right) => new Bool3(
+        left.x != right.x,
+        left.y != right.y,
+        left.z != right.z
+    );
 
-    public static Bool3 operator !(Bool3 value) =>
-        new((value._data & X_MASK) == 0,
-            (value._data & Y_MASK) == 0,
-            (value._data & Z_MASK) == 0);
+    public static Bool3 operator !(Bool3 value) => new Bool3(
+        !value.x,
+        !value.y,
+        !value.z
+    );
 
     #endregion
 
