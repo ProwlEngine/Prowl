@@ -2,16 +2,11 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.IO.Compression;
-using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-
-using BepuPhysics.CollisionDetection;
-
-using Prowl.Runtime;
-using Prowl.Runtime.Utils;
 
 using Prowl.Editor.Utilities.SemVersion;
+using Prowl.Runtime;
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets;
 
