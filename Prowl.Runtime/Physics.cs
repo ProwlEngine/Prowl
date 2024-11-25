@@ -12,7 +12,6 @@ using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
 
-
 [FilePath("PhysicsSettings.projsetting", FilePathAttribute.Location.Setting)]
 public class PhysicsSetting : ScriptableSingleton<PhysicsSetting>
 {
@@ -29,6 +28,7 @@ public class PhysicsSetting : ScriptableSingleton<PhysicsSetting>
     public bool UseMultithreading = true;
     public bool AutoSyncTransforms = true;
 
+    public Boolean32Matrix s_collisionMatrix = new(true);
 }
 
 public class JitterGizmosDrawer : IDebugDrawer
@@ -114,5 +114,53 @@ public static class Physics
         }
     }
 
+    /// <summary>
+    /// Sets the collision matrix for two layers
+    /// </summary>
+    public static void SetLayerCollision(int layer1Index, int layer2Index, bool shouldCollide)
+    {
+        PhysicsSetting.Instance.s_collisionMatrix.SetSymmetric(layer1Index, layer2Index, shouldCollide);
+    }
 
+    /// <summary>
+    /// Makes sure the collision matrix is symmetric (if [a,b] collides, [b,a] should too)
+    /// </summary>
+    public static void EnsureSymmetric()
+    {
+        PhysicsSetting.Instance.s_collisionMatrix.MakeSymmetric();
+    }
+
+    /// <summary>
+    /// Sets all collisions for a specific layer
+    /// </summary>
+    public static void SetLayerCollisions(int layer, bool shouldCollide)
+    {
+        PhysicsSetting.Instance.s_collisionMatrix.SetRow(layer, shouldCollide);
+        // Make sure to maintain symmetry
+        PhysicsSetting.Instance.s_collisionMatrix.SetColumn(layer, shouldCollide);
+    }
+
+    /// <summary>
+    /// Gets weather two layers should collide
+    /// </summary>
+    public static bool GetLayerCollision(int layer1, int layer2)
+    {
+        return PhysicsSetting.Instance.s_collisionMatrix[layer1, layer2];
+    }
+
+    /// <summary>
+    /// Gets all collisions for a specific layer
+    /// </summary>
+    public static bool[] GetLayerCollisions(int layer)
+    {
+        return PhysicsSetting.Instance.s_collisionMatrix.GetRow(layer);
+    }
+
+    /// <summary>
+    /// Sets all layers to collide or not collide
+    /// </summary>
+    public static void SetAllCollisions(bool shouldCollide)
+    {
+        PhysicsSetting.Instance.s_collisionMatrix.SetAll(shouldCollide);
+    }
 }
