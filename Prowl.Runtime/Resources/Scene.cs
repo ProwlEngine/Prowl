@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Runtime.Cloning;
-using Prowl.Runtime.Utilities;
+using Prowl.Runtime.Utils;
 
 using Vortice.Direct3D11;
 using Prowl.Echo;

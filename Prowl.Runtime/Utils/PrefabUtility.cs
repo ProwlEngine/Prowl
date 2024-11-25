@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Prowl.Runtime.Utilities;
+namespace Prowl.Runtime.Utils;
 
 public static class PrefabUtility
 {

@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 using Prowl.Icons;
 
-namespace Prowl.Runtime.Components.Testings;
+namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Dna}  Testing/{FontAwesome6.Shapes}  TestDrawers")]
 public class TestDrawers : MonoBehaviour

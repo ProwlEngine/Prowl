@@ -10,7 +10,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Utilities;
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor;
 
