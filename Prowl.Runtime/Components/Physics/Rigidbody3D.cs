@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
 using Jitter2;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
@@ -22,14 +24,101 @@ public sealed class Rigidbody3D : MonoBehaviour
         //public JVector TranslationConstraint { get; set; }
     }
 
-    public bool isStatic;
-    public bool isSpeculative;
-    public bool useGravity = true;
-    public float mass = 1;
-    public float friction = 0.2f;
-    public float restitution = 0;
+   [SerializeField] private bool isStatic;
+   [SerializeField] private bool isSpeculative;
+   [SerializeField] private bool useGravity = true;
+   [SerializeField] private double mass = 1;
+   [SerializeField, Range(0, 1] private double friction = 0.2f;
+   [SerializeField, Range(0, 1)] private double restitution = 0;
     //public Vector3Int translationConstraints = Vector3Int.one;
     //public Vector3Int rotationConstraints = Vector3Int.one;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this Rigidbody3D is static.
+    /// </summary>
+    public bool IsStatic
+    {
+        get => isStatic;
+        set
+        {
+            isStatic = value;
+            if (_body != null) _body.IsStatic = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether speculative contacts are enabled.
+    /// </summary>
+    public bool EnableSpeculativeContacts
+    {
+        get => isSpeculative;
+        set
+        {
+            isSpeculative = value;
+            if (_body != null) _body.EnableSpeculativeContacts = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this Rigidbody3D is affected by gravity.
+    /// </summary>
+    public bool AffectedByGravity
+    {
+        get => useGravity;
+        set
+        {
+            useGravity = value;
+            if (_body != null) _body.AffectedByGravity = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the mass of this Rigidbody3D.
+    /// </summary>
+    public double Mass
+    {
+        get => mass;
+        set
+        {
+            if (mass <= 0.0)
+                throw new ArgumentException("Mass can not be zero or negative.", nameof(mass));
+
+            mass = value;
+            if (_body != null) _body.SetMassInertia(value);
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the friction of this Rigidbody3D.
+    /// </summary>
+    public double Friction
+    {
+        get => friction;
+        set
+        {
+            if (value < 0.0 || value > 1.0)
+                throw new ArgumentOutOfRangeException(nameof(value), "Restitution must be between 0 and 1.");
+
+            friction = value;
+            if (_body != null) _body.Friction = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the restitution of this Rigidbody3D.
+    /// </summary>
+    public double Restitution
+    {
+        get => restitution;
+        set
+        {
+            if (value < 0.0 || value > 1.0)
+                throw new ArgumentOutOfRangeException(nameof(value), "Restitution must be between 0 and 1.");
+
+            restitution = value;
+            if (_body != null) _body.Restitution = value;
+        }
+    }
 
     [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
     internal RigidBody _body;
@@ -65,8 +154,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (_body == null || _body.Handle.IsZero) return;
 
-        this.Transform.position = new Vector3(_body.Position.X, _body.Position.Y, _body.Position.Z);
-        this.Transform.rotation = new Quaternion(_body.Orientation.X, _body.Orientation.Y, _body.Orientation.Z, _body.Orientation.W);
+        Transform.position = new Vector3(_body.Position.X, _body.Position.Y, _body.Position.Z);
+        Transform.rotation = new Quaternion(_body.Orientation.X, _body.Orientation.Y, _body.Orientation.Z, _body.Orientation.W);
     }
 
     public override void DrawGizmos()
@@ -99,9 +188,9 @@ public sealed class Rigidbody3D : MonoBehaviour
         rb.Tag = new RigidBodyUserData()
         {
             Layer = GameObject.layerIndex,
-            HasTransformConstraints = rotationConstraints != Vector3Int.one || translationConstraints != Vector3Int.one,
-            RotationConstraint = new JVector(rotationConstraints.x, rotationConstraints.y, rotationConstraints.z),
-            TranslationConstraint = new JVector(translationConstraints.x, translationConstraints.y, translationConstraints.z)
+            //HasTransformConstraints = rotationConstraints != Vector3Int.one || translationConstraints != Vector3Int.one,
+            //RotationConstraint = new JVector(rotationConstraints.x, rotationConstraints.y, rotationConstraints.z),
+            //TranslationConstraint = new JVector(translationConstraints.x, translationConstraints.y, translationConstraints.z)
         };
         rb.SetMassInertia(mass);
     }
