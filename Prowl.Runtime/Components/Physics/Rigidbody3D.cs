@@ -15,10 +15,11 @@ public sealed class Rigidbody3D : MonoBehaviour
 {
     public class RigidBodyUserData
     {
+        public Rigidbody3D Rigidbody { get; set; }
         public int Layer { get; set; }
-        public bool HasTransformConstraints { get; set; }
-        public JVector RotationConstraint { get; set; }
-        public JVector TranslationConstraint { get; set; }
+        //public bool HasTransformConstraints { get; set; }
+        //public JVector RotationConstraint { get; set; }
+        //public JVector TranslationConstraint { get; set; }
     }
 
     public bool isStatic;
@@ -27,8 +28,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     public float mass = 1;
     public float friction = 0.2f;
     public float restitution = 0;
-    public Vector3Int translationConstraints = Vector3Int.one;
-    public Vector3Int rotationConstraints = Vector3Int.one;
+    //public Vector3Int translationConstraints = Vector3Int.one;
+    //public Vector3Int rotationConstraints = Vector3Int.one;
 
     [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
     internal RigidBody _body;
@@ -41,7 +42,11 @@ public sealed class Rigidbody3D : MonoBehaviour
         UpdateTransform(_body);
         _body.Tag = new RigidBodyUserData()
         {
+            Rigidbody = this,
             Layer = GameObject.layerIndex,
+            //HasTransformConstraints = rotationConstraints != Vector3Int.one || translationConstraints != Vector3Int.one,
+            //RotationConstraint = new JVector(rotationConstraints.x, rotationConstraints.y, rotationConstraints.z),
+            //TranslationConstraint = new JVector(translationConstraints.x, translationConstraints.y, translationConstraints.z)
         };
         return _body;
     }

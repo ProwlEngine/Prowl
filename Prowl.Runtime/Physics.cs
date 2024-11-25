@@ -99,9 +99,68 @@ public class LayerFilter : IBroadPhaseFilter
     }
 }
 
+/// <summary>
+/// Contains information about a raycast hit.
+/// </summary>
+public struct RaycastHit
+{
+    /// <summary>
+    /// If the ray hit something.
+    /// </summary>
+    public bool hit;
+
+    /// <summary>
+    /// The distance from the ray's origin to the impact point.
+    /// </summary>
+    public double distance;
+
+    /// <summary>
+    /// The normal of the surface the ray hit.
+    /// </summary>
+    public Vector3 normal;
+
+    /// <summary>
+    /// The point in world space where the ray hit the collider.
+    /// </summary>
+    public Vector3 point;
+
+    /// <summary>
+    /// The Rigidbody3D of the collider that was hit.
+    /// </summary>
+    public Rigidbody3D rigidbody;
+
+    /// <summary>
+    /// The Shape that was hit.
+    /// </summary>
+    public RigidBodyShape shape;
+
+    /// <summary>
+    /// The Transform of the rigidbody that was hit.
+    /// </summary>
+    public Transform transform;
+
+    internal void SetFromJitterResult(DynamicTree.RayCastResult result, Vector3 origin, Vector3 direction)
+    {
+        shape = result.Entity as RigidBodyShape;
+        if(shape == null)
+        {
+            hit = false;
+            return;
+        }
+
+        var userData = shape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
+
+        hit = true;
+        rigidbody = userData.Rigidbody;
+        transform = rigidbody?.GameObject?.Transform;
+        normal = new Vector3(result.Normal.X, result.Normal.Y, result.Normal.Z);
+        distance = result.Lambda;
+        point = origin + direction * distance;
+    }
+}
+
 public static class Physics
 {
-
     static World _world;
     public static World World => _world ??= new()
     {
@@ -184,5 +243,155 @@ public static class Physics
     public static void SetAllCollisions(bool shouldCollide)
     {
         PhysicsSetting.Instance.s_collisionMatrix.SetAll(shouldCollide);
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction)
+    {
+        direction = direction.normalized;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        return _world.DynamicTree.RayCast(jOrigin, jDirection,
+            PreFilter, PostFilter,
+            out _, out _, out _);
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene and returns detailed information about the hit.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hitInfo)
+    {
+        direction = direction.normalized;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        hitInfo = new RaycastHit();
+        bool hit = _world.DynamicTree.RayCast(jOrigin, jDirection,
+            PreFilter, PostFilter,
+            out IDynamicTreeProxy shape, out JVector normal, out double lambda);
+
+        if (hit)
+        {
+            var result = new DynamicTree.RayCastResult
+            {
+                Entity = shape,
+                Lambda = lambda,
+                Normal = normal
+            };
+            hitInfo.SetFromJitterResult(result, origin, direction);
+        }
+
+        return hit;
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene within a maximum distance.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction, float maxDistance)
+    {
+        direction = direction.normalized * maxDistance;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        return _world.DynamicTree.RayCast(jOrigin, jDirection,
+            PreFilter, PostFilter,
+            out _, out _, out _);
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene within a maximum distance and returns detailed information about the hit.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction, float maxDistance, out RaycastHit hitInfo)
+    {
+        direction = direction.normalized * maxDistance;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        hitInfo = new RaycastHit();
+        bool hit = _world.DynamicTree.RayCast(jOrigin, jDirection,
+            PreFilter, PostFilter,
+            out IDynamicTreeProxy shape, out JVector normal, out double lambda);
+
+        if (hit)
+        {
+            var result = new DynamicTree.RayCastResult
+            {
+                Entity = shape,
+                Lambda = lambda,
+                Normal = normal,
+            };
+            hitInfo.SetFromJitterResult(result, origin, direction);
+        }
+
+        return hit;
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene with the specified layer mask.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction, float maxDistance, LayerMask layerMask)
+    {
+        direction = direction.normalized * maxDistance;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        return _world.DynamicTree.RayCast(jOrigin, jDirection,
+            shape => PreFilterWithLayer(shape, layerMask), PostFilter,
+            out _, out _, out _);
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene with the specified layer mask and returns detailed information about the hit.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hitInfo, float maxDistance, LayerMask layerMask)
+    {
+        direction = direction.normalized * maxDistance;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        hitInfo = new RaycastHit();
+        bool hit = _world.DynamicTree.RayCast(jOrigin, jDirection,
+            shape => PreFilterWithLayer(shape, layerMask), PostFilter,
+            out IDynamicTreeProxy shape, out JVector normal, out double lambda);
+
+        if (hit)
+        {
+            var result = new DynamicTree.RayCastResult
+            {
+                Entity = shape,
+                Lambda = lambda,
+                Normal = normal,
+            };
+            hitInfo.SetFromJitterResult(result, origin, direction);
+        }
+
+        return hit;
+    }
+
+    private static bool PreFilter(IDynamicTreeProxy proxy)
+    {
+        return true;
+    }
+
+    private static bool PreFilterWithLayer(IDynamicTreeProxy proxy, LayerMask layerMask)
+    {
+        if (proxy is RigidBodyShape shape)
+        {
+            if (!PreFilter(proxy)) return false;
+
+            var userData = shape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
+
+            return layerMask.HasLayer(userData.Layer);
+        }
+
+        return false;
+    }
+
+    private static bool PostFilter(DynamicTree.RayCastResult result)
+    {
+        return true;
     }
 }
