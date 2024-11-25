@@ -10,10 +10,16 @@ public abstract class Collider : MonoBehaviour
     public Vector3 center;
     public Vector3 rotation;
 
-    public Rigidbody3D RigidBody => GetComponentInParent<Rigidbody3D>();
+    protected Rigidbody3D RigidBody => GetComponentInParent<Rigidbody3D>();
 
+    /// <summary>
+    /// Create the Jitter Physics RigidBodyShape
+    /// </summary>
     public abstract RigidBodyShape CreateShape();
 
+    /// <summary>
+    /// Create the Transformed Jitter Physics RigidBodyShape
+    /// </summary>
     public RigidBodyShape CreateTransformedShape()
     {
         // Create the base shape
