@@ -21,7 +21,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.x
+          dotnet-version: 9.x
 
       # For caching purposes, restore dependencies in a dedicated step
       - name: Restore dependencies
@@ -54,11 +54,11 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.x
+          dotnet-version: 9.x
 
       # Publish
       - name: Publish
-        run: dotnet publish ./Prowl.Editor/Prowl.Editor.csproj --configuration Release --output ./publish/${{ matrix.runtime }}/Prowl --runtime ${{ matrix.runtime }} --framework net8.0
+        run: dotnet publish ./Prowl.Editor/Prowl.Editor.csproj --configuration Release --output ./publish/${{ matrix.runtime }}/Prowl --runtime ${{ matrix.runtime }} --framework net9.0
 
       # Save the resulting folder as artifacts
       - name: Upload artifact
