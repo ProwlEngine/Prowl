@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 
 using Jitter2;
+using Jitter2.Collision;
+using Jitter2.Collision.Shapes;
 using Jitter2.LinearMath;
 
 using Prowl.Runtime.SceneManagement;
@@ -80,11 +82,31 @@ public class JitterGizmosDrawer : IDebugDrawer
     }
 }
 
+public class LayerFilter : IBroadPhaseFilter
+{
+    public bool Filter(IDynamicTreeProxy proxyA, IDynamicTreeProxy proxyB)
+    {
+        if (proxyA is RigidBodyShape rbsA && proxyB is RigidBodyShape rbsB)
+        {
+            if (rbsA.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData udA ||
+                rbsB.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData udB)
+                return true;
+
+            return Physics.GetLayerCollision(udA.Layer, udB.Layer);
+        }
+
+        return false;
+    }
+}
+
 public static class Physics
 {
 
     static World _world;
-    public static World World => _world ??= new();
+    public static World World => _world ??= new()
+    {
+        BroadPhaseFilter = new LayerFilter()
+    };
 
     private static double timer = 0;
 
