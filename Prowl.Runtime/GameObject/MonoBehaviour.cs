@@ -10,6 +10,7 @@ using Prowl.Runtime.Cloning;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Utils;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 

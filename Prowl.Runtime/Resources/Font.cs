@@ -14,6 +14,7 @@ using Prowl.Runtime.GUI.Graphics;
 using StbTrueTypeSharp;
 
 using Veldrid;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 
@@ -490,9 +491,9 @@ public sealed class Font : EngineObject, ISerializable
     }
 
 
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        var compoundTag = SerializedProperty.NewCompound();
+        var compoundTag = EchoObject.NewCompound();
         compoundTag.Add("Width", new(Width));
         compoundTag.Add("Height", new(Height));
 
@@ -509,10 +510,10 @@ public sealed class Font : EngineObject, ISerializable
             compoundTag.Add("Bitmap", new(memoryStream.ToArray()));
         }
 
-        SerializedProperty glyphsTag = SerializedProperty.NewList();
+        EchoObject glyphsTag = EchoObject.NewList();
         foreach (var glyph in Glyphs)
         {
-            var glyphTag = SerializedProperty.NewCompound();
+            var glyphTag = EchoObject.NewCompound();
             glyphTag.Add("Unicode", new(glyph.Key));
             glyphTag.Add("X", new(glyph.Value.X));
             glyphTag.Add("Y", new(glyph.Value.Y));
@@ -528,7 +529,7 @@ public sealed class Font : EngineObject, ISerializable
         return compoundTag;
     }
 
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         Width = value["Width"].IntValue;
         Height = value["Height"].IntValue;

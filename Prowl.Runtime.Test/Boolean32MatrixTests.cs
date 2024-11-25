@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using Prowl.Echo;
 using Prowl.Runtime.Utils;
 
 using Xunit;

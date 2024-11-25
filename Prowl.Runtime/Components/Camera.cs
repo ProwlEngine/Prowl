@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 
 using Prowl.Icons;
+using Prowl.Echo;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Pipelines;
 

@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Veldrid;
+using Prowl.Echo;
 
 using static Prowl.Runtime.Rendering.TextureUtility;
 
@@ -349,7 +350,7 @@ public abstract class Texture : EngineObject, ISerializable
     }
 
 
-    public abstract SerializedProperty Serialize(Serializer.SerializationContext ctx);
+    public abstract EchoObject Serialize(SerializationContext ctx);
 
-    public abstract void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx);
+    public abstract void Deserialize(EchoObject value, SerializationContext ctx);
 }

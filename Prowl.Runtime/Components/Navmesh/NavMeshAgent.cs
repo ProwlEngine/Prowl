@@ -5,6 +5,8 @@ using DotRecast.Core.Numerics;
 using DotRecast.Detour;
 using DotRecast.Detour.Crowd;
 
+using Prowl.Echo;
+
 namespace Prowl.Runtime;
 
 public class NavMeshAgent : MonoBehaviour

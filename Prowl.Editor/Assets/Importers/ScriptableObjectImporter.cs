@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Echo;
+using Prowl.Echo.FileFormats;
 using Prowl.Editor.Preferences;
 using Prowl.Editor.ScriptedEditors;
 using Prowl.Runtime;
@@ -28,7 +30,7 @@ public class ScriptableObjectImporterEditor : ScriptedEditor
 
     public override void OnEnable()
     {
-        SerializedProperty tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
+        EchoObject tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
         _editingObject = Serializer.Deserialize<ScriptableObject>(tag);
         _objectEditor = null; // Replace this to load a Scripta
     }

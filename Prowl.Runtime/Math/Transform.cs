@@ -4,6 +4,7 @@
 using System;
 
 using Prowl.Runtime.Cloning;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 

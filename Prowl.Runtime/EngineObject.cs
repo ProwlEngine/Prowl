@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
+using Prowl.Echo;
 using Prowl.Runtime.Cloning;
 
 namespace Prowl.Runtime;
@@ -176,24 +177,24 @@ public abstract class EngineObject : ICloneExplicit
 
     public override string ToString() => Name;
 
-    protected void SerializeHeader(SerializedProperty compound)
+    protected void SerializeHeader(EchoObject compound)
     {
         compound.Add("Name", new(Name));
 
         if (AssetID != Guid.Empty)
         {
-            compound.Add("AssetID", new SerializedProperty(AssetID.ToString()));
+            compound.Add("AssetID", new EchoObject(AssetID.ToString()));
 
             if (FileID != 0)
-                compound.Add("FileID", new SerializedProperty(FileID));
+                compound.Add("FileID", new EchoObject(FileID));
         }
     }
 
-    protected void DeserializeHeader(SerializedProperty value)
+    protected void DeserializeHeader(EchoObject value)
     {
         Name = value.Get("Name")?.StringValue;
 
-        if (value.TryGet("AssetID", out SerializedProperty? assetIDTag))
+        if (value.TryGet("AssetID", out EchoObject? assetIDTag))
         {
             AssetID = Guid.Parse(assetIDTag.StringValue);
 

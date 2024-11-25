@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
+using Prowl.Echo;
+
 using Veldrid;
 
 namespace Prowl.Runtime.Rendering;
@@ -249,9 +251,9 @@ public sealed class RenderTexture : EngineObject, ISerializable
         Framebuffer = null;
     }
 
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        SerializedProperty compoundTag = SerializedProperty.NewCompound();
+        EchoObject compoundTag = EchoObject.NewCompound();
 
         SerializeHeader(compoundTag);
 
@@ -261,7 +263,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
         compoundTag.Add("DepthBufferFormat", new(DepthBuffer != null ? (int)DepthBuffer.Format : -1));
 
-        SerializedProperty colorBuffersTag = SerializedProperty.NewList();
+        EchoObject colorBuffersTag = EchoObject.NewList();
 
         if (ColorBuffers != null)
         {
@@ -274,7 +276,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
         return compoundTag;
     }
 
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         DeserializeHeader(value);
 

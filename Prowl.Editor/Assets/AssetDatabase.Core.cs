@@ -5,6 +5,8 @@ using System.Diagnostics;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
+using Prowl.Echo;
+using Prowl.Echo.FileFormats;
 
 using Debug = Prowl.Runtime.Debug;
 
@@ -576,7 +578,7 @@ public static partial class AssetDatabase
         {
             try
             {
-                SerializedProperty serialized = Serializer.Serialize(assetInstance);
+                EchoObject serialized = Serializer.Serialize(assetInstance);
                 StringTagConverter.WriteToFile(serialized, fileInfo);
 
                 if(pingAsset)

@@ -8,6 +8,8 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
+using Prowl.Echo;
+
 namespace Prowl.Runtime.Utils;
 
 /// <summary>
@@ -173,24 +175,24 @@ public struct Boolean32Matrix : IEquatable<Boolean32Matrix>, ISerializable
         return hash.ToHashCode();
     }
 
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        var value = SerializedProperty.NewCompound();
+        var value = EchoObject.NewCompound();
 
-        var columnsList = SerializedProperty.NewList();
+        var columnsList = EchoObject.NewList();
         for (int i = 0; i < 32; i++)
         {
-            columnsList.ListAdd(new SerializedProperty(rows[i]));
+            columnsList.ListAdd(new EchoObject(rows[i]));
         }
         value.Add("Columns", columnsList);
 
         return value;
     }
 
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         rows = new uint[32];
-        List<SerializedProperty> columnsList = value.Get("Columns").List;
+        List<EchoObject> columnsList = value.Get("Columns").List;
         for (int i = 0; i < 32; i++)
         {
             rows[i] = columnsList[i].UIntValue;

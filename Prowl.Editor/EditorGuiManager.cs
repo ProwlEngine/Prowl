@@ -4,6 +4,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 
+using Prowl.Echo;
+using Prowl.Echo.FileFormats;
 using Prowl.Editor.Assets;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Preferences;

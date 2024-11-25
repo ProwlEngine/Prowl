@@ -1,5 +1,6 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
+using Prowl.Echo;
 
 namespace Prowl.Desktop;
 

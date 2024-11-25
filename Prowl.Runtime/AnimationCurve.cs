@@ -5,6 +5,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
+using Prowl.Echo;
+
 namespace Prowl.Runtime;
 
 // MIT License - Copyright (C) The Mono.Xna Team
@@ -307,21 +309,21 @@ public class AnimationCurve : ISerializable
         return 0f;
     }
 
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        var value = SerializedProperty.NewCompound();
-        value.Add("PreLoop", new SerializedProperty((int)PreLoop));
-        value.Add("PostLoop", new SerializedProperty((int)PostLoop));
+        var value = EchoObject.NewCompound();
+        value.Add("PreLoop", new EchoObject((int)PreLoop));
+        value.Add("PostLoop", new EchoObject((int)PostLoop));
 
-        var keyList = SerializedProperty.NewList();
+        var keyList = EchoObject.NewList();
         foreach (var key in Keys)
         {
-            var keyProp = SerializedProperty.NewCompound();
-            keyProp.Add("Position", new SerializedProperty(key.Position));
-            keyProp.Add("Value", new SerializedProperty(key.Value));
-            keyProp.Add("TangentIn", new SerializedProperty(key.TangentIn));
-            keyProp.Add("TangentOut", new SerializedProperty(key.TangentOut));
-            keyProp.Add("Continuity", new SerializedProperty((int)key.Continuity));
+            var keyProp = EchoObject.NewCompound();
+            keyProp.Add("Position", new EchoObject(key.Position));
+            keyProp.Add("Value", new EchoObject(key.Value));
+            keyProp.Add("TangentIn", new EchoObject(key.TangentIn));
+            keyProp.Add("TangentOut", new EchoObject(key.TangentOut));
+            keyProp.Add("Continuity", new EchoObject((int)key.Continuity));
             keyList.ListAdd(keyProp);
         }
         value.Add("Keys", keyList);
@@ -329,7 +331,7 @@ public class AnimationCurve : ISerializable
         return value;
     }
 
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         PreLoop = (CurveLoopType)value.Get("PreLoop").IntValue;
         PostLoop = (CurveLoopType)value.Get("PostLoop").IntValue;

@@ -8,6 +8,7 @@ using System.Text;
 using Prowl.Runtime.Rendering;
 
 using Veldrid;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 

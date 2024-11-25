@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Echo;
 using Prowl.Runtime.Cloning;
 
 namespace Prowl.Runtime;
@@ -294,24 +295,24 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     }
 
 
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        SerializedProperty compoundTag = SerializedProperty.NewCompound();
-        compoundTag.Add("AssetID", new SerializedProperty(assetID.ToString()));
+        EchoObject compoundTag = EchoObject.NewCompound();
+        compoundTag.Add("AssetID", new EchoObject(assetID.ToString()));
         if (assetID != Guid.Empty)
             ctx.AddDependency(assetID);
         if (fileID != 0)
-            compoundTag.Add("FileID", new SerializedProperty(fileID));
+            compoundTag.Add("FileID", new EchoObject(fileID));
         if (IsRuntimeResource)
             compoundTag.Add("Instance", Serializer.Serialize(instance, ctx));
         return compoundTag;
     }
 
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         assetID = Guid.Parse(value["AssetID"].StringValue);
-        fileID = value.TryGet("FileID", out SerializedProperty fileTag) ? fileTag.UShortValue : (ushort)0;
-        if (assetID == Guid.Empty && value.TryGet("Instance", out SerializedProperty tag))
+        fileID = value.TryGet("FileID", out EchoObject fileTag) ? fileTag.UShortValue : (ushort)0;
+        if (assetID == Guid.Empty && value.TryGet("Instance", out EchoObject tag))
             instance = Serializer.Deserialize<T?>(tag, ctx);
     }
 }

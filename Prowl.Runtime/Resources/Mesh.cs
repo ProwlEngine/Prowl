@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 
 using Veldrid;
+using Prowl.Echo;
 
 using Prowl.Runtime.Rendering;
 
@@ -782,9 +783,9 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         return mesh;
     }
 
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        var compoundTag = SerializedProperty.NewCompound();
+        var compoundTag = EchoObject.NewCompound();
 
         using (MemoryStream memoryStream = new())
         using (BinaryWriter writer = new(memoryStream))
@@ -805,7 +806,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
             WriteArray(writer, _bindPoses);
 
-            compoundTag.Add("MeshData", new SerializedProperty(memoryStream.ToArray()));
+            compoundTag.Add("MeshData", new EchoObject(memoryStream.ToArray()));
         }
 
         // write bounds
@@ -833,7 +834,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             writer.Write(new Span<byte>(dataPtr, sizeof(T) * data.Length));
     }
 
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         using (MemoryStream memoryStream = new(value["MeshData"].ByteArrayValue))
         using (BinaryReader reader = new(memoryStream))

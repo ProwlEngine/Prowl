@@ -8,6 +8,7 @@ using Prowl.Runtime.Cloning;
 using Prowl.Runtime.Utilities;
 
 using Vortice.Direct3D11;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 

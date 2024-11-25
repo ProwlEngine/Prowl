@@ -8,6 +8,7 @@ using System.Linq;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Pipelines;
 using Prowl.Runtime.Utils;
+using Prowl.Echo;
 
 namespace Prowl.Runtime.SceneManagement;
 
@@ -17,7 +18,7 @@ public static class SceneManager
 
     public static Scene Scene => Current.Res!;
 
-    private static SerializedProperty? StoredScene;
+    private static EchoObject? StoredScene;
     private static Guid StoredSceneID;
 
     public static void Initialize()

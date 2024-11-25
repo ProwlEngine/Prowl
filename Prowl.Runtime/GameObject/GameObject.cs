@@ -12,6 +12,7 @@ using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utilities;
 
 using SoftCircuits.Collections;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 
@@ -1055,38 +1056,38 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <param name="ctx">The serialization context.</param>
     /// <returns>A SerializedProperty containing the GameObject's data.</returns>
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        SerializedProperty compoundTag = SerializedProperty.NewCompound();
-        compoundTag.Add("Name", new SerializedProperty(Name));
+        EchoObject compoundTag = EchoObject.NewCompound();
+        compoundTag.Add("Name", new EchoObject(Name));
 
-        compoundTag.Add("Identifier", new SerializedProperty(_identifier.ToString()));
-        compoundTag.Add("Static", new SerializedProperty((byte)(_static ? 1 : 0)));
+        compoundTag.Add("Identifier", new EchoObject(_identifier.ToString()));
+        compoundTag.Add("Static", new EchoObject((byte)(_static ? 1 : 0)));
 
-        compoundTag.Add("Enabled", new SerializedProperty((byte)(_enabled ? 1 : 0)));
-        compoundTag.Add("EnabledInHierarchy", new SerializedProperty((byte)(_enabledInHierarchy ? 1 : 0)));
+        compoundTag.Add("Enabled", new EchoObject((byte)(_enabled ? 1 : 0)));
+        compoundTag.Add("EnabledInHierarchy", new EchoObject((byte)(_enabledInHierarchy ? 1 : 0)));
 
-        compoundTag.Add("TagIndex", new SerializedProperty(tagIndex));
-        compoundTag.Add("LayerIndex", new SerializedProperty(layerIndex));
+        compoundTag.Add("TagIndex", new EchoObject(tagIndex));
+        compoundTag.Add("LayerIndex", new EchoObject(layerIndex));
 
-        compoundTag.Add("HideFlags", new SerializedProperty((int)hideFlags));
+        compoundTag.Add("HideFlags", new EchoObject((int)hideFlags));
 
         compoundTag.Add("Transform", Serializer.Serialize(_transform, ctx));
         compoundTag.Add("PrefabLink", Serializer.Serialize(prefabLink, ctx));
 
         if (AssetID != Guid.Empty)
         {
-            compoundTag.Add("AssetID", new SerializedProperty(AssetID.ToString()));
+            compoundTag.Add("AssetID", new EchoObject(AssetID.ToString()));
             if (FileID != 0)
-                compoundTag.Add("FileID", new SerializedProperty(FileID));
+                compoundTag.Add("FileID", new EchoObject(FileID));
         }
 
-        SerializedProperty components = SerializedProperty.NewList();
+        EchoObject components = EchoObject.NewList();
         foreach (MonoBehaviour comp in _components)
             components.ListAdd(Serializer.Serialize(comp, ctx));
         compoundTag.Add("Components", components);
 
-        SerializedProperty children = SerializedProperty.NewList();
+        EchoObject children = EchoObject.NewList();
         foreach (GameObject child in this.children)
             children.ListAdd(Serializer.Serialize(child, ctx));
         compoundTag.Add("Children", children);
@@ -1099,7 +1100,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <param name="value">The SerializedProperty containing the GameObject's data.</param>
     /// <param name="ctx">The serialization context.</param>
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         Name = value["Name"].StringValue;
         if (Guid.TryParse(value["Identifier"]?.StringValue ?? "", out var identifier))
@@ -1113,21 +1114,21 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
         _transform.gameObject = this;
-        if (value.TryGet("PrefabLink", out SerializedProperty? link))
+        if (value.TryGet("PrefabLink", out EchoObject? link))
         {
             prefabLink = Serializer.Deserialize<PrefabLink>(link, ctx);
             if (prefabLink != null)
                 prefabLink.Obj = this;
         }
 
-        if (value.TryGet("AssetID", out SerializedProperty? guid))
+        if (value.TryGet("AssetID", out EchoObject? guid))
             AssetID = Guid.Parse(guid.StringValue);
-        if (value.TryGet("FileID", out SerializedProperty? fileID))
+        if (value.TryGet("FileID", out EchoObject? fileID))
             FileID = fileID.UShortValue;
 
-        SerializedProperty children = value["Children"];
+        EchoObject children = value["Children"];
         this.children = [];
-        foreach (SerializedProperty childTag in children.List)
+        foreach (EchoObject childTag in children.List)
         {
             GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
             if (child == null) continue;
@@ -1135,12 +1136,12 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             this.children.Add(child);
         }
 
-        SerializedProperty comps = value["Components"];
+        EchoObject comps = value["Components"];
         _components = [];
-        foreach (SerializedProperty compTag in comps.List)
+        foreach (EchoObject compTag in comps.List)
         {
             // Fallback for Missing Type
-            SerializedProperty? typeProperty = compTag.Get("$type");
+            EchoObject? typeProperty = compTag.Get("$type");
             // If the type is missing or string null/whitespace something is wrong, so just let the Deserializer handle it, maybe it knows what to do
             if (typeProperty != null && !string.IsNullOrWhiteSpace(typeProperty.StringValue))
             {
@@ -1175,13 +1176,13 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <param name="compTag">The SerializedProperty containing the component data.</param>
     /// <param name="ctx">The serialization context.</param>
-    private void HandleMissingComponent(SerializedProperty compTag, Serializer.SerializationContext ctx)
+    private void HandleMissingComponent(EchoObject compTag, SerializationContext ctx)
     {
         // Were missing! see if we can recover
         MissingMonobehaviour missing = Serializer.Deserialize<MissingMonobehaviour>(compTag, ctx);
-        SerializedProperty oldData = missing.ComponentData;
+        EchoObject oldData = missing.ComponentData;
         // Try to recover the component
-        if (oldData.TryGet("$type", out SerializedProperty? typeProp))
+        if (oldData.TryGet("$type", out EchoObject? typeProp))
         {
             Type oType = RuntimeUtils.FindType(typeProp.StringValue);
             if (oType != null)

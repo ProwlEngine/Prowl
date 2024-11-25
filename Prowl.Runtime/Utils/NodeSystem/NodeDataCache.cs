@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Runtime.NodeSystem;
+using Prowl.Echo;
 
 namespace Prowl.Runtime.Utils.NodeSystem;
 

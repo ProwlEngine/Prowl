@@ -8,6 +8,7 @@ using Jitter2.Collision.Shapes;
 using Jitter2.LinearMath;
 
 using Prowl.Icons;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 

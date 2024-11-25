@@ -3,6 +3,7 @@
 
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
+using Prowl.Echo;
 
 namespace Prowl.Editor.ProjectSettings;
 

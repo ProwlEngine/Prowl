@@ -8,6 +8,7 @@ using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
 using Prowl.Icons;
+using Prowl.Echo;
 using Prowl.Runtime.Cloning;
 
 namespace Prowl.Runtime;

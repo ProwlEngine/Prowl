@@ -4,6 +4,7 @@
 using Jitter2.Collision.Shapes;
 
 using Prowl.Icons;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 

@@ -3,6 +3,8 @@
 
 using System.Reflection;
 
+using Prowl.Echo;
+using Prowl.Echo.FileFormats;
 using Prowl.Editor.Assets;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
