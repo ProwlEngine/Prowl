@@ -2,8 +2,6 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Echo;
-using Prowl.Echo.FileFormats;
-using Prowl.Editor.Preferences;
 using Prowl.Editor.ScriptedEditors;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;

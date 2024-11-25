@@ -4,10 +4,8 @@
 using System.Reflection;
 
 using Prowl.Echo;
-using Prowl.Echo.FileFormats;
 using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
-using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
