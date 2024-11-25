@@ -23,7 +23,7 @@ public abstract class MonoBehaviour : EngineObject
 {
     private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
 
-    [SerializeField, HideInInspector]
+    [SerializeField, HideInInspector, CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
 
     [SerializeField, HideInInspector]
@@ -607,17 +607,12 @@ public abstract class MonoBehaviour : EngineObject
 
     public override void SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
     {
-        if (this == targetObj)
-            System.Diagnostics.Debugger.Break();
         MonoBehaviour target = targetObj as MonoBehaviour;
         this.OnSetupCloneTargets(targetObj, setup);
     }
 
     public override void CopyDataTo(object targetObj, ICloneOperation operation)
     {
-        if (this == targetObj)
-            System.Diagnostics.Debugger.Break();
-
         MonoBehaviour target = targetObj as MonoBehaviour;
         if (!operation.Context.PreserveIdentity)
             target._identifier = _identifier;
