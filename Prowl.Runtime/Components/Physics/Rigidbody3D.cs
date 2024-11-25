@@ -11,7 +11,7 @@ using Prowl.Runtime.Cloning;
 namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Cubes}  Rigidbody3D")]
-public class Rigidbody3D : MonoBehaviour
+public sealed class Rigidbody3D : MonoBehaviour
 {
     public class RigidBodyUserData
     {
