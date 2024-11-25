@@ -3,7 +3,7 @@
 
 using System.Globalization;
 
-namespace Prowl.Echo.FileFormats;
+namespace Prowl.Echo;
 
 public static partial class StringTagConverter
 {
