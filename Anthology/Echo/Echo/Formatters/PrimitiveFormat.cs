@@ -10,7 +10,7 @@ internal sealed class PrimitiveFormat : ISerializationFormat
         type == typeof(decimal) ||
         type == typeof(byte[]);
 
-    public SerializedProperty Serialize(object value, SerializationContext context)
+    public Echo Serialize(object value, SerializationContext context)
     {
         return value switch
         {
@@ -33,7 +33,7 @@ internal sealed class PrimitiveFormat : ISerializationFormat
         };
     }
 
-    public object? Deserialize(SerializedProperty value, Type targetType, SerializationContext context)
+    public object? Deserialize(Echo value, Type targetType, SerializationContext context)
     {
         try
         {

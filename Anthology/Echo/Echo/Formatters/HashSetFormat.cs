@@ -10,16 +10,16 @@ internal sealed class HashSetFormat : ISerializationFormat
     public bool CanHandle(Type type) =>
         type.IsGenericType && type.GetGenericTypeDefinition() == typeof(HashSet<>);
 
-    public SerializedProperty Serialize(object value, SerializationContext context)
+    public Echo Serialize(object value, SerializationContext context)
     {
         var hashSet = (IEnumerable)value;
-        List<SerializedProperty> tags = new();
+        List<Echo> tags = new();
         foreach (var item in hashSet)
             tags.Add(Serializer.Serialize(item, context));
-        return new SerializedProperty(tags);
+        return new Echo(tags);
     }
 
-    public object? Deserialize(SerializedProperty value, Type targetType, SerializationContext context)
+    public object? Deserialize(Echo value, Type targetType, SerializationContext context)
     {
         Type elementType = targetType.GetGenericArguments()[0];
         dynamic hashSet = Activator.CreateInstance(targetType)

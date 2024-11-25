@@ -45,15 +45,15 @@ public class SerializerTests
         public int Value = 42;
         public string Text = "Custom";
 
-        public SerializedProperty Serialize(SerializationContext ctx)
+        public Echo Serialize(SerializationContext ctx)
         {
-            var compound = SerializedProperty.NewCompound();
-            compound.Add("customValue", new SerializedProperty(PropertyType.Int, Value));
-            compound.Add("customText", new SerializedProperty(PropertyType.String, Text));
+            var compound = Echo.NewCompound();
+            compound.Add("customValue", new Echo(PropertyType.Int, Value));
+            compound.Add("customText", new Echo(PropertyType.String, Text));
             return compound;
         }
 
-        public void Deserialize(SerializedProperty tag, SerializationContext ctx)
+        public void Deserialize(Echo tag, SerializationContext ctx)
         {
             Value = tag.Get("customValue").IntValue;
             Text = tag.Get("customText").StringValue;
@@ -297,7 +297,7 @@ public class SerializerTests
         var original = new ObjectWithAttributes { NewName = "Updated" };
         var serialized = Serializer.Serialize(original);
         serialized.Remove("NewName");
-        serialized.Add("oldName", new SerializedProperty(PropertyType.String, "Updated"));
+        serialized.Add("oldName", new Echo(PropertyType.String, "Updated"));
         var deserialized = Serializer.Deserialize<ObjectWithAttributes>(serialized);
         Assert.Equal(original.NewName, deserialized.NewName);
     }

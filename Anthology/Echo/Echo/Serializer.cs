@@ -32,15 +32,15 @@ public static class Serializer
         formats.Insert(0, format); // Add to start for precedence - Also ensures ObjectFormat is last
     }
 
-    public static SerializedProperty Serialize(object? value) => Serialize(value, new SerializationContext());
+    public static Echo Serialize(object? value) => Serialize(value, new SerializationContext());
 
-    public static SerializedProperty Serialize(object? value, SerializationContext context)
+    public static Echo Serialize(object? value, SerializationContext context)
     {
-        if (value == null) return new SerializedProperty(PropertyType.Null, null);
+        if (value == null) return new Echo(PropertyType.Null, null);
 
-        if (value is SerializedProperty property)
+        if (value is Echo property)
         {
-            SerializedProperty clone = property.Clone();
+            Echo clone = property.Clone();
             HashSet<Guid> deps = new();
             clone.GetAllAssetRefs(ref deps);
             foreach (Guid dep in deps)
@@ -54,10 +54,10 @@ public static class Serializer
         return format.Serialize(value, context);
     }
 
-    public static T? Deserialize<T>(SerializedProperty value) => (T?)Deserialize(value, typeof(T));
-    public static object? Deserialize(SerializedProperty value, Type targetType) => Deserialize(value, targetType, new SerializationContext());
-    public static T? Deserialize<T>(SerializedProperty value, SerializationContext context) => (T?)Deserialize(value, typeof(T), context);
-    public static object? Deserialize(SerializedProperty value, Type targetType, SerializationContext context)
+    public static T? Deserialize<T>(Echo value) => (T?)Deserialize(value, typeof(T));
+    public static object? Deserialize(Echo value, Type targetType) => Deserialize(value, targetType, new SerializationContext());
+    public static T? Deserialize<T>(Echo value, SerializationContext context) => (T?)Deserialize(value, typeof(T), context);
+    public static object? Deserialize(Echo value, Type targetType, SerializationContext context)
     {
         if (value == null || value.TagType == PropertyType.Null) return null;
 

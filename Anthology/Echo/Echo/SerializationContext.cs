@@ -10,6 +10,7 @@ public class SerializationContext
     public Dictionary<object, int> objectToId = new(ReferenceEqualityComparer.Instance);
     public Dictionary<int, object> idToObject = new();
     public int nextId = 1;
+
     private int dependencyCounter = 0;
     public HashSet<Guid> dependencies = new();
 

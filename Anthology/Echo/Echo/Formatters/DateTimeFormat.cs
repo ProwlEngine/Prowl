@@ -6,7 +6,7 @@ internal sealed class DateTimeFormat : ISerializationFormat
 {
     public bool CanHandle(Type type) => type == typeof(DateTime);
 
-    public SerializedProperty Serialize(object value, SerializationContext context)
+    public Echo Serialize(object value, SerializationContext context)
     {
         if (value is DateTime date)
             return new(PropertyType.Long, date.ToBinary());
@@ -14,7 +14,7 @@ internal sealed class DateTimeFormat : ISerializationFormat
         throw new NotSupportedException($"Type '{value.GetType()}' is not supported by DateTimeFormat.");
     }
 
-    public object? Deserialize(SerializedProperty value, Type targetType, SerializationContext context)
+    public object? Deserialize(Echo value, Type targetType, SerializationContext context)
     {
         if (value.TagType != PropertyType.Long)
             throw new Exception($"Expected Long type for DateTime, got {value.TagType}");

@@ -11,22 +11,22 @@ internal sealed class CollectionFormat : ISerializationFormat
         type.IsArray ||
         (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>));
 
-    public SerializedProperty Serialize(object value, SerializationContext context)
+    public Echo Serialize(object value, SerializationContext context)
     {
         if (value is Array array)
         {
             if (array.Rank == 1)
             {
                 // Single dimensional array
-                List<SerializedProperty> tags = new();
+                List<Echo> tags = new();
                 foreach (var item in array)
                     tags.Add(Serializer.Serialize(item, context));
-                return new SerializedProperty(tags);
+                return new Echo(tags);
             }
             else
             {
                 // Multi-dimensional array
-                var compound = SerializedProperty.NewCompound();
+                var compound = Echo.NewCompound();
 
                 // Store dimensions
                 var dimensions = new int[array.Rank];
@@ -36,9 +36,9 @@ internal sealed class CollectionFormat : ISerializationFormat
                 compound["dimensions"] = Serializer.Serialize(dimensions, context);
 
                 // Store elements
-                List<SerializedProperty> elements = new();
+                List<Echo> elements = new();
                 SerializeMultiDimensionalArray(array, new int[array.Rank], 0, elements, context);
-                compound["elements"] = new SerializedProperty(elements);
+                compound["elements"] = new Echo(elements);
 
                 return compound;
             }
@@ -46,14 +46,14 @@ internal sealed class CollectionFormat : ISerializationFormat
         else
         {
             var list = value as IList ?? throw new InvalidOperationException("Expected IList type");
-            List<SerializedProperty> tags = new();
+            List<Echo> tags = new();
             foreach (var item in list)
                 tags.Add(Serializer.Serialize(item, context));
-            return new SerializedProperty(tags);
+            return new Echo(tags);
         }
     }
 
-    private void SerializeMultiDimensionalArray(Array array, int[] indices, int dimension, List<SerializedProperty> elements, SerializationContext context)
+    private void SerializeMultiDimensionalArray(Array array, int[] indices, int dimension, List<Echo> elements, SerializationContext context)
     {
         if (dimension == array.Rank)
         {
@@ -68,7 +68,7 @@ internal sealed class CollectionFormat : ISerializationFormat
         }
     }
 
-    public object? Deserialize(SerializedProperty value, Type targetType, SerializationContext context)
+    public object? Deserialize(Echo value, Type targetType, SerializationContext context)
     {
         if (targetType.IsArray)
         {
@@ -118,7 +118,7 @@ internal sealed class CollectionFormat : ISerializationFormat
         }
     }
 
-    private void DeserializeMultiDimensionalArray(Array array, int[] indices, int dimension, List<SerializedProperty> elements, ref int elementIndex, Type elementType, SerializationContext context)
+    private void DeserializeMultiDimensionalArray(Array array, int[] indices, int dimension, List<Echo> elements, ref int elementIndex, Type elementType, SerializationContext context)
     {
         if (dimension == array.Rank)
         {

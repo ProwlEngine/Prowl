@@ -7,9 +7,9 @@ public sealed class AnyObjectFormat : ISerializationFormat
 {
     public bool CanHandle(Type type) => true; // Fallback format for any object
 
-    public SerializedProperty Serialize(object value, SerializationContext context)
+    public Echo Serialize(object value, SerializationContext context)
     {
-        var compound = SerializedProperty.NewCompound();
+        var compound = Echo.NewCompound();
         Type type = value.GetType();
 
         if (context.objectToId.TryGetValue(value, out int id))
@@ -46,7 +46,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
                     }
                     else
                     {
-                        SerializedProperty tag = Serializer.Serialize(propValue, context);
+                        Echo tag = Serializer.Serialize(propValue, context);
                         compound.Add(field.Name, tag);
                     }
                 }
@@ -65,13 +65,13 @@ public sealed class AnyObjectFormat : ISerializationFormat
         return compound;
     }
 
-    public object? Deserialize(SerializedProperty value, Type targetType, SerializationContext context)
+    public object? Deserialize(Echo value, Type targetType, SerializationContext context)
     {
-        if (value.TryGet("$id", out SerializedProperty? id) &&
+        if (value.TryGet("$id", out Echo? id) &&
             context.idToObject.TryGetValue(id.IntValue, out object? existingObj))
             return existingObj;
 
-        if (!value.TryGet("$type", out SerializedProperty? typeProperty))
+        if (!value.TryGet("$type", out Echo? typeProperty))
         {
             Serializer.Logger.Error($"Failed to deserialize object, missing type info");
             return null;
@@ -98,7 +98,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         {
             foreach (System.Reflection.FieldInfo field in result.GetSerializableFields())
             {
-                if (!TryGetFieldValue(value, field, out SerializedProperty? fieldValue))
+                if (!TryGetFieldValue(value, field, out Echo? fieldValue))
                     continue;
 
                 try
@@ -121,7 +121,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         return result;
     }
 
-    private bool TryGetFieldValue(SerializedProperty compound, System.Reflection.FieldInfo field, out SerializedProperty value)
+    private bool TryGetFieldValue(Echo compound, System.Reflection.FieldInfo field, out Echo value)
     {
         if (compound.TryGet(field.Name, out value))
             return true;

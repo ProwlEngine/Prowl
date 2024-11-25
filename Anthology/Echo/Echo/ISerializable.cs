@@ -5,7 +5,7 @@ namespace Prowl.Echo;
 
 public interface ISerializable
 {
-    public SerializedProperty Serialize(SerializationContext ctx);
-    public void Deserialize(SerializedProperty value, SerializationContext ctx);
+    public Echo Serialize(SerializationContext ctx);
+    public void Deserialize(Echo value, SerializationContext ctx);
 
 }

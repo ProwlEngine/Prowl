@@ -1,8 +1,6 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 
 namespace Prowl.Echo;
@@ -30,11 +28,11 @@ public enum PropertyType
 
 public class PropertyChangeEventArgs : EventArgs
 {
-    public SerializedProperty Property { get; }
+    public Echo Property { get; }
     public object? OldValue { get; }
     public object? NewValue { get; }
 
-    public PropertyChangeEventArgs(SerializedProperty property, object? oldValue, object? newValue)
+    public PropertyChangeEventArgs(Echo property, object? oldValue, object? newValue)
     {
         Property = property;
         OldValue = oldValue;
@@ -42,7 +40,7 @@ public class PropertyChangeEventArgs : EventArgs
     }
 }
 
-public sealed partial class SerializedProperty
+public sealed partial class Echo
 {
     public event EventHandler<PropertyChangeEventArgs>? PropertyChanged;
 
@@ -51,52 +49,52 @@ public sealed partial class SerializedProperty
 
     public PropertyType TagType { get; private set; }
 
-    public SerializedProperty? Parent { get; private set; }
+    public Echo? Parent { get; private set; }
 
-    public SerializedProperty() { }
-    public SerializedProperty(byte i) { _value = i; TagType = PropertyType.Byte; }
-    public SerializedProperty(sbyte i) { _value = i; TagType = PropertyType.sByte; }
-    public SerializedProperty(short i) { _value = i; TagType = PropertyType.Short; }
-    public SerializedProperty(int i) { _value = i; TagType = PropertyType.Int; }
-    public SerializedProperty(long i) { _value = i; TagType = PropertyType.Long; }
-    public SerializedProperty(ushort i) { _value = i; TagType = PropertyType.UShort; }
-    public SerializedProperty(uint i) { _value = i; TagType = PropertyType.UInt; }
-    public SerializedProperty(ulong i) { _value = i; TagType = PropertyType.ULong; }
-    public SerializedProperty(float i) { _value = i; TagType = PropertyType.Float; }
-    public SerializedProperty(double i) { _value = i; TagType = PropertyType.Double; }
-    public SerializedProperty(decimal i) { _value = i; TagType = PropertyType.Decimal; }
-    public SerializedProperty(string i) { _value = i; TagType = PropertyType.String; }
-    public SerializedProperty(byte[] i) { _value = i; TagType = PropertyType.ByteArray; }
-    public SerializedProperty(bool i) { _value = i; TagType = PropertyType.Bool; }
-    public SerializedProperty(PropertyType type, object? value)
+    public Echo() { }
+    public Echo(byte i) { _value = i; TagType = PropertyType.Byte; }
+    public Echo(sbyte i) { _value = i; TagType = PropertyType.sByte; }
+    public Echo(short i) { _value = i; TagType = PropertyType.Short; }
+    public Echo(int i) { _value = i; TagType = PropertyType.Int; }
+    public Echo(long i) { _value = i; TagType = PropertyType.Long; }
+    public Echo(ushort i) { _value = i; TagType = PropertyType.UShort; }
+    public Echo(uint i) { _value = i; TagType = PropertyType.UInt; }
+    public Echo(ulong i) { _value = i; TagType = PropertyType.ULong; }
+    public Echo(float i) { _value = i; TagType = PropertyType.Float; }
+    public Echo(double i) { _value = i; TagType = PropertyType.Double; }
+    public Echo(decimal i) { _value = i; TagType = PropertyType.Decimal; }
+    public Echo(string i) { _value = i; TagType = PropertyType.String; }
+    public Echo(byte[] i) { _value = i; TagType = PropertyType.ByteArray; }
+    public Echo(bool i) { _value = i; TagType = PropertyType.Bool; }
+    public Echo(PropertyType type, object? value)
     {
         TagType = type;
         if (type == PropertyType.List && value == null)
-            _value = new List<SerializedProperty>();
+            _value = new List<Echo>();
         else if (type == PropertyType.Compound && value == null)
-            _value = new Dictionary<string, SerializedProperty>();
+            _value = new Dictionary<string, Echo>();
         else
             _value = value;
     }
-    public SerializedProperty(List<SerializedProperty> tags)
+    public Echo(List<Echo> tags)
     {
         TagType = PropertyType.List;
         _value = tags;
     }
 
-    public static SerializedProperty NewCompound() => new(PropertyType.Compound, new Dictionary<string, SerializedProperty>());
-    public static SerializedProperty NewList() => new(PropertyType.List, new List<SerializedProperty>());
+    public static Echo NewCompound() => new(PropertyType.Compound, new Dictionary<string, Echo>());
+    public static Echo NewList() => new(PropertyType.List, new List<Echo>());
 
     public void GetAllAssetRefs(ref HashSet<Guid> refs)
     {
         if (TagType == PropertyType.List)
         {
-            foreach (var tag in (List<SerializedProperty>)Value!)
+            foreach (var tag in (List<Echo>)Value!)
                 tag.GetAllAssetRefs(ref refs);
         }
         else if (TagType == PropertyType.Compound)
         {
-            var dict = (Dictionary<string, SerializedProperty>)Value!;
+            var dict = (Dictionary<string, Echo>)Value!;
             if (TryGet("$type", out var typeName))
             {
                 // This isnt a perfect solution since maybe theres a class named AssetRefCollection or something
@@ -113,22 +111,22 @@ public sealed partial class SerializedProperty
         }
     }
 
-    public SerializedProperty Clone()
+    public Echo Clone()
     {
         if (TagType == PropertyType.Null) return new(PropertyType.Null, null);
         else if (TagType == PropertyType.List)
         {
             // Value is a List<Tag>
-            var list = (List<SerializedProperty>)Value!;
-            var newList = new List<SerializedProperty>(list.Count);
+            var list = (List<Echo>)Value!;
+            var newList = new List<Echo>(list.Count);
             foreach (var tag in list)
                 newList.Add(tag.Clone());
         }
         else if (TagType == PropertyType.Compound)
         {
             // Value is a Dictionary<string, Tag>
-            var dict = (Dictionary<string, SerializedProperty>)Value!;
-            var newDict = new Dictionary<string, SerializedProperty>(dict.Count);
+            var dict = (Dictionary<string, Echo>)Value!;
+            var newDict = new Dictionary<string, Echo>(dict.Count);
             foreach (var (key, tag) in dict)
                 newDict.Add(key, tag.Clone());
         }
@@ -151,8 +149,8 @@ public sealed partial class SerializedProperty
     {
         get
         {
-            if (TagType == PropertyType.Compound) return ((Dictionary<string, SerializedProperty>)Value!).Count;
-            else if (TagType == PropertyType.List) return ((List<SerializedProperty>)Value!).Count;
+            if (TagType == PropertyType.Compound) return ((Dictionary<string, Echo>)Value!).Count;
+            else if (TagType == PropertyType.List) return ((List<Echo>)Value!).Count;
             else return 0;
         }
     }

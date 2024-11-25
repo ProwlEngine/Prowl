@@ -5,7 +5,7 @@ using System;
 
 namespace Prowl.Echo;
 
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, Inherited = false, AllowMultiple = false)]
+[AttributeUsage(AttributeTargets.Field, Inherited = false, AllowMultiple = false)]
 public sealed class IgnoreOnNullAttribute : Attribute { }
 
 [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
@@ -18,7 +18,7 @@ public class SerializeFieldAttribute : Attribute
 {
 }
 
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Field, AllowMultiple = true)]
 public class FormerlySerializedAsAttribute : Attribute
 {
     public string oldName { get; set; }

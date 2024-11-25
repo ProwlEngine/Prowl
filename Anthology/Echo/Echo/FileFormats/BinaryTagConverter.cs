@@ -7,16 +7,16 @@ public static class BinaryTagConverter
 {
 
     #region Writing
-    public static void WriteToFile(SerializedProperty tag, FileInfo file)
+    public static void WriteToFile(Echo tag, FileInfo file)
     {
         using var stream = file.OpenWrite();
         using var writer = new BinaryWriter(stream);
         WriteTo(tag, writer);
     }
 
-    public static void WriteTo(SerializedProperty tag, BinaryWriter writer) => WriteCompound(tag, writer);
+    public static void WriteTo(Echo tag, BinaryWriter writer) => WriteCompound(tag, writer);
 
-    private static void WriteCompound(SerializedProperty tag, BinaryWriter writer)
+    private static void WriteCompound(Echo tag, BinaryWriter writer)
     {
         writer.Write(tag.GetAllTags().Count());
         foreach (var subTag in tag.Tags)
@@ -26,7 +26,7 @@ public static class BinaryTagConverter
         }
     }
 
-    private static void WriteTag(SerializedProperty tag, BinaryWriter writer)
+    private static void WriteTag(Echo tag, BinaryWriter writer)
     {
         var type = tag.TagType;
         writer.Write((byte)type);
@@ -64,25 +64,25 @@ public static class BinaryTagConverter
 
 
     #region Reading
-    public static SerializedProperty ReadFromFile(FileInfo file)
+    public static Echo ReadFromFile(FileInfo file)
     {
         using var stream = file.OpenRead();
         using var reader = new BinaryReader(stream);
         return ReadFrom(reader);
     }
 
-    public static SerializedProperty ReadFrom(BinaryReader reader) => ReadCompound(reader);
+    public static Echo ReadFrom(BinaryReader reader) => ReadCompound(reader);
 
-    private static SerializedProperty ReadCompound(BinaryReader reader)
+    private static Echo ReadCompound(BinaryReader reader)
     {
-        SerializedProperty tag = SerializedProperty.NewCompound();
+        Echo tag = Echo.NewCompound();
         var tagCount = reader.ReadInt32();
         for (int i = 0; i < tagCount; i++)
             tag.Add(reader.ReadString(), ReadTag(reader));
         return tag;
     }
 
-    private static SerializedProperty ReadTag(BinaryReader reader)
+    private static Echo ReadTag(BinaryReader reader)
     {
         var type = (PropertyType)reader.ReadByte();
         if (type == PropertyType.Null) return new(PropertyType.Null, null);
@@ -102,7 +102,7 @@ public static class BinaryTagConverter
         else if (type == PropertyType.Bool) return new(PropertyType.Bool, reader.ReadBoolean());
         else if (type == PropertyType.List)
         {
-            var listTag = SerializedProperty.NewList();
+            var listTag = Echo.NewList();
             var tagCount = reader.ReadInt32();
             for (int i = 0; i < tagCount; i++)
                 listTag.ListAdd(ReadTag(reader));

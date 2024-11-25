@@ -7,7 +7,7 @@ internal sealed class GuidFormat : ISerializationFormat
 {
     public bool CanHandle(Type type) => type == typeof(Guid);
 
-    public SerializedProperty Serialize(object value, SerializationContext context)
+    public Echo Serialize(object value, SerializationContext context)
     {
         if (value is Guid guid)
             return new(PropertyType.String, guid.ToString());
@@ -15,7 +15,7 @@ internal sealed class GuidFormat : ISerializationFormat
         throw new NotSupportedException($"Type '{value.GetType()}' is not supported by GuidFormat.");
     }
 
-    public object? Deserialize(SerializedProperty value, Type targetType, SerializationContext context)
+    public object? Deserialize(Echo value, Type targetType, SerializationContext context)
     {
         if (value.TagType != PropertyType.String)
             throw new Exception($"Expected String type for Guid, got {value.TagType}");
