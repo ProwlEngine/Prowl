@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 
 using Veldrid;
+using Prowl.Echo;
 
 namespace Prowl.Runtime.Rendering;
 

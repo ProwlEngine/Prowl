@@ -10,6 +10,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 
+using Prowl.Echo;
+
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;

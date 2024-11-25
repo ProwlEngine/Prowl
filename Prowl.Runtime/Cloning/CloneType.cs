@@ -4,6 +4,8 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
+using Prowl.Echo;
+
 namespace Prowl.Runtime.Cloning
 {
     /// <summary>

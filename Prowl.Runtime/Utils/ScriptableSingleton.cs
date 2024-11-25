@@ -4,6 +4,8 @@
 using System;
 using System.IO;
 
+using Prowl.Echo;
+
 namespace Prowl.Runtime.Utils;
 
 [AttributeUsage(AttributeTargets.Class)]

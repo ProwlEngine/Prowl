@@ -146,14 +146,16 @@ public class GameWindow : EditorWindow
                 }
             }
 
-            if (GeneralPreferences.Instance.AutoRefreshGameView || !hasFrame)
+            if ((GeneralPreferences.Instance.AutoRefreshGameView || !hasFrame) && PlayMode.Current != PlayMode.Mode.Paused)
             {
+                Input.PushHandler(InputHandler);
                 if (!SceneManager.Draw(RenderTarget))
                 {
                     gui.Draw2D.DrawRect(innerRect, Color.red, 2);
                     gui.Draw2D.DrawText(Font.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
                     return;
                 }
+                Input.PopHandler();
             }
 
             hasFrame = true;

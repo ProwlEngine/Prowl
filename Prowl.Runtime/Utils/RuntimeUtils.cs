@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading;
 
 using Prowl.Runtime.Utils;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 

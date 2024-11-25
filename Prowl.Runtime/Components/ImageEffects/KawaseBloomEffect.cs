@@ -22,10 +22,12 @@ public class KawaseBloomEffect : MonoBehaviour
 
     public Resolution resolution = Resolution.Quarter;
 
+    [Range(1, 8, true)]
     public int Iterations = 2;
     public float Radius = 16.0f;
     public float Threshold = 1.0f;
     public float Intensity = 1.0f;
+    [Range(0, 1, true)]
     public float SoftKnee = 0.5f;
 
     public bool UseBlur = true;       // Toggle to enable/disable blur

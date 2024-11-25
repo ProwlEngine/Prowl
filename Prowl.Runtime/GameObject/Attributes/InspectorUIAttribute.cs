@@ -124,3 +124,36 @@ public class HideInInspectorAttribute : Attribute { }
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
 public class ShowInInspectorAttribute : Attribute { }
+
+/// <summary>
+/// A Numerical Value Clamping Attribute.
+/// </summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
+public class RangeAttribute(double min, double max, bool IsSlider = false) : Attribute
+{
+    /// <summary>
+    /// The minimum value of the field.
+    /// </summary>
+    public double Min = min;
+
+    /// <summary>
+    /// The maximum value of the field.
+    /// </summary>
+    public double Max = max;
+
+    /// <summary>
+    /// Draws a slider for the field in the inspector.
+    /// </summary>
+    public bool IsSlider = true;
+}
+
+/// <summary>
+/// A Numerical Value Clamping Attribute.
+/// </summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
+public class ListDrawerAttribute(bool allowReorder = true, bool allowResize = true, bool canCollapse = true) : Attribute
+{
+    public bool AllowReorder = allowReorder;
+    public bool AllowResize = allowResize;
+    public bool CanCollapse = canCollapse;
+}

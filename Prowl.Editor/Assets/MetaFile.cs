@@ -1,7 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Runtime;
+using Prowl.Echo;
 
 namespace Prowl.Editor.Assets;
 
@@ -43,7 +43,7 @@ public class MetaFile
     {
         FileInfo file = new(AssetPath.FullName + ".meta");
         version = MetaVersion;
-        SerializedProperty tag = Serializer.Serialize(this);
+        EchoObject tag = Serializer.Serialize(this);
         StringTagConverter.WriteToFile(tag, file);
     }
 
@@ -54,7 +54,7 @@ public class MetaFile
     {
         FileInfo file = new(assetFile + ".meta");
         if (!File.Exists(file.FullName)) return null; // Doesnt Exist
-        SerializedProperty tag = StringTagConverter.ReadFromFile(file);
+        EchoObject tag = StringTagConverter.ReadFromFile(file);
         MetaFile? meta = Serializer.Deserialize<MetaFile>(tag);
         meta!.AssetPath = assetFile;
         meta.lastModified = DateTime.UtcNow;

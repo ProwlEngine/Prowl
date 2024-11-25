@@ -1,42 +1,30 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using BepuPhysics;
-using BepuPhysics.Collidables;
-
-using BepuUtilities.Memory;
+using Jitter2.Collision.Shapes;
 
 using Prowl.Icons;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Box Collider")]
 public sealed class BoxCollider : Collider
 {
-    [SerializeField, HideInInspector] private Vector3 _size = new(1, 1, 1);
+    [SerializeField] private Vector3 size = new(1, 1, 1);
 
-    [ShowInInspector]
+    /// <summary>
+    /// Gets or sets the dimensions of the box.
+    /// </summary>
     public Vector3 Size
     {
-        get => _size;
+        get => size;
         set
         {
-            _size = value;
-            Container?.ReAttach();
+            size = value;
+            OnValidate();
         }
     }
 
-    public Vector3 WorldSize
-    {
-        get
-        {
-            return _size * Transform.lossyScale;
-        }
-    }
-
-    internal override void AddToCompoundBuilder(BufferPool pool, ref CompoundBuilder builder, RigidPose localPose)
-    {
-        var size = WorldSize;
-        builder.Add(new Box((float)size.x, (float)size.y, (float)size.z), localPose, Mass);
-    }
+    public override RigidBodyShape CreateShape() => new BoxShape(size.x, size.y, size.z);
 }

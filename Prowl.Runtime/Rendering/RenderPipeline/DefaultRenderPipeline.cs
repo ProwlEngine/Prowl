@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
+using Prowl.Runtime.Components.UI;
+
 using Veldrid;
 
 namespace Prowl.Runtime.Rendering.Pipelines;
@@ -114,7 +116,7 @@ public class DefaultRenderPipeline : RenderPipeline
             (Camera.Main?.HDR ?? camera.HDR) :
             camera.HDR;
 
-        (List<MonoBehaviour> all, List<MonoBehaviour> opaqueEffects, List<MonoBehaviour> finalEffects) = GatherImageEffects(camera, data.IsSceneViewCamera);
+        (List<MonoBehaviour> all, List<MonoBehaviour> opaqueEffects, List<MonoBehaviour> finalEffects, GuiLayer gui) = GatherImageEffects(camera, data.IsSceneViewCamera);
         CommandBuffer? buffer = PrepareCommandBuffer(target, camera, isHDR, out RenderTexture? forwardBuffer);
         List<RenderTexture> toRelease = [];
 
@@ -157,6 +159,8 @@ public class DefaultRenderPipeline : RenderPipeline
             foreach (RenderTexture rt in toRelease)
                 RenderTexture.ReleaseTemporaryRT(rt);
 
+            gui?.ExecuteGUI(target);
+
             // Clear global data, As some values like _CameraDepthTexture and _CameraMotionVectorsTexture are now invalid
             PropertyState.ClearGlobalData();
 
@@ -165,11 +169,12 @@ public class DefaultRenderPipeline : RenderPipeline
         }
     }
 
-    private static (List<MonoBehaviour> all, List<MonoBehaviour> opaque, List<MonoBehaviour> final) GatherImageEffects(Camera camera, bool isSceneView)
+    private static (List<MonoBehaviour> all, List<MonoBehaviour> opaque, List<MonoBehaviour> final, GuiLayer? guiLayer) GatherImageEffects(Camera camera, bool isSceneView)
     {
         var all = new List<MonoBehaviour>();
         var opaqueEffects = new List<MonoBehaviour>();
         var finalEffects = new List<MonoBehaviour>();
+        GuiLayer? guiLayer = null;
 
         IEnumerable<MonoBehaviour> components = camera.GetComponents<MonoBehaviour>();
         // If this is the Scene view camera, we need to include the Camera.Main effects
@@ -180,6 +185,14 @@ public class DefaultRenderPipeline : RenderPipeline
         {
             if (effect.EnabledInHierarchy == false) continue;
             if (effect is Camera) continue;
+            if (effect is GuiLayer gui &&
+                guiLayer == null &&
+                !isSceneView &&
+                (gui.ExecuteAlways || Application.IsPlaying))
+            {
+                guiLayer = gui;
+                continue;
+            }
 
             Type type = effect.GetType();
 
@@ -200,7 +213,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 finalEffects.Add(effect);
         }
 
-        return (all, opaqueEffects, finalEffects);
+        return (all, opaqueEffects, finalEffects, guiLayer);
     }
 
     private static CommandBuffer PrepareCommandBuffer(Framebuffer target, Camera camera, bool isHDR, out RenderTexture forwardBuffer)

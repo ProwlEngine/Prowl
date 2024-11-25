@@ -14,7 +14,7 @@ namespace Prowl.Editor.PropertyDrawers;
 [Drawer(typeof(Color))]
 public class Color_PropertyDrawer : PropertyDrawer
 {
-    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
+    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value, List<Attribute>? attributes = null)
     {
         Color color = (Color)value;
         bool changed = gui.ColorPicker(ID, $"{ID}_ColorPopup", ref color, true, 0, 0, Size.Percentage(1), Size.Percentage(1), EditorGUI.InputStyle);

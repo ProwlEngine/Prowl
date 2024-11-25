@@ -13,6 +13,9 @@ public class ActionHistory : IEnumerable<IAction>
 
     public bool AppendAction(IAction action)
     {
+        if (CurrentState.PreviousAction != null && CurrentState.PreviousAction.TryMerge(action))
+            return false;
+
         CurrentState.NextAction = action;
         CurrentState.NextNode = new SimpleHistoryNode(action, CurrentState);
         return true;

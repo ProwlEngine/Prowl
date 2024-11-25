@@ -123,7 +123,7 @@ public static class Application
         IsRunning = false;
         Quitting?.Invoke();
         Graphics.Dispose();
-        Physics.Dispose();
+        Physics.World.Clear();
         AudioSystem.Dispose();
         AssemblyManager.Dispose();
         Debug.Log("Is terminating...");

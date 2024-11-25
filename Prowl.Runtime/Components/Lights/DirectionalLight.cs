@@ -20,9 +20,13 @@ public class DirectionalLight : Light
 
     public Resolution shadowResolution = Resolution._1024;
 
+    [Range(8, 32, true)]
     public int qualitySamples = 32;
+    [Range(8, 32, true)]
     public int blockerSamples = 16;
+    [Range(10, 512)]
     public float shadowDistance = 50f;
+    [Range(0.001f, 4f, true)]
     public float shadowRadius = 1f;
 
     public override void Update()

@@ -31,7 +31,7 @@ public class MeshRenderer : MonoBehaviour, IRenderable
     }
 
     public Material GetMaterial() => Material.Res;
-    public byte GetLayer() => GameObject.layerIndex;
+    public int GetLayer() => GameObject.layerIndex;
 
     public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
     {

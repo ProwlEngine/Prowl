@@ -21,6 +21,7 @@ public class ProjectSettingsWindow : SingletonEditorWindow
 
     public override void RenderSideView()
     {
+        RenderSideViewElement(TagLayerManager.Instance);
         RenderSideViewElement(PhysicsSetting.Instance);
         RenderSideViewElement(BuildProjectSettings.Instance);
     }

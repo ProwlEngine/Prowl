@@ -3,6 +3,7 @@
 
 using System.Reflection;
 
+using Prowl.Echo;
 using Prowl.Editor.Assets;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;

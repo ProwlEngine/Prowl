@@ -7,8 +7,10 @@ using System.Collections.Generic;
 using System.Reflection;
 
 using Prowl.Runtime.Cloning;
+using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Utils;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 
@@ -280,14 +282,21 @@ public abstract class MonoBehaviour : EngineObject
     public virtual void LateUpdate() { }
 
     /// <summary>
-    /// Called for rendering and handling GUI events.
+    /// Called for rendering and handling GUI gizmos.
     /// </summary>
     public virtual void DrawGizmos() { }
 
     /// <summary>
-    /// Called for rendering and handling GUI events when the object is selected.
+    /// Called for rendering and handling GUI gizmos when the object is selected.
     /// </summary>
     public virtual void DrawGizmosSelected() { }
+
+    /// <summary>
+    /// Called for drawing and handling interaction with Runtime/Ingame UI
+    /// Executed on any camera with the GUILayer component
+    /// </summary>
+    /// <param name="gui"></param>
+    public virtual void OnGUI(Gui gui) { }
 
     /// <summary>
     /// Called when a new level is loaded.
@@ -610,7 +619,8 @@ public abstract class MonoBehaviour : EngineObject
             System.Diagnostics.Debugger.Break();
 
         MonoBehaviour target = targetObj as MonoBehaviour;
-        target._identifier = _identifier;
+        if (!operation.Context.PreserveIdentity)
+            target._identifier = _identifier;
         target._enabled = _enabled;
         target._enabledInHierarchy = _enabledInHierarchy;
         this.OnCopyDataTo(targetObj, operation);

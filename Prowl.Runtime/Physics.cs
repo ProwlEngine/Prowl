@@ -4,307 +4,394 @@
 using System;
 using System.Collections.Generic;
 
-using BepuPhysics;
-using BepuPhysics.Collidables;
+using Jitter2;
+using Jitter2.Collision;
+using Jitter2.Collision.Shapes;
+using Jitter2.LinearMath;
 
-using BepuUtilities;
-using BepuUtilities.Memory;
-
-using Prowl.Runtime.Contacts;
-using Prowl.Runtime.Controller;
-using Prowl.Runtime.Raycast;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
 
-// Bepu Implementation based on: https://github.com/Nicogo1705/Stride.BepuPhysics
-
 [FilePath("PhysicsSettings.projsetting", FilePathAttribute.Location.Setting)]
 public class PhysicsSetting : ScriptableSingleton<PhysicsSetting>
 {
     public Vector3 Gravity = new Vector3(0, -9.81f, 0);
-    public int Iterations = 8;
+    [Range(1, 16)]
+    public int SolverIterations = 6;
+    [Range(0, 16)]
+    public int RelaxIterations = 4;
+    [Range(1, 16)]
     public int Substep = 1;
+    [Range(5, 120)]
     public int TargetFrameRate = 50;
+    public bool AllowSleep = true;
     public bool UseMultithreading = true;
-    public bool EnhancedDeterminism = false;
     public bool AutoSyncTransforms = true;
 
+    public Boolean32Matrix s_collisionMatrix = new(true);
 }
 
+public class JitterGizmosDrawer : IDebugDrawer
+{
+    static JitterGizmosDrawer m_Instance;
+    public static JitterGizmosDrawer Instance => m_Instance ??= new();
+    public Color color { get; set; } = new Color(0, 255, 0, 128);
+
+    public void DrawCube(in JVector p, in JQuaternion ori, in JVector size)
+    {
+        Vector3 center = new Vector3(p.X, p.Y, p.Z);
+        Quaternion rotation = new Quaternion(ori.X, ori.Y, ori.Z, ori.W);
+        Vector3 extents = new Vector3(size.X * 0.501f, size.Y * 0.501f, size.Z * 0.501f);
+
+        Debug.PushMatrix(Matrix4x4.TRS(center, rotation, Vector3.one));
+        Debug.DrawCube(center, extents, color);
+        Debug.PopMatrix();
+    }
+
+    public void DrawPoint(in JVector p)
+    {
+        Vector3 center = new Vector3(p.X, p.Y, p.Z);
+        Debug.DrawSphere(center, 0.1f, color, 8);
+    }
+
+    public void DrawSegment(in JVector pA, in JVector pB)
+    {
+        Vector3 a = new Vector3(pA.X, pA.Y, pA.Z);
+        Vector3 b = new Vector3(pB.X, pB.Y, pB.Z);
+        Debug.DrawLine(a, b, color);
+    }
+
+    public void DrawSphere(in JVector p, in JQuaternion ori, float radius)
+    {
+        Vector3 center = new Vector3(p.X, p.Y, p.Z);
+        Quaternion rotation = new Quaternion(ori.X, ori.Y, ori.Z, ori.W);
+        Debug.DrawWireSphere(center, radius, color);
+    }
+
+    public void DrawTriangle(in JVector pA, in JVector pB, in JVector pC)
+    {
+        Vector3 a = new Vector3(pA.X, pA.Y, pA.Z);
+        Vector3 b = new Vector3(pB.X, pB.Y, pB.Z);
+        Vector3 c = new Vector3(pC.X, pC.Y, pC.Z);
+        //Debug.DrawTriangle(a, b, c, color);
+        Debug.DrawLine(a, b, color);
+        Debug.DrawLine(b, c, color);
+        Debug.DrawLine(c, a, color);
+    }
+}
+
+public class LayerFilter : IBroadPhaseFilter
+{
+    public bool Filter(IDynamicTreeProxy proxyA, IDynamicTreeProxy proxyB)
+    {
+        if (proxyA is RigidBodyShape rbsA && proxyB is RigidBodyShape rbsB)
+        {
+            if (rbsA.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData udA ||
+                rbsB.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData udB)
+                return true;
+
+            return Physics.GetLayerCollision(udA.Layer, udB.Layer);
+        }
+
+        return false;
+    }
+}
+
+/// <summary>
+/// Contains information about a raycast hit.
+/// </summary>
+public struct RaycastHit
+{
+    /// <summary>
+    /// If the ray hit something.
+    /// </summary>
+    public bool hit;
+
+    /// <summary>
+    /// The distance from the ray's origin to the impact point.
+    /// </summary>
+    public double distance;
+
+    /// <summary>
+    /// The normal of the surface the ray hit.
+    /// </summary>
+    public Vector3 normal;
+
+    /// <summary>
+    /// The point in world space where the ray hit the collider.
+    /// </summary>
+    public Vector3 point;
+
+    /// <summary>
+    /// The Rigidbody3D of the collider that was hit.
+    /// </summary>
+    public Rigidbody3D rigidbody;
+
+    /// <summary>
+    /// The Shape that was hit.
+    /// </summary>
+    public RigidBodyShape shape;
+
+    /// <summary>
+    /// The Transform of the rigidbody that was hit.
+    /// </summary>
+    public Transform transform;
+
+    internal void SetFromJitterResult(DynamicTree.RayCastResult result, Vector3 origin, Vector3 direction)
+    {
+        shape = result.Entity as RigidBodyShape;
+        if(shape == null)
+        {
+            hit = false;
+            return;
+        }
+
+        var userData = shape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
+
+        hit = true;
+        rigidbody = userData.Rigidbody;
+        transform = rigidbody?.GameObject?.Transform;
+        normal = new Vector3(result.Normal.X, result.Normal.Y, result.Normal.Z);
+        distance = result.Lambda;
+        point = origin + direction * distance;
+    }
+}
 
 public static class Physics
 {
-    public static bool IsReady => isInitialized && Application.IsPlaying;
-
-    public static Simulation? Sim { get; private set; }
-    public static BufferPool? Pool { get; private set; }
-    public static ThreadDispatcher? Dispatcher { get; private set; }
-
-    public static CharacterControllersManager? Characters { get; private set; }
+    static World _world;
+    public static World World => _world ??= new()
+    {
+        BroadPhaseFilter = new LayerFilter()
+    };
 
     private static double timer = 0;
 
-
-    private static bool isInitialized = false;
-
-    internal static CollidableProperty<PhysicsMaterial> CollidableMaterials { get; private set; }
-    internal static ContactEventsManager ContactEvents { get; private set; }
-
-    internal static List<Rigidbody?> Bodies { get; } = new();
-    internal static List<Staticbody?> Statics { get; } = new();
-
-    public static PhysicsBody GetContainer(CollidableReference collidable)
+    [OnAssemblyLoad, OnAssemblyUnload, OnSceneLoad, OnSceneUnload, OnPlaymodeChanged]
+    public static void Clear()
     {
-        if (collidable.Mobility == CollidableMobility.Static)
-            return GetContainer(collidable.StaticHandle);
-        else
-            return GetContainer(collidable.BodyHandle);
-    }
-
-    public static Rigidbody GetContainer(BodyHandle handle)
-    {
-        return Bodies[handle.Value];
-    }
-
-    public static Staticbody GetContainer(StaticHandle handle)
-    {
-        return Statics[handle.Value];
-    }
-
-    public static void Initialize()
-    {
-        if (isInitialized)
-            return;
-
-        //Any IThreadDispatcher implementation can be used for multithreading. Here, we use the BepuUtilities.ThreadDispatcher implementation.
-        Dispatcher = new ThreadDispatcher(Environment.ProcessorCount);
-        Pool = new BufferPool();
-        Characters = new CharacterControllersManager(Pool);
-        CollidableMaterials = new CollidableProperty<PhysicsMaterial>();
-        ContactEvents = new ContactEventsManager(Dispatcher, Pool);
-
-        var narrow = new BepuNarrowPhaseCallbacks() { CollidableMaterials = CollidableMaterials, ContactEvents = ContactEvents };
-        var pose = new BepuPoseIntegratorCallbacks();
-        pose.Gravity = PhysicsSetting.Instance.Gravity;
-        var desc = new SolveDescription(PhysicsSetting.Instance.Iterations, PhysicsSetting.Instance.Substep);
-        Sim = Simulation.Create(Pool, narrow, pose, desc);
-        Sim.Deterministic = PhysicsSetting.Instance.EnhancedDeterminism;
-
-        CollidableMaterials.Initialize(Sim);
-        ContactEvents.Initialize();
-
-        isInitialized = true;
+        _world?.Clear();
     }
 
     public static void Update()
     {
-        if (!isInitialized)
-            return;
-
         timer += Time.deltaTime;
         int count = 0;
         while (timer >= Time.fixedDeltaTime && count++ < 10)
         {
             SceneManager.PhysicsUpdate();
-            if (PhysicsSetting.Instance.UseMultithreading)
-                Sim.Timestep((float)Time.fixedDeltaTime, Dispatcher);
-            else
-                Sim.Timestep((float)Time.fixedDeltaTime);
+
+            _world.SolverIterations = (PhysicsSetting.Instance.SolverIterations, PhysicsSetting.Instance.RelaxIterations);
+            _world.SubstepCount = PhysicsSetting.Instance.Substep;
+            _world.AllowDeactivation = PhysicsSetting.Instance.AllowSleep;
+
+            _world.Gravity = new JVector(PhysicsSetting.Instance.Gravity.x, PhysicsSetting.Instance.Gravity.y, PhysicsSetting.Instance.Gravity.z);
+
+            _world.Step(Time.fixedDeltaTime, PhysicsSetting.Instance.UseMultithreading);
+
             timer -= Time.fixedDeltaTime;
-            ContactEvents.Flush(); //Fire event handler stuff.
-
-            foreach (var body in Bodies)
-            {
-                if (body == null) continue;
-
-                if (PhysicsSetting.Instance.AutoSyncTransforms)
-                    body.SyncTransform();
-
-                body.PreviousPose = body.CurrentPose;
-                if (body.BodyReference is { } bRef)
-                    body.CurrentPose = bRef.Pose;
-            }
-
-            foreach (var body in Statics)
-            {
-                if (body == null) continue;
-
-                if (PhysicsSetting.Instance.AutoSyncTransforms)
-                    body.SyncTransform();
-
-                body.PreviousPose = body.CurrentPose;
-                if (body.StaticReference is { } sRef)
-                    body.CurrentPose = sRef.Pose;
-            }
-        }
-
-        InterpolateTransforms();
-    }
-
-    private static void InterpolateTransforms()
-    {
-#warning TODO: Very broken
-        // Find the interpolation factor, a value [0,1] which represents the ratio of the current time relative to the previous and the next physics step,
-        // a value of 0.5 means that we're halfway to the next physics update, just have to wait for the same amount of time.
-        //var interpolationFactor = (float)(timer / Time.fixedDeltaTime);
-        //interpolationFactor = MathF.Min(interpolationFactor, 1f);
-        foreach (var body in Bodies)
-        {
-            if (body == null) continue;
-
-            var prevVersion = body.Transform.version;
-            body.Transform.rotation = body.CurrentPose.Orientation;
-            body.Transform.position = body.CurrentPose.Position;
-            // Physics doesnt (for the time being, may change) update the transform version
-            body.Transform.version = prevVersion;
-
-            //if (body.InterpolationMode == InterpolationMode.Extrapolated)
-            //    interpolationFactor += 1f;
-            //
-            //var interpolatedPosition = Vector3.Lerp(body.PreviousPose.Position, body.CurrentPose.Position, interpolationFactor);
-            //// We may be able to get away with just a Lerp instead of Slerp, not sure if it needs to be normalized though at which point it may not be that much faster
-            //var interpolatedRotation = Quaternion.Slerp(body.PreviousPose.Orientation, body.CurrentPose.Orientation, interpolationFactor);
-            //
-            //var prevVersion = body.Transform.version;
-            //body.Transform.rotation = interpolatedRotation;
-            //body.Transform.position = interpolatedPosition - Vector3.Transform(body.CenterOfMass, interpolatedRotation);
-            //// Physics doesnt (for the time being, may change) update the transform version
-            //body.Transform.version = prevVersion;
         }
     }
-
-    public static void Dispose()
-    {
-        if (!isInitialized)
-            return;
-
-        CollidableMaterials.Dispose();
-        ContactEvents.Dispose();
-        Bodies.Clear();
-        Statics.Clear();
-
-        Characters.Dispose();
-        Characters = null;
-        Sim.Dispose();
-        Sim = null;
-        Dispatcher.Dispose();
-        Dispatcher = null;
-        Pool.Clear();
-        Pool = null;
-
-        isInitialized = false;
-    }
-
-    #region Public API
 
     /// <summary>
-    /// Finds the closest intersection between this ray and shapes in the simulation.
+    /// Sets the collision matrix for two layers
     /// </summary>
-    /// <returns>True when the given ray intersects with a shape, false otherwise</returns>
-    public static bool RayCast(in Vector3 origin, in Vector3 dir, float maxDistance, out HitInfo result, LayerMask? layerMask = null)
+    public static void SetLayerCollision(int layer1Index, int layer2Index, bool shouldCollide)
     {
-        var handler = new RayClosestHitHandler(layerMask);
-        Sim.RayCast(origin, dir, maxDistance, ref handler);
-        if (handler.HitInformation.HasValue)
+        PhysicsSetting.Instance.s_collisionMatrix.SetSymmetric(layer1Index, layer2Index, shouldCollide);
+    }
+
+    /// <summary>
+    /// Makes sure the collision matrix is symmetric (if [a,b] collides, [b,a] should too)
+    /// </summary>
+    public static void EnsureSymmetric()
+    {
+        PhysicsSetting.Instance.s_collisionMatrix.MakeSymmetric();
+    }
+
+    /// <summary>
+    /// Sets all collisions for a specific layer
+    /// </summary>
+    public static void SetLayerCollisions(int layer, bool shouldCollide)
+    {
+        PhysicsSetting.Instance.s_collisionMatrix.SetRow(layer, shouldCollide);
+        // Make sure to maintain symmetry
+        PhysicsSetting.Instance.s_collisionMatrix.SetColumn(layer, shouldCollide);
+    }
+
+    /// <summary>
+    /// Gets weather two layers should collide
+    /// </summary>
+    public static bool GetLayerCollision(int layer1, int layer2)
+    {
+        return PhysicsSetting.Instance.s_collisionMatrix[layer1, layer2];
+    }
+
+    /// <summary>
+    /// Gets all collisions for a specific layer
+    /// </summary>
+    public static bool[] GetLayerCollisions(int layer)
+    {
+        return PhysicsSetting.Instance.s_collisionMatrix.GetRow(layer);
+    }
+
+    /// <summary>
+    /// Sets all layers to collide or not collide
+    /// </summary>
+    public static void SetAllCollisions(bool shouldCollide)
+    {
+        PhysicsSetting.Instance.s_collisionMatrix.SetAll(shouldCollide);
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction)
+    {
+        direction = direction.normalized;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        return _world.DynamicTree.RayCast(jOrigin, jDirection,
+            PreFilter, PostFilter,
+            out _, out _, out _);
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene and returns detailed information about the hit.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hitInfo)
+    {
+        direction = direction.normalized;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        hitInfo = new RaycastHit();
+        bool hit = _world.DynamicTree.RayCast(jOrigin, jDirection,
+            PreFilter, PostFilter,
+            out IDynamicTreeProxy shape, out JVector normal, out double lambda);
+
+        if (hit)
         {
-            result = handler.HitInformation.Value;
-            return true;
+            var result = new DynamicTree.RayCastResult
+            {
+                Entity = shape,
+                Lambda = lambda,
+                Normal = normal
+            };
+            hitInfo.SetFromJitterResult(result, origin, direction);
         }
 
-        result = default;
+        return hit;
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene within a maximum distance.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction, float maxDistance)
+    {
+        direction = direction.normalized * maxDistance;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        return _world.DynamicTree.RayCast(jOrigin, jDirection,
+            PreFilter, PostFilter,
+            out _, out _, out _);
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene within a maximum distance and returns detailed information about the hit.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction, float maxDistance, out RaycastHit hitInfo)
+    {
+        direction = direction.normalized * maxDistance;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        hitInfo = new RaycastHit();
+        bool hit = _world.DynamicTree.RayCast(jOrigin, jDirection,
+            PreFilter, PostFilter,
+            out IDynamicTreeProxy shape, out JVector normal, out double lambda);
+
+        if (hit)
+        {
+            var result = new DynamicTree.RayCastResult
+            {
+                Entity = shape,
+                Lambda = lambda,
+                Normal = normal,
+            };
+            hitInfo.SetFromJitterResult(result, origin, direction);
+        }
+
+        return hit;
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene with the specified layer mask.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction, float maxDistance, LayerMask layerMask)
+    {
+        direction = direction.normalized * maxDistance;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        return _world.DynamicTree.RayCast(jOrigin, jDirection,
+            shape => PreFilterWithLayer(shape, layerMask), PostFilter,
+            out _, out _, out _);
+    }
+
+    /// <summary>
+    /// Casts a ray against all colliders in the scene with the specified layer mask and returns detailed information about the hit.
+    /// </summary>
+    public static bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hitInfo, float maxDistance, LayerMask layerMask)
+    {
+        direction = direction.normalized * maxDistance;
+        var jOrigin = new JVector(origin.x, origin.y, origin.z);
+        var jDirection = new JVector(direction.x, direction.y, direction.z);
+
+        hitInfo = new RaycastHit();
+        bool hit = _world.DynamicTree.RayCast(jOrigin, jDirection,
+            shape => PreFilterWithLayer(shape, layerMask), PostFilter,
+            out IDynamicTreeProxy shape, out JVector normal, out double lambda);
+
+        if (hit)
+        {
+            var result = new DynamicTree.RayCastResult
+            {
+                Entity = shape,
+                Lambda = lambda,
+                Normal = normal,
+            };
+            hitInfo.SetFromJitterResult(result, origin, direction);
+        }
+
+        return hit;
+    }
+
+    private static bool PreFilter(IDynamicTreeProxy proxy)
+    {
+        return true;
+    }
+
+    private static bool PreFilterWithLayer(IDynamicTreeProxy proxy, LayerMask layerMask)
+    {
+        if (proxy is RigidBodyShape shape)
+        {
+            if (!PreFilter(proxy)) return false;
+
+            var userData = shape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
+
+            return layerMask.HasLayer(userData.Layer);
+        }
+
         return false;
     }
 
-    /// <summary>
-    /// Collect intersections between the given ray and shapes in this simulation. Hits are NOT sorted.
-    /// </summary>
-    public static void RaycastPenetrating(in Vector3 origin, in Vector3 dir, float maxDistance, HitInfo[] buffer, out Span<HitInfo> hits, LayerMask? collisionMask = null)
+    private static bool PostFilter(DynamicTree.RayCastResult result)
     {
-        var handler = new RayHitsArrayHandler(buffer, collisionMask);
-        Sim.RayCast(origin, dir, maxDistance, ref handler);
-        hits = new(buffer, 0, handler.Count);
+        return true;
     }
-
-    /// <summary>
-    /// Collect intersections between the given ray and shapes in this simulation. Hits are NOT sorted.
-    /// </summary>
-    public static void RaycastPenetrating(in Vector3 origin, in Vector3 dir, float maxDistance, ICollection<HitInfo> collection, LayerMask? collisionMask = null)
-    {
-        var handler = new RayHitsCollectionHandler(collection, collisionMask);
-        Sim.RayCast(origin, dir, maxDistance, ref handler);
-    }
-
-    /// <summary>
-    /// Finds the closest contact between <paramref name="shape"/> and other shapes in the simulation when thrown in <paramref name="velocity"/> direction.
-    /// </summary>
-    /// <returns>True when the given ray intersects with a shape, false otherwise</returns>
-    public static bool SweepCast<TShape>(in TShape shape, in RigidPose pose, in BodyVelocity velocity, float maxDistance, out HitInfo result, LayerMask? collisionMask = null) where TShape : unmanaged, IConvexShape //== collider "RayCast"
-    {
-        var handler = new RayClosestHitHandler(collisionMask);
-        Sim.Sweep(shape, pose, velocity, maxDistance, Pool, ref handler);
-        if (handler.HitInformation.HasValue)
-        {
-            result = handler.HitInformation.Value;
-            return true;
-        }
-
-        result = default;
-        return false;
-    }
-
-    /// <summary>
-    /// Finds contacts between <paramref name="shape"/> and other shapes in the simulation when thrown in <paramref name="velocity"/> direction.
-    /// </summary>
-    /// <returns>True when the given ray intersects with a shape, false otherwise</returns>
-    public static void SweepCastPenetrating<TShape>(in TShape shape, in RigidPose pose, in BodyVelocity velocity, float maxDistance, HitInfo[] buffer, out Span<HitInfo> contacts, LayerMask? collisionMask = null) where TShape : unmanaged, IConvexShape //== collider "RayCast"
-    {
-        var handler = new RayHitsArrayHandler(buffer, collisionMask);
-        Sim.Sweep(shape, pose, velocity, maxDistance, Pool, ref handler);
-        contacts = new(buffer, 0, handler.Count);
-    }
-
-    /// <summary>
-    /// Finds contacts between <paramref name="shape"/> and other shapes in the simulation when thrown in <paramref name="velocity"/> direction.
-    /// </summary>
-    /// <returns>True when the given ray intersects with a shape, false otherwise</returns>
-    public static void SweepCastPenetrating<TShape>(in TShape shape, in RigidPose pose, in BodyVelocity velocity, float maxDistance, ICollection<HitInfo> collection, LayerMask? collisionMask = null) where TShape : unmanaged, IConvexShape //== collider "RayCast"
-    {
-        var handler = new RayHitsCollectionHandler(collection, collisionMask);
-        Sim.Sweep(shape, pose, velocity, maxDistance, Pool, ref handler);
-    }
-
-    /// <summary>
-    /// Returns true when this shape overlaps with any physics object in this simulation
-    /// </summary>
-    /// <returns>True when the given shape overlaps with any physics object in the simulation</returns>
-    public static bool Overlap<TShape>(in TShape shape, in RigidPose pose, LayerMask? collisionMask = null) where TShape : unmanaged, IConvexShape
-    {
-        var handler = new OverlapAnyHandler(collisionMask);
-        Sim.Sweep(shape, pose, default, 0f, Pool, ref handler);
-        return handler.Any;
-    }
-
-    /// <summary>
-    /// Fills <paramref name="buffer"/> with any physics object in the simulation that overlaps with this shape
-    /// </summary>
-    public static void Overlap<TShape>(in TShape shape, in RigidPose pose, PhysicsBody[] buffer, out Span<PhysicsBody> overlaps, LayerMask? collisionMask = null) where TShape : unmanaged, IConvexShape
-    {
-        var handler = new OverlapArrayHandler(buffer, collisionMask);
-        Sim.Sweep(shape, pose, default, 0f, Pool, ref handler);
-        overlaps = new(buffer, 0, handler.Count);
-    }
-
-    /// <summary>
-    /// Fills <paramref name="collection"/> with any physics object in the simulation that overlaps with this shape
-    /// </summary>
-    public static void Overlap<TShape>(in TShape shape, in RigidPose pose, ICollection<PhysicsBody> collection, LayerMask? collisionMask = null) where TShape : unmanaged, IConvexShape
-    {
-        var handler = new OverlapCollectionHandler(collection, collisionMask);
-        Sim.Sweep(shape, pose, default, 0f, Pool, ref handler);
-    }
-
-    #endregion
-
 }

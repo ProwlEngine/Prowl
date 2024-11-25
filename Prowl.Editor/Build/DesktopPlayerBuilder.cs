@@ -10,6 +10,7 @@ using Prowl.Editor.ProjectSettings;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 using Prowl.Runtime.Rendering;
+using Prowl.Echo;
 
 namespace Prowl.Editor.Build;
 
@@ -260,7 +261,7 @@ public class Desktop_Player : ProjectBuilder
         {
             // Debug.Log($"Packing scene_{i}.prowl.");
             AssetRef<Scene> scene = scenes[i];
-            SerializedProperty tag = Serializer.Serialize(scene.Res!);
+            EchoObject tag = Serializer.Serialize(scene.Res!);
             BinaryTagConverter.WriteToFile(tag, new FileInfo(Path.Combine(dataPath, $"scene_{i}.prowl")));
         }
     }

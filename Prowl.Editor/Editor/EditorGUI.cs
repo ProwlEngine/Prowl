@@ -300,7 +300,7 @@ public static class EditorGUI
                 isPrefabModified = comp.GameObject.AffectedByPrefabLink != null && comp.GameObject.AffectedByPrefabLink.HasChange(comp, field.Name);
 
             // Draw the property
-            bool propChange = DrawerAttribute.DrawProperty(ActiveGUI, field.Name + (isPrefabModified ? "*" : ""), i++, fieldType, ref fieldValue, config);
+            bool propChange = DrawerAttribute.DrawProperty(ActiveGUI, field.Name + (isPrefabModified ? "*" : ""), i++, fieldType, ref fieldValue, config, attributes.Cast<Attribute>().ToList());
 
             HandleEndAttributes(imGuiAttributes);
 
@@ -363,7 +363,8 @@ public static class EditorGUI
         if (fieldInfo != null)
         {
             object? obj = fieldInfo.GetValue(target);
-            bool changed = DrawerAttribute.DrawProperty(ActiveGUI, name, index, fieldInfo.FieldType, ref obj, config);
+            List<Attribute> attributes = fieldInfo.GetCustomAttributes<Attribute>(true).ToList();
+            bool changed = DrawerAttribute.DrawProperty(ActiveGUI, name, index, fieldInfo.FieldType, ref obj, config, attributes);
             if (changed)
             {
                 if (target is MonoBehaviour comp2)
@@ -404,7 +405,8 @@ public static class EditorGUI
         if (propInfo != null)
         {
             object? obj = propInfo.GetValue(target);
-            bool changed = DrawerAttribute.DrawProperty(ActiveGUI, name, index, propInfo.PropertyType, ref obj, config);
+            List<Attribute> attributes = propInfo.GetCustomAttributes<Attribute>(true).ToList();
+            bool changed = DrawerAttribute.DrawProperty(ActiveGUI, name, index, propInfo.PropertyType, ref obj, config, attributes);
             if (changed)
             {
                 if (target is MonoBehaviour comp2)

@@ -46,4 +46,7 @@ public abstract class AbstractAction : IAction
 
     public virtual bool CanExecute() => ExecuteCount == 0;
     public virtual bool CanUnExecute() => !CanExecute();
+
+
+    public virtual bool TryMerge(IAction action) => false;
 }

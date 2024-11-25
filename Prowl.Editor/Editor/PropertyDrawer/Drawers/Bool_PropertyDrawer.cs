@@ -11,7 +11,7 @@ public class Bool_PropertyDrawer : PropertyDrawer
 {
     public override double MinWidth => EditorStylePrefs.Instance.ItemSize;
 
-    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
+    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value, List<Attribute>? attributes = null)
     {
         bool val = (bool)value;
         bool changed = Gui.ActiveGUI.Checkbox(ID + "Val", ref val, 0, 0, out _, EditorGUI.InputStyle);

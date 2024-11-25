@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
+using Prowl.Echo;
 using Prowl.Runtime.Cloning;
 
 namespace Prowl.Runtime;
@@ -94,16 +95,6 @@ public abstract class EngineObject : ICloneExplicit
         return null;
     }
 
-    public static EngineObject Instantiate(EngineObject obj, bool keepAssetID = false)
-    {
-        if (obj.IsDestroyed) throw new Exception(obj.Name + " has been destroyed.");
-        // Don't need to assign ID the constructor will do that automatically
-        EngineObject newObj = obj.Clone();
-        // Need to make sure to set GUID to empty so the engine knows this isn't the original Asset file
-        if (!keepAssetID) newObj.AssetID = Guid.Empty;
-        return newObj;
-    }
-
     /// <summary>
     /// Creates a deep copy of this EngineObject.
     /// </summary>
@@ -186,24 +177,24 @@ public abstract class EngineObject : ICloneExplicit
 
     public override string ToString() => Name;
 
-    protected void SerializeHeader(SerializedProperty compound)
+    protected void SerializeHeader(EchoObject compound)
     {
         compound.Add("Name", new(Name));
 
         if (AssetID != Guid.Empty)
         {
-            compound.Add("AssetID", new SerializedProperty(AssetID.ToString()));
+            compound.Add("AssetID", new EchoObject(AssetID.ToString()));
 
             if (FileID != 0)
-                compound.Add("FileID", new SerializedProperty(FileID));
+                compound.Add("FileID", new EchoObject(FileID));
         }
     }
 
-    protected void DeserializeHeader(SerializedProperty value)
+    protected void DeserializeHeader(EchoObject value)
     {
         Name = value.Get("Name")?.StringValue;
 
-        if (value.TryGet("AssetID", out SerializedProperty? assetIDTag))
+        if (value.TryGet("AssetID", out EchoObject? assetIDTag))
         {
             AssetID = Guid.Parse(assetIDTag.StringValue);
 

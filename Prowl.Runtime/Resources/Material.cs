@@ -10,6 +10,7 @@ using Vector3F = System.Numerics.Vector3;
 using Vector4F = System.Numerics.Vector4;
 
 using Prowl.Runtime.Rendering;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 

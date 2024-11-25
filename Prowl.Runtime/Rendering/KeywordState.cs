@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Echo;
+
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>

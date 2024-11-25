@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Echo;
 namespace Prowl.Runtime;
 
 public enum AnimationWrapMode
@@ -83,7 +84,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
         }
     }
 
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         Name = value.Get("Name").StringValue;
         Duration = value.Get("Duration").DoubleValue;
@@ -117,20 +118,20 @@ public sealed class AnimationClip : EngineObject, ISerializable
         _boneMap = Bones.ToDictionary(b => b.BoneName);
     }
 
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        var value = SerializedProperty.NewCompound();
-        value.Add("Name", new SerializedProperty(Name));
-        value.Add("Duration", new SerializedProperty(Duration));
-        value.Add("TicksPerSecond", new SerializedProperty(TicksPerSecond));
-        value.Add("DurationInTicks", new SerializedProperty(DurationInTicks));
-        value.Add("Wrap", new SerializedProperty((int)Wrap));
+        var value = EchoObject.NewCompound();
+        value.Add("Name", new EchoObject(Name));
+        value.Add("Duration", new EchoObject(Duration));
+        value.Add("TicksPerSecond", new EchoObject(TicksPerSecond));
+        value.Add("DurationInTicks", new EchoObject(DurationInTicks));
+        value.Add("Wrap", new EchoObject((int)Wrap));
 
-        var boneList = SerializedProperty.NewList();
+        var boneList = EchoObject.NewList();
         foreach (var bone in Bones)
         {
-            var boneProp = SerializedProperty.NewCompound();
-            boneProp.Add("BoneName", new SerializedProperty(bone.BoneName));
+            var boneProp = EchoObject.NewCompound();
+            boneProp.Add("BoneName", new EchoObject(bone.BoneName));
 
             boneProp.Add("PosX", Serializer.Serialize(bone.PosX, ctx));
             boneProp.Add("PosY", Serializer.Serialize(bone.PosY, ctx));

@@ -4,6 +4,7 @@
 using System;
 
 using Veldrid;
+using Prowl.Echo;
 
 namespace Prowl.Runtime.Rendering;
 
@@ -194,9 +195,9 @@ public sealed class TextureSampler : IDisposable, ISerializable
                desc1.MinimumLod == desc2.MinimumLod;
     }
 
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        SerializedProperty compoundTag = SerializedProperty.NewCompound();
+        EchoObject compoundTag = EchoObject.NewCompound();
 
         compoundTag.Add("WrapModeU", new((int)WrapModeU));
         compoundTag.Add("WrapModeV", new((int)WrapModeV));
@@ -211,7 +212,7 @@ public sealed class TextureSampler : IDisposable, ISerializable
         return compoundTag;
     }
 
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         WrapModeU = (TextureWrapMode)value["WrapModeU"].IntValue;
         WrapModeV = (TextureWrapMode)value["WrapModeV"].IntValue;

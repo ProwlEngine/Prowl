@@ -143,6 +143,7 @@ public struct Vector3Int : IEquatable<Vector3Int>, IFormattable
     #endregion Public Instance Methods
 
     public static Vector3Int zero { get { return new Vector3Int(); } }
+    public static Vector3Int one { get { return new Vector3Int(1, 1, 1); } }
 
     #region Public Static Methods
 

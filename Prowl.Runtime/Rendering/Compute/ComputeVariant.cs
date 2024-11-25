@@ -4,6 +4,7 @@
 using System;
 
 using Veldrid;
+using Prowl.Echo;
 
 namespace Prowl.Runtime.Rendering;
 

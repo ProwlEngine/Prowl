@@ -17,6 +17,7 @@ public class SSAOEffect : MonoBehaviour
 
     public float Radius = 0.5f;
     public float Intensity = 1.25f;
+    [Range(4, 32, true)]
     public int SampleCount = 16;
     public float MaxDistance = 100f;
 

@@ -8,6 +8,7 @@ using System.Linq;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Pipelines;
 using Prowl.Runtime.Utils;
+using Prowl.Echo;
 
 namespace Prowl.Runtime.SceneManagement;
 
@@ -17,7 +18,7 @@ public static class SceneManager
 
     public static Scene Scene => Current.Res!;
 
-    private static SerializedProperty? StoredScene;
+    private static EchoObject? StoredScene;
     private static Guid StoredSceneID;
 
     public static void Initialize()
@@ -83,7 +84,6 @@ public static class SceneManager
         {
             Camera.Main = null; // Clear the main camera so it will re-find itself and be updated
 
-            Physics.Dispose();
             // The act of Destroying a active scene sets the current scene to an new one
             // During this period the previous scene is Destroyed, making Res return null, hence the ? here
             Current.Res.DestroyImmediate();
@@ -91,8 +91,6 @@ public static class SceneManager
             EngineObject.HandleDestroyed();
 
             Current = new Scene();
-
-            Physics.Initialize();
         }
     }
 

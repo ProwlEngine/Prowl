@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Runtime.Rendering;
+using Prowl.Echo;
 
 namespace Prowl.Runtime.NodeSystem;
 
@@ -109,7 +110,7 @@ public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiv
     /// <summary> Creates a copy of the original node in the graph </summary>
     public virtual Node CopyNode(Node original)
     {
-        SerializedProperty nodeTag = Serializer.Serialize(original);
+        EchoObject nodeTag = Serializer.Serialize(original);
         Node node = Serializer.Deserialize<Node>(nodeTag);
         node.graph = this;
         node.position += new Vector2(30, 30);
@@ -146,13 +147,13 @@ public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiv
     /// <summary> Create a new deep copy of this graph </summary>
     public virtual NodeGraph Copy()
     {
-        SerializedProperty graphTag = Serializer.Serialize(this);
+        EchoObject graphTag = Serializer.Serialize(this);
         NodeGraph graph = Serializer.Deserialize<NodeGraph>(graphTag);
         // Instantiate all nodes inside the graph
         for (int i = 0; i < nodes.Count; i++)
         {
             if (nodes[i] == null) continue;
-            SerializedProperty nodeTag = Serializer.Serialize(nodes[i]);
+            EchoObject nodeTag = Serializer.Serialize(nodes[i]);
             Node node = Serializer.Deserialize<Node>(nodeTag);
             node.graph = graph;
             graph.nodes[i] = node;

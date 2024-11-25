@@ -454,7 +454,8 @@ public class DefaultNodeEditor : ScriptedNodeEditor
         if (showBacking)
         {
             object? value = fieldInfo.GetValue(node);
-            if (DrawerAttribute.DrawProperty(g, fieldInfo.Name, fieldIndex, fieldInfo.FieldType, ref value, EditorGUI.PropertyGridConfig.NoLabel))
+            List<Attribute> attributes = fieldInfo.GetCustomAttributes<Attribute>(true).ToList();
+            if (DrawerAttribute.DrawProperty(g, fieldInfo.Name, fieldIndex, fieldInfo.FieldType, ref value, EditorGUI.PropertyGridConfig.NoLabel, attributes))
             {
                 changed |= true;
 

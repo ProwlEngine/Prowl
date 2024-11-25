@@ -7,8 +7,7 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Pipelines;
 
 using Prowl.Icons;
-using Veldrid;
-using System;
+using Prowl.Echo;
 
 namespace Prowl.Runtime;
 
@@ -61,9 +60,9 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
     }
 
 
-    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        SerializedProperty compoundTag = SerializedProperty.NewCompound();
+        EchoObject compoundTag = EchoObject.NewCompound();
         compoundTag.Add("Mesh", Serializer.Serialize(Mesh, ctx));
         compoundTag.Add("Material", Serializer.Serialize(Material, ctx));
         compoundTag.Add("Bones", Serializer.Serialize(Bones, ctx));
@@ -72,7 +71,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
     }
 
 
-    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         Mesh = Serializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
         Material = Serializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
@@ -82,7 +81,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
 
     public Material GetMaterial() => Material.Res;
 
-    public byte GetLayer() => GameObject.layerIndex;
+    public int GetLayer() => GameObject.layerIndex;
 
 
     public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)

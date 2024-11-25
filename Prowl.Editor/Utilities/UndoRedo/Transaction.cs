@@ -28,6 +28,8 @@ public sealed class Transaction : IAction, IDisposable
             action.UnExecute();
     }
 
+    public bool TryMerge(IAction action) => false;
+
     public bool CanExecute() => _actions.All(a => a.CanExecute());
     public bool CanUnExecute() => _actions.All(a => a.CanUnExecute());
 

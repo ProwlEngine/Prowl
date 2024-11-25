@@ -34,7 +34,7 @@ public static partial class Graphics
         }
 
         public Material GetMaterial() => _material.Res;
-        public byte GetLayer() => _layerIndex;
+        public int GetLayer() => _layerIndex;
 
         public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
         {

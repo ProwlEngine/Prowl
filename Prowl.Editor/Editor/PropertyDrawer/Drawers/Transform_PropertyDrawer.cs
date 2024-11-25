@@ -12,7 +12,7 @@ namespace Prowl.Editor.PropertyDrawers;
 [Drawer(typeof(Transform))]
 public class Transform_PropertyDrawer : PropertyDrawer
 {
-    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue)
+    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue, List<Attribute>? attributes = null)
     {
         gui.CurrentNode.Layout(LayoutType.Row).ScaleChildren();
 

@@ -347,7 +347,7 @@ public class HierarchyWindow : EditorWindow
                 {
                     _renamingGO = null;
                     if (_renamingText != entity.Name)
-                        UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(entity, nameof(GameObject.Name), name.Trim()));
+                        UndoRedoManager.RecordAction(new ChangeFieldOnGameObjectAction(entity, nameof(GameObject.Name), _renamingText.Trim()));
                 }
                 //entity.Name = name;
                 _justStartedRename = false;
@@ -387,7 +387,7 @@ public class HierarchyWindow : EditorWindow
             }
             else
             {
-                UndoRedoManager.RecordAction(new SetParentAction(go.Identifier, entity.Identifier));
+                UndoRedoManager.RecordAction(new SetParentAction(go.Identifier, entity?.Identifier ?? Guid.Empty));
             }
 
             //if (entity != null)

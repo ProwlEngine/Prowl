@@ -12,7 +12,9 @@ public abstract class Light : MonoBehaviour, IRenderableLight
 
     public Color color = Color.white;
     public float intensity = 16.0f;
+    [Range(0, 1, true)]
     public float shadowBias = 0.05f;
+    [Range(0, 3, true)]
     public float shadowNormalBias = 1f;
     public bool castShadows = true;
 

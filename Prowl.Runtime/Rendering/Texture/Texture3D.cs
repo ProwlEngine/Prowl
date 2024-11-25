@@ -4,6 +4,7 @@
 using System;
 
 using Veldrid;
+using Prowl.Echo;
 
 namespace Prowl.Runtime.Rendering;
 
@@ -148,9 +149,9 @@ public sealed class Texture3D : Texture
         });
     }
 
-    public override SerializedProperty Serialize(Serializer.SerializationContext ctx)
+    public override EchoObject Serialize(SerializationContext ctx)
     {
-        SerializedProperty compoundTag = SerializedProperty.NewCompound();
+        EchoObject compoundTag = EchoObject.NewCompound();
 
         SerializeHeader(compoundTag);
 
@@ -169,7 +170,7 @@ public sealed class Texture3D : Texture
         return compoundTag;
     }
 
-    public override void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+    public override void Deserialize(EchoObject value, SerializationContext ctx)
     {
         DeserializeHeader(value);
 

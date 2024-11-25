@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Runtime.SceneManagement;
+using Prowl.Echo;
 
 namespace Prowl.Runtime.Utils;
 
@@ -34,7 +35,7 @@ public class SerializedAsset
         if (Main == null) throw new Exception("Asset does not have a main object.");
 
         file.Directory?.Create(); // Ensure the Directory exists
-        Serializer.SerializationContext ctx = new();
+        SerializationContext ctx = new();
         var tag = Serializer.Serialize(this, ctx);
         dependencies = ctx.dependencies;
 

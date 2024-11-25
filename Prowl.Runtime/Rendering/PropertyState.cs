@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
+using Prowl.Echo;
+
 using Matrix4x4F = System.Numerics.Matrix4x4;
 using Vector2F = System.Numerics.Vector2;
 using Vector3F = System.Numerics.Vector3;

@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 
 using Prowl.Icons;
+using Prowl.Echo;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Pipelines;
 
@@ -53,6 +54,7 @@ public class Camera : MonoBehaviour
     public AssetRef<RenderPipeline> Pipeline;
     public AssetRef<RenderTexture> Target;
     public bool HDR = false;
+    [Range(0, 2, true)]
     public float RenderScale = 1.0f;
 
     public bool IsOrthographic => projectionType == ProjectionType.Orthographic;

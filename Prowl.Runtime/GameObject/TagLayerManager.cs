@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Runtime.Cloning;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
@@ -20,6 +21,7 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     /// <summary>
     /// List of available tags for GameObjects.
     /// </summary>
+    [ListDrawer(false, true, false)]
     public List<string> tags =
     [
         "Untagged",
@@ -34,48 +36,27 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     /// <summary>
     /// Array of available layers for GameObjects.
     /// </summary>
+    [ListDrawer(false, false, false)]
     public string[] layers =
-        [
-            "Default",
-            "TransparentFX",
-            "Ignore Raycast",
-            "Water",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-        ];
+    [
+        "Default",
+        "TransparentFX",
+        "Ignore Raycast",
+        "Water",
+        "", "", "", "", "",
+        "", "", "", "", "",
+        "", "", "", "", "",
+        "", "", "", "", "",
+        "", "", "", "", "",
+        "", "", ""
+    ];
 
     /// <summary>
     /// Retrieves the tag name associated with the given index.
     /// </summary>
     /// <param name="index">The index of the tag to retrieve.</param>
     /// <returns>The tag name at the specified index, or "Untagged" if the index is out of range.</returns>
-    public static string GetTag(byte index)
+    public static string GetTag(int index)
     {
         if (index < 0 || index >= Instance.tags.Count)
             return "Untagged";
@@ -86,12 +67,11 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     /// Retrieves the layer name associated with the given index.
     /// </summary>
     /// <param name="index">The index of the layer to retrieve.</param>
-    /// <returns>The layer name at the specified index.</returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the index is out of range.</exception>
-    public static string GetLayer(byte index)
+    /// <returns>The layer name at the specified index, "Default" If index is out of range.</returns>
+    public static string GetLayer(int index)
     {
         if (index < 0 || index >= Instance.layers.Length)
-            throw new ArgumentOutOfRangeException(nameof(index), index, "Layer index is out of range.");
+            return "Default";
         return Instance.layers[index];
     }
 
@@ -99,42 +79,39 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     /// Retrieves the index of the specified tag.
     /// </summary>
     /// <param name="tag">The tag name to look up.</param>
-    /// <returns>The index of the tag, or 0 if the tag is not found.</returns>
-    public static byte GetTagIndex(string tag)
+    /// <returns>The index of the tag, or -1 if the tag is not found.</returns>
+    public static int GetTagIndex(string tag)
     {
-        int index = Instance.tags.IndexOf(tag);
-        return (byte)(index == -1 ? 0 : index);
+        for (int i = 0; i < Instance.tags.Count; i++)
+            if (Instance.tags[i].Equals(tag, StringComparison.OrdinalIgnoreCase))
+                return i;
+        return -1;
     }
 
     /// <summary>
     /// Retrieves the index of the specified layer.
     /// </summary>
     /// <param name="layer">The layer name to look up.</param>
-    /// <returns>The index of the layer, or 0 if the layer is not found.</returns>
-    public static byte GetLayerIndex(string layer)
+    /// <returns>The index of the layer, or -1 if the layer is not found.</returns>
+    public static int GetLayerIndex(string layer)
     {
-        int index = Array.IndexOf(Instance.layers, layer);
-        return (byte)(index == -1 ? 0 : index);
-    }
-
-    /// <summary>
-    /// Removes a tag from the list of available tags and updates all GameObjects using that tag.
-    /// </summary>
-    /// <param name="index">The index of the tag to remove.</param>
-    public static void RemoveTag(byte index)
-    {
-        foreach (var gameObject in GameObject.FindGameObjectsWithTag(Instance.tags[index]))
-            gameObject.tagIndex = 0;
-
-        var tags = Instance.tags.ToList();
-        tags.RemoveAt(index);
-        foreach (var gameObject in EngineObject.FindObjectsOfType<GameObject>())
-            gameObject.tagIndex = (byte)tags.IndexOf(gameObject.tag);
+        for (int i = 0; i < Instance.layers.Length; i++)
+            if (Instance.layers[i].Equals(layer, StringComparison.OrdinalIgnoreCase))
+                return i;
+        return -1;
     }
 
     /// <summary>
     /// Retrieves a copy of the layers array.
     /// </summary>
     /// <returns>A new array containing all layer names.</returns>
-    public static string[] GetLayers() => (string[])Instance.layers.Clone();
+    public static IReadOnlyList<string> GetLayers() => Instance.layers;
+
+    [GUIButton("Reset to Default")]
+    public static void ResetDefault()
+    {
+        // Shortcut to reset values
+        _instance = new TagLayerManager();
+        _instance.Save();
+    }
 }

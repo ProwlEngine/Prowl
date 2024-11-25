@@ -9,4 +9,5 @@ public interface IAction
     void UnExecute();
     bool CanExecute();
     bool CanUnExecute();
+    bool TryMerge(IAction action);
 }
