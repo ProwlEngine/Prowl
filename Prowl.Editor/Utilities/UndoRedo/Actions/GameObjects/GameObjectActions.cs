@@ -180,7 +180,21 @@ public class ChangeFieldOnGameObjectAction : AbstractAction
     public ChangeFieldOnGameObjectAction(GameObject target, string field, object newValue)
     {
         _target = target?.Identifier ?? Guid.Empty;
-        _field = target.GetType().GetField(field, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) ?? throw new InvalidOperationException($"Field '{field}' not found on '{target}'");
+        try
+        {
+            _field = target.GetType().GetField(field, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        }
+        catch
+        {
+            try
+            {
+                _field = target.GetType().GetProperty(field, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            }
+            catch
+            {
+                throw new InvalidOperationException($"Could not find {field} on gameObject {target}");
+            }
+        }
         _newValue = newValue;
     }
 
