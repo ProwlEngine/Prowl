@@ -199,9 +199,9 @@ public sealed class Rigidbody3D : MonoBehaviour
     internal void UpdateShapes(RigidBody rb)
     {
         rb.RemoveShape(rb.Shapes, false);
-        foreach (var shape in GetComponents<Collider>())
+        foreach (Collider shape in GetComponents<Collider>())
         {
-            var result = shape.CreateTransformedShape();
+            Jitter2.Collision.Shapes.RigidBodyShape result = shape.CreateTransformedShape();
             if (result == null) continue;
             rb.AddShape(result, false);
         }

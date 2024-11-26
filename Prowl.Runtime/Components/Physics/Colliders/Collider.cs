@@ -12,6 +12,7 @@ public abstract class Collider : MonoBehaviour
 
     protected Rigidbody3D RigidBody => GetComponentInParent<Rigidbody3D>();
 
+
     /// <summary>
     /// Create the Jitter Physics RigidBodyShape
     /// </summary>
@@ -76,10 +77,33 @@ public abstract class Collider : MonoBehaviour
         return new TransformedShape(shape, translation, orientation);
     }
 
+    public override void OnEnable()
+    {
+        Rigidbody3D rb = RigidBody;
+        if (rb != null)
+        {
+            // Refresh the Rigidbody, this will regenerate the body's shape and include this collider
+            rb.OnValidate();
+        }
+    }
+
+    public override void OnDisable()
+    {
+        Rigidbody3D rb = RigidBody;
+        if (rb != null)
+        {
+            // Refresh the Rigidbody, this will regenerate the body's shape and remove this collider
+            rb.OnValidate();
+        }
+    }
+
     public override void OnValidate()
     {
         Rigidbody3D rb = RigidBody;
-        if(rb != null)
+        if (rb != null)
+        {
+            // Refresh the Rigidbody, this will regenerate the body's shape and include the changes made to this collider
             rb.OnValidate();
+        }
     }
 }
