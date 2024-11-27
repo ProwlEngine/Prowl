@@ -67,6 +67,7 @@ public static class Program
 
         Application.Update += () =>
         {
+            EngineObject.HandleDestroyed();
 
             if (!s_opened && options?.ProjectPath is not null && options.ProjectPath.Exists)
             {

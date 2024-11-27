@@ -96,8 +96,6 @@ public static class SceneManager
 
     public static void Update()
     {
-        EngineObject.HandleDestroyed();
-
         List<GameObject> activeGOs = Scene.ActiveObjects.ToList();
         foreach (GameObject go in activeGOs)
             go.PreUpdate();

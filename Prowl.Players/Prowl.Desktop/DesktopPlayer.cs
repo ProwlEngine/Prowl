@@ -30,7 +30,11 @@ public static class DesktopPlayer
             }
         };
 
-        Application.Update += SceneManager.Update;
+        Application.Update += () =>
+        {
+            EngineObject.HandleDestroyed();
+            SceneManager.Update();
+        };
 
         Application.Render += () =>
         {
