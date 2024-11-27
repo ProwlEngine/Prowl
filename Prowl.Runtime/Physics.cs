@@ -183,7 +183,8 @@ public static class Physics
         {
             SceneManager.PhysicsUpdate();
 
-            _world.SolverIterations = (PhysicsSetting.Instance.SolverIterations, PhysicsSetting.Instance.RelaxIterations);
+            // Use World once to ensure its created
+            World.SolverIterations = (PhysicsSetting.Instance.SolverIterations, PhysicsSetting.Instance.RelaxIterations);
             _world.SubstepCount = PhysicsSetting.Instance.Substep;
             _world.AllowDeactivation = PhysicsSetting.Instance.AllowSleep;
 
