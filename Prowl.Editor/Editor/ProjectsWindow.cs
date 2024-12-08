@@ -27,7 +27,6 @@ public class ProjectsWindow : EditorWindow
     private FileDialog _dialog;
     private FileDialogContext _dialogContext;
 
-
     protected override bool Center { get; } = true;
     protected override double Width { get; } = 1024;
     protected override double Height { get; } = 640;
@@ -52,30 +51,32 @@ public class ProjectsWindow : EditorWindow
         if (Project.HasProject)
             isOpened = false;
 
-        using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Enter())
+        using (gui.CurrentNode.Left(0).Top(0).ExpandWidth().ExpandHeight().Enter())
         {
-            using (gui.Node("Side").ExpandHeight().MaxWidth(150).Layout(LayoutType.Column).Spacing(5).Enter())
+            using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Enter())
             {
-                using (gui.Node("Name").Scale(150, 50).Enter())
+                using (gui.Node("Side").ExpandHeight().MaxWidth(150).Layout(LayoutType.Column).Spacing(5).Enter())
                 {
-                    Rect rect = gui.CurrentNode.LayoutData.Rect;
-                    gui.Draw2D.DrawText(Font.DefaultFont, "Prowl", 40, rect, Color.white);
+                    using (gui.Node("Name").Scale(150, 50).Enter())
+                    {
+                        Rect rect = gui.CurrentNode.LayoutData.Rect;
+                        gui.Draw2D.DrawText(Font.DefaultFont, "Prowl", 40, rect, Color.white);
+                    }
+
+                    DrawSidePanel();
                 }
 
-                DrawSidePanel();
+                gui.PushID((ulong)_currentTab);
+
+                using (gui.Node("TabContent").ExpandHeight().Enter())
+                {
+                    _tabs[_currentTab].Item2.Invoke();
+                }
+
+                gui.PopID();
             }
-
-            gui.PushID((ulong)_currentTab);
-
-            using (gui.Node("TabContent").ExpandHeight().Enter())
-            {
-                _tabs[_currentTab].Item2.Invoke();
-            }
-
-            gui.PopID();
         }
     }
-
 
     private void DrawProjectsTab()
     {
