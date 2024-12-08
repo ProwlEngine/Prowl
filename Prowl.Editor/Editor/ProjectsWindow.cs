@@ -36,6 +36,8 @@ public class ProjectsWindow : EditorWindow
     protected override bool LockSize => true;
     protected override double Padding => 0;
 
+    static readonly Color GrayAlpha = new Color(0, 0, 0, 0.5f);
+
     public ProjectsWindow()
     {
         Title = FontAwesome6.Book + " Project Window";
@@ -51,6 +53,7 @@ public class ProjectsWindow : EditorWindow
         if (Project.HasProject)
             isOpened = false;
 
+        // Fill parent (Window in this case).
         using (gui.CurrentNode.Left(0).Top(0).ExpandWidth().ExpandHeight().Enter())
         {
             using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Enter())
@@ -198,8 +201,9 @@ public class ProjectsWindow : EditorWindow
             }
         }
 
-        using (gui.Node("Footer").TopLeft(Offset.Percentage(1f, -162), Offset.Percentage(1f, -60)).Scale(162, 60).Enter())
+        using (gui.Node("OpenButton").TopLeft(Offset.Percentage(1f, -162), Offset.Percentage(1f, -60)).Scale(162, 60).Enter())
         {
+            Rect openButtonRect = gui.CurrentNode.LayoutData.Rect;
             Color col = Color.white * 0.4f;
 
             bool isSelectable = _createTabOpen ? !string.IsNullOrEmpty(_createName) && Directory.Exists(ProjectCache.Instance.SavedProjectsFolder) && !Path.Exists(_createName) :
@@ -217,18 +221,33 @@ public class ProjectsWindow : EditorWindow
                         ProjectCache.Instance.AddProject(project);
                         _createTabOpen = false;
                     }
-                    else if (Project.Open(SelectedProject))
+                    else if (SelectedProject != null)
                     {
-                        isOpened = false;
+                        // Display load info (and possibly load bar). Placed in empty space of footer
+
+                        // Opening project info
+                        // Text pos + offset/padding
+                        Vector2 openInfoTextPos = footer.Position + new Vector2(8f, 8f);
+                        gui.Draw2D.DrawText($"Opening '{SelectedProject.Name}'...", openInfoTextPos);
+
+                        // Change 'open/create' button text
+                        text = "Opening...";
+
+                        // Cover controls (fill EditorWindow)
+                        gui.Draw2D.DrawRectFilled(this.Rect, GrayAlpha);
+
+                        bool projectOpened = Project.Open(SelectedProject);
+                        if (projectOpened)
+                            isOpened = false;
                     }
                 }
-
-                col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
-                    gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
             }
 
-            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
-            gui.Draw2D.DrawText(text, gui.CurrentNode.LayoutData.Rect);
+            col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
+                  gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
+
+            gui.Draw2D.DrawRectFilled(openButtonRect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
+            gui.Draw2D.DrawText(text, openButtonRect);
         }
     }
 
@@ -491,7 +510,6 @@ public class ProjectsWindow : EditorWindow
             }
         }
     }
-
 
     private static string GetFormattedLastModifiedTime(DateTime lastModified)
     {
