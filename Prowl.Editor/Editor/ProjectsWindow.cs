@@ -229,6 +229,7 @@ public class ProjectsWindow : EditorWindow
                         // Text pos + offset/padding
                         Vector2 openInfoTextPos = footer.Position + new Vector2(8f, 8f);
                         gui.Draw2D.DrawText($"Opening '{SelectedProject.Name}'...", openInfoTextPos);
+                        // Add more information about progress here (even console output)
 
                         // Change 'open/create' button text
                         text = "Opening...";
