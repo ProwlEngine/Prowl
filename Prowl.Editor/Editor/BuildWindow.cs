@@ -77,6 +77,8 @@ public class BuildWindow : EditorWindow
 
                 // Name types are formatted as "Desktop_Player" -> "Desktop"
                 string name = builder.GetType().Name;
+
+                // Make sure name does actually include underscore
                 int underscoreIndex = name.IndexOf('_');
                 if (underscoreIndex > 0)
                     name = name.Substring(0, underscoreIndex);
