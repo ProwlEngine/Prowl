@@ -19,6 +19,7 @@ public struct DotnetCompileOptions()
     public DirectoryInfo? outputPath = null;
     public DirectoryInfo? tempPath = null;
 
+    public Dictionary<string, string> additionalParameters = new Dictionary<string, string>();
 
     public string ConstructDotnetArgs(FileInfo project)
     {
@@ -84,6 +85,14 @@ public struct DotnetCompileOptions()
                 Platform.Windows => "win",
                 _ => throw new Exception($"Unknown target platform: {platform}")
             });
+        }
+
+        if (additionalParameters.Count > 0)
+        {
+            foreach (KeyValuePair<string, string> kvp in additionalParameters)
+            {
+                args.Add($"/p:{kvp.Key}={kvp.Value}");
+            }
         }
 
         return string.Join(" ", args);
