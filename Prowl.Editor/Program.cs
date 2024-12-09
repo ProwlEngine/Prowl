@@ -130,8 +130,8 @@ public static class Program
                 else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
                     EditorGuiManager.SaveScene();
 
-                Application.IsPlaying = PlayMode.Current == PlayMode.Mode.Playing || PlayMode.Current == PlayMode.Mode.Paused;
-
+                //Application.IsPlaying = PlayMode.Current == PlayMode.Mode.Playing || PlayMode.Current == PlayMode.Mode.Paused;
+                Application.IsPlaying = PlayMode.Current == PlayMode.Mode.Playing;
 
                 try
                 {
