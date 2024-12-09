@@ -252,7 +252,7 @@ public class ProjectsWindow : EditorWindow
         // Text pos + offset/padding
         Vector2 openInfoTextPos = footer.Position + new Vector2(8f, 8f);
         gui.Draw2D.DrawText($"Opening '{SelectedProject.Name}'...", openInfoTextPos);
-        
+
         // Add more information about progress here (even console output)
 
         // Cover controls (fill EditorWindow)
@@ -393,6 +393,7 @@ public class ProjectsWindow : EditorWindow
     }
 
     Project contextMenuProject = null;
+    bool contextMenuIsHovered = false;
     private void DisplayProject(Project project)
     {
         Rect rootRect = gui.CurrentNode.LayoutData.Rect;
@@ -465,6 +466,7 @@ public class ProjectsWindow : EditorWindow
                 {
                     gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
                     contextMenuProject = project;
+                    contextMenuIsHovered = false;
                     gui.OpenPopup("ProjectOptionsContextMenu", null, gui.CurrentNode.Parent);
                 }
                 else if (optionsInteract.IsHovered())
@@ -490,8 +492,21 @@ public class ProjectsWindow : EditorWindow
         {
             using (popupHolder.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
             {
+                // Getting Interactable (IsHovered) removes interaction from styled buttons?
+                if (popupHolder.LayoutData.Rect.Contains(gui.PointerPos))
+                {
+                    if (!contextMenuIsHovered)
+                        contextMenuIsHovered = true;
+                }
+                else
+                {
+                    if (contextMenuIsHovered)
+                        closePopup = true;
+                }
+
                 // Add options
                 // - Delete project (with popup confirmation)
+
                 if (EditorGUI.StyledButton("Show In Explorer"))
                 {
                     AssetDatabase.OpenPath(project.ProjectDirectory, type: FileOpenType.FileExplorer);
@@ -502,6 +517,8 @@ public class ProjectsWindow : EditorWindow
                     ProjectCache.Instance.RemoveProject(project);
                     closePopup = true;
                 }
+
+              
             }
         }
         if (closePopup)
