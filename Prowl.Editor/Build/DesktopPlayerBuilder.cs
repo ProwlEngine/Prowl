@@ -261,13 +261,24 @@ public class Desktop_Player : ProjectBuilder
         }
         else
         {
+            // This is missing the skybox asset (and possibly other defaults)
+
             HashSet<Guid> assets = [];
             foreach (AssetRef<Scene> scene in scenes)
+            {
                 AssetDatabase.GetDependenciesDeep(scene.AssetID, ref assets);
+            }
+            if (AssetDatabase.GetDefaultAssets(out List<Guid> guids))
+            {
+                foreach (Guid assetID in guids)
+                    assets.Add(assetID);
+            }
+
+            // Get assets from /Defaults dir too
 
             // Include all Shaders in the build for the time being
-            foreach ((string, Guid, ushort) shader in AssetDatabase.GetAllAssetsOfType<Shader>())
-                assets.Add(shader.Item2);
+            foreach ((string name, Guid assetID, ushort fileId) shader in AssetDatabase.GetAllAssetsOfType<Shader>())
+                assets.Add(shader.assetID);
 
             AssetDatabase.ExportBuildPackages(assets.ToArray(), new DirectoryInfo(dataPath));
         }
