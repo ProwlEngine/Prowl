@@ -249,6 +249,10 @@ public class ProjectsWindow : EditorWindow
         // Display load info (and possibly load bar). Placed in empty space of footer
 
         // Opening project info
+
+        // Projects list clips overlay. Ignore clipping
+        gui.Draw2D.PushClip(gui.ScreenRect, true);
+
         // Text pos + offset/padding
         Vector2 openInfoTextPos = footer.Position + new Vector2(8f, 8f);
         gui.Draw2D.DrawText($"Opening '{SelectedProject.Name}'...", openInfoTextPos);
@@ -256,16 +260,17 @@ public class ProjectsWindow : EditorWindow
         // Add more information about progress here (even console output)
 
         // Cover controls (fill EditorWindow)
-        gui.Draw2D.DrawRectFilled(this.Rect, GrayAlpha);
+        gui.Draw2D.DrawRectFilled(gui.ScreenRect, GrayAlpha);
 
+        gui.Draw2D.PopClip();
 
         // Redirect output of logs to window
-        Debug.OnLog += OpeningProjectLog;
+        //Debug.OnLog += OpeningProjectLog;
 
-        // Should probably occur on a new thread to stop blocking UI
+        // Should probably occur on a new thread/async to stop blocking UI
         bool projectOpened = Project.Open(SelectedProject);
 
-        Debug.OnLog -= OpeningProjectLog;
+       // Debug.OnLog -= OpeningProjectLog;
         if (projectOpened)
             isOpened = false;
     }
@@ -518,7 +523,7 @@ public class ProjectsWindow : EditorWindow
                     closePopup = true;
                 }
 
-              
+
             }
         }
         if (closePopup)
