@@ -1,57 +1,83 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Prowl.Echo;
 
 [RequiresUnreferencedCode("These methods use reflection and can't be statically analyzed.")]
-internal static class ReflectionUtils
+public static class ReflectionUtils
 {
+    // Cache for type lookups
+    private static readonly ConcurrentDictionary<string, Type?> TypeCache = new();
+
+    // Cache for serializable fields
+    private static readonly ConcurrentDictionary<RuntimeTypeHandle, FieldInfo[]> SerializableFieldsCache = new();
+
+    /// <summary>
+    /// Clears all reflection caches. Call this when you need to reload assemblies or refresh type information.
+    /// </summary>
+    public static void ClearCache()
+    {
+        TypeCache.Clear();
+        SerializableFieldsCache.Clear();
+    }
+
     internal static Type? FindType(string qualifiedTypeName)
     {
-        Type? t = Type.GetType(qualifiedTypeName);
+        return TypeCache.GetOrAdd(qualifiedTypeName, typeName => {
+            // First try direct type lookup
+            Type? t = Type.GetType(typeName);
+            if (t != null)
+                return t;
 
-        if (t != null)
-        {
-            return t;
-        }
-        else
-        {
-            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            foreach (Assembly asm in assemblies)
             {
-                t = asm.GetType(qualifiedTypeName);
+                // Try full name lookup
+                t = asm.GetType(typeName);
                 if (t != null)
                     return t;
 
-                // If not found, try to find by name without namespace
-                t = asm.GetTypes().FirstOrDefault(t => t.Name.Equals(qualifiedTypeName, StringComparison.OrdinalIgnoreCase));
+                // Try name-only lookup (case insensitive)
+                t = asm.GetTypes().FirstOrDefault(type => type.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase));
                 if (t != null)
                     return t;
             }
             return null;
-        }
+        });
     }
 
     internal static FieldInfo[] GetSerializableFields(this object target)
     {
-        FieldInfo[] fields = GetAllFields(target.GetType()).ToArray();
-        // Only allow Publics or ones with SerializeField
-        fields = fields.Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null) && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null).ToArray();
-        // Remove Public NonSerialized fields
-        fields = fields.Where(field => !field.IsPublic || field.GetCustomAttribute<NonSerializedAttribute>() == null).ToArray();
-        return fields;
+        Type targetType = target.GetType();
+        return SerializableFieldsCache.GetOrAdd(targetType.TypeHandle, _ => {
+            const BindingFlags flags = BindingFlags.Public |
+                                     BindingFlags.NonPublic |
+                                     BindingFlags.Instance;
+
+            return targetType.GetFields(flags)
+                .Where(field => IsFieldSerializable(field))
+                .ToArray();
+        });
     }
 
-    internal static IEnumerable<FieldInfo> GetAllFields(Type? t)
+    private static bool IsFieldSerializable(FieldInfo field)
     {
-        if (t == null)
-            return Enumerable.Empty<FieldInfo>();
+        // Check if field should be serialized
+        bool shouldSerialize = field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null;
+        if (!shouldSerialize)
+            return false;
 
-        BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic |
-                             BindingFlags.Instance | BindingFlags.DeclaredOnly;
+        // Check if field should be ignored
+        bool shouldIgnore = field.GetCustomAttribute<SerializeIgnoreAttribute>() != null ||
+                            field.GetCustomAttribute<NonSerializedAttribute>() != null;
+        if (shouldIgnore)
+            return false;
 
-        return t.GetFields(flags).Concat(GetAllFields(t.BaseType));
+        return true;
     }
 }

@@ -18,7 +18,7 @@ internal static class BinaryTagConverter
 
     private static void WriteCompound(EchoObject tag, BinaryWriter writer)
     {
-        writer.Write(tag.GetAllTags().Count());
+        writer.Write(tag.Count);
         foreach (var subTag in tag.Tags)
         {
             writer.Write(subTag.Key); // Compounds always need tag names

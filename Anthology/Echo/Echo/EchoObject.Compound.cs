@@ -38,7 +38,7 @@ public sealed partial class EchoObject
     public IEnumerable<string> GetNames()
     {
         if (TagType != EchoType.Compound)
-            throw new InvalidOperationException("Cannot set tag on non-compound tag");
+            throw new InvalidOperationException("Cannot get all tag names on non-compound tag");
         return Tags.Keys;
     }
 
@@ -48,7 +48,7 @@ public sealed partial class EchoObject
     public IEnumerable<EchoObject> GetAllTags()
     {
         if (TagType != EchoType.Compound)
-            throw new InvalidOperationException("Cannot set tag on non-compound tag");
+            throw new InvalidOperationException("Cannot get all tags on non-compound tag");
         return Tags.Values;
     }
 

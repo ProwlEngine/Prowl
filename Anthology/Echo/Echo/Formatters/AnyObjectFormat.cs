@@ -67,8 +67,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (value.TryGet("$id", out EchoObject? id) &&
-            context.idToObject.TryGetValue(id.IntValue, out object? existingObj))
+        if (value.TryGet("$id", out EchoObject? id) && context.idToObject.TryGetValue(id.IntValue, out object? existingObj))
             return existingObj;
 
         if (!value.TryGet("$type", out EchoObject? typeProperty))
