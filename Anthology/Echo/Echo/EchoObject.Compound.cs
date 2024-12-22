@@ -151,6 +151,18 @@ public sealed partial class EchoObject
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentNullException(nameof(name));
         return Tags.Remove(name);
+
+        try
+        {
+            var tag = Tags[name];
+            Tags.Remove(name);
+            tag.Parent = null;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
