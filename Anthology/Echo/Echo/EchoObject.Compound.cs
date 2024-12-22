@@ -142,43 +142,6 @@ public sealed partial class EchoObject
         return Tags.Remove(name);
     }
 
-    /// <inheritdoc cref="EchoObject.Find"/>"
-    public bool TryFind(string path, out EchoObject? tag)
-    {
-        tag = Find(path);
-        return tag != null;
-    }
-
-    /// <summary>
-    /// Find a tag by path. For example, if you have a compound tag with a tag called "stats" and that tag has a tag called "stamina",
-    /// you can find the health tag by calling Find("stats/stamina").
-    /// </summary>
-    /// <param name="path">The path to the tag</param>
-    /// <returns>The tag if found, otherwise null</returns>
-    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    public EchoObject? Find(string path)
-    {
-        if (TagType != EchoType.Compound)
-            throw new InvalidOperationException("Cannot get tag from non-compound tag");
-        EchoObject currentTag = this;
-        while (true)
-        {
-            var i = path.IndexOf('/');
-            var name = i < 0 ? path : path[..i];
-            if (!currentTag.TryGet(name, out EchoObject? tag) || tag == null)
-                return null;
-
-            if (i < 0)
-                return tag;
-
-            if (tag.TagType != EchoType.Compound)
-                return null;
-
-            currentTag = tag;
-            path = path[(i + 1)..];
-        }
-    }
-
     /// <summary>
     /// Get the type stored inside this compound if it was serialized with type information.
     /// This is useful in networked environments for security reasons, when you want to confirm the type of the object before deserializing it.

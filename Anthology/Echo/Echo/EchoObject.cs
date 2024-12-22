@@ -45,7 +45,7 @@ public sealed partial class EchoObject
     public event EventHandler<EchoChangeEventArgs>? PropertyChanged;
 
     private object? _value;
-    public object? Value { get { return _value; } private set { Set(value); } }
+    public object? Value { get { return _value; } private set { SetValue(value); } }
 
     public EchoType TagType { get; private set; }
 
@@ -149,7 +149,7 @@ public sealed partial class EchoObject
     /// <summary>
     /// Utility to set the value of this tag with safety checks.
     /// </summary>
-    public void Set(object value)
+    public void SetValue(object value)
     {
         if (_value == value) return;
         var old = _value;
@@ -181,56 +181,56 @@ public sealed partial class EchoObject
 
     /// <summary> Returns the value of this tag, cast as a bool. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than BoolTag. </exception>
-    public bool BoolValue { get => (bool)Value; set => Set(value); }
+    public bool BoolValue { get => (bool)Value; set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a byte. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than ByteTag. </exception>
-    public byte ByteValue { get => Convert.ToByte(Value); set => Set(value); }
+    public byte ByteValue { get => Convert.ToByte(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a sbyte. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than sByteTag. </exception>
-    public sbyte sByteValue { get => Convert.ToSByte(Value); set => Set(value); }
+    public sbyte sByteValue { get => Convert.ToSByte(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a short. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than ShortTag. </exception>
-    public short ShortValue { get => Convert.ToInt16(Value); set => Set(value); }
+    public short ShortValue { get => Convert.ToInt16(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a int. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than IntTag. </exception>
-    public int IntValue { get => Convert.ToInt32(Value); set => Set(value); }
+    public int IntValue { get => Convert.ToInt32(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a long. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than LongTag. </exception>
-    public long LongValue { get => Convert.ToInt64(Value); set => Set(value); }
+    public long LongValue { get => Convert.ToInt64(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a ushort. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than UShortTag. </exception>
-    public ushort UShortValue { get => Convert.ToUInt16(Value); set => Set(value); }
+    public ushort UShortValue { get => Convert.ToUInt16(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as an uint. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than UIntTag. </exception>
-    public uint UIntValue { get => Convert.ToUInt32(Value); set => Set(value); }
+    public uint UIntValue { get => Convert.ToUInt32(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a ulong. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than ULongTag. </exception>
-    public ulong ULongValue { get => Convert.ToUInt64(Value); set => Set(value); }
+    public ulong ULongValue { get => Convert.ToUInt64(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a float. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than FloatTag. </exception>
-    public float FloatValue { get => Convert.ToSingle(Value); set => Set(value); }
+    public float FloatValue { get => Convert.ToSingle(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a double. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than DoubleTag. </exception>
-    public double DoubleValue { get => Convert.ToDouble(Value); set => Set(value); }
+    public double DoubleValue { get => Convert.ToDouble(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a decimal.
     /// Only supported by DecimalTag. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on an a tag other than DecimalTag. </exception>
-    public decimal DecimalValue { get => Convert.ToDecimal(Value); set => Set(value); }
+    public decimal DecimalValue { get => Convert.ToDecimal(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a byte array. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than ByteArrayTag. </exception>
-    public byte[] ByteArrayValue { get => (byte[])Value; set => Set(value); }
+    public byte[] ByteArrayValue { get => (byte[])Value; set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a string.
     /// Returns exact value for StringTag, and ToString(InvariantCulture) value for Byte, SByte, Double, Float, Int, UInt, Long, uLong, Short, UShort, Decimal, Bool.
@@ -257,7 +257,7 @@ public sealed partial class EchoObject
             EchoType.ByteArray => Convert.ToBase64String(ByteArrayValue),
             _ => throw new InvalidCastException("Cannot get StringValue from " + TagType.ToString())
         };
-        set => Set(value);
+        set => SetValue(value);
     }
 
     #endregion
