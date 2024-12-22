@@ -101,4 +101,98 @@ public sealed partial class EchoObject
             path = path[(i + 1)..];
         }
     }
+    /// <summary>
+    /// Write this tag to a binary file in the Echo format.
+    /// </summary>
+    /// <param name="file">The file to write to</param>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    public void WriteToBinary(FileInfo file)
+    {
+        if (TagType != PropertyType.Compound)
+            throw new InvalidOperationException("Cannot convert non-compound tag to Binary");
+
+        using var stream = file.OpenWrite();
+        using var writer = new BinaryWriter(stream);
+        BinaryTagConverter.WriteTo(this, writer);
+    }
+
+    /// <summary>
+    /// Write this tag to a binary file in the Echo format.
+    /// </summary>
+    /// <param name="writer">The writer to write to</param>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    public void WriteToBinary(BinaryWriter writer)
+    {
+        if (TagType != PropertyType.Compound)
+            throw new InvalidOperationException("Cannot convert non-compound tag to Binary");
+
+        BinaryTagConverter.WriteTo(this, writer);
+    }
+
+    /// <summary>
+    /// Read a tag from a binary file in the Echo format.
+    /// </summary>
+    /// <param name="file">The file to read from</param>
+    /// <returns>The tag read from the file</returns>
+    public static EchoObject ReadFromBinary(FileInfo file)
+    {
+        return BinaryTagConverter.ReadFromFile(file);
+    }
+
+    /// <summary>
+    /// Read a tag from a binary file in the Echo format.
+    /// </summary>
+    /// <param name="reader">The reader to read from</param>
+    /// <returns>The tag read from the file</returns>
+    public static EchoObject ReadFromBinary(BinaryReader reader)
+    {
+        return BinaryTagConverter.ReadFrom(reader);
+    }
+
+
+    /// <summary>
+    /// Write this tag to a string in the Echo format.
+    /// </summary>
+    /// <param name="file">The file to write to</param>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    public void WriteToString(FileInfo file)
+    {
+        if (TagType != PropertyType.Compound)
+            throw new InvalidOperationException("Cannot convert non-compound tag to String");
+
+        StringTagConverter.WriteToFile(this, file);
+    }
+
+    /// <summary>
+    /// Write this tag to a string in the Echo format.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    public string WriteToString()
+    {
+        if (TagType != PropertyType.Compound)
+            throw new InvalidOperationException("Cannot convert non-compound tag to String");
+
+        return StringTagConverter.Write(this);
+    }
+
+    /// <summary>
+    /// Read a tag from a file in the Echo format.
+    /// </summary>
+    /// <param name="file">The file to read from</param>
+    /// <returns>The tag read from the file</returns>
+    public static EchoObject ReadFromString(FileInfo file)
+    {
+        return StringTagConverter.ReadFromFile(file);
+    }
+
+    /// <summary>
+    /// Read a tag from a string in the Echo format.
+    /// </summary>
+    /// <param name="input">The string to read from</param>
+    /// <returns>The tag read from the string</returns>
+    public static EchoObject ReadFromString(string input)
+    {
+        return StringTagConverter.Read(input);
+    }
+
 }
