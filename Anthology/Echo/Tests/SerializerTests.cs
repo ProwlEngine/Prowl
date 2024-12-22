@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Tests;
 using Xunit;
 
 namespace Prowl.Echo.Test;
@@ -371,6 +372,32 @@ public class SerializerTests
         Assert.Equal(original.IntField, deserialized.IntField);
         Assert.Equal(original.FloatField, deserialized.FloatField);
         Assert.Equal(original.BoolField, deserialized.BoolField);
+    }
+
+    [Fact]
+    public void TestSimpleVector3Struct()
+    {
+        var original = new Vector3();
+        original.X = 1.0f;
+        original.Y = 2.0f;
+        original.Z = 3.0f;
+        var stream = new MemoryStream();
+        using var bw = new BinaryWriter(stream);
+        var serialized = Prowl.Echo.Serializer.Serialize(original);
+        Assert.NotNull(serialized);
+
+        serialized.WriteToBinary(bw);
+        bw.Flush();
+
+        stream.Position = 0;
+        using var br = new BinaryReader(stream);
+        var deserialized = Prowl.Echo.EchoObject.ReadFromBinary(br);
+        Assert.NotNull(deserialized);
+        Vector3 clone = (Vector3)Prowl.Echo.Serializer.Deserialize(deserialized, typeof(Vector3));
+
+        Assert.Equal(original.X, clone.X);
+        Assert.Equal(original.Y, clone.Y);
+        Assert.Equal(original.Z, clone.Z);
     }
 
     [Fact]
