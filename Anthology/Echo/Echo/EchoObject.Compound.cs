@@ -27,6 +27,9 @@ public sealed partial class EchoObject
 
             ArgumentNullException.ThrowIfNull(value, nameof(value));
 
+            if (value.Parent != null)
+                throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(value));
+
             Tags[tagName] = value;
             value.Parent = this;
         }
@@ -122,6 +125,10 @@ public sealed partial class EchoObject
             throw new ArgumentException(null, nameof(newTag));
         else if (newTag == this)
             throw new ArgumentException("Cannot add tag to self", nameof(newTag));
+
+        if (newTag.Parent != null)
+            throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(newTag));
+
         Tags.Add(name, newTag);
         newTag.Parent = this;
     }
