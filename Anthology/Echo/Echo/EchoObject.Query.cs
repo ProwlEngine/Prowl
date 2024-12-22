@@ -5,44 +5,21 @@ namespace Prowl.Echo;
 
 public sealed partial class EchoObject
 {
-    ///// <inheritdoc cref="EchoObject.Find"/>"
-    //public bool TryFind(string path, out EchoObject? tag)
-    //{
-    //    tag = Find(path);
-    //    return tag != null;
-    //}
-    //
-    ///// <summary>
-    ///// Find a tag by path. For example, if you have a compound tag with a tag called "stats" and that tag has a tag called "stamina",
-    ///// you can find the health tag by calling Find("stats/stamina").
-    ///// </summary>
-    ///// <param name="path">The path to the tag</param>
-    ///// <returns>The tag if found, otherwise null</returns>
-    ///// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    //public EchoObject? Find(string path)
-    //{
-    //    if (TagType != EchoType.Compound)
-    //        throw new InvalidOperationException("Cannot get tag from non-compound tag");
-    //    EchoObject currentTag = this;
-    //    while (true)
-    //    {
-    //        var i = path.IndexOf('/');
-    //        var name = i < 0 ? path : path[..i];
-    //        if (!currentTag.TryGet(name, out EchoObject? tag) || tag == null)
-    //            return null;
-    //
-    //        if (i < 0)
-    //            return tag;
-    //
-    //        if (tag.TagType != EchoType.Compound)
-    //            return null;
-    //
-    //        currentTag = tag;
-    //        path = path[(i + 1)..];
-    //    }
-    //}
+    /// <inheritdoc cref="Find"/>"
+    public bool TryFind(string path, out EchoObject? tag)
+    {
+        tag = Find(path);
+        return tag != null;
+    }
 
-    // Enhanced path-based Find with list support
+    /// <summary>
+    /// Find a tag by path. For example, if you have a compound tag with a tag called "stats" and that tag has a tag called "stamina",
+    /// you can find the health tag by calling Find("stats/stamina").
+    /// Lists can be indexed by their position in the list, for example Find("Players/0") will return the first player tag in a players list.
+    /// </summary>
+    /// <param name="path">The path to the tag</param>
+    /// <returns>The tag if found, otherwise null</returns>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
     public EchoObject? Find(string path)
     {
         if (string.IsNullOrWhiteSpace(path)) return this;
