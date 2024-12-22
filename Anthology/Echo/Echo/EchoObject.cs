@@ -98,6 +98,8 @@ public sealed partial class EchoObject
             var newList = new List<EchoObject>(list.Count);
             foreach (var tag in list)
                 newList.Add(tag.Clone());
+
+            return new(EchoType.List, newList);
         }
         else if (TagType == EchoType.Compound)
         {
@@ -106,7 +108,10 @@ public sealed partial class EchoObject
             var newDict = new Dictionary<string, EchoObject>(dict.Count);
             foreach (var (key, tag) in dict)
                 newDict.Add(key, tag.Clone());
+
+            return new(EchoType.Compound, newDict);
         }
+
         return new(TagType, Value);
     }
 
