@@ -9,14 +9,14 @@ internal sealed class DateTimeFormat : ISerializationFormat
     public EchoObject Serialize(object value, SerializationContext context)
     {
         if (value is DateTime date)
-            return new(PropertyType.Long, date.ToBinary());
+            return new(EchoType.Long, date.ToBinary());
 
         throw new NotSupportedException($"Type '{value.GetType()}' is not supported by DateTimeFormat.");
     }
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (value.TagType != PropertyType.Long)
+        if (value.TagType != EchoType.Long)
             throw new Exception($"Expected Long type for DateTime, got {value.TagType}");
 
         return DateTime.FromBinary(value.LongValue);

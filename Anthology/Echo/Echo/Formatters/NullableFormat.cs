@@ -24,13 +24,13 @@ internal sealed class NullableFormat : ISerializationFormat
         var underlyingType = Nullable.GetUnderlyingType(targetType)
             ?? throw new InvalidOperationException("Not a nullable type");
 
-        if (value.TagType == PropertyType.Null)
+        if (value.TagType == EchoType.Null)
             return null;
 
         // If it's a compound, get the value
-        if (value.TagType == PropertyType.Compound && value.TryGet("value", out var valueTag))
+        if (value.TagType == EchoType.Compound && value.TryGet("value", out var valueTag))
         {
-            if (valueTag.TagType == PropertyType.Null)
+            if (valueTag.TagType == EchoType.Null)
                 return null;
 
             return Serializer.Deserialize(valueTag, underlyingType, context);

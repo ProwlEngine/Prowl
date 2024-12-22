@@ -14,7 +14,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
         if (context.objectToId.TryGetValue(value, out int id))
         {
-            compound["$id"] = new(PropertyType.Int, id);
+            compound["$id"] = new(EchoType.Int, id);
             return compound;
         }
 
@@ -42,7 +42,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
                     {
                         if (Attribute.GetCustomAttribute(field, typeof(IgnoreOnNullAttribute)) != null)
                             continue;
-                        compound.Add(field.Name, new(PropertyType.Null, null));
+                        compound.Add(field.Name, new(EchoType.Null, null));
                     }
                     else
                     {
@@ -58,8 +58,8 @@ public sealed class AnyObjectFormat : ISerializationFormat
             }
         }
 
-        compound["$id"] = new(PropertyType.Int, id);
-        compound["$type"] = new(PropertyType.String, type.FullName);
+        compound["$id"] = new(EchoType.Int, id);
+        compound["$type"] = new(EchoType.String, type.FullName);
         context.EndDependencies();
 
         return compound;

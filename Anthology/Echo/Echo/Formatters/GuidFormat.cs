@@ -10,14 +10,14 @@ internal sealed class GuidFormat : ISerializationFormat
     public EchoObject Serialize(object value, SerializationContext context)
     {
         if (value is Guid guid)
-            return new(PropertyType.String, guid.ToString());
+            return new(EchoType.String, guid.ToString());
 
         throw new NotSupportedException($"Type '{value.GetType()}' is not supported by GuidFormat.");
     }
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (value.TagType != PropertyType.String)
+        if (value.TagType != EchoType.String)
             throw new Exception($"Expected String type for Guid, got {value.TagType}");
 
         return Guid.Parse(value.StringValue);

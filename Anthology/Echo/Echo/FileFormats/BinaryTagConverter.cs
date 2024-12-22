@@ -30,33 +30,33 @@ internal static class BinaryTagConverter
     {
         var type = tag.TagType;
         writer.Write((byte)type);
-        if (type == PropertyType.Null) { } // Nothing for Null
-        else if (type == PropertyType.Byte) writer.Write(tag.ByteValue);
-        else if (type == PropertyType.sByte) writer.Write(tag.sByteValue);
-        else if (type == PropertyType.Short) writer.Write(tag.ShortValue);
-        else if (type == PropertyType.Int) writer.Write(tag.IntValue);
-        else if (type == PropertyType.Long) writer.Write(tag.LongValue);
-        else if (type == PropertyType.UShort) writer.Write(tag.UShortValue);
-        else if (type == PropertyType.UInt) writer.Write(tag.UIntValue);
-        else if (type == PropertyType.ULong) writer.Write(tag.ULongValue);
-        else if (type == PropertyType.Float) writer.Write(tag.FloatValue);
-        else if (type == PropertyType.Double) writer.Write(tag.DoubleValue);
-        else if (type == PropertyType.Decimal) writer.Write(tag.DecimalValue);
-        else if (type == PropertyType.String) writer.Write(tag.StringValue);
-        else if (type == PropertyType.ByteArray)
+        if (type == EchoType.Null) { } // Nothing for Null
+        else if (type == EchoType.Byte) writer.Write(tag.ByteValue);
+        else if (type == EchoType.sByte) writer.Write(tag.sByteValue);
+        else if (type == EchoType.Short) writer.Write(tag.ShortValue);
+        else if (type == EchoType.Int) writer.Write(tag.IntValue);
+        else if (type == EchoType.Long) writer.Write(tag.LongValue);
+        else if (type == EchoType.UShort) writer.Write(tag.UShortValue);
+        else if (type == EchoType.UInt) writer.Write(tag.UIntValue);
+        else if (type == EchoType.ULong) writer.Write(tag.ULongValue);
+        else if (type == EchoType.Float) writer.Write(tag.FloatValue);
+        else if (type == EchoType.Double) writer.Write(tag.DoubleValue);
+        else if (type == EchoType.Decimal) writer.Write(tag.DecimalValue);
+        else if (type == EchoType.String) writer.Write(tag.StringValue);
+        else if (type == EchoType.ByteArray)
         {
             writer.Write(tag.ByteArrayValue.Length);
             writer.Write(tag.ByteArrayValue);
         }
-        else if (type == PropertyType.Bool) writer.Write(tag.BoolValue);
-        else if (type == PropertyType.List)
+        else if (type == EchoType.Bool) writer.Write(tag.BoolValue);
+        else if (type == EchoType.List)
         {
             var listTag = tag;
             writer.Write(listTag.Count);
             foreach (var subTag in listTag.List)
                 WriteTag(subTag, writer); // Lists dont care about names, so dont need to write Tag Names inside a List
         }
-        else if (type == PropertyType.Compound) WriteCompound(tag, writer);
+        else if (type == EchoType.Compound) WriteCompound(tag, writer);
         else throw new Exception($"Unknown tag type: {type}");
     }
 
@@ -84,23 +84,23 @@ internal static class BinaryTagConverter
 
     private static EchoObject ReadTag(BinaryReader reader)
     {
-        var type = (PropertyType)reader.ReadByte();
-        if (type == PropertyType.Null) return new(PropertyType.Null, null);
-        else if (type == PropertyType.Byte) return new(PropertyType.Byte, reader.ReadByte());
-        else if (type == PropertyType.sByte) return new(PropertyType.sByte, reader.ReadSByte());
-        else if (type == PropertyType.Short) return new(PropertyType.Short, reader.ReadInt16());
-        else if (type == PropertyType.Int) return new(PropertyType.Int, reader.ReadInt32());
-        else if (type == PropertyType.Long) return new(PropertyType.Long, reader.ReadInt64());
-        else if (type == PropertyType.UShort) return new(PropertyType.UShort, reader.ReadUInt16());
-        else if (type == PropertyType.UInt) return new(PropertyType.UInt, reader.ReadUInt32());
-        else if (type == PropertyType.ULong) return new(PropertyType.ULong, reader.ReadUInt64());
-        else if (type == PropertyType.Float) return new(PropertyType.Float, reader.ReadSingle());
-        else if (type == PropertyType.Double) return new(PropertyType.Double, reader.ReadDouble());
-        else if (type == PropertyType.Decimal) return new(PropertyType.Decimal, reader.ReadDecimal());
-        else if (type == PropertyType.String) return new(PropertyType.String, reader.ReadString());
-        else if (type == PropertyType.ByteArray) return new(PropertyType.ByteArray, reader.ReadBytes(reader.ReadInt32()));
-        else if (type == PropertyType.Bool) return new(PropertyType.Bool, reader.ReadBoolean());
-        else if (type == PropertyType.List)
+        var type = (EchoType)reader.ReadByte();
+        if (type == EchoType.Null) return new(EchoType.Null, null);
+        else if (type == EchoType.Byte) return new(EchoType.Byte, reader.ReadByte());
+        else if (type == EchoType.sByte) return new(EchoType.sByte, reader.ReadSByte());
+        else if (type == EchoType.Short) return new(EchoType.Short, reader.ReadInt16());
+        else if (type == EchoType.Int) return new(EchoType.Int, reader.ReadInt32());
+        else if (type == EchoType.Long) return new(EchoType.Long, reader.ReadInt64());
+        else if (type == EchoType.UShort) return new(EchoType.UShort, reader.ReadUInt16());
+        else if (type == EchoType.UInt) return new(EchoType.UInt, reader.ReadUInt32());
+        else if (type == EchoType.ULong) return new(EchoType.ULong, reader.ReadUInt64());
+        else if (type == EchoType.Float) return new(EchoType.Float, reader.ReadSingle());
+        else if (type == EchoType.Double) return new(EchoType.Double, reader.ReadDouble());
+        else if (type == EchoType.Decimal) return new(EchoType.Decimal, reader.ReadDecimal());
+        else if (type == EchoType.String) return new(EchoType.String, reader.ReadString());
+        else if (type == EchoType.ByteArray) return new(EchoType.ByteArray, reader.ReadBytes(reader.ReadInt32()));
+        else if (type == EchoType.Bool) return new(EchoType.Bool, reader.ReadBoolean());
+        else if (type == EchoType.List)
         {
             var listTag = EchoObject.NewList();
             var tagCount = reader.ReadInt32();
@@ -108,7 +108,7 @@ internal static class BinaryTagConverter
                 listTag.ListAdd(ReadTag(reader));
             return listTag;
         }
-        else if (type == PropertyType.Compound) return ReadCompound(reader);
+        else if (type == EchoType.Compound) return ReadCompound(reader);
         else throw new Exception($"Unknown tag type: {type}");
     }
 

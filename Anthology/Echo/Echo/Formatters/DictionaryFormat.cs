@@ -39,7 +39,7 @@ internal sealed class DictionaryFormat : ISerializationFormat
                 entries.Add(entryCompound);
             }
 
-            compound.Add("$type", new EchoObject(PropertyType.String, type.FullName));
+            compound.Add("$type", new EchoObject(EchoType.String, type.FullName));
             compound.Add("entries", new EchoObject(entries));
             return compound;
         }
@@ -63,7 +63,7 @@ internal sealed class DictionaryFormat : ISerializationFormat
         {
             // Non-string key behavior
             var entries = value.Get("entries");
-            if (entries == null || entries.TagType != PropertyType.List)
+            if (entries == null || entries.TagType != EchoType.List)
                 throw new InvalidOperationException("Invalid dictionary format");
 
             foreach (var entry in entries.List)

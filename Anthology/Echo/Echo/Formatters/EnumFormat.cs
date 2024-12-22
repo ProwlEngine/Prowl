@@ -12,14 +12,14 @@ internal sealed class EnumFormat : ISerializationFormat
     public EchoObject Serialize(object value, SerializationContext context)
     {
         if (value is Enum e)
-            return new(PropertyType.Int, Convert.ToInt32(e));
+            return new(EchoType.Int, Convert.ToInt32(e));
 
         throw new NotSupportedException($"Type '{value.GetType()}' is not supported by EnumFormat.");
     }
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (value.TagType != PropertyType.Int)
+        if (value.TagType != EchoType.Int)
             throw new Exception($"Expected Int type for Enum, got {value.TagType}");
 
         return Enum.ToObject(targetType, value.IntValue);

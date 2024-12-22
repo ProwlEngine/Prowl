@@ -75,7 +75,7 @@ internal sealed class CollectionFormat : ISerializationFormat
             Type elementType = targetType.GetElementType()
                 ?? throw new InvalidOperationException("Array element type is null");
 
-            if (value.TagType == PropertyType.List)
+            if (value.TagType == EchoType.List)
             {
                 // Single dimensional array
                 var array = Array.CreateInstance(elementType, value.Count);
@@ -83,7 +83,7 @@ internal sealed class CollectionFormat : ISerializationFormat
                     array.SetValue(Serializer.Deserialize(value[idx], elementType, context), idx);
                 return array;
             }
-            else if (value.TagType == PropertyType.Compound)
+            else if (value.TagType == EchoType.Compound)
             {
                 // Multi-dimensional array
                 var dimensionsTag = value.Get("dimensions")

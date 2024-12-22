@@ -36,7 +36,7 @@ public static class Serializer
 
     public static EchoObject Serialize(object? value, SerializationContext context)
     {
-        if (value == null) return new EchoObject(PropertyType.Null, null);
+        if (value == null) return new EchoObject(EchoType.Null, null);
 
         if (value is EchoObject property)
         {
@@ -59,7 +59,7 @@ public static class Serializer
     public static T? Deserialize<T>(EchoObject value, SerializationContext context) => (T?)Deserialize(value, typeof(T), context);
     public static object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (value == null || value.TagType == PropertyType.Null) return null;
+        if (value == null || value.TagType == EchoType.Null) return null;
 
         if (value.GetType() == targetType) return value;
 

@@ -15,14 +15,14 @@ public sealed partial class EchoObject
 
     public EchoObject Get(int tagIdx)
     {
-        if (TagType != PropertyType.List)
+        if (TagType != EchoType.List)
             throw new System.InvalidOperationException("Cannot get tag from non-list tag");
         return List[tagIdx];
     }
 
     public void ListAdd(EchoObject tag)
     {
-        if (TagType != PropertyType.List)
+        if (TagType != EchoType.List)
             throw new System.InvalidOperationException("Cannot add tag to non-list tag");
         List.Add(tag);
         tag.Parent = this;
@@ -30,7 +30,7 @@ public sealed partial class EchoObject
 
     public void ListRemove(EchoObject tag)
     {
-        if (TagType != PropertyType.List)
+        if (TagType != EchoType.List)
             throw new System.InvalidOperationException("Cannot remove tag from non-list tag");
         List.Remove(tag);
         tag.Parent = null;

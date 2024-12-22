@@ -48,8 +48,8 @@ public class SerializerTests
         public EchoObject Serialize(SerializationContext ctx)
         {
             var compound = EchoObject.NewCompound();
-            compound.Add("customValue", new EchoObject(PropertyType.Int, Value));
-            compound.Add("customText", new EchoObject(PropertyType.String, Text));
+            compound.Add("customValue", new EchoObject(EchoType.Int, Value));
+            compound.Add("customText", new EchoObject(EchoType.String, Text));
             return compound;
         }
 
@@ -297,7 +297,7 @@ public class SerializerTests
         var original = new ObjectWithAttributes { NewName = "Updated" };
         var serialized = Serializer.Serialize(original);
         serialized.Remove("NewName");
-        serialized.Add("oldName", new EchoObject(PropertyType.String, "Updated"));
+        serialized.Add("oldName", new EchoObject(EchoType.String, "Updated"));
         var deserialized = Serializer.Deserialize<ObjectWithAttributes>(serialized);
         Assert.Equal(original.NewName, deserialized.NewName);
     }

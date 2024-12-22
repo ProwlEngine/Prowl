@@ -50,62 +50,62 @@ internal static class StringTagConverter
 
         switch (prop.TagType)
         {
-            case PropertyType.Null:
+            case EchoType.Null:
                 writer.Write("NULL");
                 break;
-            case PropertyType.Byte:
+            case EchoType.Byte:
                 writer.Write(prop.ByteValue);
                 writer.Write('B');
                 break;
-            case PropertyType.sByte:
+            case EchoType.sByte:
                 writer.Write(prop.sByteValue);
                 writer.Write('N');
                 break;
-            case PropertyType.Short:
+            case EchoType.Short:
                 writer.Write(prop.ShortValue);
                 writer.Write('S');
                 break;
-            case PropertyType.Int:
+            case EchoType.Int:
                 writer.Write(prop.IntValue);
                 break;
-            case PropertyType.Long:
+            case EchoType.Long:
                 writer.Write(prop.LongValue);
                 writer.Write('L');
                 break;
-            case PropertyType.UShort:
+            case EchoType.UShort:
                 writer.Write(prop.UShortValue);
                 writer.Write('V');
                 break;
-            case PropertyType.UInt:
+            case EchoType.UInt:
                 writer.Write(prop.UIntValue);
                 writer.Write('U');
                 break;
-            case PropertyType.ULong:
+            case EchoType.ULong:
                 writer.Write(prop.ULongValue);
                 writer.Write('C');
                 break;
-            case PropertyType.Float:
+            case EchoType.Float:
                 writer.Write(prop.FloatValue.ToString(CultureInfo.InvariantCulture));
                 writer.Write('F');
                 break;
-            case PropertyType.Double:
+            case EchoType.Double:
                 writer.Write(prop.DoubleValue.ToString(CultureInfo.InvariantCulture));
                 writer.Write('D');
                 break;
-            case PropertyType.Decimal:
+            case EchoType.Decimal:
                 writer.Write(prop.DecimalValue.ToString(CultureInfo.InvariantCulture));
                 writer.Write('M');
                 break;
-            case PropertyType.String:
+            case EchoType.String:
                 WriteString(writer, prop.StringValue);
                 break;
-            case PropertyType.ByteArray:
+            case EchoType.ByteArray:
                 WriteByteArray(writer, prop.ByteArrayValue);
                 break;
-            case PropertyType.Bool:
+            case EchoType.Bool:
                 writer.Write(prop.BoolValue ? "true" : "false");
                 break;
-            case PropertyType.List:
+            case EchoType.List:
                 writer.WriteLine("[");
                 var list = (List<EchoObject>)prop.Value!;
                 for (int i = 0; i < list.Count; i++)
@@ -123,7 +123,7 @@ internal static class StringTagConverter
                 writer.Write(indent);
                 writer.Write("]");
                 break;
-            case PropertyType.Compound:
+            case EchoType.Compound:
                 WriteCompound(writer, (Dictionary<string, EchoObject>)prop.Value!, indentLevel);
                 break;
         }
@@ -264,7 +264,7 @@ internal static class StringTagConverter
             switch (parser.TokenType)
             {
                 case TextTokenType.EndCompound:
-                    return new EchoObject(PropertyType.Compound, dict);
+                    return new EchoObject(EchoType.Compound, dict);
                 case TextTokenType.Separator:
                     continue;
                 case TextTokenType.Value:
@@ -303,7 +303,7 @@ internal static class StringTagConverter
             switch (parser.TokenType)
             {
                 case TextTokenType.EndList:
-                    return new EchoObject(PropertyType.List, items);
+                    return new EchoObject(EchoType.List, items);
                 case TextTokenType.Separator:
                     continue;
             }
@@ -352,7 +352,7 @@ internal static class StringTagConverter
     private static EchoObject ReadValueTag(StringTagTokenizer parser)
     {
         // null
-        if (parser.Token.SequenceEqual("NULL")) return new EchoObject(PropertyType.Null, null);
+        if (parser.Token.SequenceEqual("NULL")) return new EchoObject(EchoType.Null, null);
 
         // boolean
         if (parser.Token.SequenceEqual("false")) return new EchoObject(false);

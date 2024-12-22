@@ -19,7 +19,7 @@ public sealed partial class EchoObject
         get { return Get(tagName); }
         set
         {
-            if (TagType != PropertyType.Compound)
+            if (TagType != EchoType.Compound)
                 throw new InvalidOperationException("Cannot set tag on non-compound tag");
 
             if (string.IsNullOrWhiteSpace(tagName))
@@ -37,7 +37,7 @@ public sealed partial class EchoObject
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
     public IEnumerable<string> GetNames()
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot set tag on non-compound tag");
         return Tags.Keys;
     }
@@ -47,7 +47,7 @@ public sealed partial class EchoObject
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
     public IEnumerable<EchoObject> GetAllTags()
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot set tag on non-compound tag");
         return Tags.Values;
     }
@@ -61,7 +61,7 @@ public sealed partial class EchoObject
     /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
     public EchoObject? Get(string tagName)
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
         if (string.IsNullOrWhiteSpace(tagName))
             throw new ArgumentNullException(nameof(tagName));
@@ -79,7 +79,7 @@ public sealed partial class EchoObject
     /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
     public bool TryGet(string tagName, out EchoObject? result)
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
         if (string.IsNullOrWhiteSpace(tagName))
             throw new ArgumentNullException(nameof(tagName));
@@ -96,7 +96,7 @@ public sealed partial class EchoObject
     /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
     public bool Contains(string tagName)
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
         if (string.IsNullOrWhiteSpace(tagName))
             throw new ArgumentNullException(nameof(tagName));
@@ -113,7 +113,7 @@ public sealed partial class EchoObject
     /// <exception cref="ArgumentException">Thrown if the new tag is null or the same as this tag</exception>
     public void Add(string name, EchoObject newTag)
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentNullException(nameof(name));
@@ -135,7 +135,7 @@ public sealed partial class EchoObject
     /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception></exception>
     public bool Remove(string name)
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentNullException(nameof(name));
@@ -158,7 +158,7 @@ public sealed partial class EchoObject
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
     public EchoObject? Find(string path)
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
         EchoObject currentTag = this;
         while (true)
@@ -171,7 +171,7 @@ public sealed partial class EchoObject
             if (i < 0)
                 return tag;
 
-            if (tag.TagType != PropertyType.Compound)
+            if (tag.TagType != EchoType.Compound)
                 return null;
 
             currentTag = tag;
@@ -203,7 +203,7 @@ public sealed partial class EchoObject
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
     public void WriteToBinary(FileInfo file)
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot convert non-compound tag to Binary");
 
         using var stream = file.OpenWrite();
@@ -218,7 +218,7 @@ public sealed partial class EchoObject
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
     public void WriteToBinary(BinaryWriter writer)
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot convert non-compound tag to Binary");
 
         BinaryTagConverter.WriteTo(this, writer);
@@ -252,7 +252,7 @@ public sealed partial class EchoObject
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
     public void WriteToString(FileInfo file)
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot convert non-compound tag to String");
 
         StringTagConverter.WriteToFile(this, file);
@@ -264,7 +264,7 @@ public sealed partial class EchoObject
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
     public string WriteToString()
     {
-        if (TagType != PropertyType.Compound)
+        if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot convert non-compound tag to String");
 
         return StringTagConverter.Write(this);

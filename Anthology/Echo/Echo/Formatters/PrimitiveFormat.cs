@@ -14,21 +14,21 @@ internal sealed class PrimitiveFormat : ISerializationFormat
     {
         return value switch
         {
-            char c => new(PropertyType.Byte, (byte)c), // Char is serialized as a byte
-            byte b => new(PropertyType.Byte, b),
-            sbyte sb => new(PropertyType.sByte, sb),
-            short s => new(PropertyType.Short, s),
-            int i => new(PropertyType.Int, i),
-            long l => new(PropertyType.Long, l),
-            uint ui => new(PropertyType.UInt, ui),
-            ulong ul => new(PropertyType.ULong, ul),
-            ushort us => new(PropertyType.UShort, us),
-            float f => new(PropertyType.Float, f),
-            double d => new(PropertyType.Double, d),
-            decimal dec => new(PropertyType.Decimal, dec),
-            string str => new(PropertyType.String, str),
-            byte[] bArr => new(PropertyType.ByteArray, bArr),
-            bool bo => new(PropertyType.Bool, bo),
+            char c => new(EchoType.Byte, (byte)c), // Char is serialized as a byte
+            byte b => new(EchoType.Byte, b),
+            sbyte sb => new(EchoType.sByte, sb),
+            short s => new(EchoType.Short, s),
+            int i => new(EchoType.Int, i),
+            long l => new(EchoType.Long, l),
+            uint ui => new(EchoType.UInt, ui),
+            ulong ul => new(EchoType.ULong, ul),
+            ushort us => new(EchoType.UShort, us),
+            float f => new(EchoType.Float, f),
+            double d => new(EchoType.Double, d),
+            decimal dec => new(EchoType.Decimal, dec),
+            string str => new(EchoType.String, str),
+            byte[] bArr => new(EchoType.ByteArray, bArr),
+            bool bo => new(EchoType.Bool, bo),
             _ => throw new NotSupportedException($"Type '{value.GetType()}' is not supported by PrimitiveFormat.")
         };
     }
@@ -37,7 +37,7 @@ internal sealed class PrimitiveFormat : ISerializationFormat
     {
         try
         {
-            if (value.TagType == PropertyType.ByteArray && targetType == typeof(byte[]))
+            if (value.TagType == EchoType.ByteArray && targetType == typeof(byte[]))
                 return value.Value;
 
             return Convert.ChangeType(value.Value, targetType);

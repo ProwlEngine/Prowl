@@ -5,7 +5,7 @@ using System.Globalization;
 
 namespace Prowl.Echo;
 
-public enum PropertyType
+public enum EchoType
 {
     Null = 0,
     Byte,
@@ -26,13 +26,13 @@ public enum PropertyType
     Compound,
 }
 
-public class PropertyChangeEventArgs : EventArgs
+public class EchoChangeEventArgs : EventArgs
 {
     public EchoObject Property { get; }
     public object? OldValue { get; }
     public object? NewValue { get; }
 
-    public PropertyChangeEventArgs(EchoObject property, object? oldValue, object? newValue)
+    public EchoChangeEventArgs(EchoObject property, object? oldValue, object? newValue)
     {
         Property = property;
         OldValue = oldValue;
@@ -42,78 +42,52 @@ public class PropertyChangeEventArgs : EventArgs
 
 public sealed partial class EchoObject
 {
-    public event EventHandler<PropertyChangeEventArgs>? PropertyChanged;
+    public event EventHandler<EchoChangeEventArgs>? PropertyChanged;
 
     private object? _value;
     public object? Value { get { return _value; } private set { Set(value); } }
 
-    public PropertyType TagType { get; private set; }
+    public EchoType TagType { get; private set; }
 
     public EchoObject? Parent { get; private set; }
 
     public EchoObject() { }
-    public EchoObject(byte i) { _value = i; TagType = PropertyType.Byte; }
-    public EchoObject(sbyte i) { _value = i; TagType = PropertyType.sByte; }
-    public EchoObject(short i) { _value = i; TagType = PropertyType.Short; }
-    public EchoObject(int i) { _value = i; TagType = PropertyType.Int; }
-    public EchoObject(long i) { _value = i; TagType = PropertyType.Long; }
-    public EchoObject(ushort i) { _value = i; TagType = PropertyType.UShort; }
-    public EchoObject(uint i) { _value = i; TagType = PropertyType.UInt; }
-    public EchoObject(ulong i) { _value = i; TagType = PropertyType.ULong; }
-    public EchoObject(float i) { _value = i; TagType = PropertyType.Float; }
-    public EchoObject(double i) { _value = i; TagType = PropertyType.Double; }
-    public EchoObject(decimal i) { _value = i; TagType = PropertyType.Decimal; }
-    public EchoObject(string i) { _value = i; TagType = PropertyType.String; }
-    public EchoObject(byte[] i) { _value = i; TagType = PropertyType.ByteArray; }
-    public EchoObject(bool i) { _value = i; TagType = PropertyType.Bool; }
-    public EchoObject(PropertyType type, object? value)
+    public EchoObject(byte i) { _value = i; TagType = EchoType.Byte; }
+    public EchoObject(sbyte i) { _value = i; TagType = EchoType.sByte; }
+    public EchoObject(short i) { _value = i; TagType = EchoType.Short; }
+    public EchoObject(int i) { _value = i; TagType = EchoType.Int; }
+    public EchoObject(long i) { _value = i; TagType = EchoType.Long; }
+    public EchoObject(ushort i) { _value = i; TagType = EchoType.UShort; }
+    public EchoObject(uint i) { _value = i; TagType = EchoType.UInt; }
+    public EchoObject(ulong i) { _value = i; TagType = EchoType.ULong; }
+    public EchoObject(float i) { _value = i; TagType = EchoType.Float; }
+    public EchoObject(double i) { _value = i; TagType = EchoType.Double; }
+    public EchoObject(decimal i) { _value = i; TagType = EchoType.Decimal; }
+    public EchoObject(string i) { _value = i; TagType = EchoType.String; }
+    public EchoObject(byte[] i) { _value = i; TagType = EchoType.ByteArray; }
+    public EchoObject(bool i) { _value = i; TagType = EchoType.Bool; }
+    public EchoObject(EchoType type, object? value)
     {
         TagType = type;
-        if (type == PropertyType.List && value == null)
+        if (type == EchoType.List && value == null)
             _value = new List<EchoObject>();
-        else if (type == PropertyType.Compound && value == null)
+        else if (type == EchoType.Compound && value == null)
             _value = new Dictionary<string, EchoObject>();
         else
             _value = value;
     }
     public EchoObject(List<EchoObject> tags)
     {
-        TagType = PropertyType.List;
+        TagType = EchoType.List;
         _value = tags;
     }
-    public static EchoObject NewCompound() => new(PropertyType.Compound, new Dictionary<string, EchoObject>());
-    public static EchoObject NewList() => new(PropertyType.List, new List<EchoObject>());
-
-    public void GetAllAssetRefs(ref HashSet<Guid> refs)
-    {
-        if (TagType == PropertyType.List)
-        {
-            foreach (var tag in (List<EchoObject>)Value!)
-                tag.GetAllAssetRefs(ref refs);
-        }
-        else if (TagType == PropertyType.Compound)
-        {
-            var dict = (Dictionary<string, EchoObject>)Value!;
-            if (TryGet("$type", out var typeName))
-            {
-                // This isnt a perfect solution since maybe theres a class named AssetRefCollection or something
-                // But this in combination with the "AssetID" tag and Guid.TryParse should be reliable enough while being fast
-                if (typeName!.StringValue.Contains("Prowl.Runtime.AssetRef") && TryGet("AssetID", out var assetId))
-                {
-                    // Is an AssetRef were cloning, Spit out
-                    if (Guid.TryParse(assetId!.StringValue, out var id) && id != Guid.Empty)
-                        refs.Add(id);
-                }
-            }
-            foreach (var (_, tag) in dict)
-                tag.GetAllAssetRefs(ref refs);
-        }
-    }
+    public static EchoObject NewCompound() => new(EchoType.Compound, new Dictionary<string, EchoObject>());
+    public static EchoObject NewList() => new(EchoType.List, new List<EchoObject>());
 
     public EchoObject Clone()
     {
-        if (TagType == PropertyType.Null) return new(PropertyType.Null, null);
-        else if (TagType == PropertyType.List)
+        if (TagType == EchoType.Null) return new(EchoType.Null, null);
+        else if (TagType == EchoType.List)
         {
             // Value is a List<Tag>
             var list = (List<EchoObject>)Value!;
@@ -121,7 +95,7 @@ public sealed partial class EchoObject
             foreach (var tag in list)
                 newList.Add(tag.Clone());
         }
-        else if (TagType == PropertyType.Compound)
+        else if (TagType == EchoType.Compound)
         {
             // Value is a Dictionary<string, Tag>
             var dict = (Dictionary<string, EchoObject>)Value!;
@@ -132,7 +106,7 @@ public sealed partial class EchoObject
         return new(TagType, Value);
     }
 
-    private void OnPropertyChanged(PropertyChangeEventArgs e)
+    private void OnPropertyChanged(EchoChangeEventArgs e)
     {
         PropertyChanged?.Invoke(this, e);
         Parent?.OnPropertyChanged(e);
@@ -148,8 +122,8 @@ public sealed partial class EchoObject
     {
         get
         {
-            if (TagType == PropertyType.Compound) return ((Dictionary<string, EchoObject>)Value!).Count;
-            else if (TagType == PropertyType.List) return ((List<EchoObject>)Value!).Count;
+            if (TagType == EchoType.Compound) return ((Dictionary<string, EchoObject>)Value!).Count;
+            else if (TagType == EchoType.List) return ((List<EchoObject>)Value!).Count;
             else return 0;
         }
     }
@@ -164,9 +138,9 @@ public sealed partial class EchoObject
         {
             return TagType switch
             {
-                PropertyType.Compound => false,
-                PropertyType.List => false,
-                PropertyType.Null => false,
+                EchoType.Compound => false,
+                EchoType.List => false,
+                EchoType.Null => false,
                 _ => true
             };
         }
@@ -183,26 +157,26 @@ public sealed partial class EchoObject
         { 
             _value = TagType switch
             {
-                PropertyType.Byte => (byte)value,
-                PropertyType.sByte => (sbyte)value,
-                PropertyType.Short => (short)value,
-                PropertyType.Int => (int)value,
-                PropertyType.Long => (long)value,
-                PropertyType.UShort => (ushort)value,
-                PropertyType.UInt => (uint)value,
-                PropertyType.ULong => (ulong)value,
-                PropertyType.Float => (float)value,
-                PropertyType.Double => (double)value,
-                PropertyType.Decimal => (decimal)value,
-                PropertyType.String => (string)value,
-                PropertyType.ByteArray => (byte[])value,
-                PropertyType.Bool => (bool)value,
+                EchoType.Byte => (byte)value,
+                EchoType.sByte => (sbyte)value,
+                EchoType.Short => (short)value,
+                EchoType.Int => (int)value,
+                EchoType.Long => (long)value,
+                EchoType.UShort => (ushort)value,
+                EchoType.UInt => (uint)value,
+                EchoType.ULong => (ulong)value,
+                EchoType.Float => (float)value,
+                EchoType.Double => (double)value,
+                EchoType.Decimal => (decimal)value,
+                EchoType.String => (string)value,
+                EchoType.ByteArray => (byte[])value,
+                EchoType.Bool => (bool)value,
                 _ => throw new Exception()
             };
         }
         catch (Exception e) { throw new InvalidOperationException("Cannot set value of " + TagType.ToString() + " to " + value.ToString(), e); }
 
-        OnPropertyChanged(new PropertyChangeEventArgs(this, old, value));
+        OnPropertyChanged(new EchoChangeEventArgs(this, old, value));
     }
 
     /// <summary> Returns the value of this tag, cast as a bool. </summary>
@@ -266,21 +240,21 @@ public sealed partial class EchoObject
     /// <exception cref="InvalidCastException"> Will throw when used on an unsupported tag. </exception>
     public string StringValue {
         get => TagType switch {
-            PropertyType.Null => "NULL",
-            PropertyType.String => Value as string ?? "",
-            PropertyType.Byte => ByteValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.sByte => sByteValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.Double => DoubleValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.Float => FloatValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.Int => IntValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.UInt => UIntValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.Long => LongValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.ULong => ULongValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.Short => ShortValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.UShort => UShortValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.Decimal => DecimalValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.Bool => BoolValue.ToString(CultureInfo.InvariantCulture),
-            PropertyType.ByteArray => Convert.ToBase64String(ByteArrayValue),
+            EchoType.Null => "NULL",
+            EchoType.String => Value as string ?? "",
+            EchoType.Byte => ByteValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.sByte => sByteValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.Double => DoubleValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.Float => FloatValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.Int => IntValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.UInt => UIntValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.Long => LongValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.ULong => ULongValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.Short => ShortValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.UShort => UShortValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.Decimal => DecimalValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.Bool => BoolValue.ToString(CultureInfo.InvariantCulture),
+            EchoType.ByteArray => Convert.ToBase64String(ByteArrayValue),
             _ => throw new InvalidCastException("Cannot get StringValue from " + TagType.ToString())
         };
         set => Set(value);
