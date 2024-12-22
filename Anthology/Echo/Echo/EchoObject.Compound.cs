@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.ComponentModel.DataAnnotations;
+
 namespace Prowl.Echo;
 
 public sealed partial class EchoObject
@@ -32,6 +34,7 @@ public sealed partial class EchoObject
 
             Tags[tagName] = value;
             value.Parent = this;
+            value.CompoundKey = tagName;
         }
     }
 
@@ -135,6 +138,7 @@ public sealed partial class EchoObject
 
         Tags.Add(name, newTag);
         newTag.Parent = this;
+        newTag.CompoundKey = name;
     }
 
     /// <summary>
@@ -150,13 +154,13 @@ public sealed partial class EchoObject
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentNullException(nameof(name));
-        return Tags.Remove(name);
 
         try
         {
             var tag = Tags[name];
             Tags.Remove(name);
             tag.Parent = null;
+            tag.CompoundKey = null;
             return true;
         }
         catch

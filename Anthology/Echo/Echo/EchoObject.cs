@@ -54,6 +54,8 @@ public sealed partial class EchoObject
     public EchoType TagType { get; private set; }
 
     public EchoObject? Parent { get; private set; }
+    public string? CompoundKey { get; private set; }
+    public int? ListIndex { get; private set; }
 
     public EchoObject() { }
     public EchoObject(byte i) { _value = i; TagType = EchoType.Byte; }
@@ -80,6 +82,7 @@ public sealed partial class EchoObject
             for (int i = 0; i < ((List<EchoObject>)_value).Count; i++)
             {
                 ((List<EchoObject>)_value)[i].Parent = this;
+                ((List<EchoObject>)_value)[i].ListIndex = i;
             }
         }
         else if (type == EchoType.Compound && value == null)
@@ -90,6 +93,7 @@ public sealed partial class EchoObject
             foreach (var (key, tag) in (Dictionary<string, EchoObject>)_value)
             {
                 tag.Parent = this;
+                tag.CompoundKey = key;
             }
         }
         else
@@ -99,7 +103,13 @@ public sealed partial class EchoObject
     {
         TagType = EchoType.List;
         _value = tags;
+
+        // Set parent for all children
+        for (int i = 0; i < tags.Count; i++)
+        {
+            tags[i].Parent = this;
             tags[i].ListIndex = i;
+        }
     }
     public static EchoObject NewCompound() => new(EchoType.Compound, new Dictionary<string, EchoObject>());
     public static EchoObject NewList() => new(EchoType.List, new List<EchoObject>());

@@ -30,13 +30,26 @@ public sealed partial class EchoObject
 
         List.Add(tag);
         tag.Parent = this;
+        tag.ListIndex = List.Count - 1;
     }
 
     public void ListRemove(EchoObject tag)
     {
         if (TagType != EchoType.List)
             throw new System.InvalidOperationException("Cannot remove tag from non-list tag");
-        List.Remove(tag);
-        tag.Parent = null;
+
+        int removedIndex = List.IndexOf(tag);
+        if (removedIndex != -1)
+        {
+            List.RemoveAt(removedIndex);
+            tag.Parent = null;
+            tag.ListIndex = null;
+
+            // Update indices for all items after the removed one
+            for (int i = removedIndex; i < List.Count; i++)
+            {
+                List[i].ListIndex = i;
+            }
+        }
     }
 }
