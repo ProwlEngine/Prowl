@@ -3,7 +3,7 @@
 
 namespace Prowl.Echo;
 
-public static class BinaryTagConverter
+internal static class BinaryTagConverter
 {
 
     #region Writing

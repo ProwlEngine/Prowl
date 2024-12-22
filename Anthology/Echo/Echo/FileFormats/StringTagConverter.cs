@@ -5,7 +5,7 @@ using System.Globalization;
 
 namespace Prowl.Echo;
 
-public static partial class StringTagConverter
+internal static class StringTagConverter
 {
     // Writing:
 
