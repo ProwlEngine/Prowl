@@ -128,7 +128,6 @@ public class MyClass
 
 ## Limitations
   - Properties are not serialized (only fields)
-  - No benchmarks exist but performance is expected to be lacking
 
 ## Performance
 
@@ -138,6 +137,17 @@ However, If you're using Echo and need better performance:
   1. Implement `ISerializable` for your critical types - this can significantly outperform the default reflection-based approach
   2. Minimize deep object graphs when possible
   3. Consider using binary format instead of text, as the text format is significantly slower
+
+Heres is a quick Benchmark I did with BenchmarkDotNet, These were done on a simple Vector3 class.
+
+|      Method |           Serializer |        Mean |     Error |    StdDev | DataSize |
+|------------ |--------------------- |------------:|----------:|----------:|---------:|
+|   **Serialize** |      **Newtonsoft.Json** | **1,318.56 ns** |  **8.097 ns** |  **7.574 ns** |     **35 B** |
+| Deserialize |      Newtonsoft.Json | 2,278.44 ns |  9.244 ns |  8.195 ns |        - |
+|   **Serialize** |           **Echo** | **1,489.87 ns** | **17.410 ns** | **15.434 ns** |     **72 B** |
+| Deserialize |           Echo | 1,948.34 ns | 65.129 ns | 72.390 ns |        - |
+|   **Serialize** |           **Manual** | **68.53 ns** | **0.313 ns** | **0.277 ns** |     **12 B** |
+| Deserialize |           Manual | 60.46 ns | 0.429 ns | 0.359 ns |        - |
 
 ## License
 
