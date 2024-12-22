@@ -178,6 +178,24 @@ public sealed partial class EchoObject
             path = path[(i + 1)..];
         }
     }
+
+    /// <summary>
+    /// Get the type stored inside this compound if it was serialized with type information.
+    /// This is useful in networked environments for security reasons, when you want to confirm the type of the object before deserializing it.
+    /// Otherwise a malicious actor could send a serialized object with a malicious type and cause a security vulnerability.
+    /// 
+    /// For example, Maybe in your networked game you have an IPacket type that gets serialized by Echo and sent back and forth.
+    /// When the server goes to deserialize the packet, it can use this method to confirm that the type is actually IPacket before deserializing it.
+    /// Otherwise a client could send a malicious packet with a different type maybe a OpenGL Texture type or something and trigger a memory leak.
+    /// </summary>
+    /// <returns>The type stored in this compound tag, or null if no type was stored</returns>
+    public Type? GetStoredType()
+    {
+        if (TryGet("$type", out var typeTag))
+            return ReflectionUtils.FindType(typeTag!.StringValue);
+        return null;
+    }
+
     /// <summary>
     /// Write this tag to a binary file in the Echo format.
     /// </summary>
