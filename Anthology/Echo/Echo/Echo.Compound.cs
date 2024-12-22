@@ -7,6 +7,13 @@ public sealed partial class EchoObject
 {
     public Dictionary<string, EchoObject> Tags => (Value as Dictionary<string, EchoObject>)!;
 
+    /// <summary>
+    /// Get or set a tag by name in this CompoundTag.
+    /// </summary>
+    /// <param name="tagName">The name of the tag to check for</param>
+    /// <returns>The tag if found, otherwise null</returns>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace or the value that is being set is null</exception>
     public EchoObject this[string tagName]
     {
         get { return Get(tagName); }
@@ -14,56 +21,118 @@ public sealed partial class EchoObject
         {
             if (TagType != PropertyType.Compound)
                 throw new InvalidOperationException("Cannot set tag on non-compound tag");
-            else if (tagName == null)
+
+            if (string.IsNullOrWhiteSpace(tagName))
                 throw new ArgumentNullException(nameof(tagName));
-            else if (value == null)
-                throw new ArgumentNullException(nameof(value));
+
+            ArgumentNullException.ThrowIfNull(value, nameof(value));
+
             Tags[tagName] = value;
             value.Parent = this;
         }
     }
 
     /// <summary> Gets a collection containing all tag names in this CompoundTag. </summary>
-    public IEnumerable<string> GetNames() => Tags.Keys;
+    /// <returns>A collection of all tag names</returns>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    public IEnumerable<string> GetNames()
+    {
+        if (TagType != PropertyType.Compound)
+            throw new InvalidOperationException("Cannot set tag on non-compound tag");
+        return Tags.Keys;
+    }
 
     /// <summary> Gets a collection containing all tags in this CompoundTag. </summary>
-    public IEnumerable<EchoObject> GetAllTags() => Tags.Values;
+    /// <returns>A collection of all tags</returns>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    public IEnumerable<EchoObject> GetAllTags()
+    {
+        if (TagType != PropertyType.Compound)
+            throw new InvalidOperationException("Cannot set tag on non-compound tag");
+        return Tags.Values;
+    }
 
+    /// <summary>
+    /// Get a tag from this compound tag by name.
+    /// </summary>
+    /// <param name="tagName">The name of the tag to check for</param>
+    /// <returns>The tag if found, otherwise null</returns>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
     public EchoObject? Get(string tagName)
     {
         if (TagType != PropertyType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
-        else if (tagName == null)
+        if (string.IsNullOrWhiteSpace(tagName))
             throw new ArgumentNullException(nameof(tagName));
+
         return Tags.TryGetValue(tagName, out var result) ? result : null;
     }
 
+    /// <summary>
+    /// Try to get a tag from this compound tag by name.
+    /// </summary>
+    /// <param name="tagName">The name of the tag to check for</param>
+    /// <param name="result">The tag if found, otherwise null</param>
+    /// <returns>True if the tag was found, otherwise false</returns>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
     public bool TryGet(string tagName, out EchoObject? result)
     {
         if (TagType != PropertyType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
-        return tagName != null ? Tags.TryGetValue(tagName, out result) : throw new ArgumentNullException(nameof(tagName));
+        if (string.IsNullOrWhiteSpace(tagName))
+            throw new ArgumentNullException(nameof(tagName));
+
+        return Tags.TryGetValue(tagName, out result);
     }
 
+    /// <summary>
+    /// Check if this compound tag contains a tag by name.
+    /// </summary>
+    /// <param name="tagName">The name of the tag to check for</param>
+    /// <returns>True if the tag exists, otherwise false</returns>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
     public bool Contains(string tagName)
     {
         if (TagType != PropertyType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
-        return tagName != null ? Tags.ContainsKey(tagName) : throw new ArgumentNullException(nameof(tagName));
+        if (string.IsNullOrWhiteSpace(tagName))
+            throw new ArgumentNullException(nameof(tagName));
+        return Tags.ContainsKey(tagName);
     }
 
+    /// <summary>
+    /// Add a tag to this compound tag.
+    /// </summary>
+    /// <param name="name">The name of the tag</param>
+    /// <param name="newTag">The tag to add</param>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
+    /// <exception cref="ArgumentException">Thrown if the new tag is null or the same as this tag</exception>
     public void Add(string name, EchoObject newTag)
     {
         if (TagType != PropertyType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentNullException(nameof(name));
+
         if (newTag == null)
-            throw new ArgumentNullException(nameof(newTag));
+            throw new ArgumentException(null, nameof(newTag));
         else if (newTag == this)
-            throw new ArgumentException("Cannot add tag to self");
+            throw new ArgumentException("Cannot add tag to self", nameof(newTag));
         Tags.Add(name, newTag);
         newTag.Parent = this;
     }
 
+    /// <summary>
+    /// Remove a tag from this compound tag by name.
+    /// </summary>
+    /// <param name="name">The name of the tag to remove</param>
+    /// <returns>True if the tag was removed, otherwise false</returns>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception></exception>
     public bool Remove(string name)
     {
         if (TagType != PropertyType.Compound)
@@ -73,12 +142,20 @@ public sealed partial class EchoObject
         return Tags.Remove(name);
     }
 
+    /// <inheritdoc cref="EchoObject.Find"/>"
     public bool TryFind(string path, out EchoObject? tag)
     {
         tag = Find(path);
         return tag != null;
     }
 
+    /// <summary>
+    /// Find a tag by path. For example, if you have a compound tag with a tag called "stats" and that tag has a tag called "stamina",
+    /// you can find the health tag by calling Find("stats/stamina").
+    /// </summary>
+    /// <param name="path">The path to the tag</param>
+    /// <returns>The tag if found, otherwise null</returns>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
     public EchoObject? Find(string path)
     {
         if (TagType != PropertyType.Compound)
