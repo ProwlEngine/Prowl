@@ -28,6 +28,7 @@ This allows for fast inspection and modification before converting to Binary or 
   - Battle Tested in the Prowl Game Engine
   - Supports both String & Binary formats
   - Mimics Unity's Serializer
+  - GUID-based Resource Dependency Tracking built right in, No overhead when unused.
 
 
 ## Usage
@@ -49,34 +50,37 @@ var deserialized = Serializer.Deserialize<MyClass>(serialized);
 var serialized = Serializer.Serialize(myObject);
 
 // Save to Text
-string text = StringTagConverter.Write(serialized);
+string text = serialized.WriteToString();
 
 // Read to From
-var fromText = StringTagConverter.Read(text);
+var fromText = EchoObject.ReadFromString(text);
 
 var deserialized = Serializer.Deserialize<MyClass>(fromText);
 ```
 
-### Custom Serialization
+### Custom Serialization - Fastest mode Echo has to offer
 
 ```csharp
 public class CustomObject : ISerializable
 {
     public int Value = 42;
     public string Text = "Custom";
+	public MyClass Obj = new();
 
-    public SerializedProperty Serialize(SerializationContext ctx)
+    public EchoObject Serialize(SerializationContext ctx)
     {
-        var compound = SerializedProperty.NewCompound();
-        compound.Add("customValue", new SerializedProperty(PropertyType.Int, Value));
-        compound.Add("customText", new SerializedProperty(PropertyType.String, Text));
+        var compound = EchoObject.NewCompound();
+        compound.Add("value", new(Value));
+        compound.Add("text", new(Text));
+        compound.Add("obj", Serializer.Serialize(Obj, ctx));
         return compound;
     }
 
-    public void Deserialize(SerializedProperty tag, SerializationContext ctx)
+    public void Deserialize(EchoObject tag, SerializationContext ctx)
     {
-        Value = tag.Get("customValue").IntValue;
-        Text = tag.Get("customText").StringValue;
+        Value = tag.Get("value").IntValue;
+        Text = tag.Get("text").StringValue;
+		Obj = Serializer.Deserialize(tag.Get("obj"), ctx);
     }
 }
 ```
@@ -89,9 +93,9 @@ var list = new List<string> { "one", "two", "three" };
 var serializedList = Serializer.Serialize(list);
 
 // Dictionaries
-var dict = new Dictionary<string, int> {
-    { "one", 1 },
-    { "two", 2 }
+var dict = new Dictionary<MyClass, int> {
+    { new("one"), 1 },
+    { new("two"), 2 }
 };
 var serializedDict = Serializer.Serialize(dict);
 

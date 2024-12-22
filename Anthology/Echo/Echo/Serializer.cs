@@ -24,7 +24,7 @@ public static class Serializer
     ///         var dict = (Dictionary<string, EchoObject>)echo.Value!;
     ///         if (TryGet("$type", out var typeName)) // See if we are an asset ref
     ///         {
-    ///             if (typeName!.StringValue.Contains(Serializer.DependencyType) && echo.TryGet("AssetID", out var assetId))
+    ///             if (typeName!.StringValue.Contains("Prowl.Runtime.AssetRef") && echo.TryGet("AssetID", out var assetId))
     ///             {
     ///                 if (Guid.TryParse(assetId!.StringValue, out var id) && id != Guid.Empty)
     ///                     refs.Add(id);
