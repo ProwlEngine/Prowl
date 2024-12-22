@@ -185,30 +185,28 @@ public sealed partial class EchoObject
 
     public static string GetRelativePath(EchoObject from, EchoObject to)
     {
-        // Get full paths
-        var fromPath = from.GetPath().Split('/').ToList();
-        var toPath = to.GetPath().Split('/').ToList();
+        if (from == to) return "";
+        if (to.Parent == null) throw new ArgumentException("'to' must exist inside 'from'");
 
-        // Find common prefix
-        int commonPrefixLength = 0;
-        int minLength = Math.Min(fromPath.Count, toPath.Count);
+        var path = new List<string>();
+        var current = to;
 
-        while (commonPrefixLength < minLength &&
-               fromPath[commonPrefixLength] == toPath[commonPrefixLength])
+        // Build path from property up to source
+        while (current != from && current.Parent != null)
         {
-            commonPrefixLength++;
+            if (current.Parent == null)
+                throw new ArgumentException("'to' must exist inside 'from'");
+
+            if (current.Parent.TagType == EchoType.List)
+                path.Add(current.ListIndex?.ToString() ?? "");
+            else
+                path.Add(current.CompoundKey ?? "");
+
+            current = current.Parent;
         }
 
-        // Build relative path
-        var relativePath = new List<string>();
-
-        // Add ".." for each level we need to go up
-        for (int i = commonPrefixLength; i < fromPath.Count; i++)
-            relativePath.Add("..");
-
-        // Add the path to the target
-        relativePath.AddRange(toPath.Skip(commonPrefixLength));
-
-        return string.Join("/", relativePath);
+        // Reverse and join
+        path.Reverse();
+        return string.Join("/", path);
     }
 }
