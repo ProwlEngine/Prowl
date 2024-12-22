@@ -32,9 +32,22 @@ public sealed partial class EchoObject
             if (value.Parent != null)
                 throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(value));
 
+            var oldValue = Tags.TryGetValue(tagName, out var existingTag) ? existingTag : null;
+
+            if (oldValue != null)
+            {
+                oldValue.Parent = null;
+                oldValue.CompoundKey = null;
+                OnPropertyChanged(new EchoChangeEventArgs(
+                    this, oldValue, oldValue.Value, null, ChangeType.TagRemoved));
+            }
+
             Tags[tagName] = value;
             value.Parent = this;
             value.CompoundKey = tagName;
+
+            OnPropertyChanged(new EchoChangeEventArgs(
+                this, value, null, value.Value, ChangeType.TagAdded));
         }
     }
 
@@ -139,6 +152,13 @@ public sealed partial class EchoObject
         Tags.Add(name, newTag);
         newTag.Parent = this;
         newTag.CompoundKey = name;
+
+        OnPropertyChanged(new EchoChangeEventArgs(
+            this,           // Source is this compound
+            newTag,         // Property is the new tag
+            null,           // Old value null since it's an add
+            newTag.Value,   // New value is the tag's value
+            ChangeType.TagAdded));
     }
 
     /// <summary>
@@ -155,18 +175,59 @@ public sealed partial class EchoObject
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentNullException(nameof(name));
 
-        try
+        if (Tags.TryGetValue(name, out var tag))
         {
-            var tag = Tags[name];
             Tags.Remove(name);
+
+            // Fire change event before clearing parent/key
+            OnPropertyChanged(new EchoChangeEventArgs(
+                this,       // Source is this compound
+                tag,        // Property is the removed tag
+                tag.Value,  // Old value is the tag's current value
+                null,       // New value null since it's a remove
+                ChangeType.TagRemoved));
+
             tag.Parent = null;
             tag.CompoundKey = null;
             return true;
         }
-        catch
-        {
-            return false;
-        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Rename a tag in this compound tag.
+    /// </summary>
+    /// <param name="oldName">The old name of the tag</param>
+    /// <param name="newName">The new name of the tag</param>
+    /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the old or new name is null or whitespace</exception>
+    /// <exception cref="ArgumentException">Thrown if the old name doesn't exist or the new name already exists</exception>
+    public void Rename(string oldName, string newName)
+    {
+        if (TagType != EchoType.Compound)
+            throw new InvalidOperationException("Cannot rename tag in non-compound tag");
+        if (string.IsNullOrWhiteSpace(oldName))
+            throw new ArgumentNullException(nameof(oldName));
+        if (string.IsNullOrWhiteSpace(newName))
+            throw new ArgumentNullException(nameof(newName));
+        if (oldName == newName) return;
+        if (!Tags.ContainsKey(oldName))
+            throw new ArgumentException("Tag with old name doesn't exist", nameof(oldName));
+        if (Tags.ContainsKey(newName))
+            throw new ArgumentException("Tag with new name already exists", nameof(newName));
+
+        var tag = Tags[oldName];
+        Tags.Remove(oldName);
+        Tags.Add(newName, tag);
+        tag.CompoundKey = newName;
+
+        OnPropertyChanged(new EchoChangeEventArgs(
+            this,     // Source is this compound
+            tag,      // Property is the renamed tag
+            oldName,  // Old value is the old name
+            newName,  // New value is the new name
+            ChangeType.TagRenamed));
     }
 
     /// <summary>

@@ -28,20 +28,40 @@ public enum EchoType
 
 public class EchoChangeEventArgs : EventArgs
 {
-    public EchoObject Property { get; }
+    public EchoObject Source { get; }      // The root object where the event originated
+    public string Path { get; }            // Full path to changed property
+    public string RelativePath { get; }    // Path relative to the listening object
+    public EchoObject Property { get; }    // The actual changed property
     public object? OldValue { get; }
     public object? NewValue { get; }
+    public ChangeType Type { get; }        // Type of change that occurred
 
-    // TODO: We should provide the path to the property that changed, Relative to the current parent
-    // That way people can hook onto a root EchoObject and get notified of changes to any property inside, and its path, old and new value
-    // This would be super useful for Networked games, where you can just send the path and new value to the others to keep an EchoObject in sync
-
-    public EchoChangeEventArgs(EchoObject property, object? oldValue, object? newValue)
+    public EchoChangeEventArgs(
+        EchoObject source,
+        EchoObject property,
+        object? oldValue,
+        object? newValue,
+        ChangeType type)
     {
+        Source = source;
         Property = property;
+        Path = property.GetPath();
+        RelativePath = source == property ? "" : EchoObject.GetRelativePath(source, property);
         OldValue = oldValue;
         NewValue = newValue;
+        Type = type;
     }
+}
+
+public enum ChangeType
+{
+    ValueChanged,     // Value of a property changed
+    ListTagAdded,     // Item added to a list
+    ListTagRemoved,   // Item removed from a list
+    ListTagMoved,     // Item moved within a list
+    TagAdded,         // Property added to compound
+    TagRemoved,       // Property removed from compound
+    TagRenamed        // Property renamed in compound
 }
 
 public sealed partial class EchoObject
@@ -49,7 +69,7 @@ public sealed partial class EchoObject
     public event EventHandler<EchoChangeEventArgs>? PropertyChanged;
 
     private object? _value;
-    public object? Value { get { return _value; } private set { SetValue(value); } }
+    public object? Value { get { return _value; } set { SetValue(value); } }
 
     public EchoType TagType { get; private set; }
 
@@ -143,8 +163,34 @@ public sealed partial class EchoObject
 
     private void OnPropertyChanged(EchoChangeEventArgs e)
     {
-        PropertyChanged?.Invoke(this, e);
-        Parent?.OnPropertyChanged(e);
+        // Create a new event with the path relative to this object
+        var localEvent = new EchoChangeEventArgs(
+            this,  // Source is this object
+            e.Property,
+            e.OldValue,
+            e.NewValue,
+            e.Type);
+
+        // Fire local event
+        PropertyChanged?.Invoke(this, localEvent);
+
+        // If we have a parent, propagate upwards
+        if (Parent != null)
+        {
+            // For parent events, we need to include our key in the path
+            string parentPath = Parent.TagType == EchoType.List
+                ? ListIndex.ToString()
+                : CompoundKey ?? "";
+
+            var parentEvent = new EchoChangeEventArgs(
+                Parent,  // Source is the parent
+                e.Property,
+                e.OldValue,
+                e.NewValue,
+                e.Type);
+
+            Parent.OnPropertyChanged(parentEvent);
+        }
     }
 
     #region Shortcuts
@@ -187,32 +233,76 @@ public sealed partial class EchoObject
     public void SetValue(object value)
     {
         if (_value == value) return;
-        var old = _value;
-        try 
-        { 
-            _value = TagType switch
-            {
-                EchoType.Byte => (byte)value,
-                EchoType.sByte => (sbyte)value,
-                EchoType.Short => (short)value,
-                EchoType.Int => (int)value,
-                EchoType.Long => (long)value,
-                EchoType.UShort => (ushort)value,
-                EchoType.UInt => (uint)value,
-                EchoType.ULong => (ulong)value,
-                EchoType.Float => (float)value,
-                EchoType.Double => (double)value,
-                EchoType.Decimal => (decimal)value,
-                EchoType.String => (string)value,
-                EchoType.ByteArray => (byte[])value,
-                EchoType.Bool => (bool)value,
-                _ => throw new Exception()
-            };
-        }
-        catch (Exception e) { throw new InvalidOperationException("Cannot set value of " + TagType.ToString() + " to " + value.ToString(), e); }
+        var oldValue = _value;
 
-        OnPropertyChanged(new EchoChangeEventArgs(this, old, value));
+        try
+        {
+            // Handle null for nullable types
+            if (value == null)
+            {
+                if (TagType == EchoType.String)
+                {
+                    _value = string.Empty;
+                    OnPropertyChanged(new EchoChangeEventArgs(this, this, oldValue, _value, ChangeType.ValueChanged));
+                    return;
+                }
+                throw new ArgumentNullException(nameof(value), $"Cannot set null value for type {TagType}");
+            }
+
+            // Try converting using Convert.ChangeType for numeric types
+            if (IsNumericType(TagType))
+            {
+                try
+                {
+                    _value = TagType switch {
+                        EchoType.Byte => Convert.ToByte(value),
+                        EchoType.sByte => Convert.ToSByte(value),
+                        EchoType.Short => Convert.ToInt16(value),
+                        EchoType.Int => Convert.ToInt32(value),
+                        EchoType.Long => Convert.ToInt64(value),
+                        EchoType.UShort => Convert.ToUInt16(value),
+                        EchoType.UInt => Convert.ToUInt32(value),
+                        EchoType.ULong => Convert.ToUInt64(value),
+                        EchoType.Float => Convert.ToSingle(value),
+                        EchoType.Double => Convert.ToDouble(value),
+                        EchoType.Decimal => Convert.ToDecimal(value),
+                        _ => throw new InvalidOperationException($"Unexpected numeric type: {TagType}")
+                    };
+                    OnPropertyChanged(new EchoChangeEventArgs(this, this, oldValue, _value, ChangeType.ValueChanged));
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to convert value '{value}' of type {value.GetType().Name} to {TagType}", ex);
+                }
+            }
+
+            // Handle special types
+            _value = TagType switch {
+                EchoType.String => value is string str ? str : value.ToString(),
+                EchoType.Bool => Convert.ToBoolean(value),
+                EchoType.ByteArray => value is byte[] arr ? arr : throw new InvalidOperationException(
+                    $"Cannot convert type {value.GetType().Name} to byte array"),
+                _ => throw new InvalidOperationException($"Unsupported tag type: {TagType}")
+            };
+
+            OnPropertyChanged(new EchoChangeEventArgs(this, this, oldValue, _value, ChangeType.ValueChanged));
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to set value of type {TagType} to {value} ({value.GetType().Name})", ex);
+        }
     }
+
+    private static bool IsNumericType(EchoType type) => type switch {
+        EchoType.Byte or EchoType.sByte or
+        EchoType.Short or EchoType.Int or EchoType.Long or
+        EchoType.UShort or EchoType.UInt or EchoType.ULong or
+        EchoType.Float or EchoType.Double or EchoType.Decimal => true,
+        _ => false
+    };
 
     /// <summary> Returns the value of this tag, cast as a bool. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than BoolTag. </exception>

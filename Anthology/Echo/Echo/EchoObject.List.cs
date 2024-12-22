@@ -31,6 +31,9 @@ public sealed partial class EchoObject
         List.Add(tag);
         tag.Parent = this;
         tag.ListIndex = List.Count - 1;
+
+        OnPropertyChanged(new EchoChangeEventArgs(
+            this, tag, null, tag.Value, ChangeType.ListTagAdded));
     }
 
     public void ListRemove(EchoObject tag)
@@ -42,13 +45,23 @@ public sealed partial class EchoObject
         if (removedIndex != -1)
         {
             List.RemoveAt(removedIndex);
+
+            // Track removal before updating indices
+            OnPropertyChanged(new EchoChangeEventArgs(
+                this, tag, tag.Value, null, ChangeType.ListTagRemoved));
+
             tag.Parent = null;
             tag.ListIndex = null;
 
-            // Update indices for all items after the removed one
+            // Update indices and track moves
             for (int i = removedIndex; i < List.Count; i++)
             {
-                List[i].ListIndex = i;
+                var movedItem = List[i];
+                var oldIndex = movedItem.ListIndex;
+                movedItem.ListIndex = i;
+
+                OnPropertyChanged(new EchoChangeEventArgs(
+                    this, movedItem, oldIndex, i, ChangeType.ListTagMoved));
             }
         }
     }
