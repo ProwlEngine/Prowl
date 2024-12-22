@@ -1304,6 +1304,110 @@ public class SerializerTests
         Assert.Equal(1000, highestValue);
     }
 
+    [Fact]
+    public void GetPath_ReturnsCorrectPath()
+    {
+        var root = EchoObject.NewCompound();
+        var list = EchoObject.NewList();
+        root["items"] = list;
+
+        var item = EchoObject.NewCompound();
+        list.ListAdd(item);
+        item["name"] = new EchoObject("test");
+
+        Assert.Equal("items", list.GetPath());
+        Assert.Equal("items/0", item.GetPath());
+        Assert.Equal("items/0/name", item["name"].GetPath());
+    }
+
+    [Fact]
+    public void GetPath_WithMultipleLevels_ReturnsCorrectPath()
+    {
+        var root = EchoObject.NewCompound();
+        var players = EchoObject.NewList();
+        root["players"] = players;
+
+        var player = EchoObject.NewCompound();
+        players.ListAdd(player);
+
+        var inventory = EchoObject.NewList();
+        player["inventory"] = inventory;
+
+        var item = EchoObject.NewCompound();
+        inventory.ListAdd(item);
+        item["name"] = new EchoObject("sword");
+
+        Assert.Equal("players/0/inventory/0/name", item["name"].GetPath());
+    }
+
+    [Fact]
+    public void GetRelativePath_ReturnsCorrectPath()
+    {
+        var root = EchoObject.NewCompound();
+        var players = EchoObject.NewList();
+        root["players"] = players;
+
+        var player1 = EchoObject.NewCompound();
+        var player2 = EchoObject.NewCompound();
+        players.ListAdd(player1);
+        players.ListAdd(player2);
+
+        player1["name"] = new EchoObject("Player1");
+        player2["name"] = new EchoObject("Player2");
+
+        // From player1 to player2
+        Assert.Equal("../1", EchoObject.GetRelativePath(player1, player2));
+
+        // From player1's name to player2's name
+        Assert.Equal("../../1/name", EchoObject.GetRelativePath(player1["name"], player2["name"]));
+    }
+
+    [Fact]
+    public void CompoundKey_And_ListIndex_AreSetCorrectly()
+    {
+        var root = EchoObject.NewCompound();
+        var list = EchoObject.NewList();
+        root["items"] = list;
+
+        var item1 = EchoObject.NewCompound();
+        var item2 = EchoObject.NewCompound();
+        list.ListAdd(item1);
+        list.ListAdd(item2);
+
+        // Test CompoundKey
+        Assert.Equal("items", list.CompoundKey);
+
+        // Test ListIndex
+        Assert.Equal(0, item1.ListIndex);
+        Assert.Equal(1, item2.ListIndex);
+
+        // Test both with nested structure
+        item1["name"] = new EchoObject("sword");
+        Assert.Equal("name", item1["name"].CompoundKey);
+        Assert.Equal(null, item1["name"].ListIndex); // Not in a list
+    }
+
+    [Fact]
+    public void GetPath_Uses_CompoundKey_And_ListIndex()
+    {
+        var root = EchoObject.NewCompound();
+        var players = EchoObject.NewList();
+        root["players"] = players;  // CompoundKey = "players"
+
+        var player = EchoObject.NewCompound();
+        players.ListAdd(player);    // ListIndex = 0
+
+        var items = EchoObject.NewList();
+        player["inventory"] = items;  // CompoundKey = "inventory"
+
+        var item = EchoObject.NewCompound();
+        items.ListAdd(item);         // ListIndex = 0
+
+        item["name"] = new EchoObject("sword");  // CompoundKey = "name"
+
+        Assert.Equal("players/0/inventory/0/name", item["name"].GetPath());
+    }
+
     #endregion
 
 }

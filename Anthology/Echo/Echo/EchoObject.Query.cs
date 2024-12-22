@@ -163,4 +163,52 @@ public sealed partial class EchoObject
                 GetPathsToRecursive(value, $"{currentPath}{(currentPath == "" ? "" : "/")}{key}", predicate, paths);
         }
     }
+
+    public string GetPath()
+    {
+        var segments = new List<string>();
+        var current = this;
+
+        while (current.Parent != null)
+        {
+            if (current.Parent.TagType == EchoType.List)
+                segments.Add(current.ListIndex.ToString());
+            else if (current.Parent.TagType == EchoType.Compound)
+                segments.Add(current.CompoundKey);
+
+            current = current.Parent;
+        }
+
+        segments.Reverse();
+        return string.Join("/", segments);
+    }
+
+    public static string GetRelativePath(EchoObject from, EchoObject to)
+    {
+        // Get full paths
+        var fromPath = from.GetPath().Split('/').ToList();
+        var toPath = to.GetPath().Split('/').ToList();
+
+        // Find common prefix
+        int commonPrefixLength = 0;
+        int minLength = Math.Min(fromPath.Count, toPath.Count);
+
+        while (commonPrefixLength < minLength &&
+               fromPath[commonPrefixLength] == toPath[commonPrefixLength])
+        {
+            commonPrefixLength++;
+        }
+
+        // Build relative path
+        var relativePath = new List<string>();
+
+        // Add ".." for each level we need to go up
+        for (int i = commonPrefixLength; i < fromPath.Count; i++)
+            relativePath.Add("..");
+
+        // Add the path to the target
+        relativePath.AddRange(toPath.Skip(commonPrefixLength));
+
+        return string.Join("/", relativePath);
+    }
 }
