@@ -126,6 +126,10 @@ public sealed partial class EchoObject
         else if (newTag == this)
             throw new ArgumentException("Cannot add tag to self", nameof(newTag));
 
+        // Make sure we dont already have this tag
+        if (Tags.ContainsKey(name))
+            throw new ArgumentException("Tag with this name already exists", nameof(name));
+
         if (newTag.Parent != null)
             throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(newTag));
 
