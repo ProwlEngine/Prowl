@@ -259,27 +259,30 @@ public sealed partial class EchoObject
     public byte[] ByteArrayValue { get => (byte[])Value; set => Set(value); }
 
     /// <summary> Returns the value of this tag, cast as a string.
-    public string StringValue
-    {
-        get
-        {
-            return TagType switch
-            {
-                PropertyType.String => (string)Value!,
-                PropertyType.Byte => ((byte)Value!).ToString(CultureInfo.InvariantCulture),
-                PropertyType.Double => ((double)Value!).ToString(CultureInfo.InvariantCulture),
-                PropertyType.Float => ((float)Value!).ToString(CultureInfo.InvariantCulture),
-                PropertyType.Int => ((int)Value!).ToString(CultureInfo.InvariantCulture),
-                PropertyType.Long => ((long)Value!).ToString(CultureInfo.InvariantCulture),
-                PropertyType.Short => ((short)Value!).ToString(CultureInfo.InvariantCulture),
-                _ => throw new InvalidCastException("Cannot get StringValue from " + TagType.ToString())
-            };
-        }
     /// Returns exact value for StringTag, and ToString(InvariantCulture) value for Byte, SByte, Double, Float, Int, UInt, Long, uLong, Short, UShort, Decimal, Bool.
     /// ByteArray returns a Base64 string.
     /// Null returns a string with contents "NULL".
     /// Not supported by CompoundTag, ListTag. </summary>
     /// <exception cref="InvalidCastException"> Will throw when used on an unsupported tag. </exception>
+    public string StringValue {
+        get => TagType switch {
+            PropertyType.Null => "NULL",
+            PropertyType.String => Value as string ?? "",
+            PropertyType.Byte => ByteValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.sByte => sByteValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.Double => DoubleValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.Float => FloatValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.Int => IntValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.UInt => UIntValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.Long => LongValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.ULong => ULongValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.Short => ShortValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.UShort => UShortValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.Decimal => DecimalValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.Bool => BoolValue.ToString(CultureInfo.InvariantCulture),
+            PropertyType.ByteArray => Convert.ToBase64String(ByteArrayValue),
+            _ => throw new InvalidCastException("Cannot get StringValue from " + TagType.ToString())
+        };
         set => Set(value);
     }
 
