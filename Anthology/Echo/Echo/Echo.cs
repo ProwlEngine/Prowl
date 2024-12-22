@@ -81,7 +81,6 @@ public sealed partial class EchoObject
         TagType = PropertyType.List;
         _value = tags;
     }
-
     public static EchoObject NewCompound() => new(PropertyType.Compound, new Dictionary<string, EchoObject>());
     public static EchoObject NewList() => new(PropertyType.List, new List<EchoObject>());
 
@@ -180,24 +179,28 @@ public sealed partial class EchoObject
     {
         if (_value == value) return;
         var old = _value;
-        _value = TagType switch
-        {
-            PropertyType.Byte => (byte)value,
-            PropertyType.sByte => (sbyte)value,
-            PropertyType.Short => (short)value,
-            PropertyType.Int => (int)value,
-            PropertyType.Long => (long)value,
-            PropertyType.UShort => (ushort)value,
-            PropertyType.UInt => (uint)value,
-            PropertyType.ULong => (ulong)value,
-            PropertyType.Float => (float)value,
-            PropertyType.Double => (double)value,
-            PropertyType.Decimal => (decimal)value,
-            PropertyType.String => (string)value,
-            PropertyType.ByteArray => (byte[])value,
-            PropertyType.Bool => (bool)value,
-            _ => throw new InvalidOperationException("Cannot set value of " + TagType.ToString())
-        };
+        try 
+        { 
+            _value = TagType switch
+            {
+                PropertyType.Byte => (byte)value,
+                PropertyType.sByte => (sbyte)value,
+                PropertyType.Short => (short)value,
+                PropertyType.Int => (int)value,
+                PropertyType.Long => (long)value,
+                PropertyType.UShort => (ushort)value,
+                PropertyType.UInt => (uint)value,
+                PropertyType.ULong => (ulong)value,
+                PropertyType.Float => (float)value,
+                PropertyType.Double => (double)value,
+                PropertyType.Decimal => (decimal)value,
+                PropertyType.String => (string)value,
+                PropertyType.ByteArray => (byte[])value,
+                PropertyType.Bool => (bool)value,
+                _ => throw new Exception()
+            };
+        }
+        catch (Exception e) { throw new InvalidOperationException("Cannot set value of " + TagType.ToString() + " to " + value.ToString(), e); }
 
         OnPropertyChanged(new PropertyChangeEventArgs(this, old, value));
     }
