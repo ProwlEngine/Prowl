@@ -32,6 +32,10 @@ public class EchoChangeEventArgs : EventArgs
     public object? OldValue { get; }
     public object? NewValue { get; }
 
+    // TODO: We should provide the path to the property that changed, Relative to the current parent
+    // That way people can hook onto a root EchoObject and get notified of changes to any property inside, and its path, old and new value
+    // This would be super useful for Networked games, where you can just send the path and new value to the others to keep an EchoObject in sync
+
     public EchoChangeEventArgs(EchoObject property, object? oldValue, object? newValue)
     {
         Property = property;
