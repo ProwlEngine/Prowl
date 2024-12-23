@@ -18,6 +18,7 @@ This allows for fast inspection and modification before converting to Binary or 
   - Circular references
   - Multi-dimensional and jagged arrays
   - Support for custom serializable objects
+  - Over 110 tests to ensure the library remains stable and reliable!
 
 - **Flexible Serialization Control**
   - Custom serialization through `ISerializable` interface
@@ -139,6 +140,8 @@ However, If you're using Echo and need better performance:
   3. Consider using binary format instead of text, as the text format is significantly slower
 
 Heres is a quick Benchmark I did with BenchmarkDotNet, These were done on a simple Vector3 class.
+This is slightly outdated, specifically the size of the resulting data should be a bit smaller now.
+As when this benchmark was made it always included type information even if not needed.
 
 |      Method |           Serializer |        Mean |     Error |    StdDev | DataSize |
 |------------ |--------------------- |------------:|----------:|----------:|---------:|
