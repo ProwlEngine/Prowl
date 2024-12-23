@@ -7,10 +7,10 @@ public sealed class AnyObjectFormat : ISerializationFormat
 {
     public bool CanHandle(Type type) => true; // Fallback format for any object
 
-    public EchoObject Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         var compound = EchoObject.NewCompound();
-        Type type = value.GetType();
+        Type actualType = value.GetType();
 
         if (context.objectToId.TryGetValue(value, out int id))
         {
@@ -46,7 +46,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
                     }
                     else
                     {
-                        EchoObject tag = Serializer.Serialize(propValue, context);
+                        EchoObject tag = Serializer.Serialize(field.FieldType, propValue, context);
                         compound.Add(field.Name, tag);
                     }
                 }
@@ -59,7 +59,18 @@ public sealed class AnyObjectFormat : ISerializationFormat
         }
 
         compound["$id"] = new(EchoType.Int, id);
-        compound["$type"] = new(EchoType.String, type.FullName);
+
+        // Handle type information based on TypeMode
+        bool shouldIncludeType = context.TypeMode switch {
+            TypeMode.Aggressive => true, // Always include type information
+            TypeMode.None => false, // Never include type information
+            TypeMode.Auto => targetType == typeof(object) || targetType != actualType, // Include type information if target is object or actual type is different
+            _ => true // Default to aggressive for safety
+        };
+
+        if (shouldIncludeType)
+            compound["$type"] = new(EchoType.String, actualType.FullName);
+
         context.EndDependencies();
 
         return compound;
@@ -70,17 +81,23 @@ public sealed class AnyObjectFormat : ISerializationFormat
         if (value.TryGet("$id", out EchoObject? id) && context.idToObject.TryGetValue(id.IntValue, out object? existingObj))
             return existingObj;
 
-        if (!value.TryGet("$type", out EchoObject? typeProperty))
-        {
-            Serializer.Logger.Error($"Failed to deserialize object, missing type info");
-            return null;
-        }
 
-        Type? objectType = ReflectionUtils.FindType(typeProperty.StringValue);
-        if (objectType == null)
+        // Determine the actual type to instantiate
+        Type objectType;
+        if (value.TryGet("$type", out EchoObject? typeProperty))
         {
-            Serializer.Logger.Error($"Couldn't find Type: {typeProperty.StringValue}");
-            return null;
+            Type? resolvedType = ReflectionUtils.FindTypeByName(typeProperty.StringValue);
+            if (resolvedType == null)
+            {
+                Serializer.Logger.Error($"Couldn't find Type: {typeProperty.StringValue}");
+                return null;
+            }
+            objectType = resolvedType;
+        }
+        else
+        {
+            // If no type information is present, use the target type
+            objectType = targetType;
         }
 
         object result = Activator.CreateInstance(objectType, true)

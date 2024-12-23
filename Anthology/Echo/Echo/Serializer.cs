@@ -61,9 +61,11 @@ public static class Serializer
         formats.Insert(0, format); // Add to start for precedence - Also ensures ObjectFormat is last
     }
 
-    public static EchoObject Serialize(object? value) => Serialize(value, new SerializationContext());
+    public static EchoObject Serialize(object? value, TypeMode typeMode = TypeMode.Auto) => Serialize(value, new SerializationContext(typeMode));
 
-    public static EchoObject Serialize(object? value, SerializationContext context)
+    public static EchoObject Serialize(object? value, SerializationContext context) => Serialize(value?.GetType(), value, context);
+
+    public static EchoObject Serialize(Type? targetType, object? value, SerializationContext context)
     {
         if (value == null) return new EchoObject(EchoType.Null, null);
 
@@ -80,7 +82,7 @@ public static class Serializer
         ISerializationFormat? format = formats.FirstOrDefault(f => f.CanHandle(value.GetType()))
             ?? throw new NotSupportedException($"No format handler found for type {value.GetType()}");
 
-        return format.Serialize(value, context);
+        return format.Serialize(targetType, value, context);
     }
 
     public static T? Deserialize<T>(EchoObject value) => (T?)Deserialize(value, typeof(T));

@@ -243,7 +243,7 @@ public sealed partial class EchoObject
     public Type? GetStoredType()
     {
         if (TryGet("$type", out var typeTag))
-            return ReflectionUtils.FindType(typeTag!.StringValue);
+            return ReflectionUtils.FindTypeByName(typeTag!.StringValue);
         return null;
     }
 

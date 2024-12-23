@@ -11,16 +11,20 @@ internal sealed class CollectionFormat : ISerializationFormat
         type.IsArray ||
         (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>));
 
-    public EchoObject Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         if (value is Array array)
         {
+            // target type is the Array itself, we want the element type
+            var elementType = targetType!.GetElementType()
+                ?? throw new InvalidOperationException("Array element type is null");
+
             if (array.Rank == 1)
             {
                 // Single dimensional array
                 List<EchoObject> tags = new();
                 foreach (var item in array)
-                    tags.Add(Serializer.Serialize(item, context));
+                    tags.Add(Serializer.Serialize(elementType, item, context));
                 return new EchoObject(tags);
             }
             else
@@ -33,11 +37,11 @@ internal sealed class CollectionFormat : ISerializationFormat
                 for (int i = 0; i < array.Rank; i++)
                     dimensions[i] = array.GetLength(i);
 
-                compound["dimensions"] = Serializer.Serialize(dimensions, context);
+                compound["dimensions"] = Serializer.Serialize(dimensions, context); // Just serializing an int array so dont need to pass target type
 
                 // Store elements
                 List<EchoObject> elements = new();
-                SerializeMultiDimensionalArray(array, new int[array.Rank], 0, elements, context);
+                SerializeMultiDimensionalArray(elementType, array, new int[array.Rank], 0, elements, context);
                 compound["elements"] = new EchoObject(elements);
 
                 return compound;
@@ -45,26 +49,29 @@ internal sealed class CollectionFormat : ISerializationFormat
         }
         else
         {
+            // target type is the Array itself, we want the element type
+            var elementType = targetType!.GetGenericArguments()[0];
+
             var list = value as IList ?? throw new InvalidOperationException("Expected IList type");
             List<EchoObject> tags = new();
             foreach (var item in list)
-                tags.Add(Serializer.Serialize(item, context));
+                tags.Add(Serializer.Serialize(elementType, item, context));
             return new EchoObject(tags);
         }
     }
 
-    private void SerializeMultiDimensionalArray(Array array, int[] indices, int dimension, List<EchoObject> elements, SerializationContext context)
+    private void SerializeMultiDimensionalArray(Type elementType, Array array, int[] indices, int dimension, List<EchoObject> elements, SerializationContext context)
     {
         if (dimension == array.Rank)
         {
-            elements.Add(Serializer.Serialize(array.GetValue(indices), context));
+            elements.Add(Serializer.Serialize(elementType, array.GetValue(indices), context));
             return;
         }
 
         for (int i = 0; i < array.GetLength(dimension); i++)
         {
             indices[dimension] = i;
-            SerializeMultiDimensionalArray(array, indices, dimension + 1, elements, context);
+            SerializeMultiDimensionalArray(elementType, array, indices, dimension + 1, elements, context);
         }
     }
 

@@ -8,14 +8,14 @@ internal sealed class NullableFormat : ISerializationFormat
     public bool CanHandle(Type type) =>
         Nullable.GetUnderlyingType(type) != null;
 
-    public EchoObject Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         var underlyingType = Nullable.GetUnderlyingType(value.GetType())
             ?? throw new InvalidOperationException("Not a nullable type");
 
         // Create compound to store nullable info
         var compound = EchoObject.NewCompound();
-        compound.Add("value", Serializer.Serialize(value, context));
+        compound.Add("value", Serializer.Serialize(underlyingType, value, context));
         return compound;
     }
 

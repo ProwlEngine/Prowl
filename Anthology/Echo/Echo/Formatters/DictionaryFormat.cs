@@ -11,18 +11,19 @@ internal sealed class DictionaryFormat : ISerializationFormat
         type.IsAssignableTo(typeof(IDictionary)) &&
         type.IsGenericType;
 
-    public EchoObject Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         var dict = (IDictionary)value;
         var type = value.GetType();
         var keyType = type.GetGenericArguments()[0];
+        var valueType = type.GetGenericArguments()[1];
 
         if (keyType == typeof(string))
         {
             // string-key behavior
             var tag = EchoObject.NewCompound();
             foreach (DictionaryEntry kvp in dict)
-                tag.Add((string)kvp.Key, Serializer.Serialize(kvp.Value, context));
+                tag.Add((string)kvp.Key, Serializer.Serialize(valueType, kvp.Value, context));
             return tag;
         }
         else
@@ -34,12 +35,22 @@ internal sealed class DictionaryFormat : ISerializationFormat
             foreach (DictionaryEntry kvp in dict)
             {
                 var entryCompound = EchoObject.NewCompound();
-                entryCompound.Add("key", Serializer.Serialize(kvp.Key, context));
-                entryCompound.Add("value", Serializer.Serialize(kvp.Value, context));
+                entryCompound.Add("key", Serializer.Serialize(keyType, kvp.Key, context));
+                entryCompound.Add("value", Serializer.Serialize(valueType, kvp.Value, context));
                 entries.Add(entryCompound);
             }
 
-            compound.Add("$type", new EchoObject(EchoType.String, type.FullName));
+            // Handle type information based on TypeMode
+            bool shouldIncludeType = context.TypeMode switch {
+                TypeMode.Aggressive => true, // Always include type information
+                TypeMode.None => false, // Never include type information
+                TypeMode.Auto => targetType == typeof(object) || targetType != type, // Include type information if target is object or actual type is different
+                _ => true // Default to aggressive for safety
+            };
+
+            if (shouldIncludeType)
+                compound["$type"] = new(EchoType.String, type.FullName);
+
             compound.Add("entries", new EchoObject(entries));
             return compound;
         }

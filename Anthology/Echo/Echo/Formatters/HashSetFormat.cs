@@ -10,12 +10,15 @@ internal sealed class HashSetFormat : ISerializationFormat
     public bool CanHandle(Type type) =>
         type.IsGenericType && type.GetGenericTypeDefinition() == typeof(HashSet<>);
 
-    public EchoObject Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
+        // target type is the Array itself, we want the element type
+        var elementType = targetType!.GetGenericArguments()[0];
+
         var hashSet = (IEnumerable)value;
         List<EchoObject> tags = new();
         foreach (var item in hashSet)
-            tags.Add(Serializer.Serialize(item, context));
+            tags.Add(Serializer.Serialize(elementType, item, context));
         return new EchoObject(tags);
     }
 

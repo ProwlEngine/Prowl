@@ -3,8 +3,20 @@
 
 namespace Prowl.Echo;
 
+public enum TypeMode 
+{
+    /// <summary> Always include type information. </summary>
+    Aggressive,
+    /// <summary> Include type information only when necessary (When the type is not the expected type) </summary>
+    Auto,
+    /// <summary> Never include type information. (This may cause deserialization to fail if the type is not the expected type) </summary>
+    None
+}
+
 public class SerializationContext
 {
+    internal TypeMode TypeMode = TypeMode.Auto;
+
     private class NullKey { }
 
     public Dictionary<object, int> objectToId = new(ReferenceEqualityComparer.Instance);
@@ -14,8 +26,9 @@ public class SerializationContext
     private int dependencyCounter = 0;
     public HashSet<Guid> dependencies = new();
 
-    public SerializationContext()
+    public SerializationContext(TypeMode typeMode = TypeMode.Auto)
     {
+        TypeMode = typeMode;
         objectToId.Clear();
         objectToId.Add(new NullKey(), 0);
         idToObject.Clear();

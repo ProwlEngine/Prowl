@@ -10,7 +10,7 @@ internal sealed class PrimitiveFormat : ISerializationFormat
         type == typeof(decimal) ||
         type == typeof(byte[]);
 
-    public EchoObject Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         return value switch
         {

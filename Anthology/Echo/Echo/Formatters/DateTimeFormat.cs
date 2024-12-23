@@ -6,7 +6,7 @@ internal sealed class DateTimeFormat : ISerializationFormat
 {
     public bool CanHandle(Type type) => type == typeof(DateTime);
 
-    public EchoObject Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         if (value is DateTime date)
             return new(EchoType.Long, date.ToBinary());

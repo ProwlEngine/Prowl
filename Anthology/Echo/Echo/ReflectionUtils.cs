@@ -12,7 +12,6 @@ public static class ReflectionUtils
 {
     // Cache for type lookups
     private static readonly ConcurrentDictionary<string, Type?> TypeCache = new();
-
     // Cache for serializable fields
     private static readonly ConcurrentDictionary<RuntimeTypeHandle, FieldInfo[]> SerializableFieldsCache = new();
 
@@ -24,24 +23,20 @@ public static class ReflectionUtils
         TypeCache.Clear();
         SerializableFieldsCache.Clear();
     }
-
-    internal static Type? FindType(string qualifiedTypeName)
+    internal static Type? FindTypeByName(string qualifiedTypeName)
     {
         return TypeCache.GetOrAdd(qualifiedTypeName, typeName => {
             // First try direct type lookup
             Type? t = Type.GetType(typeName);
             if (t != null)
                 return t;
-
             Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-
             foreach (Assembly asm in assemblies)
             {
                 // Try full name lookup
                 t = asm.GetType(typeName);
                 if (t != null)
                     return t;
-
                 // Try name-only lookup (case insensitive)
                 t = asm.GetTypes().FirstOrDefault(type => type.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase));
                 if (t != null)
@@ -58,7 +53,6 @@ public static class ReflectionUtils
             const BindingFlags flags = BindingFlags.Public |
                                      BindingFlags.NonPublic |
                                      BindingFlags.Instance;
-
             return targetType.GetFields(flags)
                 .Where(field => IsFieldSerializable(field))
                 .ToArray();
@@ -71,13 +65,11 @@ public static class ReflectionUtils
         bool shouldSerialize = field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null;
         if (!shouldSerialize)
             return false;
-
         // Check if field should be ignored
         bool shouldIgnore = field.GetCustomAttribute<SerializeIgnoreAttribute>() != null ||
                             field.GetCustomAttribute<NonSerializedAttribute>() != null;
         if (shouldIgnore)
             return false;
-
         return true;
     }
 }

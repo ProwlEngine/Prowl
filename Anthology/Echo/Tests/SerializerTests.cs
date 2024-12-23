@@ -29,6 +29,11 @@ public class SerializerTests
         public bool BoolField = true;
     }
 
+    public class SimpleInheritedObject : SimpleObject
+    {
+        public string InheritedField = "Inherited";
+    }
+
     public class ComplexObject
     {
         public SimpleObject Object = new();
@@ -101,7 +106,13 @@ public class SerializerTests
             public string Value = "Nested";
         }
 
-        public NestedClass Nested = new();
+        public class NestedInheritedClass : NestedClass
+        {
+            public string InheritedValue = "Inherited";
+        }
+
+        public NestedClass NestedA = new NestedClass();
+        public NestedClass NestedB = new NestedInheritedClass();
     }
 
     private class ObjectWithTuple
@@ -359,6 +370,193 @@ public class SerializerTests
         var deserialized = Serializer.Deserialize<HashSet<int>>(serialized);
         Assert.Equal(original, deserialized);
     }
+    #endregion
+
+    #region Test Type Modes
+
+    [Fact]
+    public void TypeMode_Aggressive_AlwaysIncludesType()
+    {
+        // Arrange
+        var obj = new SimpleObject();
+        var context = new SerializationContext(TypeMode.Aggressive);
+
+        // Act
+        var result = Serializer.Serialize(obj, context);
+
+        // Assert
+        Assert.True(result.TryGet("$type", out var typeTag));
+        Assert.Equal(typeof(SimpleObject).FullName, typeTag.StringValue);
+    }
+
+    [Fact]
+    public void TypeMode_None_NeverIncludesType()
+    {
+        // Arrange
+        var obj = new ComplexObject();
+        var context = new SerializationContext(TypeMode.None);
+
+        // Act
+        var result = Serializer.Serialize(typeof(object), obj, context);
+
+        // Assert
+        Assert.False(result.TryGet("$type", out _));
+    }
+
+    [Fact]
+    public void TypeMode_Auto_IncludesTypeOnlyWhenNecessary()
+    {
+        // Test with matching type - should not include type info
+        {
+            // Arrange
+            var simpleObj = new SimpleObject();
+            var context = new SerializationContext(TypeMode.Auto);
+            Type targetType = typeof(SimpleObject);
+
+            // Act
+            var result = Serializer.Serialize(targetType, simpleObj, context);
+
+            // Assert
+            Assert.False(result.TryGet("$type", out _), "Type info should not be included when type matches exactly");
+        }
+
+        // Test with different type - should include type info
+        {
+            // Arrange - using SimpleObject as a more specific type than object
+            var simpleObj = new SimpleObject();
+            var context = new SerializationContext(TypeMode.Auto);
+            Type targetType = typeof(object);
+
+            // Act
+            var result = Serializer.Serialize(targetType, simpleObj, context);
+
+            // Assert
+            Assert.True(result.TryGet("$type", out var typeTag), "Type info should be included when actual type differs from target type");
+            Assert.Equal(typeof(SimpleObject).FullName, typeTag.StringValue);
+        }
+    }
+
+    [Fact]
+    public void TypeMode_Auto_IncludesTypeForObjectType()
+    {
+        // Arrange
+        object obj = new SimpleObject();
+        var context = new SerializationContext(TypeMode.Auto);
+
+        // Act, We are passing object as the target type to force it to serialize into the object type
+        var result = Serializer.Serialize(typeof(object), obj, context);
+
+        // Assert
+        Assert.True(result.TryGet("$type", out var typeTag));
+        Assert.Equal(typeof(SimpleObject).FullName, typeTag.StringValue);
+    }
+
+    [Fact]
+    public void TypeMode_ComplexObjects_WithCollections()
+    {
+        // Arrange
+        var complex = new ComplexObject {
+            Object = new SimpleObject(),
+            Numbers = new List<int> { 1, 2, 3 },
+            Values = new Dictionary<string, float> { { "test", 1.0f } }
+        };
+
+        // Act
+        var result = Serializer.Serialize(complex, TypeMode.Auto);
+
+        // Assert
+        Assert.False(result.TryGet("$type", out _)); // Base type matches
+        Assert.False(result.Get("Object").TryGet("$type", out _)); // Nested object type matches
+
+        // Arrange
+        var complex2 = new ComplexObject {
+            Object = new SimpleInheritedObject(),
+            Numbers = new List<int> { 1, 2, 3 },
+            Values = new Dictionary<string, float> { { "test", 1.0f } }
+        };
+
+        // Act
+        var result2 = Serializer.Serialize(complex2, TypeMode.Auto);
+
+        // Assert
+        Assert.False(result2.TryGet("$type", out _)); // Base type matches
+        Assert.True(result2.Get("Object").TryGet("$type", out var objectType)); // Nested object type does not match
+        Assert.Equal(typeof(SimpleInheritedObject).FullName, objectType.StringValue);
+    }
+
+    [Fact]
+    public void TypeMode_CircularReferences()
+    {
+        // Arrange
+        var parent = new CircularObject { Name = "Parent" };
+        var child = new CircularObject { Name = "Child" };
+        parent.Child = child;
+        child.Child = parent;
+
+        var context = new SerializationContext(TypeMode.Auto);
+
+        // Act
+        var result = Serializer.Serialize(parent, context);
+
+        // Assert
+        Assert.True(result.TryGet("$id", out var parentId));
+        Assert.True(result.TryGet("Child", out var childTag));
+        Assert.True(childTag.TryGet("$id", out var childId));
+        Assert.True(childTag.TryGet("Child", out var circularRef));
+        Assert.True(circularRef.TryGet("$id", out var circularId));
+
+        // The circular reference should point back to the first object
+        Assert.Equal(parentId.IntValue, circularId.IntValue);
+    }
+
+    [Fact]
+    public void TypeMode_CustomSerializable()
+    {
+        // Arrange
+        var obj = new CustomSerializableObject { Value = 100, Text = "Test" };
+        var context = new SerializationContext(TypeMode.Aggressive);
+
+        // Act
+        var result = Serializer.Serialize(obj, context);
+
+        // Assert
+        Assert.True(result.TryGet("$type", out var typeTag));
+        Assert.Equal(typeof(CustomSerializableObject).FullName, typeTag.StringValue);
+        Assert.Equal(100, result.Get("customValue").IntValue);
+        Assert.Equal("Test", result.Get("customText").StringValue);
+    }
+
+    [Fact]
+    public void TypeMode_NestedTypes()
+    {
+        // Arrange
+        var obj = new ObjectWithNestedTypes();
+        var context = new SerializationContext(TypeMode.Auto);
+
+        // Act
+        var result = Serializer.Serialize(obj, context);
+
+        // Assert 
+        Assert.False(result.Get("NestedA").TryGet("$type", out _)); // Nested type matches base type
+        Assert.True(result.Get("NestedB").TryGet("$type", out var nestedType)); // Nested type does not match base type
+        Assert.Equal(typeof(ObjectWithNestedTypes.NestedInheritedClass).FullName, nestedType.StringValue);
+    }
+
+    [Fact]
+    public void TypeMode_GenericTypes()
+    {
+        // Arrange
+        var obj = new ObjectWithGenericField<string> { Value = "test" };
+        var context = new SerializationContext(TypeMode.Auto);
+
+        // Act
+        var result = Serializer.Serialize(typeof(object), obj, context);
+
+        // Assert
+        Assert.True(result.TryGet("$type", out var typeTag));
+        Assert.Contains("ObjectWithGenericField", typeTag.StringValue);
+    }
+
     #endregion
 
     [Fact]

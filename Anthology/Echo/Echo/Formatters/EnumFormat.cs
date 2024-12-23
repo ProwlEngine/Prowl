@@ -9,7 +9,7 @@ internal sealed class EnumFormat : ISerializationFormat
 {
     public bool CanHandle(Type type) => type.IsEnum;
 
-    public EchoObject Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         if (value is Enum e)
             return new(EchoType.Int, Convert.ToInt32(e));

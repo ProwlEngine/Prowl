@@ -7,7 +7,7 @@ internal sealed class GuidFormat : ISerializationFormat
 {
     public bool CanHandle(Type type) => type == typeof(Guid);
 
-    public EchoObject Serialize(object value, SerializationContext context)
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         if (value is Guid guid)
             return new(EchoType.String, guid.ToString());
