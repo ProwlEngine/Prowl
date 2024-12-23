@@ -381,8 +381,8 @@ public class SerializerTests
         var obj = new SimpleObject();
         var context = new SerializationContext(TypeMode.Aggressive);
 
-        // Act
-        var result = Serializer.Serialize(obj, context);
+        // Act - No reason to include type here, since the target type is the same as the actual type
+        var result = Serializer.Serialize(obj.GetType(), obj, context);
 
         // Assert
         Assert.True(result.TryGet("$type", out var typeTag));

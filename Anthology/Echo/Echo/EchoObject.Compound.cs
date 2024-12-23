@@ -251,48 +251,52 @@ public sealed partial class EchoObject
     /// Write this tag to a binary file in the Echo format.
     /// </summary>
     /// <param name="file">The file to write to</param>
+    /// <param name="options">Optional serialization options</param>
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    public void WriteToBinary(FileInfo file)
+    public void WriteToBinary(FileInfo file, BinarySerializationOptions? options = null)
     {
         if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot convert non-compound tag to Binary");
 
         using var stream = file.OpenWrite();
         using var writer = new BinaryWriter(stream);
-        BinaryTagConverter.WriteTo(this, writer);
+        BinaryTagConverter.WriteTo(this, writer, options);
     }
 
     /// <summary>
     /// Write this tag to a binary file in the Echo format.
     /// </summary>
     /// <param name="writer">The writer to write to</param>
+    /// <param name="options">Optional serialization options</param>
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    public void WriteToBinary(BinaryWriter writer)
+    public void WriteToBinary(BinaryWriter writer, BinarySerializationOptions? options = null)
     {
         if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot convert non-compound tag to Binary");
 
-        BinaryTagConverter.WriteTo(this, writer);
+        BinaryTagConverter.WriteTo(this, writer, options);
     }
 
     /// <summary>
     /// Read a tag from a binary file in the Echo format.
     /// </summary>
     /// <param name="file">The file to read from</param>
+    /// <param name="options">Optional serialization options</param>
     /// <returns>The tag read from the file</returns>
-    public static EchoObject ReadFromBinary(FileInfo file)
+    public static EchoObject ReadFromBinary(FileInfo file, BinarySerializationOptions? options = null)
     {
-        return BinaryTagConverter.ReadFromFile(file);
+        return BinaryTagConverter.ReadFromFile(file, options);
     }
 
     /// <summary>
     /// Read a tag from a binary file in the Echo format.
     /// </summary>
     /// <param name="reader">The reader to read from</param>
+    /// <param name="options">Optional serialization options</param>
     /// <returns>The tag read from the file</returns>
-    public static EchoObject ReadFromBinary(BinaryReader reader)
+    public static EchoObject ReadFromBinary(BinaryReader reader, BinarySerializationOptions? options = null)
     {
-        return BinaryTagConverter.ReadFrom(reader);
+        return BinaryTagConverter.ReadFrom(reader, options);
     }
 
 
