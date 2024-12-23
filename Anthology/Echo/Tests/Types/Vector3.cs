@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace Tests
+namespace Tests.Types
 {
     [Serializable]
     public struct Vector3 : IEquatable<Vector3>

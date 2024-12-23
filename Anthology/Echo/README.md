@@ -18,7 +18,7 @@ This allows for fast inspection and modification before converting to Binary or 
   - Circular references
   - Multi-dimensional and jagged arrays
   - Support for custom serializable objects
-  - Over 110 tests to ensure the library remains stable and reliable!
+  - 150+ tests to ensure the library remains stable and reliable!
 
 - **Flexible Serialization Control**
   - Custom serialization through `ISerializable` interface
