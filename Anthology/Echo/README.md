@@ -10,7 +10,7 @@ This allows for fast inspection and modification before converting to Binary or 
 - **Type Support**
   - Primitives (int, float, double, string, bool, etc.)
   - Complex objects and nested types
-  - Collections (List, Array, HashSet)
+  - Collections (List, Arrays, HashSet, Stack, Queue, LinkedLists)
   - Dictionaries
   - Enums
   - DateTime and Guid
@@ -18,7 +18,7 @@ This allows for fast inspection and modification before converting to Binary or 
   - Circular references
   - Multi-dimensional and jagged arrays
   - Support for custom serializable objects
-  - 150+ tests to ensure the library remains stable and reliable!
+  - 160+ tests to ensure the library remains stable and reliable!
 
 - **Flexible Serialization Control**
   - Custom serialization through `ISerializable` interface
