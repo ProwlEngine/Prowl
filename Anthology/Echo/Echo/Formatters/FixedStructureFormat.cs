@@ -18,8 +18,6 @@ public sealed class FixedStructureFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        var compound = EchoObject.NewCompound();
-
         // Create a list to store field values in order
         var list = EchoObject.NewList();
 
@@ -45,15 +43,11 @@ public sealed class FixedStructureFormat : ISerializationFormat
             }
         }
 
-        // This is an unfortunate workaround due to the rest of the library expecting serialization to always output a compound
-        compound["V"] = list;
-        return compound;
+        return list;
     }
 
-    public object? Deserialize(EchoObject valueCompound, Type targetType, SerializationContext context)
+    public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        var value = valueCompound["V"];
-
         if (value.TagType != EchoType.List)
             throw new InvalidOperationException("Expected list for fixed structure deserialization");
 
