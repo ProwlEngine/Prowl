@@ -5,7 +5,7 @@ using Tests.Types;
 
 namespace Prowl.Echo.Test;
 
-[FixedStructure]
+[FixedEchoStructure]
 public struct NetworkPosition
 {
     public float X;

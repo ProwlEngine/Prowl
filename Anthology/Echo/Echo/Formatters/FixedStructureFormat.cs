@@ -13,7 +13,7 @@ public sealed class FixedStructureFormat : ISerializationFormat
 {
     public bool CanHandle(Type type)
     {
-        return type.GetCustomAttribute<FixedStructureAttribute>() != null;
+        return type.GetCustomAttribute<FixedEchoStructureAttribute>() != null;
     }
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
