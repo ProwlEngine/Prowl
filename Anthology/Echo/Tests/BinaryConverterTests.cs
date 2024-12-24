@@ -158,24 +158,6 @@
         [Theory]
         [InlineData(BinaryEncodingMode.Performance)]
         [InlineData(BinaryEncodingMode.Size)]
-        public void TestInvalidOperation(BinaryEncodingMode mode)
-        {
-            // Arrange
-            var options = new BinarySerializationOptions { EncodingMode = mode };
-            var nonCompound = new EchoObject(EchoType.String, "test");
-
-            // Act & Assert
-            Assert.Throws<InvalidOperationException>(() =>
-            {
-                using var stream = new MemoryStream();
-                using var writer = new BinaryWriter(stream);
-                nonCompound.WriteToBinary(writer, options);
-            });
-        }
-
-        [Theory]
-        [InlineData(BinaryEncodingMode.Performance)]
-        [InlineData(BinaryEncodingMode.Size)]
         public void TestIncompatibleVersions(BinaryEncodingMode mode)
         {
             var options = new BinarySerializationOptions { EncodingMode = mode };
@@ -305,5 +287,164 @@
             for (int i = 0; i < 1000000; i++)
                 Assert.Equal(i, deserialized.Get("large_list").List[i].IntValue);
         }
+
+        #region Non-Compound Tests
+
+        [Theory]
+        [InlineData(BinaryEncodingMode.Performance)]
+        [InlineData(BinaryEncodingMode.Size)]
+        public void TestSinglePrimitiveTag(BinaryEncodingMode mode)
+        {
+            var options = new BinarySerializationOptions { EncodingMode = mode };
+            var intTag = new EchoObject(EchoType.Int, 42);
+
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream);
+            intTag.WriteToBinary(writer, options);
+
+            stream.Position = 0;
+            using var reader = new BinaryReader(stream);
+            var deserialized = EchoObject.ReadFromBinary(reader, options);
+
+            Assert.Equal(EchoType.Int, deserialized.TagType);
+            Assert.Equal(42, deserialized.IntValue);
+        }
+
+        [Theory]
+        [InlineData(BinaryEncodingMode.Performance)]
+        [InlineData(BinaryEncodingMode.Size)]
+        public void TestSingleListTag(BinaryEncodingMode mode)
+        {
+            var options = new BinarySerializationOptions { EncodingMode = mode };
+            var list = EchoObject.NewList();
+            list.ListAdd(new EchoObject(EchoType.Int, 1));
+            list.ListAdd(new EchoObject(EchoType.String, "test"));
+
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream);
+            list.WriteToBinary(writer, options);
+
+            stream.Position = 0;
+            using var reader = new BinaryReader(stream);
+            var deserialized = EchoObject.ReadFromBinary(reader, options);
+
+            Assert.Equal(2, deserialized.Count);
+            Assert.Equal(1, deserialized.List[0].IntValue);
+            Assert.Equal("test", deserialized.List[1].StringValue);
+        }
+
+        [Theory]
+        [InlineData(BinaryEncodingMode.Performance)]
+        [InlineData(BinaryEncodingMode.Size)]
+        public void TestByteArrayTag(BinaryEncodingMode mode)
+        {
+            var options = new BinarySerializationOptions { EncodingMode = mode };
+            var bytes = new byte[] { 1, 2, 3, 4, 5 };
+            var byteArrayTag = new EchoObject(EchoType.ByteArray, bytes);
+
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream);
+            byteArrayTag.WriteToBinary(writer, options);
+
+            stream.Position = 0;
+            using var reader = new BinaryReader(stream);
+            var deserialized = EchoObject.ReadFromBinary(reader, options);
+
+            Assert.Equal(EchoType.ByteArray, deserialized.TagType);
+            Assert.Equal(bytes, deserialized.ByteArrayValue);
+        }
+
+        [Theory]
+        [InlineData(BinaryEncodingMode.Performance)]
+        [InlineData(BinaryEncodingMode.Size)]
+        public void TestFloatingPointTag(BinaryEncodingMode mode)
+        {
+            var options = new BinarySerializationOptions { EncodingMode = mode };
+            var doubleTag = new EchoObject(EchoType.Double, 3.14159);
+
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream);
+            doubleTag.WriteToBinary(writer, options);
+
+            stream.Position = 0;
+            using var reader = new BinaryReader(stream);
+            var deserialized = EchoObject.ReadFromBinary(reader, options);
+
+            Assert.Equal(EchoType.Double, deserialized.TagType);
+            Assert.Equal(3.14159, deserialized.DoubleValue);
+        }
+
+        [Theory]
+        [InlineData(BinaryEncodingMode.Performance)]
+        [InlineData(BinaryEncodingMode.Size)]
+        public void TestNullTag(BinaryEncodingMode mode)
+        {
+            var options = new BinarySerializationOptions { EncodingMode = mode };
+            var nullTag = new EchoObject(EchoType.Null, null);
+
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream);
+            nullTag.WriteToBinary(writer, options);
+
+            stream.Position = 0;
+            using var reader = new BinaryReader(stream);
+            var deserialized = EchoObject.ReadFromBinary(reader, options);
+
+            Assert.Equal(EchoType.Null, deserialized.TagType);
+            Assert.Null(deserialized.Value);
+        }
+
+        [Theory]
+        [InlineData(BinaryEncodingMode.Performance)]
+        [InlineData(BinaryEncodingMode.Size)]
+        public void TestLongStringTag(BinaryEncodingMode mode)
+        {
+            var options = new BinarySerializationOptions { EncodingMode = mode };
+            var longString = new string('a', 10000);
+            var stringTag = new EchoObject(EchoType.String, longString);
+
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream);
+            stringTag.WriteToBinary(writer, options);
+
+            stream.Position = 0;
+            using var reader = new BinaryReader(stream);
+            var deserialized = EchoObject.ReadFromBinary(reader, options);
+
+            Assert.Equal(EchoType.String, deserialized.TagType);
+            Assert.Equal(longString, deserialized.StringValue);
+        }
+
+        [Theory]
+        [InlineData(BinaryEncodingMode.Performance)]
+        [InlineData(BinaryEncodingMode.Size)]
+        public void TestNestedListTag(BinaryEncodingMode mode)
+        {
+            var options = new BinarySerializationOptions { EncodingMode = mode };
+            var innerList = EchoObject.NewList();
+            innerList.ListAdd(new EchoObject(EchoType.Int, 1));
+            innerList.ListAdd(new EchoObject(EchoType.Int, 2));
+
+            var outerList = EchoObject.NewList();
+            outerList.ListAdd(innerList);
+            outerList.ListAdd(new EchoObject(EchoType.String, "test"));
+
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream);
+            outerList.WriteToBinary(writer, options);
+
+            stream.Position = 0;
+            using var reader = new BinaryReader(stream);
+            var deserialized = EchoObject.ReadFromBinary(reader, options);
+
+            Assert.Equal(2, deserialized.Count);
+            var deserializedInnerList = deserialized.List[0];
+            Assert.Equal(2, deserializedInnerList.Count);
+            Assert.Equal(1, deserializedInnerList.List[0].IntValue);
+            Assert.Equal(2, deserializedInnerList.List[1].IntValue);
+            Assert.Equal("test", deserialized.List[1].StringValue);
+        }
+
+        #endregion
     }
 }

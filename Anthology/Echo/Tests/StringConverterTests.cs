@@ -220,5 +220,114 @@
                 Assert.Equal(i, deserialized.Get("large_list").List[i].IntValue);
         }
 
+        #region Non-Compound Tests
+
+        [Fact]
+        public void TestSinglePrimitiveTag()
+        {
+            var intTag = new EchoObject(EchoType.Int, 42);
+
+            string text = intTag.WriteToString();
+
+            var deserialized = EchoObject.ReadFromString(text);
+
+            Assert.Equal(EchoType.Int, deserialized.TagType);
+            Assert.Equal(42, deserialized.IntValue);
+        }
+
+        [Fact]
+        public void TestSingleListTag()
+        {
+            var list = EchoObject.NewList();
+            list.ListAdd(new EchoObject(EchoType.Int, 1));
+            list.ListAdd(new EchoObject(EchoType.String, "test"));
+
+            string text = list.WriteToString();
+
+            var deserialized = EchoObject.ReadFromString(text);
+
+            Assert.Equal(2, deserialized.Count);
+            Assert.Equal(1, deserialized.List[0].IntValue);
+            Assert.Equal("test", deserialized.List[1].StringValue);
+        }
+
+        [Fact]
+        public void TestByteArrayTag()
+        {
+            var bytes = new byte[] { 1, 2, 3, 4, 5 };
+            var byteArrayTag = new EchoObject(EchoType.ByteArray, bytes);
+
+            string text = byteArrayTag.WriteToString();
+
+            var deserialized = EchoObject.ReadFromString(text);
+
+            Assert.Equal(EchoType.ByteArray, deserialized.TagType);
+            Assert.Equal(bytes, deserialized.ByteArrayValue);
+        }
+
+        [Fact]
+        public void TestFloatingPointTag()
+        {
+            var doubleTag = new EchoObject(EchoType.Double, 3.14159);
+
+            string text = doubleTag.WriteToString();
+
+            var deserialized = EchoObject.ReadFromString(text);
+
+            Assert.Equal(EchoType.Double, deserialized.TagType);
+            Assert.Equal(3.14159, deserialized.DoubleValue);
+        }
+
+        [Fact]
+        public void TestNullTag()
+        {
+            var nullTag = new EchoObject(EchoType.Null, null);
+
+            string text = nullTag.WriteToString();
+
+            var deserialized = EchoObject.ReadFromString(text);
+
+            Assert.Equal(EchoType.Null, deserialized.TagType);
+            Assert.Null(deserialized.Value);
+        }
+
+        [Fact]
+        public void TestLongStringTag()
+        {
+            var longString = new string('a', 10000);
+            var stringTag = new EchoObject(EchoType.String, longString);
+
+            string text = stringTag.WriteToString();
+
+            var deserialized = EchoObject.ReadFromString(text);
+
+            Assert.Equal(EchoType.String, deserialized.TagType);
+            Assert.Equal(longString, deserialized.StringValue);
+        }
+
+        [Fact]
+        public void TestNestedListTag()
+        {
+            var innerList = EchoObject.NewList();
+            innerList.ListAdd(new EchoObject(EchoType.Int, 1));
+            innerList.ListAdd(new EchoObject(EchoType.Int, 2));
+
+            var outerList = EchoObject.NewList();
+            outerList.ListAdd(innerList);
+            outerList.ListAdd(new EchoObject(EchoType.String, "test"));
+
+            string text = outerList.WriteToString();
+
+            var deserialized = EchoObject.ReadFromString(text);
+
+            Assert.Equal(2, deserialized.Count);
+            var deserializedInnerList = deserialized.List[0];
+            Assert.Equal(2, deserializedInnerList.Count);
+            Assert.Equal(1, deserializedInnerList.List[0].IntValue);
+            Assert.Equal(2, deserializedInnerList.List[1].IntValue);
+            Assert.Equal("test", deserialized.List[1].StringValue);
+        }
+
+        #endregion
     }
 }
