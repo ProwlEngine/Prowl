@@ -5,8 +5,188 @@ using Tests.Types;
 
 namespace Prowl.Echo.Test;
 
+
+public class TestObject
+{
+    public int Id;
+    public string Name;
+}
+
 public class Collection_Tests
 {
+    T RoundTrip<T>(T value)
+    {
+        var serialized = Serializer.Serialize(value);
+        return Serializer.Deserialize<T>(serialized);
+    }
+
+    [Fact]
+    public void TestListOfLists()
+    {
+        var original = new List<List<int>>
+        {
+            new List<int> { 1, 2 },
+            new List<int> { 3, 4, 5 }
+        };
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<List<List<int>>>(serialized);
+
+        Assert.Equal(original.Count, deserialized.Count);
+        for (int i = 0; i < original.Count; i++)
+        {
+            Assert.Equal(original[i], deserialized[i]);
+        }
+    }
+
+    [Fact]
+    public void TestQueue()
+    {
+        var original = new Queue<string>();
+        original.Enqueue("first");
+        original.Enqueue("second");
+        original.Enqueue("third");
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<Queue<string>>(serialized);
+
+        Assert.Equal(original.Count, deserialized.Count);
+        while (original.Count > 0)
+        {
+            Assert.Equal(original.Dequeue(), deserialized.Dequeue());
+        }
+    }
+
+    [Fact]
+    public void TestStack()
+    {
+        var original = new Stack<double>();
+        original.Push(1.1);
+        original.Push(2.2);
+        original.Push(3.3);
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<Stack<double>>(serialized);
+
+        Assert.Equal(original.Count, deserialized.Count);
+        while (original.Count > 0)
+        {
+            Assert.Equal(original.Pop(), deserialized.Pop());
+        }
+    }
+
+    [Fact]
+    public void TestLinkedList()
+    {
+        var original = new LinkedList<int>();
+        original.AddLast(1);
+        original.AddLast(2);
+        original.AddLast(3);
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<LinkedList<int>>(serialized);
+
+        Assert.Equal(original.Count, deserialized.Count);
+
+        var originalNode = original.First;
+        var deserializedNode = deserialized.First;
+
+        while (originalNode != null)
+        {
+            Assert.Equal(originalNode.Value, deserializedNode.Value);
+            originalNode = originalNode.Next;
+            deserializedNode = deserializedNode.Next;
+        }
+    }
+
+    [Fact]
+    public void TestComplexTypes()
+    {
+        var original = new List<TestObject>
+        {
+            new TestObject { Id = 1, Name = "One" },
+            new TestObject { Id = 2, Name = "Two" }
+        };
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<List<TestObject>>(serialized);
+
+        Assert.Equal(original.Count, deserialized.Count);
+        for (int i = 0; i < original.Count; i++)
+        {
+            Assert.Equal(original[i].Id, deserialized[i].Id);
+            Assert.Equal(original[i].Name, deserialized[i].Name);
+        }
+    }
+
+    [Fact]
+    public void TestNestedCollections()
+    {
+        var original = new Queue<List<Stack<int>>>();
+        var stack1 = new Stack<int>();
+        stack1.Push(1);
+        stack1.Push(2);
+        var stack2 = new Stack<int>();
+        stack2.Push(3);
+        stack2.Push(4);
+        var list1 = new List<Stack<int>> { stack1 };
+        var list2 = new List<Stack<int>> { stack2 };
+        original.Enqueue(list1);
+        original.Enqueue(list2);
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<Queue<List<Stack<int>>>>(serialized);
+
+        // Convert to arrays for non-destructive comparison
+        var originalArray = original.ToArray();
+        var deserializedArray = deserialized.ToArray();
+
+        Assert.Equal(originalArray.Length, deserializedArray.Length);
+
+        for (int i = 0; i < originalArray.Length; i++)
+        {
+            var originalList = originalArray[i];
+            var deserializedList = deserializedArray[i];
+            Assert.Equal(originalList.Count, deserializedList.Count);
+
+            for (int j = 0; j < originalList.Count; j++)
+            {
+                var originalStack = originalList[j].ToArray();
+                var deserializedStack = deserializedList[j].ToArray();
+
+                Assert.Equal(originalStack.Length, deserializedStack.Length);
+                Assert.Equal(originalStack, deserializedStack);
+            }
+        }
+    }
+
+    [Fact]
+    public void TestEmptyCollections()
+    {
+        // Test empty List
+        var emptyList = new List<int>();
+        var serializedList = Serializer.Serialize(emptyList);
+        var deserializedList = Serializer.Deserialize<List<int>>(serializedList);
+        Assert.Empty(deserializedList);
+
+        // Test empty Queue
+        var emptyQueue = new Queue<string>();
+        var serializedQueue = Serializer.Serialize(emptyQueue);
+        var deserializedQueue = Serializer.Deserialize<Queue<string>>(serializedQueue);
+        Assert.Empty(deserializedQueue);
+
+        // Test empty Stack
+        var emptyStack = new Stack<double>();
+        var serializedStack = Serializer.Serialize(emptyStack);
+        var deserializedStack = Serializer.Deserialize<Stack<double>>(serializedStack);
+        Assert.Empty(deserializedStack);
+
+        // Test empty LinkedList
+        var emptyLinkedList = new LinkedList<int>();
+        var serializedLinkedList = Serializer.Serialize(emptyLinkedList);
+        var deserializedLinkedList = Serializer.Deserialize<LinkedList<int>>(serializedLinkedList);
+        Assert.Empty(deserializedLinkedList);
+    }
+
     [Fact]
     public void TestArrays()
     {
