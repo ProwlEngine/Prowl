@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Reflection;
+
 namespace Prowl.Echo.Formatters;
 
 public sealed class AnyObjectFormat : ISerializationFormat
@@ -12,15 +14,20 @@ public sealed class AnyObjectFormat : ISerializationFormat
         var compound = EchoObject.NewCompound();
         Type actualType = value.GetType();
 
-        if (context.objectToId.TryGetValue(value, out int id))
+        if (!actualType.IsValueType)
         {
-            compound["$id"] = new(EchoType.Int, id);
-            return compound;
-        }
+            if (context.objectToId.TryGetValue(value, out int id))
+            {
+                compound["$id"] = new(EchoType.Int, id);
+                return compound;
+            }
 
-        id = context.nextId++;
-        context.objectToId[value] = id;
-        context.idToObject[id] = value;
+            id = context.nextId++;
+            context.objectToId[value] = id;
+            context.idToObject[id] = value;
+
+            compound["$id"] = new(EchoType.Int, id);
+        }
 
         context.BeginDependencies();
 
@@ -58,8 +65,6 @@ public sealed class AnyObjectFormat : ISerializationFormat
             }
         }
 
-        compound["$id"] = new(EchoType.Int, id);
-
         // Handle type information based on TypeMode
         bool shouldIncludeType = context.TypeMode switch {
             TypeMode.Aggressive => true, // Always include type information
@@ -78,9 +83,13 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (value.TryGet("$id", out EchoObject? id) && context.idToObject.TryGetValue(id.IntValue, out object? existingObj))
+        EchoObject? id = null;
+        if (!targetType.IsValueType &&
+            value.TryGet("$id", out id) &&
+            context.idToObject.TryGetValue(id.IntValue, out object? existingObj))
+        {
             return existingObj;
-
+        }
 
         // Determine the actual type to instantiate
         Type objectType;
@@ -103,7 +112,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         object result = Activator.CreateInstance(objectType, true)
             ?? throw new InvalidOperationException($"Failed to create instance of type: {objectType}");
 
-        if (id != null)
+        if (!objectType.IsValueType && id != null)
             context.idToObject[id.IntValue] = result;
 
         if (result is ISerializable serializable)
