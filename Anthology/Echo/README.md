@@ -18,7 +18,7 @@ This allows for fast inspection and modification before converting to Binary or 
   - Circular references
   - Multi-dimensional and jagged arrays
   - Support for custom serializable objects
-  - 160+ tests to ensure the library remains stable and reliable!
+  - 190+ tests to ensure the library remains stable and reliable!
 
 - **Flexible Serialization Control**
   - Custom serialization through `ISerializable` interface
@@ -124,6 +124,16 @@ public class MyClass
 
     [IgnoreOnNull]
     public string? OptionalField = null;
+}
+
+// Fixed Structure attribute tells the serializer this struct is reliable in shape/structure and will never change
+// This allows it to skip serializing type names, and only serialize the field values in the order they appear
+[FixedStructure]
+public struct MyVector3
+{
+    public float X;
+    public float Y;
+    public float Z;
 }
 ```
 
