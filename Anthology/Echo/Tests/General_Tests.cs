@@ -5,6 +5,14 @@ using Tests.Types;
 
 namespace Prowl.Echo.Test;
 
+[FixedStructure]
+public struct NetworkPosition
+{
+    public float X;
+    public float Y;
+    public float Z;
+}
+
 public class General_Tests
 {
     #region Basic Tests
@@ -371,6 +379,33 @@ public class General_Tests
     }
 
     #endregion
+
+    [Fact]
+    public void TestFixedAttribute()
+    {
+        var original = new NetworkPosition { X = 1.0f, Y = 2.0f, Z = 3.0f };
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<NetworkPosition>(serialized);
+        Assert.Equal(original.X, deserialized.X);
+        Assert.Equal(original.Y, deserialized.Y);
+        Assert.Equal(original.Z, deserialized.Z);
+
+        // Convert to binary
+        var stream = new MemoryStream();
+        using var bw = new BinaryWriter(stream);
+        serialized.WriteToBinary(bw, new BinarySerializationOptions() { EncodingMode = BinaryEncodingMode.Size });
+        bw.Flush();
+
+        int size = (int)stream.Length;
+
+        stream.Position = 0;
+        using var br = new BinaryReader(stream);
+        var deserialized2 = Prowl.Echo.EchoObject.ReadFromBinary(br, new BinarySerializationOptions() { EncodingMode = BinaryEncodingMode.Size });
+        var clone = (NetworkPosition)Prowl.Echo.Serializer.Deserialize(deserialized2, typeof(NetworkPosition));
+        Assert.Equal(original.X, clone.X);
+        Assert.Equal(original.Y, clone.Y);
+        Assert.Equal(original.Z, clone.Z);
+    }
 
     [Fact]
     public void TestSimpleObject()
