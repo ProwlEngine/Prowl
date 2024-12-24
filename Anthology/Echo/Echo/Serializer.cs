@@ -51,7 +51,9 @@ public static class Serializer
         formats.Add(new GuidFormat());
         formats.Add(new EnumFormat());
         formats.Add(new HashSetFormat());
-        formats.Add(new CollectionFormat());
+        formats.Add(new ArrayFormat());
+        formats.Add(new ListFormat());
+        formats.Add(new QueueFormat());
         formats.Add(new DictionaryFormat());
         formats.Add(new AnyObjectFormat()); // Fallback format - must be last
     }
