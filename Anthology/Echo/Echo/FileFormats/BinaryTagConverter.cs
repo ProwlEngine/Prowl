@@ -50,7 +50,7 @@ internal static class BinaryTagConverter
     public static void WriteTo(EchoObject tag, BinaryWriter writer, BinarySerializationOptions? options = null)
     {
         options ??= BinarySerializationOptions.Default;
-        WriteCompound(tag, writer, options);
+        WriteTag(tag, writer, options);
     }
 
     private static void WriteCompound(EchoObject tag, BinaryWriter writer, BinarySerializationOptions options)
@@ -169,7 +169,7 @@ internal static class BinaryTagConverter
 
     public static EchoObject ReadFrom(BinaryReader reader, BinarySerializationOptions? options = null)
     {
-        return ReadCompound(reader, options ?? BinarySerializationOptions.Default);
+        return ReadTag(reader, options ?? BinarySerializationOptions.Default);
     }
 
     private static EchoObject ReadCompound(BinaryReader reader, BinarySerializationOptions options)

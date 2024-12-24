@@ -161,6 +161,88 @@ public sealed partial class EchoObject
         return new(TagType, Value);
     }
 
+    /// <summary>
+    /// Write this tag to a binary file in the Echo format.
+    /// </summary>
+    /// <param name="file">The file to write to</param>
+    /// <param name="options">Optional serialization options</param>
+    public void WriteToBinary(FileInfo file, BinarySerializationOptions? options = null)
+    {
+        using var stream = file.OpenWrite();
+        using var writer = new BinaryWriter(stream);
+        BinaryTagConverter.WriteTo(this, writer, options);
+    }
+
+    /// <summary>
+    /// Write this tag to a binary file in the Echo format.
+    /// </summary>
+    /// <param name="writer">The writer to write to</param>
+    /// <param name="options">Optional serialization options</param>
+    public void WriteToBinary(BinaryWriter writer, BinarySerializationOptions? options = null)
+    {
+        BinaryTagConverter.WriteTo(this, writer, options);
+    }
+
+    /// <summary>
+    /// Read a tag from a binary file in the Echo format.
+    /// </summary>
+    /// <param name="file">The file to read from</param>
+    /// <param name="options">Optional serialization options</param>
+    /// <returns>The tag read from the file</returns>
+    public static EchoObject ReadFromBinary(FileInfo file, BinarySerializationOptions? options = null)
+    {
+        return BinaryTagConverter.ReadFromFile(file, options);
+    }
+
+    /// <summary>
+    /// Read a tag from a binary file in the Echo format.
+    /// </summary>
+    /// <param name="reader">The reader to read from</param>
+    /// <param name="options">Optional serialization options</param>
+    /// <returns>The tag read from the file</returns>
+    public static EchoObject ReadFromBinary(BinaryReader reader, BinarySerializationOptions? options = null)
+    {
+        return BinaryTagConverter.ReadFrom(reader, options);
+    }
+
+
+    /// <summary>
+    /// Write this tag to a string in the Echo format.
+    /// </summary>
+    /// <param name="file">The file to write to</param>
+    public void WriteToString(FileInfo file)
+    {
+        StringTagConverter.WriteToFile(this, file);
+    }
+
+    /// <summary>
+    /// Write this tag to a string in the Echo format.
+    /// </summary>
+    public string WriteToString()
+    {
+        return StringTagConverter.Write(this);
+    }
+
+    /// <summary>
+    /// Read a tag from a file in the Echo format.
+    /// </summary>
+    /// <param name="file">The file to read from</param>
+    /// <returns>The tag read from the file</returns>
+    public static EchoObject ReadFromString(FileInfo file)
+    {
+        return StringTagConverter.ReadFromFile(file);
+    }
+
+    /// <summary>
+    /// Read a tag from a string in the Echo format.
+    /// </summary>
+    /// <param name="input">The string to read from</param>
+    /// <returns>The tag read from the string</returns>
+    public static EchoObject ReadFromString(string input)
+    {
+        return StringTagConverter.Read(input);
+    }
+
     private void OnPropertyChanged(EchoChangeEventArgs e)
     {
         // Create a new event with the path relative to this object

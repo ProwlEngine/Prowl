@@ -17,7 +17,7 @@ internal static class StringTagConverter
     public static string Write(EchoObject prop)
     {
         using var writer = new StringWriter();
-        Serialize(prop, writer, 0);
+        WriteTag(prop, writer, 0);
         return writer.ToString();
     }
 
@@ -44,7 +44,7 @@ internal static class StringTagConverter
         }
     }
 
-    private static void Serialize(EchoObject prop, TextWriter writer, int indentLevel)
+    private static void WriteTag(EchoObject prop, TextWriter writer, int indentLevel)
     {
         var indent = new string(' ', indentLevel * 2);
 
@@ -112,7 +112,7 @@ internal static class StringTagConverter
                 {
                     writer.Write(indent);
                     writer.Write("  ");
-                    Serialize(list[i], writer, indentLevel + 1);
+                    WriteTag(list[i], writer, indentLevel + 1);
                     if (i < list.Count - 1)
                     {
                         writer.Write(",");
@@ -223,7 +223,7 @@ internal static class StringTagConverter
         writer.Write("  ");
         WriteString(writer, key);
         writer.Write(": ");
-        Serialize(dict[key], writer, indentLevel + 1);
+        WriteTag(dict[key], writer, indentLevel + 1);
     }
 
     // Reading:
