@@ -57,6 +57,7 @@ public static class Serializer
         formats.Add(new StackFormat());
         formats.Add(new LinkedListFormat());
         formats.Add(new DictionaryFormat());
+        formats.Add(new FixedStructureFormat());
         formats.Add(new AnyObjectFormat()); // Fallback format - must be last
     }
 
