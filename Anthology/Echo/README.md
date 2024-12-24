@@ -147,7 +147,7 @@ As when this benchmark was made it always included type information even if not 
 |------------ |--------------------- |------------:|----------:|----------:|---------:|
 |   **Serialize** |      **Newtonsoft.Json** | **1,318.56 ns** |  **8.097 ns** |  **7.574 ns** |     **35 B** |
 | Deserialize |      Newtonsoft.Json | 2,278.44 ns |  9.244 ns |  8.195 ns |        - |
-|   **Serialize** |           **Echo** | **1,489.87 ns** | **17.410 ns** | **15.434 ns** |     **72 B** |
+|   **Serialize** |           **Echo** | **1,489.87 ns** | **17.410 ns** | **15.434 ns** |     **28 B** |
 | Deserialize |           Echo | 1,948.34 ns | 65.129 ns | 72.390 ns |        - |
 |   **Serialize** |           **Manual** | **68.53 ns** | **0.313 ns** | **0.277 ns** |     **12 B** |
 | Deserialize |           Manual | 60.46 ns | 0.429 ns | 0.359 ns |        - |
