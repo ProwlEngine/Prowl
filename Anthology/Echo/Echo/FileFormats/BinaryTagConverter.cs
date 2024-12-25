@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Text;
+
 namespace Prowl.Echo;
 
 /// <summary>
@@ -39,6 +41,11 @@ public class BinarySerializationOptions
 
 internal static class BinaryTagConverter
 {
+    private static readonly Dictionary<string, int> SharedEncodeDictionary = new(4096);
+    private static readonly Dictionary<int, string> SharedDecodeDictionary = new(4096);
+    private static readonly StringBuilder SharedStringBuilder = new(4096);
+    private static readonly List<int> SharedCodeList = new(1024);
+
     #region Writing
     public static void WriteToFile(EchoObject tag, FileInfo file, BinarySerializationOptions? options = null)
     {
@@ -56,20 +63,69 @@ internal static class BinaryTagConverter
     private static void WriteCompound(EchoObject tag, BinaryWriter writer, BinarySerializationOptions options)
     {
         if (options.EncodingMode == BinaryEncodingMode.Size)
-            LEB128.WriteUnsigned(writer, (ulong)tag.Count);
-        else
-            writer.Write(tag.Count);
-
-        foreach (var subTag in tag.Tags)
         {
-            byte[] stringBytes = System.Text.Encoding.UTF8.GetBytes(subTag.Key);
-            if (options.EncodingMode == BinaryEncodingMode.Size)
-                LEB128.WriteUnsigned(writer, (ulong)stringBytes.Length);
-            else
-                writer.Write(stringBytes.Length);
-            writer.Write(stringBytes);
+            LEB128.WriteUnsigned(writer, (ulong)tag.Count);
 
-            WriteTag(subTag.Value, writer, options);
+            // Reuse shared dictionary
+            SharedEncodeDictionary.Clear();
+            SharedCodeList.Clear();
+            for (int i = 0; i < 256; i++)
+                SharedEncodeDictionary[((char)i).ToString()] = i;
+
+            int nextCode = 256;
+
+            foreach (var subTag in tag.Tags)
+            {
+                SharedCodeList.Clear();
+                ReadOnlySpan<char> keySpan = subTag.Key.AsSpan();
+                if (keySpan.Length == 0)
+                {
+                    LEB128.WriteUnsigned(writer, 0ul);
+                    WriteTag(subTag.Value, writer, options);
+                    continue;
+                }
+
+                string current = keySpan[0].ToString();
+                for (int i = 1; i < keySpan.Length; i++)
+                {
+                    string combined = current + keySpan[i];
+                    if (SharedEncodeDictionary.TryGetValue(combined, out int code))
+                    {
+                        current = combined;
+                    }
+                    else
+                    {
+                        SharedCodeList.Add(SharedEncodeDictionary[current]);
+                        // Only add new entries if we haven't exceeded dictionary limit
+                        if (nextCode < 4096)
+                        {
+                            SharedEncodeDictionary[combined] = nextCode++;
+                        }
+                        current = keySpan[i].ToString();
+                    }
+                }
+
+                if (current.Length > 0)
+                    SharedCodeList.Add(SharedEncodeDictionary[current]);
+
+                // Write compressed field name
+                LEB128.WriteUnsigned(writer, (ulong)SharedCodeList.Count);
+                foreach (int code in SharedCodeList)
+                    LEB128.WriteUnsigned(writer, (ulong)code);
+
+                WriteTag(subTag.Value, writer, options);
+            }
+        }
+        else
+        {
+            writer.Write(tag.Count);
+            foreach (var subTag in tag.Tags)
+            {
+                byte[] stringBytes = System.Text.Encoding.UTF8.GetBytes(subTag.Key);
+                writer.Write(stringBytes.Length);
+                writer.Write(stringBytes);
+                WriteTag(subTag.Value, writer, options);
+            }
         }
     }
 
@@ -128,12 +184,52 @@ internal static class BinaryTagConverter
         else if (type == EchoType.Decimal) writer.Write(tag.DecimalValue);
         else if (type == EchoType.String)
         {
-            byte[] stringBytes = System.Text.Encoding.UTF8.GetBytes(tag.StringValue);
             if (options.EncodingMode == BinaryEncodingMode.Size)
-                LEB128.WriteUnsigned(writer, (ulong)stringBytes.Length);
+            {
+                ReadOnlySpan<char> valueSpan = tag.StringValue.AsSpan();
+
+                SharedEncodeDictionary.Clear();
+                SharedCodeList.Clear();
+                for (int i = 0; i < 256; i++)
+                    SharedEncodeDictionary[((char)i).ToString()] = i;
+
+                int nextCode = 256;
+
+                if (valueSpan.Length == 0)
+                {
+                    LEB128.WriteUnsigned(writer, 0ul);
+                    return;
+                }
+
+                string current = valueSpan[0].ToString();
+                for (int i = 1; i < valueSpan.Length; i++)
+                {
+                    string combined = current + valueSpan[i];
+                    if (SharedEncodeDictionary.TryGetValue(combined, out int code))
+                    {
+                        current = combined;
+                    }
+                    else
+                    {
+                        SharedCodeList.Add(SharedEncodeDictionary[current]);
+                        SharedEncodeDictionary[combined] = nextCode++;
+                        current = valueSpan[i].ToString();
+                    }
+                }
+
+                if (current.Length > 0)
+                    SharedCodeList.Add(SharedEncodeDictionary[current]);
+
+                LEB128.WriteUnsigned(writer, (ulong)SharedCodeList.Count);
+                foreach (int code in SharedCodeList)
+                    LEB128.WriteUnsigned(writer, (ulong)code);
+            }
             else
+            {
+                byte[] stringBytes = System.Text.Encoding.UTF8.GetBytes(tag.StringValue);
                 writer.Write(stringBytes.Length);
-            writer.Write(stringBytes);
+                writer.Write(stringBytes);
+            }
         }
         else if (type == EchoType.ByteArray)
         {
@@ -178,22 +274,76 @@ internal static class BinaryTagConverter
         int tagCount;
 
         if (options.EncodingMode == BinaryEncodingMode.Size)
-            tagCount = (int)LEB128.ReadUnsigned(reader);
-        else
-            tagCount = reader.ReadInt32();
-
-        for (int i = 0; i < tagCount; i++)
         {
-            int nameLength;
-            if (options.EncodingMode == BinaryEncodingMode.Size)
-                nameLength = (int)LEB128.ReadUnsigned(reader);
-            else
-                nameLength = reader.ReadInt32();
+            tagCount = (int)LEB128.ReadUnsigned(reader);
 
-            byte[] nameBytes = reader.ReadBytes(nameLength);
-            string name = System.Text.Encoding.UTF8.GetString(nameBytes);
+            SharedDecodeDictionary.Clear();
+            SharedCodeList.Clear();
+            SharedStringBuilder.Clear();
 
-            tag.Add(name, ReadTag(reader, options));
+            for (int i = 0; i < 256; i++)
+                SharedDecodeDictionary[i] = ((char)i).ToString();
+
+            int nextCode = 256;  // Track dictionary size
+
+            for (int i = 0; i < tagCount; i++)
+            {
+                int nameCodesCount = (int)LEB128.ReadUnsigned(reader);
+                if (nameCodesCount == 0)
+                {
+                    tag.Add(string.Empty, ReadTag(reader, options));
+                    continue;
+                }
+
+                SharedCodeList.Clear();
+                for (int j = 0; j < nameCodesCount; j++)
+                    SharedCodeList.Add((int)LEB128.ReadUnsigned(reader));
+
+                SharedStringBuilder.Clear();
+                string current = SharedDecodeDictionary[SharedCodeList[0]];
+                SharedStringBuilder.Append(current);
+
+                for (int j = 1; j < SharedCodeList.Count; j++)
+                {
+                    int code = SharedCodeList[j];
+                    string entry;
+
+                    if (SharedDecodeDictionary.TryGetValue(code, out string? value))
+                    {
+                        entry = value;
+                    }
+                    else if (code == nextCode) 
+                    {
+                        entry = current + current[0];
+                    }
+                    else
+                    {
+                        throw new Exception($"Invalid compressed field name data: code {code} not found in dictionary");
+                    }
+
+                    SharedStringBuilder.Append(entry);
+
+                    // Only add new entries if we haven't exceeded dictionary limit
+                    if (nextCode < 4096)
+                    {
+                        SharedDecodeDictionary[nextCode++] = current + entry[0];
+                    }
+                    current = entry;
+                }
+
+                tag.Add(SharedStringBuilder.ToString(), ReadTag(reader, options));
+            }
+        }
+        else
+        {
+            tagCount = reader.ReadInt32();
+            for (int i = 0; i < tagCount; i++)
+            {
+                int nameLength = reader.ReadInt32();
+                byte[] nameBytes = reader.ReadBytes(nameLength);
+                string name = System.Text.Encoding.UTF8.GetString(nameBytes);
+                tag.Add(name, ReadTag(reader, options));
+            }
         }
         return tag;
     }
@@ -246,13 +396,55 @@ internal static class BinaryTagConverter
         else if (type == EchoType.Decimal) return new(EchoType.Decimal, reader.ReadDecimal());
         else if (type == EchoType.String)
         {
-            int length;
             if (options.EncodingMode == BinaryEncodingMode.Size)
-                length = (int)LEB128.ReadUnsigned(reader);
+            {
+                int codesCount = (int)LEB128.ReadUnsigned(reader);
+                if (codesCount == 0)
+                    return new(EchoType.String, string.Empty);
+
+                // Reuse shared collections
+                SharedDecodeDictionary.Clear();
+                SharedCodeList.Clear();
+                SharedStringBuilder.Clear();
+
+                for (int i = 0; i < 256; i++)
+                    SharedDecodeDictionary[i] = ((char)i).ToString();
+
+                // Read all codes at once
+                for (int i = 0; i < codesCount; i++)
+                    SharedCodeList.Add((int)LEB128.ReadUnsigned(reader));
+
+                // Fast decompression
+                string current = SharedDecodeDictionary[SharedCodeList[0]];
+                SharedStringBuilder.Append(current);
+                int nextCode = 256;
+
+                // Process remaining codes
+                for (int i = 1; i < codesCount; i++)
+                {
+                    int code = SharedCodeList[i];
+                    string entry;
+
+                    if (SharedDecodeDictionary.TryGetValue(code, out string? value))
+                        entry = value;
+                    else if (code == nextCode)
+                        entry = current + current[0];
+                    else
+                        throw new Exception("Invalid compressed string data");
+
+                    SharedStringBuilder.Append(entry);
+                    SharedDecodeDictionary[nextCode++] = current + entry[0];
+                    current = entry;
+                }
+
+                return new(EchoType.String, SharedStringBuilder.ToString());
+            }
             else
-                length = reader.ReadInt32();
-            byte[] stringBytes = reader.ReadBytes(length);
-            return new(EchoType.String, System.Text.Encoding.UTF8.GetString(stringBytes));
+            {
+                int length = reader.ReadInt32();
+                byte[] stringBytes = reader.ReadBytes(length);
+                return new(EchoType.String, System.Text.Encoding.UTF8.GetString(stringBytes));
+            }
         }
         else if (type == EchoType.ByteArray)
         {

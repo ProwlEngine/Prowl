@@ -1,8 +1,17 @@
-﻿namespace Prowl.Echo.Test
+﻿using System.Diagnostics;
+using Xunit.Abstractions;
+
+namespace Prowl.Echo.Test
 {
 
     public class BinaryTagConverterTests
     {
+        private readonly ITestOutputHelper _output;
+
+        public BinaryTagConverterTests(ITestOutputHelper testOutputHelper)
+        {
+            _output = testOutputHelper;
+        }
 
         [Theory]
         [InlineData(BinaryEncodingMode.Performance)]
@@ -30,6 +39,8 @@
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
             compound.WriteToBinary(writer, options);
+
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
 
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
@@ -68,6 +79,8 @@
             using var writer = new BinaryWriter(stream);
             compound.WriteToBinary(writer, options);
 
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
+
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
             var deserialized = EchoObject.ReadFromBinary(reader, options);
@@ -91,6 +104,8 @@
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
             outer.WriteToBinary(writer, options);
+
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
 
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
@@ -118,6 +133,8 @@
             using var writer = new BinaryWriter(stream);
             compound.WriteToBinary(writer, options);
 
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
+
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
             var deserialized = EchoObject.ReadFromBinary(reader, options);
@@ -144,6 +161,7 @@
                 try
                 {
                     compound.WriteToBinary(new FileInfo(tempFile), options);
+
                     var deserialized = EchoObject.ReadFromBinary(new FileInfo(tempFile), options);
 
                     Assert.Equal("file test", deserialized.Get("test").StringValue);
@@ -170,6 +188,8 @@
             using var writer = new BinaryWriter(stream);
             compound.WriteToBinary(writer, options);
 
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
+
             // Verify we can read it back
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
@@ -183,6 +203,7 @@
         public void TestLongStrings(BinaryEncodingMode mode)
         {
             // Arrange
+            Stopwatch sw = Stopwatch.StartNew();
             var options = new BinarySerializationOptions { EncodingMode = mode };
             var compound = EchoObject.NewCompound();
             var longString = new string('a', 1000); // 1000 characters
@@ -192,11 +213,16 @@
             using var writer = new BinaryWriter(stream);
             compound.WriteToBinary(writer, options);
 
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
+
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
             var deserialized = EchoObject.ReadFromBinary(reader, options);
 
             Assert.Equal(longString, deserialized.Get("long_string").StringValue);
+
+            sw.Stop();
+            _output.WriteLine($"Time taken: {sw.Elapsed.TotalMilliseconds} ms");
         }
 
         [Theory]
@@ -222,6 +248,8 @@
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
             root.WriteToBinary(writer, options);
+
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
 
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
@@ -253,6 +281,8 @@
             using var writer = new BinaryWriter(stream);
             compound.WriteToBinary(writer, options);
 
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
+
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
             var deserialized = EchoObject.ReadFromBinary(reader, options);
@@ -279,6 +309,8 @@
             using var writer = new BinaryWriter(stream);
             compound.WriteToBinary(writer, options);
 
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
+
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
             var deserialized = EchoObject.ReadFromBinary(reader, options);
@@ -302,6 +334,8 @@
             using var writer = new BinaryWriter(stream);
             intTag.WriteToBinary(writer, options);
 
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
+
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
             var deserialized = EchoObject.ReadFromBinary(reader, options);
@@ -323,6 +357,8 @@
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
             list.WriteToBinary(writer, options);
+
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
 
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
@@ -346,6 +382,8 @@
             using var writer = new BinaryWriter(stream);
             byteArrayTag.WriteToBinary(writer, options);
 
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
+
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
             var deserialized = EchoObject.ReadFromBinary(reader, options);
@@ -365,6 +403,8 @@
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
             doubleTag.WriteToBinary(writer, options);
+
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
 
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
@@ -386,6 +426,8 @@
             using var writer = new BinaryWriter(stream);
             nullTag.WriteToBinary(writer, options);
 
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
+
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
             var deserialized = EchoObject.ReadFromBinary(reader, options);
@@ -406,6 +448,8 @@
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
             stringTag.WriteToBinary(writer, options);
+
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
 
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
@@ -432,6 +476,8 @@
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
             outerList.WriteToBinary(writer, options);
+
+            _output.WriteLine($"Binary size: {stream.Length} bytes");
 
             stream.Position = 0;
             using var reader = new BinaryReader(stream);
