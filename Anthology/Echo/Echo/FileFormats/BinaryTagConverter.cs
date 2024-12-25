@@ -41,10 +41,139 @@ public class BinarySerializationOptions
 
 internal static class BinaryTagConverter
 {
-    private static readonly Dictionary<string, int> SharedEncodeDictionary = new(4096);
-    private static readonly Dictionary<int, string> SharedDecodeDictionary = new(4096);
-    private static readonly StringBuilder SharedStringBuilder = new(4096);
-    private static readonly List<int> SharedCodeList = new(1024);
+    private static readonly ThreadLocal<Dictionary<string, int>> SharedEncodeDictionary = new(() => new Dictionary<string, int>(4096));
+    private static readonly ThreadLocal<Dictionary<int, string>> SharedDecodeDictionary = new(() => new Dictionary<int, string>(4096));
+    private static readonly ThreadLocal<StringBuilder> SharedStringBuilder = new(() => new StringBuilder(4096));
+    private static readonly ThreadLocal<List<int>> SharedCodeList = new(() => new List<int>(1024));
+
+    private static void ClearSharedCollections()
+    {
+        SharedEncodeDictionary.Value!.Clear();
+        SharedDecodeDictionary.Value!.Clear();
+        SharedStringBuilder.Value!.Clear();
+        SharedCodeList.Value!.Clear();
+    }
+
+
+    #region LZW Compression Helpers
+    private const int MaxDictionarySize = 4096;
+    private const int InitialDictionarySize = 256;
+
+    private static void InitializeEncodeDictionary()
+    {
+        var dict = SharedEncodeDictionary.Value!;
+        dict.Clear();
+        for (int i = 0; i < InitialDictionarySize; i++)
+            dict[((char)i).ToString()] = i;
+    }
+
+    private static void InitializeDecodeDictionary()
+    {
+        var dict = SharedDecodeDictionary.Value!;
+        dict.Clear();
+        for (int i = 0; i < InitialDictionarySize; i++)
+            dict[i] = ((char)i).ToString();
+    }
+
+    private static List<int> CompressString(ReadOnlySpan<char> input)
+    {
+        if (input.Length == 0)
+            return new List<int>();
+
+        InitializeEncodeDictionary();
+        var codes = SharedCodeList.Value!;
+        codes.Clear();
+
+        int nextCode = InitialDictionarySize;
+        string current = input[0].ToString();
+
+        for (int i = 1; i < input.Length; i++)
+        {
+            string combined = current + input[i];
+            if (SharedEncodeDictionary.Value!.TryGetValue(combined, out int code))
+            {
+                current = combined;
+            }
+            else
+            {
+                codes.Add(SharedEncodeDictionary.Value![current]);
+                if (nextCode < MaxDictionarySize)
+                {
+                    SharedEncodeDictionary.Value![combined] = nextCode++;
+                }
+                current = input[i].ToString();
+            }
+        }
+
+        if (current.Length > 0)
+            codes.Add(SharedEncodeDictionary.Value![current]);
+
+        return codes;
+    }
+
+    private static string DecompressString(List<int> codes)
+    {
+        if (codes.Count == 0)
+            return string.Empty;
+
+        InitializeDecodeDictionary();
+        var sb = SharedStringBuilder.Value!;
+        sb.Clear();
+
+        string current = SharedDecodeDictionary.Value![codes[0]];
+        sb.Append(current);
+        int nextCode = InitialDictionarySize;
+
+        for (int i = 1; i < codes.Count; i++)
+        {
+            int code = codes[i];
+            string entry;
+
+            if (SharedDecodeDictionary.Value!.TryGetValue(code, out string? value))
+            {
+                entry = value;
+            }
+            else if (code == nextCode)
+            {
+                entry = current + current[0];
+            }
+            else
+            {
+                throw new Exception("Invalid compressed data");
+            }
+
+            sb.Append(entry);
+            if (nextCode < MaxDictionarySize)
+            {
+                SharedDecodeDictionary.Value![nextCode++] = current + entry[0];
+            }
+            current = entry;
+        }
+
+        return sb.ToString();
+    }
+
+    private static void WriteLZWCompressed(BinaryWriter writer, ReadOnlySpan<char> input)
+    {
+        var codes = CompressString(input);
+        LEB128.WriteUnsigned(writer, (ulong)codes.Count);
+        foreach (int code in codes)
+            LEB128.WriteUnsigned(writer, (ulong)code);
+    }
+
+    private static string ReadLZWCompressed(BinaryReader reader)
+    {
+        int codesCount = (int)LEB128.ReadUnsigned(reader);
+        if (codesCount == 0)
+            return string.Empty;
+
+        SharedCodeList.Value!.Clear();
+        for (int i = 0; i < codesCount; i++)
+            SharedCodeList.Value!.Add((int)LEB128.ReadUnsigned(reader));
+
+        return DecompressString(SharedCodeList.Value!);
+    }
+    #endregion
 
     #region Writing
     public static void WriteToFile(EchoObject tag, FileInfo file, BinarySerializationOptions? options = null)
@@ -80,53 +209,9 @@ internal static class BinaryTagConverter
     {
         LEB128.WriteUnsigned(writer, (ulong)tag.Count);
 
-        // Reuse shared dictionary
-        SharedEncodeDictionary.Clear();
-        SharedCodeList.Clear();
-        for (int i = 0; i < 256; i++)
-            SharedEncodeDictionary[((char)i).ToString()] = i;
-
-        int nextCode = 256;
-
         foreach (var subTag in tag.Tags)
         {
-            SharedCodeList.Clear();
-            ReadOnlySpan<char> keySpan = subTag.Key.AsSpan();
-            if (keySpan.Length == 0)
-            {
-                LEB128.WriteUnsigned(writer, 0ul);
-                WriteTag_Size(subTag.Value, writer, options);
-                continue;
-            }
-
-            string current = keySpan[0].ToString();
-            for (int i = 1; i < keySpan.Length; i++)
-            {
-                string combined = current + keySpan[i];
-                if (SharedEncodeDictionary.TryGetValue(combined, out int code))
-                {
-                    current = combined;
-                }
-                else
-                {
-                    SharedCodeList.Add(SharedEncodeDictionary[current]);
-                    // Only add new entries if we haven't exceeded dictionary limit
-                    if (nextCode < 4096)
-                    {
-                        SharedEncodeDictionary[combined] = nextCode++;
-                    }
-                    current = keySpan[i].ToString();
-                }
-            }
-
-            if (current.Length > 0)
-                SharedCodeList.Add(SharedEncodeDictionary[current]);
-
-            // Write compressed field name
-            LEB128.WriteUnsigned(writer, (ulong)SharedCodeList.Count);
-            foreach (int code in SharedCodeList)
-                LEB128.WriteUnsigned(writer, (ulong)code);
-
+            WriteLZWCompressed(writer, subTag.Key.AsSpan());
             WriteTag_Size(subTag.Value, writer, options);
         }
     }
@@ -190,43 +275,7 @@ internal static class BinaryTagConverter
         else if (type == EchoType.Decimal) writer.Write(tag.DecimalValue);
         else if (type == EchoType.String)
         {
-            ReadOnlySpan<char> valueSpan = tag.StringValue.AsSpan();
-
-            SharedEncodeDictionary.Clear();
-            SharedCodeList.Clear();
-            for (int i = 0; i < 256; i++)
-                SharedEncodeDictionary[((char)i).ToString()] = i;
-
-            int nextCode = 256;
-
-            if (valueSpan.Length == 0)
-            {
-                LEB128.WriteUnsigned(writer, 0ul);
-                return;
-            }
-
-            string current = valueSpan[0].ToString();
-            for (int i = 1; i < valueSpan.Length; i++)
-            {
-                string combined = current + valueSpan[i];
-                if (SharedEncodeDictionary.TryGetValue(combined, out int code))
-                {
-                    current = combined;
-                }
-                else
-                {
-                    SharedCodeList.Add(SharedEncodeDictionary[current]);
-                    SharedEncodeDictionary[combined] = nextCode++;
-                    current = valueSpan[i].ToString();
-                }
-            }
-
-            if (current.Length > 0)
-                SharedCodeList.Add(SharedEncodeDictionary[current]);
-
-            LEB128.WriteUnsigned(writer, (ulong)SharedCodeList.Count);
-            foreach (int code in SharedCodeList)
-                LEB128.WriteUnsigned(writer, (ulong)code);
+            WriteLZWCompressed(writer, tag.StringValue.AsSpan());
         }
         else if (type == EchoType.ByteArray)
         {
@@ -285,61 +334,10 @@ internal static class BinaryTagConverter
         EchoObject tag = EchoObject.NewCompound();
         int tagCount = (int)LEB128.ReadUnsigned(reader);
 
-        SharedDecodeDictionary.Clear();
-        SharedCodeList.Clear();
-        SharedStringBuilder.Clear();
-
-        for (int i = 0; i < 256; i++)
-            SharedDecodeDictionary[i] = ((char)i).ToString();
-
-        int nextCode = 256;  // Track dictionary size
-
         for (int i = 0; i < tagCount; i++)
         {
-            int nameCodesCount = (int)LEB128.ReadUnsigned(reader);
-            if (nameCodesCount == 0)
-            {
-                tag.Add(string.Empty, ReadTag_Size(reader, options));
-                continue;
-            }
-
-            SharedCodeList.Clear();
-            for (int j = 0; j < nameCodesCount; j++)
-                SharedCodeList.Add((int)LEB128.ReadUnsigned(reader));
-
-            SharedStringBuilder.Clear();
-            string current = SharedDecodeDictionary[SharedCodeList[0]];
-            SharedStringBuilder.Append(current);
-
-            for (int j = 1; j < SharedCodeList.Count; j++)
-            {
-                int code = SharedCodeList[j];
-                string entry;
-
-                if (SharedDecodeDictionary.TryGetValue(code, out string? value))
-                {
-                    entry = value;
-                }
-                else if (code == nextCode)
-                {
-                    entry = current + current[0];
-                }
-                else
-                {
-                    throw new Exception($"Invalid compressed field name data: code {code} not found in dictionary");
-                }
-
-                SharedStringBuilder.Append(entry);
-
-                // Only add new entries if we haven't exceeded dictionary limit
-                if (nextCode < 4096)
-                {
-                    SharedDecodeDictionary[nextCode++] = current + entry[0];
-                }
-                current = entry;
-            }
-
-            tag.Add(SharedStringBuilder.ToString(), ReadTag_Size(reader, options));
+            string name = ReadLZWCompressed(reader);
+            tag.Add(name, ReadTag_Size(reader, options));
         }
 
         return tag;
@@ -403,46 +401,7 @@ internal static class BinaryTagConverter
         else if (type == EchoType.Decimal) return new(EchoType.Decimal, reader.ReadDecimal());
         else if (type == EchoType.String)
         {
-            int codesCount = (int)LEB128.ReadUnsigned(reader);
-            if (codesCount == 0)
-                return new(EchoType.String, string.Empty);
-
-            // Reuse shared collections
-            SharedDecodeDictionary.Clear();
-            SharedCodeList.Clear();
-            SharedStringBuilder.Clear();
-
-            for (int i = 0; i < 256; i++)
-                SharedDecodeDictionary[i] = ((char)i).ToString();
-
-            // Read all codes at once
-            for (int i = 0; i < codesCount; i++)
-                SharedCodeList.Add((int)LEB128.ReadUnsigned(reader));
-
-            // Fast decompression
-            string current = SharedDecodeDictionary[SharedCodeList[0]];
-            SharedStringBuilder.Append(current);
-            int nextCode = 256;
-
-            // Process remaining codes
-            for (int i = 1; i < codesCount; i++)
-            {
-                int code = SharedCodeList[i];
-                string entry;
-
-                if (SharedDecodeDictionary.TryGetValue(code, out string? value))
-                    entry = value;
-                else if (code == nextCode)
-                    entry = current + current[0];
-                else
-                    throw new Exception("Invalid compressed string data");
-
-                SharedStringBuilder.Append(entry);
-                SharedDecodeDictionary[nextCode++] = current + entry[0];
-                current = entry;
-            }
-
-            return new(EchoType.String, SharedStringBuilder.ToString());
+            return new(EchoType.String, ReadLZWCompressed(reader));
         }
         else if (type == EchoType.ByteArray)
         {
