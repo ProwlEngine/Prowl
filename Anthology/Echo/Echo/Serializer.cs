@@ -59,6 +59,13 @@ public static class Serializer
         formats.Add(new DictionaryFormat());
         formats.Add(new FixedStructureFormat());
         formats.Add(new AnyObjectFormat()); // Fallback format - must be last
+    /// <summary>
+    /// Clears all reflection caches. Call this when you need to reload assemblies or refresh type information.
+    /// </summary>
+    internal static void ClearCache()
+    {
+        _formatCache.Clear();
+        ReflectionUtils.ClearCache();
     }
 
     public static void RegisterFormat(ISerializationFormat format)

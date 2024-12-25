@@ -15,14 +15,12 @@ public static class ReflectionUtils
     // Cache for serializable fields
     private static readonly ConcurrentDictionary<RuntimeTypeHandle, FieldInfo[]> SerializableFieldsCache = new();
 
-    /// <summary>
-    /// Clears all reflection caches. Call this when you need to reload assemblies or refresh type information.
-    /// </summary>
-    public static void ClearCache()
+    internal static void ClearCache()
     {
         TypeCache.Clear();
         SerializableFieldsCache.Clear();
     }
+
     internal static Type? FindTypeByName(string qualifiedTypeName)
     {
         return TypeCache.GetOrAdd(qualifiedTypeName, typeName => {
