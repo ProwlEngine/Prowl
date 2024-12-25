@@ -70,7 +70,7 @@ public static class Serializer
     /// <summary>
     /// Clears all reflection caches. Call this when you need to reload assemblies or refresh type information.
     /// </summary>
-    internal static void ClearCache()
+    public static void ClearCache()
     {
         _formatCache.Clear();
         ReflectionUtils.ClearCache();
