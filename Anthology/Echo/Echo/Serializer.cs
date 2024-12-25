@@ -3,6 +3,7 @@
 
 using Echo.Logging;
 using Prowl.Echo.Formatters;
+using System.Collections.Concurrent;
 
 namespace Prowl.Echo;
 
@@ -39,26 +40,33 @@ public static class Serializer
 
     public static IEchoLogger Logger { get; set; } = new NullEchoLogger();
 
+    private static readonly ConcurrentDictionary<Type, ISerializationFormat> _formatCache = new();
 
-    private static readonly List<ISerializationFormat> formats = new();
+    private static IReadOnlyList<ISerializationFormat> _formats;
 
     static Serializer()
     {
         // Register built-in formats in order of precedence
-        formats.Add(new PrimitiveFormat());
-        formats.Add(new NullableFormat());
-        formats.Add(new DateTimeFormat());
-        formats.Add(new GuidFormat());
-        formats.Add(new EnumFormat());
-        formats.Add(new HashSetFormat());
-        formats.Add(new ArrayFormat());
-        formats.Add(new ListFormat());
-        formats.Add(new QueueFormat());
-        formats.Add(new StackFormat());
-        formats.Add(new LinkedListFormat());
-        formats.Add(new DictionaryFormat());
-        formats.Add(new FixedStructureFormat());
-        formats.Add(new AnyObjectFormat()); // Fallback format - must be last
+        var formatsList = new List<ISerializationFormat>
+        {
+            new PrimitiveFormat(),
+            new NullableFormat(),
+            new DateTimeFormat(),
+            new GuidFormat(),
+            new EnumFormat(),
+            new HashSetFormat(),
+            new ArrayFormat(),
+            new ListFormat(),
+            new QueueFormat(),
+            new StackFormat(),
+            new LinkedListFormat(),
+            new DictionaryFormat(),
+            new FixedStructureFormat(),
+            new AnyObjectFormat() // Fallback format - must be last
+        };
+        _formats = formatsList.AsReadOnly();
+    }
+
     /// <summary>
     /// Clears all reflection caches. Call this when you need to reload assemblies or refresh type information.
     /// </summary>
@@ -70,7 +78,14 @@ public static class Serializer
 
     public static void RegisterFormat(ISerializationFormat format)
     {
-        formats.Insert(0, format); // Add to start for precedence - Also ensures ObjectFormat is last
+        // Clear the cache when registering new formats
+        _formatCache.Clear();
+
+        // Create a new list with the new format
+        var newFormats = new List<ISerializationFormat> { format };
+        newFormats.AddRange(_formats.Where(f => !(f is AnyObjectFormat)));
+        newFormats.Add(_formats.Last()); // Add AnyObjectFormat back at the end
+        _formats = newFormats.AsReadOnly();
     }
 
     public static EchoObject Serialize(object? value, TypeMode typeMode = TypeMode.Auto) => Serialize(value, new SerializationContext(typeMode));
@@ -91,8 +106,10 @@ public static class Serializer
             return clone;
         }
 
-        ISerializationFormat? format = formats.FirstOrDefault(f => f.CanHandle(value.GetType()))
-            ?? throw new NotSupportedException($"No format handler found for type {value.GetType()}");
+        var valueType = value.GetType();
+        var format = _formatCache.GetOrAdd(valueType, type =>
+            _formats.FirstOrDefault(f => f.CanHandle(type))
+            ?? throw new NotSupportedException($"No format handler found for type {type}"));
 
         return format.Serialize(targetType, value, context);
     }
@@ -106,8 +123,9 @@ public static class Serializer
 
         if (value.GetType() == targetType) return value;
 
-        ISerializationFormat format = formats.FirstOrDefault(f => f.CanHandle(targetType))
-            ?? throw new NotSupportedException($"No format handler found for type {targetType}");
+        var format = _formatCache.GetOrAdd(targetType, type =>
+            _formats.FirstOrDefault(f => f.CanHandle(type))
+            ?? throw new NotSupportedException($"No format handler found for type {type}"));
 
         return format.Deserialize(value, targetType, context);
     }
