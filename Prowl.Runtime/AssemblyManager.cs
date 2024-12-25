@@ -105,6 +105,8 @@ public static class AssemblyManager
 
         AssemblyMethodAttributeBase.Clear();
 
+        Echo.Serializer.ClearCache();
+
         InvokeUnloadDelegate();
 
         UnloadInternal(out WeakReference externalAssemblyLoadContextRef);

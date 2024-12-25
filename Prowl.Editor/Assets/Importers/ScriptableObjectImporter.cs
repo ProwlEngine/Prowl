@@ -15,7 +15,7 @@ public class ScriptableObjectImporter : ScriptedImporter
     {
         // Load the Texture into a TextureData Object and serialize to Asset Folder
         //var scriptable = JsonUtility.Deserialize<ScriptableObject>(File.ReadAllText(assetPath.FullName));
-        var scriptable = Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile(assetPath));
+        var scriptable = Serializer.Deserialize<ScriptableObject>(EchoObject.ReadFromString(assetPath));
         ctx.SetMainObject(scriptable);
     }
 }
@@ -28,7 +28,7 @@ public class ScriptableObjectImporterEditor : ScriptedEditor
 
     public override void OnEnable()
     {
-        EchoObject tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
+        EchoObject tag = EchoObject.ReadFromString((target as MetaFile).AssetPath);
         _editingObject = Serializer.Deserialize<ScriptableObject>(tag);
         _objectEditor = null; // Replace this to load a Scripta
     }
@@ -52,7 +52,7 @@ public class ScriptableObjectImporterEditor : ScriptedEditor
             if (changed)
             {
                 _editingObject.OnValidate();
-                StringTagConverter.WriteToFile(Serializer.Serialize(_editingObject), (target as MetaFile).AssetPath);
+                Serializer.Serialize(_editingObject).WriteToString((target as MetaFile).AssetPath);
                 AssetDatabase.Reimport((target as MetaFile).AssetPath);
             }
         }

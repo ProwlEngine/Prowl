@@ -578,7 +578,7 @@ public static partial class AssetDatabase
             try
             {
                 EchoObject serialized = Serializer.Serialize(assetInstance);
-                StringTagConverter.WriteToFile(serialized, fileInfo);
+                serialized.WriteToString(fileInfo);
 
                 if(pingAsset)
                     AssetDatabase.Ping(fileInfo);

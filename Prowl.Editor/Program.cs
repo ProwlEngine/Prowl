@@ -181,6 +181,8 @@ public static class Program
                 SceneManager.StoreScene();
                 //SceneManager.Clear(); // SceneManager.Clear has OnAssemblyUnload
 
+
+
                 try
                 {
                     // Unload External Assemblies

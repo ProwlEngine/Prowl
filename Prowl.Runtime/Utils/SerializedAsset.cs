@@ -41,7 +41,7 @@ public class SerializedAsset
 
         using var stream = file.OpenWrite();
         using BinaryWriter writer = new(stream);
-        BinaryTagConverter.WriteTo(tag, writer);
+        tag.WriteToBinary(writer);
     }
 
     public void SaveToStream(Stream writer)
@@ -50,14 +50,14 @@ public class SerializedAsset
 
         var tag = Serializer.Serialize(this);
         using BinaryWriter binarywriter = new(writer);
-        BinaryTagConverter.WriteTo(tag, binarywriter);
+        tag.WriteToBinary(binarywriter);
     }
 
     public static SerializedAsset FromSerializedAsset(string path)
     {
         using var stream = File.OpenRead(path);
         using BinaryReader reader = new(stream);
-        var tag = BinaryTagConverter.ReadFrom(reader);
+        var tag = EchoObject.ReadFromBinary(reader);
          
         try
         {
@@ -73,7 +73,7 @@ public class SerializedAsset
     public static SerializedAsset FromStream(Stream stream)
     {
         using BinaryReader reader = new(stream);
-        var tag = BinaryTagConverter.ReadFrom(reader);
+        var tag = EchoObject.ReadFromBinary(reader);
 
         try
         {

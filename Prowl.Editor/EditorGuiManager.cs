@@ -319,7 +319,7 @@ public static class EditorGuiManager
             if (File.Exists(file.FullName))
                 file.Delete();
 
-            StringTagConverter.WriteToFile(serializedScene, file);
+            serializedScene.WriteToString(file);
 
             AssetDatabase.Update();
             AssetDatabase.Ping(file);
@@ -352,7 +352,7 @@ public static class EditorGuiManager
 
                 Scene scene = SceneManager.Scene;
                 var serializedScene = Serializer.Serialize(scene);
-                StringTagConverter.WriteToFile(serializedScene, file);
+                serializedScene.WriteToString(file);
                 AssetDatabase.Update();
                 AssetDatabase.Ping(file);
             }
@@ -466,7 +466,7 @@ public static class EditorGuiManager
 
         Material mat = Material.CreateDefaultMaterial();
 
-        StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
+        Serializer.Serialize(mat).WriteToString(file);
 
         if (fromAssetBrowser)
             AssetsBrowserWindow.StartRename(file.FullName);

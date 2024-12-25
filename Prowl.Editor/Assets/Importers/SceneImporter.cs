@@ -12,7 +12,7 @@ public class SceneImporter : ScriptedImporter
 {
     public override void Import(SerializedAsset ctx, FileInfo assetPath)
     {
-        var tag = StringTagConverter.ReadFromFile(assetPath);
+        var tag = EchoObject.ReadFromString(assetPath);
         Scene? scene = Serializer.Deserialize<Scene>(tag) ?? throw new Exception("Failed to Deserialize Scene.");
         ctx.SetMainObject(scene);
     }

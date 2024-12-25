@@ -304,7 +304,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         if (fileID != 0)
             compoundTag.Add("FileID", new EchoObject(fileID));
         if (IsRuntimeResource)
-            compoundTag.Add("Instance", Serializer.Serialize(instance, ctx));
+            compoundTag.Add("Instance", Serializer.Serialize(typeof(T), instance, ctx));
         return compoundTag;
     }
 

@@ -222,7 +222,7 @@ public class AssetsBrowserWindow : EditorWindow
                     while (File.Exists(file.FullName))
                         file = new FileInfo(file.FullName.Replace(".prefab", "") + " new.prefab");
 
-                    StringTagConverter.WriteToFile(Serializer.Serialize(prefab), file);
+                    Serializer.Serialize(prefab).WriteToString(file);
 
                     AssetDatabase.Update();
                     AssetDatabase.Ping(file);

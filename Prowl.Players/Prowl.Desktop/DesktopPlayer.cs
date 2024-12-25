@@ -24,7 +24,7 @@ public static class DesktopPlayer
 
             if (File.Exists(StartingScene.FullName))
             {
-                var tag = BinaryTagConverter.ReadFromFile(StartingScene);
+                var tag = EchoObject.ReadFromBinary(StartingScene);
                 Scene scene = Serializer.Deserialize<Scene>(tag);
                 SceneManager.LoadScene(scene);
             }
