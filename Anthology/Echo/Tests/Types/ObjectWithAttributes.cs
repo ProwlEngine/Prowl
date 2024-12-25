@@ -12,4 +12,7 @@ public class ObjectWithAttributes
 
     [IgnoreOnNull]
     public string? OptionalField = null;
+
+    [SerializeField]
+    private float[] privateField = null;
 }

@@ -13,6 +13,23 @@ public struct NetworkPosition
     public float Z;
 }
 
+public abstract class MonoBehaviour
+{
+    public string Name;
+}
+
+public class Component : MonoBehaviour
+{
+    public int Value;
+}
+
+public class GameObject
+{
+    public string Name;
+
+    public List<MonoBehaviour> Components = new List<MonoBehaviour>();
+}
+
 public class General_Tests
 {
     #region Basic Tests
@@ -190,6 +207,14 @@ public class General_Tests
         var original = new ObjectWithAttributes { OptionalField = null };
         var serialized = Serializer.Serialize(original);
         Assert.False(serialized.Tags.ContainsKey("OptionalField"));
+    }
+
+    [Fact]
+    public void TestSerializeFieldOnPrivate()
+    {
+        var original = new ObjectWithAttributes();
+        var serialized = Serializer.Serialize(original);
+        Assert.True(serialized.Tags.ContainsKey("privateField"));
     }
     #endregion
 
@@ -379,6 +404,20 @@ public class General_Tests
     }
 
     #endregion
+
+    // Test GameObject structure
+    [Fact]
+    public void TestGameObjectStructure()
+    {
+        var gameObject = new GameObject { Name = "Test" };
+        gameObject.Components.Add(new Component { Name = "Component", Value = 42 });
+        var serialized = Serializer.Serialize(gameObject);
+        var deserialized = Serializer.Deserialize<GameObject>(serialized);
+        Assert.Equal(gameObject.Name, deserialized.Name);
+        Assert.Single(deserialized.Components);
+        Assert.Equal(gameObject.Components[0].Name, deserialized.Components[0].Name);
+        Assert.Equal(typeof(Component), deserialized.Components[0].GetType());
+    }
 
     [Fact]
     public void TestFixedAttribute()
