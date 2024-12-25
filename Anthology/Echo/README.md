@@ -128,7 +128,7 @@ public class MyClass
 
 // Fixed Structure attribute tells the serializer this struct is reliable in shape/structure and will never change
 // This allows it to skip serializing type names, and only serialize the field values in the order they appear
-[FixedStructure]
+[FixedEchoStructure]
 public struct MyVector3
 {
     public float X;
@@ -149,6 +149,12 @@ However, If you're using Echo and need better performance:
   2. Minimize deep object graphs when possible
   3. Consider using binary format instead of text, as the text format is significantly slower
 
+If size is a concern:
+  1. Try to use the FixedEchoStructure attribute wherever possible.
+  2. Use binary and set its encoding to Size mode.
+  3. 
+This should help
+
 Heres is a quick Benchmark I did with BenchmarkDotNet, These were done on a simple Vector3 class.
 This is slightly outdated, specifically the size of the resulting data should be a bit smaller now.
 As when this benchmark was made it always included type information even if not needed.
@@ -157,7 +163,7 @@ As when this benchmark was made it always included type information even if not 
 |------------ |--------------------- |------------:|----------:|----------:|---------:|
 |   **Serialize** |      **Newtonsoft.Json** | **1,318.56 ns** |  **8.097 ns** |  **7.574 ns** |     **35 B** |
 | Deserialize |      Newtonsoft.Json | 2,278.44 ns |  9.244 ns |  8.195 ns |        - |
-|   **Serialize** |           **Echo** | **1,489.87 ns** | **17.410 ns** | **15.434 ns** |     **28 B** |
+|   **Serialize** |           **Echo** | **1,489.87 ns** | **17.410 ns** | **15.434 ns** |     **17 B** |
 | Deserialize |           Echo | 1,948.34 ns | 65.129 ns | 72.390 ns |        - |
 |   **Serialize** |           **Manual** | **68.53 ns** | **0.313 ns** | **0.277 ns** |     **12 B** |
 | Deserialize |           Manual | 60.46 ns | 0.429 ns | 0.359 ns |        - |
