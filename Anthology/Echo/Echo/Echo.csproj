@@ -18,7 +18,6 @@
 It has over 190 tests to ensure its reliable, It also serializes objects into an In-Memory graph almost like a Database. 
 These "Database's" can be used independantly from the serializer.</Description>
     <Version>1.4.4</Version>
-    <TargetFramework>net6.0-ios</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
