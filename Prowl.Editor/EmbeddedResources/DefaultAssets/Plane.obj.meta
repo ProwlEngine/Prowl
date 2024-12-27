@@ -26,7 +26,7 @@
         "CullEmpty": false,
         "OptimizeGraph": false,
         "OptimizeMeshes": false,
-        "FlipWindingOrder": true,
+        "FlipWindingOrder": false,
         "WeldVertices": false,
         "InvertNormals": false,
         "GlobalScale": false,
