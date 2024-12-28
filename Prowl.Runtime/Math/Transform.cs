@@ -28,6 +28,7 @@ public class Transform : ICloneExplicit
         {
             Vector3 newPosition = value;
             Transform p = parent;
+
             if (p != null)
                 newPosition = p.InverseTransformPoint(newPosition);
 
@@ -146,12 +147,13 @@ public class Transform : ICloneExplicit
     public Vector3 forward { get => rotation * Vector3.forward; } // TODO: Setter
 
     public Matrix4x4 worldToLocalMatrix => localToWorldMatrix.Invert();
+
     public Matrix4x4 localToWorldMatrix
     {
         get
         {
             Matrix4x4 t = Matrix4x4.TRS(m_LocalPosition, m_LocalRotation, m_LocalScale);
-            return parent != null ? t * parent.localToWorldMatrix : t;
+            return parent != null ? parent.localToWorldMatrix * t : t;
         }
     }
 
