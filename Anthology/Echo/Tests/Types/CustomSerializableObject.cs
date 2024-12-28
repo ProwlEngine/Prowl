@@ -10,12 +10,10 @@ public class CustomSerializableObject : ISerializable
     public int Value = 42;
     public string Text = "Custom";
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compound, SerializationContext ctx)
     {
-        var compound = EchoObject.NewCompound();
         compound.Add("customValue", new EchoObject(EchoType.Int, Value));
         compound.Add("customText", new EchoObject(EchoType.String, Text));
-        return compound;
     }
 
     public void Deserialize(EchoObject tag, SerializationContext ctx)

@@ -37,16 +37,12 @@ public class NodeWithMultipleRefs : ISerializable
     public NodeWithMultipleRefs Right;
     public NodeWithMultipleRefs Parent;
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compound, SerializationContext ctx)
     {
-        var comp = EchoObject.NewCompound();
-
-        comp.Add("Name", new EchoObject(Name));
-        comp.Add("Left", Serializer.Serialize(typeof(NodeWithMultipleRefs), Left, ctx));
-        comp.Add("Right", Serializer.Serialize(typeof(NodeWithMultipleRefs), Right, ctx));
-        comp.Add("Parent", Serializer.Serialize(typeof(NodeWithMultipleRefs), Parent, ctx));
-
-        return comp;
+        compound.Add("Name", new EchoObject(Name));
+        compound.Add("Left", Serializer.Serialize(typeof(NodeWithMultipleRefs), Left, ctx));
+        compound.Add("Right", Serializer.Serialize(typeof(NodeWithMultipleRefs), Right, ctx));
+        compound.Add("Parent", Serializer.Serialize(typeof(NodeWithMultipleRefs), Parent, ctx));
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)

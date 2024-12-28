@@ -35,7 +35,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
         if (value is ISerializable serializable)
         {
-            compound = serializable.Serialize(context);
+            serializable.Serialize(ref compound, context);
         }
         else
         {
