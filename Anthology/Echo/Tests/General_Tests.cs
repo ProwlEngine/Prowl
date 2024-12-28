@@ -30,6 +30,35 @@ public class GameObject
     public List<MonoBehaviour> Components = new List<MonoBehaviour>();
 }
 
+public class NodeWithMultipleRefs : ISerializable
+{
+    public string Name;
+    public NodeWithMultipleRefs Left;
+    public NodeWithMultipleRefs Right;
+    public NodeWithMultipleRefs Parent;
+
+    public EchoObject Serialize(SerializationContext ctx)
+    {
+        var comp = EchoObject.NewCompound();
+
+        comp.Add("Name", new EchoObject(Name));
+        comp.Add("Left", Serializer.Serialize(typeof(NodeWithMultipleRefs), Left, ctx));
+        comp.Add("Right", Serializer.Serialize(typeof(NodeWithMultipleRefs), Right, ctx));
+        comp.Add("Parent", Serializer.Serialize(typeof(NodeWithMultipleRefs), Parent, ctx));
+
+        return comp;
+    }
+
+    public void Deserialize(EchoObject value, SerializationContext ctx)
+    {
+        Name = value["Name"].StringValue;
+        Left = Serializer.Deserialize<NodeWithMultipleRefs>(value["Left"], ctx);
+        Right = Serializer.Deserialize<NodeWithMultipleRefs>(value["Right"], ctx);
+        Parent = Serializer.Deserialize<NodeWithMultipleRefs>(value["Parent"], ctx);
+
+    }
+}
+
 public class General_Tests
 {
     #region Basic Tests
@@ -514,6 +543,71 @@ public class General_Tests
         Assert.NotNull(deserialized.Child);
         Assert.Equal("Child", deserialized.Child.Name);
         Assert.Same(deserialized, deserialized.Child.Child); // Verify circular reference is preserved
+    }
+
+    [Fact]
+    public void TestDiamondCircularReferences()
+    {
+        // Create a diamond-shaped reference pattern
+        var root = new NodeWithMultipleRefs { Name = "Root" };
+        var left = new NodeWithMultipleRefs { Name = "Left", Parent = root };
+        var right = new NodeWithMultipleRefs { Name = "Right", Parent = root };
+        var bottom = new NodeWithMultipleRefs { Name = "Bottom" };
+
+        root.Left = left;
+        root.Right = right;
+        left.Right = bottom;
+        right.Left = bottom;
+        bottom.Parent = root;  // Complete the circle
+
+        var serialized = Serializer.Serialize(root);
+        var deserialized = Serializer.Deserialize<NodeWithMultipleRefs>(serialized);
+
+        // Verify structure
+        Assert.NotNull(deserialized);
+        Assert.Equal("Root", deserialized.Name);
+        Assert.Equal("Left", deserialized.Left.Name);
+        Assert.Equal("Right", deserialized.Right.Name);
+
+        // Verify object identity is preserved
+        Assert.Same(deserialized.Left.Right, deserialized.Right.Left); // Bottom node should be the same instance
+        Assert.Same(deserialized, deserialized.Left.Parent); // Parent references should point to root
+        Assert.Same(deserialized, deserialized.Right.Parent);
+        Assert.Same(deserialized, deserialized.Left.Right.Parent); // Bottom's parent should be root
+    }
+
+    [Fact]
+    public void TestDelayedCircularReference()
+    {
+        // This test creates a situation where the circular reference isn't
+        // encountered immediately during serialization
+        var list = new List<NodeWithMultipleRefs>();
+        var first = new NodeWithMultipleRefs { Name = "First" };
+        var second = new NodeWithMultipleRefs { Name = "Second" };
+        var third = new NodeWithMultipleRefs { Name = "Third" };
+
+        list.Add(first);
+        list.Add(second);
+        list.Add(third);
+
+        // Create circular references after adding to list
+        first.Right = second;
+        second.Right = third;
+        third.Right = first; // Complete the circle
+
+        var serialized = Serializer.Serialize(list);
+        var deserialized = Serializer.Deserialize<List<NodeWithMultipleRefs>>(serialized);
+
+        // Verify structure
+        Assert.Equal(3, deserialized.Count);
+        Assert.Equal("First", deserialized[0].Name);
+        Assert.Equal("Second", deserialized[1].Name);
+        Assert.Equal("Third", deserialized[2].Name);
+
+        // Verify circular references
+        Assert.Same(deserialized[1], deserialized[0].Right);
+        Assert.Same(deserialized[2], deserialized[1].Right);
+        Assert.Same(deserialized[0], deserialized[2].Right);
     }
 
     [Fact]

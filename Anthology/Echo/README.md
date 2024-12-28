@@ -19,6 +19,7 @@ This allows for fast inspection and modification before converting to Binary or 
   - Multi-dimensional and jagged arrays
   - Support for custom serializable objects
   - 190+ tests to ensure the library remains stable and reliable!
+  - Less than 1k lines of executable code!
 
 - **Flexible Serialization Control**
   - Custom serialization through `ISerializable` interface
@@ -156,8 +157,6 @@ If size is a concern:
 This should help
 
 Heres is a quick Benchmark I did with BenchmarkDotNet, These were done on a simple Vector3 class.
-This is slightly outdated, specifically the size of the resulting data should be a bit smaller now.
-As when this benchmark was made it always included type information even if not needed.
 
 |      Method |           Serializer |        Mean |     Error |    StdDev | DataSize |
 |------------ |--------------------- |------------:|----------:|----------:|---------:|

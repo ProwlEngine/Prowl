@@ -13,20 +13,19 @@ public sealed class AnyObjectFormat : ISerializationFormat
     {
         var compound = EchoObject.NewCompound();
         Type actualType = value.GetType();
+        int? id = null;
 
         if (!actualType.IsValueType)
         {
-            if (context.objectToId.TryGetValue(value, out int id))
+            if (context.objectToId.TryGetValue(value, out int existingId))
             {
-                compound["$id"] = new(EchoType.Int, id);
+                compound["$id"] = new(EchoType.Int, existingId);
                 return compound;
             }
 
             id = context.nextId++;
-            context.objectToId[value] = id;
-            context.idToObject[id] = value;
-
-            compound["$id"] = new(EchoType.Int, id);
+            context.objectToId[value] = id.Value;
+            context.idToObject[id.Value] = value;
         }
 
         context.BeginDependencies();
@@ -64,6 +63,9 @@ public sealed class AnyObjectFormat : ISerializationFormat
                 }
             }
         }
+
+        if (id.HasValue)
+            compound["$id"] = new(EchoType.Int, id.Value);
 
         // Handle type information based on TypeMode
         bool shouldIncludeType = context.TypeMode switch {
