@@ -60,14 +60,11 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable, IRenderable
     }
 
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        EchoObject compoundTag = EchoObject.NewCompound();
         compoundTag.Add("Mesh", Serializer.Serialize(typeof(AssetRef<Mesh>), Mesh, ctx));
         compoundTag.Add("Material", Serializer.Serialize(typeof(AssetRef<Material>), Material, ctx));
         compoundTag.Add("Bones", Serializer.Serialize(typeof(Transform[]), Bones, ctx));
-
-        return compoundTag;
     }
 
 

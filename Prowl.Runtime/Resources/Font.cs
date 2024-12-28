@@ -491,9 +491,8 @@ public sealed class Font : EngineObject, ISerializable
     }
 
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        var compoundTag = EchoObject.NewCompound();
         compoundTag.Add("Width", new(Width));
         compoundTag.Add("Height", new(Height));
 
@@ -525,8 +524,6 @@ public sealed class Font : EngineObject, ISerializable
             glyphsTag.ListAdd(glyphTag);
         }
         compoundTag.Add("Glyphs", glyphsTag);
-
-        return compoundTag;
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)

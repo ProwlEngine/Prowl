@@ -118,9 +118,8 @@ public sealed class AnimationClip : EngineObject, ISerializable
         _boneMap = Bones.ToDictionary(b => b.BoneName);
     }
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject value, SerializationContext ctx)
     {
-        var value = EchoObject.NewCompound();
         value.Add("Name", new EchoObject(Name));
         value.Add("Duration", new EchoObject(Duration));
         value.Add("TicksPerSecond", new EchoObject(TicksPerSecond));
@@ -149,8 +148,6 @@ public sealed class AnimationClip : EngineObject, ISerializable
             boneList.ListAdd(boneProp);
         }
         value.Add("Bones", boneList);
-
-        return value;
     }
 
 

@@ -175,18 +175,14 @@ public struct Boolean32Matrix : IEquatable<Boolean32Matrix>, ISerializable
         return hash.ToHashCode();
     }
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject value, SerializationContext ctx)
     {
-        var value = EchoObject.NewCompound();
-
         var columnsList = EchoObject.NewList();
         for (int i = 0; i < 32; i++)
         {
             columnsList.ListAdd(new EchoObject(rows[i]));
         }
         value.Add("Columns", columnsList);
-
-        return value;
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)

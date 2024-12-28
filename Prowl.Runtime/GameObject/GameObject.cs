@@ -1056,9 +1056,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <param name="ctx">The serialization context.</param>
     /// <returns>A SerializedProperty containing the GameObject's data.</returns>
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        EchoObject compoundTag = EchoObject.NewCompound();
         compoundTag.Add("Name", new EchoObject(Name));
 
         compoundTag.Add("Identifier", new EchoObject(_identifier.ToString()));
@@ -1091,8 +1090,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         foreach (GameObject child in this.children)
             children.ListAdd(Serializer.Serialize(typeof(GameObject), child, ctx));
         compoundTag.Add("Children", children);
-
-        return compoundTag;
     }
 
     /// <summary>

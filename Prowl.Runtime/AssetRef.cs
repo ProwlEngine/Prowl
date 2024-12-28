@@ -295,9 +295,8 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     }
 
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        EchoObject compoundTag = EchoObject.NewCompound();
         compoundTag.Add("AssetID", new EchoObject(assetID.ToString()));
         if (assetID != Guid.Empty)
             ctx.AddDependency(assetID);
@@ -305,7 +304,6 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
             compoundTag.Add("FileID", new EchoObject(fileID));
         if (IsRuntimeResource)
             compoundTag.Add("Instance", Serializer.Serialize(typeof(T), instance, ctx));
-        return compoundTag;
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)

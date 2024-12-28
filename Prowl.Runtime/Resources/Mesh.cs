@@ -783,10 +783,8 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         return mesh;
     }
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        var compoundTag = EchoObject.NewCompound();
-
         using (MemoryStream memoryStream = new())
         using (BinaryWriter writer = new(memoryStream))
         {
@@ -816,8 +814,6 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         compoundTag.Add("bMaxX", new(bounds.max.x));
         compoundTag.Add("bMaxY", new(bounds.max.y));
         compoundTag.Add("bMaxZ", new(bounds.max.z));
-
-        return compoundTag;
     }
 
     private static unsafe void WriteArray<T>(BinaryWriter writer, T[]? data) where T : unmanaged
