@@ -108,7 +108,7 @@ public class AssetsBrowserWindow : EditorWindow
 
         gui.CurrentNode.Layout(LayoutType.Column);
         gui.CurrentNode.ScaleChildren();
-        gui.CurrentNode.Padding(0, 10, 10, 10);
+        gui.CurrentNode.Padding(5, 10, 10, 10);
 
         RenderHeader();
 
