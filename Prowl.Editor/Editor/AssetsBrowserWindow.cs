@@ -198,7 +198,7 @@ public class AssetsBrowserWindow : EditorWindow
 
     public void RenderBody()
     {
-        using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Grid).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
+        using (gui.Node("Body").Width(Size.Percentage(1f)).Layout(LayoutType.Grid).PaddingTop(5).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
             var dropInteract = gui.GetInteractable();
@@ -256,7 +256,7 @@ public class AssetsBrowserWindow : EditorWindow
 
     public void RenderEntry(ref int index, AssetDirectoryCache.DirNode entry)
     {
-        using (gui.Node(entry.Directory.Name).Scale(EntrySize).Margin(itemPadding).Enter())
+        using (gui.Node(entry.Directory.Name).Scale(EntrySize).Padding(itemPadding).Enter())
         {
             var interact = gui.GetInteractable();
 
@@ -302,7 +302,7 @@ public class AssetsBrowserWindow : EditorWindow
         AssetDatabase.SubAssetCache[] subAssets = entry.SubAssets;
 
         bool expanded = false;
-        using (gui.Node(entry.File.Name).Scale(EntrySize).Margin(itemPadding).Enter())
+        using (gui.Node(entry.File.Name).Scale(EntrySize).Padding(itemPadding).Enter())
         {
             var interact = gui.GetInteractable();
             AssetsTreeWindow.HandleFileClick(-1, interact, entry, 0, true);
@@ -320,7 +320,7 @@ public class AssetsBrowserWindow : EditorWindow
                         expanded = !expanded;
                         gui.SetNodeStorage(gui.CurrentNode.Parent.Parent, entry.File.FullName, expanded);
                     }
-                    gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronRight : FontAwesome6.ChevronLeft, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? Color.white : EditorStylePrefs.Instance.LesserText);
+                    gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronRight : FontAwesome6.ChevronLeft, 20, gui.CurrentNode.LayoutData.InnerRect, gui.IsNodeHovered() ? Color.white : EditorStylePrefs.Instance.LesserText);
                 }
             }
 
@@ -331,7 +331,7 @@ public class AssetsBrowserWindow : EditorWindow
         {
             for (ushort i = 0; i < subAssets.Length; i++)
             {
-                using (gui.Node(subAssets[i].name, i).Scale(EntrySize * 0.75).Margin(itemPadding).Enter())
+                using (gui.Node(subAssets[i].name, i).Scale(EntrySize * 0.75).Padding(itemPadding).Enter())
                 {
                     var interact = gui.GetInteractable();
                     AssetsTreeWindow.HandleFileClick(-1, interact, entry, i, true);
@@ -344,7 +344,7 @@ public class AssetsBrowserWindow : EditorWindow
 
     private void DrawFileEntry(int index, FileSystemInfo entry, Interactable interact, bool hasSubAsset = false, AssetDatabase.SubAssetCache? subAsset = null)
     {
-        var rect = gui.CurrentNode.LayoutData.Rect;
+        var rect = gui.CurrentNode.LayoutData.InnerRect;
         //if (hasSubAsset)
         //    rect.Expand(-10);
         var entrySize = rect.width;
@@ -422,7 +422,7 @@ public class AssetsBrowserWindow : EditorWindow
                     CurDirectoryNode = node;
                 //ScrollToItem();
             }
-            var pingRect = gui.CurrentNode.LayoutData.Rect;
+            var pingRect = gui.CurrentNode.LayoutData.InnerRect;
             pingRect.Expand(MathF.Sin(_pingTimer) * 6f);
             gui.Draw2D.DrawRect(pingRect, EditorStylePrefs.Instance.Ping, 2f, 4f);
         }

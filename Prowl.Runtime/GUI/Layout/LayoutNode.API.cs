@@ -116,22 +116,6 @@ public partial class LayoutNode
         return this;
     }
 
-    public LayoutNode Margin(Offset margins) => Margin(margins, margins, margins, margins);
-    public LayoutNode MarginTop(Offset margin) => Margin(margin, 0, 0, 0);
-    public LayoutNode MarginRight(Offset margin) => Margin(0, margin, 0, 0);
-    public LayoutNode MarginBottom(Offset margin) => Margin(0, 0, margin, 0);
-    public LayoutNode MarginLeft(Offset margin) => Margin(0, 0, 0, margin);
-    public LayoutNode Margin(Offset vertical, Offset horizontal) => Margin(vertical, horizontal, vertical, horizontal);
-
-    public LayoutNode Margin(Offset top, Offset right, Offset bottom, Offset left)
-    {
-        _marginTop = top;
-        _marginRight = right;
-        _marginBottom = bottom;
-        _marginLeft = left;
-        return this;
-    }
-
     public LayoutNode Padding(Offset paddings) => Padding(paddings, paddings, paddings, paddings);
     public LayoutNode PaddingTop(Offset padding) => Padding(padding, 0, 0, 0);
     public LayoutNode PaddingRight(Offset padding) => Padding(0, padding, 0, 0);

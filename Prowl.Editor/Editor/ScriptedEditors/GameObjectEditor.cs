@@ -102,7 +102,7 @@ public class GameObjectEditor : ScriptedEditor
             // Show buttons to Ping Prefab Asset, Revert Prefab, and Apply Prefab
             using (gui.Node("#_PrefabBtns").ExpandWidth().Height(ItemSize).Top((ItemSize + 5)).Layout(LayoutType.Row).ScaleChildren().Enter())
             {
-                using (gui.Node("#_SelectBtn").ExpandHeight().Margin(0, 4).Enter())
+                using (gui.Node("#_SelectBtn").ExpandHeight().Enter())
                 {
                     if (gui.IsNodePressed())
                     {
@@ -116,7 +116,7 @@ public class GameObjectEditor : ScriptedEditor
                     gui.Draw2D.DrawText("Select", gui.CurrentNode.LayoutData.InnerRect, Color.white, false);
                 }
 
-                using (gui.Node("#_RevertBtn").ExpandHeight().Margin(0, 4).Enter())
+                using (gui.Node("#_RevertBtn").ExpandHeight().Enter())
                 {
                     if (gui.IsNodePressed())
                     {
@@ -134,7 +134,7 @@ public class GameObjectEditor : ScriptedEditor
                     gui.Draw2D.DrawText("Revert", gui.CurrentNode.LayoutData.InnerRect, Color.white, false);
                 }
 
-                using (gui.Node("#_ApplyBtn").ExpandHeight().Margin(0, 4).Enter())
+                using (gui.Node("#_ApplyBtn").ExpandHeight().Enter())
                 {
                     if (gui.IsNodePressed())
                     {
