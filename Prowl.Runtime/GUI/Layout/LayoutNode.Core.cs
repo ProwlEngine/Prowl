@@ -108,8 +108,6 @@ public partial class LayoutNode
     private double _fitContentYPerc = 1f;
     private bool _centerContent = false;
     private bool _canScaleChildren = false;
-    private LayoutNode _positionRelativeTo;
-    private LayoutNode _sizeRelativeTo;
 
     private LayoutType _layout = LayoutType.None;
     private bool _layoutX = false;
@@ -165,26 +163,12 @@ public partial class LayoutNode
     public void UpdateScaleCache()
     {
         // Then Paddings (They rely on Scale)
-        if (_positionRelativeTo != null)
-        {
-            double x = _positionRelativeTo._data.Scale.x;
-            double y = _positionRelativeTo._data.Scale.y;
-            _data.Paddings = new(
-                _paddingLeft.ToPixels(x),
-                _paddingRight.ToPixels(x),
-                _paddingTop.ToPixels(y),
-                _paddingBottom.ToPixels(y)
-            );
-        }
-        else
-        {
-            _data.Paddings = new(_paddingLeft.ToPixels(0), _paddingRight.ToPixels(0), _paddingTop.ToPixels(0), _paddingBottom.ToPixels(0));
-        }
+        _data.Paddings = new(_paddingLeft.ToPixels(0), _paddingRight.ToPixels(0), _paddingTop.ToPixels(0), _paddingBottom.ToPixels(0));
 
-        if (_sizeRelativeTo != null)
+        if (Parent != null)
         {
-            var width = _sizeRelativeTo._data.GlobalContentWidth;
-            var height = _sizeRelativeTo._data.GlobalContentHeight;
+            var width = Parent._data.GlobalContentWidth;
+            var height = Parent._data.GlobalContentHeight;
             var maxW = _maxWidth.ToPixels(width);
             var maxH = _maxHeight.ToPixels(height);
 
@@ -211,11 +195,11 @@ public partial class LayoutNode
 
     public void UpdatePositionCache()
     {
-        if (_positionRelativeTo != null)
+        if (Parent != null)
         {
             _data.Position = new(
-                _positionX.ToPixels(_positionRelativeTo._data.GlobalContentWidth),
-                _positionY.ToPixels(_positionRelativeTo._data.GlobalContentHeight)
+                _positionX.ToPixels(Parent._data.GlobalContentWidth),
+                _positionY.ToPixels(Parent._data.GlobalContentHeight)
             );
         }
         else

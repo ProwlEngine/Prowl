@@ -131,19 +131,6 @@ public partial class LayoutNode
         return this;
     }
 
-    public LayoutNode PositionRelativeTo(LayoutNode node)
-    {
-        _positionRelativeTo = node;
-        return this;
-    }
-
-    public LayoutNode SizeRelativeTo(LayoutNode node)
-    {
-        _sizeRelativeTo = node;
-        return this;
-    }
-
-
     public LayoutNodeScope Enter()
     {
         var scope = new LayoutNodeScope(this);
@@ -158,8 +145,6 @@ public partial class LayoutNode
         Parent = newParent;
         Parent.Children.Add(this);
         //Parent.GetNextNode();
-        _positionRelativeTo = newParent;
-        _sizeRelativeTo = newParent;
     }
 
     public LayoutNode AppendNode(string ID) => Gui.Node(this, ID);
