@@ -23,7 +23,6 @@ public partial class LayoutNode
         public readonly double HScrollHeight => IsHScrollVisible ? ScrollBarSize : 0;
 
         public readonly Rect InnerRect => new(GlobalContentPosition, new(GlobalContentWidth, GlobalContentHeight));
-        public readonly Rect InnerRect_NoScroll => new(GlobalContentPosition, new(GlobalContentWidth + VScrollWidth, GlobalContentHeight + HScrollHeight));
         public readonly Rect Rect => new(GlobalPosition, new(Scale.x, Scale.y));
 
         public readonly Vector2 GlobalPosition

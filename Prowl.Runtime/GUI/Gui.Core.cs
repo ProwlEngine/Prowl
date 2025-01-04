@@ -193,7 +193,7 @@ public partial class Gui
 
         if (CurrentNode._clipped != ClipType.None)
         {
-            var rect = scope._node._clipped == ClipType.Inner ? scope._node.LayoutData.InnerRect_NoScroll : scope._node.LayoutData.Rect;
+            var rect = scope._node._clipped == ClipType.Inner ? scope._node.LayoutData.InnerRect : scope._node.LayoutData.Rect;
             Draw2D.PushClip(rect);
         }
     }

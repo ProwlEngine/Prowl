@@ -48,7 +48,7 @@ public partial class LayoutNode
         return this;
     }
 
-    public LayoutNode Expand(double xOffset = 0, double yOffset = 0) => Width(Size.Percentage(1f, xOffset)).Height(Size.Percentage(1f, yOffset));
+    public LayoutNode Expand(double xOffset = 0, double yOffset = 0) => ExpandWidth(xOffset).ExpandHeight(yOffset);
     public LayoutNode ExpandWidth(double pixelOffset = 0) => Width(Size.Percentage(1f, pixelOffset));
     public LayoutNode ExpandHeight(double pixelOffset = 0) => Height(Size.Percentage(1f, pixelOffset));
 
