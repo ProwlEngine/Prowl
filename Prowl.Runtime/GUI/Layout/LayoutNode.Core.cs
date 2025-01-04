@@ -91,10 +91,10 @@ public partial class LayoutNode
     private Size _height = Size.Default;
     private Size _maxWidth = Size.Max;
     private Size _maxHeight = Size.Max;
-    private Offset _paddingLeft = Offset.Default;
-    private Offset _paddingRight = Offset.Default;
-    private Offset _paddingTop = Offset.Default;
-    private Offset _paddingBottom = Offset.Default;
+    private double _paddingLeft = 0;
+    private double _paddingRight = 0;
+    private double _paddingTop = 0;
+    private double _paddingBottom = 0;
 
     private Gui.WidgetStyle _scrollStyle;
     private bool _showVScroll = false;
@@ -162,7 +162,7 @@ public partial class LayoutNode
     public void UpdateScaleCache()
     {
         // Then Paddings (They rely on Scale)
-        _data.Paddings = new(_paddingLeft.ToPixels(0), _paddingRight.ToPixels(0), _paddingTop.ToPixels(0), _paddingBottom.ToPixels(0));
+        _data.Paddings = new(_paddingLeft, _paddingRight, _paddingTop, _paddingBottom);
 
         if (Parent != null)
         {
@@ -516,31 +516,34 @@ public partial class LayoutNode
 
     public ulong GetHashCode64()
     {
-        ulong hash = 17;
-        hash = hash * 23 + ID;
-        hash = hash * 23 + _positionX.GetHashCode64();
-        hash = hash * 23 + _positionY.GetHashCode64();
-        hash = hash * 23 + _width.GetHashCode64();
-        hash = hash * 23 + _height.GetHashCode64();
-        hash = hash * 23 + _maxWidth.GetHashCode64();
-        hash = hash * 23 + _maxHeight.GetHashCode64();
-        hash = hash * 23 + _paddingLeft.GetHashCode64();
-        hash = hash * 23 + _paddingRight.GetHashCode64();
-        hash = hash * 23 + _paddingTop.GetHashCode64();
-        hash = hash * 23 + _paddingBottom.GetHashCode64();
-        hash = hash * 23 + (ulong)_ignore.GetHashCode();
-        hash = hash * 23 + (ulong)_fitContentX.GetHashCode();
-        hash = hash * 23 + (ulong)_fitContentXPerc.GetHashCode();
-        hash = hash * 23 + (ulong)_fitContentY.GetHashCode();
-        hash = hash * 23 + (ulong)_fitContentYPerc.GetHashCode();
-        hash = hash * 23 + (ulong)_centerContent.GetHashCode();
-        hash = hash * 23 + (ulong)_canScaleChildren.GetHashCode();
-        hash = hash * 23 + (ulong)_layout.GetHashCode();
-        hash = hash * 23 + (ulong)_clipped.GetHashCode();
-        hash = hash * 23 + (ulong)VScroll.GetHashCode();
-        hash = hash * 23 + (ulong)HScroll.GetHashCode();
-        hash = hash * 23 + (ulong)_nextAnimation.GetHashCode();
-        return hash;
+        unchecked
+        {
+            ulong hash = 17;
+            hash = hash * 23 + ID;
+            hash = hash * 23 + _positionX.GetHashCode64();
+            hash = hash * 23 + _positionY.GetHashCode64();
+            hash = hash * 23 + _width.GetHashCode64();
+            hash = hash * 23 + _height.GetHashCode64();
+            hash = hash * 23 + _maxWidth.GetHashCode64();
+            hash = hash * 23 + _maxHeight.GetHashCode64();
+            hash = hash * 23 + (ulong)_paddingLeft.GetHashCode();
+            hash = hash * 23 + (ulong)_paddingRight.GetHashCode();
+            hash = hash * 23 + (ulong)_paddingTop.GetHashCode();
+            hash = hash * 23 + (ulong)_paddingBottom.GetHashCode();
+            hash = hash * 23 + (ulong)_ignore.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentX.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentXPerc.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentY.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentYPerc.GetHashCode();
+            hash = hash * 23 + (ulong)_centerContent.GetHashCode();
+            hash = hash * 23 + (ulong)_canScaleChildren.GetHashCode();
+            hash = hash * 23 + (ulong)_layout.GetHashCode();
+            hash = hash * 23 + (ulong)_clipped.GetHashCode();
+            hash = hash * 23 + (ulong)VScroll.GetHashCode();
+            hash = hash * 23 + (ulong)HScroll.GetHashCode();
+            hash = hash * 23 + (ulong)_nextAnimation.GetHashCode();
+            return hash;
+        }
 
         //unchecked
         //{

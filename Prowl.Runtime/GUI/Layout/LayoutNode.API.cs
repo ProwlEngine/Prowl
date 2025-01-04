@@ -116,13 +116,13 @@ public partial class LayoutNode
         return this;
     }
 
-    public LayoutNode Padding(Offset paddings) => Padding(paddings, paddings, paddings, paddings);
-    public LayoutNode PaddingTop(Offset padding) => Padding(padding, 0, 0, 0);
-    public LayoutNode PaddingRight(Offset padding) => Padding(0, padding, 0, 0);
-    public LayoutNode PaddingBottom(Offset padding) => Padding(0, 0, padding, 0);
-    public LayoutNode PaddingLeft(Offset padding) => Padding(0, 0, 0, padding);
-    public LayoutNode Padding(Offset vertical, Offset horizontal) => Padding(vertical, horizontal, vertical, horizontal);
-    public LayoutNode Padding(Offset top, Offset right, Offset bottom, Offset left)
+    public LayoutNode Padding(double paddings) => Padding(paddings, paddings, paddings, paddings);
+    public LayoutNode PaddingTop(double padding) => Padding(padding, 0, 0, 0);
+    public LayoutNode PaddingRight(double padding) => Padding(0, padding, 0, 0);
+    public LayoutNode PaddingBottom(double padding) => Padding(0, 0, padding, 0);
+    public LayoutNode PaddingLeft(double padding) => Padding(0, 0, 0, padding);
+    public LayoutNode Padding(double vertical, double horizontal) => Padding(vertical, horizontal, vertical, horizontal);
+    public LayoutNode Padding(double top, double right, double bottom, double left)
     {
         _paddingTop = top;
         _paddingRight = right;
