@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 
 namespace Prowl.Echo.Formatters;
@@ -85,6 +86,48 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
+        // Sometimes compounds can be direct values
+        // For example if you serialize object[] { 1, 2, 3 } you get a ListTag with 3 IntTags
+        // So deserialize needs to support returning the direct value
+        if (value.TagType != EchoType.Compound)
+        {
+            if (value.TagType == EchoType.Null)
+                return null;
+            else if (value.TagType == EchoType.Byte)
+                return value.ByteValue;
+            else if (value.TagType == EchoType.sByte)
+                return value.sByteValue;
+            else if (value.TagType == EchoType.Short)
+                return value.ShortValue;
+            else if (value.TagType == EchoType.UShort)
+                return value.UShortValue;
+            else if (value.TagType == EchoType.Int)
+                return value.IntValue;
+            else if (value.TagType == EchoType.UInt)
+                return value.UIntValue;
+            else if (value.TagType == EchoType.Long)
+                return value.LongValue;
+            else if (value.TagType == EchoType.ULong)
+                return value.ULongValue;
+            else if (value.TagType == EchoType.Float)
+                return value.FloatValue;
+            else if (value.TagType == EchoType.Double)
+                return value.DoubleValue;
+            else if (value.TagType == EchoType.Decimal)
+                return value.DecimalValue;
+            else if (value.TagType == EchoType.Bool)
+                return value.BoolValue;
+            else if (value.TagType == EchoType.String)
+                return value.StringValue;
+            else if (value.TagType == EchoType.ByteArray)
+                return value.ByteArrayValue;
+            else
+            {
+                Serializer.Logger.Error($"Failed to deserialize value of type {value.TagType}, EchoObject is not a compound and not a known value type.");
+                return null;
+            }
+        }
+
         EchoObject? id = null;
         if (!targetType.IsValueType &&
             value.TryGet("$id", out id) &&

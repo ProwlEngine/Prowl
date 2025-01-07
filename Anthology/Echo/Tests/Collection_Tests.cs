@@ -197,6 +197,46 @@ public class Collection_Tests
     }
 
     [Fact]
+    public void TestObjectArrays()
+    {
+        object[] objects = new object[]
+        {
+            1,
+            "two",
+            new TestObject { Id = 3, Name = "Three" }
+        };
+
+        var serialized = Serializer.Serialize(objects);
+        var deserialized = Serializer.Deserialize<object[]>(serialized);
+
+        Assert.Equal(objects.Length, deserialized.Length);
+        for (int i = 0; i < objects.Length; i++)
+        {
+            var original = objects[i];
+            var deserializedObject = deserialized[i];
+
+            if (original is int)
+            {
+                Assert.IsType<int>(deserializedObject);
+                Assert.Equal(original, deserializedObject);
+            }
+            else if (original is string)
+            {
+                Assert.IsType<string>(deserializedObject);
+                Assert.Equal(original, deserializedObject);
+            }
+            else if (original is TestObject)
+            {
+                Assert.IsType<TestObject>(deserializedObject);
+                var originalTestObject = (TestObject)original;
+                var deserializedTestObject = (TestObject)deserializedObject;
+                Assert.Equal(originalTestObject.Id, deserializedTestObject.Id);
+                Assert.Equal(originalTestObject.Name, deserializedTestObject.Name);
+            }
+        }
+    }
+
+    [Fact]
     public void TestJaggedArrays()
     {
         var original = new int[][]
