@@ -139,7 +139,7 @@ public sealed partial class EchoObject
 
         if (newTag == null)
             throw new ArgumentException(null, nameof(newTag));
-        else if (newTag == this)
+        else if (object.ReferenceEquals(newTag, this))
             throw new ArgumentException("Cannot add tag to self", nameof(newTag));
 
         // Make sure we dont already have this tag

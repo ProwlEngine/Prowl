@@ -46,7 +46,7 @@ public class EchoChangeEventArgs : EventArgs
         Source = source;
         Property = property;
         Path = property.GetPath();
-        RelativePath = source == property ? "" : EchoObject.GetRelativePath(source, property);
+        RelativePath = object.ReferenceEquals(source, property) ? "" : EchoObject.GetRelativePath(source, property);
         OldValue = oldValue;
         NewValue = newValue;
         Type = type;
@@ -64,7 +64,7 @@ public enum ChangeType
     TagRenamed        // Property renamed in compound
 }
 
-public sealed partial class EchoObject
+public sealed partial class EchoObject : IEquatable<EchoObject>
 {
     public event EventHandler<EchoChangeEventArgs>? PropertyChanged;
 
@@ -274,6 +274,102 @@ public sealed partial class EchoObject
             Parent.OnPropertyChanged(parentEvent);
         }
     }
+
+    #region Equality
+
+    public bool Equals(EchoObject? other)
+    {
+        if (other is null) return false;
+        if (object.ReferenceEquals(this, other)) return true;
+        if (TagType != other.TagType) return false;
+
+        // Handle different tag types
+        switch (TagType)
+        {
+            case EchoType.Compound:
+                var thisTags = (Dictionary<string, EchoObject>)Value!;
+                var otherTags = (Dictionary<string, EchoObject>)other.Value!;
+
+                // First check if the dictionaries have the same number of keys
+                if (thisTags.Count != otherTags.Count) return false;
+
+                // Then check if they have exactly the same keys
+                if (!thisTags.Keys.SequenceEqual(otherTags.Keys)) return false;
+
+                // Finally check if all values are equal
+                foreach (var key in thisTags.Keys)
+                {
+                    if (!thisTags[key].Equals(otherTags[key])) return false;
+                }
+                return true;
+
+            case EchoType.List:
+                var thisList = (List<EchoObject>)Value!;
+                var otherList = (List<EchoObject>)other.Value!;
+
+                if (thisList.Count != otherList.Count) return false;
+
+                for (int i = 0; i < thisList.Count; i++)
+                {
+                    if (!thisList[i].Equals(otherList[i])) return false;
+                }
+                return true;
+
+            case EchoType.Null:
+                return true; // Both are null type
+
+            default:
+                // Handle primitive types
+                if (Value == null) return other.Value == null;
+                if (other.Value == null) return false;
+
+                if (Value is byte[] thisBytes && other.Value is byte[] otherBytes)
+                {
+                    return thisBytes.SequenceEqual(otherBytes);
+                }
+
+                return TagType switch {
+                    EchoType.Int => IntValue == other.IntValue,
+                    EchoType.Float => FloatValue == other.FloatValue,
+                    EchoType.Double => DoubleValue == other.DoubleValue,
+                    EchoType.Long => LongValue == other.LongValue,
+                    EchoType.Short => ShortValue == other.ShortValue,
+                    EchoType.Byte => ByteValue == other.ByteValue,
+                    EchoType.sByte => sByteValue == other.sByteValue,
+                    EchoType.UShort => UShortValue == other.UShortValue,
+                    EchoType.UInt => UIntValue == other.UIntValue,
+                    EchoType.ULong => ULongValue == other.ULongValue,
+                    EchoType.Decimal => DecimalValue == other.DecimalValue,
+                    EchoType.Bool => BoolValue == other.BoolValue,
+                    EchoType.String => StringValue == other.StringValue,
+                    _ => Value.Equals(other.Value)
+                };
+        }
+    }
+
+    public override bool Equals(object? obj) => Equals(obj as EchoObject);
+    public override int GetHashCode()
+    {
+        int hash = TagType.GetHashCode();
+
+        if (TagType == EchoType.Compound)
+        {
+            foreach (var echo in Tags)
+                hash = HashCode.Combine(hash.GetHashCode(), echo.Key, echo.Value.GetHashCode());
+        }
+        else if (TagType == EchoType.List)
+        {
+            foreach (var echo in List)
+                hash = HashCode.Combine(hash.GetHashCode(), echo.GetHashCode());
+        }
+        else hash = HashCode.Combine(TagType.GetHashCode(), Value?.GetHashCode() ?? 0); // Primitive tag type
+
+        return hash;
+    }
+    public static bool operator ==(EchoObject left, EchoObject right) => left is null ? right is null : left.Equals(right);
+    public static bool operator !=(EchoObject left, EchoObject right) => !(left == right);
+
+    #endregion
 
     #region Shortcuts
 

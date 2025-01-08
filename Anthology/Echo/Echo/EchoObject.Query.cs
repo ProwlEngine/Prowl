@@ -185,14 +185,14 @@ public sealed partial class EchoObject
 
     public static string GetRelativePath(EchoObject from, EchoObject to)
     {
-        if (from == to) return "";
+        if (object.ReferenceEquals(from, to)) return "";
         if (to.Parent == null) throw new ArgumentException("'to' must exist inside 'from'");
 
         var path = new List<string>();
         var current = to;
 
         // Build path from property up to source
-        while (current != from && current.Parent != null)
+        while (!object.ReferenceEquals(current, from) && current.Parent != null)
         {
             if (current.Parent == null)
                 throw new ArgumentException("'to' must exist inside 'from'");
