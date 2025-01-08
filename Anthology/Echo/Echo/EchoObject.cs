@@ -331,6 +331,46 @@ public sealed partial class EchoObject
                 throw new ArgumentNullException(nameof(value), $"Cannot set null value for type {TagType}");
             }
 
+            // Handle Compound type
+            if (TagType == EchoType.Compound)
+            {
+                if (value is not Dictionary<string, EchoObject> dict)
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot convert type {value.GetType().Name} to Dictionary<string, EchoObject>");
+                }
+
+                _value = dict;
+                // Set parent for all children
+                foreach (var (key, tag) in dict)
+                {
+                    tag.Parent = this;
+                    tag.CompoundKey = key;
+                }
+                OnPropertyChanged(new EchoChangeEventArgs(this, this, oldValue, _value, ChangeType.ValueChanged));
+                return;
+            }
+
+            // Handle List type
+            if (TagType == EchoType.List)
+            {
+                if (value is not List<EchoObject> list)
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot convert type {value.GetType().Name} to List<EchoObject>");
+                }
+
+                _value = list;
+                // Set parent for all children
+                for (int i = 0; i < list.Count; i++)
+                {
+                    list[i].Parent = this;
+                    list[i].ListIndex = i;
+                }
+                OnPropertyChanged(new EchoChangeEventArgs(this, this, oldValue, _value, ChangeType.ValueChanged));
+                return;
+            }
+
             // Try converting using Convert.ChangeType for numeric types
             if (IsNumericType(TagType))
             {
