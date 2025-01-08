@@ -89,7 +89,7 @@ public sealed partial class EchoObject
     public EchoObject(float i) { _value = i; TagType = EchoType.Float; }
     public EchoObject(double i) { _value = i; TagType = EchoType.Double; }
     public EchoObject(decimal i) { _value = i; TagType = EchoType.Decimal; }
-    public EchoObject(string i) { _value = i; TagType = EchoType.String; }
+    public EchoObject(string i) { _value = i ?? ""; TagType = EchoType.String; }
     public EchoObject(byte[] i) { _value = i; TagType = EchoType.ByteArray; }
     public EchoObject(bool i) { _value = i; TagType = EchoType.Bool; }
     public EchoObject(EchoType type, object? value)
