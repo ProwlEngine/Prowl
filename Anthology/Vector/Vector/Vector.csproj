@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <NeutralLanguage>en-AU</NeutralLanguage>
+    <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <Title>Prowl.Vector</Title>
+    <Authors>Wulferis</Authors>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Vector</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Vector</PackageProjectUrl>
+    <Description>A 3D 64-bit Mathematics Library, the API is heavily inspired by Unity.
+Built for the Prowl Game Engine.</Description>
+    <PackageTags>mathematics;3d;3d-math;linear-algebra;vector;matrix;quaternion;geometry;transformation;double-precision;numerical;math-library;spatial;rotation;interpolation</PackageTags>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>
