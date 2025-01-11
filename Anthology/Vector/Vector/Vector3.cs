@@ -468,6 +468,21 @@ public struct Vector3 : IEquatable<Vector3>, IFormattable
         return projectedVector;
     }
 
+    /// <summary>
+    /// Returns a normalized vector perpendicular to the input vector.
+    /// Uses Vector3.up as the primary reference vector, falling back to Vector3.right
+    /// when the input is parallel to up.
+    /// </summary>
+    /// <param name="vector">The input vector to find a perpendicular for</param>
+    /// <returns>A normalized vector perpendicular to the input</returns>
+    public static Vector3 GetPerpendicularVector(Vector3 vector)
+    {
+        var normalizedInput = vector.normalized;
+        if (MathD.Abs(Dot(normalizedInput, up)) > 0.8f)
+            return Cross(normalizedInput, right).normalized;
+        return Cross(normalizedInput, up).normalized;
+    }
+
     #endregion Public Static Methods
 
     #region Public Static Operators
