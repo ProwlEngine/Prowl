@@ -391,6 +391,7 @@ public struct Vector2 : IEquatable<Vector2>, IFormattable
     {
         return new Vector2(Math.Sqrt(value.x), Math.Sqrt(value.y));
     }
+
     #endregion Public Static Methods
 
     #region Public Static Operators
