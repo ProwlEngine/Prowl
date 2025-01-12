@@ -71,7 +71,7 @@ public struct Plane : IEquatable<Plane>
     public Plane(Vector3 a, Vector3 b, Vector3 c)
     {
         // Same as Set3Points, Cant call it due to c# version differences
-        normal = Vector3.Normalize(Vector3.Cross(a - c, a - b));
+        normal = Vector3.Normalize(Vector3.Cross(a - b, a - c));
         distance = Vector3.Dot(normal, a);
     }
 
@@ -128,7 +128,7 @@ public struct Plane : IEquatable<Plane>
 
     public void Set3Points(Vector3 a, Vector3 b, Vector3 c)
     {
-        normal = Vector3.Normalize(Vector3.Cross(a - c, a - b));
+        normal = Vector3.Normalize(Vector3.Cross(a - b, a - c));
         distance = Vector3.Dot(normal, a);
     }
 
