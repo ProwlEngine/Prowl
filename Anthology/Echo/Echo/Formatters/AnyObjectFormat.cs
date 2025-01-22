@@ -220,11 +220,31 @@ public sealed class AnyObjectFormat : ISerializationFormat
         if (compound.TryGet(field.Name, out value))
             return true;
 
-        Attribute[] formerNames = Attribute.GetCustomAttributes(field, typeof(FormerlySerializedAsAttribute));
-        foreach (FormerlySerializedAsAttribute formerName in formerNames.Cast<FormerlySerializedAsAttribute>())
+        // Case-insensitive fallback
+        foreach (var key in compound.GetNames())
+        {
+            if (string.Equals(key, field.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                value = compound[key];
+                return true;
+            }
+        }
+
+        // Check former names with case-insensitivity
+        foreach (FormerlySerializedAsAttribute formerName in Attribute.GetCustomAttributes(field, typeof(FormerlySerializedAsAttribute)))
         {
             if (compound.TryGet(formerName.oldName, out value))
                 return true;
+
+            // Case-insensitive check for former names
+            foreach (var key in compound.GetNames())
+            {
+                if (string.Equals(key, formerName.oldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = compound[key];
+                    return true;
+                }
+            }
         }
 
         return false;
