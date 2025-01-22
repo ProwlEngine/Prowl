@@ -189,7 +189,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         {
             foreach (System.Reflection.FieldInfo field in result.GetSerializableFields())
             {
-                if (!TryGetFieldValue(value, field, out EchoObject? fieldValue))
+                if (!AnyObjectFormat.TryGetFieldValue(value, field, out EchoObject? fieldValue))
                     continue;
 
                 try
@@ -215,7 +215,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         return result;
     }
 
-    private bool TryGetFieldValue(EchoObject compound, System.Reflection.FieldInfo field, out EchoObject value)
+    private static bool TryGetFieldValue(EchoObject compound, System.Reflection.FieldInfo field, out EchoObject? value)
     {
         if (compound.TryGet(field.Name, out value))
             return true;
@@ -231,7 +231,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         }
 
         // Check former names with case-insensitivity
-        foreach (FormerlySerializedAsAttribute formerName in Attribute.GetCustomAttributes(field, typeof(FormerlySerializedAsAttribute)))
+        foreach (FormerlySerializedAsAttribute formerName in Attribute.GetCustomAttributes(field, typeof(FormerlySerializedAsAttribute)).Cast<FormerlySerializedAsAttribute>())
         {
             if (compound.TryGet(formerName.oldName, out value))
                 return true;

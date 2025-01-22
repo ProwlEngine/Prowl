@@ -114,12 +114,12 @@ public static class Serializer
         return format.Serialize(targetType, value, context);
     }
 
-    public static T? Deserialize<T>(EchoObject value) => (T?)Deserialize(value, typeof(T));
-    public static object? Deserialize(EchoObject value, Type targetType) => Deserialize(value, targetType, new SerializationContext());
-    public static T? Deserialize<T>(EchoObject value, SerializationContext context) => (T?)Deserialize(value, typeof(T), context);
-    public static object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
+    public static T? Deserialize<T>(EchoObject? value) => (T?)Deserialize(value, typeof(T));
+    public static object? Deserialize(EchoObject? value, Type targetType) => Deserialize(value, targetType, new SerializationContext());
+    public static T? Deserialize<T>(EchoObject? value, SerializationContext context) => (T?)Deserialize(value, typeof(T), context);
+    public static object? Deserialize(EchoObject? value, Type targetType, SerializationContext context)
     {
-        if (value == null || value.TagType == EchoType.Null) return null;
+        if (object.Equals(value, null) || value.TagType == EchoType.Null) return null;
 
         if (value.GetType() == targetType) return value;
 
