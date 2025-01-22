@@ -834,4 +834,126 @@ public class General_Tests
         Assert.Equal(boolValue, Serializer.Deserialize<bool?>(Serializer.Serialize(boolValue)));
     }
 
+    #region PolyMorphic Deserialize
+    
+    #region Test Models
+    public interface IAnimal {  }
+
+    public class Dog : IAnimal
+    {
+        public string Species;
+        public string Breed;
+    }
+
+    public class Person
+    {
+        [FormerlySerializedAs("FULLNAME")]
+        public string Name;
+
+        public int Age;
+    }
+    #endregion
+
+    [Fact]
+    public void Deserialize_ShouldUseActualTypeFromTypeTag()
+    {
+        // Arrange
+        var original = new Dog { Species = "Canine", Breed = "Golden Retriever" };
+
+        // Serialize with type information
+        var context = new SerializationContext(TypeMode.Aggressive);
+        var serialized = Serializer.Serialize(original, context);
+
+        // Act - Deserialize as base type
+        var deserialized = Serializer.Deserialize<IAnimal>(serialized);
+
+        // Assert
+        Assert.NotNull(deserialized);
+        Assert.IsType<Dog>(deserialized);
+        Assert.Equal("Golden Retriever", ((Dog)deserialized).Breed);
+    }
+
+    [Fact]
+    public void Deserialize_ShouldHandleCaseInsensitiveFieldNames()
+    {
+        // Arrange
+        var original = new Person { Name = "John", Age = 30 };
+        var serialized = EchoObject.NewCompound();
+
+        // Use different casing and former name
+        serialized["NAME"] = new EchoObject(EchoType.String, "John"); // Lowercase
+        serialized["AGE"] = new EchoObject(EchoType.Int, 30); // Uppercase
+
+        // Act
+        var deserialized = Serializer.Deserialize<Person>(serialized);
+
+        // Assert
+        Assert.NotNull(deserialized);
+        Assert.Equal("John", deserialized.Name);
+        Assert.Equal(30, deserialized.Age);
+    }
+
+    [Fact]
+    public void Deserialize_ShouldHandleFormerlySerializedNames()
+    {
+        // Arrange
+        var serialized = EchoObject.NewCompound();
+
+        // Use old field name from FormerlySerializedAs attribute
+        serialized["FULLNAME"] = new EchoObject(EchoType.String, "Sarah");
+        serialized["Age"] = new EchoObject(EchoType.Int, 28);
+
+        // Act
+        var deserialized = Serializer.Deserialize<Person>(serialized);
+
+        // Assert
+        Assert.NotNull(deserialized);
+        Assert.Equal("Sarah", deserialized.Name);
+        Assert.Equal(28, deserialized.Age);
+    }
+
+    [Fact]
+    public void Deserialize_ShouldUseActualTypeFormatterWhenAvailable()
+    {
+        // Arrange
+        var original = new Dog { Species = "Canine", Breed = "Shiba Inu" };
+
+        // Register a custom format handler for Dog
+        Serializer.RegisterFormat(new DogFormat());
+
+        var serialized = Serializer.Serialize(original, new SerializationContext(TypeMode.Aggressive));
+
+        // Act
+        var deserialized = Serializer.Deserialize<IAnimal>(serialized);
+
+        // Assert
+        Assert.IsType<Dog>(deserialized);
+        Assert.Equal("Processed: Shiba Inu", ((Dog)deserialized).Breed);
+    }
+
+    // Custom format handler for Dog to test actual type handling
+    private class DogFormat : ISerializationFormat
+    {
+        public bool CanHandle(Type type) => type == typeof(Dog);
+
+        public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
+        {
+            var dog = (Dog)value;
+            var compound = EchoObject.NewCompound();
+            compound["Breed"] = new EchoObject(EchoType.String, dog.Breed);
+            compound["$type"] = new(EchoType.String, typeof(Dog).FullName);
+            return compound;
+        }
+
+        public object Deserialize(EchoObject value, Type targetType, SerializationContext context)
+        {
+            return new Dog {
+                Breed = "Processed: " + value["Breed"].StringValue,
+                Species = "Canine"
+            };
+        }
+    }
+
+    #endregion
+
 }

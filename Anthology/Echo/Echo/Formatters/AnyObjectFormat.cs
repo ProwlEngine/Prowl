@@ -247,6 +247,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
             }
         }
 
+        value = null;
         return false;
     }
 }
