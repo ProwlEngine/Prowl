@@ -154,6 +154,12 @@ public sealed class AnyObjectFormat : ISerializationFormat
             objectType = targetType;
         }
 
+        if (objectType.IsInterface || objectType.IsAbstract)
+        {
+            Serializer.Logger.Error($"Cannot deserialize to interface or abstract type: {objectType.FullName}.");
+            return null;
+        }
+
         object result;
         try
         {
