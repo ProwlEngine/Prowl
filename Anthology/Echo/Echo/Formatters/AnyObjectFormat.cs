@@ -154,8 +154,23 @@ public sealed class AnyObjectFormat : ISerializationFormat
             objectType = targetType;
         }
 
-        object result = Activator.CreateInstance(objectType, true)
-            ?? throw new InvalidOperationException($"Failed to create instance of type: {objectType}");
+        object result;
+        try
+        {
+            result = Activator.CreateInstance(objectType, nonPublic: true);
+            if (result == null)
+                throw new Exception(); // Throw, it will get caught
+        }
+        catch (MissingMethodException ex)
+        {
+            Serializer.Logger.Error($"No parameterless constructor found for type: {objectType.FullName}.", ex);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Serializer.Logger.Error($"Failed to create instance of type: {objectType.FullName}.", ex);
+            return null;
+        }
 
         if (!objectType.IsValueType && id != null)
             context.idToObject[id.IntValue] = result;
