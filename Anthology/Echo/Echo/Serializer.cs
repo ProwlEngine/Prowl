@@ -123,7 +123,12 @@ public static class Serializer
 
         if (value.GetType() == targetType) return value;
 
-        var format = _formatCache.GetOrAdd(targetType, type =>
+        // Resolve actual type from $type if present
+        Type actualType = targetType;
+        if (value.TagType == EchoType.Compound && value.TryGet("$type", out var typeTag))
+            actualType = ReflectionUtils.FindTypeByName(typeTag.StringValue) ?? targetType;
+
+        var format = _formatCache.GetOrAdd(actualType, type =>
             _formats.FirstOrDefault(f => f.CanHandle(type))
             ?? throw new NotSupportedException($"No format handler found for type {type}"));
 
