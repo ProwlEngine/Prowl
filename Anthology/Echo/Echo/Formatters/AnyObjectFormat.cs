@@ -196,6 +196,9 @@ public sealed class AnyObjectFormat : ISerializationFormat
                 {
                     object? deserializedValue = Serializer.Deserialize(fieldValue, field.FieldType, context);
 
+                    if (field.IsInitOnly)
+                        Serializer.Logger.Warning($"Setting readonly field '{field.Name}' in type '{objectType.FullName}'.");
+
                     field.SetValue(result, deserializedValue);
                 }
                 catch (Exception ex)
