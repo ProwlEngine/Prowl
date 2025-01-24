@@ -1,7 +1,9 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 using CommandLine;
 
@@ -86,6 +88,7 @@ public static class Program
             {
                 if (!s_createdDefaultWindows)
                 {
+                    Runtime.Debug.Log("Creating default windows");
                     s_createdDefaultWindows = true;
                     //new EditorMainMenubar();
                     var console = EditorGuiManager.DockWindowTo(new ConsoleWindow(), null, Docking.DockZone.Center);
@@ -148,7 +151,7 @@ public static class Program
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError("Scene Update Error: " + e.ToString());
+                    Runtime.Debug.LogError("Scene Update Error: " + e.ToString());
                 }
             }
         };
@@ -178,10 +181,23 @@ public static class Program
 
             if (Project.HasProject)
             {
+                // If we have already loaded external assemblies
+                // Unfortunately we need to restart the editor
+                // This is because we cannot unload loaded assemblies reliably, as user code or editor code may still be referencing said assemblies
+                if (AssemblyManager.HasExternalAssemblies)
+                {
+                    // Save temp scene
+                    // Save window layout
+                    // Save Undo/Redo stack
+
+                    // Restart the editor
+                    RestartEditor();
+
+                    return;
+                }
+
                 SceneManager.StoreScene();
                 //SceneManager.Clear(); // SceneManager.Clear has OnAssemblyUnload
-
-
 
                 try
                 {
@@ -239,7 +255,7 @@ public static class Program
 
                     if (gameAssembly != null)
                     {
-                        Debug.Log($"Successfully reloaded project assemblies");
+                        Runtime.Debug.Log($"Successfully reloaded project assemblies");
 
                         options.outputPath = editor;
                         options.tempPath = tmpEditor;
@@ -249,12 +265,12 @@ public static class Program
                         Assembly? editorAssembly = AssemblyManager.LoadExternalAssembly(editorOutputPath, true);
 
                         if (editorAssembly != null)
-                            Debug.Log($"Successfully reloaded editor assemblies");
+                            Runtime.Debug.Log($"Successfully reloaded editor assemblies");
                     }
                 }
                 catch (Exception e)
                 {
-                    Debug.LogException(new Exception("Error reloading assemblies", e));
+                    Runtime.Debug.LogException(new Exception("Error reloading assemblies", e));
                 }
                 finally
                 {
@@ -267,7 +283,7 @@ public static class Program
             }
             else
             {
-                Debug.LogError("Cannot reload assemblies, No project loaded.");
+                Runtime.Debug.LogError("Cannot reload assemblies, No project loaded.");
             }
         }
     }
