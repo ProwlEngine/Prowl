@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Xml.Linq;
 
+using Prowl.Echo;
 using Prowl.Editor.Assets;
 using Prowl.Editor.ProjectSettings;
 using Prowl.Runtime;
@@ -120,6 +121,7 @@ public class Project
 
 #warning TODO: Record last opened scene and try to open it
         SceneManager.InstantiateNewScene();
+        project.LoadTempScene();
 
         OnProjectChanged?.Invoke();
 
@@ -164,6 +166,35 @@ public class Project
 
         return ProjectDirectory.Exists &&
             AssetDirectory.Exists;
+    }
+
+    internal void SaveTempScene()
+    {
+        DirectoryInfo temp = TempDirectory;
+        EchoObject scene = Serializer.Serialize(SceneManager.Current.Res!);
+        var file = new FileInfo(Path.Combine(temp.FullName, "temp_scene.tmp"));
+        if (file.Exists)
+            file.Delete();
+        scene.WriteToBinary(file);
+    }
+
+    internal void LoadTempScene()
+    {
+        DirectoryInfo temp = TempDirectory;
+        var file = new FileInfo(Path.Combine(temp.FullName, "temp_scene.tmp"));
+        if (file.Exists)
+        {
+            try
+            {
+                EchoObject echoScene = EchoObject.ReadFromBinary(file);
+                Scene scene = Serializer.Deserialize<Scene>(echoScene);
+                SceneManager.LoadScene(scene);
+            }
+            catch (Exception e)
+            {
+                Runtime.Debug.LogError($"Failed to load last opened scene: {e.Message}");
+            }
+        }
     }
 
 

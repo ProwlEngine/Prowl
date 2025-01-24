@@ -4,9 +4,11 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 using CommandLine;
 
+using Prowl.Echo;
 using Prowl.Editor.Assets;
 using Prowl.Editor.Editor.CLI;
 using Prowl.Editor.Preferences;
@@ -165,7 +167,8 @@ public static class Program
 
         Application.Quitting += () =>
         {
-
+            if (Project.HasProject)
+                Project.Active.SaveTempScene();
         };
 
         Application.Run("Prowl Editor", 1920, 1080, new EditorAssetProvider(), true);
@@ -181,14 +184,18 @@ public static class Program
 
             if (Project.HasProject)
             {
+                Project active = Project.Active!;
+
                 // If we have already loaded external assemblies
                 // Unfortunately we need to restart the editor
                 // This is because we cannot unload loaded assemblies reliably, as user code or editor code may still be referencing said assemblies
                 if (AssemblyManager.HasExternalAssemblies)
                 {
                     // Save temp scene
-                    // Save window layout
-                    // Save Undo/Redo stack
+                    active.SaveTempScene();
+
+                    // TODO: Save window layout
+                    // TODO: Save Undo/Redo stack
 
                     // Restart the editor
                     RestartEditor();
@@ -204,7 +211,6 @@ public static class Program
                     // Unload External Assemblies
                     AssemblyManager.Unload();
 
-                    Project active = Project.Active;
 
                     DirectoryInfo temp = active.TempDirectory;
                     DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
