@@ -172,7 +172,7 @@ public static class Program
 
     public static void CheckReloadingAssemblies()
     {
-        if (IsReloadingExternalAssemblies)
+        if (IsReloadingExternalAssemblies && Screen.IsFocused)
         {
             IsReloadingExternalAssemblies = false;
 
