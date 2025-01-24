@@ -271,4 +271,17 @@ public static class Program
             }
         }
     }
+
+    public static void RestartEditor()
+    {
+        // Reopen the same project
+        string arguments = $"-p \"{Project.Active.ProjectPath}\"";
+        ProcessStartInfo startInfo = new ProcessStartInfo(Environment.ProcessPath, arguments);
+        startInfo.UseShellExecute = true;
+
+        Process.Start(startInfo);
+
+        // Exit the current instance of the application
+        Screen.Close();
+    }
 }
