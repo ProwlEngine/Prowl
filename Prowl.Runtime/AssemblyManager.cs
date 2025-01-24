@@ -57,6 +57,7 @@ public static class AssemblyManager
 
     public static IEnumerable<Assembly> ExternalAssemblies => _externalAssemblyLoadContext?.Assemblies ?? [];
 
+    public static bool HasExternalAssemblies => _externalAssemblyLoadContext != null;
 
     public static void Initialize()
     {
