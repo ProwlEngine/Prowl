@@ -21,7 +21,7 @@ public static class EditorGuiManager
     public static System.Numerics.Vector4 SelectedColor => new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1.00f);
 
     public static Gui Gui;
-    public static DockContainer? Container;
+    public static DockContainer Container = new();
     public static EditorWindow? DraggingWindow;
     public static DockNode? DragSplitter;
     private static Vector2 m_DragPos;
@@ -176,7 +176,6 @@ public static class EditorGuiManager
     {
         using (g.Node("Main_Content").ExpandWidth().Enter())
         {
-            Container ??= new();
             Rect rect = g.CurrentNode.LayoutData.Rect;
             //rect.Expand(-(float)EditorStylePrefs.Instance.DockSpacing);
             rect.Min.x += (float)EditorStylePrefs.Instance.DockSpacing;
