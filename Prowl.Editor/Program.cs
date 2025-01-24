@@ -202,8 +202,26 @@ public static class Program
                     string editorOutputPath = Path.Combine(editor.FullName, Project.EditorCSProjectName + ".dll");
 
                     // Delete everything under Temp/bin
-                    if (bin.Exists)
-                        Directory.Delete(bin.FullName, true);
+                    int attempts = 1;
+                    while (true)
+                    {
+                        try
+                        {
+                            if (bin.Exists)
+                                Directory.Delete(bin.FullName, true);
+                            break;
+                        }
+                        catch (Exception e)
+                        {
+                            Runtime.Debug.Log($"Error deleting temp/bin: '" + e.Message + $"' Retrying {attempts}/16");
+                            attempts++;
+                            if (attempts >= 16)
+                                break;
+
+                            Thread.Sleep(1000);
+                            continue;
+                        }
+                    }
 
                     bin.Create();
 
