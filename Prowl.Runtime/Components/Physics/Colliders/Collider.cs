@@ -16,17 +16,19 @@ public abstract class Collider : MonoBehaviour
     /// <summary>
     /// Create the Jitter Physics RigidBodyShape
     /// </summary>
-    public abstract RigidBodyShape CreateShape();
+    public abstract RigidBodyShape[] CreateShapes();
 
     /// <summary>
     /// Create the Transformed Jitter Physics RigidBodyShape
     /// </summary>
-    public RigidBodyShape CreateTransformedShape()
+    public RigidBodyShape[] CreateTransformedShapes()
     {
         // Create the base shape
-        RigidBodyShape shape = CreateShape();
+        RigidBodyShape[] shapes = CreateShapes();
+        if (shapes == null)
+            return null;
         var rb = RigidBody;
-        if (rb == null) return shape;
+        if (rb == null) return shapes;
 
         // Get the cumulative scale from this object up to (but not including) the rigidbody
         Vector3 cumulativeScale = Vector3.one;
@@ -58,7 +60,7 @@ public abstract class Collider : MonoBehaviour
         if (rbLocalCenter == Vector3.zero &&
             cumulativeScale == Vector3.one &&
             rbLocalRotation == Quaternion.identity)
-            return shape;
+            return shapes;
 
         // Convert to Jitter types
         var translation = new Jitter2.LinearMath.JVector(
@@ -74,7 +76,12 @@ public abstract class Collider : MonoBehaviour
             scaleMatrix.M31, scaleMatrix.M32, scaleMatrix.M33
         );
 
-        return new TransformedShape(shape, translation, orientation);
+        //return new TransformedShape(shape, translation, orientation);
+        TransformedShape[] transformedShapes = new TransformedShape[shapes.Length];
+        for (int i = 0; i < shapes.Length; i++)
+            transformedShapes[i] = new TransformedShape(shapes[i], translation, orientation);
+
+        return transformedShapes;
     }
 
     public override void OnEnable()

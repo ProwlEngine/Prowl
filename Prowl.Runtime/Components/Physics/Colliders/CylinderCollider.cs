@@ -34,5 +34,5 @@ public sealed class CylinderCollider : Collider
         }
     }
 
-    public override RigidBodyShape CreateShape() => new CylinderShape(radius, height);
+    public override RigidBodyShape[] CreateShapes() => [new CylinderShape(radius, height)];
 }

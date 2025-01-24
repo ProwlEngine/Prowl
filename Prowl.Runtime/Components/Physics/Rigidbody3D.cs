@@ -29,6 +29,8 @@ public sealed class Rigidbody3D : MonoBehaviour
    [SerializeField] private bool isSpeculative;
    [SerializeField] private bool useGravity = true;
    [SerializeField] private double mass = 1;
+   //[SerializeField, Range(0, 1)] private double drag = 0.0f;
+   //[SerializeField, Range(0, 1)] private double angularDrag = 0.0f;
    [SerializeField, Range(0, 1)] private double friction = 0.2f;
    [SerializeField, Range(0, 1)] private double restitution = 0;
     //public Vector3Int translationConstraints = Vector3Int.one;
@@ -183,6 +185,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         rb.IsStatic = isStatic;
         rb.EnableSpeculativeContacts = isSpeculative;
+        //rb.Damping = (drag, angularDrag);
         rb.Friction = friction;
         rb.AffectedByGravity = useGravity;
         rb.Restitution = restitution;
@@ -201,9 +204,10 @@ public sealed class Rigidbody3D : MonoBehaviour
         rb.RemoveShape(rb.Shapes, false);
         foreach (Collider shape in GetComponents<Collider>())
         {
-            Jitter2.Collision.Shapes.RigidBodyShape result = shape.CreateTransformedShape();
+            Jitter2.Collision.Shapes.RigidBodyShape[] result = shape.CreateTransformedShapes();
             if (result == null) continue;
-            rb.AddShape(result, false);
+            foreach (var s in result)
+                rb.AddShape(s, false);
         }
     }
 

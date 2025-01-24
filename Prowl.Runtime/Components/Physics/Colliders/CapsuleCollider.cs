@@ -34,5 +34,5 @@ public sealed class CapsuleCollider : Collider
         }
     }
 
-    public override RigidBodyShape CreateShape() => new CapsuleShape(radius, height);
+    public override RigidBodyShape[] CreateShapes() => [new CapsuleShape(radius, height)];
 }

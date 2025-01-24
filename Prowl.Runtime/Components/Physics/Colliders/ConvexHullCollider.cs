@@ -28,7 +28,7 @@ public sealed class ConvexHullCollider : Collider
         }
     }
 
-    public override RigidBodyShape CreateShape()
+    public override RigidBodyShape[] CreateShapes()
     {
         if (mesh.IsAvailable == false)
         {
@@ -40,7 +40,7 @@ public sealed class ConvexHullCollider : Collider
 
         List<JTriangle> triangles = new();
 
-        return new ConvexHullShape(ToTriangleList(mesh.Res));
+        return [new ConvexHullShape(ToTriangleList(mesh.Res))];
     }
 
     public override void Awake()
