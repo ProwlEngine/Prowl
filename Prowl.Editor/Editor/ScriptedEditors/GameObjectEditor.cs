@@ -237,7 +237,8 @@ public class GameObjectEditor : ScriptedEditor
             // Draw Components
             HashSet<int> editorsNeeded = [];
 
-            IEnumerable<MonoBehaviour> allComps = go.GetComponents<MonoBehaviour>();
+            // Make a clone of all components so we can remove them if they are deleted
+            var allComps = new List<MonoBehaviour>(go.GetComponents<MonoBehaviour>());
             foreach (MonoBehaviour comp in allComps)
             {
                 if (comp == null) continue;
