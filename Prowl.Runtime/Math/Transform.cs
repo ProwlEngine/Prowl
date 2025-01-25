@@ -18,22 +18,27 @@ public class Transform : ICloneExplicit
     {
         get
         {
-
-            if (parent != null)
-                return MakeSafe(parent.localToWorldMatrix.MultiplyPoint(m_LocalPosition));
-            else
-                return MakeSafe(m_LocalPosition);
+            if (_isWorldPosDirty)
+            {
+                if (parent != null)
+                    _cachedWorldPosition = parent.localToWorldMatrix.MultiplyPoint(m_LocalPosition);
+                else
+                    _cachedWorldPosition = m_LocalPosition;
+                _isWorldPosDirty = false;
+            }
+            return MakeSafe(_cachedWorldPosition);
         }
         set
         {
             Vector3 newPosition = value;
-            Transform p = parent;
+            if (parent != null)
+                newPosition = parent.InverseTransformPoint(newPosition);
 
-            if (p != null)
-                newPosition = p.InverseTransformPoint(newPosition);
-
-            localPosition = MakeSafe(newPosition);
-            _version++;
+            if (m_LocalPosition != newPosition)
+            {
+                m_LocalPosition = MakeSafe(newPosition);
+                InvalidateTransformCache();
+            }
         }
     }
 
@@ -45,7 +50,7 @@ public class Transform : ICloneExplicit
             if (m_LocalPosition != value)
             {
                 m_LocalPosition = MakeSafe(value);
-                _version++;
+                InvalidateTransformCache();
             }
         }
     }
@@ -56,22 +61,32 @@ public class Transform : ICloneExplicit
     {
         get
         {
-            Quaternion worldRot = m_LocalRotation;
-            Transform p = parent;
-            while (p != null)
+            if (_isWorldRotDirty)
             {
-                worldRot = p.m_LocalRotation * worldRot;
-                p = p.parent;
+                Quaternion worldRot = m_LocalRotation;
+                Transform p = parent;
+                while (p != null)
+                {
+                    worldRot = p.m_LocalRotation * worldRot;
+                    p = p.parent;
+                }
+                _cachedWorldRotation = worldRot;
+                _isWorldRotDirty = false;
             }
-            return MakeSafe(worldRot);
+            return MakeSafe(_cachedWorldRotation);
         }
         set
         {
+            var newVale = Quaternion.identity;
             if (parent != null)
-                localRotation = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(parent.rotation) * value));
+                newVale = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(parent.rotation) * value));
             else
-                localRotation = MakeSafe(Quaternion.NormalizeSafe(value));
-            _version++;
+                newVale = MakeSafe(Quaternion.NormalizeSafe(value));
+            if(localRotation != newVale)
+            {
+                localRotation = newVale;
+                InvalidateTransformCache();
+            }
         }
     }
 
@@ -84,7 +99,7 @@ public class Transform : ICloneExplicit
             if (m_LocalRotation != value)
             {
                 m_LocalRotation = MakeSafe(value);
-                _version++;
+                InvalidateTransformCache();
             }
         }
     }
@@ -95,7 +110,7 @@ public class Transform : ICloneExplicit
         set
         {
             rotation = MakeSafe(Quaternion.Euler(value));
-            _version++;
+            InvalidateTransformCache();
         }
     }
 
@@ -105,7 +120,7 @@ public class Transform : ICloneExplicit
         set
         {
             m_LocalRotation.eulerAngles = MakeSafe(value);
-            _version++;
+            InvalidateTransformCache();
         }
     }
     #endregion
@@ -120,7 +135,7 @@ public class Transform : ICloneExplicit
             if (m_LocalScale != value)
             {
                 m_LocalScale = MakeSafe(value);
-                _version++;
+                InvalidateTransformCache();
             }
         }
     }
@@ -129,14 +144,19 @@ public class Transform : ICloneExplicit
     {
         get
         {
-            Vector3 scale = localScale;
-            Transform p = parent;
-            while (p != null)
+            if (_isWorldScaleDirty)
             {
-                scale.Scale(p.localScale);
-                p = p.parent;
+                Vector3 scale = localScale;
+                Transform p = parent;
+                while (p != null)
+                {
+                    scale.Scale(p.localScale);
+                    p = p.parent;
+                }
+                _cachedLossyScale = scale;
+                _isWorldScaleDirty = false;
             }
-            return MakeSafe(scale);
+            return MakeSafe(_cachedLossyScale);
         }
     }
 
@@ -152,8 +172,15 @@ public class Transform : ICloneExplicit
     {
         get
         {
-            Matrix4x4 t = Matrix4x4.TRS(m_LocalPosition, m_LocalRotation, m_LocalScale);
-            return parent != null ? parent.localToWorldMatrix * t : t;
+            if (_isLocalToWorldMatrixDirty)
+            {
+                Matrix4x4 t = Matrix4x4.TRS(m_LocalPosition, m_LocalRotation, m_LocalScale);
+                _cachedLocalToWorldMatrix = parent != null ? parent.localToWorldMatrix * t : t;
+                _isLocalToWorldMatrixDirty = false;
+            }
+            return _cachedLocalToWorldMatrix;
+            //Matrix4x4 t = Matrix4x4.TRS(m_LocalPosition, m_LocalRotation, m_LocalScale);
+            //return parent != null ? parent.localToWorldMatrix * t : t;
         }
     }
 
@@ -185,8 +212,38 @@ public class Transform : ICloneExplicit
     [SerializeIgnore]
     uint _version = 1;
 
+    [SerializeIgnore] private Vector3 _cachedWorldPosition;
+    [SerializeIgnore] private Quaternion _cachedWorldRotation;
+    [SerializeIgnore] private Vector3 _cachedLossyScale;
+    [SerializeIgnore] private Matrix4x4 _cachedLocalToWorldMatrix;
+    [SerializeIgnore] private bool _isLocalToWorldMatrixDirty = true;
+    [SerializeIgnore] private bool _isWorldPosDirty = true;
+    [SerializeIgnore] private bool _isWorldRotDirty = true;
+    [SerializeIgnore] private bool _isWorldScaleDirty = true;
+
     public GameObject gameObject { get; internal set; }
     #endregion
+
+    private void InvalidateTransformCache()
+    {
+        _isLocalToWorldMatrixDirty = true;
+        _isWorldPosDirty = true;
+        _isWorldRotDirty = true;
+        _isWorldScaleDirty = true;
+        _version++;
+
+        // Invalidate children
+        foreach (GameObject child in gameObject.children)
+            child.Transform.InvalidateTransformCache();
+    }
+
+    public void SetLocalTransform(Vector3 position, Quaternion rotation, Vector3 scale)
+    {
+        m_LocalPosition = position;
+        m_LocalRotation = rotation;
+        m_LocalScale = scale;
+        InvalidateTransformCache();
+    }
 
     private double MakeSafe(double v) => double.IsNaN(v) ? 0 : v;
     private Vector3 MakeSafe(Vector3 v) => new Vector3(MakeSafe(v.x), MakeSafe(v.y), MakeSafe(v.z));
