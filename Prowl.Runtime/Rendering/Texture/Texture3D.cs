@@ -149,10 +149,8 @@ public sealed class Texture3D : Texture
         });
     }
 
-    public override EchoObject Serialize(SerializationContext ctx)
+    public override void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        EchoObject compoundTag = EchoObject.NewCompound();
-
         SerializeHeader(compoundTag);
 
         compoundTag.Add("Width", new((int)Width));
@@ -166,8 +164,6 @@ public sealed class Texture3D : Texture
         Span<byte> memory = new byte[GetMemoryUsage()];
         CopyData(memory);
         compoundTag.Add("Data", new(memory.ToArray()));
-
-        return compoundTag;
     }
 
     public override void Deserialize(EchoObject value, SerializationContext ctx)

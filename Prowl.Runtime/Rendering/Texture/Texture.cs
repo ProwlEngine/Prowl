@@ -350,7 +350,7 @@ public abstract class Texture : EngineObject, ISerializable
     }
 
 
-    public abstract EchoObject Serialize(SerializationContext ctx);
+    public abstract void Serialize(ref EchoObject compoundTag, SerializationContext ctx);
 
     public abstract void Deserialize(EchoObject value, SerializationContext ctx);
 }

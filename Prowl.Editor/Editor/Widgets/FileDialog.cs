@@ -100,7 +100,7 @@ public class FileDialog : EditorWindow
 
         using (gui.Node("Root").Expand().Layout(LayoutType.Row).ScaleChildren().Padding(10).Enter())
         {
-            using (gui.Node("Sidebar").Layout(LayoutType.Column).ExpandHeight().MaxWidth(125).MarginRight(10).Padding(10).Enter())
+            using (gui.Node("Sidebar").Layout(LayoutType.Column).ExpandHeight().MaxWidth(125).PaddingRight(10).Padding(10).Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, (float)EditorStylePrefs.Instance.WindowRoundness);
 

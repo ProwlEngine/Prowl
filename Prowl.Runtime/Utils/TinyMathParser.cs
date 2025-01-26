@@ -19,14 +19,14 @@ namespace Prowl.Runtime.Utils;
 /// </summary>
 public static class TinyMathParser
 {
-    public static readonly Dictionary<string, double> Variables = new();
+    public static readonly Dictionary<string, double> Variables = [];
 
     public static double Parse(string expression) => EvaluatePostfix(ShuntingYard(Tokenize(Regex.Replace(expression, @"\s+", ""))));
 
     private static List<string> Tokenize(string expression)
     {
-        List<string> tokens = new();
-        var matches = Regex.Matches(expression, @"(\+|-|\*|/|\^|\(|\))|(\d+(\.\d+)?)|([a-zA-Z]+)");
+        List<string> tokens = [];
+        MatchCollection matches = Regex.Matches(expression, @"(\+|-|\*|/|\^|\(|\))|(\d+(\.\d+)?)|([a-zA-Z]+)");
         for (int i = 0; i < matches.Count; i++)
         {
             if (matches[i].Value == "-" && (i == 0 || "^*/(-+".Contains(matches[i - 1].Value)))
@@ -40,9 +40,9 @@ public static class TinyMathParser
 
     private static List<string> ShuntingYard(List<string> tokens)
     {
-        List<string> output = new();
+        List<string> output = [];
         Stack<string> operatorStack = new();
-        foreach (var token in tokens)
+        foreach (string token in tokens)
         {
             if (double.TryParse(token, out _) || Variables.ContainsKey(token))
                 output.Add(token);
@@ -75,7 +75,7 @@ public static class TinyMathParser
     private static double EvaluatePostfix(List<string> postfix)
     {
         Stack<double> stack = new();
-        foreach (var token in postfix)
+        foreach (string token in postfix)
         {
             if (double.TryParse(token, out double number))
                 stack.Push(number);
@@ -85,9 +85,7 @@ public static class TinyMathParser
             {
                 if (stack.Count < 2)
                     throw new ArgumentException("Invalid expression");
-                var operand2 = stack.Pop();
-                var operand1 = stack.Pop();
-                var result = ApplyOperator(token, operand1, operand2);
+                double result = ApplyOperator(token, stack.Pop(), stack.Pop());
                 stack.Push(result);
             }
         }
@@ -98,7 +96,7 @@ public static class TinyMathParser
 
     private static int GetPrecedence(string op) => op switch { "+" or "-" => 1, "*" or "/" => 2, "^" => 3, _ => 0 };
 
-    private static double ApplyOperator(string op, double l, double r) => op switch
+    private static double ApplyOperator(string op, double r, double l) => op switch
     {
         "+" => l + r,
         "-" => l - r,

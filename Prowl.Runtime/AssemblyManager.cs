@@ -57,6 +57,7 @@ public static class AssemblyManager
 
     public static IEnumerable<Assembly> ExternalAssemblies => _externalAssemblyLoadContext?.Assemblies ?? [];
 
+    public static bool HasExternalAssemblies => _externalAssemblyLoadContext != null;
 
     public static void Initialize()
     {
@@ -104,6 +105,8 @@ public static class AssemblyManager
         OnAssemblyUnloadAttribute.Invoke();
 
         AssemblyMethodAttributeBase.Clear();
+
+        Echo.Serializer.ClearCache();
 
         InvokeUnloadDelegate();
 

@@ -44,7 +44,7 @@ public class MetaFile
         FileInfo file = new(AssetPath.FullName + ".meta");
         version = MetaVersion;
         EchoObject tag = Serializer.Serialize(this);
-        StringTagConverter.WriteToFile(tag, file);
+        tag.WriteToString(file);
     }
 
     /// <summary>Load a MetaFile from the specified file.</summary>
@@ -54,7 +54,7 @@ public class MetaFile
     {
         FileInfo file = new(assetFile + ".meta");
         if (!File.Exists(file.FullName)) return null; // Doesnt Exist
-        EchoObject tag = StringTagConverter.ReadFromFile(file);
+        EchoObject tag = EchoObject.ReadFromString(file);
         MetaFile? meta = Serializer.Deserialize<MetaFile>(tag);
         meta!.AssetPath = assetFile;
         meta.lastModified = DateTime.UtcNow;

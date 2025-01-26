@@ -195,10 +195,8 @@ public sealed class TextureSampler : IDisposable, ISerializable
                desc1.MinimumLod == desc2.MinimumLod;
     }
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        EchoObject compoundTag = EchoObject.NewCompound();
-
         compoundTag.Add("WrapModeU", new((int)WrapModeU));
         compoundTag.Add("WrapModeV", new((int)WrapModeV));
         compoundTag.Add("WrapModeW", new((int)WrapModeW));
@@ -208,8 +206,6 @@ public sealed class TextureSampler : IDisposable, ISerializable
         compoundTag.Add("MaxAniso", new(MaximumAnisotropy));
         compoundTag.Add("MaxLod", new(MaximumLod));
         compoundTag.Add("MinLod", new(MinimumLod));
-
-        return compoundTag;
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)

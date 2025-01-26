@@ -51,7 +51,7 @@ public class EditorStylePrefs : ScriptableSingleton<EditorStylePrefs>
     public double Disabled = 0.7;
     public Color LesserText = new(110, 110, 120);
     public Color Background = new(15, 15, 18);
-    public Color WindowBGOne = new(31, 33, 40);
+    public Color WindowBGOne = new(0.14814814925193787f, 0.15755437314510345f, 0.190476194024086f, 1.0f);
     public Color WindowBGTwo = new Color(25, 27, 32);
     public Color Borders = new(49, 52, 66);
     public Color Hovering = Color.white * 0.8f;
@@ -65,11 +65,11 @@ public class EditorStylePrefs : ScriptableSingleton<EditorStylePrefs>
     public double ItemSize = 25;
 
     [Text("Spacing:")]
-    public double DockSpacing = 4;
+    public double DockSpacing = 3;
 
     [Text("Rounding:")]
-    public double WindowRoundness = 4;
-    public double TabRoundness = 4;
+    public double WindowRoundness = 10;
+    public double TabRoundness = 10;
     public double AssetRoundness = 4;
     public double ButtonRoundness = 4;
 

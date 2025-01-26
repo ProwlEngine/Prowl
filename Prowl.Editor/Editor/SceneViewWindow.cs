@@ -391,6 +391,7 @@ public class SceneViewWindow : EditorWindow
                     result.Value.ScaleDelta.HasValue)
                 {
                     var newPos = selectedGo.Transform.position + (result.Value.TranslationDelta ?? Vector3.zero);
+                    newPos = selectedGo.Transform.parent?.InverseTransformPoint(newPos) ?? newPos;
 
                     Quaternion newRot = selectedGo.Transform.rotation;
                     if (result.Value.RotationDelta.HasValue && result.Value.RotationAxis.HasValue)

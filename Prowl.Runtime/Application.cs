@@ -2,7 +2,9 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
+using Prowl.Echo;
 using Prowl.Runtime.Audio;
 using Prowl.Runtime.SceneManagement;
 
@@ -84,6 +86,8 @@ public static class Application
 
     static void AppInitialize()
     {
+        Serializer.GetAllDependencyRefsInEcho = GetAllAssetRefsInEcho;
+
         Graphics.Initialize(true, GetBackend());
         SceneManager.Initialize();
         AudioSystem.Initialize();
@@ -132,6 +136,30 @@ public static class Application
     static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         Debug.Log("[Unhandled Exception] " + (e.ExceptionObject as Exception).Message + "\n" + (e.ExceptionObject as Exception).StackTrace);
+    }
+
+
+    private static void GetAllAssetRefsInEcho(EchoObject echo, HashSet<Guid> deps)
+    {
+        if (echo.TagType == EchoType.List)
+        {
+            foreach (var tag in (List<EchoObject>)echo.Value!)
+                GetAllAssetRefsInEcho(tag, deps);
+        }
+        else if (echo.TagType == EchoType.Compound)
+        {
+            var dict = (Dictionary<string, EchoObject>)echo.Value!;
+            if (echo.TryGet("$type", out var typeName)) // See if we are an asset ref
+            {
+                if (typeName!.StringValue.Contains("Prowl.Runtime.AssetRef") && echo.TryGet("AssetID", out var assetId))
+                {
+                    if (Guid.TryParse(assetId!.StringValue, out var id) && id != Guid.Empty)
+                        deps.Add(id);
+                }
+            }
+            foreach (var (_, tag) in dict)
+                GetAllAssetRefsInEcho(tag, deps);
+        }
     }
 
     public static void Quit()

@@ -17,7 +17,7 @@ public class MeshImporter : ScriptedImporter
         try
         {
             string json = File.ReadAllText(assetPath.FullName);
-            var tag = StringTagConverter.Read(json);
+            var tag = EchoObject.ReadFromString(json);
             mesh = Serializer.Deserialize<Mesh>(tag);
         }
         catch

@@ -309,9 +309,8 @@ public class AnimationCurve : ISerializable
         return 0f;
     }
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject value, SerializationContext ctx)
     {
-        var value = EchoObject.NewCompound();
         value.Add("PreLoop", new EchoObject((int)PreLoop));
         value.Add("PostLoop", new EchoObject((int)PostLoop));
 
@@ -327,8 +326,6 @@ public class AnimationCurve : ISerializable
             keyList.ListAdd(keyProp);
         }
         value.Add("Keys", keyList);
-
-        return value;
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)

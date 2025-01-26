@@ -17,14 +17,14 @@ public class MaterialImporter : ScriptedImporter
         try
         {
             string json = File.ReadAllText(assetPath.FullName);
-            var tag = StringTagConverter.Read(json);
+            var tag = EchoObject.ReadFromString(json);
             mat = Serializer.Deserialize<Material>(tag);
         }
         catch
         {
             // something went wrong, lets just create a new material and save it
             mat = Material.CreateDefaultMaterial();
-            string json = StringTagConverter.Write(Serializer.Serialize(mat));
+            string json = Serializer.Serialize(mat).WriteToString();
             File.WriteAllText(assetPath.FullName, json);
         }
 
@@ -41,7 +41,7 @@ public class MaterialImporterEditor : ScriptedEditor
 
     public override void OnEnable()
     {
-        EchoObject tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
+        EchoObject tag = EchoObject.ReadFromString((target as MetaFile).AssetPath);
         _editingMaterial = Serializer.Deserialize<Material>(tag);
 
         _editor = CreateEditor(_editingMaterial);
@@ -53,7 +53,7 @@ public class MaterialImporterEditor : ScriptedEditor
 
     private void OnChange()
     {
-        StringTagConverter.WriteToFile(Serializer.Serialize(_editingMaterial), (target as MetaFile).AssetPath);
+        Serializer.Serialize(_editingMaterial).WriteToString((target as MetaFile).AssetPath);
         AssetDatabase.Reimport((target as MetaFile).AssetPath);
     }
 

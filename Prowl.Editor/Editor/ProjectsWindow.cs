@@ -27,7 +27,6 @@ public class ProjectsWindow : EditorWindow
     private FileDialog _dialog;
     private FileDialogContext _dialogContext;
 
-
     protected override bool Center { get; } = true;
     protected override double Width { get; } = 1024;
     protected override double Height { get; } = 640;
@@ -36,6 +35,8 @@ public class ProjectsWindow : EditorWindow
     protected override bool RoundCorners => false;
     protected override bool LockSize => true;
     protected override double Padding => 0;
+
+    static readonly Color GrayAlpha = new Color(0, 0, 0, 0.5f);
 
     public ProjectsWindow()
     {
@@ -52,30 +53,33 @@ public class ProjectsWindow : EditorWindow
         if (Project.HasProject)
             isOpened = false;
 
-        using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Enter())
+        // Fill parent (Window in this case).
+        using (gui.CurrentNode.Left(0).Top(0).ExpandWidth().ExpandHeight().Enter())
         {
-            using (gui.Node("Side").ExpandHeight().MaxWidth(150).Layout(LayoutType.Column).Spacing(5).Enter())
+            using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Enter())
             {
-                using (gui.Node("Name").Scale(150, 50).Enter())
+                using (gui.Node("Side").ExpandHeight().MaxWidth(150).Layout(LayoutType.Column).Spacing(5).Enter())
                 {
-                    Rect rect = gui.CurrentNode.LayoutData.Rect;
-                    gui.Draw2D.DrawText(Font.DefaultFont, "Prowl", 40, rect, Color.white);
+                    using (gui.Node("Name").Scale(150, 50).Enter())
+                    {
+                        Rect rect = gui.CurrentNode.LayoutData.Rect;
+                        gui.Draw2D.DrawText(Font.DefaultFont, "Prowl", 40, rect, Color.white);
+                    }
+
+                    DrawSidePanel();
                 }
 
-                DrawSidePanel();
+                gui.PushID((ulong)_currentTab);
+
+                using (gui.Node("TabContent").ExpandHeight().Enter())
+                {
+                    _tabs[_currentTab].Item2.Invoke();
+                }
+
+                gui.PopID();
             }
-
-            gui.PushID((ulong)_currentTab);
-
-            using (gui.Node("TabContent").ExpandHeight().Enter())
-            {
-                _tabs[_currentTab].Item2.Invoke();
-            }
-
-            gui.PopID();
         }
     }
-
 
     private void DrawProjectsTab()
     {
@@ -197,8 +201,9 @@ public class ProjectsWindow : EditorWindow
             }
         }
 
-        using (gui.Node("Footer").TopLeft(Offset.Percentage(1f, -162), Offset.Percentage(1f, -60)).Scale(162, 60).Enter())
+        using (gui.Node("OpenButton").TopLeft(Offset.Percentage(1f, -162), Offset.Percentage(1f, -60)).Scale(162, 60).Enter())
         {
+            Rect openButtonRect = gui.CurrentNode.LayoutData.Rect;
             Color col = Color.white * 0.4f;
 
             bool isSelectable = _createTabOpen ? !string.IsNullOrEmpty(_createName) && Directory.Exists(ProjectCache.Instance.SavedProjectsFolder) && !Path.Exists(_createName) :
@@ -216,18 +221,34 @@ public class ProjectsWindow : EditorWindow
                         ProjectCache.Instance.AddProject(project);
                         _createTabOpen = false;
                     }
-                    else if (Project.Open(SelectedProject))
+                    else if (SelectedProject != null)
                     {
-                        isOpened = false;
+                        // Display load info (and possibly load bar). Placed in empty space of footer
+
+                        // Opening project info
+                        // Text pos + offset/padding
+                        Vector2 openInfoTextPos = footer.Position + new Vector2(8f, 8f);
+                        gui.Draw2D.DrawText($"Opening '{SelectedProject.Name}'...", openInfoTextPos);
+                        // Add more information about progress here (even console output)
+
+                        // Change 'open/create' button text
+                        text = "Opening...";
+
+                        // Cover controls (fill EditorWindow)
+                        gui.Draw2D.DrawRectFilled(this.Rect, GrayAlpha);
+
+                        bool projectOpened = Project.Open(SelectedProject);
+                        if (projectOpened)
+                            isOpened = false;
                     }
                 }
-
-                col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
-                    gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
             }
 
-            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
-            gui.Draw2D.DrawText(text, gui.CurrentNode.LayoutData.Rect);
+            col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
+                  gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
+
+            gui.Draw2D.DrawRectFilled(openButtonRect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
+            gui.Draw2D.DrawText(text, openButtonRect);
         }
     }
 
@@ -490,7 +511,6 @@ public class ProjectsWindow : EditorWindow
             }
         }
     }
-
 
     private static string GetFormattedLastModifiedTime(DateTime lastModified)
     {

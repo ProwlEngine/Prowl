@@ -35,14 +35,14 @@ public class AssetSelectorWindow : EditorWindow
 
         gui.CurrentNode.Layout(LayoutType.Column);
         gui.CurrentNode.ScaleChildren();
-        gui.CurrentNode.Padding(0, 10, 10, 10);
+        gui.CurrentNode.Padding(5, 10, 10, 10);
 
         using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Enter())
         {
             gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), ItemSize, EditorGUI.InputFieldStyle);
         }
 
-        using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
+        using (gui.Node("Body").Width(Size.Percentage(1f)).PaddingTop(5).Layout(LayoutType.Column).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             double xPos = gui.CurrentNode.LayoutData.InnerRect.x + 3;
             using (gui.Node("None", -1).Width(Size.Percentage(1f)).Height(ItemSize).Enter())

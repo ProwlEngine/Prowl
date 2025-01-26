@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Echo;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
@@ -27,8 +28,10 @@ public class EditorWindow
     protected bool isOpened = true;
     protected Gui gui => Gui.ActiveGUI;
 
-    private double _width, _height;
-    public double X, Y;
+    private double _width;
+    private double _height;
+    public double X;
+    public double Y;
     private bool _wasDragged;
 
 
@@ -111,120 +114,47 @@ public class EditorWindow
                 height = DockSize.y;
             }
 
-            using (gui.Node("_" + Title, _id).Width(width).Height(height).Margin(EditorStylePrefs.Instance.DockSpacing).Left(X).Top(Y).Layout(LayoutType.Column).ScaleChildren().Enter())
+            using (gui.Node("_" + Title, _id).Width(width).Height(height).Padding(EditorStylePrefs.Instance.DockSpacing).Left(X).Top(Y).Layout(LayoutType.Column).ScaleChildren().Enter())
             {
-                gui.BlockInteractables(gui.CurrentNode.LayoutData.Rect);
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
+                gui.BlockInteractables(gui.CurrentNode.LayoutData.InnerRect);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
 
-                Rect = gui.CurrentNode.LayoutData.Rect;
+                Rect = gui.CurrentNode.LayoutData.InnerRect;
 
                 if (!LockSize && !IsDocked)
                     HandleResize();
 
                 if (TitleBar)
                 {
-                    using (gui.Node("_Titlebar").Width(Size.Percentage(1f)).MaxHeight(40).Padding(10, 10).Enter())
+                    using (gui.Node("_Titlebar").Width(Size.Percentage(1f)).MaxHeight(25).Clip().Enter())
                     {
-                        HandleTitleBarInteraction();
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.Top);
 
-                        if (IsDocked && Leaf.LeafWindows.Count > 0)
+                        HandleDragWindow();
+
+                        if (IsDocked)
                         {
-                            double[] tabWidths = new double[Leaf.LeafWindows.Count];
-                            double total = 0;
-                            for (int i = 0; i < Leaf.LeafWindows.Count; i++)
+                            gui.CurrentNode.Layout(LayoutType.Row);
+                            var leafWindowsCopy = new List<EditorWindow>(Leaf.LeafWindows);
+                            for (int i = 0; i < leafWindowsCopy.Count; i++)
                             {
-                                var window = Leaf.LeafWindows[i];
+                                var window = leafWindowsCopy[i];
                                 var textSize = Font.DefaultFont.CalcTextSize(window.Title, 0);
-                                tabWidths[i] = textSize.x + 20;
-                                total += tabWidths[i];
-                            }
-
-                            double updatedTotal = 0;
-                            if (total > gui.CurrentNode.LayoutData.Rect.width - 35)
-                            {
-                                for (int i = 0; i < tabWidths.Length; i++)
-                                {
-                                    tabWidths[i] = (tabWidths[i] / total) * (gui.CurrentNode.LayoutData.Rect.width - 35);
-                                    updatedTotal += tabWidths[i];
-                                }
-                            }
-                            else
-                            {
-                                updatedTotal = total;
-                            }
-
-                            double left = 0;
-                            for (int i = 0; i < Leaf.LeafWindows.Count; i++)
-                            {
-                                var window = Leaf.LeafWindows[i];
-                                var tabWidth = tabWidths[i];
-                                using (gui.Node("Tab _" + window.Title, window._id).Width(tabWidth).Height(20).Left(left).Enter())
-                                {
-                                    left += tabWidth + 5;
-                                    var tabRect = gui.CurrentNode.LayoutData.Rect;
-                                    tabRect.Expand(0, 2);
-
-                                    if (window != this)
-                                    {
-                                        if (gui.IsNodePressed())
-                                        {
-                                            Leaf.WindowNum = i;
-                                            EditorGuiManager.FocusWindow(window);
-                                        }
-                                        if (gui.IsNodeHovered())
-                                            gui.Draw2D.DrawRectFilled(tabRect, EditorStylePrefs.Instance.Borders, (float)EditorStylePrefs.Instance.TabRoundness);
-                                    }
-                                    if (window == this)
-                                    {
-                                        gui.Draw2D.DrawRectFilled(tabRect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.TabRoundness);
-                                    }
-
-                                    var textSize = Font.DefaultFont.CalcTextSize(window.Title, 0);
-                                    var pos = gui.CurrentNode.LayoutData.Rect.Position;
-                                    pos.x += (tabRect.width - textSize.x) * 0.5f;
-                                    pos.y += (tabRect.height - (textSize.y)) * 0.5f;
-                                    if (textSize.x < tabWidth - 10)
-                                        gui.Draw2D.DrawText(window.Title, pos, Color.white);
-                                    else
-                                        gui.Draw2D.DrawText("...", new Vector2(tabRect.x + (tabRect.width * 0.5) - 5, pos.y), Color.white);
-
-                                    // Close Button
-                                    if (gui.IsNodeHovered())
-                                    {
-                                        using (gui.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -23)).Enter())
-                                        {
-                                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(1, 1, 1, 150), 5);
-                                            if (gui.IsPointerHovering() && gui.IsPointerClick())
-                                            {
-                                                //Leaf.LeafWindows.Remove(window);
-                                                //EditorGuiManager.Remove(window);
-                                                //EditorGuiManager.FocusWindow(Leaf.LeafWindows[Leaf.WindowNum]);
-                                                if (window == this)
-                                                    isOpened = false;
-                                                else
-                                                    EditorGuiManager.Remove(window);
-                                            }
-                                            gui.Draw2D.DrawText(FontAwesome6.Xmark, gui.CurrentNode.LayoutData.Rect, gui.IsPointerHovering() ? EditorStylePrefs.Instance.Hovering : Color.white);
-                                        }
-
-                                    }
-                                }
+                                TabNode(i, window, textSize);
                             }
                         }
                         else
                         {
-                            gui.Draw2D.DrawText(Title, 20, gui.CurrentNode.LayoutData.Rect, Color.white);
-                        }
+                            // Window Title
+                            gui.Draw2D.DrawText(Title, 20, gui.CurrentNode.LayoutData.InnerRect, Color.white);
 
-                        if (!IsDocked)
-                        {
                             // If the window isnt docked then theres no tab with a Close button
                             // So we need to draw the close button on the title bar instead
-                            using (gui.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -20)).Enter())
+                            using (gui.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -23)).Top(3).Enter())
                             {
                                 if (gui.IsNodePressed())
                                     isOpened = false;
-                                gui.Draw2D.DrawText(FontAwesome6.Xmark, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.LesserText);
+                                gui.Draw2D.DrawText(FontAwesome6.Xmark, gui.CurrentNode.LayoutData.InnerRect, gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.LesserText);
                             }
                         }
                     }
@@ -239,7 +169,9 @@ public class EditorWindow
                 {
                     Draw();
                 }
-                gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 2, (float)EditorStylePrefs.Instance.WindowRoundness);
+
+                if(IsFocused)
+                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Borders, 1.5f, (float)EditorStylePrefs.Instance.WindowRoundness);
             }
 
 
@@ -250,6 +182,27 @@ public class EditorWindow
                 EditorGuiManager.Remove(this);
                 Close();
             }
+
+            if(EditorGuiManager.DraggingWindow == this)
+            {
+                if (IsDockable && !IsDocked)
+                {
+                    // Draw Docking Placement
+                    var oldZ = gui.CurrentZIndex;
+                    gui.SetZIndex(10000);
+                    _ = EditorGuiManager.Container.GetPlacement(gui.PointerPos.x, gui.PointerPos.y, out var placements, out var hovered);
+                    if (placements != null)
+                    {
+                        foreach (var possible in placements)
+                        {
+                            gui.Draw2D.DrawRectFilled(possible, EditorStylePrefs.Blue * 0.6f, 10);
+                            gui.Draw2D.DrawRect(possible, EditorStylePrefs.Blue * 0.6f, 4, 10);
+                        }
+                        gui.Draw2D.DrawRect(hovered, Color.yellow, 4, 10);
+                    }
+                    gui.SetZIndex(oldZ);
+                }
+            }
         }
         catch (Exception e)
         {
@@ -257,6 +210,50 @@ public class EditorWindow
         }
 
         MaxZ = gui.GetCurrentInteractableZLayer();
+    }
+
+    private void TabNode(int i, EditorWindow window, Vector2 textSize)
+    {
+        using (gui.Node("Tab _" + window.Title, window._id).Width(textSize.x + 20).ExpandHeight().Enter())
+        {
+            var tabRect = gui.CurrentNode.LayoutData.InnerRect;
+
+            if (window == this)
+                gui.Draw2D.DrawRectFilled(tabRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.TabRoundness, CornerRounding.Top);
+
+            bool isHovered = gui.IsPointerHovering();
+            if (isHovered)
+            {
+                if (window != this)
+                {
+                    if (gui.IsPointerPressed())
+                    {
+                        Leaf.WindowNum = i;
+                        EditorGuiManager.FocusWindow(window);
+                    }
+                    else
+                        gui.Draw2D.DrawRectFilled(tabRect, EditorStylePrefs.Instance.Borders, (float)EditorStylePrefs.Instance.TabRoundness, CornerRounding.Top);
+                }
+
+                using (gui.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -23)).Top(3).Enter())
+                {
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.InnerRect, new Color(1, 1, 1, 150), 5);
+                    if (gui.IsPointerHovering() && gui.IsPointerClick())
+                    {
+                        if (window.IsDocked)
+                            EditorGuiManager.Container.DetachWindow(window);
+                        EditorGuiManager.Remove(window);
+                    }
+                    gui.Draw2D.DrawText(FontAwesome6.Xmark, gui.CurrentNode.LayoutData.InnerRect, gui.IsPointerHovering() ? EditorStylePrefs.Instance.Hovering : Color.white);
+                }
+            }
+
+            var pos = gui.CurrentNode.LayoutData.InnerRect.Position;
+            pos.x += 10.0;
+            pos.y += textSize.y * 0.25f;
+
+            gui.Draw2D.DrawText(window.Title, pos, Color.white);
+        }
     }
 
     private bool _wasResizing;
@@ -291,9 +288,9 @@ public class EditorWindow
         }
     }
 
-    private void HandleTitleBarInteraction()
+    private void HandleDragWindow()
     {
-        var titleInteract = gui.GetInteractable();
+        Interactable titleInteract = gui.GetInteractable();
         if (EditorGuiManager.DragSplitter == null)
         {
             if (titleInteract.TakeFocus() || titleInteract.IsActive())
@@ -309,28 +306,10 @@ public class EditorWindow
 
                     if (gui.IsPointerMoving && IsDocked)
                     {
-                        EditorGuiManager.Container.DetachWindow(this);
+                        EditorGuiManager.Container!.DetachWindow(this);
                         // Position the window so the mouse is over the title bar
                         X = gui.PointerPos.x - (_width / 2);
                         Y = gui.PointerPos.y - 10;
-                    }
-
-                    if (IsDockable && !IsDocked)
-                    {
-                        // Draw Docking Placement
-                        var oldZ = gui.CurrentZIndex;
-                        gui.SetZIndex(10000);
-                        _ = EditorGuiManager.Container.GetPlacement(gui.PointerPos.x, gui.PointerPos.y, out var placements, out var hovered);
-                        if (placements != null)
-                        {
-                            foreach (var possible in placements)
-                            {
-                                gui.Draw2D.DrawRectFilled(possible, EditorStylePrefs.Blue * 0.6f, 10);
-                                gui.Draw2D.DrawRect(possible, EditorStylePrefs.Blue * 0.6f, 4, 10);
-                            }
-                            gui.Draw2D.DrawRect(hovered, Color.yellow, 4, 10);
-                        }
-                        gui.SetZIndex(oldZ);
                     }
                 }
             }
@@ -342,14 +321,12 @@ public class EditorWindow
                     if (IsDockable && !IsDocked)
                     {
                         Vector2 cursorPos = gui.PointerPos;
-                        EditorGuiManager.Container.AttachWindowAt(this, cursorPos.x, cursorPos.y);
+                        EditorGuiManager.Container!.AttachWindowAt(this, cursorPos.x, cursorPos.y);
                     }
                 }
 
                 if (EditorGuiManager.DraggingWindow == this)
-                {
                     EditorGuiManager.DraggingWindow = null;
-                }
             }
         }
     }

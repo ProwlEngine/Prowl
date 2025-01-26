@@ -684,7 +684,7 @@ public class ModelEditor : ScriptedEditor
         }
 
 
-        using (gui.Node("Content").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Scroll(inputstyle: EditorGUI.InputStyle).Enter())
+        using (gui.Node("Content").Width(Size.Percentage(1f)).PaddingTop(5).Layout(LayoutType.Column).Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             switch (_selectedTab)
             {

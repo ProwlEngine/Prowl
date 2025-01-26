@@ -12,9 +12,9 @@ using Prowl.Echo;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Convex Hull Collider")]
+[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Mesh Collider")]
 [ExecuteAlways]
-public sealed class ConvexHullCollider : Collider
+public sealed class MeshCollider : Collider
 {
     [SerializeField] private AssetRef<Mesh> mesh;
 
@@ -38,9 +38,14 @@ public sealed class ConvexHullCollider : Collider
             return null;
         }
 
-        List<JTriangle> triangles = new();
+        List<JTriangle> triangles = ToTriangleList(mesh.Res);
+        TriangleMesh triangleMesh = new(triangles);
 
-        return [new ConvexHullShape(ToTriangleList(mesh.Res))];
+        TriangleShape[] shapes = new TriangleShape[triangles.Count];
+        for (int i = 0; i < triangles.Count; i++)
+            shapes[i] = new TriangleShape(triangleMesh, i);
+
+        return shapes;
     }
 
     public override void Awake()

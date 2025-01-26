@@ -48,7 +48,7 @@ public partial class LayoutNode
         return this;
     }
 
-    public LayoutNode Expand(double xOffset = 0, double yOffset = 0) => Width(Size.Percentage(1f, xOffset)).Height(Size.Percentage(1f, yOffset));
+    public LayoutNode Expand(double xOffset = 0, double yOffset = 0) => ExpandWidth(xOffset).ExpandHeight(yOffset);
     public LayoutNode ExpandWidth(double pixelOffset = 0) => Width(Size.Percentage(1f, pixelOffset));
     public LayoutNode ExpandHeight(double pixelOffset = 0) => Height(Size.Percentage(1f, pixelOffset));
 
@@ -116,29 +116,13 @@ public partial class LayoutNode
         return this;
     }
 
-    public LayoutNode Margin(Offset margins) => Margin(margins, margins, margins, margins);
-    public LayoutNode MarginTop(Offset margin) => Margin(margin, 0, 0, 0);
-    public LayoutNode MarginRight(Offset margin) => Margin(0, margin, 0, 0);
-    public LayoutNode MarginBottom(Offset margin) => Margin(0, 0, margin, 0);
-    public LayoutNode MarginLeft(Offset margin) => Margin(0, 0, 0, margin);
-    public LayoutNode Margin(Offset vertical, Offset horizontal) => Margin(vertical, horizontal, vertical, horizontal);
-
-    public LayoutNode Margin(Offset top, Offset right, Offset bottom, Offset left)
-    {
-        _marginTop = top;
-        _marginRight = right;
-        _marginBottom = bottom;
-        _marginLeft = left;
-        return this;
-    }
-
-    public LayoutNode Padding(Offset paddings) => Padding(paddings, paddings, paddings, paddings);
-    public LayoutNode PaddingTop(Offset padding) => Padding(padding, 0, 0, 0);
-    public LayoutNode PaddingRight(Offset padding) => Padding(0, padding, 0, 0);
-    public LayoutNode PaddingBottom(Offset padding) => Padding(0, 0, padding, 0);
-    public LayoutNode PaddingLeft(Offset padding) => Padding(0, 0, 0, padding);
-    public LayoutNode Padding(Offset vertical, Offset horizontal) => Padding(vertical, horizontal, vertical, horizontal);
-    public LayoutNode Padding(Offset top, Offset right, Offset bottom, Offset left)
+    public LayoutNode Padding(double paddings) => Padding(paddings, paddings, paddings, paddings);
+    public LayoutNode PaddingTop(double padding) => Padding(padding, 0, 0, 0);
+    public LayoutNode PaddingRight(double padding) => Padding(0, padding, 0, 0);
+    public LayoutNode PaddingBottom(double padding) => Padding(0, 0, padding, 0);
+    public LayoutNode PaddingLeft(double padding) => Padding(0, 0, 0, padding);
+    public LayoutNode Padding(double vertical, double horizontal) => Padding(vertical, horizontal, vertical, horizontal);
+    public LayoutNode Padding(double top, double right, double bottom, double left)
     {
         _paddingTop = top;
         _paddingRight = right;
@@ -146,19 +130,6 @@ public partial class LayoutNode
         _paddingLeft = left;
         return this;
     }
-
-    public LayoutNode PositionRelativeTo(LayoutNode node)
-    {
-        _positionRelativeTo = node;
-        return this;
-    }
-
-    public LayoutNode SizeRelativeTo(LayoutNode node)
-    {
-        _sizeRelativeTo = node;
-        return this;
-    }
-
 
     public LayoutNodeScope Enter()
     {
@@ -174,8 +145,6 @@ public partial class LayoutNode
         Parent = newParent;
         Parent.Children.Add(this);
         //Parent.GetNextNode();
-        _positionRelativeTo = newParent;
-        _sizeRelativeTo = newParent;
     }
 
     public LayoutNode AppendNode(string ID) => Gui.Node(this, ID);

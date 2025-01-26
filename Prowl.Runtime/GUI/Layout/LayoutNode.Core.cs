@@ -23,9 +23,7 @@ public partial class LayoutNode
         public readonly double HScrollHeight => IsHScrollVisible ? ScrollBarSize : 0;
 
         public readonly Rect InnerRect => new(GlobalContentPosition, new(GlobalContentWidth, GlobalContentHeight));
-        public readonly Rect InnerRect_NoScroll => new(GlobalContentPosition, new(GlobalContentWidth + VScrollWidth, GlobalContentHeight + HScrollHeight));
         public readonly Rect Rect => new(GlobalPosition, new(Scale.x, Scale.y));
-        public readonly Rect OuterRect => new(GlobalPosition - Margins.TopLeft, new(Scale.x + Margins.Horizontal, Scale.y + Margins.Vertical));
 
         public readonly Vector2 GlobalPosition
         {
@@ -33,7 +31,7 @@ public partial class LayoutNode
             {
                 if (_node == null)
                     return Vector2.zero;
-                Vector2 globalPosition = _node.Parent != null ? _node.Parent.LayoutData.GlobalContentPosition + Position + Margins.TopLeft : Position;
+                Vector2 globalPosition = _node.Parent != null ? _node.Parent.LayoutData.GlobalContentPosition + Position : Position;
                 if (_node.Parent != null && !_node._ignore)
                     globalPosition -= new Vector2(_node.Parent.HScroll, _node.Parent.VScroll);
                 return globalPosition;
@@ -48,7 +46,6 @@ public partial class LayoutNode
         //public Vector2 Scale = node._data.Scale;
         public Vector2 Scale = node._data.Scale;
         public Vector2 MaxScale = node._data.MaxScale;
-        public Spacing Margins = node._data.Margins;
         public Spacing Paddings = node._data.Paddings;
         public Vector2 Position = node._data.Position;
         public Rect ContentRect = node._data.ContentRect;
@@ -94,14 +91,10 @@ public partial class LayoutNode
     private Size _height = Size.Default;
     private Size _maxWidth = Size.Max;
     private Size _maxHeight = Size.Max;
-    private Offset _marginLeft = Offset.Default;
-    private Offset _marginRight = Offset.Default;
-    private Offset _marginTop = Offset.Default;
-    private Offset _marginBottom = Offset.Default;
-    private Offset _paddingLeft = Offset.Default;
-    private Offset _paddingRight = Offset.Default;
-    private Offset _paddingTop = Offset.Default;
-    private Offset _paddingBottom = Offset.Default;
+    private double _paddingLeft = 0;
+    private double _paddingRight = 0;
+    private double _paddingTop = 0;
+    private double _paddingBottom = 0;
 
     private Gui.WidgetStyle _scrollStyle;
     private bool _showVScroll = false;
@@ -114,8 +107,6 @@ public partial class LayoutNode
     private double _fitContentYPerc = 1f;
     private bool _centerContent = false;
     private bool _canScaleChildren = false;
-    private LayoutNode _positionRelativeTo;
-    private LayoutNode _sizeRelativeTo;
 
     private LayoutType _layout = LayoutType.None;
     private bool _layoutX = false;
@@ -170,40 +161,19 @@ public partial class LayoutNode
 
     public void UpdateScaleCache()
     {
-        // Then Margin/Paddings (They rely on Scale)
-        if (_positionRelativeTo != null)
-        {
-            double x = _positionRelativeTo._data.Scale.x;
-            double y = _positionRelativeTo._data.Scale.y;
-            _data.Margins = new(
-                _marginLeft.ToPixels(x),
-                _marginRight.ToPixels(x),
-                _marginTop.ToPixels(y),
-                _marginBottom.ToPixels(y)
-            );
-            _data.Paddings = new(
-                _paddingLeft.ToPixels(x),
-                _paddingRight.ToPixels(x),
-                _paddingTop.ToPixels(y),
-                _paddingBottom.ToPixels(y)
-            );
-        }
-        else
-        {
-            _data.Margins = new(_marginLeft.ToPixels(0), _marginRight.ToPixels(0), _marginTop.ToPixels(0), _marginBottom.ToPixels(0));
-            _data.Paddings = new(_paddingLeft.ToPixels(0), _paddingRight.ToPixels(0), _paddingTop.ToPixels(0), _paddingBottom.ToPixels(0));
-        }
+        // Then Paddings (They rely on Scale)
+        _data.Paddings = new(_paddingLeft, _paddingRight, _paddingTop, _paddingBottom);
 
-        if (_sizeRelativeTo != null)
+        if (Parent != null)
         {
-            var width = _sizeRelativeTo._data.GlobalContentWidth;
-            var height = _sizeRelativeTo._data.GlobalContentHeight;
+            var width = Parent._data.GlobalContentWidth;
+            var height = Parent._data.GlobalContentHeight;
             var maxW = _maxWidth.ToPixels(width);
             var maxH = _maxHeight.ToPixels(height);
 
             _data.Scale = new(
-                Math.Min(_width.ToPixels(width) - _data.Margins.Horizontal, maxW),
-                Math.Min(_height.ToPixels(height) - _data.Margins.Vertical, maxH)
+                Math.Min(_width.ToPixels(width), maxW),
+                Math.Min(_height.ToPixels(height), maxH)
             );
 
             _data.MaxScale = new(maxW, maxH);
@@ -214,8 +184,8 @@ public partial class LayoutNode
             var maxH = _maxHeight.ToPixels(0);
 
             _data.Scale = new(
-                Math.Min(_width.ToPixels(0) - _data.Margins.Horizontal, maxW),
-                Math.Min(_height.ToPixels(0) - _data.Margins.Vertical, maxH)
+                Math.Min(_width.ToPixels(0), maxW),
+                Math.Min(_height.ToPixels(0), maxH)
             );
 
             _data.MaxScale = new(maxW, maxH);
@@ -224,11 +194,11 @@ public partial class LayoutNode
 
     public void UpdatePositionCache()
     {
-        if (_positionRelativeTo != null)
+        if (Parent != null)
         {
             _data.Position = new(
-                _positionX.ToPixels(_positionRelativeTo._data.GlobalContentWidth),
-                _positionY.ToPixels(_positionRelativeTo._data.GlobalContentHeight)
+                _positionX.ToPixels(Parent._data.GlobalContentWidth),
+                _positionY.ToPixels(Parent._data.GlobalContentHeight)
             );
         }
         else
@@ -273,10 +243,10 @@ public partial class LayoutNode
                 switch (_layout)
                 {
                     case LayoutType.Column:
-                        child._positionX = (_data.GlobalContentWidth - child._data.Scale.x - child._data.Margins.Horizontal) / 2;
+                        child._positionX = (_data.GlobalContentWidth - child._data.Scale.x) / 2;
                         break;
                     case LayoutType.Row:
-                        child._positionY = (_data.GlobalContentHeight - child._data.Scale.y - child._data.Margins.Vertical) / 2;
+                        child._positionY = (_data.GlobalContentHeight - child._data.Scale.y) / 2;
                         break;
                     case LayoutType.Grid:
                         // TODO: This isnt working correctly, All the layout types should use just this, but it needs to work properly first
@@ -286,8 +256,8 @@ public partial class LayoutNode
                         child._positionY = child._data.Position.y + offset.y;
                         break;
                     default:
-                        child._positionX = (_data.GlobalContentWidth - child._data.Scale.x - child._data.Margins.Horizontal) / 2;
-                        child._positionY = (_data.GlobalContentHeight - child._data.Scale.y - child._data.Margins.Vertical) / 2;
+                        child._positionX = (_data.GlobalContentWidth - child._data.Scale.x) / 2;
+                        child._positionY = (_data.GlobalContentHeight - child._data.Scale.y) / 2;
                         break;
                 }
                 child.UpdatePositionCache();
@@ -296,12 +266,12 @@ public partial class LayoutNode
 
         if (Children.Count > 0)
         {
-            _data.ContentRect = Children[0]._data.OuterRect;
+            _data.ContentRect = Children[0]._data.Rect;
             for (int i = 1; i < Children.Count; i++)
             {
                 var child = Children[i];
                 if (child._ignore) continue;
-                _data.ContentRect = Rect.CombineRect(_data.ContentRect, child._data.OuterRect);
+                _data.ContentRect = Rect.CombineRect(_data.ContentRect, child._data.Rect);
             }
         }
         else _data.ContentRect = new Rect();
@@ -420,7 +390,7 @@ public partial class LayoutNode
             {
                 double width = remainingWidth / remainingChildren;
                 width = Math.Min(width, child._data.MaxScale.x);
-                child._width = Math.Max(width - child._data.Margins.Horizontal, 0);
+                child._width = Math.Max(width, 0);
                 remainingWidth -= width;
                 remainingChildren--;
             }
@@ -435,7 +405,7 @@ public partial class LayoutNode
             {
                 double height = remainingHeight / remainingChildren;
                 height = Math.Min(height, child._data.MaxScale.y);
-                child._height = Math.Max(height - child._data.Margins.Vertical, 0);
+                child._height = Math.Max(height, 0);
                 remainingHeight -= height;
                 remainingChildren--;
             }
@@ -455,7 +425,7 @@ public partial class LayoutNode
                     if (child._ignore) continue;
                     if (_layoutX) child._positionX = 0;
                     if (_layoutY) child._positionY = y;
-                    y += child._data.Margins.Vertical + child._data.Scale.y;
+                    y += child._data.Scale.y;
                     y += _layoutYSpacing.ToPixels(_data.GlobalContentHeight);
                     child.UpdatePositionCache();
                 }
@@ -467,7 +437,7 @@ public partial class LayoutNode
                     if (child._ignore) continue;
                     if (_layoutY)
                     {
-                        y -= child._data.Margins.Vertical + child._data.Scale.y;
+                        y -= child._data.Scale.y;
                         child._positionY = y;
                     }
                     if (_layoutX) child._positionX = 0;
@@ -481,7 +451,7 @@ public partial class LayoutNode
                     if (child._ignore) continue;
                     if (_layoutX) child._positionX = x;
                     if (_layoutY) child._positionY = 0;
-                    x += child._data.Margins.Horizontal + child._data.Scale.x;
+                    x += child._data.Scale.x;
                     x += _layoutXSpacing.ToPixels(_data.GlobalContentWidth);
                     child.UpdatePositionCache();
                 }
@@ -493,7 +463,7 @@ public partial class LayoutNode
                     if (child._ignore) continue;
                     if (_layoutX)
                     {
-                        x -= child._data.Margins.Horizontal + child._data.Scale.x;
+                        x -= child._data.Scale.x;
                         child._positionX = x;
                     }
                     if (_layoutY) child._positionY = 0;
@@ -511,7 +481,7 @@ public partial class LayoutNode
                 double maxY = 0;
                 foreach (var child in gridChildren)
                 {
-                    if (x + child._data.Scale.x + child._data.Margins.Horizontal > _data.GlobalContentWidth)
+                    if (x + child._data.Scale.x > _data.GlobalContentWidth)
                     {
                         y += maxY;
                         x = 0;
@@ -520,10 +490,10 @@ public partial class LayoutNode
 
                     if (_layoutX) child._positionX = x;
                     if (_layoutY) child._positionY = y;
-                    x += child._data.Margins.Horizontal + child._data.Scale.x;
+                    x += child._data.Scale.x;
 
-                    if (child._data.Margins.Vertical + child._data.Scale.y > maxY)
-                        maxY = child._data.Margins.Vertical + child._data.Scale.y;
+                    if (child._data.Scale.y > maxY)
+                        maxY = child._data.Scale.y;
                     child.UpdatePositionCache();
                 }
                 break;
@@ -546,35 +516,34 @@ public partial class LayoutNode
 
     public ulong GetHashCode64()
     {
-        ulong hash = 17;
-        hash = hash * 23 + ID;
-        hash = hash * 23 + _positionX.GetHashCode64();
-        hash = hash * 23 + _positionY.GetHashCode64();
-        hash = hash * 23 + _width.GetHashCode64();
-        hash = hash * 23 + _height.GetHashCode64();
-        hash = hash * 23 + _maxWidth.GetHashCode64();
-        hash = hash * 23 + _maxHeight.GetHashCode64();
-        hash = hash * 23 + _marginLeft.GetHashCode64();
-        hash = hash * 23 + _marginRight.GetHashCode64();
-        hash = hash * 23 + _marginTop.GetHashCode64();
-        hash = hash * 23 + _marginBottom.GetHashCode64();
-        hash = hash * 23 + _paddingLeft.GetHashCode64();
-        hash = hash * 23 + _paddingRight.GetHashCode64();
-        hash = hash * 23 + _paddingTop.GetHashCode64();
-        hash = hash * 23 + _paddingBottom.GetHashCode64();
-        hash = hash * 23 + (ulong)_ignore.GetHashCode();
-        hash = hash * 23 + (ulong)_fitContentX.GetHashCode();
-        hash = hash * 23 + (ulong)_fitContentXPerc.GetHashCode();
-        hash = hash * 23 + (ulong)_fitContentY.GetHashCode();
-        hash = hash * 23 + (ulong)_fitContentYPerc.GetHashCode();
-        hash = hash * 23 + (ulong)_centerContent.GetHashCode();
-        hash = hash * 23 + (ulong)_canScaleChildren.GetHashCode();
-        hash = hash * 23 + (ulong)_layout.GetHashCode();
-        hash = hash * 23 + (ulong)_clipped.GetHashCode();
-        hash = hash * 23 + (ulong)VScroll.GetHashCode();
-        hash = hash * 23 + (ulong)HScroll.GetHashCode();
-        hash = hash * 23 + (ulong)_nextAnimation.GetHashCode();
-        return hash;
+        unchecked
+        {
+            ulong hash = 17;
+            hash = hash * 23 + ID;
+            hash = hash * 23 + _positionX.GetHashCode64();
+            hash = hash * 23 + _positionY.GetHashCode64();
+            hash = hash * 23 + _width.GetHashCode64();
+            hash = hash * 23 + _height.GetHashCode64();
+            hash = hash * 23 + _maxWidth.GetHashCode64();
+            hash = hash * 23 + _maxHeight.GetHashCode64();
+            hash = hash * 23 + (ulong)_paddingLeft.GetHashCode();
+            hash = hash * 23 + (ulong)_paddingRight.GetHashCode();
+            hash = hash * 23 + (ulong)_paddingTop.GetHashCode();
+            hash = hash * 23 + (ulong)_paddingBottom.GetHashCode();
+            hash = hash * 23 + (ulong)_ignore.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentX.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentXPerc.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentY.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentYPerc.GetHashCode();
+            hash = hash * 23 + (ulong)_centerContent.GetHashCode();
+            hash = hash * 23 + (ulong)_canScaleChildren.GetHashCode();
+            hash = hash * 23 + (ulong)_layout.GetHashCode();
+            hash = hash * 23 + (ulong)_clipped.GetHashCode();
+            hash = hash * 23 + (ulong)VScroll.GetHashCode();
+            hash = hash * 23 + (ulong)HScroll.GetHashCode();
+            hash = hash * 23 + (ulong)_nextAnimation.GetHashCode();
+            return hash;
+        }
 
         //unchecked
         //{
@@ -585,10 +554,6 @@ public partial class LayoutNode
         //    hash ^= (_positionX.GetHashCode64() << 32) | _positionY.GetHashCode64();
         //    hash ^= (_width.GetHashCode64() << 32) | _height.GetHashCode64();
         //    hash ^= (_maxWidth.GetHashCode64() << 32) | _maxHeight.GetHashCode64();
-        //
-        //    // Combine margins
-        //    hash ^= (_marginLeft.GetHashCode64() << 48) | (_marginRight.GetHashCode64() << 32) |
-        //            (_marginTop.GetHashCode64() << 16) | _marginBottom.GetHashCode64();
         //
         //    // Combine paddings
         //    hash ^= (_paddingLeft.GetHashCode64() << 48) | (_paddingRight.GetHashCode64() << 32) |

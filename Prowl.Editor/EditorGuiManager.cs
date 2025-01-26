@@ -21,7 +21,7 @@ public static class EditorGuiManager
     public static System.Numerics.Vector4 SelectedColor => new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1.00f);
 
     public static Gui Gui;
-    public static DockContainer? Container;
+    public static DockContainer Container = new();
     public static EditorWindow? DraggingWindow;
     public static DockNode? DragSplitter;
     private static Vector2 m_DragPos;
@@ -128,15 +128,14 @@ public static class EditorGuiManager
     private static void DrawHeaderBar(Gui g)
     {
         double padding = EditorStylePrefs.Instance.DockSpacing;
-        double padx2 = padding * 2;
 
-        using (g.Node("Main_Header").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize + (padding * 3)).Padding(padding * 2, padx2, padding, padx2).Enter())
+        using (g.Node("Main_Header").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize + (padding * 2 * 2)).Padding(padding * 2, padding * 2, padding, padding * 2).Enter())
         {
-            using (g.Node("MenuBar").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())
-            {
-                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
-                g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Borders, 2, (float)EditorStylePrefs.Instance.WindowRoundness);
+            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
 
+
+            using (g.Node("MenuBar").ExpandHeight().FitContentWidth().Left(8).Top(1.5).Layout(LayoutType.Row).Enter())
+            {
                 MenuItem.DrawMenuRoot("File", true, Font.DefaultFont.CalcTextSize("File", 0).x + 20);
                 MenuItem.DrawMenuRoot("Edit", true, Font.DefaultFont.CalcTextSize("Edit", 0).x + 20);
                 MenuItem.DrawMenuRoot("Assets", true, Font.DefaultFont.CalcTextSize("Assets", 0).x + 20);
@@ -144,12 +143,9 @@ public static class EditorGuiManager
                 MenuItem.DrawMenuRoot("Windows", true, Font.DefaultFont.CalcTextSize("Windows", 0).x + 20);
             }
 
-            using (g.Node("PlayMode").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())
+            using (g.Node("PlayMode").ExpandHeight().FitContentWidth().Top(1.5).Layout(LayoutType.Row).Enter())
             {
                 g.CurrentNode.Left(Offset.Percentage(0.5f, -(g.CurrentNode.LayoutData.Scale.x / 2)));
-
-                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
-                g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Borders, 2, (float)EditorStylePrefs.Instance.WindowRoundness);
 
                 switch (PlayMode.Current)
                 {
@@ -180,7 +176,6 @@ public static class EditorGuiManager
     {
         using (g.Node("Main_Content").ExpandWidth().Enter())
         {
-            Container ??= new();
             Rect rect = g.CurrentNode.LayoutData.Rect;
             //rect.Expand(-(float)EditorStylePrefs.Instance.DockSpacing);
             rect.Min.x += (float)EditorStylePrefs.Instance.DockSpacing;
@@ -319,7 +314,7 @@ public static class EditorGuiManager
             if (File.Exists(file.FullName))
                 file.Delete();
 
-            StringTagConverter.WriteToFile(serializedScene, file);
+            serializedScene.WriteToString(file);
 
             AssetDatabase.Update();
             AssetDatabase.Ping(file);
@@ -352,7 +347,7 @@ public static class EditorGuiManager
 
                 Scene scene = SceneManager.Scene;
                 var serializedScene = Serializer.Serialize(scene);
-                StringTagConverter.WriteToFile(serializedScene, file);
+                serializedScene.WriteToString(file);
                 AssetDatabase.Update();
                 AssetDatabase.Ping(file);
             }
@@ -466,7 +461,7 @@ public static class EditorGuiManager
 
         Material mat = Material.CreateDefaultMaterial();
 
-        StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
+        Serializer.Serialize(mat).WriteToString(file);
 
         if (fromAssetBrowser)
             AssetsBrowserWindow.StartRename(file.FullName);

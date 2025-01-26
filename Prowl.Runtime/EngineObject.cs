@@ -148,7 +148,7 @@ public abstract class EngineObject : ICloneExplicit
         OnDispose();
     }
 
-    internal static void HandleDestroyed()
+    public static void HandleDestroyed()
     {
         while (s_destroyed.TryPop(out EngineObject? obj))
         {

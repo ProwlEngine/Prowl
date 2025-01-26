@@ -49,7 +49,7 @@ public abstract class ScriptableSingleton<T> where T : ScriptableSingleton<T>, n
 
     public void Save()
     {
-        StringTagConverter.WriteToFile(Serializer.Serialize(this), new(GetFilePath(Application.DataPath)));
+        Serializer.Serialize(this).WriteToString(new(GetFilePath(Application.DataPath)));
     }
 
     protected string GetFilePath(string? dataPath)
@@ -101,7 +101,7 @@ public abstract class ScriptableSingleton<T> where T : ScriptableSingleton<T>, n
         {
             try
             {
-                var deserialized = Serializer.Deserialize<T>(StringTagConverter.ReadFromFile(new FileInfo(filePath)))!;
+                var deserialized = Serializer.Deserialize<T>(EchoObject.ReadFromString(new FileInfo(filePath)))!;
                 deserialized.OnValidate();
                 if (deserialized != null)
                     return deserialized;

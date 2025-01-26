@@ -303,10 +303,12 @@ public class ConsoleWindow : EditorWindow
 
         Vector2 msgSize = Font.DefaultFont.CalcTextSize(selMsg, font_size: 22, 0);
 
-        using (gui.Node("Header").Width(msgSize.x).Height(msgSize.y).Margin(10, 0, 0, 10).Enter())
+        using (gui.Node("Header").Width(msgSize.x).Height(msgSize.y).Enter())
         {
             Rect headerRect = gui.CurrentNode.LayoutData.Rect;
             Vector2 textPos = headerRect.Position;
+            textPos.x += 10f;
+            textPos.y += 10f;
 
             gui.Draw2D.DrawText(Font.DefaultFont, selMsg, 20, textPos, color);
         }
@@ -319,7 +321,7 @@ public class ConsoleWindow : EditorWindow
                 string frameText = frame.ToString();
                 Vector2 frameSize = Font.DefaultFont.CalcTextSize(frameText, font_size: 21, 0);
 
-                using (gui.Node("StackFrame", i).Margin(0, 0, 0, 10).Width(frameSize.x).Height(15).Enter())
+                using (gui.Node("StackFrame", i).Width(frameSize.x).Height(15).Enter())
                 {
                     Interactable interact = gui.GetInteractable();
                     Color col = Color.white * 0.65f;
@@ -333,6 +335,7 @@ public class ConsoleWindow : EditorWindow
                     }
 
                     Rect frameRect = gui.CurrentNode.LayoutData.Rect;
+                    frameRect.x += 10f;
                     gui.Draw2D.DrawText(Font.DefaultFont, frameText, 19, frameRect.Position, col, 0, frameRect);
                 }
             }

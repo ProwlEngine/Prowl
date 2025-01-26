@@ -262,7 +262,7 @@ public class Desktop_Player : ProjectBuilder
             // Debug.Log($"Packing scene_{i}.prowl.");
             AssetRef<Scene> scene = scenes[i];
             EchoObject tag = Serializer.Serialize(scene.Res!);
-            BinaryTagConverter.WriteToFile(tag, new FileInfo(Path.Combine(dataPath, $"scene_{i}.prowl")));
+            tag.WriteToBinary(new FileInfo(Path.Combine(dataPath, $"scene_{i}.prowl")));
         }
     }
 

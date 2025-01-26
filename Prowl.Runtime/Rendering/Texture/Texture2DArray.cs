@@ -143,10 +143,8 @@ public sealed class Texture2DArray : Texture
         return Width * Height * TextureUtility.PixelFormatBytes(Format);
     }
 
-    public override EchoObject Serialize(SerializationContext ctx)
+    public override void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        EchoObject compoundTag = EchoObject.NewCompound();
-
         SerializeHeader(compoundTag);
 
         compoundTag.Add("Width", new((int)Width));
@@ -167,8 +165,6 @@ public sealed class Texture2DArray : Texture
         }
 
         compoundTag.Add("Data", dataTag);
-
-        return compoundTag;
     }
 
     public override void Deserialize(EchoObject value, SerializationContext ctx)

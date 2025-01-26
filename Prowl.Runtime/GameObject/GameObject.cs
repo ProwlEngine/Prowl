@@ -1056,9 +1056,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <param name="ctx">The serialization context.</param>
     /// <returns>A SerializedProperty containing the GameObject's data.</returns>
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        EchoObject compoundTag = EchoObject.NewCompound();
         compoundTag.Add("Name", new EchoObject(Name));
 
         compoundTag.Add("Identifier", new EchoObject(_identifier.ToString()));
@@ -1084,15 +1083,13 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
         EchoObject components = EchoObject.NewList();
         foreach (MonoBehaviour comp in _components)
-            components.ListAdd(Serializer.Serialize(comp, ctx));
+            components.ListAdd(Serializer.Serialize(typeof(MonoBehaviour), comp, ctx));
         compoundTag.Add("Components", components);
 
         EchoObject children = EchoObject.NewList();
         foreach (GameObject child in this.children)
-            children.ListAdd(Serializer.Serialize(child, ctx));
+            children.ListAdd(Serializer.Serialize(typeof(GameObject), child, ctx));
         compoundTag.Add("Children", children);
-
-        return compoundTag;
     }
 
     /// <summary>

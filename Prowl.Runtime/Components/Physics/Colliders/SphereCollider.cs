@@ -23,5 +23,5 @@ public sealed class SphereCollider : Collider
         }
     }
 
-    public override RigidBodyShape CreateShape() => new SphereShape(radius);
+    public override RigidBodyShape[] CreateShapes() => [new SphereShape(radius)];
 }

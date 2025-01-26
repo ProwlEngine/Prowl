@@ -70,7 +70,7 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
             gui.TextNode("H_Text", RuntimeUtils.Prettify(label)).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).IgnoreLayout();
 
             bool enumexpanded = true;
-            if (drawer.CanCollapse)
+            if (drawer?.CanCollapse ?? true)
             {
                 enumexpanded = gui.GetNodeStorage("enumexpanded", false);
                 using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
@@ -127,13 +127,16 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
                         }
                     }
 
-                    if (drawer.AllowResize || drawer.AllowReorder)
+                    bool allowResize = drawer?.AllowResize ?? true;
+                    bool allowReorder = drawer?.AllowReorder ?? true;
+
+                    if (allowResize || allowReorder)
                     {
                         using (gui.Node("_Footer").ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.RowReversed).Enter())
                         {
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
 
-                            if (drawer.AllowResize)
+                            if (allowResize)
                             {
                                 using (gui.Node("AddBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                                 {
@@ -171,7 +174,7 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
                                 }
                             }
 
-                            if (drawer.AllowReorder)
+                            if (allowReorder)
                             {
                                 using (gui.Node("MoveDownBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                                 {

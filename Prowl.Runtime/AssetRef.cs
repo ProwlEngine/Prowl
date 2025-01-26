@@ -295,17 +295,15 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     }
 
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        EchoObject compoundTag = EchoObject.NewCompound();
         compoundTag.Add("AssetID", new EchoObject(assetID.ToString()));
         if (assetID != Guid.Empty)
             ctx.AddDependency(assetID);
         if (fileID != 0)
             compoundTag.Add("FileID", new EchoObject(fileID));
         if (IsRuntimeResource)
-            compoundTag.Add("Instance", Serializer.Serialize(instance, ctx));
-        return compoundTag;
+            compoundTag.Add("Instance", Serializer.Serialize(typeof(T), instance, ctx));
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)

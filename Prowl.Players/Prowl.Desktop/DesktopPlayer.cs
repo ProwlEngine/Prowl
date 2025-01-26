@@ -24,13 +24,17 @@ public static class DesktopPlayer
 
             if (File.Exists(StartingScene.FullName))
             {
-                var tag = BinaryTagConverter.ReadFromFile(StartingScene);
+                var tag = EchoObject.ReadFromBinary(StartingScene);
                 Scene scene = Serializer.Deserialize<Scene>(tag);
                 SceneManager.LoadScene(scene);
             }
         };
 
-        Application.Update += SceneManager.Update;
+        Application.Update += () =>
+        {
+            EngineObject.HandleDestroyed();
+            SceneManager.Update();
+        };
 
         Application.Render += () =>
         {

@@ -251,10 +251,8 @@ public sealed class RenderTexture : EngineObject, ISerializable
         Framebuffer = null;
     }
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        EchoObject compoundTag = EchoObject.NewCompound();
-
         SerializeHeader(compoundTag);
 
         compoundTag.Add("Width", new(Width));
@@ -272,8 +270,6 @@ public sealed class RenderTexture : EngineObject, ISerializable
         }
 
         compoundTag.Add("ColorBufferFormats", colorBuffersTag);
-
-        return compoundTag;
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)

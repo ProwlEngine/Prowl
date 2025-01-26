@@ -53,7 +53,7 @@ public class HierarchyWindow : EditorWindow
 
         gui.CurrentNode.Layout(LayoutType.Column);
         gui.CurrentNode.ScaleChildren();
-        gui.CurrentNode.Padding(0, 10, 10, 10);
+        gui.CurrentNode.Padding(5, 10, 10, 10);
 
 
         using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Enter())
@@ -79,7 +79,7 @@ public class HierarchyWindow : EditorWindow
         }
 
 
-        using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
+        using (gui.Node("Tree").Width(Size.Percentage(1f)).PaddingTop(5).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             //gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
 
@@ -244,7 +244,7 @@ public class HierarchyWindow : EditorWindow
         ulong goNodeID = 0;
         double width = gui.CurrentNode.LayoutData.InnerRect.width - left;
         width = Math.Max(width, 200);
-        using (gui.Node(entity.GetHashCode().ToString()).Left(left).Top(index * (entryHeight + EntryPadding)).Width(width).Height(entryHeight).Margin(2, 0).Enter())
+        using (gui.Node(entity.GetHashCode().ToString()).Left(left).Top(index * (entryHeight + EntryPadding)).Width(width).Height(entryHeight).Enter())
         {
             goNodeID = gui.CurrentNode.ID;
             float colMult = entity.enabledInHierarchy ? 1 : 0.5f;

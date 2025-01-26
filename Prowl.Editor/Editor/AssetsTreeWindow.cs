@@ -45,7 +45,7 @@ public class AssetsTreeWindow : EditorWindow
 
         gui.CurrentNode.Layout(LayoutType.Column);
         gui.CurrentNode.ScaleChildren();
-        gui.CurrentNode.Padding(0, 10, 10, 10);
+        gui.CurrentNode.Padding(5, 10, 10, 10);
 
         using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(EditorStylePrefs.Instance.ItemSize).Enter())
         {
@@ -81,7 +81,7 @@ public class AssetsTreeWindow : EditorWindow
         }
 
 
-        using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column, false).Spacing(entryPadding).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
+        using (gui.Node("Tree").Width(Size.Percentage(1f)).PaddingTop(5).Layout(LayoutType.Column, false).Spacing(entryPadding).Clip().Scroll(inputstyle: EditorGUI.InputStyle).Enter())
         {
             //gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, 4);
 
