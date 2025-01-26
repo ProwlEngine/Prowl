@@ -246,4 +246,19 @@ public sealed class Rigidbody3D : MonoBehaviour
             rb.Orientation = new JQuaternion(Transform.rotation.x, Transform.rotation.y, Transform.rotation.z, Transform.rotation.w);
         }
     }
+
+    public void AddForce(Vector3 velocity)
+    {
+        _body.AddForce(new JVector(velocity.x, velocity.y, velocity.z));
+    }
+
+    public void AddForceAtPosition(Vector3 velocity, Vector3 worldPosition)
+    {
+        _body.AddForce(new JVector(velocity.x, velocity.y, velocity.z), new JVector(worldPosition.x, worldPosition.y, worldPosition.z));
+    }
+
+    public void AddTorque(Vector3 torque)
+    {
+        Torque += torque;
+    }
 }
