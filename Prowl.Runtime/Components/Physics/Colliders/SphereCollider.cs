@@ -23,5 +23,5 @@ public sealed class SphereCollider : Collider
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new SphereShape(radius)];
+    public override RigidBodyShape[] CreateShapes() => [new SphereShape(MathD.Max(radius, 0.01))];
 }
