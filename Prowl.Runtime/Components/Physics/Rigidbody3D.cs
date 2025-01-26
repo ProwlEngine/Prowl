@@ -123,6 +123,33 @@ public sealed class Rigidbody3D : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Gets or sets the Linear Velocity of this Rigidbody3D.
+    /// </summary>
+    public Vector3 Velocity
+    {
+        get => new(_body.Velocity.X, _body.Velocity.Y, _body.Velocity.Z);
+        set => _body.Velocity = new(value.x, value.y, value.z);
+    }
+
+    /// <summary>
+    /// Gets or sets the Angular Velocity of this Rigidbody3D.
+    /// </summary>
+    public Vector3 AngularVelocity
+    {
+        get => new(_body.AngularVelocity.X, _body.AngularVelocity.Y, _body.AngularVelocity.Z);
+        set => _body.AngularVelocity = new(value.x, value.y, value.z);
+    }
+
+    /// <summary>
+    /// Gets or sets the Torque of this Rigidbody3D.
+    /// </summary>
+    public Vector3 Torque
+    {
+        get => new Vector3(_body.Torque.X, _body.Torque.Y, _body.Torque.Z);
+        set => _body.Torque = new JVector(value.x, value.y, value.z);
+    }
+
     [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
     internal RigidBody _body;
 
