@@ -698,7 +698,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 int vtx_count = pointsCount;
                 PrimReserve(idx_count, vtx_count);
                 for (int i = 0; i < vtx_count; i++)
-                    _vertices[_vertexWritePos++] = new UIVertex() { Position = new(points[i], _primitiveCount), UV = uv, Color = colors[i] };
+                    _vertices[_vertexWritePos++] = new UIVertex() { Position = new(points[i], _primitiveCount), UV = uv, Color = colors[Math.Min(i, colors.Count - 1)] };
 
                 for (uint i = 2u; i < pointsCount; i++)
                 {
