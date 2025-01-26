@@ -43,11 +43,13 @@ public enum Platform
 public static class RuntimeUtils
 {
     private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
+    private static readonly Dictionary<Type, int> s_executionOrderCache = [];
 
     [OnAssemblyUnload]
     public static void ClearCache()
     {
         s_deepCopyByAssignmentCache.Clear();
+        s_executionOrderCache.Clear();
     }
 	
     public static bool IsARM() =>
@@ -469,4 +471,18 @@ public static class RuntimeUtils
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static unsafe int NonNormalizedAsInt(bool b) =>
         (int)(*(byte*)(&b));
+
+    internal static int? GetExecutionOrder(MonoBehaviour a)
+    {
+        Type type = a.GetType();
+        if (s_executionOrderCache.TryGetValue(type, out int order))
+            return order;
+        ExecutionOrderAttribute? attr = type.GetCustomAttribute<ExecutionOrderAttribute>();
+        if (attr != null)
+        {
+            s_executionOrderCache[type] = attr.Order;
+            return attr.Order;
+        }
+        return null;
+    }
 }

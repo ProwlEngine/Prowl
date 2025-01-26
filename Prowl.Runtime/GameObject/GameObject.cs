@@ -512,6 +512,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             newComponent.Do(newComponent.InternalAwake);
         }
 
+        SortComponents();
+
         return newComponent;
     }
 
@@ -548,6 +550,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         {
             comp.Do(comp.InternalAwake);
         }
+
+        SortComponents();
     }
 
     /// <summary>
@@ -886,6 +890,16 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         }
         dependentType = null;
         return false;
+    }
+
+    private void SortComponents()
+    {
+        _components.Sort((a, b) =>
+        {
+            int orderA = RuntimeUtils.GetExecutionOrder(a) ?? 0;
+            int orderB = RuntimeUtils.GetExecutionOrder(b) ?? 0;
+            return orderA.CompareTo(orderB);
+        });
     }
 
     private static GameObject Internal_Instantiate(GameObject obj)
