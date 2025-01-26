@@ -126,8 +126,8 @@ public static class SceneManager
         List<GameObject> activeGOs = Scene.ActiveObjects.ToList();
         ForeachComponent(activeGOs, (x) =>
         {
-            x.Do(x.UpdateFixedUpdateCoroutines);
             x.Do(x.FixedUpdate);
+            x.Do(x.UpdateFixedUpdateCoroutines);
         });
     }
 
