@@ -293,13 +293,13 @@ public static class Physics
     /// </summary>
     public static bool Raycast(Vector3 origin, Vector3 direction, double maxDistance)
     {
-        direction = direction.normalized * maxDistance;
+        direction = direction.normalized;
         var jOrigin = new JVector(origin.x, origin.y, origin.z);
         var jDirection = new JVector(direction.x, direction.y, direction.z);
 
         return _world.DynamicTree.RayCast(jOrigin, jDirection,
             PreFilter, PostFilter,
-            out _, out _, out _);
+            out _, out _, out var dist) && dist <= maxDistance;
     }
 
     /// <summary>
@@ -307,14 +307,14 @@ public static class Physics
     /// </summary>
     public static bool Raycast(Vector3 origin, Vector3 direction, double maxDistance, out RaycastHit hitInfo)
     {
-        direction = direction.normalized * maxDistance;
+        direction = direction.normalized;
         var jOrigin = new JVector(origin.x, origin.y, origin.z);
         var jDirection = new JVector(direction.x, direction.y, direction.z);
 
         hitInfo = new RaycastHit();
         bool hit = _world.DynamicTree.RayCast(jOrigin, jDirection,
             PreFilter, PostFilter,
-            out IDynamicTreeProxy shape, out JVector normal, out double lambda);
+            out IDynamicTreeProxy shape, out JVector normal, out double lambda) && lambda <= maxDistance;
 
         if (hit)
         {
@@ -335,13 +335,13 @@ public static class Physics
     /// </summary>
     public static bool Raycast(Vector3 origin, Vector3 direction, double maxDistance, LayerMask layerMask)
     {
-        direction = direction.normalized * maxDistance;
+        direction = direction.normalized;
         var jOrigin = new JVector(origin.x, origin.y, origin.z);
         var jDirection = new JVector(direction.x, direction.y, direction.z);
 
         return _world.DynamicTree.RayCast(jOrigin, jDirection,
             shape => PreFilterWithLayer(shape, layerMask), PostFilter,
-            out _, out _, out _);
+            out _, out _, out double lambda) && lambda <= maxDistance;
     }
 
     /// <summary>
@@ -349,14 +349,14 @@ public static class Physics
     /// </summary>
     public static bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hitInfo, double maxDistance, LayerMask layerMask)
     {
-        direction = direction.normalized * maxDistance;
+        direction = direction.normalized;
         var jOrigin = new JVector(origin.x, origin.y, origin.z);
         var jDirection = new JVector(direction.x, direction.y, direction.z);
 
         hitInfo = new RaycastHit();
         bool hit = _world.DynamicTree.RayCast(jOrigin, jDirection,
             shape => PreFilterWithLayer(shape, layerMask), PostFilter,
-            out IDynamicTreeProxy shape, out JVector normal, out double lambda);
+            out IDynamicTreeProxy shape, out JVector normal, out double lambda) && lambda <= maxDistance;
 
         if (hit)
         {
