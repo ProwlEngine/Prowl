@@ -167,6 +167,9 @@ public static class Program
 
         Application.Quitting += () =>
         {
+            if (PlayMode.Current == PlayMode.Mode.Playing)
+                PlayMode.Stop();
+
             if (Project.HasProject)
                 Project.Active.SaveTempScene();
         };
@@ -178,7 +181,7 @@ public static class Program
 
     public static void CheckReloadingAssemblies()
     {
-        if (IsReloadingExternalAssemblies && Screen.IsFocused)
+        if (IsReloadingExternalAssemblies && Screen.IsFocused && PlayMode.Current == PlayMode.Mode.Editing)
         {
             IsReloadingExternalAssemblies = false;
 

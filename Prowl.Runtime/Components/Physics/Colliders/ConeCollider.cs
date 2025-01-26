@@ -34,5 +34,5 @@ public sealed class ConeCollider : Collider
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new ConeShape(radius, height)];
+    public override RigidBodyShape[] CreateShapes() => [new ConeShape(MathD.Max(radius, 0.01), MathD.Max(height, 0.01))];
 }

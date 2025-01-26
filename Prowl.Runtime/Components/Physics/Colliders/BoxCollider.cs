@@ -26,5 +26,5 @@ public sealed class BoxCollider : Collider
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new BoxShape(size.x, size.y, size.z)];
+    public override RigidBodyShape[] CreateShapes() => [new BoxShape(MathD.Max(size.x, 0.01), MathD.Max(size.y, 0.01), MathD.Max(size.z, 0.01))];
 }

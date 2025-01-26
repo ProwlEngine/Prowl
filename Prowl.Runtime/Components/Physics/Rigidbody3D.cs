@@ -123,6 +123,33 @@ public sealed class Rigidbody3D : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Gets or sets the Linear Velocity of this Rigidbody3D.
+    /// </summary>
+    public Vector3 Velocity
+    {
+        get => new(_body.Velocity.X, _body.Velocity.Y, _body.Velocity.Z);
+        set => _body.Velocity = new(value.x, value.y, value.z);
+    }
+
+    /// <summary>
+    /// Gets or sets the Angular Velocity of this Rigidbody3D.
+    /// </summary>
+    public Vector3 AngularVelocity
+    {
+        get => new(_body.AngularVelocity.X, _body.AngularVelocity.Y, _body.AngularVelocity.Z);
+        set => _body.AngularVelocity = new(value.x, value.y, value.z);
+    }
+
+    /// <summary>
+    /// Gets or sets the Torque of this Rigidbody3D.
+    /// </summary>
+    public Vector3 Torque
+    {
+        get => new Vector3(_body.Torque.X, _body.Torque.Y, _body.Torque.Z);
+        set => _body.Torque = new JVector(value.x, value.y, value.z);
+    }
+
     [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
     internal RigidBody _body;
 
@@ -191,6 +218,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         rb.Restitution = restitution;
         rb.Tag = new RigidBodyUserData()
         {
+            Rigidbody = this,
             Layer = GameObject.layerIndex,
             //HasTransformConstraints = rotationConstraints != Vector3Int.one || translationConstraints != Vector3Int.one,
             //RotationConstraint = new JVector(rotationConstraints.x, rotationConstraints.y, rotationConstraints.z),
@@ -218,5 +246,20 @@ public sealed class Rigidbody3D : MonoBehaviour
             rb.Position = new JVector(Transform.position.x, Transform.position.y, Transform.position.z);
             rb.Orientation = new JQuaternion(Transform.rotation.x, Transform.rotation.y, Transform.rotation.z, Transform.rotation.w);
         }
+    }
+
+    public void AddForce(Vector3 velocity)
+    {
+        _body.AddForce(new JVector(velocity.x, velocity.y, velocity.z));
+    }
+
+    public void AddForceAtPosition(Vector3 velocity, Vector3 worldPosition)
+    {
+        _body.AddForce(new JVector(velocity.x, velocity.y, velocity.z), new JVector(worldPosition.x, worldPosition.y, worldPosition.z));
+    }
+
+    public void AddTorque(Vector3 torque)
+    {
+        Torque += torque;
     }
 }

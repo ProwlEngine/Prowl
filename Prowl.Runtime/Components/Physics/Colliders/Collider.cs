@@ -41,6 +41,8 @@ public abstract class Collider : MonoBehaviour
             current = current.parent;
         }
 
+        cumulativeScale = Vector3.Max(cumulativeScale, Vector3.one * 0.05);
+
         // Get the local rotation and position in world space
         Quaternion localRotation = Quaternion.Euler(rotation);
         Vector3 scaledCenter = Vector3.Scale(this.center, cumulativeScale);
