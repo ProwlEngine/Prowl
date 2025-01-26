@@ -178,7 +178,7 @@ public static class Program
 
     public static void CheckReloadingAssemblies()
     {
-        if (IsReloadingExternalAssemblies && Screen.IsFocused)
+        if (IsReloadingExternalAssemblies && Screen.IsFocused && PlayMode.Current == PlayMode.Mode.Editing)
         {
             IsReloadingExternalAssemblies = false;
 
