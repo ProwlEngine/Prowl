@@ -167,6 +167,9 @@ public static class Program
 
         Application.Quitting += () =>
         {
+            if (PlayMode.Current == PlayMode.Mode.Playing)
+                PlayMode.Stop();
+
             if (Project.HasProject)
                 Project.Active.SaveTempScene();
         };
