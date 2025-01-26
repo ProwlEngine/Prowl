@@ -218,6 +218,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         rb.Restitution = restitution;
         rb.Tag = new RigidBodyUserData()
         {
+            Rigidbody = this,
             Layer = GameObject.layerIndex,
             //HasTransformConstraints = rotationConstraints != Vector3Int.one || translationConstraints != Vector3Int.one,
             //RotationConstraint = new JVector(rotationConstraints.x, rotationConstraints.y, rotationConstraints.z),
