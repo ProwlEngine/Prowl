@@ -157,7 +157,8 @@ public sealed class WheelCollider : MonoBehaviour
         for (int i = 0; i < NumberOfRays; i++)
         {
             double distFwd = deltaFwdStart + i * deltaFwd - Radius;
-            double zOffset = Radius * (1.0 - Math.Cos(Math.PI / 2.0 * (distFwd / Radius)));
+            double normalizedDist = distFwd / Radius;
+            double zOffset = Radius - Math.Sqrt(Math.Max(0, Radius * Radius - distFwd * distFwd));
             Vector3 newOrigin = wheelRayOrigin + distFwd * wheelFwd + zOffset * wheelUp;
 
             _debugRayStart.Add(newOrigin);
@@ -263,8 +264,6 @@ public sealed class WheelCollider : MonoBehaviour
 
 
 
-        // TODO: These are for some reason unstable to use, once used the results are very chaotic
-        // But their kinda needed to actually move the car, and also to track wheel rotation
         //// fwd/back forces
         //friction = ForwardFriction;
         //double fwdVel = Vector3.Dot(wheelPointVel, groundFwd);
@@ -314,7 +313,7 @@ public sealed class WheelCollider : MonoBehaviour
         // Draw Raycasts
         for (int i = 0; i < _debugRayStart.Count; i++)
         {
-            Debug.DrawLine(_debugRayStart[i], _debugRayEnd[i], Color.yellow);
+            //Debug.DrawLine(_debugRayStart[i], _debugRayEnd[i], Color.yellow);
         }
     }
 
