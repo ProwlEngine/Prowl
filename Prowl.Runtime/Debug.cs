@@ -217,12 +217,13 @@ public static class Debug
     public static void DrawTriangle(Vector3 a, Vector3 b, Vector3 c, Color color) => s_gizmoBuilder.DrawTriangle(a, b, c, color);
     public static void DrawWireCube(Vector3 center, Vector3 halfExtents, Color color) => s_gizmoBuilder.DrawWireCube(center, halfExtents, color);
     public static void DrawCube(Vector3 center, Vector3 halfExtents, Color color) => s_gizmoBuilder.DrawCube(center, halfExtents, color);
-    public static void DrawWireSphere(Vector3 center, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireSphere(center, radius, color, segments);
-    public static void DrawSphere(Vector3 center, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawSphere(center, radius, color, segments);
-    public static void DrawWireCone(Vector3 start, Vector3 direction, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireCone(start, direction, radius, color, segments);
+    public static void DrawWireCircle(Vector3 center, Vector3 normal, double radius, Color color, int segments = 16) => s_gizmoBuilder.DrawCircle(center, normal, radius, color, segments);
+    public static void DrawWireSphere(Vector3 center, double radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireSphere(center, radius, color, segments);
+    public static void DrawSphere(Vector3 center, double radius, Color color, int segments = 16) => s_gizmoBuilder.DrawSphere(center, radius, color, segments);
+    public static void DrawWireCone(Vector3 start, Vector3 direction, double radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireCone(start, direction, radius, color, segments);
     public static void DrawArrow(Vector3 start, Vector3 direction, Color color) => s_gizmoBuilder.DrawArrow(start, direction, color);
 
-    public static void DrawIcon(Texture2D icon, Vector3 center, float scale, Color color) => s_gizmoBuilder.DrawIcon(icon, center, scale, color);
+    public static void DrawIcon(Texture2D icon, Vector3 center, double scale, Color color) => s_gizmoBuilder.DrawIcon(icon, center, scale, color);
 
     #endregion
 
@@ -259,7 +260,7 @@ public class GizmoBuilder
     {
         public Texture2D texture;
         public Vector3 center;
-        public float scale;
+        public double scale;
         public Color color;
     }
 
@@ -412,22 +413,22 @@ public class GizmoBuilder
         AddTriangle(vertices[0], vertices[5], vertices[1], uvs[0], uvs[2], uvs[3], color);
     }
 
-    public void DrawWireSphere(Vector3 center, float radius, Color color, int segments = 16)
+    public void DrawWireSphere(Vector3 center, double radius, Color color, int segments = 16)
     {
-        float step = MathF.PI * 2 / segments;
+        double step = MathF.PI * 2 / segments;
 
         for (int i = 0; i < segments; i++)
         {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
+            double angle1 = i * step;
+            double angle2 = (i + 1) * step;
 
-            Vector3 a = new(MathF.Cos(angle1) * radius + center.x,
-                            MathF.Sin(angle1) * radius + center.y,
+            Vector3 a = new(Math.Cos(angle1) * radius + center.x,
+                            Math.Sin(angle1) * radius + center.y,
                             center.z
                         );
 
-            Vector3 b = new(MathF.Cos(angle2) * radius + center.x,
-                            MathF.Sin(angle2) * radius + center.y,
+            Vector3 b = new(Math.Cos(angle2) * radius + center.x,
+                            Math.Sin(angle2) * radius + center.y,
                             center.z
                         );
 
@@ -436,17 +437,17 @@ public class GizmoBuilder
 
         for (int i = 0; i < segments; i++)
         {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
+            double angle1 = i * step;
+            double angle2 = (i + 1) * step;
 
-            Vector3 a = new(MathF.Cos(angle1) * radius + center.x,
+            Vector3 a = new(Math.Cos(angle1) * radius + center.x,
                             center.y,
-                            MathF.Sin(angle1) * radius + center.z
+                            Math.Sin(angle1) * radius + center.z
                         );
 
-            Vector3 b = new(MathF.Cos(angle2) * radius + center.x,
+            Vector3 b = new(Math.Cos(angle2) * radius + center.x,
                             center.y,
-                            MathF.Sin(angle2) * radius + center.z
+                            Math.Sin(angle2) * radius + center.z
                         );
 
             AddLine(a, b, color);
@@ -454,37 +455,52 @@ public class GizmoBuilder
 
         for (int i = 0; i < segments; i++)
         {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
+            double angle1 = i * step;
+            double angle2 = (i + 1) * step;
 
             Vector3 a = new(center.x,
-                            MathF.Cos(angle1) * radius + center.y,
-                            MathF.Sin(angle1) * radius + center.z
+                            Math.Cos(angle1) * radius + center.y,
+                            Math.Sin(angle1) * radius + center.z
                         );
 
             Vector3 b = new(center.x,
-                            MathF.Cos(angle2) * radius + center.y,
-                            MathF.Sin(angle2) * radius + center.z
+                            Math.Cos(angle2) * radius + center.y,
+                            Math.Sin(angle2) * radius + center.z
                         );
 
             AddLine(a, b, color);
         }
     }
 
-    public void DrawSphere(Vector3 center, float radius, Color color, int segments = 16)
+    public void DrawCircle(Vector3 center, Vector3 normal, double radius, Color color, int segments)
+    {
+        Vector3 u = Vector3.Normalize(Vector3.Cross(normal, Vector3.up));
+        Vector3 v = Vector3.Normalize(Vector3.Cross(u, normal));
+        double step = MathF.PI * 2 / segments;
+        for (int i = 0; i < segments; i++)
+        {
+            double angle1 = i * step;
+            double angle2 = (i + 1) * step;
+            Vector3 a = center + radius * (Math.Cos(angle1) * u + Math.Sin(angle1) * v);
+            Vector3 b = center + radius * (Math.Cos(angle2) * u + Math.Sin(angle2) * v);
+            AddLine(a, b, color);
+        }
+    }
+
+    public void DrawSphere(Vector3 center, double radius, Color color, int segments = 16)
     {
         int latitudeSegments = segments;
         int longitudeSegments = segments * 2;
 
         for (int lat = 0; lat < latitudeSegments; lat++)
         {
-            float theta1 = lat * MathF.PI / latitudeSegments;
-            float theta2 = (lat + 1) * MathF.PI / latitudeSegments;
+            double theta1 = lat * MathF.PI / latitudeSegments;
+            double theta2 = (lat + 1) * MathF.PI / latitudeSegments;
 
             for (int lon = 0; lon < longitudeSegments; lon++)
             {
-                float phi1 = lon * 2 * MathF.PI / longitudeSegments;
-                float phi2 = (lon + 1) * 2 * MathF.PI / longitudeSegments;
+                double phi1 = lon * 2 * MathF.PI / longitudeSegments;
+                double phi2 = (lon + 1) * 2 * MathF.PI / longitudeSegments;
 
                 Vector3 v1 = CalculatePointOnSphere(theta1, phi1, radius, center);
                 Vector3 v2 = CalculatePointOnSphere(theta1, phi2, radius, center);
@@ -500,11 +516,11 @@ public class GizmoBuilder
         }
     }
 
-    private Vector3 CalculatePointOnSphere(float theta, float phi, float radius, Vector3 center)
+    private Vector3 CalculatePointOnSphere(double theta, double phi, double radius, Vector3 center)
     {
-        float x = MathF.Sin(theta) * MathF.Cos(phi);
-        float y = MathF.Cos(theta);
-        float z = MathF.Sin(theta) * MathF.Sin(phi);
+        double x = Math.Sin(theta) * Math.Cos(phi);
+        double y = Math.Cos(theta);
+        double z = Math.Sin(theta) * Math.Sin(phi);
 
         return new Vector3(
             x * radius + center.x,
@@ -513,9 +529,9 @@ public class GizmoBuilder
         );
     }
 
-    public void DrawWireCone(Vector3 start, Vector3 direction, float radius, Color color, int segments = 16)
+    public void DrawWireCone(Vector3 start, Vector3 direction, double radius, Color color, int segments = 16)
     {
-        float step = MathF.PI * 2 / segments;
+        double step = MathF.PI * 2 / segments;
         Vector3 tip = start + direction;
 
         // Normalize the direction vector
@@ -527,12 +543,12 @@ public class GizmoBuilder
 
         for (int i = 0; i < segments; i++)
         {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
+            double angle1 = i * step;
+            double angle2 = (i + 1) * step;
 
             // Calculate circle points using the perpendicular vectors
-            Vector3 a = start + radius * (MathF.Cos(angle1) * u + MathF.Sin(angle1) * v);
-            Vector3 b = start + radius * (MathF.Cos(angle2) * u + MathF.Sin(angle2) * v);
+            Vector3 a = start + radius * (Math.Cos(angle1) * u + Math.Sin(angle1) * v);
+            Vector3 b = start + radius * (Math.Cos(angle2) * u + Math.Sin(angle2) * v);
 
             AddLine(a, b, color);
             if (i == 0 || i == segments / 4 || i == segments / 2 || i == segments * 3 / 4)
@@ -562,7 +578,7 @@ public class GizmoBuilder
 
     }
 
-    public void DrawIcon(Texture2D icon, Vector3 center, float scale, Color color) => _icons.Add(new IconDrawCall { texture = icon, center = center, scale = scale, color = color });
+    public void DrawIcon(Texture2D icon, Vector3 center, double scale, Color color) => _icons.Add(new IconDrawCall { texture = icon, center = center, scale = scale, color = color });
 
     public (Mesh? wire, Mesh? solid) UpdateMesh(bool cameraRelative, Vector3 cameraPosition)
     {
