@@ -625,7 +625,7 @@ public class DefaultRenderPipeline : RenderPipeline
     private static void RenderSkybox(CommandBuffer buffer, CameraSnapshot css)
     {
         buffer.SetMaterial(s_skybox);
-        buffer.SetMatrix("_Matrix_VP", (css.originView * css.projection).ToFloat());
+        //buffer.SetMatrix("prowl_MatVP", (css.originView * css.projection).ToFloat());
         buffer.DrawSingle(s_skyDome);
     }
 
@@ -637,8 +637,7 @@ public class DefaultRenderPipeline : RenderPipeline
         if (wire != null || solid != null)
         {
             // The vertices have already been transformed by the gizmo system to be camera relative (if needed) so we just need to draw them
-            buffer.SetMatrix("_Matrix_VP", vp.ToFloat());
-
+            buffer.SetMatrix("prowl_ObjectToWorld", Matrix4x4.Identity.ToFloat());
             buffer.SetTexture("_MainTex", Texture2D.White.Res);
             buffer.SetMaterial(s_gizmo);
             if (wire != null) buffer.DrawSingle(wire);
@@ -657,8 +656,27 @@ public class DefaultRenderPipeline : RenderPipeline
                     center -= css.cameraPosition;
                 Matrix4x4 billboard = Matrix4x4.CreateBillboard(center, Vector3.zero, css.cameraUp, css.cameraForward);
 
-                buffer.SetMatrix("_Matrix_VP", (billboard * vp).ToFloat());
+                buffer.SetMatrix("prowl_ObjectToWorld", billboard.ToFloat());
                 buffer.SetTexture("_MainTex", icon.texture);
+
+                buffer.DrawSingle(s_quadMesh);
+            }
+        }
+
+        List<GizmoBuilder.ImageDrawCall> images = Debug.GetGizmoImages();
+        if (images != null)
+        {
+            buffer.SetMaterial(s_gizmo);
+            foreach (GizmoBuilder.ImageDrawCall image in images)
+            {
+                Vector3 position = image.center;
+                if (CAMERA_RELATIVE)
+                    position -= css.cameraPosition;
+                Matrix4x4 model = Matrix4x4.CreateScale(image.size.x / 2.0, image.size.y / 2.0, 0f) * Matrix4x4.CreateTranslation(position) * image.matrix;
+
+
+                buffer.SetMatrix("prowl_ObjectToWorld", model.ToFloat());
+                buffer.SetTexture("_MainTex", image.texture);
 
                 buffer.DrawSingle(s_quadMesh);
             }

@@ -203,6 +203,11 @@ public static class Debug
         return s_gizmoBuilder.GetIcons();
     }
 
+    public static List<GizmoBuilder.ImageDrawCall> GetGizmoImages()
+    {
+        return s_gizmoBuilder.GetImages();
+    }
+
     public static void PushMatrix(Matrix4x4 matrix)
     {
         s_gizmoBuilder.PushMatrix(matrix);
@@ -224,6 +229,7 @@ public static class Debug
     public static void DrawArrow(Vector3 start, Vector3 direction, Color color) => s_gizmoBuilder.DrawArrow(start, direction, color);
 
     public static void DrawIcon(Texture2D icon, Vector3 center, double scale, Color color) => s_gizmoBuilder.DrawIcon(icon, center, scale, color);
+    public static void DrawImage(Texture2D texture, Vector3 center, Vector2 size, Color color, Matrix4x4 matrix) => s_gizmoBuilder.DrawImage(texture, center, size, color, matrix);
 
     #endregion
 
@@ -266,6 +272,17 @@ public class GizmoBuilder
 
     private List<IconDrawCall> _icons = [];
 
+    public struct ImageDrawCall
+    {
+        public Texture2D texture;
+        public Vector3 center;
+        public Vector2 size;
+        public Color color;
+        public Matrix4x4 matrix;
+    }
+
+    private List<ImageDrawCall> _images = [];
+
     private Stack<Matrix4x4> _matrix4X4s = new();
 
 
@@ -278,6 +295,7 @@ public class GizmoBuilder
         _solid?.Clear();
 
         _icons.Clear();
+        _images.Clear();
 
         _matrix4X4s.Clear();
     }
@@ -580,6 +598,8 @@ public class GizmoBuilder
 
     public void DrawIcon(Texture2D icon, Vector3 center, double scale, Color color) => _icons.Add(new IconDrawCall { texture = icon, center = center, scale = scale, color = color });
 
+    public void DrawImage(Texture2D texture, Vector3 center, Vector2 size, Color color, Matrix4x4 matrix) => _images.Add(new ImageDrawCall { texture = texture, center = center, size = size, color = color, matrix = matrix });
+
     public (Mesh? wire, Mesh? solid) UpdateMesh(bool cameraRelative, Vector3 cameraPosition)
     {
         bool hasWire = _wireData.s_vertices.Count > 0;
@@ -645,5 +665,10 @@ public class GizmoBuilder
     public List<IconDrawCall> GetIcons()
     {
         return _icons;
+    }
+
+    public List<ImageDrawCall> GetImages()
+    {
+        return _images;
     }
 }
