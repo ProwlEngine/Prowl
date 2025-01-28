@@ -551,6 +551,13 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
             new Vector2F(1, 1),
         ];
 
+        mesh.Colors = [
+            Color.white,
+            Color.white,
+            Color.white,
+            Color.white
+        ];
+
         mesh.IndexFormat = IndexFormat.UInt16;
         mesh.Indices16 = [0, 2, 1, 2, 3, 1];
 

@@ -324,7 +324,7 @@ public abstract class MonoBehaviour : EngineObject
     /// Called right before the camera starts rendering the scene.
     /// </summary>
     public virtual void OnPreRender(Camera camera) { }
-
+    
     /// <summary>
     /// Called after the camera has finished rendering the scene.
     /// </summary>
