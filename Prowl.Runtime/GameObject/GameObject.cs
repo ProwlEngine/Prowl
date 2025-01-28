@@ -257,6 +257,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
         HierarchyStateChanged();
 
+        // Trigger OnTransformParentChanged
+        foreach (MonoBehaviour component in _components)
+            component.Do(component.OnTransformParentChanged);
+
         return true;
     }
 

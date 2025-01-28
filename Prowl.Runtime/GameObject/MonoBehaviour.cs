@@ -282,6 +282,11 @@ public abstract class MonoBehaviour : EngineObject
     public virtual void LateUpdate() { }
 
     /// <summary>
+    /// Called every time the Transform's Parent is changed.
+    /// </summary>
+    public virtual void OnTransformParentChanged() { }
+
+    /// <summary>
     /// Called for rendering and handling GUI gizmos.
     /// </summary>
     public virtual void DrawGizmos() { }
