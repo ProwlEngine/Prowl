@@ -38,7 +38,16 @@ public class EngineObject_PropertyDrawer : PropertyDrawer
         {
             ActiveGUI.Draw2D.DrawText(value.Name, pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
             if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(MouseButton.Left))
-                GlobalSelectHandler.Select(value);
+            {
+                if (value is MonoBehaviour mono)
+                {
+                    GlobalSelectHandler.Select(mono.GameObject);
+                }
+                else
+                {
+                    GlobalSelectHandler.Select(value);
+                }
+            }
         }
 
         // Drag and drop support
