@@ -44,11 +44,18 @@ public class RectTransform : MonoBehaviour
 
     public Rect CalculatedRect => _calculatedRect;
 
-    public Canvas TargetCanvas => _canvas;
+    public Canvas TargetCanvas
+    {
+        get
+        {
+            if (_canvas == null)
+                _canvas = GetComponentInParent<Canvas>();
+            return _canvas;
+        }
+    }
 
     public override void OnEnable()
     {
-        _canvas = GetComponentInParent<Canvas>();
         _parentRect = Transform.parent?.gameObject.GetComponent<RectTransform>();
 
         if (_parentRect != null)
@@ -67,7 +74,7 @@ public class RectTransform : MonoBehaviour
             _parentRect.RemoveChild(this); // Triggers a rebuild down the hierarchy from _parentRect
 
         _parentRect = Transform.parent?.gameObject.GetComponent<RectTransform>();
-        _canvas = GetComponentInParent<Canvas>();
+        _canvas = null;
 
         if (_parentRect != null)
             _parentRect.AddChild(this); // Triggers a rebuild down the hierarchy from _parentRect
@@ -140,6 +147,8 @@ public class RectTransform : MonoBehaviour
 
     public void Rebuild()
     {
+        if (TargetCanvas == null) return;
+
         // Rebuild this rect
         CalculateLayout();
 
@@ -148,17 +157,19 @@ public class RectTransform : MonoBehaviour
             child.Rebuild();
 
         // Rebuild Draw Data
-        _canvas.SetCanvasDirty();
+        TargetCanvas.SetCanvasDirty();
     }
 
     public void CalculateLayout()
     {
+        if (TargetCanvas == null) return;
+
         Rect parentRect = _parentRect != null ?
             _parentRect._calculatedRect :
             new Rect(0, 0, Screen.Width, Screen.Height);
 
         Vector2 position = parentRect.Min;
-        Vector2 finalSize = _size * _canvas.CanvasScale;
+        Vector2 finalSize = _size * TargetCanvas.CanvasScale;
 
         // Horizontal
         switch (_horizontalAlignment)
@@ -204,7 +215,7 @@ public class RectTransform : MonoBehaviour
         position -= pivotOffset;
 
         // Apply anchored position
-        position += _anchoredPosition * _canvas.CanvasScale;
+        position += _anchoredPosition * TargetCanvas.CanvasScale;
 
         _calculatedRect = new Rect(position, finalSize);
     }
@@ -219,11 +230,10 @@ public class RectTransform : MonoBehaviour
 
     public override void DrawGizmos()
     {
-        if (_canvas == null)
-            return;
+        if (TargetCanvas == null) return;
 
         // Draw the calculated rect
-        Debug.PushMatrix(_canvas.Transform.localToWorldMatrix);
+        Debug.PushMatrix(TargetCanvas.Transform.localToWorldMatrix);
         Debug.DrawLine(new Vector3(_calculatedRect.Min.x, _calculatedRect.Min.y, 0), new Vector3(_calculatedRect.Max.x, _calculatedRect.Min.y, 0), Color.white);
         Debug.DrawLine(new Vector3(_calculatedRect.Max.x, _calculatedRect.Min.y, 0), new Vector3(_calculatedRect.Max.x, _calculatedRect.Max.y, 0), Color.white);
         Debug.DrawLine(new Vector3(_calculatedRect.Max.x, _calculatedRect.Max.y, 0), new Vector3(_calculatedRect.Min.x, _calculatedRect.Max.y, 0), Color.white);
@@ -233,11 +243,10 @@ public class RectTransform : MonoBehaviour
 
     public override void DrawGizmosSelected()
     {
-        if (_canvas == null)
-            return;
+        if (TargetCanvas == null) return;
 
 
-        Debug.PushMatrix(_canvas.Transform.localToWorldMatrix);
+        Debug.PushMatrix(TargetCanvas.Transform.localToWorldMatrix);
 
         Rect parentRect = _parentRect != null ?
             _parentRect._calculatedRect :

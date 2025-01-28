@@ -242,7 +242,7 @@ public sealed class Canvas : MonoBehaviour
 public abstract class CanvasElement : MonoBehaviour
 {
     private RectTransform? _rectTransform;
-    public RectTransform RectTransform => _rectTransform ??= GetComponent<RectTransform>();
+    public RectTransform RectTransform => (_rectTransform == null) ?_rectTransform = GetComponent<RectTransform>() : _rectTransform;
 
     public abstract void Draw(UIDrawList drawList);
 
