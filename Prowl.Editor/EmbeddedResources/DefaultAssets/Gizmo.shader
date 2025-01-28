@@ -55,7 +55,7 @@ Pass "Gizmo"
         {
             Varyings output = (Varyings)0;
 
-            output.pos = mul(PROWL_MATRIX_VP, float4(input.pos, 1.0));
+            output.pos = mul(PROWL_MATRIX_MVP, float4(input.pos, 1.0));
             output.col = input.col;
             output.uv = input.uv;
 
@@ -65,8 +65,10 @@ Pass "Gizmo"
 
 		float4 Fragment(Varyings input) : SV_TARGET
 		{
-			float3 color = _MainTex.Sample(sampler_MainTex, input.uv).rgb * input.col.rgb;
-            return float4(color, 1.0);
+			float4 color = _MainTex.Sample(sampler_MainTex, input.uv) * input.col;
+			if(color.a < 0.5)
+				discard;
+            return color;
 		}
 	ENDHLSL
 }
