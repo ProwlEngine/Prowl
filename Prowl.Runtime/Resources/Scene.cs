@@ -196,6 +196,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public void OnAfterDeserialize()
     {
+        if (serializeObj == null)
+        {
+            Debug.LogWarning("Serialized object array is null, The Scene failed to load for whatever reason.");
+            serializeObj = [];
+            return;
+        }
+
         foreach (GameObject obj in serializeObj)
             Add(obj);
     }
