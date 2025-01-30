@@ -6,7 +6,7 @@ using System.Linq;
 
 using Prowl.Icons;
 
-namespace Prowl.Runtime.Components.UI;
+namespace Prowl.Runtime.UI;
 
 public enum CanvasInputType { PointerEnter, PointerExit, PointerDown, PointerUp, Scroll }
 

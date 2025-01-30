@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using Prowl.Echo;
 using Prowl.Icons;
 
-namespace Prowl.Runtime.Components.UI;
+namespace Prowl.Runtime.UI;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  UI/{FontAwesome6.UsersRectangle}  RectTransform")]
 [ExecuteAlways]
