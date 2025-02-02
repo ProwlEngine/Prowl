@@ -108,7 +108,7 @@ Pass "Grid"
 			float4 output = float4(_GridColor.xyz, max(sg, bg));
 
             output.w *= _GridColor.w;
-            output.w *= 1 - (length(input.vpos) / _MaxDist);
+            output *= 1.0 - (length(input.vpos) / _MaxDist);
 
             return output;
 		}
