@@ -19,7 +19,6 @@ public class DefaultRenderPipeline : RenderPipeline
 {
     const bool CAMERA_RELATIVE = true;
     private const float GRID_SCALE = 1000f;
-    private const float GRID_FALLOFF = 15.0f;
 
 
     #region Static Resources
@@ -701,7 +700,6 @@ public class DefaultRenderPipeline : RenderPipeline
         buffer.SetFloat("_LineWidth", (float)data.GridSizes.z);
         buffer.SetFloat("_PrimaryGridSize", 1 / (float)data.GridSizes.x * GRID_SCALE * 2);
         buffer.SetFloat("_SecondaryGridSize", 1 / (float)data.GridSizes.y * GRID_SCALE * 2);
-        buffer.SetFloat("_Falloff", 15.0f);
         buffer.SetFloat("_MaxDist", Math.Min(css.farClipPlane, GRID_SCALE));
 
         buffer.DrawSingle(s_quadMesh);

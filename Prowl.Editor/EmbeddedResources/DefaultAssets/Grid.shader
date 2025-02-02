@@ -51,7 +51,6 @@ Pass "Grid"
 		float _PrimaryGridSize;
 		float _LineWidth;
 		float _SecondaryGridSize;
-        float _Falloff;
         float _MaxDist;
 
 
@@ -109,7 +108,7 @@ Pass "Grid"
 			float4 output = float4(_GridColor.xyz, max(sg, bg));
 
             output.w *= _GridColor.w;
-            output.w *= 1 - pow((length(input.vpos) / _MaxDist), _Falloff);
+            output.w *= 1 - (length(input.vpos) / _MaxDist);
 
             return output;
 		}
