@@ -51,9 +51,21 @@ public static class ReflectionUtils
             const BindingFlags flags = BindingFlags.Public |
                                      BindingFlags.NonPublic |
                                      BindingFlags.Instance;
-            return targetType.GetFields(flags)
-                .Where(field => IsFieldSerializable(field))
-                .ToArray();
+
+            // Start with the current type
+            List<FieldInfo> fields = new List<FieldInfo>();
+            Type? currentType = targetType;
+
+            // Walk up the inheritance hierarchy to collect fields from all base types
+            while (currentType != null && currentType != typeof(object))
+            {
+                fields.AddRange(currentType.GetFields(flags)
+                    .Where(field => IsFieldSerializable(field)));
+
+                currentType = currentType.BaseType;
+            }
+
+            return fields.ToArray();
         });
     }
 

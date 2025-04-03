@@ -622,9 +622,13 @@ public class General_Tests
     public void TestAbstractClass()
     {
         AbstractClass original = new ConcreteClass { Name = "Test", Value = 42 };
+        original.Position = new Vector3 { X = 5, Y = 6, Z = 7 };
         var serialized = Serializer.Serialize(original);
         var deserialized = Serializer.Deserialize<ConcreteClass>(serialized);
         Assert.Equal(((ConcreteClass)original).Value, deserialized.Value);
+        Assert.Equal(original.Position.X, deserialized.Position.X);
+        Assert.Equal(original.Position.Y, deserialized.Position.Y);
+        Assert.Equal(original.Position.Z, deserialized.Position.Z);
     }
 
     [Fact]
