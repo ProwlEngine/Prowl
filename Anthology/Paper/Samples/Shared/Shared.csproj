@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="EmbeddedResources\fa-regular-400.ttf" />
+    <None Remove="EmbeddedResources\fa-solid-900.ttf" />
+    <None Remove="EmbeddedResources\font.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="EmbeddedResources\fa-regular-400.ttf" />
+    <EmbeddedResource Include="EmbeddedResources\fa-solid-900.ttf" />
+    <EmbeddedResource Include="EmbeddedResources\font.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Paper\Paper.csproj" />
+  </ItemGroup>
+
+</Project>
