@@ -5,9 +5,6 @@ using System.Numerics;
 
 namespace Prowl.PaperUI
 {
-    /// <summary>
-    /// Interaction handling portion of the ImGui system.
-    /// </summary>
     public static partial class Paper
     {
         #region State Query Methods
@@ -257,7 +254,7 @@ namespace Prowl.PaperUI
         private static void HandleMouseEvents()
         {
             // Handle double-click
-            if (IsPointerDoubleClick(MouseButton.Left))
+            if (IsPointerDoubleClick(PaperMouseBtn.Left))
             {
                 if (_theHoveredElementId != 0)
                 {
@@ -274,7 +271,7 @@ namespace Prowl.PaperUI
             }
 
             // Handle press
-            if (IsPointerPressed(MouseButton.Left))
+            if (IsPointerPressed(PaperMouseBtn.Left))
             {
                 if (_theHoveredElementId != 0)
                 {
@@ -294,7 +291,7 @@ namespace Prowl.PaperUI
                 }
             }
             // Handle release
-            else if (IsPointerReleased(MouseButton.Left))
+            else if (IsPointerReleased(PaperMouseBtn.Left))
             {
                 if (_activeElementId != 0)
                 {
@@ -343,7 +340,7 @@ namespace Prowl.PaperUI
                 }
             }
             // Handle right-click
-            else if (IsPointerPressed(MouseButton.Right))
+            else if (IsPointerPressed(PaperMouseBtn.Right))
             {
                 if (_theHoveredElementId != 0)
                 {
@@ -360,7 +357,7 @@ namespace Prowl.PaperUI
             }
 
             // Handle dragging
-            if (IsPointerDown(MouseButton.Left) && _activeElementId != 0)
+            if (IsPointerDown(PaperMouseBtn.Left) && _activeElementId != 0)
             {
                 Element? activeElement = FindElementByID(_activeElementId);
                 if (activeElement != null)
