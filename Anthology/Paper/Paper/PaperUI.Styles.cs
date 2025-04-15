@@ -684,9 +684,6 @@ namespace Prowl.PaperUI
         #endregion
     }
 
-    /// <summary>
-    /// Style management portion of the ImGui system.
-    /// </summary>
     public static partial class Paper
     {
         #region Style Management

@@ -7,8 +7,8 @@ namespace Prowl.PaperUI
         #region Fields & Properties
 
         // Enums
-        public static readonly Key[] KeyValues = Enum.GetValues<Key>();
-        public static readonly MouseButton[] MouseValues = Enum.GetValues<MouseButton>();
+        public static readonly PaperKey[] KeyValues = Enum.GetValues<PaperKey>();
+        public static readonly PaperMouseBtn[] MouseValues = Enum.GetValues<PaperMouseBtn>();
 
         // Events
         public static event Action<Vector2> OnPointerPosSet;
@@ -20,7 +20,7 @@ namespace Prowl.PaperUI
         private static bool[] _keyCurState;
         private static bool[] _keyPrevState;
         private static float[] _keyPressedTime;
-        public static Key LastKeyPressed { get; private set; } = Key.Unknown;
+        public static PaperKey LastKeyPressed { get; private set; } = PaperKey.Unknown;
 
         #endregion
 
@@ -31,7 +31,7 @@ namespace Prowl.PaperUI
         private static bool[] _pointerPrevState;
         private static float[] _pointerPressedTime;
         private static Vector2[] _pointerClickPos;
-        public static MouseButton LastButtonPressed { get; private set; } = MouseButton.Unknown;
+        public static PaperMouseBtn LastButtonPressed { get; private set; } = PaperMouseBtn.Unknown;
         public static Vector2 PreviousPointerPos { get; private set; } = Vector2.Zero;
 
         // Current pointer position
@@ -243,7 +243,7 @@ namespace Prowl.PaperUI
                 _keyPressedTime[i] = 0;
             }
 
-            LastKeyPressed = Key.Unknown;
+            LastKeyPressed = PaperKey.Unknown;
 
             // Clear mouse state
             for (var i = 0; i < _pointerCurState.Length; ++i)
@@ -254,7 +254,7 @@ namespace Prowl.PaperUI
                 _pointerClickPos[i] = Vector2.Zero;
             }
 
-            LastButtonPressed = MouseButton.Unknown;
+            LastButtonPressed = PaperMouseBtn.Unknown;
             PreviousPointerPos = _pointerPos;
             _pointerPos = Vector2.Zero;
             PointerWheel = 0;
@@ -269,7 +269,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="key">The key to update</param>
         /// <param name="isKeyDown">Whether the key is pressed</param>
-        public static void SetKeyState(Key key, bool isKeyDown)
+        public static void SetKeyState(PaperKey key, bool isKeyDown)
         {
             var index = (int)key;
             _keyPrevState[index] = _keyCurState[index];
@@ -287,7 +287,7 @@ namespace Prowl.PaperUI
         /// <param name="y">Y coordinate</param>
         /// <param name="isPointerBtnDown">Whether the button is pressed</param>
         /// <param name="isPointerMove">Whether this is a movement event</param>
-        public static void SetPointerState(MouseButton btn, float x, float y, bool isPointerBtnDown, bool isPointerMove)
+        public static void SetPointerState(PaperMouseBtn btn, float x, float y, bool isPointerBtnDown, bool isPointerMove)
         {
             var index = (int)btn;
             LastButtonPressed = btn;
@@ -354,27 +354,27 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Checks if a key is currently down.
         /// </summary>
-        public static bool IsKeyDown(Key key) => _keyCurState[(int)key];
+        public static bool IsKeyDown(PaperKey key) => _keyCurState[(int)key];
 
         /// <summary>
         /// Checks if a key is currently up.
         /// </summary>
-        public static bool IsKeyUp(Key key) => !_keyCurState[(int)key];
+        public static bool IsKeyUp(PaperKey key) => !_keyCurState[(int)key];
 
         /// <summary>
         /// Checks if a key was just pressed this frame.
         /// </summary>
-        public static bool IsKeyPressed(Key key) => !_keyPrevState[(int)key] && _keyCurState[(int)key];
+        public static bool IsKeyPressed(PaperKey key) => !_keyPrevState[(int)key] && _keyCurState[(int)key];
 
         /// <summary>
         /// Checks if a key was just released this frame.
         /// </summary>
-        public static bool IsKeyReleased(Key key) => _keyPrevState[(int)key] && !_keyCurState[(int)key];
+        public static bool IsKeyReleased(PaperKey key) => _keyPrevState[(int)key] && !_keyCurState[(int)key];
 
         /// <summary>
         /// Checks if a key has been held down for a while.
         /// </summary>
-        public static bool IsKeyHeld(Key key) => IsKeyDown(key) && _keyPressedTime[(int)key] >= 0.5f;
+        public static bool IsKeyHeld(PaperKey key) => IsKeyDown(key) && _keyPressedTime[(int)key] >= 0.5f;
 
         #endregion
 
@@ -383,39 +383,39 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Checks if a mouse button is currently down.
         /// </summary>
-        public static bool IsPointerDown(MouseButton btn) => _pointerCurState[(int)btn];
+        public static bool IsPointerDown(PaperMouseBtn btn) => _pointerCurState[(int)btn];
 
         /// <summary>
         /// Checks if a mouse button is currently up.
         /// </summary>
-        public static bool IsPointerUp(MouseButton btn) => !_pointerCurState[(int)btn];
+        public static bool IsPointerUp(PaperMouseBtn btn) => !_pointerCurState[(int)btn];
 
         /// <summary>
         /// Checks if a mouse button was just pressed this frame.
         /// </summary>
-        public static bool IsPointerPressed(MouseButton btn) => !_pointerPrevState[(int)btn] && _pointerCurState[(int)btn];
+        public static bool IsPointerPressed(PaperMouseBtn btn) => !_pointerPrevState[(int)btn] && _pointerCurState[(int)btn];
 
         /// <summary>
         /// Checks if a mouse button was just released this frame.
         /// </summary>
-        public static bool IsPointerReleased(MouseButton btn) => _pointerPrevState[(int)btn] && !_pointerCurState[(int)btn];
+        public static bool IsPointerReleased(PaperMouseBtn btn) => _pointerPrevState[(int)btn] && !_pointerCurState[(int)btn];
 
         /// <summary>
         /// Checks if a mouse button has been held down for a while.
         /// </summary>
-        public static bool IsPointerHeld(MouseButton btn) => IsPointerDown(btn) && _pointerPressedTime[(int)btn] >= 0.5f;
+        public static bool IsPointerHeld(PaperMouseBtn btn) => IsPointerDown(btn) && _pointerPressedTime[(int)btn] >= 0.5f;
 
         /// <summary>
         /// Checks if a mouse button was double-clicked.
         /// </summary>
-        public static bool IsPointerDoubleClick(MouseButton btn) =>
+        public static bool IsPointerDoubleClick(PaperMouseBtn btn) =>
             IsPointerPressed(btn) && _time < _pointerLastClickTime[(int)btn] &&
             (PointerPos - _pointerLastClickPos[(int)btn]).LengthSquared() < 2; // 5^2 = 25
 
         /// <summary>
         /// Gets the position where a mouse button was clicked.
         /// </summary>
-        public static Vector2 GetPointerClickPos(MouseButton btn) => _pointerClickPos[(int)btn];
+        public static Vector2 GetPointerClickPos(PaperMouseBtn btn) => _pointerClickPos[(int)btn];
 
         /// <summary>
         /// Checks if the pointer is over a specified rectangle.
@@ -457,10 +457,7 @@ namespace Prowl.PaperUI
         void SetClipboardText(string text);
     }
 
-    /// <summary>
-    /// Enumeration of keyboard keys.
-    /// </summary>
-    public enum Key
+    public enum PaperKey
     {
         Unknown = 0,
 
@@ -501,7 +498,7 @@ namespace Prowl.PaperUI
     /// <summary>
     /// Enumeration of mouse buttons.
     /// </summary>
-    public enum MouseButton
+    public enum PaperMouseBtn
     {
         Unknown = 0,
         Left,
