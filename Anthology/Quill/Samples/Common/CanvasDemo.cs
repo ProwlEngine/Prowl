@@ -211,22 +211,22 @@ namespace Common
             _canvas.SetStrokeWidth(4);
 
             // Draw horizontal lines
-            for (int i = 0; i <= x; i++)
-            {
-                _canvas.BeginPath();
-                _canvas.MoveTo(0, i * cellSize);
-                _canvas.LineTo((cellSize * x), i * cellSize);
-                _canvas.Stroke();
-            }
-
-            // Draw vertical lines
+            _canvas.BeginPath();
             for (int i = 0; i <= y; i++)
             {
-                _canvas.BeginPath();
+                _canvas.MoveTo(0, i * cellSize);
+                _canvas.LineTo((cellSize * x), i * cellSize);
+            }
+            _canvas.Stroke();
+
+            // Draw vertical lines
+            _canvas.BeginPath();
+            for (int i = 0; i <= x; i++)
+            {
                 _canvas.MoveTo(i * cellSize, 0);
                 _canvas.LineTo(i * cellSize, (cellSize * y));
-                _canvas.Stroke();
             }
+            _canvas.Stroke();
         }   
 
         private void DrawCoordinateSystem(double x, double y, double size)
@@ -274,7 +274,7 @@ namespace Common
             _canvas.SaveState();
 
             // Draw 2D grid for reference
-            DrawGrid(16, 16, 50, Color.FromArgb(40, 255, 255, 255));
+            DrawGrid(16, 17, 50, Color.FromArgb(40, 255, 255, 255));
 
             // Draw coordinate system at center
             DrawCoordinateSystem(0, 0, 50);
@@ -305,6 +305,9 @@ namespace Common
 
             // 9. Image Demo
             DrawImageDemo(550, 450, 200, 150);
+
+            // 10. Gradient Demo
+            DrawGradientDemo(50, 650, 200, 150);
 
             // Restore the canvas state
             _canvas.RestoreState();
@@ -757,6 +760,89 @@ namespace Common
                 // Draw "No Image" text
                 DrawText("No Image Available", 30, 45, 14, Color.FromArgb(255, 255, 255, 255));
             }
+
+            _canvas.RestoreState();
+        }
+
+        private void DrawGradientDemo(double x, double y, double width, double height)
+        {
+            // Draw group background and title
+            DrawGroupBackground(x, y, width, height, "Gradients");
+
+            _canvas.SaveState();
+            _canvas.TransformBy(Transform2D.CreateTranslation(x + 20, y + 30));
+
+            // Section spacing
+            double spacing = 20;
+            double boxSize = 40;
+            double animatedFactor = (Math.Sin(_time * 2.0) * 0.5 + 0.5); // 0 to 1 animation
+
+            // 1
+            // Horizontal linear gradient
+            _canvas.SetLinearBrush(0, 0, boxSize, 0,
+                Color.FromArgb(255, 255, 100, 100),
+                Color.FromArgb((int)(255 * animatedFactor), 100, 100, 255));
+            _canvas.RectFilled(0, 0, boxSize, boxSize, Color.White);
+
+            // Diagonal linear gradient with animation
+            _canvas.SetLinearBrush(
+                0, boxSize + spacing * 2,
+                boxSize, boxSize * 2 + spacing * 5 * animatedFactor,
+                Color.FromArgb(255, 255, 100, 255),
+                Color.FromArgb(255, 100, 255, 255));
+            _canvas.RectFilled(0, boxSize + spacing, boxSize, boxSize, Color.White);
+
+            // 2
+            double col2X = boxSize + spacing;
+
+            // Circle with linear gradient
+            _canvas.SetLinearBrush(
+                col2X, 0,
+                col2X + boxSize, boxSize,
+                Color.FromArgb(255, 255, 100, 100),
+                Color.FromArgb(255, 100, 100, 255));
+            _canvas.CircleFilled(col2X + boxSize / 2, boxSize / 2, boxSize / 2, Color.White);
+
+            // Radial gradient with animation
+            _canvas.SetRadialBrush(
+                (col2X + boxSize / 2) - 5, (boxSize / 2 + boxSize + spacing) - 5,
+                13,
+                30,
+                Color.PowderBlue,
+                Color.RebeccaPurple);
+            _canvas.CircleFilled(col2X + boxSize / 2, boxSize / 2 + boxSize + spacing, boxSize / 2, Color.White);
+
+
+            // 3
+            double col3X = (boxSize + spacing) * 2;
+
+            // Basic box gradient
+            _canvas.SetBoxBrush(
+                col3X + boxSize / 2, boxSize / 2,
+                boxSize * 0.7, boxSize * 0.7,
+                5, 10,
+                Color.Turquoise,
+                Color.Tomato);
+            _canvas.RectFilled(col3X, 0, boxSize, boxSize, Color.White);
+
+            // Rounded rect with box gradient
+            _canvas.SetBoxBrush(
+                col3X + boxSize / 2, boxSize / 2 + boxSize + spacing,
+                boxSize * 0.7, boxSize * 0.7,
+                5, 10,
+                Color.FromArgb(255, 255, 255, 100),
+                Color.FromArgb(255, 50, 128, 50));
+
+            // Use path-based drawing to show gradient with a rounded rect
+            _canvas.RoundedRect(
+                col3X, boxSize + spacing,
+                boxSize, boxSize,
+                10, 10, 10, 10);
+            _canvas.Fill();
+
+
+            // Clear gradient
+            _canvas.ClearGradient();
 
             _canvas.RestoreState();
         }

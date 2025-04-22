@@ -18,6 +18,67 @@ uniform sampler2D texture0;
 uniform mat4 scissorMat;
 uniform vec2 scissorExt;
 
+uniform mat4 brushMat;
+uniform int brushType;       // 0=none, 1=linear, 2=radial, 3=box
+uniform vec4 brushColor1;    // Start color
+uniform vec4 brushColor2;    // End color
+uniform vec4 brushParams;    // x,y = start point, z,w = end point (or center+radius for radial)
+uniform vec2 brushParams2;   // x = Box radius, y = Box Feather
+
+float calculateBrushFactor() {
+    // No brush
+    if (brushType == 0) return 0.0;
+    
+    vec2 transformedPoint = (brushMat * vec4(fragPos, 0.0, 1.0)).xy;
+
+    // Linear brush - projects position onto the line between start and end
+    if (brushType == 1) {
+        vec2 startPoint = brushParams.xy;
+        vec2 endPoint = brushParams.zw;
+        vec2 line = endPoint - startPoint;
+        float lineLength = length(line);
+        
+        if (lineLength < 0.001) return 0.0;
+        
+        vec2 posToStart = transformedPoint - startPoint;
+        float projection = dot(posToStart, line) / (lineLength * lineLength);
+        return clamp(projection, 0.0, 1.0);
+    }
+    
+    // Radial brush - based on distance from center
+    if (brushType == 2) {
+        vec2 center = brushParams.xy;
+        float innerRadius = brushParams.z;
+        float outerRadius = brushParams.w;
+        
+        if (outerRadius < 0.001) return 0.0;
+        
+        float distance = smoothstep(innerRadius, outerRadius, length(transformedPoint - center));
+        return clamp(distance, 0.0, 1.0);
+    }
+    
+    // Box brush - like radial but uses max distance in x or y direction
+    if (brushType == 3) {
+        vec2 center = brushParams.xy;
+        vec2 halfSize = brushParams.zw;
+        float radius = brushParams2.x;
+        float feather = brushParams2.y;
+        
+        if (halfSize.x < 0.001 || halfSize.y < 0.001) return 0.0;
+        
+        // Calculate distance from center (normalized by half-size)
+        vec2 q = abs(transformedPoint - center) - (halfSize - vec2(radius));
+        
+        // Distance field calculation for rounded rectangle
+        //float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+        float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
+        
+        return clamp((dist + feather * 0.5) / feather, 0.0, 1.0);
+    }
+    
+    return 0.0;
+}
+
 // Determines whether a point is within the scissor region and returns the appropriate mask value
 // p: The point to test against the scissor region
 // Returns: 1.0 for points fully inside, 0.0 for points fully outside, and a gradient for edge transition
@@ -47,6 +108,13 @@ void main()
     
     float mask = scissorMask(fragPos);
     vec4 color = fragColor;
+
+    // Apply brush if active
+    if (brushType > 0) {
+        float factor = calculateBrushFactor();
+        color = mix(brushColor1, brushColor2, factor);
+    }
+
     color *= texture(texture0, fragTexCoord);
     
     finalColor = vec4(color.rgb, color.a * edgeAlpha * mask);
@@ -75,12 +143,26 @@ void main()
         static int scissorMatLoc;
         static int scissorExtLoc;
 
+        static int _brushMatLoc;
+        static int _brushTypeLoc;
+        static int _brushColor1Loc;
+        static int _brushColor2Loc;
+        static int _brushParamsLoc;
+        static int _brushParams2Loc;
+
         public static void Initialize()
         {
             // Load shader with scissoring support
             shader = LoadShaderFromMemory(Vertex_VS, Stroke_FS);
             scissorMatLoc = GetShaderLocation(shader, "scissorMat");
             scissorExtLoc = GetShaderLocation(shader, "scissorExt");
+
+            _brushMatLoc = GetShaderLocation(shader, "brushMat");
+            _brushTypeLoc = GetShaderLocation(shader, "brushType");
+            _brushColor1Loc = GetShaderLocation(shader, "brushColor1");
+            _brushColor2Loc = GetShaderLocation(shader, "brushColor2");
+            _brushParamsLoc = GetShaderLocation(shader, "brushParams");
+            _brushParams2Loc = GetShaderLocation(shader, "brushParams2");
         }
 
         public static void Render(Canvas canvas)
@@ -97,6 +179,35 @@ void main()
             UnloadShader(shader);
         }
 
+        static void SetUniforms(Prowl.Quill.DrawCall drawCall)
+        {
+            // Bind the texture if available, otherwise use default
+            uint textureToUse = 0;
+            if (drawCall.Texture != null)
+                textureToUse = ((Texture2D)drawCall.Texture).Id;
+
+            Rlgl.SetTexture(textureToUse);
+
+            // Set scissor rectangle
+            drawCall.GetScissor(out var scissor, out var extent);
+            scissor = Matrix4x4.Transpose(scissor);
+
+            SetShaderValueMatrix(shader, scissorMatLoc, scissor.ToFloat());
+            SetShaderValue(shader, scissorExtLoc, [(float)extent.x, (float)extent.y], ShaderUniformDataType.Vec2);
+
+            // Set gradient parameters
+            SetShaderValue(shader, _brushTypeLoc, (int)drawCall.Brush.Type, ShaderUniformDataType.Int);
+            if (drawCall.Brush.Type != BrushType.None)
+            {
+                var brushMat = Matrix4x4.Transpose(drawCall.Brush.BrushMatrix);
+                SetShaderValueMatrix(shader, _brushMatLoc, brushMat.ToFloat());
+                SetShaderValue(shader, _brushColor1Loc, ToVec4(drawCall.Brush.Color1), ShaderUniformDataType.Vec4);
+                SetShaderValue(shader, _brushColor2Loc, ToVec4(drawCall.Brush.Color2), ShaderUniformDataType.Vec4);
+                SetShaderValue(shader, _brushParamsLoc, new System.Numerics.Vector4((float)drawCall.Brush.Point1.x, (float)drawCall.Brush.Point1.y, (float)drawCall.Brush.Point2.x, (float)drawCall.Brush.Point2.y), ShaderUniformDataType.Vec4);
+                SetShaderValue(shader, _brushParams2Loc, new System.Numerics.Vector2((float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather), ShaderUniformDataType.Vec2);
+            }
+        }
+
         static void DrawCanvas(Canvas canvas, Shader shader, int scissorMatLoc, int scissorExtLoc)
         {
             Rlgl.DrawRenderBatchActive();
@@ -105,31 +216,17 @@ void main()
 
             foreach (var drawCall in canvas.DrawCalls)
             {
-                // Bind the texture if available, otherwise use default
-                uint textureToUse = 0;
-                if (drawCall.Texture != null)
-                    textureToUse = ((Texture2D)drawCall.Texture).Id;
-
-                // Set scissor rectangle
-                drawCall.GetScissor(out var scissor, out var extent);
-                scissor = Matrix4x4.Transpose(scissor);
 
                 // Draw the vertices for this draw call
                 Rlgl.Begin(DrawMode.Triangles);
-                Rlgl.SetTexture(textureToUse);
-
-                SetShaderValueMatrix(shader, scissorMatLoc, scissor.ToFloat());
-                SetShaderValue(shader, scissorExtLoc, [(float)extent.x, (float)extent.y], ShaderUniformDataType.Vec2);
+                SetUniforms(drawCall);
 
                 for (int i = 0; i < drawCall.ElementCount; i += 3)
                 {
                     if (Rlgl.CheckRenderBatchLimit(3))
                     {
                         Rlgl.Begin(DrawMode.Triangles);
-                        Rlgl.SetTexture(textureToUse);
-
-                        SetShaderValueMatrix(shader, scissorMatLoc, scissor.ToFloat());
-                        SetShaderValue(shader, scissorExtLoc, [(float)extent.x, (float)extent.y], ShaderUniformDataType.Vec2);
+                        SetUniforms(drawCall);
                     }
 
                     var a = canvas.Vertices[(int)canvas.Indices[index]];
@@ -155,5 +252,8 @@ void main()
             }
             Rlgl.SetTexture(0);
         }
+
+        static System.Numerics.Vector4 ToVec4(System.Drawing.Color color) =>
+            new System.Numerics.Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
     }
 }

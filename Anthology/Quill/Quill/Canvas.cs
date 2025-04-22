@@ -4,10 +4,19 @@ using System.Runtime.InteropServices;
 
 namespace Prowl.Quill;
 
-public struct ProwlCanvasDrawCall
+public enum BrushType
+{
+    None = 0,
+    Linear = 1,
+    Radial = 2,
+    Box = 3 
+}
+
+public struct DrawCall
 {
     public int ElementCount;
     public object? Texture;
+    public Brush Brush;
     internal Transform2D scissor;
     internal Vector2 scissorExtent;
 
@@ -29,9 +38,9 @@ public struct ProwlCanvasDrawCall
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
-public struct ProwlCanvasVertex
+public struct Vertex
 {
-    public static int SizeInBytes => Marshal.SizeOf<ProwlCanvasVertex>();
+    public static int SizeInBytes => Marshal.SizeOf<Vertex>();
 
     public readonly Vector2 Position => new Vector2(x, y);
     public readonly Vector2 UV => new Vector2(u, v);
@@ -49,7 +58,7 @@ public struct ProwlCanvasVertex
     public byte b;
     public byte a;
 
-    public ProwlCanvasVertex(Vector2 position, Vector2 UV, Color color)
+    public Vertex(Vector2 position, Vector2 UV, Color color)
     {
         x = (float)position.x;
         y = (float)position.y;
@@ -59,6 +68,33 @@ public struct ProwlCanvasVertex
         g = color.G;
         b = color.B;
         a = color.A;
+    }
+}
+
+public struct Brush
+{
+    public Matrix4x4 BrushMatrix => Transform.Inverse().ToMatrix4x4();
+
+    public Transform2D Transform;
+
+    public BrushType Type;
+    public Color Color1;
+    public Color Color2;
+    public Vector2 Point1;
+    public Vector2 Point2; // or radius for radial, half-size for box
+    public double CornerRadii;
+    public double Feather;
+
+    internal bool EqualsOther(Brush gradient)
+    {
+        return Type == gradient.Type &&
+               Color1 == gradient.Color1 &&
+               Color2 == gradient.Color2 &&
+               Point1 == gradient.Point1 &&
+               Point2 == gradient.Point2 &&
+               CornerRadii == gradient.CornerRadii &&
+               Feather == gradient.Feather &&
+               Transform == gradient.Transform;
     }
 }
 
@@ -77,6 +113,7 @@ internal struct ProwlCanvasState
     internal object? texture;
     internal Transform2D scissor;
     internal Vector2 scissorExtent;
+    internal Brush brush;
 
 
     internal Color fillColor;
@@ -96,6 +133,8 @@ internal struct ProwlCanvasState
         scissor.Zero();
         scissorExtent.x = -1.0f;
         scissorExtent.y = -1.0f;
+        brush = new();
+        brush.Transform = Transform2D.Identity;
         fillColor = Color.FromArgb(255, 0, 0, 0); // Default fill color (black)
     }
 
@@ -113,6 +152,8 @@ internal struct ProwlCanvasState
         scissor.Zero();
         scissorExtent.x = -1.0f;
         scissorExtent.y = -1.0f;
+        brush = new();
+        brush.Transform = Transform2D.Identity;
         fillColor = Color.FromArgb(255, 0, 0, 0); // Default fill color (black)
     }
 }
@@ -132,15 +173,15 @@ public partial class Canvas
     }
 
     private const double RoundingMinDistance = 5;
-    public IReadOnlyList<ProwlCanvasDrawCall> DrawCalls => _drawCalls.Where(d => d.ElementCount != 0).ToList();
+    public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.Where(d => d.ElementCount != 0).ToList();
     public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
-    public IReadOnlyList<ProwlCanvasVertex> Vertices => _vertices.AsReadOnly();
+    public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
 
-    internal List<ProwlCanvasDrawCall> _drawCalls = new();
+    internal List<DrawCall> _drawCalls = new();
     internal Stack<object> _textureStack = new();
 
     internal List<uint> _indices = new();
-    internal List<ProwlCanvasVertex> _vertices = new();
+    internal List<Vertex> _vertices = new();
 
     private readonly List<SubPath> _subPaths = new();
     private SubPath? _currentSubPath = null;
@@ -191,6 +232,42 @@ public partial class Canvas
     public void SetStrokeScale(double scale) => _state.strokeScale = scale;
     public void SetMiterLimit(double limit = 4) => _state.miterLimit = limit;
     public void SetTexture(object? texture) => _state.texture = texture;
+    public void SetLinearBrush(double x1, double y1, double x2, double y2, Color color1, Color color2)
+    {
+        _state.brush.Type = BrushType.Linear;
+        _state.brush.Color1 = color1;
+        _state.brush.Color2 = color2;
+        _state.brush.Point1 = new Vector2(x1, y1);
+        _state.brush.Point2 = new Vector2(x2, y2);
+
+        _state.brush.Transform = _state.transform;
+    }
+    public void SetRadialBrush(double centerX, double centerY, double innerRadius, double outerRadius, Color innerColor, Color outerColor)
+    {
+        _state.brush.Type = BrushType.Radial;
+        _state.brush.Color1 = innerColor;
+        _state.brush.Color2 = outerColor;
+        _state.brush.Point1 = new Vector2(centerX, centerY);
+        _state.brush.Point2 = new Vector2(innerRadius, outerRadius); // Store radius
+
+        _state.brush.Transform = _state.transform;
+    }
+    public void SetBoxBrush(double centerX, double centerY, double width, double height, float radi, float feather, Color innerColor, Color outerColor)
+    {
+        _state.brush.Type = BrushType.Box;
+        _state.brush.Color1 = innerColor;
+        _state.brush.Color2 = outerColor;
+        _state.brush.Point1 = new Vector2(centerX, centerY);
+        _state.brush.Point2 = new Vector2(width / 2, height / 2); // Store half-size
+        _state.brush.CornerRadii = radi;
+        _state.brush.Feather = feather;
+
+        _state.brush.Transform = _state.transform;
+    }
+    public void ClearGradient()
+    {
+        _state.brush.Type = BrushType.None;
+    }
     public void SetFillColor(Color color) => _state.fillColor = color;
 
 
@@ -273,18 +350,19 @@ public partial class Canvas
 
     #region Draw Calls
 
-    public void AddDrawCmd() => _drawCalls.Add(new ProwlCanvasDrawCall());
+    public void AddDrawCmd() => _drawCalls.Add(new DrawCall());
 
     private void AddTriangleCount(int count)
     {
         if (_drawCalls.Count == 0)
             return;
 
-        ProwlCanvasDrawCall lastDrawCall = _drawCalls[_drawCalls.Count - 1];
+        DrawCall lastDrawCall = _drawCalls[_drawCalls.Count - 1];
 
-        bool isDrawStateSame = lastDrawCall.Texture == _state.texture && 
-            lastDrawCall.scissorExtent == _state.scissorExtent && 
-            lastDrawCall.scissor == _state.scissor;
+        bool isDrawStateSame = lastDrawCall.Texture == _state.texture &&
+            lastDrawCall.scissorExtent == _state.scissorExtent &&
+            lastDrawCall.scissor == _state.scissor &&
+            lastDrawCall.Brush.EqualsOther(_state.brush);
 
         if (!isDrawStateSame)
         {
@@ -294,6 +372,7 @@ public partial class Canvas
             lastDrawCall.Texture = _state.texture;
             lastDrawCall.scissor = _state.scissor;
             lastDrawCall.scissorExtent = _state.scissorExtent;
+            lastDrawCall.Brush = _state.brush;
         }
 
         lastDrawCall.ElementCount += count * 3;
@@ -639,7 +718,7 @@ public partial class Canvas
         var color = ApplyGlobalAlpha(_state.fillColor);
 
         // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-        _vertices.Add(new ProwlCanvasVertex(center, new(0.5f, 0.5f), color));
+        _vertices.Add(new Vertex(center, new(0.5f, 0.5f), color));
 
         // Generate vertices around the path
         // TODO: May need to push the vertex out by half a pixel or a pixel to counteract the AA's habit of shrinking things
@@ -719,9 +798,9 @@ public partial class Canvas
         foreach (var triangle in triangles)
         {
             var color = ApplyGlobalAlpha(triangle.Color);
-            _vertices.Add(new ProwlCanvasVertex(triangle.V1, triangle.UV1, color));
-            _vertices.Add(new ProwlCanvasVertex(triangle.V2, triangle.UV2, color));
-            _vertices.Add(new ProwlCanvasVertex(triangle.V3, triangle.UV3, color));
+            _vertices.Add(new Vertex(triangle.V1, triangle.UV1, color));
+            _vertices.Add(new Vertex(triangle.V2, triangle.UV2, color));
+            _vertices.Add(new Vertex(triangle.V3, triangle.UV3, color));
         }
 
         // Add triangle _indices
@@ -926,10 +1005,10 @@ public partial class Canvas
         uint startVertexIndex = (uint)_vertices.Count;
 
         // Add all vertices with the transformed coordinates
-        _vertices.Add(new ProwlCanvasVertex(topLeft, new(0, 0), color));
-        _vertices.Add(new ProwlCanvasVertex(topRight, new(1, 0), color));
-        _vertices.Add(new ProwlCanvasVertex(bottomRight, new(1, 1), color));
-        _vertices.Add(new ProwlCanvasVertex(bottomLeft, new(0, 1), color));
+        _vertices.Add(new Vertex(topLeft, new(0, 0), color));
+        _vertices.Add(new Vertex(topRight, new(1, 0), color));
+        _vertices.Add(new Vertex(bottomRight, new(1, 1), color));
+        _vertices.Add(new Vertex(bottomLeft, new(0, 1), color));
 
         // Add indexes for fill
         _indices.Add(startVertexIndex);
@@ -993,7 +1072,7 @@ public partial class Canvas
         Vector2 center = ModifyPoint(new Vector2(x + width / 2, y + height / 2));
 
         // Add center vertex with UV at 0.5,0.5 (no AA)
-        _vertices.Add(new ProwlCanvasVertex(center, new(0.5f, 0.5f), color));
+        _vertices.Add(new Vertex(center, new(0.5f, 0.5f), color));
 
         List<Vector2> points = new List<Vector2>();
 
@@ -1069,7 +1148,7 @@ public partial class Canvas
         for (int i = 0; i < points.Count; i++)
         {
             Vector2 transformedPoint = ModifyPoint(points[i]);
-            _vertices.Add(new ProwlCanvasVertex(transformedPoint, new(0, 0), color));
+            _vertices.Add(new Vertex(transformedPoint, new(0, 0), color));
         }
 
         // Create triangles (fan from center to edges)
@@ -1120,7 +1199,7 @@ public partial class Canvas
         Vector2 transformedCenter = ModifyPoint(new Vector2(x, y));
 
         // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-        _vertices.Add(new ProwlCanvasVertex(transformedCenter, new(0.5f, 0.5f), color));
+        _vertices.Add(new Vertex(transformedCenter, new(0.5f, 0.5f), color));
 
         // Generate vertices around the circle
         for (int i = 0; i <= segments; i++)
@@ -1132,7 +1211,7 @@ public partial class Canvas
             Vector2 transformedPoint = ModifyPoint(new Vector2(vx, vy));
 
             // Edge vertices have UV at 0,0 for anti-aliasing
-            _vertices.Add(new ProwlCanvasVertex(
+            _vertices.Add(new Vertex(
                 transformedPoint,
                 new(0, 0),  // UV at edge for AA
                 color
