@@ -21,15 +21,26 @@ internal static class PolylineMesher
     private static readonly Vector2 HalfPixel = new Vector2(0.5f, 0.5f);
 
     /// <summary> A triangle defined by three vertices </summary>
-    public struct Triangle(Vector2 v1, Vector2 v2, Vector2 v3, Vector2 uv1, Vector2 uv2, Vector2 uv3, System.Drawing.Color col)
+    public struct Triangle
     {
-        public Vector2 V1 = v1;
-        public Vector2 V2 = v2;
-        public Vector2 V3 = v3;
-        public Vector2 UV1 = uv1;
-        public Vector2 UV2 = uv2;
-        public Vector2 UV3 = uv3;
-        public System.Drawing.Color Color = col;
+        public Vector2 V1;
+        public Vector2 V2;
+        public Vector2 V3;
+        public Vector2 UV1;
+        public Vector2 UV2;
+        public Vector2 UV3;
+        public System.Drawing.Color Color;
+
+        public Triangle(Vector2 v1, Vector2 v2, Vector2 v3, Vector2 uv1, Vector2 uv2, Vector2 uv3, System.Drawing.Color col)
+        {
+            V1 = v1;
+            V2 = v2;
+            V3 = v3;
+            UV1 = uv1;
+            UV2 = uv2;
+            UV3 = uv3;
+            Color = col;
+        }
     }
 
     /// <summary>
@@ -551,10 +562,10 @@ internal static class PolylineMesher
 
     #region Helper Classes and Methods
 
-    private struct LineSegment(Vector2 a, Vector2 b)
+    private struct LineSegment
     {
-        public Vector2 A { get; } = a;
-        public Vector2 B { get; } = b;
+        public Vector2 A { get; }
+        public Vector2 B { get; }
 
         private Vector2? _cachedDirection;
         public Vector2 Direction {
@@ -569,6 +580,16 @@ internal static class PolylineMesher
         }
 
         private Vector2? _cachedNormal;
+
+        public LineSegment(Vector2 a, Vector2 b)
+        {
+            A = a;
+            B = b;
+
+            _cachedDirection = null;
+            _cachedNormal = null;
+        }
+
         public Vector2 Normal {
             get {
                 if (_cachedNormal == null)

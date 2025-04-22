@@ -1,11 +1,34 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+    <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Quill</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Quill</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Version>0.1.0</Version>
+    <Title>Prowl.Quill</Title>
+    <Authors>Wulferis</Authors>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Description>A Hardware-Accelerated Anti-Aliased Vector Graphics Library made with .NET</Description>
+    <PackageTags>vector-graphics;vector;graphics;canvas;2d;2d-graphics;game-development;graphics-library;anti-aliased;hardware-accelerated;prowl;rendering;bezier;path;gpu;fast</PackageTags>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Prowl.Vector" Version="0.5.1" />

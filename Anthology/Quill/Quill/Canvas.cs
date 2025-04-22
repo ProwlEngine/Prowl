@@ -29,7 +29,7 @@ public struct ProwlCanvasDrawCall
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
-public struct ProwlCanvasVertex(Vector2 position, Vector2 UV, Color color)
+public struct ProwlCanvasVertex
 {
     public static int SizeInBytes => Marshal.SizeOf<ProwlCanvasVertex>();
 
@@ -38,16 +38,28 @@ public struct ProwlCanvasVertex(Vector2 position, Vector2 UV, Color color)
     public readonly Color Color => Color.FromArgb(a, r, g, b);
 
 
-    public float x = (float)position.x;
-    public float y = (float)position.y;
+    public float x;
+    public float y;
 
-    public float u = (float)UV.x;
-    public float v = (float)UV.y;
+    public float u;
+    public float v;
 
-    public byte r = color.R;
-    public byte g = color.G;
-    public byte b = color.B;
-    public byte a = color.A;
+    public byte r;
+    public byte g;
+    public byte b;
+    public byte a;
+
+    public ProwlCanvasVertex(Vector2 position, Vector2 UV, Color color)
+    {
+        x = (float)position.x;
+        y = (float)position.y;
+        u = (float)UV.x;
+        v = (float)UV.y;
+        r = color.R;
+        g = color.G;
+        b = color.B;
+        a = color.A;
+    }
 }
 
 internal struct ProwlCanvasState
@@ -69,7 +81,23 @@ internal struct ProwlCanvasState
 
     internal Color fillColor;
 
-    public ProwlCanvasState() => Reset();
+    public ProwlCanvasState()
+    {
+        transform = Transform2D.Identity;
+        strokeColor = Color.FromArgb(255, 0, 0, 0); // Default stroke color (black)
+        strokeJoint = JointStyle.Bevel; // Default joint style
+        strokeStartCap = EndCapStyle.Butt; // Default start cap style
+        strokeEndCap = EndCapStyle.Butt; // Default end cap style
+        strokeWidth = 1f; // Default stroke width
+        strokeScale = 1f; // Default stroke scale
+        miterLimit = 4; // Default miter limit
+        texture = null;
+        scissor = new();
+        scissor.Zero();
+        scissorExtent.x = -1.0f;
+        scissorExtent.y = -1.0f;
+        fillColor = Color.FromArgb(255, 0, 0, 0); // Default fill color (black)
+    }
 
     internal void Reset()
     {
@@ -89,10 +117,16 @@ internal struct ProwlCanvasState
 
 public partial class Canvas
 {
-    internal class SubPath(List<Vector2> points, bool isClosed)
+    internal class SubPath
     {
-        internal List<Vector2> Points { get; } = points;
-        internal bool IsClosed { get; } = isClosed;
+        internal List<Vector2> Points { get; }
+        internal bool IsClosed { get; }
+
+        public SubPath(List<Vector2> points, bool isClosed)
+        {
+            Points = points;
+            IsClosed = isClosed;
+        }
     }
 
     private const double RoundingMinDistance = 5;
@@ -110,7 +144,7 @@ public partial class Canvas
     private SubPath? _currentSubPath = null;
     private bool _isPathOpen = false;
 
-    private readonly Stack<ProwlCanvasState> _savedStates = [];
+    private readonly Stack<ProwlCanvasState> _savedStates = new();
     private ProwlCanvasState _state;
     private double _globalAlpha;
 
