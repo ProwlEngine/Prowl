@@ -1158,8 +1158,8 @@ public partial class Canvas
             uint next = (uint)(startVertexIndex + 1 + ((i + 1) % points.Count));
 
             _indices.Add((uint)startVertexIndex);  // Center
-            _indices.Add(current);                 // Current edge vertex
             _indices.Add(next);                    // Next edge vertex
+            _indices.Add(current);                 // Current edge vertex
 
             //AddTriangleCount(1);
         }

@@ -834,11 +834,10 @@ namespace Common
                 Color.FromArgb(255, 50, 128, 50));
 
             // Use path-based drawing to show gradient with a rounded rect
-            _canvas.RoundedRect(
+            _canvas.RoundedRectFilled(
                 col3X, boxSize + spacing,
                 boxSize, boxSize,
-                10, 10, 10, 10);
-            _canvas.Fill();
+                10, 10, 10, 10, Color.AliceBlue);
 
 
             // Clear gradient
