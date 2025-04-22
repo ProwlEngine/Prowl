@@ -645,8 +645,10 @@ public partial class Canvas
                 _indices.Add(current);
             }
 
-            AddTriangleCount(1);
+            //AddTriangleCount(1);
         }
+
+        AddTriangleCount(segments);
 
         // Reset the points to their original values
         for (int i = 0; i < subPath.Points.Count; i++)
@@ -692,8 +694,10 @@ public partial class Canvas
             _indices.Add(startVertexIndex + (i * 3));
             _indices.Add(startVertexIndex + (i * 3) + 1);
             _indices.Add(startVertexIndex + (i * 3) + 2);
-            AddTriangleCount(1);
+            //AddTriangleCount(1);
         }
+
+        AddTriangleCount(triangles.Count);
 
         // Reset the points to their original values
         for (int i = 0; i < subPath.Points.Count; i++)
@@ -1042,8 +1046,9 @@ public partial class Canvas
             _indices.Add(current);                 // Current edge vertex
             _indices.Add(next);                    // Next edge vertex
 
-            AddTriangleCount(1);
+            //AddTriangleCount(1);
         }
+        AddTriangleCount(points.Count);
     }
 
     /// <summary>
@@ -1105,8 +1110,10 @@ public partial class Canvas
             _indices.Add((uint)(startVertexIndex + 1 + ((i + 1) % segments))); // Next edge vertex
             _indices.Add((uint)(startVertexIndex + 1 + i));          // Current edge vertex
 
-            AddTriangleCount(1);
+            //AddTriangleCount(1);
         }
+
+        AddTriangleCount(segments);
     }
 
     /// <summary>
@@ -1189,8 +1196,10 @@ public partial class Canvas
             _indices.Add((uint)(startVertexIndex + 1 + i + 1));      // Next edge vertex
             _indices.Add((uint)(startVertexIndex + 1 + i));          // Current edge vertex
 
-            AddTriangleCount(1);
+            //AddTriangleCount(1);
         }
+
+        AddTriangleCount(segments + 2);
     }
     #endregion
 
