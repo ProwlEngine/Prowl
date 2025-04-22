@@ -593,7 +593,7 @@ namespace Common
                 _canvas.Stroke();
 
                 // Draw join style label
-                DrawText(join.ToString(), 0, yOffset + 10, 10, color);
+                //DrawText(join.ToString(), 0, yOffset + 10, 10, color);
             }
 
             // Set miter limit for all joins
@@ -641,8 +641,8 @@ namespace Common
                 _canvas.Stroke();
 
                 // Draw labels for the caps
-                DrawText(startCap.ToString(), 5, yOffset - 15, 10, color);
-                DrawText(endCap.ToString(), lineLength - 30, yOffset, 10, color);
+                //DrawText(startCap.ToString(), 5, yOffset - 15, 10, color);
+                //DrawText(endCap.ToString(), lineLength - 30, yOffset, 10, color);
             }
 
             // Show all five cap styles with matching start/end caps

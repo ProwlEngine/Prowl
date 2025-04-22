@@ -96,7 +96,6 @@ void main()
         private int _textureSamplerLocation;
         private int _scissorMatLoc = 0;
         private int _scissorExtLoc = 0;
-        private int _scissorScaleLoc = 0;
         private Matrix4 _projection;
         private TextureTK _defaultTexture;
 
@@ -229,7 +228,6 @@ void main()
             _textureSamplerLocation = GL.GetUniformLocation(_shaderProgram, "textureSampler");
             _scissorMatLoc = GL.GetUniformLocation(_shaderProgram, "scissorMat");
             _scissorExtLoc = GL.GetUniformLocation(_shaderProgram, "scissorExt");
-            _scissorScaleLoc = GL.GetUniformLocation(_shaderProgram, "scissorScale");
         }
 
         private Matrix4 ToTK(Matrix4x4 mat) => new Matrix4(
