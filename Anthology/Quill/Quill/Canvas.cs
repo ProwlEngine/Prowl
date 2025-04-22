@@ -104,6 +104,8 @@ internal struct ProwlCanvasState
         transform = Transform2D.Identity;
         strokeColor = Color.FromArgb(255, 0, 0, 0); // Default stroke color (black)
         strokeJoint = JointStyle.Bevel; // Default joint style
+        strokeStartCap = EndCapStyle.Butt; // Default start cap style
+        strokeEndCap = EndCapStyle.Butt; // Default end cap style
         strokeWidth = 1f; // Default stroke width
         strokeScale = 1f; // Default stroke scale
         miterLimit = 4; // Default miter limit
