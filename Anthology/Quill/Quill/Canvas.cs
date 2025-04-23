@@ -705,7 +705,7 @@ public partial class Canvas
         var copy = subPath.Points.ToArray();
         // Transform each point
         for (int i = 0; i < subPath.Points.Count; i++)
-            subPath.Points[i] = ModifyPoint(subPath.Points[i]);
+            subPath.Points[i] = ModifyPoint(subPath.Points[i]) + new Vector2(0.5,0.5); // And offset by half a pixel to properly center it with Stroke()
 
         Vector2 center = Vector2.zero;
         for (int i = 0; i < subPath.Points.Count; i++)
@@ -721,10 +721,9 @@ public partial class Canvas
         _vertices.Add(new Vertex(center, new(0.5f, 0.5f), color));
 
         // Generate vertices around the path
-        // TODO: May need to push the vertex out by half a pixel or a pixel to counteract the AA's habit of shrinking things
         int segments = subPath.Points.Count;
         for (int i = 0; i < segments; i++) // Edge vertices have UV at 0,0 for anti-aliasing
-            _vertices.Add(new(subPath.Points[i], new(0, 0), color));
+        {
 
         // Create triangles (fan from center to edges)
         // Check orientation with just the first triangle
