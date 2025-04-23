@@ -9,7 +9,13 @@ public enum BrushType
     None = 0,
     Linear = 1,
     Radial = 2,
-    Box = 3 
+    Box = 3
+}
+
+public enum WindingOrder
+{
+    Clockwise,
+    CounterClockwise
 }
 
 public struct DrawCall
@@ -164,11 +170,13 @@ public partial class Canvas
     {
         internal List<Vector2> Points { get; }
         internal bool IsClosed { get; }
+        internal WindingOrder Winding { get; set; }
 
-        public SubPath(List<Vector2> points, bool isClosed)
+        public SubPath(List<Vector2> points, bool isClosed, WindingOrder winding = WindingOrder.Clockwise)
         {
             Points = points;
             IsClosed = isClosed;
+            Winding = winding;
         }
     }
 
@@ -459,6 +467,31 @@ public partial class Canvas
     }
 
     /// <summary>
+    /// Sets the winding order for the currently active path.
+    /// </summary>
+    public void SetWindingOrder(WindingOrder winding)
+    {
+        if (_currentSubPath != null)
+            _currentSubPath.Winding = winding;
+    }
+
+    /// <summary>
+    /// Sets the winding order to be counter-clockwise to indicate that the path is a hole.
+    /// </summary>
+    public void SetAsHole()
+    {
+        SetWindingOrder(WindingOrder.CounterClockwise);
+    }
+
+    /// <summary>
+    /// Sets the winding order to be clockwise to indicate that the path is solid.
+    /// </summary>
+    public void SetAsSolid()
+    {
+        SetWindingOrder(WindingOrder.Clockwise);
+    }
+
+    /// <summary>
     /// Adds an arc to the current path.
     /// </summary>
     /// <param name="x">The x-coordinate of the center of the arc.</param>
@@ -687,6 +720,40 @@ public partial class Canvas
 
     #endregion
 
+    public void FillFast()
+    {
+        if (_subPaths.Count == 0)
+            return;
+
+        // Fill all sub-paths individually
+        foreach (var subPath in _subPaths)
+            FillSubPath(subPath);
+    }
+
+    public void FillComplex()
+    {
+        if (_subPaths.Count == 0)
+            return;
+
+        // Group paths by winding order
+        var outerPaths = _subPaths.Where(p => p.Winding == WindingOrder.Clockwise).ToList();
+        var holePaths = _subPaths.Where(p => p.Winding == WindingOrder.CounterClockwise).ToList();
+
+        if (holePaths.Count == 0)
+        {
+            // No holes, use simple fill
+            FillFast();
+            return;
+        }
+
+        // Process each outer path with its holes
+        foreach (var outerPath in outerPaths)
+        {
+            FillComplexSubPath(outerPath, holePaths);
+        }
+    }
+
+
     public void Fill()
     {
         if (_subPaths.Count == 0)
@@ -724,6 +791,9 @@ public partial class Canvas
         int segments = subPath.Points.Count;
         for (int i = 0; i < segments; i++) // Edge vertices have UV at 0,0 for anti-aliasing
         {
+            Vector2 dirToPoint = (subPath.Points[i] - center).normalized;
+            _vertices.Add(new(subPath.Points[i] + (dirToPoint * 0.5), new(0, 0), color));
+        }
 
         // Create triangles (fan from center to edges)
         // Check orientation with just the first triangle
@@ -767,6 +837,77 @@ public partial class Canvas
         // Reset the points to their original values
         for (int i = 0; i < subPath.Points.Count; i++)
             subPath.Points[i] = copy[i];
+    }
+
+    private void FillComplexSubPath(SubPath outerPath, List<SubPath> holePaths)
+    {
+        if (outerPath.Points.Count < 3)
+            return;
+
+        // Apply transform to all points
+        var outerPoints = outerPath.Points.Select(p => ModifyPoint(p) + new Vector2(0.5, 0.5)).ToList();
+
+        // Prepare data for Earcut triangulation
+        List<double> vertices = new List<double>();
+        List<int> holeIndices = new List<int>();
+
+        // Add outer path vertices
+        foreach (var point in outerPoints)
+        {
+            vertices.Add(point.x);
+            vertices.Add(point.y);
+        }
+
+        int vertexCount = outerPoints.Count;
+
+        foreach (var hole in holePaths)
+        {
+            holeIndices.Add(vertexCount);
+
+            // Add hole vertices
+            var holePoints = hole.Points.Select(p => ModifyPoint(p) + new Vector2(0.5, 0.5)).ToList();
+            foreach (var point in holePoints)
+            {
+                vertices.Add(point.x);
+                vertices.Add(point.y);
+            }
+
+            vertexCount += holePoints.Count;
+        }
+
+        // If no holes found inside this path, use simple fill
+        if (holeIndices.Count == 0)
+        {
+            FillSubPath(outerPath);
+            return;
+        }
+
+        // Triangulate using Earcut
+        var indices = Earcut.Tessellate(vertices, holeIndices);
+
+        // Create vertices and triangles
+        uint startVertexIndex = (uint)_vertices.Count;
+        var color = ApplyGlobalAlpha(_state.fillColor);
+
+        // Add all points as vertices
+        for (int i = 0; i < vertices.Count; i += 2)
+        {
+            Vector2 point = new Vector2(vertices[i], vertices[i + 1]);
+            Vector2 uv = new Vector2(0.5, 0.5);
+            _vertices.Add(new Vertex(point, uv, color));
+        }
+
+        // Add triangle indices
+        int triangleCount = indices.Count / 3;
+        for (int i = 0; i < indices.Count; i += 3)
+        {
+            _indices.Add((uint)startVertexIndex + (uint)indices[i]);
+            _indices.Add((uint)startVertexIndex + (uint)indices[i + 1]);
+            _indices.Add((uint)startVertexIndex + (uint)indices[i + 2]);
+        }
+
+        // Make sure to add the triangle count to the draw call
+        AddTriangleCount(triangleCount);
     }
 
     public void Stroke()

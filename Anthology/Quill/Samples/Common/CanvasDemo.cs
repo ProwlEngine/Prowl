@@ -309,6 +309,9 @@ namespace Common
             // 10. Gradient Demo
             DrawGradientDemo(50, 650, 200, 150);
 
+            // 11. Concave Polygon Demo
+            DrawConcaveDemo(300, 650, 200, 150);
+
             // Restore the canvas state
             _canvas.RestoreState();
         }
@@ -842,6 +845,192 @@ namespace Common
 
             // Clear gradient
             _canvas.ClearGradient();
+
+            _canvas.RestoreState();
+        }
+
+        private void DrawConcaveDemo(double x, double y, double width, double height)
+        {
+            // Draw group background and title
+            DrawGroupBackground(x, y, width, height, "Concave");
+
+            _canvas.SaveState();
+            _canvas.TransformBy(Transform2D.CreateTranslation(x + 20, y + 30));
+
+            // PART 1: Simple polygon with clockwise winding
+            {
+                _canvas.BeginPath();
+
+                // Star-like concave shape with clockwise winding
+                _canvas.MoveTo(20, 0);  // Top point
+                _canvas.LineTo(25, 15); // Right shoulder
+                _canvas.LineTo(40, 15); // Right arm
+                _canvas.LineTo(30, 25); // Right side
+                _canvas.LineTo(35, 40); // Right leg
+                _canvas.LineTo(20, 30); // Bottom point
+                _canvas.LineTo(5, 40);  // Left leg
+                _canvas.LineTo(10, 25); // Left side
+                _canvas.LineTo(0, 15);  // Left arm
+                _canvas.LineTo(15, 15); // Left shoulder
+                _canvas.ClosePath();
+
+                // Set fill color and stroke
+                _canvas.SetFillColor(Color.FromArgb(255, 100, 200, 255));
+                _canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 255));
+                _canvas.SetStrokeWidth(1.5);
+
+                // Fill and stroke
+                _canvas.FillAndStroke();
+            }
+
+            // PART 2: Polygon with hole (counter-clockwise inner path)
+            {
+                // Outer path (clockwise)
+                _canvas.BeginPath();
+                _canvas.MoveTo(70, 5);
+                _canvas.LineTo(110, 5);
+                _canvas.LineTo(110, 45);
+                _canvas.LineTo(70, 45);
+                _canvas.ClosePath();
+
+                // Inner path (counter-clockwise) - explicitly set as hole
+                _canvas.MoveTo(100, 15); // Start point at top-right of hole
+                _canvas.SetAsHole(); // Mark as hole (counter-clockwise)
+                _canvas.LineTo(80, 15);  // Top edge (right to left = CCW)
+                _canvas.LineTo(80, 35);  // Left edge
+                _canvas.LineTo(100, 35); // Bottom edge
+                _canvas.ClosePath();
+
+                // Set fill color and stroke
+                _canvas.SetFillColor(Color.FromArgb(255, 255, 150, 100));
+                _canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 255));
+                _canvas.SetStrokeWidth(1.5);
+
+                // Fill complex shape (with hole)
+                _canvas.FillComplex();
+                _canvas.Stroke();
+            }
+
+            // PART 3: Animated complex shape with multiple holes
+            {
+                double time = _time;
+                double wave = Math.Sin(time) * 3;
+            
+                // Outer path
+                _canvas.BeginPath();
+                double centerX = 150;
+                double centerY = 25;
+                double radius = 20;
+            
+                // Create wavy outer circle
+                int segments = 20;
+                for (int i = 0; i <= segments; i++)
+                {
+                    double angle = 2 * Math.PI * i / segments;
+                    double r = radius + Math.Sin(angle * 5 + time * 2) * 5;
+                    double px = centerX + r * Math.Cos(angle);
+                    double py = centerY + r * Math.Sin(angle);
+            
+                    if (i == 0)
+                        _canvas.MoveTo(px, py);
+                    else
+                        _canvas.LineTo(px, py);
+                }
+                _canvas.ClosePath();
+            
+                // Inner hole 1 (counter-clockwise)
+                double hole1X = centerX - 5 + Math.Sin(time * 1.5) * 3;
+                double hole1Y = centerY - 5 + Math.Cos(time * 1.5) * 3;
+                double hole1Radius = 5 + Math.Sin(time * 2) * 1;
+            
+                //_canvas.MoveTo(hole1X + hole1Radius, hole1Y);
+                //for (int i = segments; i >= 0; i--)
+                //{ // CCW direction
+                //    double angle = 2 * Math.PI * i / segments;
+                //    double px = hole1X + hole1Radius * Math.Cos(angle);
+                //    double py = hole1Y + hole1Radius * Math.Sin(angle);
+                //    _canvas.LineTo(px, py);
+                //}
+                //_canvas.ClosePath();
+                //_canvas.SetAsHole(); // Mark as hole
+                //
+                //// Inner hole 2 (counter-clockwise)
+                //double hole2X = centerX + 10 + Math.Cos(time) * 3;
+                //double hole2Y = centerY + 5 + Math.Sin(time * 2) * 3;
+                //double hole2Radius = 4 + Math.Cos(time * 3) * 1;
+                //
+                //_canvas.MoveTo(hole2X + hole2Radius, hole2Y);
+                //for (int i = segments; i >= 0; i--)
+                //{ // CCW direction
+                //    double angle = 2 * Math.PI * i / segments;
+                //    double px = hole2X + hole2Radius * Math.Cos(angle);
+                //    double py = hole2Y + hole2Radius * Math.Sin(angle);
+                //    _canvas.LineTo(px, py);
+                //}
+                //_canvas.ClosePath();
+                //_canvas.SetAsHole(); // Mark as hole
+
+                // Set fill color and stroke
+                _canvas.SetFillColor(Color.FromArgb(255, 150, 255, 150));
+                _canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 255));
+                _canvas.SetStrokeWidth(1.5);
+            
+                // Fill complex shape
+                _canvas.FillComplex();
+                _canvas.Stroke();
+            }
+            
+            // PART 4: Complex shape with animated holes
+            {
+            
+                // Outer path (snake-like shape)
+                _canvas.BeginPath();
+                _canvas.MoveTo(00, 60);
+                _canvas.BezierCurveTo(
+                    120, 60,
+                    140, 90,
+                    160, 90);
+                _canvas.LineTo(160, 110);
+                _canvas.BezierCurveTo(
+                    140, 110,
+                    120, 80,
+                    00, 80);
+                _canvas.ClosePath();
+            
+                void AddHole(double holeX, double holeY, double holeSize)
+                {
+                    _canvas.MoveTo(holeX + holeSize, holeY);
+                    for (int j = 20; j >= 0; j--)
+                    {
+                        double angle = 2 * Math.PI * j / 20;
+                        double px = holeX + holeSize * Math.Cos(angle);
+                        double py = holeY + holeSize * Math.Sin(angle);
+                        _canvas.LineTo(px, py);
+                    }
+                    _canvas.ClosePath();
+                    _canvas.SetAsHole();
+                }
+
+                double time = _time;
+
+                // Add a few holes
+                AddHole(20, 70, 8 * Math.Sin(time += 0.25));
+                AddHole(40, 71, 8 * Math.Sin(time += 0.25));
+                AddHole(60, 73, 8 * Math.Sin(time += 0.25));
+                AddHole(80, 76, 8 * Math.Sin(time += 0.25));
+                AddHole(100, 80, 8 * Math.Sin(time += 0.25));
+                AddHole(120, 86, 8 * Math.Sin(time += 0.25));
+                AddHole(140, 94, 8 * Math.Sin(time += 0.25));
+
+                // Set fill and stroke
+                _canvas.SetFillColor(Color.FromArgb(255, 255, 200, 100));
+                _canvas.SetStrokeColor(Color.White);
+                _canvas.SetStrokeWidth(1.5);
+            
+                // Fill using auto-detection
+                _canvas.FillComplex(); // Will use complex fill since we have holes
+                //_canvas.Stroke();
+            }
 
             _canvas.RestoreState();
         }
