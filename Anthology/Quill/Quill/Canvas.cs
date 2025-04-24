@@ -1140,6 +1140,14 @@ public partial class Canvas
     {
         if (width <= 0 || height <= 0)
             return;
+
+        // Clamp radii to half of the smaller dimension to prevent overlap
+        double maxRadius = Math.Min(width, height) / 2;
+        tlRadii = Math.Min(tlRadii, maxRadius);
+        trRadii = Math.Min(trRadii, maxRadius);
+        brRadii = Math.Min(brRadii, maxRadius);
+        blRadii = Math.Min(blRadii, maxRadius);
+
         BeginPath();
         // Top-left corner
         MoveTo(x + tlRadii, y);
@@ -1319,6 +1327,13 @@ public partial class Canvas
     {
         if (width <= 0 || height <= 0)
             return;
+
+        // Clamp radii to half of the smaller dimension to prevent overlap
+        double maxRadius = Math.Min(width, height) / 2;
+        tlRadii = Math.Min(tlRadii, maxRadius);
+        trRadii = Math.Min(trRadii, maxRadius);
+        brRadii = Math.Min(brRadii, maxRadius);
+        blRadii = Math.Min(blRadii, maxRadius);
 
         // Adjust for proper AA
         x -= _pixelHalf;
