@@ -1244,6 +1244,7 @@ namespace Shared
                             using (Paper.Box($"ToggleSwitch_{i}")
                                 .Width(60)
                                 .Height(30)
+                                .Rounded(20)
                                 .BackgroundColor(isOn ? secondaryColor : Color.FromArgb(100, lightTextColor))
                                 //.Style(BoxStyle.SolidRounded(isOn ? secondaryColor : Color.FromArgb(100, lightTextColor), 15f))
                                 .OnClick((rect) => {
@@ -1256,6 +1257,7 @@ namespace Shared
                                 using (Paper.Box($"ToggleDot_{i}")
                                     .Width(24)
                                     .Height(24)
+                                    .Rounded(20)
                                     .BackgroundColor(Color.White)
                                     //.Style(BoxStyle.SolidRounded(Color.White, 12f))
                                     .PositionType(PositionType.SelfDirected)
