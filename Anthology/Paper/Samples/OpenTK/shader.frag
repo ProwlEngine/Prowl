@@ -21,8 +21,10 @@ uniform float strokeThr;
 uniform int type;
 
 // Varyings
-varying vec2 fpos;
-varying vec2 ftcoord;
+in vec2 fpos;
+in vec2 ftcoord;
+
+out vec4 fragColor;
 
 float sdroundrect(vec2 pt, vec2 ext, float rad) {
 	vec2 ext2 = ext - vec2(rad,rad);
@@ -84,5 +86,5 @@ void main(void) {
 		result = color * innerCol;
 	}
 
-	gl_FragColor = result;
+	fragColor = result;
 }

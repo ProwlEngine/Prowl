@@ -1,13 +1,13 @@
 // Attributes
-attribute vec2 vertex;
-attribute vec2 tcoord;
+in vec2 vertex;
+in vec2 tcoord;
 
 // Uniforms
 uniform mat4 transformMat;
 
 // Varyings
-varying vec2 fpos;
-varying vec2 ftcoord;
+out vec2 fpos;
+out vec2 ftcoord;
 
 void main()
 {
