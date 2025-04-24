@@ -57,6 +57,12 @@ Which produces this button you can click on:
 
 <img src="https://i.imgur.com/4R3meKS.png" width="50%">
 
+Unlike Retained, you don't need to find elements or store references to change values.
+For example, If you want to animate the roundness it is as simple as
+```cs
+.Rounded(YourAnimatedFloat)
+```
+
 # <span align="center">✨ Features ✨</span>
 
 -   **General:**
