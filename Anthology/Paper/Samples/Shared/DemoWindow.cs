@@ -20,7 +20,7 @@ namespace Shared
         static int selectedTabIndex = 0;
         static Vector2 chartPosition = new Vector2(0, 0);
         static float zoomLevel = 1.0f;
-        static bool toggleState = false;
+        static bool[] toggleState = { true, false, true, false, true };
 
         // Sample data for visualization
         static float[] dataPoints = { 0.2f, 0.5f, 0.3f, 0.8f, 0.4f, 0.7f, 0.6f };
@@ -1203,7 +1203,7 @@ namespace Shared
                                 .Enter()) { }
 
                             // Toggle switch
-                            bool isOn = i == 1 ? toggleState : i % 2 == 0;
+                            bool isOn = toggleState[i];
 
                             int index = i;
                             using (Paper.Box($"ToggleSwitch_{i}")
@@ -1212,7 +1212,7 @@ namespace Shared
                                 .BackgroundColor(isOn ? secondaryColor : Color.FromArgb(100, lightTextColor))
                                 //.Style(BoxStyle.SolidRounded(isOn ? secondaryColor : Color.FromArgb(100, lightTextColor), 15f))
                                 .OnClick((rect) => {
-                                    if (index == 1) toggleState = !toggleState;
+                                    toggleState[index] = !toggleState[index];
                                     Console.WriteLine($"Toggle {options[index]}: {!isOn}");
                                 })
                                 .Enter())
