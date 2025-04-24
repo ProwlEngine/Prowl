@@ -129,15 +129,12 @@ void main()
     // Apply brush if active
     if (brushType > 0) {
         float factor = calculateBrushFactor();
-        color = mix(brushColor1, brushColor2, factor) * fragColor;
+        color = mix(brushColor1, brushColor2, factor);
     }
     
     vec4 textureColor = texture(texture0, fragTexCoord);
-    textureColor = vec4(textureColor.rgb * textureColor.a, textureColor.a);
     color *= textureColor;
-    
     color *= edgeAlpha * mask;
-    
     finalColor = color;
 }";
 
