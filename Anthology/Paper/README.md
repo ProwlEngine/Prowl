@@ -248,7 +248,7 @@ Here's a simplified example using Raylib:
 void UpdatePaperUIInput()
 {
     // Update mouse position
-    Paper.SetPointerState(PaperMouseBtn.Unknown, mousePos, false, true);
+    Paper.SetPointerPosition(mousePos);
     
     // Forward mouse button events
     if (IsMouseButtonPressed(MouseButton.Left))
