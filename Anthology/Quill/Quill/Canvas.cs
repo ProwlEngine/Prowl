@@ -755,6 +755,7 @@ public partial class Canvas
 
     #endregion
 
+    public void Fill() => FillFast();
     public void FillFast()
     {
         if (_subPaths.Count == 0)
@@ -774,13 +775,6 @@ public partial class Canvas
         var outerPaths = _subPaths.Where(p => p.Solidity == Solidity.Solid).ToList();
         var holePaths = _subPaths.Where(p => p.Solidity == Solidity.Hole).ToList();
 
-        if (holePaths.Count == 0)
-        {
-            // No holes, use simple fill
-            FillFast();
-            return;
-        }
-
         // Process each outer path with its holes
         foreach (var outerPath in outerPaths)
         {
@@ -788,16 +782,6 @@ public partial class Canvas
         }
     }
 
-
-    public void Fill()
-    {
-        if (_subPaths.Count == 0)
-            return;
-
-        // Fill all sub-paths
-        foreach (var subPath in _subPaths)
-            FillSubPath(subPath);
-    }
 
     private void FillSubPath(SubPath subPath)
     {

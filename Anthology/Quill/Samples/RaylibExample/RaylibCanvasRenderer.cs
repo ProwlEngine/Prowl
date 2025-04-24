@@ -100,6 +100,18 @@ float scissorMask(vec2 p) {
     return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
 }
 
+// Can improve text but a bit slower
+//vec4 textureNice( sampler2D sam, vec2 uv )
+//{
+//    float textureResolution = float(textureSize(sam,0).x);
+//    uv = uv*textureResolution + 0.5;
+//    vec2 iuv = floor( uv );
+//    vec2 fuv = fract( uv );
+//    uv = iuv + fuv*fuv*(3.0-2.0*fuv);
+//    uv = (uv - 0.5)/textureResolution;
+//    return texture( sam, uv );
+//}
+
 void main()
 {
     vec2 pixelSize = fwidth(fragTexCoord);
@@ -116,7 +128,7 @@ void main()
     }
 
     color *= texture(texture0, fragTexCoord);
-    
+
     finalColor = vec4(color.rgb, color.a * edgeAlpha * mask);
 }";
 
