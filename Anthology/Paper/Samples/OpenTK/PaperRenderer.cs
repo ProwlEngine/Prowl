@@ -108,6 +108,7 @@ void main()
     vec2 pixelSize = fwidth(fragTexCoord);
     vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
     float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
+    edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
     
     float mask = scissorMask(fragPos);
     vec4 color = fragColor;
@@ -117,10 +118,14 @@ void main()
         float factor = calculateBrushFactor();
         color = mix(brushColor1, brushColor2, factor);
     }
-
-    color *= texture(texture0, fragTexCoord);
     
-    finalColor = vec4(color.rgb, color.a * edgeAlpha * mask);
+    vec4 textureColor = texture(texture0, fragTexCoord);
+    textureColor = vec4(textureColor.rgb * textureColor.a, textureColor.a * textureColor.a);
+    color *= textureColor;
+    
+    color *= edgeAlpha * mask;
+    
+    finalColor = color;
 }";
 
         // Shader source for the vertex shader
@@ -281,7 +286,7 @@ void main()
             // Configure OpenGL state
             GL.Disable(EnableCap.DepthTest);
             GL.Enable(EnableCap.Blend);
-            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+            GL.BlendFunc(BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
 
             // Use shader and set projection
             GL.UseProgram(_shaderProgram);
