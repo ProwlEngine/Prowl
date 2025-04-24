@@ -8,7 +8,7 @@ using System.Reflection;
 
 namespace Shared
 {
-    public static class DemoWindow
+    public static class PaperDemo
     {
         static FontSystem fontSystem;
         static SpriteFontBase fontSmall;
@@ -68,7 +68,7 @@ namespace Shared
             fontTitle = fontSystem.GetFont(40);
         }
 
-        public static void RenderUI(int width, int height)
+        public static void RenderUI()
         {
             // Update time for animations
             time += 0.016f; // Assuming ~60fps

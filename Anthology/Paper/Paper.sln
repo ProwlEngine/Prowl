@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared", "Samples\Shared\Sh
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Paper", "Paper\Paper.csproj", "{7B872272-FDB0-452E-ADAA-C7E665F15914}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RaylibSample", "RaylibSample\RaylibSample.csproj", "{81493B71-1E37-4208-8B76-310CE13E4335}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,6 +31,10 @@ Global
 		{7B872272-FDB0-452E-ADAA-C7E665F15914}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B872272-FDB0-452E-ADAA-C7E665F15914}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7B872272-FDB0-452E-ADAA-C7E665F15914}.Release|Any CPU.Build.0 = Release|Any CPU
+		{81493B71-1E37-4208-8B76-310CE13E4335}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{81493B71-1E37-4208-8B76-310CE13E4335}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{81493B71-1E37-4208-8B76-310CE13E4335}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{81493B71-1E37-4208-8B76-310CE13E4335}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -36,6 +42,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{38341843-AB82-46B8-A724-A3207F94CAAB} = {4044107C-7B0A-45E4-94FA-FA995C5FCC3E}
 		{1A875D97-B3FF-4EA6-8197-10E5FE6618DB} = {4044107C-7B0A-45E4-94FA-FA995C5FCC3E}
+		{81493B71-1E37-4208-8B76-310CE13E4335} = {4044107C-7B0A-45E4-94FA-FA995C5FCC3E}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {733A0ECE-2685-4247-9DDB-0C3BB707765A}

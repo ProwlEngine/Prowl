@@ -18,7 +18,7 @@ namespace OpenTKSample
             base.OnLoad();
             _renderer = new PaperRenderer();
             _renderer.Initialize(ClientRectangle.Size.X, ClientRectangle.Size.Y);
-            Shared.DemoWindow.Initialize();
+            Shared.PaperDemo.Initialize();
             Paper.Initialize(_renderer, ClientRectangle.Size.X, ClientRectangle.Size.Y);
         }
 
@@ -31,7 +31,7 @@ namespace OpenTKSample
 
             Paper.BeginFrame((float)args.Time);
 
-            Shared.DemoWindow.RenderUI(ClientRectangle.Size.X, ClientRectangle.Size.Y);
+            Shared.PaperDemo.RenderUI();
 
             Paper.EndFrame();
 
@@ -155,7 +155,7 @@ namespace OpenTKSample
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.RightBracket => PaperKey.RightBracket,
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.GraveAccent => PaperKey.Grave,
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.Escape => PaperKey.Escape,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Enter => PaperKey.Return,
+                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Enter => PaperKey.Enter,
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.Tab => PaperKey.Tab,
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.Backspace => PaperKey.Backspace,
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.Insert => PaperKey.Insert,
@@ -195,7 +195,7 @@ namespace OpenTKSample
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.KeyPad7 => PaperKey.Keypad7,
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.KeyPad8 => PaperKey.Keypad8,
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.KeyPad9 => PaperKey.Keypad9,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.KeyPadDecimal => PaperKey.KeypadPeriod,
+                OpenTK.Windowing.GraphicsLibraryFramework.Keys.KeyPadDecimal => PaperKey.KeypadDecimal,
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.KeyPadDivide => PaperKey.KeypadDivide,
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.KeyPadMultiply => PaperKey.KeypadMultiply,
                 OpenTK.Windowing.GraphicsLibraryFramework.Keys.KeyPadSubtract => PaperKey.KeypadMinus,

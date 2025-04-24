@@ -471,7 +471,7 @@ namespace Prowl.PaperUI
         F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
 
         // Special keys
-        Return, Escape, Backspace, Tab, Space,
+        Enter, Escape, Backspace, Tab, Space,
         Minus, Equals, LeftBracket, RightBracket, Backslash,
         Semicolon, Apostrophe, Grave, Comma, Period, Slash,
 
@@ -482,7 +482,7 @@ namespace Prowl.PaperUI
         // Keypad
         NumLock, KeypadDivide, KeypadMultiply, KeypadMinus, KeypadPlus, KeypadEnter, KeypadEquals,
         Keypad1, Keypad2, Keypad3, Keypad4, Keypad5, Keypad6, Keypad7, Keypad8, Keypad9, Keypad0,
-        KeypadPeriod,
+        KeypadDecimal,
 
         // Modifier keys
         LeftControl, LeftShift, LeftAlt, LeftSuper,
