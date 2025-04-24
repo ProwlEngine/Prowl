@@ -156,7 +156,7 @@ namespace OpenTKSample
         {
             var sb = new StringBuilder();
 
-            sb.AppendLine("#version 330 core\n");
+            sb.Append("#version 330 core\n");
 
             if (defines != null)
             {

@@ -68,7 +68,7 @@ void main(void) {
 		// Image
 		// Calculate color fron texture
 		vec2 pt = (paintMat * vec4(fpos,0,1)).xy / extent;
-		vec4 color = texture2D(tex, pt);
+		vec4 color = texture(tex, pt);
 		color = vec4(color.xyz*color.w,color.w);
 		
 		// Apply color tint and alpha.
@@ -81,7 +81,7 @@ void main(void) {
 		result = vec4(1,1,1,1);
 	} else if (type == 3) {
 		// Textured tris
-		vec4 color = texture2D(tex, ftcoord);
+		vec4 color = texture(tex, ftcoord);
 		color *= scissor;
 		result = color * innerCol;
 	}
