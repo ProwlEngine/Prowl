@@ -8,7 +8,7 @@ namespace OpenTKSample
         static void Main(string[] args)
         {
             var nativeWindowSettings = new NativeWindowSettings() {
-                ClientSize = new Vector2i(800, 800),
+                ClientSize = new Vector2i(1080, 850),
                 Title = "Paper OpenTK Example",
                 Flags = OpenTK.Windowing.Common.ContextFlags.ForwardCompatible
             };

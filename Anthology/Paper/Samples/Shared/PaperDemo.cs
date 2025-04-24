@@ -680,6 +680,7 @@ namespace Shared
                     using (Paper.Box("ActivityPanel")
                         .BackgroundColor(cardBackground)
                         //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
+                        .Rounded(8)
                         .Enter())
                     {
                         // Panel header

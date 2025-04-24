@@ -17,10 +17,11 @@ internal class Program
     {
         Console.WriteLine("Hello, World!");
 
-        int width = 800;
-        int height = 600;
+        int width = 1080;
+        int height = 850;
 
         // Initialize the window
+        SetConfigFlags(ConfigFlags.ResizableWindow);
         InitWindow(width, height, "Raylib Sample");
         SetTargetFPS(60);
 
