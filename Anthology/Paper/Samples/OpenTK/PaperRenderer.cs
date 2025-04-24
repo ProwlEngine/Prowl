@@ -120,11 +120,8 @@ void main()
     }
     
     vec4 textureColor = texture(texture0, fragTexCoord);
-    textureColor = vec4(textureColor.rgb * textureColor.a, textureColor.a * textureColor.a);
     color *= textureColor;
-    
     color *= edgeAlpha * mask;
-    
     finalColor = color;
 }";
 
