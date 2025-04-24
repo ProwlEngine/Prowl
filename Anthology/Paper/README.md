@@ -20,6 +20,7 @@
    * [Layouting](#layouting)
    * [Styling and Animation](#styling-and-animation)
    * [Event Handling](#event-handling)
+   * [Input Handling](#input-handling)
 5. [Contributing](#🤝-contributing-🤝)
 6. [Contributors](#contributors-🌟)
 7. [Dependencies](#dependencies-📦)
@@ -47,6 +48,7 @@ using (Paper.Box("MyButton")
 }
 ```
 Which produces this button you can click on:
+
 <img src="https://i.imgur.com/4R3meKS.png" width="50%">
 
 # <span align="center">✨ Features ✨</span>
@@ -71,7 +73,7 @@ Which produces this button you can click on:
         - Automatic transitions for each individual Property of any node at any time
     - Rich Event Handling
         - Comprehensive Mouse & Keyboard support
-        - Parent-child Event Bubbling
+        - Parent-Child Event Bubbling
         - OnClick, OnDragStart, OnHover and many more
     - Transformations
         - Scale, Rotate, Translate & Skew any Element
@@ -96,6 +98,9 @@ dotnet add package Prowl.Paper
 You will need a Renderer, Theres examples in the repository under Samples for OpenTK and Raylib, with more to come.
 ```cs
 Paper.Initialize(yourRenderer, screenWidth, screenHeight);
+
+// Resize with
+Paper.SetResolution(screenWidth, screenHeight);
 
 // Load a font
 var fontSystem = new FontSystem();
@@ -148,7 +153,7 @@ That should result in the following UI:
 
 ## Layouting
 
-Paper provides a very powerful layouting engine based on the Morphorm library.
+Paper provides a mighty layout engine based on the Morphorm library.
 
 ```cs
 // Row container (horizontal layout)
@@ -196,6 +201,9 @@ using (Paper.Box("InteractiveElement")
     .Active
         .BackgroundColor(Color.DarkGray)
         .End()
+    .If(YourCondition)
+        .BackgroundColor(Color.Gray)
+        .End()
     .Enter()) { }
 
 // Transitions/animations
@@ -231,9 +239,51 @@ Paper.Box("InteractiveElement")
     .OnDragEnd((start, total, rect) => FinishDragging())
     .OnScroll((delta, rect) => Scroll(delta))
 ```
+## Input Handling
+To integrate Paper's input system with your project, you need to forward input events from your project to PaperUI. 
+Here's a simplified example using Raylib:
+
+```cs
+// Call this every frame before you draw your UI
+void UpdatePaperUIInput()
+{
+    // Update mouse position
+    Paper.SetPointerState(PaperMouseBtn.Unknown, mousePos, false, true);
+    
+    // Forward mouse button events
+    if (IsMouseButtonPressed(MouseButton.Left))
+        Paper.SetPointerState(PaperMouseBtn.Left, mousePos, true);
+    if (IsMouseButtonReleased(MouseButton.Left))
+        Paper.SetPointerState(PaperMouseBtn.Left, mousePos, false);
+    // Repeat for Right & Middle
+        
+    // Forward mouse wheel events
+    float wheelDelta = GetMouseWheelMove();
+    if (wheelDelta != 0)
+        Paper.SetPointerWheel(wheelDelta);
+        
+    // Forward text input
+    int key = GetCharPressed();
+    while (key > 0)
+    {
+        Paper.AddInputCharacter(((char)key).ToString());
+        key = GetCharPressed();
+    }
+    
+    // Forward key states
+    // keyMappings being an array storing the mapping from a PaperKey enum to your Projects Key Enum
+    foreach (var keyMapping in keyMappings)
+    {
+        if (IsKeyPressed(keyMapping.EngineKey))
+            Paper.SetKeyState(keyMapping.PaperKey, true);
+        else if (IsKeyReleased(keyMapping.EngineKey))
+            Paper.SetKeyState(keyMapping.PaperKey, false);
+    }
+}
+```
 
 ## So much more!
-Theres so much more I couldn't possibly fit it all into this Readme file.
+There's so much more I couldn't possibly fit it all into this Readme file.
 A more complete documentation & tutorial will be coming in the near future!
 
 # <span align="center">🤝 Contributing 🤝</span>
