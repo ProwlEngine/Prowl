@@ -227,7 +227,7 @@ namespace Shared
                         .Width(50)
                         .Height(50)
                         .Margin(10)
-                        .Text(Text.Center(Icons.Newspaper, fontLarge))
+                        .Text(Text.Center(Icons.Newspaper, fontLarge, lightTextColor))
                         .Enter()) { }
 
                     using (Paper.Box("LogoText")
@@ -258,7 +258,7 @@ namespace Shared
                     .Height(40)
                     //.Style(BoxStyle.SolidRounded(Color.FromArgb(50, 0, 0, 0), 20f))
                     .Margin(0, 10, 15, 0)
-                    .Text(Text.Center(Icons.Lightbulb, fontMedium))
+                    .Text(Text.Center(Icons.Lightbulb, fontMedium, lightTextColor))
                     .OnClick((rect) => ToggleTheme())
                     .Enter()) { }
 
@@ -268,7 +268,7 @@ namespace Shared
                     .Height(40)
                     //.Style(BoxStyle.SolidRounded(Color.FromArgb(50, 0, 0, 0), 20f))
                     .Margin(0, 10, 15, 0)
-                    .Text(Text.Center(Icons.CircleExclamation, fontMedium))
+                    .Text(Text.Center(Icons.CircleExclamation, fontMedium, lightTextColor))
                     .OnClick((rect) => Console.WriteLine("Notifications clicked"))
                     .Enter()) { }
 
