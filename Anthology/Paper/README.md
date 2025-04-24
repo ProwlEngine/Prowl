@@ -20,6 +20,7 @@
    * [Layouting](#layouting)
    * [Styling and Animation](#styling-and-animation)
    * [Event Handling](#event-handling)
+   * [Input Handling](#input-handling)
 5. [Contributing](#🤝-contributing-🤝)
 6. [Contributors](#contributors-🌟)
 7. [Dependencies](#dependencies-📦)
@@ -237,6 +238,48 @@ Paper.Box("InteractiveElement")
     .OnDragging((start, rect) => UpdateDragPosition(start))
     .OnDragEnd((start, total, rect) => FinishDragging())
     .OnScroll((delta, rect) => Scroll(delta))
+```
+## Input Handling
+To integrate Paper's input system with your project, you need to forward input events from your project to PaperUI. 
+Here's a simplified example using Raylib:
+
+```cs
+// Call this every frame before you draw your UI
+void UpdatePaperUIInput()
+{
+    // Update mouse position
+    Paper.SetPointerState(PaperMouseBtn.Unknown, mousePos, false, true);
+    
+    // Forward mouse button events
+    if (IsMouseButtonPressed(MouseButton.Left))
+        Paper.SetPointerState(PaperMouseBtn.Left, mousePos, true);
+    if (IsMouseButtonReleased(MouseButton.Left))
+        Paper.SetPointerState(PaperMouseBtn.Left, mousePos, false);
+    // Repeat for Right & Middle
+        
+    // Forward mouse wheel events
+    float wheelDelta = GetMouseWheelMove();
+    if (wheelDelta != 0)
+        Paper.SetPointerWheel(wheelDelta);
+        
+    // Forward text input
+    int key = GetCharPressed();
+    while (key > 0)
+    {
+        Paper.AddInputCharacter(((char)key).ToString());
+        key = GetCharPressed();
+    }
+    
+    // Forward key states
+    // keyMappings being an array storing the mapping from a PaperKey enum to your Projects Key Enum
+    foreach (var keyMapping in keyMappings)
+    {
+        if (IsKeyPressed(keyMapping.EngineKey))
+            Paper.SetKeyState(keyMapping.PaperKey, true);
+        else if (IsKeyReleased(keyMapping.EngineKey))
+            Paper.SetKeyState(keyMapping.PaperKey, false);
+    }
+}
 ```
 
 ## So much more!
