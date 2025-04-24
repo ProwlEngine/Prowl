@@ -47,6 +47,7 @@ using (Paper.Box("MyButton")
 }
 ```
 Which produces this button you can click on:
+
 <img src="https://i.imgur.com/4R3meKS.png" width="50%">
 
 # <span align="center">✨ Features ✨</span>
