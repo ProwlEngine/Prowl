@@ -132,7 +132,7 @@ internal struct ProwlCanvasState
         strokeJoint = JointStyle.Bevel; // Default joint style
         strokeStartCap = EndCapStyle.Butt; // Default start cap style
         strokeEndCap = EndCapStyle.Butt; // Default end cap style
-        strokeWidth = 1f; // Default stroke width
+        strokeWidth = 2f; // Default stroke width
         strokeScale = 1f; // Default stroke scale
         miterLimit = 4; // Default miter limit
         texture = null;
@@ -250,7 +250,7 @@ public partial class Canvas
     }
     public void SetStrokeStartCap(EndCapStyle cap) => _state.strokeStartCap = cap;
     public void SetStrokeEndCap(EndCapStyle cap) => _state.strokeEndCap = cap;
-    public void SetStrokeWidth(double width = 1f) => _state.strokeWidth = width;
+    public void SetStrokeWidth(double width = 2f) => _state.strokeWidth = width;
     public void SetStrokeScale(double scale) => _state.strokeScale = scale;
     public void SetMiterLimit(double limit = 4) => _state.miterLimit = limit;
     public void SetTexture(object? texture) => _state.texture = texture;
