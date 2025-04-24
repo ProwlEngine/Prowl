@@ -1405,8 +1405,6 @@ public partial class Canvas
             return;
 
         // Center it so it scales and sits properly with AA
-        x += 0.5;
-        y += 0.5;
         radius++;
 
         // Store the starting index to reference _vertices
@@ -1468,7 +1466,7 @@ public partial class Canvas
 
         if (radius <= 0 || segments < 1)
             return;
-        
+
         // Ensure angles are ordered correctly
         if (endAngle < startAngle)
         {
