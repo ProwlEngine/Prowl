@@ -1,8 +1,8 @@
 ﻿namespace Prowl.PaperUI.LayoutEngine
 {
-    internal struct UISize(float main, float cross)
+    internal struct UISize(double main, double cross)
     {
-        public float Main = main;
-        public float Cross = cross;
+        public double Main = main;
+        public double Cross = cross;
     }
 }

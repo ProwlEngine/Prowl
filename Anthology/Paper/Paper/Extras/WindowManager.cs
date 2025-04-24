@@ -1,7 +1,8 @@
 ﻿using FontStashSharp;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Vector;
+
 using System.Drawing;
-using System.Numerics;
 
 namespace Prowl.PaperUI.Extras
 {
@@ -18,9 +19,9 @@ namespace Prowl.PaperUI.Extras
         public Color CloseButtonStyle { get; set; } = Color.FromArgb(80, 255, 100, 100);
         public Color ResizeHandleIndicatorColor { get; set; } = Color.FromArgb(180, 94, 104, 202);
 
-        public float BorderWidth { get; set; } = 1.0f;
-        public float CornerRadius { get; set; } = 8.0f;
-        public float TitleBarHeight { get; set; } = 32.0f;
+        public double BorderWidth { get; set; } = 1.0f;
+        public double CornerRadius { get; set; } = 8.0f;
+        public double TitleBarHeight { get; set; } = 32.0f;
 
         // Predefined styles
         public static WindowStyle Default => new WindowStyle();
@@ -179,13 +180,13 @@ namespace Prowl.PaperUI.Extras
             using (Paper.Box($"Window_{state.Id}")
                 .Depth(100_000 + state.ZOrder)
                 .PositionType(PositionType.SelfDirected)
-                .Position(state.Position.X, state.Position.Y)
+                .Position(state.Position.x, state.Position.y)
 
-                .Size(state.Size.X, state.Size.Y)
-                .MaxLeft(Paper.Percent(100, -state.Size.X))
-                .MaxTop(Paper.Percent(100, -state.Size.Y))
-                .MinWidth(state.MinSize.X)
-                .MinHeight(state.MinSize.Y)
+                .Size(state.Size.x, state.Size.y)
+                .MaxLeft(Paper.Percent(100, -state.Size.x))
+                .MaxTop(Paper.Percent(100, -state.Size.y))
+                .MinWidth(state.MinSize.x)
+                .MinHeight(state.MinSize.y)
                 .BackgroundColor(style.BackgroundStyle)
                 .BorderColor(style.BorderColor)
                 .BorderWidth(style.BorderWidth)
@@ -199,24 +200,24 @@ namespace Prowl.PaperUI.Extras
                     var viewport = new Rect(0, 0, node.Parent.LayoutWidth, node.Parent.LayoutHeight);
                     
                     // If window is larger than viewport, scale it down to fit
-                    float windowWidth = Math.Min(state.Size.X, viewport.Width);
-                    float windowHeight = Math.Min(state.Size.Y, viewport.Height);
+                    double windowWidth = Math.Min(state.Size.x, viewport.width);
+                    double windowHeight = Math.Min(state.Size.y, viewport.height);
                     
                     // Calculate window position to keep it in bounds
-                    float x = state.Position.X;
-                    float y = state.Position.Y;
+                    double x = state.Position.x;
+                    double y = state.Position.y;
                     
                     // Adjust horizontal position to keep window inside viewport
-                    if (x < viewport.X)
-                        x = viewport.X; // Window extends beyond left edge
-                    else if (x + windowWidth > viewport.X + viewport.Width)
-                        x = viewport.X + viewport.Width - windowWidth; // Window extends beyond right edge
+                    if (x < viewport.x)
+                        x = viewport.x; // Window extends beyond left edge
+                    else if (x + windowWidth > viewport.x + viewport.width)
+                        x = viewport.x + viewport.width - windowWidth; // Window extends beyond right edge
                     
                     // Adjust vertical position to keep window inside viewport
-                    if (y < viewport.Y)
-                        y = viewport.Y; // Window extends beyond top edge
-                    else if(y + windowHeight > viewport.Y + viewport.Height)
-                        y = viewport.Y + viewport.Height - windowHeight; // Window extends beyond bottom edge
+                    if (y < viewport.y)
+                        y = viewport.y; // Window extends beyond top edge
+                    else if(y + windowHeight > viewport.y + viewport.height)
+                        y = viewport.y + viewport.height - windowHeight; // Window extends beyond bottom edge
                     
                     
                     // Update window position and size
@@ -267,7 +268,7 @@ namespace Prowl.PaperUI.Extras
                     {
                         // Update window position based on drag
                         var totalDelta = Paper.PointerPos - start;
-                        state.Position = new Vector2(state.StartDraggingPosition.X + totalDelta.X, state.StartDraggingPosition.Y + totalDelta.Y);
+                        state.Position = new Vector2(state.StartDraggingPosition.x + totalDelta.x, state.StartDraggingPosition.y + totalDelta.y);
 
                         BringWindowToFront(state.Id);
                     }
@@ -303,15 +304,15 @@ namespace Prowl.PaperUI.Extras
             const int handleSize = 8;
 
             // Create an array of resize handle definitions
-            (WindowState.ResizeDirection dir, float l, float t, float w, float h)[] handles = [
-                (dir: WindowState.ResizeDirection.North, l: handleSize*2, t: 0, w: state.Size.X-handleSize*4, h: handleSize),
-                (dir: WindowState.ResizeDirection.South, l: handleSize*2, t: state.Size.Y-handleSize, w: state.Size.X-handleSize*4, h: handleSize),
-                (dir: WindowState.ResizeDirection.East, l: state.Size.X-handleSize, t: handleSize*2, w: handleSize, h: state.Size.Y-handleSize*4),
-                (dir: WindowState.ResizeDirection.West, l: 0, t: handleSize*2, w: handleSize, h: state.Size.Y-handleSize*4),
-                (dir: WindowState.ResizeDirection.NorthEast, l: state.Size.X-handleSize, t: 0, w: handleSize, h: handleSize),
+            (WindowState.ResizeDirection dir, double l, double t, double w, double h)[] handles = [
+                (dir: WindowState.ResizeDirection.North, l: handleSize*2, t: 0, w: state.Size.x-handleSize*4, h: handleSize),
+                (dir: WindowState.ResizeDirection.South, l: handleSize*2, t: state.Size.y-handleSize, w: state.Size.x-handleSize*4, h: handleSize),
+                (dir: WindowState.ResizeDirection.East, l: state.Size.x-handleSize, t: handleSize*2, w: handleSize, h: state.Size.y-handleSize*4),
+                (dir: WindowState.ResizeDirection.West, l: 0, t: handleSize*2, w: handleSize, h: state.Size.y-handleSize*4),
+                (dir: WindowState.ResizeDirection.NorthEast, l: state.Size.x-handleSize, t: 0, w: handleSize, h: handleSize),
                 (dir: WindowState.ResizeDirection.NorthWest, l: 0, t: 0, w: handleSize, h: handleSize),
-                (dir: WindowState.ResizeDirection.SouthEast, l: state.Size.X-handleSize, t: state.Size.Y-handleSize, w: handleSize, h: handleSize),
-                (dir: WindowState.ResizeDirection.SouthWest, l: 0, t: state.Size.Y-handleSize, w: handleSize, h: handleSize)
+                (dir: WindowState.ResizeDirection.SouthEast, l: state.Size.x-handleSize, t: state.Size.y-handleSize, w: handleSize, h: handleSize),
+                (dir: WindowState.ResizeDirection.SouthWest, l: 0, t: state.Size.y-handleSize, w: handleSize, h: handleSize)
             ];
 
             // Create all handles from the array
@@ -343,40 +344,40 @@ namespace Prowl.PaperUI.Extras
             switch (direction)
             {
                 case WindowState.ResizeDirection.North:
-                    state.Position = new Vector2(state.Position.X, state.Position.Y + delta.Y);
-                    state.Size = new Vector2(state.Size.X, state.Size.Y - delta.Y);
+                    state.Position = new Vector2(state.Position.x, state.Position.y + delta.y);
+                    state.Size = new Vector2(state.Size.x, state.Size.y - delta.y);
                     break;
 
                 case WindowState.ResizeDirection.South:
-                    state.Size = new Vector2(state.Size.X, state.Size.Y + delta.Y);
+                    state.Size = new Vector2(state.Size.x, state.Size.y + delta.y);
                     break;
 
                 case WindowState.ResizeDirection.East:
-                    state.Size = new Vector2(state.Size.X + delta.X, state.Size.Y);
+                    state.Size = new Vector2(state.Size.x + delta.x, state.Size.y);
                     break;
 
                 case WindowState.ResizeDirection.West:
-                    state.Position = new Vector2(state.Position.X + delta.X, state.Position.Y);
-                    state.Size = new Vector2(state.Size.X - delta.X, state.Size.Y);
+                    state.Position = new Vector2(state.Position.x + delta.x, state.Position.y);
+                    state.Size = new Vector2(state.Size.x - delta.x, state.Size.y);
                     break;
 
                 case WindowState.ResizeDirection.NorthEast:
-                    state.Position = new Vector2(state.Position.X, state.Position.Y + delta.Y);
-                    state.Size = new Vector2(state.Size.X + delta.X, state.Size.Y - delta.Y);
+                    state.Position = new Vector2(state.Position.x, state.Position.y + delta.y);
+                    state.Size = new Vector2(state.Size.x + delta.x, state.Size.y - delta.y);
                     break;
 
                 case WindowState.ResizeDirection.NorthWest:
-                    state.Position = new Vector2(state.Position.X + delta.X, state.Position.Y + delta.Y);
-                    state.Size = new Vector2(state.Size.X - delta.X, state.Size.Y - delta.Y);
+                    state.Position = new Vector2(state.Position.x + delta.x, state.Position.y + delta.y);
+                    state.Size = new Vector2(state.Size.x - delta.x, state.Size.y - delta.y);
                     break;
 
                 case WindowState.ResizeDirection.SouthEast:
-                    state.Size = new Vector2(state.Size.X + delta.X, state.Size.Y + delta.Y);
+                    state.Size = new Vector2(state.Size.x + delta.x, state.Size.y + delta.y);
                     break;
 
                 case WindowState.ResizeDirection.SouthWest:
-                    state.Position = new Vector2(state.Position.X + delta.X, state.Position.Y);
-                    state.Size = new Vector2(state.Size.X - delta.X, state.Size.Y + delta.Y);
+                    state.Position = new Vector2(state.Position.x + delta.x, state.Position.y);
+                    state.Size = new Vector2(state.Size.x - delta.x, state.Size.y + delta.y);
                     break;
             }
         }
@@ -391,10 +392,10 @@ namespace Prowl.PaperUI.Extras
             if (state.WindowNode != null)
             {
                 Paper.AddActionElement(state.WindowNode, (vg, rect) => {
-                    const float lineThickness = 4.0f;
-                    const float linePadding = 10.0f;
-                    vg.StrokeColor(style.ResizeHandleIndicatorColor);
-                    vg.StrokeWidth(lineThickness);
+                    const double lineThickness = 4.0f;
+                    const double linePadding = 10.0f;
+                    vg.SetStrokeColor(style.ResizeHandleIndicatorColor);
+                    vg.SetStrokeWidth(lineThickness);
 
                     // Define the edge coordinates for each direction
                     switch (state.CurrentResizeDirection)
@@ -404,8 +405,8 @@ namespace Prowl.PaperUI.Extras
                         case WindowState.ResizeDirection.NorthWest:
                             // Top edge
                             vg.BeginPath();
-                            vg.MoveTo(rect.X + linePadding, rect.Y + lineThickness / 2);
-                            vg.LineTo(rect.X + rect.Width - linePadding, rect.Y + lineThickness / 2);
+                            vg.MoveTo(rect.x + linePadding, rect.y + lineThickness / 2);
+                            vg.LineTo(rect.x + rect.width - linePadding, rect.y + lineThickness / 2);
                             vg.Stroke();
                             break;
                         case WindowState.ResizeDirection.South:
@@ -413,8 +414,8 @@ namespace Prowl.PaperUI.Extras
                         case WindowState.ResizeDirection.SouthWest:
                             // Bottom edge
                             vg.BeginPath();
-                            vg.MoveTo(rect.X + linePadding, rect.Y + rect.Height - lineThickness / 2);
-                            vg.LineTo(rect.X + rect.Width - linePadding, rect.Y + rect.Height - lineThickness / 2);
+                            vg.MoveTo(rect.x + linePadding, rect.y + rect.height - lineThickness / 2);
+                            vg.LineTo(rect.x + rect.width - linePadding, rect.y + rect.height - lineThickness / 2);
                             vg.Stroke();
                             break;
                     }
@@ -426,8 +427,8 @@ namespace Prowl.PaperUI.Extras
                         case WindowState.ResizeDirection.SouthEast:
                             // Right edge
                             vg.BeginPath();
-                            vg.MoveTo(rect.X + rect.Width - lineThickness / 2, rect.Y + linePadding);
-                            vg.LineTo(rect.X + rect.Width - lineThickness / 2, rect.Y + rect.Height - linePadding);
+                            vg.MoveTo(rect.x + rect.width - lineThickness / 2, rect.y + linePadding);
+                            vg.LineTo(rect.x + rect.width - lineThickness / 2, rect.y + rect.height - linePadding);
                             vg.Stroke();
                             break;
                         case WindowState.ResizeDirection.West:
@@ -435,8 +436,8 @@ namespace Prowl.PaperUI.Extras
                         case WindowState.ResizeDirection.SouthWest:
                             // Left edge
                             vg.BeginPath();
-                            vg.MoveTo(rect.X + lineThickness / 2, rect.Y + linePadding);
-                            vg.LineTo(rect.X + lineThickness / 2, rect.Y + rect.Height - linePadding);
+                            vg.MoveTo(rect.x + lineThickness / 2, rect.y + linePadding);
+                            vg.LineTo(rect.x + lineThickness / 2, rect.y + rect.height - linePadding);
                             vg.Stroke();
                             break;
                     }

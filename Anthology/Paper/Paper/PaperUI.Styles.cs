@@ -1,8 +1,7 @@
-﻿using Prowl.PaperUI.LayoutEngine;
-using Prowl.PaperUI;
-using System.Drawing;
-using System.Numerics;
-using Prowl.PaperUI;
+﻿using System.Drawing;
+
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {
@@ -80,16 +79,16 @@ namespace Prowl.PaperUI
     {
         #region Fields
 
-        private float _translateX = 0;
-        private float _translateY = 0;
-        private float _scaleX = 1;
-        private float _scaleY = 1;
-        private float _rotate = 0;
-        private float _skewX = 0;
-        private float _skewY = 0;
-        private float _originX = 0.5f; // Default to center (50%)
-        private float _originY = 0.5f; // Default to center (50%)
-        private Transform? _customTransform = null;
+        private double _translateX = 0;
+        private double _translateY = 0;
+        private double _scaleX = 1;
+        private double _scaleY = 1;
+        private double _rotate = 0;
+        private double _skewX = 0;
+        private double _skewY = 0;
+        private double _originX = 0.5f; // Default to center (50%)
+        private double _originY = 0.5f; // Default to center (50%)
+        private Transform2D? _customTransform = null;
 
         #endregion
 
@@ -98,7 +97,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the X translation.
         /// </summary>
-        public TransformBuilder SetTranslateX(float x)
+        public TransformBuilder SetTranslateX(double x)
         {
             _translateX = x;
             return this;
@@ -107,7 +106,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the Y translation.
         /// </summary>
-        public TransformBuilder SetTranslateY(float y)
+        public TransformBuilder SetTranslateY(double y)
         {
             _translateY = y;
             return this;
@@ -116,7 +115,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the X scale factor.
         /// </summary>
-        public TransformBuilder SetScaleX(float x)
+        public TransformBuilder SetScaleX(double x)
         {
             _scaleX = x;
             return this;
@@ -125,7 +124,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the Y scale factor.
         /// </summary>
-        public TransformBuilder SetScaleY(float y)
+        public TransformBuilder SetScaleY(double y)
         {
             _scaleY = y;
             return this;
@@ -134,7 +133,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the rotation angle in degrees.
         /// </summary>
-        public TransformBuilder SetRotate(float angleInDegrees)
+        public TransformBuilder SetRotate(double angleInDegrees)
         {
             _rotate = angleInDegrees;
             return this;
@@ -143,7 +142,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the X skew angle.
         /// </summary>
-        public TransformBuilder SetSkewX(float angle)
+        public TransformBuilder SetSkewX(double angle)
         {
             _skewX = angle;
             return this;
@@ -152,7 +151,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the Y skew angle.
         /// </summary>
-        public TransformBuilder SetSkewY(float angle)
+        public TransformBuilder SetSkewY(double angle)
         {
             _skewY = angle;
             return this;
@@ -161,7 +160,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the X origin point (0-1 range).
         /// </summary>
-        public TransformBuilder SetOriginX(float x)
+        public TransformBuilder SetOriginX(double x)
         {
             _originX = x;
             return this;
@@ -170,7 +169,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the Y origin point (0-1 range).
         /// </summary>
-        public TransformBuilder SetOriginY(float y)
+        public TransformBuilder SetOriginY(double y)
         {
             _originY = y;
             return this;
@@ -179,7 +178,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets a custom transform to be applied.
         /// </summary>
-        public TransformBuilder SetCustomTransform(Transform transform)
+        public TransformBuilder SetCustomTransform(Transform2D transform)
         {
             _customTransform = transform;
             return this;
@@ -194,45 +193,45 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="rect">The rectangle to transform.</param>
         /// <returns>The complete transformation matrix.</returns>
-        public Transform Build(Rect rect)
+        public Transform2D Build(Rect rect)
         {
             // Calculate origin in actual pixels
-            float originX = rect.X + _originX * rect.Width;
-            float originY = rect.Y + _originY * rect.Height;
+            double originX = rect.x + _originX * rect.width;
+            double originY = rect.y + _originY * rect.height;
 
             // Create transformation matrix
-            Transform result = Transform.Identity;
+            Transform2D result = Transform2D.Identity;
 
             // Create a matrix that transforms from origin
-            Transform originMatrix = Transform.CreateTranslation(-originX, -originY);
+            Transform2D originMatrix = Transform2D.CreateTranslation(-originX, -originY);
 
             // Apply transforms in order: translate, rotate, scale, skew
-            Transform transformMatrix = Transform.Identity;
+            Transform2D transformMatrix = Transform2D.Identity;
 
             // 1. Translate
             if (_translateX != 0 || _translateY != 0)
-                transformMatrix *= Transform.CreateTranslation(_translateX, _translateY);
+                transformMatrix *= Transform2D.CreateTranslation(_translateX, _translateY);
 
             // 2. Rotate
             if (_rotate != 0)
-                transformMatrix *= Transform.CreateRotate(_rotate);
+                transformMatrix *= Transform2D.CreateRotate(_rotate);
 
             // 3. Scale
             if (_scaleX != 1 || _scaleY != 1)
-                transformMatrix *= Transform.CreateScale(_scaleX, _scaleY);
+                transformMatrix *= Transform2D.CreateScale(_scaleX, _scaleY);
 
             // 4. Skew
             if (_skewX != 0)
-                transformMatrix *= Transform.CreateSkewX(_skewX);
+                transformMatrix *= Transform2D.CreateSkewX(_skewX);
             if (_skewY != 0)
-                transformMatrix *= Transform.CreateSkewY(_skewY);
+                transformMatrix *= Transform2D.CreateSkewY(_skewY);
 
             // 5. Apply custom transform if specified
             if (_customTransform.HasValue)
                 transformMatrix *= _customTransform.Value;
 
             // Complete transformation: move to origin, apply transform, move back from origin
-            result = originMatrix * transformMatrix * Transform.CreateTranslation(originX, originY);
+            result = originMatrix * transformMatrix * Transform2D.CreateTranslation(originX, originY);
 
             return result;
         }
@@ -246,10 +245,10 @@ namespace Prowl.PaperUI
     public class TransitionConfig
     {
         /// <summary>Duration of the transition in seconds.</summary>
-        public float Duration { get; set; }
+        public double Duration { get; set; }
 
         /// <summary>Optional easing function to control transition timing.</summary>
-        public Func<float, float>? EasingFunction { get; set; }
+        public Func<double, double>? EasingFunction { get; set; }
     }
 
     /// <summary>
@@ -345,7 +344,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Configures a transition for a property.
         /// </summary>
-        public void SetTransitionConfig(GuiProp property, float duration, Func<float, float>? easing = null)
+        public void SetTransitionConfig(GuiProp property, double duration, Func<double, double>? easing = null)
         {
             // Store the transition configuration for this property
             _transitionConfigs[property] = new TransitionConfig {
@@ -371,7 +370,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Updates all property transitions for the current frame.
         /// </summary>
-        public void Update(float deltaTime)
+        public void Update(double deltaTime)
         {
             if (!_firstFrame)
             {
@@ -413,40 +412,40 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Gets the complete transform for an element.
         /// </summary>
-        public Transform GetTransformForElement(Rect rect)
+        public Transform2D GetTransformForElement(Rect rect)
         {
             TransformBuilder builder = new TransformBuilder();
 
             // Set transform properties from the current values
             if (_currentValues.TryGetValue(GuiProp.TranslateX, out var translateX))
-                builder.SetTranslateX((float)translateX);
+                builder.SetTranslateX((double)translateX);
 
             if (_currentValues.TryGetValue(GuiProp.TranslateY, out var translateY))
-                builder.SetTranslateY((float)translateY);
+                builder.SetTranslateY((double)translateY);
 
             if (_currentValues.TryGetValue(GuiProp.ScaleX, out var scaleX))
-                builder.SetScaleX((float)scaleX);
+                builder.SetScaleX((double)scaleX);
 
             if (_currentValues.TryGetValue(GuiProp.ScaleY, out var scaleY))
-                builder.SetScaleY((float)scaleY);
+                builder.SetScaleY((double)scaleY);
 
             if (_currentValues.TryGetValue(GuiProp.Rotate, out var rotate))
-                builder.SetRotate((float)rotate);
+                builder.SetRotate((double)rotate);
 
             if (_currentValues.TryGetValue(GuiProp.SkewX, out var skewX))
-                builder.SetSkewX((float)skewX);
+                builder.SetSkewX((double)skewX);
 
             if (_currentValues.TryGetValue(GuiProp.SkewY, out var skewY))
-                builder.SetSkewY((float)skewY);
+                builder.SetSkewY((double)skewY);
 
             if (_currentValues.TryGetValue(GuiProp.OriginX, out var originX))
-                builder.SetOriginX((float)originX);
+                builder.SetOriginX((double)originX);
 
             if (_currentValues.TryGetValue(GuiProp.OriginY, out var originY))
-                builder.SetOriginY((float)originY);
+                builder.SetOriginY((double)originY);
 
             if (_currentValues.TryGetValue(GuiProp.Transform, out var customTransform))
-                builder.SetCustomTransform((Transform)customTransform);
+                builder.SetCustomTransform((Transform2D)customTransform);
 
             return builder.Build(rect);
         }
@@ -491,7 +490,7 @@ namespace Prowl.PaperUI
         /// Processes transitions for a property.
         /// </summary>
         private void ProcessPropertyWithTransition(GuiProp property, object targetValue, TransitionConfig config,
-            float deltaTime, List<GuiProp> completedInterpolations)
+            double deltaTime, List<GuiProp> completedInterpolations)
         {
             // If we don't have a current value yet, initialize it immediately
             if (!_currentValues.TryGetValue(property, out object? currentValue))
@@ -539,7 +538,7 @@ namespace Prowl.PaperUI
             else
             {
                 // Calculate interpolated value
-                float t = state.CurrentTime / state.Duration;
+                double t = state.CurrentTime / state.Duration;
                 if (state.EasingFunction != null)
                     t = state.EasingFunction(t);
 
@@ -550,9 +549,13 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Interpolates between two values based on their type.
         /// </summary>
-        private object Interpolate(object start, object end, float t)
+        private object Interpolate(object start, object end, double t)
         {
-            if (start is float floatStart && end is float floatEnd)
+            if (start is double doubleStart && end is double doubleEnd)
+            {
+                return doubleStart + (doubleEnd - doubleStart) * t;
+            }
+            else if(start is float floatStart && end is float floatEnd)
             {
                 return floatStart + (floatEnd - floatStart) * t;
             }
@@ -580,9 +583,9 @@ namespace Prowl.PaperUI
             {
                 return UnitValue.Lerp(unitStart, unitEnd, t);
             }
-            else if (start is Transform transformStart && end is Transform transformEnd)
+            else if (start is Transform2D transformStart && end is Transform2D transformEnd)
             {
-                return Transform.Lerp(transformStart, transformEnd, t);
+                return Transform2D.Lerp(transformStart, transformEnd, t);
             }
 
             // Default to just returning the end value
@@ -592,7 +595,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Interpolates between two colors.
         /// </summary>
-        private Color InterpolateColor(Color start, Color end, float t)
+        private Color InterpolateColor(Color start, Color end, double t)
         {
             int r = (int)(start.R + (end.R - start.R) * t);
             int g = (int)(start.G + (end.G - start.G) * t);
@@ -611,17 +614,17 @@ namespace Prowl.PaperUI
                 // Visual Properties
                 GuiProp.BackgroundColor => Color.Transparent,
                 GuiProp.BorderColor => Color.Transparent,
-                GuiProp.BorderWidth => 0f,
+                GuiProp.BorderWidth => (double)0.0,
                 GuiProp.Rounded => new Vector4(0, 0, 0, 0),
 
                 // Core Layout Properties
-                GuiProp.AspectRatio => -1f,
+                GuiProp.AspectRatio => (double)-1.0,
                 GuiProp.Width => UnitValue.Stretch(),
                 GuiProp.Height => UnitValue.Stretch(),
                 GuiProp.MinWidth => UnitValue.Pixels(0),
-                GuiProp.MaxWidth => UnitValue.Pixels(float.MaxValue),
+                GuiProp.MaxWidth => UnitValue.Pixels(double.MaxValue),
                 GuiProp.MinHeight => UnitValue.Pixels(0),
-                GuiProp.MaxHeight => UnitValue.Pixels(float.MaxValue),
+                GuiProp.MaxHeight => UnitValue.Pixels(double.MaxValue),
 
                 // Positioning Properties
                 GuiProp.Left => UnitValue.Auto,
@@ -629,13 +632,13 @@ namespace Prowl.PaperUI
                 GuiProp.Top => UnitValue.Auto,
                 GuiProp.Bottom => UnitValue.Auto,
                 GuiProp.MinLeft => UnitValue.Pixels(0),
-                GuiProp.MaxLeft => UnitValue.Pixels(float.MaxValue),
+                GuiProp.MaxLeft => UnitValue.Pixels(double.MaxValue),
                 GuiProp.MinRight => UnitValue.Pixels(0),
-                GuiProp.MaxRight => UnitValue.Pixels(float.MaxValue),
+                GuiProp.MaxRight => UnitValue.Pixels(double.MaxValue),
                 GuiProp.MinTop => UnitValue.Pixels(0),
-                GuiProp.MaxTop => UnitValue.Pixels(float.MaxValue),
+                GuiProp.MaxTop => UnitValue.Pixels(double.MaxValue),
                 GuiProp.MinBottom => UnitValue.Pixels(0),
-                GuiProp.MaxBottom => UnitValue.Pixels(float.MaxValue),
+                GuiProp.MaxBottom => UnitValue.Pixels(double.MaxValue),
 
                 // Child Layout Properties
                 GuiProp.ChildLeft => UnitValue.Auto,
@@ -650,16 +653,16 @@ namespace Prowl.PaperUI
                 GuiProp.BorderBottom => UnitValue.Pixels(0),
 
                 // Transform Properties
-                GuiProp.TranslateX => 0f,
-                GuiProp.TranslateY => 0f,
-                GuiProp.ScaleX => 1f,
-                GuiProp.ScaleY => 1f,
-                GuiProp.Rotate => 0f,
-                GuiProp.SkewX => 0f,
-                GuiProp.SkewY => 0f,
-                GuiProp.OriginX => 0.5f, // Default is center
-                GuiProp.OriginY => 0.5f, // Default is center
-                GuiProp.Transform => Transform.Identity,
+                GuiProp.TranslateX => (double)0.0,
+                GuiProp.TranslateY => (double)0.0,
+                GuiProp.ScaleX => (double)1.0,
+                GuiProp.ScaleY => (double)1.0,
+                GuiProp.Rotate => (double)0.0,
+                GuiProp.SkewX => (double)0.0,
+                GuiProp.SkewY => (double)0.0,
+                GuiProp.OriginX => (double)0.5, // Default is center
+                GuiProp.OriginY => (double)0.5, // Default is center
+                GuiProp.Transform => Transform2D.Identity,
 
                 _ => throw new ArgumentOutOfRangeException(nameof(property), property, null)
             };
@@ -676,9 +679,9 @@ namespace Prowl.PaperUI
         {
             public object StartValue { get; set; }
             public object TargetValue { get; set; }
-            public float Duration { get; set; }
-            public Func<float, float>? EasingFunction { get; set; }
-            public float CurrentTime { get; set; }
+            public double Duration { get; set; }
+            public Func<double, double>? EasingFunction { get; set; }
+            public double CurrentTime { get; set; }
         }
 
         #endregion
@@ -698,7 +701,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="deltaTime">The time since the last frame.</param>
         /// <param name="element">The root element to start updating from.</param>
-        private static void UpdateStyles(float deltaTime, Element element)
+        private static void UpdateStyles(double deltaTime, Element element)
         {
             ulong id = element.ID;
             if (_activeStyles.TryGetValue(id, out var style))
@@ -739,7 +742,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Configure a transition for a property.
         /// </summary>
-        internal static void SetTransitionConfig(ulong elementID, GuiProp property, float duration, Func<float, float>? easing = null)
+        internal static void SetTransitionConfig(ulong elementID, GuiProp property, double duration, Func<double, double>? easing = null)
         {
             if (!_activeStyles.TryGetValue(elementID, out var style))
             {

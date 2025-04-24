@@ -1,5 +1,5 @@
-﻿using Prowl.PaperUI;
-using Prowl.PaperUI.Graphics;
+﻿using Prowl.Quill;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {

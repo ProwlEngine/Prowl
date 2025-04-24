@@ -17,6 +17,7 @@ namespace OpenTKSample
         {
             base.OnLoad();
             _renderer = new PaperRenderer();
+            _renderer.Initialize(ClientRectangle.Size.X, ClientRectangle.Size.Y);
             Shared.DemoWindow.Initialize();
             Paper.Initialize(_renderer, ClientRectangle.Size.X, ClientRectangle.Size.Y);
         }
@@ -44,6 +45,7 @@ namespace OpenTKSample
             GL.Viewport(0, 0, ClientRectangle.Size.X, ClientRectangle.Size.Y);
 
             Paper.SetResolution(ClientRectangle.Size.X, ClientRectangle.Size.Y);
+            _renderer.UpdateProjection(ClientRectangle.Size.X, ClientRectangle.Size.Y);
         }
 
         protected override void OnMouseDown(MouseButtonEventArgs e)

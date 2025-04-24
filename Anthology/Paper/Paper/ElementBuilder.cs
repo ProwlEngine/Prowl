@@ -1,8 +1,7 @@
-﻿using Prowl.PaperUI;
-using Prowl.PaperUI;
+﻿using System.Drawing;
+
 using Prowl.PaperUI.LayoutEngine;
-using System.Drawing;
-using System.Numerics;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {
@@ -41,33 +40,33 @@ namespace Prowl.PaperUI
         public StyleStateRef BorderColor(Color color) => SetValue(GuiProp.BorderColor, color);
 
         /// <summary>Sets the border width of the element.</summary>
-        public StyleStateRef BorderWidth(float width) => SetValue(GuiProp.BorderWidth, width);
+        public StyleStateRef BorderWidth(double width) => SetValue(GuiProp.BorderWidth, width);
 
         #endregion
 
         #region Corner Rounding
 
         /// <summary>Rounds the top corners of the element.</summary>
-        public StyleStateRef RoundedTop(float radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, 0, 0));
+        public StyleStateRef RoundedTop(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, 0, 0));
 
         /// <summary>Rounds the bottom corners of the element.</summary>
-        public StyleStateRef RoundedBottom(float radius) => SetValue(GuiProp.Rounded, new Vector4(0, 0, radius, radius));
+        public StyleStateRef RoundedBottom(double radius) => SetValue(GuiProp.Rounded, new Vector4(0, 0, radius, radius));
 
         /// <summary>Rounds the left corners of the element.</summary>
-        public StyleStateRef RoundedLeft(float radius) => SetValue(GuiProp.Rounded, new Vector4(radius, 0, 0, radius));
+        public StyleStateRef RoundedLeft(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, 0, 0, radius));
 
         /// <summary>Rounds the right corners of the element.</summary>
-        public StyleStateRef RoundedRight(float radius) => SetValue(GuiProp.Rounded, new Vector4(0, radius, radius, 0));
+        public StyleStateRef RoundedRight(double radius) => SetValue(GuiProp.Rounded, new Vector4(0, radius, radius, 0));
 
         /// <summary>Rounds all corners of the element with the same radius.</summary>
-        public StyleStateRef Rounded(float radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, radius, radius));
+        public StyleStateRef Rounded(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, radius, radius));
 
         /// <summary>Rounds each corner of the element with individual radii.</summary>
         /// <param name="tlRadius">Top-left radius</param>
         /// <param name="trRadius">Top-right radius</param>
         /// <param name="brRadius">Bottom-right radius</param>
         /// <param name="blRadius">Bottom-left radius</param>
-        public StyleStateRef Rounded(float tlRadius, float trRadius, float brRadius, float blRadius) =>
+        public StyleStateRef Rounded(double tlRadius, double trRadius, double brRadius, double blRadius) =>
             SetValue(GuiProp.Rounded, new Vector4(tlRadius, trRadius, brRadius, blRadius));
 
         #endregion
@@ -75,7 +74,7 @@ namespace Prowl.PaperUI
         #region Layout Properties
 
         /// <summary>Sets the aspect ratio (width/height) of the element.</summary>
-        public StyleStateRef AspectRatio(float ratio) => SetValue(GuiProp.AspectRatio, ratio);
+        public StyleStateRef AspectRatio(double ratio) => SetValue(GuiProp.AspectRatio, ratio);
 
         /// <summary>Sets both width and height to the same value.</summary>
         public StyleStateRef Size(UnitValue sizeUniform) => Size(sizeUniform, sizeUniform);
@@ -219,13 +218,13 @@ namespace Prowl.PaperUI
         #region Transform Properties
 
         /// <summary>Sets horizontal translation.</summary>
-        public StyleStateRef TranslateX(float x) => SetValue(GuiProp.TranslateX, x);
+        public StyleStateRef TranslateX(double x) => SetValue(GuiProp.TranslateX, x);
 
         /// <summary>Sets vertical translation.</summary>
-        public StyleStateRef TranslateY(float y) => SetValue(GuiProp.TranslateY, y);
+        public StyleStateRef TranslateY(double y) => SetValue(GuiProp.TranslateY, y);
 
         /// <summary>Sets both horizontal and vertical translation.</summary>
-        public StyleStateRef Translate(float x, float y)
+        public StyleStateRef Translate(double x, double y)
         {
             SetValue(GuiProp.TranslateX, x);
             SetValue(GuiProp.TranslateY, y);
@@ -233,16 +232,16 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>Sets horizontal scaling factor.</summary>
-        public StyleStateRef ScaleX(float x) => SetValue(GuiProp.ScaleX, x);
+        public StyleStateRef ScaleX(double x) => SetValue(GuiProp.ScaleX, x);
 
         /// <summary>Sets vertical scaling factor.</summary>
-        public StyleStateRef ScaleY(float y) => SetValue(GuiProp.ScaleY, y);
+        public StyleStateRef ScaleY(double y) => SetValue(GuiProp.ScaleY, y);
 
         /// <summary>Sets uniform scaling in both directions.</summary>
-        public StyleStateRef Scale(float scale) => Scale(scale, scale);
+        public StyleStateRef Scale(double scale) => Scale(scale, scale);
 
         /// <summary>Sets individual scaling factors for each axis.</summary>
-        public StyleStateRef Scale(float x, float y)
+        public StyleStateRef Scale(double x, double y)
         {
             SetValue(GuiProp.ScaleX, x);
             SetValue(GuiProp.ScaleY, y);
@@ -250,16 +249,16 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>Sets rotation angle in degrees.</summary>
-        public StyleStateRef Rotate(float angleInDegrees) => SetValue(GuiProp.Rotate, angleInDegrees);
+        public StyleStateRef Rotate(double angleInDegrees) => SetValue(GuiProp.Rotate, angleInDegrees);
 
         /// <summary>Sets horizontal skew angle.</summary>
-        public StyleStateRef SkewX(float angle) => SetValue(GuiProp.SkewX, angle);
+        public StyleStateRef SkewX(double angle) => SetValue(GuiProp.SkewX, angle);
 
         /// <summary>Sets vertical skew angle.</summary>
-        public StyleStateRef SkewY(float angle) => SetValue(GuiProp.SkewY, angle);
+        public StyleStateRef SkewY(double angle) => SetValue(GuiProp.SkewY, angle);
 
         /// <summary>Sets both horizontal and vertical skew angles.</summary>
-        public StyleStateRef Skew(float x, float y)
+        public StyleStateRef Skew(double x, double y)
         {
             SetValue(GuiProp.SkewX, x);
             SetValue(GuiProp.SkewY, y);
@@ -267,7 +266,7 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>Sets the origin point for transformations.</summary>
-        public StyleStateRef TransformOrigin(float x, float y)
+        public StyleStateRef TransformOrigin(double x, double y)
         {
             SetValue(GuiProp.OriginX, x);
             SetValue(GuiProp.OriginY, y);
@@ -275,7 +274,7 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>Sets a complete transform matrix.</summary>
-        public StyleStateRef Transform(Transform transform) => SetValue(GuiProp.Transform, transform);
+        public StyleStateRef Transform(Transform2D transform) => SetValue(GuiProp.Transform, transform);
 
         #endregion
 
@@ -324,7 +323,7 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        public ElementBuilder Transition(GuiProp property, float duration, Func<float, float> easing = null)
+        public ElementBuilder Transition(GuiProp property, double duration, Func<double, double> easing = null)
         {
             Paper.SetTransitionConfig(_element.ID, property, duration, easing);
             return this;
@@ -373,29 +372,29 @@ namespace Prowl.PaperUI
         public ElementBuilder BorderColor(Color color) => SetValue(GuiProp.BorderColor, color);
 
         /// <summary>Sets the border width of the element.</summary>
-        public ElementBuilder BorderWidth(float width) => SetValue(GuiProp.BorderWidth, width);
+        public ElementBuilder BorderWidth(double width) => SetValue(GuiProp.BorderWidth, width);
 
         #endregion
 
         #region Corner Rounding
 
         /// <summary>Rounds the top corners of the element.</summary>
-        public ElementBuilder RoundedTop(float radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, 0, 0));
+        public ElementBuilder RoundedTop(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, 0, 0));
 
         /// <summary>Rounds the bottom corners of the element.</summary>
-        public ElementBuilder RoundedBottom(float radius) => SetValue(GuiProp.Rounded, new Vector4(0, 0, radius, radius));
+        public ElementBuilder RoundedBottom(double radius) => SetValue(GuiProp.Rounded, new Vector4(0, 0, radius, radius));
 
         /// <summary>Rounds the left corners of the element.</summary>
-        public ElementBuilder RoundedLeft(float radius) => SetValue(GuiProp.Rounded, new Vector4(radius, 0, 0, radius));
+        public ElementBuilder RoundedLeft(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, 0, 0, radius));
 
         /// <summary>Rounds the right corners of the element.</summary>
-        public ElementBuilder RoundedRight(float radius) => SetValue(GuiProp.Rounded, new Vector4(0, radius, radius, 0));
+        public ElementBuilder RoundedRight(double radius) => SetValue(GuiProp.Rounded, new Vector4(0, radius, radius, 0));
 
         /// <summary>Rounds all corners of the element with the same radius.</summary>
-        public ElementBuilder Rounded(float radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, radius, radius));
+        public ElementBuilder Rounded(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, radius, radius));
 
         /// <summary>Rounds each corner of the element with individual radii.</summary>
-        public ElementBuilder Rounded(float tlRadius, float trRadius, float brRadius, float blRadius) =>
+        public ElementBuilder Rounded(double tlRadius, double trRadius, double brRadius, double blRadius) =>
             SetValue(GuiProp.Rounded, new Vector4(tlRadius, trRadius, brRadius, blRadius));
 
         #endregion
@@ -403,7 +402,7 @@ namespace Prowl.PaperUI
         #region Layout Properties
 
         /// <summary>Sets the aspect ratio (width/height) of the element.</summary>
-        public ElementBuilder AspectRatio(float ratio) => SetValue(GuiProp.AspectRatio, ratio);
+        public ElementBuilder AspectRatio(double ratio) => SetValue(GuiProp.AspectRatio, ratio);
 
         /// <summary>Sets both width and height to the same value.</summary>
         public ElementBuilder Size(UnitValue sizeUniform) => Size(sizeUniform, sizeUniform);
@@ -547,13 +546,13 @@ namespace Prowl.PaperUI
         #region Transform Properties
 
         /// <summary>Sets horizontal translation.</summary>
-        public ElementBuilder TranslateX(float x) => SetValue(GuiProp.TranslateX, x);
+        public ElementBuilder TranslateX(double x) => SetValue(GuiProp.TranslateX, x);
 
         /// <summary>Sets vertical translation.</summary>
-        public ElementBuilder TranslateY(float y) => SetValue(GuiProp.TranslateY, y);
+        public ElementBuilder TranslateY(double y) => SetValue(GuiProp.TranslateY, y);
 
         /// <summary>Sets both horizontal and vertical translation.</summary>
-        public ElementBuilder Translate(float x, float y)
+        public ElementBuilder Translate(double x, double y)
         {
             SetValue(GuiProp.TranslateX, x);
             SetValue(GuiProp.TranslateY, y);
@@ -561,16 +560,16 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>Sets horizontal scaling factor.</summary>
-        public ElementBuilder ScaleX(float x) => SetValue(GuiProp.ScaleX, x);
+        public ElementBuilder ScaleX(double x) => SetValue(GuiProp.ScaleX, x);
 
         /// <summary>Sets vertical scaling factor.</summary>
-        public ElementBuilder ScaleY(float y) => SetValue(GuiProp.ScaleY, y);
+        public ElementBuilder ScaleY(double y) => SetValue(GuiProp.ScaleY, y);
 
         /// <summary>Sets uniform scaling in both directions.</summary>
-        public ElementBuilder Scale(float scale) => Scale(scale, scale);
+        public ElementBuilder Scale(double scale) => Scale(scale, scale);
 
         /// <summary>Sets individual scaling factors for each axis.</summary>
-        public ElementBuilder Scale(float x, float y)
+        public ElementBuilder Scale(double x, double y)
         {
             SetValue(GuiProp.ScaleX, x);
             SetValue(GuiProp.ScaleY, y);
@@ -578,16 +577,16 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>Sets rotation angle in degrees.</summary>
-        public ElementBuilder Rotate(float angleInDegrees) => SetValue(GuiProp.Rotate, angleInDegrees);
+        public ElementBuilder Rotate(double angleInDegrees) => SetValue(GuiProp.Rotate, angleInDegrees);
 
         /// <summary>Sets horizontal skew angle.</summary>
-        public ElementBuilder SkewX(float angle) => SetValue(GuiProp.SkewX, angle);
+        public ElementBuilder SkewX(double angle) => SetValue(GuiProp.SkewX, angle);
 
         /// <summary>Sets vertical skew angle.</summary>
-        public ElementBuilder SkewY(float angle) => SetValue(GuiProp.SkewY, angle);
+        public ElementBuilder SkewY(double angle) => SetValue(GuiProp.SkewY, angle);
 
         /// <summary>Sets both horizontal and vertical skew angles.</summary>
-        public ElementBuilder Skew(float x, float y)
+        public ElementBuilder Skew(double x, double y)
         {
             SetValue(GuiProp.SkewX, x);
             SetValue(GuiProp.SkewY, y);
@@ -595,7 +594,7 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>Sets the origin point for transformations.</summary>
-        public ElementBuilder TransformOrigin(float x, float y)
+        public ElementBuilder TransformOrigin(double x, double y)
         {
             SetValue(GuiProp.OriginX, x);
             SetValue(GuiProp.OriginY, y);
@@ -603,7 +602,7 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>Sets a complete transform matrix.</summary>
-        public ElementBuilder Transform(Transform transform) => SetValue(GuiProp.Transform, transform);
+        public ElementBuilder Transform(Transform2D transform) => SetValue(GuiProp.Transform, transform);
 
         #endregion
 
@@ -729,15 +728,15 @@ namespace Prowl.PaperUI
             OnRightClick((rect) => handler(capturedValue, rect));
 
         /// <summary>Sets a callback that runs when scrolling occurs over the element.</summary>
-        public ElementBuilder OnScroll(Action<float, Rect> handler)
+        public ElementBuilder OnScroll(Action<double, Rect> handler)
         {
             _element.OnScroll = handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when scrolling occurs over the element, with a captured value.</summary>
-        public ElementBuilder OnScroll<T>(T capturedValue, Action<T, float, Rect> handler) =>
-            OnScroll((float delta, Rect rect) => handler(capturedValue, delta, rect));
+        public ElementBuilder OnScroll<T>(T capturedValue, Action<T, double, Rect> handler) =>
+            OnScroll((double delta, Rect rect) => handler(capturedValue, delta, rect));
 
         /// <summary>Sets a callback that runs when the cursor hovers over the element.</summary>
         public ElementBuilder OnHover(Action<Rect> handler)

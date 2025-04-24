@@ -1,7 +1,5 @@
-﻿using Prowl.PaperUI;
-using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
-using System.Numerics;
+﻿using Prowl.PaperUI.LayoutEngine;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {
@@ -85,7 +83,7 @@ namespace Prowl.PaperUI
             _theHoveredElementId = 0;
 
             // Find the topmost element under the pointer
-            var t = Transform.Identity;
+            var t = Transform2D.Identity;
             Element? topmostInteractable = FindTopmostInteractableElement(RootElement, t);
 
             if (topmostInteractable != null)
@@ -122,20 +120,20 @@ namespace Prowl.PaperUI
         /// <param name="element">Current element to check</param>
         /// <param name="parentTransform">Accumulated transform from parent elements</param>
         /// <returns>The topmost interactable element or null if none found</returns>
-        private static Element? FindTopmostInteractableElement(Element element, Transform parentTransform)
+        private static Element? FindTopmostInteractableElement(Element element, Transform2D parentTransform)
         {
             if (element == null)
                 return null;
 
             // Calculate the combined transform
-            Transform combinedTransform = parentTransform;
+            Transform2D combinedTransform = parentTransform;
             var rect = new Rect(element.X, element.Y, element.LayoutWidth, element.LayoutHeight);
-            Transform styleTransform = element._elementStyle.GetTransformForElement(rect);
+            Transform2D styleTransform = element._elementStyle.GetTransformForElement(rect);
             combinedTransform.Premultiply(ref styleTransform);
 
             // Transform pointer position to element's local space
             var inverseTransform = combinedTransform.Inverse();
-            inverseTransform.TransformPoint(out float localX, out float localY, PointerPos.X, PointerPos.Y);
+            inverseTransform.TransformPoint(out double localX, out double localY, PointerPos.x, PointerPos.y);
 
             // Check if pointer is over this element
             bool isPointerOverElement = IsPointOverElement(element, localX, localY);
@@ -168,7 +166,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Tests if a point in local coordinates is within an element.
         /// </summary>
-        private static bool IsPointOverElement(Element element, float localX, float localY) =>
+        private static bool IsPointOverElement(Element element, double localX, double localY) =>
             localX >= element.X &&
             localX <= element.X + element.LayoutWidth &&
             localY >= element.Y &&

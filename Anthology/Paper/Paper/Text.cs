@@ -1,6 +1,9 @@
-﻿using FontStashSharp;
-using Prowl.PaperUI.Graphics;
-using System.Drawing;
+﻿using System.Drawing;
+
+using FontStashSharp;
+
+using Prowl.Quill;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {
@@ -21,10 +24,10 @@ namespace Prowl.PaperUI
         public SpriteFontBase Font { get; set; }
 
         /// <summary>Horizontal offset from the aligned position.</summary>
-        public float XOffset { get; set; }
+        public double XOffset { get; set; }
 
         /// <summary>Vertical offset from the aligned position.</summary>
-        public float YOffset { get; set; }
+        public double YOffset { get; set; }
 
         /// <summary>Horizontal alignment of the text within its container.</summary>
         public TextHorizontalAlignment HorizontalAlignment { get; set; }
@@ -33,19 +36,14 @@ namespace Prowl.PaperUI
         public TextVerticalAlignment VerticalAlignment { get; set; }
 
         /// <summary>The depth layer for rendering order.</summary>
-        public float LayerDepth { get; set; }
+        public double LayerDepth { get; set; }
 
         /// <summary>Additional spacing between characters.</summary>
-        public float CharacterSpacing { get; set; }
+        public double CharacterSpacing { get; set; }
 
         /// <summary>Additional spacing between lines.</summary>
-        public float LineSpacing { get; set; }
+        public double LineSpacing { get; set; }
 
-        /// <summary>Effect applied to the text (e.g., shadow, outline).</summary>
-        public FontStashSharp.FontSystemEffect Effect { get; set; } = FontStashSharp.FontSystemEffect.None;
-
-        /// <summary>Amount of effect applied to the text.</summary>
-        public int EffectAmount { get; set; } = 0;
         #endregion
 
         #region Constructor
@@ -59,13 +57,11 @@ namespace Prowl.PaperUI
             Color color,
             TextHorizontalAlignment horizontalAlignment,
             TextVerticalAlignment verticalAlignment,
-            float xOffset = 0,
-            float yOffset = 0,
-            float layerDepth = 0,
-            float characterSpacing = 0,
-            float lineSpacing = 0,
-            FontSystemEffect effect = FontSystemEffect.None, 
-            int effectAmount = 0)
+            double xOffset = 0,
+            double yOffset = 0,
+            double layerDepth = 0,
+            double characterSpacing = 0,
+            double lineSpacing = 0)
         {
             Value = value;
             Font = font ?? throw new ArgumentNullException(nameof(font));
@@ -77,8 +73,6 @@ namespace Prowl.PaperUI
             LayerDepth = layerDepth;
             CharacterSpacing = characterSpacing;
             LineSpacing = lineSpacing;
-            Effect = effect;
-            EffectAmount = effectAmount;
         }
 
         #endregion
@@ -98,19 +92,19 @@ namespace Prowl.PaperUI
             }
 
             var textSize = Font.MeasureString(Value);
-            float textX = rect.X;
-            float textY = rect.Y;
+            double textX = rect.x;
+            double textY = rect.y;
 
             // Horizontal alignment relative to the rectangle
             switch (HorizontalAlignment)
             {
                 case TextHorizontalAlignment.Center:
                     // Center text horizontally within the rectangle
-                    textX = rect.X + (rect.Width - textSize.X) / 2.0f;
+                    textX = rect.x + (rect.width - textSize.X) / 2.0f;
                     break;
                 case TextHorizontalAlignment.Right:
                     // Align text to the right edge of the rectangle
-                    textX = rect.X + rect.Width - textSize.X;
+                    textX = rect.x + rect.width - textSize.X;
                     break;
             }
 
@@ -119,17 +113,18 @@ namespace Prowl.PaperUI
             {
                 case TextVerticalAlignment.Center:
                     // Center text vertically within the rectangle
-                    textY = rect.Y + (rect.Height - Font.LineHeight) / 2.0f;
+                    textY = rect.y + (rect.height - Font.LineHeight) / 2.0f;
                     break;
                 case TextVerticalAlignment.Bottom:
                     // Align text to the bottom edge of the rectangle
-                    textY = rect.Y + rect.Height - Font.LineHeight;
+                    textY = rect.y + rect.height - Font.LineHeight;
                     break;
             }
 
             // Apply any additional offset and draw the text
-            context.FillColor(Color);
-            context.Text(Font, Value, textX + XOffset, textY + YOffset, LayerDepth, CharacterSpacing, LineSpacing, effect: Effect, effectAmount: EffectAmount);
+            int xPos = (int)(textX + XOffset);
+            int yPos = (int)(textY + YOffset);
+            context.DrawText(Font, Value, xPos, yPos, Color, 0, layerDepth: LayerDepth, characterSpacing: CharacterSpacing, lineSpacing: LineSpacing);
         }
 
         #endregion
@@ -139,64 +134,64 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a basic text element with default left-top alignment.
         /// </summary>
-        public static Text Create(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Left, TextVerticalAlignment.Top, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text Create(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Left, TextVerticalAlignment.Top, 0, 0, 0, 0, 0);
 
         #endregion
 
         #region Alignment Factory Methods
 
         /// <summary>Creates left-aligned text (vertical center).</summary>
-        public static Text Left(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Left, TextVerticalAlignment.Center, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text Left(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Left, TextVerticalAlignment.Center, 0, 0, 0, 0, 0);
 
         /// <summary>Creates center-aligned text (horizontal and vertical center).</summary>
-        public static Text Center(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Center, TextVerticalAlignment.Center, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text Center(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Center, TextVerticalAlignment.Center, 0, 0, 0, 0, 0);
 
         /// <summary>Creates right-aligned text (vertical center).</summary>
-        public static Text Right(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Right, TextVerticalAlignment.Center, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text Right(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Right, TextVerticalAlignment.Center, 0, 0, 0, 0, 0);
 
         #endregion
 
         #region Position Factory Methods
 
         /// <summary>Creates text aligned to the top-left corner.</summary>
-        public static Text TopLeft(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Left, TextVerticalAlignment.Top, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text TopLeft(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Left, TextVerticalAlignment.Top, 0, 0, 0, 0, 0);
 
         /// <summary>Creates text aligned to the top-center position.</summary>
-        public static Text TopCenter(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Center, TextVerticalAlignment.Top, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text TopCenter(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Center, TextVerticalAlignment.Top, 0, 0, 0, 0, 0);
 
         /// <summary>Creates text aligned to the top-right corner.</summary>
-        public static Text TopRight(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Right, TextVerticalAlignment.Top, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text TopRight(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Right, TextVerticalAlignment.Top, 0, 0, 0, 0, 0);
 
         /// <summary>Creates text aligned to the middle-left position.</summary>
-        public static Text MiddleLeft(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Left, TextVerticalAlignment.Center, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text MiddleLeft(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Left, TextVerticalAlignment.Center, 0, 0, 0, 0, 0);
 
         /// <summary>Creates text aligned to the middle-center position.</summary>
-        public static Text MiddleCenter(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Center, TextVerticalAlignment.Center, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text MiddleCenter(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Center, TextVerticalAlignment.Center, 0, 0, 0, 0, 0);
 
         /// <summary>Creates text aligned to the middle-right position.</summary>
-        public static Text MiddleRight(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Right, TextVerticalAlignment.Center, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text MiddleRight(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Right, TextVerticalAlignment.Center, 0, 0, 0, 0, 0);
 
         /// <summary>Creates text aligned to the bottom-left corner.</summary>
-        public static Text BottomLeft(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Left, TextVerticalAlignment.Bottom, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text BottomLeft(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Left, TextVerticalAlignment.Bottom, 0, 0, 0, 0, 0);
 
         /// <summary>Creates text aligned to the bottom-center position.</summary>
-        public static Text BottomCenter(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Center, TextVerticalAlignment.Bottom, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text BottomCenter(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Center, TextVerticalAlignment.Bottom, 0, 0, 0, 0, 0);
 
         /// <summary>Creates text aligned to the bottom-right corner.</summary>
-        public static Text BottomRight(string value, SpriteFontBase font, Color? color = null, FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0) =>
-            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Right, TextVerticalAlignment.Bottom, 0, 0, 0, 0, 0, effect, effectAmount);
+        public static Text BottomRight(string value, SpriteFontBase font, Color? color = null) =>
+            new Text(value, font, color ?? Color.White, TextHorizontalAlignment.Right, TextVerticalAlignment.Bottom, 0, 0, 0, 0, 0);
 
         #endregion
 
@@ -211,15 +206,15 @@ namespace Prowl.PaperUI
             Color? color = null,
             TextHorizontalAlignment horizontalAlignment = TextHorizontalAlignment.Left,
             TextVerticalAlignment verticalAlignment = TextVerticalAlignment.Top,
-            float xOffset = 0,
-            float yOffset = 0,
-            float layerDepth = 0,
-            float characterSpacing = 0,
-            float lineSpacing = 0,
+            double xOffset = 0,
+            double yOffset = 0,
+            double layerDepth = 0,
+            double characterSpacing = 0,
+            double lineSpacing = 0,
             FontSystemEffect effect = FontSystemEffect.None,
             int effectAmount = 0) =>
             new Text(value, font, color ?? Color.White, horizontalAlignment, verticalAlignment,
-                    xOffset, yOffset, layerDepth, characterSpacing, lineSpacing, effect, effectAmount);
+                    xOffset, yOffset, layerDepth, characterSpacing, lineSpacing);
 
         #endregion
     }
