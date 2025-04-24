@@ -32,7 +32,11 @@ Paper is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** imme
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 
-<image src="https://i.imgur.com/IjmlWxx.gif" width="100%"></video>
+
+
+https://github.com/user-attachments/assets/d8206009-5a0f-4769-85a2-90cb5d434757
+
+
 
 Paper follows the immediate-mode GUI (IMGUI) paradigm, where UI elements are created and configured on every frame. Unlike retained-mode systems, it doesn't maintain persistent widget objects, making code simpler and more direct.
 Here's a basic example:
