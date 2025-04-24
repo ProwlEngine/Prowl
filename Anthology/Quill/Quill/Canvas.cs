@@ -269,6 +269,18 @@ public partial class Canvas
     public void SetTexture(object? texture) => _state.texture = texture;
     public void SetLinearBrush(double x1, double y1, double x2, double y2, Color color1, Color color2)
     {
+        // Premultiply
+        color1 = Color.FromArgb(
+            (byte)(color1.A),
+            (byte)(color1.R * (color1.A / 255f)),
+            (byte)(color1.G * (color1.A / 255f)),
+            (byte)(color1.B * (color1.A / 255f)));
+        color2 = Color.FromArgb(
+            (byte)(color2.A),
+            (byte)(color2.R * (color2.A / 255f)),
+            (byte)(color2.G * (color2.A / 255f)),
+            (byte)(color2.B * (color2.A / 255f)));
+
         _state.brush.Type = BrushType.Linear;
         _state.brush.Color1 = color1;
         _state.brush.Color2 = color2;
@@ -279,6 +291,18 @@ public partial class Canvas
     }
     public void SetRadialBrush(double centerX, double centerY, double innerRadius, double outerRadius, Color innerColor, Color outerColor)
     {
+        // Premultiply
+        innerColor = Color.FromArgb(
+            (byte)(innerColor.A),
+            (byte)(innerColor.R * (innerColor.A / 255f)),
+            (byte)(innerColor.G * (innerColor.A / 255f)),
+            (byte)(innerColor.B * (innerColor.A / 255f)));
+        outerColor = Color.FromArgb(
+            (byte)(outerColor.A),
+            (byte)(outerColor.R * (outerColor.A / 255f)),
+            (byte)(outerColor.G * (outerColor.A / 255f)),
+            (byte)(outerColor.B * (outerColor.A / 255f)));
+
         _state.brush.Type = BrushType.Radial;
         _state.brush.Color1 = innerColor;
         _state.brush.Color2 = outerColor;
@@ -289,6 +313,18 @@ public partial class Canvas
     }
     public void SetBoxBrush(double centerX, double centerY, double width, double height, float radi, float feather, Color innerColor, Color outerColor)
     {
+        // Premultiply
+        innerColor = Color.FromArgb(
+            (byte)(innerColor.A),
+            (byte)(innerColor.R * (innerColor.A / 255f)),
+            (byte)(innerColor.G * (innerColor.A / 255f)),
+            (byte)(innerColor.B * (innerColor.A / 255f)));
+        outerColor = Color.FromArgb(
+            (byte)(outerColor.A),
+            (byte)(outerColor.R * (outerColor.A / 255f)),
+            (byte)(outerColor.G * (outerColor.A / 255f)),
+            (byte)(outerColor.B * (outerColor.A / 255f)));
+
         _state.brush.Type = BrushType.Box;
         _state.brush.Color1 = innerColor;
         _state.brush.Color2 = outerColor;
@@ -391,6 +427,14 @@ public partial class Canvas
     {
         if (_drawCalls.Count == 0)
             return;
+
+        var color = ApplyGlobalAlpha(vertex.Color);
+        // Premultiply
+        vertex.r = (byte)(color.R * (color.A / 255f));
+        vertex.g = (byte)(color.G * (color.A / 255f));
+        vertex.b = (byte)(color.B * (color.A / 255f));
+        vertex.a = color.A;
+
 
         // Add the vertex to the list
         _vertices.Add(vertex);
@@ -813,7 +857,7 @@ public partial class Canvas
         // Store the starting index to reference _vertices
         uint startVertexIndex = (uint)_vertices.Count;
 
-        var color = ApplyGlobalAlpha(_state.fillColor);
+        var color = _state.fillColor;
 
         // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
         AddVertex(new Vertex(center, new(0.5f, 0.5f), color));
@@ -919,7 +963,7 @@ public partial class Canvas
 
         // Create vertices and triangles
         uint startVertexIndex = (uint)_vertices.Count;
-        var color = ApplyGlobalAlpha(_state.fillColor);
+        var color = _state.fillColor;
 
         // Add all points as vertices with extrusion applied
         for (int i = 0; i < vertices.Count / 2; i++)
@@ -1013,7 +1057,10 @@ public partial class Canvas
         uint startVertexIndex = (uint)_vertices.Count;
         foreach (var triangle in triangles)
         {
-            var color = ApplyGlobalAlpha(triangle.Color);
+            var color = triangle.Color;
+
+            // TODO: Calculate Normals and push each vertex out by _pixelWidth / 0.5; for AntiAliasing
+
             AddVertex(new Vertex(triangle.V1, triangle.UV1, color));
             AddVertex(new Vertex(triangle.V2, triangle.UV2, color));
             AddVertex(new Vertex(triangle.V3, triangle.UV3, color));
@@ -1405,7 +1452,7 @@ public partial class Canvas
             return;
 
         // Center it so it scales and sits properly with AA
-        radius++;
+        radius += _pixelHalf;
 
         // Store the starting index to reference _vertices
         uint startVertexIndex = (uint)_vertices.Count;
