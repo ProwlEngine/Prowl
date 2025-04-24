@@ -64,7 +64,6 @@ internal static class PolylineMesher
             return TriangleCache;
 
         // Handle thin lines with alpha adjustment instead of thickness reduction
-        double effectiveThickness = thickness;
         if (thickness < 1.0)
         {
             color = System.Drawing.Color.FromArgb(
@@ -76,10 +75,10 @@ internal static class PolylineMesher
         }
 
         // Minimum effective thickness to avoid rendering artifacts
-        effectiveThickness = Math.Max(2.25, effectiveThickness);
+        thickness = Math.Max(1.0, thickness);
 
         // Half thickness for calculations
-        double halfThickness = effectiveThickness / 2;
+        double halfThickness = thickness / 2;
 
         // Check if path is closed
         bool isClosed = points[0] == points[^1];
