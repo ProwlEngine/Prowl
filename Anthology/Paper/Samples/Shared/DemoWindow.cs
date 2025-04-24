@@ -252,7 +252,7 @@ namespace Shared
                     .Text(Text.Left($"    {Icons.MagnifyingGlass}    Search...", fontSmall, lightTextColor))
                     .Enter()) { }
 
-                // Notification icon
+                // Theme Switch
                 using (Paper.Box("LightIcon")
                     .Width(40)
                     .Height(40)
