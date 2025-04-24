@@ -627,6 +627,10 @@ public partial class Canvas
             MoveTo(firstX, firstY);
         }
 
+        double startX = x + Math.Cos(startAngle) * radius;
+        double startY = y + Math.Sin(startAngle) * radius;
+        LineTo(startX, startY);
+
         // Add arc points
         for (int i = 1; i <= segments; i++)
         {
