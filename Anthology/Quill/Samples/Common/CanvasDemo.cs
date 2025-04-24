@@ -1,4 +1,5 @@
-﻿using Prowl.Quill;
+﻿using FontStashSharp;
+using Prowl.Quill;
 using Prowl.Vector;
 using System.Drawing;
 
@@ -11,6 +12,9 @@ namespace Common
         private double _width;
         private double _height;
         private object _texture;
+        private SpriteFontBase _fontA;
+        private SpriteFontBase _fontSmall;
+        private SpriteFontBase _fontB;
 
         private double _time;
 
@@ -25,13 +29,16 @@ namespace Common
         private double _currentFps = 0;
         private const double FPS_UPDATE_INTERVAL = 0.5; // Update FPS display every half second
 
-        public CanvasDemo(Canvas canvas, double width, double height, object texture)
+        public CanvasDemo(Canvas canvas, double width, double height, object texture, FontStashSharp.SpriteFontBase fontA, FontStashSharp.SpriteFontBase fontSmall, FontStashSharp.SpriteFontBase fontB)
         {
             _canvas = canvas;
             _width = width;
             _height = height;
             _canvas3D = new Canvas3D(canvas, width, height);
             _texture = texture;
+            _fontA = fontA;
+            _fontSmall = fontSmall;
+            _fontB = fontB;
         }
 
         /// <summary>
@@ -311,6 +318,9 @@ namespace Common
 
             // 11. Concave Polygon Demo
             DrawConcaveDemo(300, 650, 200, 150);
+
+            // 12. Text Demo
+            DrawTextDemo(550, 650, 200, 150);
 
             // Restore the canvas state
             _canvas.RestoreState();
@@ -1030,6 +1040,100 @@ namespace Common
                 // Fill using auto-detection
                 _canvas.FillComplex(); // Will use complex fill since we have holes
                 //_canvas.Stroke();
+            }
+
+            _canvas.RestoreState();
+        }
+
+        private void DrawTextDemo(double x, double y, double width, double height)
+        {
+            // Draw group background and title
+            DrawGroupBackground(x, y, width, height, "Text");
+
+            _canvas.SaveState();
+            _canvas.TransformBy(Transform2D.CreateTranslation(x + 5, y + 5));
+
+            // Basic text rendering
+            _canvas.DrawText(_fontA, "Normal", 0, 0, Color.White);
+
+            // Text with color array (gradient effect)
+            Color[] rainbowColors = {
+                Color.FromArgb(255, 255, 100, 100),
+                Color.FromArgb(255, 255, 255, 100),
+                Color.FromArgb(255, 100, 255, 100),
+                Color.FromArgb(255, 100, 255, 255),
+                Color.FromArgb(255, 100, 100, 255),
+                Color.FromArgb(255, 255, 100, 255)
+            };
+            _canvas.DrawText(_fontA, "Rainbow", 0, 25, rainbowColors);
+
+            // Text with different fonts
+            _canvas.DrawText(_fontSmall, "Small", 0, 53, Color.FromArgb(255, 200, 200, 200));
+            _canvas.DrawText(_fontB, "Multiple", 0, 70, Color.FromArgb(255, 200, 255, 200));
+
+            // Text styles
+            _canvas.DrawText(_fontA, "Strike", 0, 95, Color.White, 0, default, null, 0, 0, 0, TextStyle.Strikethrough);
+
+            // Different transformations
+
+            // 1. Rotation
+            _canvas.SaveState();
+            double angle = Math.Sin(_time) * 30; // Convert to radians, oscillate ±30°
+            Vector2 center = new Vector2(150, 20);
+            _canvas.TransformBy(Transform2D.CreateTranslation(center.x, center.y));
+            _canvas.TransformBy(Transform2D.CreateRotate(angle));
+            _canvas.DrawText(_fontA, "Rotate", 0, 0, Color.FromArgb(255, 255, 150, 150), 0, new Vector2(0.5, 0.5));
+            _canvas.RestoreState();
+
+            // 2. Scaling
+            _canvas.SaveState();
+            double scale = 0.3 + 0.2 * Math.Sin(_time * 1.5);
+            _canvas.TransformBy(Transform2D.CreateTranslation(40, 55));
+            _canvas.TransformBy(Transform2D.CreateScale(scale, scale));
+            _canvas.DrawText(_fontA, "Scaling", 0, 0, Color.FromArgb(255, 150, 255, 150));
+            _canvas.RestoreState();
+
+            // 3. Character spacing
+            double spacing = Math.Sin(_time * 2) * 1.0;
+            _canvas.DrawText(_fontA, "Spacing", 90, 45, Color.FromArgb(255, 150, 150, 255),
+                            0, default, null, 0, spacing);
+
+            // 4. Path text (text following a curve)
+            _canvas.SaveState();
+            double centerX = 140;
+            double centerY = 105;
+            double radius = 30;
+
+            // First, visualize the path for reference
+            _canvas.SetStrokeColor(Color.FromArgb(40, 255, 255, 255));
+            _canvas.SetStrokeWidth(1);
+            _canvas.BeginPath();
+            _canvas.Arc(centerX, centerY, radius, 0, Math.PI * 2, false);
+            _canvas.Stroke();
+
+            // Now draw text along the path
+            string circularText = "Animating Characters ";
+            int charCount = circularText.Length;
+
+            for (int i = 0; i < charCount; i++)
+            {
+                double charAngle = 2 * Math.PI * i / charCount - _time * 0.5;
+                double charX = centerX + radius * Math.Cos(charAngle);
+                double charY = centerY + radius * Math.Sin(charAngle);
+
+                _canvas.SaveState();
+                _canvas.TransformBy(Transform2D.CreateTranslation(charX, charY));
+
+                // Calculate color based on position
+                byte r = (byte)(128 + 127 * Math.Sin(charAngle));
+                byte g = (byte)(128 + 127 * Math.Sin(charAngle + 2 * Math.PI / 3));
+                byte b = (byte)(128 + 127 * Math.Sin(charAngle + 4 * Math.PI / 3));
+
+                // Draw the character
+                _canvas.DrawText(_fontSmall, circularText[i].ToString(), 0, 0,
+                                Color.FromArgb(255, r, g, b), 0, new Vector2(0.5,0.5));
+
+                _canvas.RestoreState();
             }
 
             _canvas.RestoreState();

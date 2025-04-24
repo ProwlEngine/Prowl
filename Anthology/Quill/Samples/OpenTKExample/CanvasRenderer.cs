@@ -9,10 +9,10 @@ namespace OpenTKExample
     /// <summary>
     /// Handles all OpenGL rendering logic for the vector graphics canvas
     /// </summary>
-    public class CanvasRenderer
+    public class CanvasRenderer : ICanvasRenderer
     {
-        // Shader source for the fragment shader - handles edge anti-aliasing
-        public static string STROKE_FRAGMENT_SHADER = @"
+        // Shader source for the fragment shader
+        public const string STROKE_FRAGMENT_SHADER = @"
 #version 330
 in vec2 fragTexCoord;
 in vec4 fragColor;
@@ -125,7 +125,7 @@ void main()
     finalColor = vec4(color.rgb, color.a * edgeAlpha * mask);
 }";
 
-        // Shader source for the vertex shader - transforms vertices
+        // Shader source for the vertex shader
         private const string DEFAULT_VERTEX_SHADER = @"
 #version 330
 uniform mat4 projection;
@@ -189,82 +189,6 @@ void main()
         public void UpdateProjection(int width, int height) => _projection = Matrix4.CreateOrthographicOffCenter(0, width, height, 0, -1, 1);
 
         /// <summary>
-        /// Render the canvas to the screen
-        /// </summary>
-        public void RenderCanvas(Canvas canvas)
-        {
-            // Skip if canvas is empty
-            if (canvas.DrawCalls.Count == 0)
-                return;
-
-            // Configure OpenGL state
-            GL.Disable(EnableCap.DepthTest);
-            GL.Enable(EnableCap.Blend);
-            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-
-            // Use shader and set projection
-            GL.UseProgram(_shaderProgram);
-            GL.UniformMatrix4(_projectionLocation, false, ref _projection);
-
-            // Bind vertex array
-            GL.BindVertexArray(_vertexArrayObject);
-
-            // Upload vertex data
-            GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
-            GL.BufferData(BufferTarget.ArrayBuffer, canvas.Vertices.Count * Vertex.SizeInBytes, canvas.Vertices.ToArray(), BufferUsageHint.StreamDraw);
-
-            // Set up vertex attributes
-            // Position attribute
-            GL.EnableVertexAttribArray(0);
-            GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, Vertex.SizeInBytes, 0);
-
-            // TexCoord attribute
-            GL.EnableVertexAttribArray(1);
-            GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, Vertex.SizeInBytes, 2 * sizeof(float));
-
-            // Color attribute
-            GL.EnableVertexAttribArray(2);
-            GL.VertexAttribPointer(2, 4, VertexAttribPointerType.UnsignedByte, true, Vertex.SizeInBytes, 4 * sizeof(float));
-
-            // Upload index data
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferObject);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, canvas.Indices.Count * sizeof(uint), canvas.Indices.ToArray(), BufferUsageHint.StreamDraw);
-
-            // Active texture unit for sampling
-            GL.ActiveTexture(TextureUnit.Texture0);
-            GL.Uniform1(_textureSamplerLocation, 0); // texture unit 0
-
-            // Draw all draw calls in the canvas
-            int indexOffset = 0;
-            foreach (var drawCall in canvas.DrawCalls)
-            {
-                // Handle texture binding
-                (drawCall.Texture as TextureTK ?? _defaultTexture).Use(TextureUnit.Texture0);
-
-                // Set scissor rectangle
-                drawCall.GetScissor(out var scissor, out var extent);
-                var tkScissor = ToTK(scissor);
-                GL.UniformMatrix4(_scissorMatLoc, false, ref tkScissor);
-                GL.Uniform2(_scissorExtLoc, (float)extent.x, (float)extent.y);
-
-                // Set brush parameters
-                var brushMat = ToTK(drawCall.Brush.BrushMatrix);
-                GL.UniformMatrix4(_brushMatLoc, false, ref brushMat);
-                GL.Uniform1(_brushTypeLoc, (int)drawCall.Brush.Type);
-                GL.Uniform4(_brushColor1Loc, ToTK(drawCall.Brush.Color1));
-                GL.Uniform4(_brushColor2Loc, ToTK(drawCall.Brush.Color2));
-                GL.Uniform4(_brushParamsLoc, (float)drawCall.Brush.Point1.x, (float)drawCall.Brush.Point1.y, (float)drawCall.Brush.Point2.x, (float)drawCall.Brush.Point2.y);
-                GL.Uniform2(_brushParams2Loc, (float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather);
-
-                GL.DrawElements(PrimitiveType.Triangles, drawCall.ElementCount, DrawElementsType.UnsignedInt, indexOffset * sizeof(uint));
-                indexOffset += drawCall.ElementCount;
-            }
-
-            // Clean up
-            GL.BindVertexArray(0);
-        }
-
-        /// <summary>
         /// Clean up OpenGL resources
         /// </summary>
         public void Cleanup()
@@ -326,5 +250,110 @@ void main()
         private OpenTK.Mathematics.Vector4 ToTK(Color color) => new OpenTK.Mathematics.Vector4(
             color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f
         );
+
+        public object CreateTexture(uint width, uint height)
+        {
+            return TextureTK.CreateNew(width, height);
+        }
+
+        public Vector2Int GetTextureSize(object texture)
+        {
+            if (texture is not TextureTK tkTexture)
+                throw new ArgumentException("Invalid texture type");
+
+            return new Vector2Int((int)tkTexture.Width, (int)tkTexture.Height);
+        }
+
+        public void SetTextureData(object texture, IntRect bounds, byte[] data)
+        {
+            if (texture is not TextureTK tkTexture)
+                throw new ArgumentException("Invalid texture type");
+            tkTexture.SetData(bounds, data);
+        }
+
+        public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
+        {
+
+            // Skip if canvas is empty
+            if (drawCalls.Count == 0)
+                return;
+
+            // Configure OpenGL state
+            GL.Disable(EnableCap.DepthTest);
+            GL.Enable(EnableCap.Blend);
+            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+
+            // Use shader and set projection
+            GL.UseProgram(_shaderProgram);
+            GL.UniformMatrix4(_projectionLocation, false, ref _projection);
+
+            // Bind vertex array
+            GL.BindVertexArray(_vertexArrayObject);
+
+            // Upload vertex data
+            GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
+            GL.BufferData(BufferTarget.ArrayBuffer, canvas.Vertices.Count * Vertex.SizeInBytes, canvas.Vertices.ToArray(), BufferUsageHint.StreamDraw);
+
+            // Set up vertex attributes
+            // Position attribute
+            GL.EnableVertexAttribArray(0);
+            GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, Vertex.SizeInBytes, 0);
+
+            // TexCoord attribute
+            GL.EnableVertexAttribArray(1);
+            GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, Vertex.SizeInBytes, 2 * sizeof(float));
+
+            // Color attribute
+            GL.EnableVertexAttribArray(2);
+            GL.VertexAttribPointer(2, 4, VertexAttribPointerType.UnsignedByte, true, Vertex.SizeInBytes, 4 * sizeof(float));
+
+            // Upload index data
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferObject);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, canvas.Indices.Count * sizeof(uint), canvas.Indices.ToArray(), BufferUsageHint.StreamDraw);
+
+            // Active texture unit for sampling
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.Uniform1(_textureSamplerLocation, 0); // texture unit 0
+
+            // Draw all draw calls in the canvas
+            int indexOffset = 0;
+            foreach (var drawCall in drawCalls)
+            {
+                // Handle texture binding
+                (drawCall.Texture as TextureTK ?? _defaultTexture).Use(TextureUnit.Texture0);
+
+                // Set scissor rectangle
+                drawCall.GetScissor(out var scissor, out var extent);
+                var tkScissor = ToTK(scissor);
+                GL.UniformMatrix4(_scissorMatLoc, false, ref tkScissor);
+                GL.Uniform2(_scissorExtLoc, (float)extent.x, (float)extent.y);
+
+                // Set brush parameters
+                var brushMat = ToTK(drawCall.Brush.BrushMatrix);
+                GL.UniformMatrix4(_brushMatLoc, false, ref brushMat);
+                GL.Uniform1(_brushTypeLoc, (int)drawCall.Brush.Type);
+                GL.Uniform4(_brushColor1Loc, ToTK(drawCall.Brush.Color1));
+                GL.Uniform4(_brushColor2Loc, ToTK(drawCall.Brush.Color2));
+                GL.Uniform4(_brushParamsLoc, (float)drawCall.Brush.Point1.x, (float)drawCall.Brush.Point1.y, (float)drawCall.Brush.Point2.x, (float)drawCall.Brush.Point2.y);
+                GL.Uniform2(_brushParams2Loc, (float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather);
+
+                GL.DrawElements(PrimitiveType.Triangles, drawCall.ElementCount, DrawElementsType.UnsignedInt, indexOffset * sizeof(uint));
+                indexOffset += drawCall.ElementCount;
+            }
+
+            // Clean up
+            GL.BindVertexArray(0);
+        }
+
+        public void Dispose()
+        {
+            // Dispose of OpenGL resources
+            GL.DeleteBuffer(_vertexBufferObject);
+            GL.DeleteBuffer(_elementBufferObject);
+            GL.DeleteVertexArray(_vertexArrayObject);
+            GL.DeleteProgram(_shaderProgram);
+            // Dispose of the default texture
+            _defaultTexture?.Dispose();
+        }
     }
 }

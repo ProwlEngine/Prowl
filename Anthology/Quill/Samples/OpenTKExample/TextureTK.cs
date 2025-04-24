@@ -1,4 +1,5 @@
 ﻿using OpenTK.Graphics.OpenGL4;
+using Prowl.Vector;
 using StbImageSharp;
 using PixelFormat = OpenTK.Graphics.OpenGL4.PixelFormat;
 
@@ -7,6 +8,10 @@ namespace OpenTKExample
     public class TextureTK(int glHandle)
     {
         public readonly int Handle = glHandle;
+
+        public uint Width;
+        public uint Height;
+
 
         public static TextureTK LoadFromFile(string path)
         {
@@ -22,9 +27,13 @@ namespace OpenTKExample
             StbImage.stbi_set_flip_vertically_on_load(1);
 
             // Here we open a stream to the file and pass it to StbImageSharp to load.
+            int width = 0;
+            int height = 0;
             using (Stream stream = File.OpenRead(path))
             {
                 ImageResult image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
+                width = image.Width;
+                height = image.Height;
 
                 // Now that our pixels are prepared, it's time to generate a texture. We do this with GL.TexImage2D.
                 // Arguments:
@@ -52,14 +61,46 @@ namespace OpenTKExample
 
             // Now, set the wrapping mode. S is for the X axis, and T is for the Y axis.
             // We set this to Repeat so that textures will repeat when wrapped. Not demonstrated here since the texture coordinates exactly match
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
 
             // This is the last step. We need to generate mipmaps for our texture. Mipmaps are smaller versions of the texture that OpenGL generates for us.
             // This is used for when the texture is scaled down. If we don't generate mipmaps, OpenGL will use the full texture for all sizes.
             GL.GenerateMipmap(GenerateMipmapTarget.Texture2D);
 
-            return new TextureTK(handle);
+            return new TextureTK(handle) { Width = (uint)width, Height = (uint)height };
+        }
+
+        // Create a new texture with the specified width and height
+        // This is used for when we want to create a texture from scratch, like for a fonts.
+        // This is a bit different from the LoadFromFile method, since we don't have any pixels to load.
+        // We just create an empty texture with the specified width and height.
+        public static TextureTK CreateNew(uint width, uint height)
+        {
+            // Generate handle
+            int handle = GL.GenTexture();
+            // Bind the handle
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, handle);
+            // Create empty texture
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba8, (int)width, (int)height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+            // Set texture parameters
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+            return new TextureTK(handle) { Width = width, Height = height };
+        }
+
+        // Set the texture data for a specific region of the texture
+        // This is used for when we want to update a specific region of the texture
+        public void SetData(IntRect bounds, byte[] data)
+        {
+            // Bind the texture
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, Handle);
+            // Set the texture data
+            GL.TexSubImage2D(TextureTarget.Texture2D, 0, bounds.x, bounds.y, bounds.width, bounds.height, PixelFormat.Rgba, PixelType.UnsignedByte, data);
         }
 
         // Activate texture

@@ -1,4 +1,5 @@
 ﻿using Common;
+using FontStashSharp;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
@@ -27,6 +28,10 @@ namespace OpenTKExample
         private TextureTK _whiteTexture;
         private TextureTK _demoTexture;
 
+        private SpriteFontBase RobotoFont32;
+        private SpriteFontBase RobotoFont16;
+        private SpriteFontBase AlamakFont32;
+
         public OpenTKWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings)
         {
         }
@@ -43,10 +48,27 @@ namespace OpenTKExample
             GL.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
             // Initialize canvas, demo and renderer
-            _canvas = new Canvas();
-            _demo = new CanvasDemo(_canvas, ClientSize.X, ClientSize.Y, _demoTexture);
             _renderer = new CanvasRenderer();
             _renderer.Initialize(ClientSize.X, ClientSize.Y, _whiteTexture);
+            _canvas = new Canvas(_renderer);
+
+
+            // Load textures
+            FontSystem fonts = new FontSystem();
+            using (var stream = File.OpenRead("Fonts/Roboto.ttf"))
+            {
+                fonts.AddFont(stream);
+                RobotoFont32 = fonts.GetFont(32);
+                RobotoFont16 = fonts.GetFont(16);
+            }
+            fonts = new FontSystem();
+            using (var stream = File.OpenRead("Fonts/Alamak.ttf"))
+            {
+                fonts.AddFont(stream);
+                AlamakFont32 = fonts.GetFont(32);
+            }
+
+            _demo = new CanvasDemo(_canvas, ClientSize.X, ClientSize.Y, _demoTexture, RobotoFont32, RobotoFont16, AlamakFont32);
         }
 
         protected override void OnRenderFrame(FrameEventArgs args)
@@ -61,7 +83,7 @@ namespace OpenTKExample
 
             // Draw the canvas content using OpenGL
             GL.Clear(ClearBufferMask.ColorBufferBit);
-            _renderer.RenderCanvas(_canvas);
+            _canvas.Render();
 
             SwapBuffers();
         }

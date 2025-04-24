@@ -14,6 +14,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)VectorFont.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)Fonts\Alamak.ttf">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)Fonts\Roboto.ttf">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="$(MSBuildThisFileDirectory)Textures\wall.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

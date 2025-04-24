@@ -1,4 +1,5 @@
-﻿using Prowl.Vector;
+﻿using FontStashSharp;
+using Prowl.Vector;
 using System.Drawing;
 using System.Runtime.InteropServices;
 
@@ -12,10 +13,10 @@ public enum BrushType
     Box = 3
 }
 
-public enum WindingOrder
+public enum Solidity
 {
-    Clockwise,
-    CounterClockwise
+    Solid,
+    Hole
 }
 
 public struct DrawCall
@@ -170,13 +171,13 @@ public partial class Canvas
     {
         internal List<Vector2> Points { get; }
         internal bool IsClosed { get; }
-        internal WindingOrder Winding { get; set; }
+        internal Solidity Solidity { get; set; }
 
-        public SubPath(List<Vector2> points, bool isClosed, WindingOrder winding = WindingOrder.Clockwise)
+        public SubPath(List<Vector2> points, bool isClosed, Solidity solidity = Solidity.Solid)
         {
             Points = points;
             IsClosed = isClosed;
-            Winding = winding;
+            Solidity = solidity;
         }
     }
 
@@ -184,6 +185,8 @@ public partial class Canvas
     public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.Where(d => d.ElementCount != 0).ToList();
     public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
     public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
+
+    internal ICanvasRenderer _renderer;
 
     internal List<DrawCall> _drawCalls = new();
     internal Stack<object> _textureStack = new();
@@ -199,7 +202,18 @@ public partial class Canvas
     private ProwlCanvasState _state;
     private double _globalAlpha;
 
+    private TextRenderer _fontStashRenderer;
+
     public Vector2 TexUvWhitePixel { get; set; } = new Vector2(0, 0);
+
+    public Canvas(ICanvasRenderer renderer)
+    {
+        ArgumentNullException.ThrowIfNull(renderer, nameof(renderer));
+
+        _renderer = renderer;
+        _fontStashRenderer = new TextRenderer(this);
+        Clear();
+    }
 
     public void Clear()
     {
@@ -352,13 +366,35 @@ public partial class Canvas
     public void TransformBy(Transform2D t) => _state.transform.Premultiply(ref t);
     public void ResetTransform() => _state.transform = Transform2D.Identity;
     public void CurrentTransform(Transform2D xform) => _state.transform = xform;
-
+    public Vector2 TransformPoint(Vector2 point) => _state.transform.TransformPoint(point);
 
     #endregion
 
     #region Draw Calls
 
     public void AddDrawCmd() => _drawCalls.Add(new DrawCall());
+
+    public void AddVertex(Vertex vertex)
+    {
+        if (_drawCalls.Count == 0)
+            return;
+
+        // Add the vertex to the list
+        _vertices.Add(vertex);
+    }
+
+    public void AddTriangle() => AddTriangle(_vertices.Count - 3, _vertices.Count - 2, _vertices.Count - 1);
+    public void AddTriangle(int v1, int v2, int v3)
+    {
+        if (_drawCalls.Count == 0)
+            return;
+        // Add the triangle indices to the list
+        _indices.Add((uint)v1);
+        _indices.Add((uint)v2);
+        _indices.Add((uint)v3);
+
+        AddTriangleCount(1);
+    }
 
     private void AddTriangleCount(int count)
     {
@@ -385,6 +421,11 @@ public partial class Canvas
 
         lastDrawCall.ElementCount += count * 3;
         _drawCalls[_drawCalls.Count - 1] = lastDrawCall;
+    }
+
+    public void Render()
+    {
+        _renderer.RenderCalls(this, _drawCalls);
     }
 
     #endregion
@@ -467,29 +508,23 @@ public partial class Canvas
     }
 
     /// <summary>
-    /// Sets the winding order for the currently active path.
+    /// Sets the solidity order for the currently active path.
     /// </summary>
-    public void SetWindingOrder(WindingOrder winding)
+    public void SetSolidity(Solidity solidity)
     {
         if (_currentSubPath != null)
-            _currentSubPath.Winding = winding;
+            _currentSubPath.Solidity = solidity;
     }
 
     /// <summary>
-    /// Sets the winding order to be counter-clockwise to indicate that the path is a hole.
+    /// Sets the solidity order to be counter-clockwise to indicate that the path is a hole.
     /// </summary>
-    public void SetAsHole()
-    {
-        SetWindingOrder(WindingOrder.CounterClockwise);
-    }
+    public void SetAsHole() => SetSolidity(Solidity.Hole);
 
     /// <summary>
-    /// Sets the winding order to be clockwise to indicate that the path is solid.
+    /// Sets the solidity order to be clockwise to indicate that the path is solid.
     /// </summary>
-    public void SetAsSolid()
-    {
-        SetWindingOrder(WindingOrder.Clockwise);
-    }
+    public void SetAsSolid() => SetSolidity(Solidity.Solid);
 
     /// <summary>
     /// Adds an arc to the current path.
@@ -736,8 +771,8 @@ public partial class Canvas
             return;
 
         // Group paths by winding order
-        var outerPaths = _subPaths.Where(p => p.Winding == WindingOrder.Clockwise).ToList();
-        var holePaths = _subPaths.Where(p => p.Winding == WindingOrder.CounterClockwise).ToList();
+        var outerPaths = _subPaths.Where(p => p.Solidity == Solidity.Solid).ToList();
+        var holePaths = _subPaths.Where(p => p.Solidity == Solidity.Hole).ToList();
 
         if (holePaths.Count == 0)
         {
@@ -772,7 +807,7 @@ public partial class Canvas
         var copy = subPath.Points.ToArray();
         // Transform each point
         for (int i = 0; i < subPath.Points.Count; i++)
-            subPath.Points[i] = ModifyPoint(subPath.Points[i]) + new Vector2(0.5,0.5); // And offset by half a pixel to properly center it with Stroke()
+            subPath.Points[i] = TransformPoint(subPath.Points[i]) + new Vector2(0.5,0.5); // And offset by half a pixel to properly center it with Stroke()
 
         Vector2 center = Vector2.zero;
         for (int i = 0; i < subPath.Points.Count; i++)
@@ -785,14 +820,14 @@ public partial class Canvas
         var color = ApplyGlobalAlpha(_state.fillColor);
 
         // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-        _vertices.Add(new Vertex(center, new(0.5f, 0.5f), color));
+        AddVertex(new Vertex(center, new(0.5f, 0.5f), color));
 
         // Generate vertices around the path
         int segments = subPath.Points.Count;
         for (int i = 0; i < segments; i++) // Edge vertices have UV at 0,0 for anti-aliasing
         {
             Vector2 dirToPoint = (subPath.Points[i] - center).normalized;
-            _vertices.Add(new(subPath.Points[i] + (dirToPoint * 0.5), new(0, 0), color));
+            AddVertex(new(subPath.Points[i] + (dirToPoint * 0.5), new(0, 0), color));
         }
 
         // Create triangles (fan from center to edges)
@@ -845,7 +880,7 @@ public partial class Canvas
             return;
 
         // Apply transform to all points
-        var outerPoints = outerPath.Points.Select(p => ModifyPoint(p) + new Vector2(0.5, 0.5)).ToList();
+        var outerPoints = outerPath.Points.Select(p => TransformPoint(p) + new Vector2(0.5, 0.5)).ToList();
 
         // Prepare data for Earcut triangulation
         List<double> vertices = new List<double>();
@@ -865,7 +900,7 @@ public partial class Canvas
             holeIndices.Add(vertexCount);
 
             // Add hole vertices
-            var holePoints = hole.Points.Select(p => ModifyPoint(p) + new Vector2(0.5, 0.5)).ToList();
+            var holePoints = hole.Points.Select(p => TransformPoint(p) + new Vector2(0.5, 0.5)).ToList();
             foreach (var point in holePoints)
             {
                 vertices.Add(point.x);
@@ -894,7 +929,7 @@ public partial class Canvas
         {
             Vector2 point = new Vector2(vertices[i], vertices[i + 1]);
             Vector2 uv = new Vector2(0.5, 0.5);
-            _vertices.Add(new Vertex(point, uv, color));
+            AddVertex(new Vertex(point, uv, color));
         }
 
         // Add triangle indices
@@ -902,8 +937,8 @@ public partial class Canvas
         for (int i = 0; i < indices.Count; i += 3)
         {
             _indices.Add((uint)startVertexIndex + (uint)indices[i]);
-            _indices.Add((uint)startVertexIndex + (uint)indices[i + 1]);
             _indices.Add((uint)startVertexIndex + (uint)indices[i + 2]);
+            _indices.Add((uint)startVertexIndex + (uint)indices[i + 1]);
         }
 
         // Make sure to add the triangle count to the draw call
@@ -928,7 +963,7 @@ public partial class Canvas
         var copy = subPath.Points.ToArray();
         // Transform each point
         for (int i = 0; i < subPath.Points.Count; i++)
-            subPath.Points[i] = ModifyPoint(subPath.Points[i]);
+            subPath.Points[i] = TransformPoint(subPath.Points[i]);
 
         bool isClosed = subPath.IsClosed;
         var triangles = PolylineMesher.Create(subPath.Points, _state.strokeWidth * _state.strokeScale, _state.strokeColor, _state.strokeJoint, _state.miterLimit, false, _state.strokeStartCap, _state.strokeEndCap);
@@ -938,9 +973,9 @@ public partial class Canvas
         foreach (var triangle in triangles)
         {
             var color = ApplyGlobalAlpha(triangle.Color);
-            _vertices.Add(new Vertex(triangle.V1, triangle.UV1, color));
-            _vertices.Add(new Vertex(triangle.V2, triangle.UV2, color));
-            _vertices.Add(new Vertex(triangle.V3, triangle.UV3, color));
+            AddVertex(new Vertex(triangle.V1, triangle.UV1, color));
+            AddVertex(new Vertex(triangle.V2, triangle.UV2, color));
+            AddVertex(new Vertex(triangle.V3, triangle.UV3, color));
         }
 
         // Add triangle _indices
@@ -1136,19 +1171,19 @@ public partial class Canvas
         //height++;
 
         // Apply transform to the four corners of the rectangle
-        Vector2 topLeft = ModifyPoint(new Vector2(x, y));
-        Vector2 topRight = ModifyPoint(new Vector2(x, y + height));
-        Vector2 bottomRight = ModifyPoint(new Vector2(x + width, y + height));
-        Vector2 bottomLeft = ModifyPoint(new Vector2(x + width, y));
+        Vector2 topLeft = TransformPoint(new Vector2(x, y));
+        Vector2 topRight = TransformPoint(new Vector2(x, y + height));
+        Vector2 bottomRight = TransformPoint(new Vector2(x + width, y + height));
+        Vector2 bottomLeft = TransformPoint(new Vector2(x + width, y));
 
         // Store the starting index to reference _vertices
         uint startVertexIndex = (uint)_vertices.Count;
 
         // Add all vertices with the transformed coordinates
-        _vertices.Add(new Vertex(topLeft, new(0, 0), color));
-        _vertices.Add(new Vertex(topRight, new(1, 0), color));
-        _vertices.Add(new Vertex(bottomRight, new(1, 1), color));
-        _vertices.Add(new Vertex(bottomLeft, new(0, 1), color));
+        AddVertex(new Vertex(topLeft, new(0, 0), color));
+        AddVertex(new Vertex(topRight, new(1, 0), color));
+        AddVertex(new Vertex(bottomRight, new(1, 1), color));
+        AddVertex(new Vertex(bottomLeft, new(0, 1), color));
 
         // Add indexes for fill
         _indices.Add(startVertexIndex);
@@ -1209,10 +1244,10 @@ public partial class Canvas
         uint startVertexIndex = (uint)_vertices.Count;
 
         // Calculate the center point of the rectangle
-        Vector2 center = ModifyPoint(new Vector2(x + width / 2, y + height / 2));
+        Vector2 center = TransformPoint(new Vector2(x + width / 2, y + height / 2));
 
         // Add center vertex with UV at 0.5,0.5 (no AA)
-        _vertices.Add(new Vertex(center, new(0.5f, 0.5f), color));
+        AddVertex(new Vertex(center, new(0.5f, 0.5f), color));
 
         List<Vector2> points = new List<Vector2>();
 
@@ -1287,8 +1322,8 @@ public partial class Canvas
         // Add all edge vertices
         for (int i = 0; i < points.Count; i++)
         {
-            Vector2 transformedPoint = ModifyPoint(points[i]);
-            _vertices.Add(new Vertex(transformedPoint, new(0, 0), color));
+            Vector2 transformedPoint = TransformPoint(points[i]);
+            AddVertex(new Vertex(transformedPoint, new(0, 0), color));
         }
 
         // Create triangles (fan from center to edges)
@@ -1336,10 +1371,10 @@ public partial class Canvas
         // Store the starting index to reference _vertices
         uint startVertexIndex = (uint)_vertices.Count;
 
-        Vector2 transformedCenter = ModifyPoint(new Vector2(x, y));
+        Vector2 transformedCenter = TransformPoint(new Vector2(x, y));
 
         // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-        _vertices.Add(new Vertex(transformedCenter, new(0.5f, 0.5f), color));
+        AddVertex(new Vertex(transformedCenter, new(0.5f, 0.5f), color));
 
         // Generate vertices around the circle
         for (int i = 0; i <= segments; i++)
@@ -1348,10 +1383,10 @@ public partial class Canvas
             double vx = x + radius * Math.Cos(angle);
             double vy = y + radius * Math.Sin(angle);
 
-            Vector2 transformedPoint = ModifyPoint(new Vector2(vx, vy));
+            Vector2 transformedPoint = TransformPoint(new Vector2(vx, vy));
 
             // Edge vertices have UV at 0,0 for anti-aliasing
-            _vertices.Add(new Vertex(
+            AddVertex(new Vertex(
                 transformedPoint,
                 new(0, 0),  // UV at edge for AA
                 color
@@ -1419,14 +1454,14 @@ public partial class Canvas
         // Store the starting index to reference _vertices
         uint startVertexIndex = (uint)_vertices.Count;
 
-        Vector2 transformedCenter = ModifyPoint(new Vector2(x, y));
-        Vector2 transformedCentroid = ModifyPoint(new Vector2(centroidX, centroidY));
+        Vector2 transformedCenter = TransformPoint(new Vector2(x, y));
+        Vector2 transformedCentroid = TransformPoint(new Vector2(centroidX, centroidY));
 
         // Add centroid vertex with UV at 0.5,0.5 (fully opaque, no AA)
-        _vertices.Add(new(transformedCentroid, new(0.5f, 0.5f), color));
+        AddVertex(new(transformedCentroid, new(0.5f, 0.5f), color));
 
         // Start path
-        _vertices.Add(new(transformedCenter, new(0.0f, 0.0f), color));
+        AddVertex(new(transformedCenter, new(0.0f, 0.0f), color));
 
         // Generate vertices around the arc plus the two radial endpoints
         for (int i = 0; i <= segments; i++)
@@ -1435,14 +1470,14 @@ public partial class Canvas
             double vx = x + radius * Math.Cos(angle);
             double vy = y + radius * Math.Sin(angle);
 
-            Vector2 transformedPoint = ModifyPoint(new Vector2(vx, vy));
+            Vector2 transformedPoint = TransformPoint(new Vector2(vx, vy));
 
             // Edge vertices have UV at 0,0 for anti-aliasing
-            _vertices.Add(new(transformedPoint, new(0, 0), color));
+            AddVertex(new(transformedPoint, new(0, 0), color));
         }
 
         // Close path
-        _vertices.Add(new(transformedCenter, new(0.0f, 0.0f), color));
+        AddVertex(new(transformedCenter, new(0.0f, 0.0f), color));
 
         // Create triangles (fan from centroid to each pair of edge points)
         for (int i = 0; i < segments + 2; i++)
@@ -1458,6 +1493,33 @@ public partial class Canvas
     }
     #endregion
 
+    #region Text
+
+    public void DrawText(SpriteFontBase font, string text, double x, double y, Color color, double rotation = 0f, Vector2 origin = default(Vector2), Vector2? scale = null, double layerDepth = 0f, double characterSpacing = 0f, double lineSpacing = 0f, TextStyle textStyle = TextStyle.None)
+    {
+        if(origin != default(Vector2))
+        {
+            // Convert normalized origin to Pixels
+            var size = font.MeasureString(text, scale, (float)characterSpacing, (float)lineSpacing);
+            origin = new Vector2((origin.x * size.X) - characterSpacing, origin.y * size.Y);
+        }
+
+        _fontStashRenderer.Text(font, text, new(x, y), color, rotation, origin, scale, layerDepth, characterSpacing, lineSpacing, textStyle);
+    }
+    public void DrawText(SpriteFontBase font, string text, double x, double y, Color[] colors, double rotation = 0f, Vector2 origin = default(Vector2), Vector2? scale = null, double layerDepth = 0f, double characterSpacing = 0f, double lineSpacing = 0f, TextStyle textStyle = TextStyle.None)
+    {
+        if (origin != default(Vector2))
+        {
+            // Convert normalized origin to Pixels
+            var size = font.MeasureString(text, scale, (float)characterSpacing, (float)lineSpacing);
+            origin = new Vector2(origin.x * size.X, origin.y * size.Y);
+        }
+
+        _fontStashRenderer.Text(font, text, new(x, y), colors, rotation, origin, scale, layerDepth, characterSpacing, lineSpacing, textStyle);
+    }
+
+    #endregion
+
     #region Helpers
 
     private double CalculateArcLength(double radius, double startAngle, double endAngle)
@@ -1468,7 +1530,10 @@ public partial class Canvas
         return radius * (endAngle - startAngle);
     }
 
-    private Vector2 ModifyPoint(Vector2 point) => _state.transform.TransformPoint(point);
-
     #endregion
+
+    public void Dispose()
+    {
+        _renderer?.Dispose();
+    }
 }

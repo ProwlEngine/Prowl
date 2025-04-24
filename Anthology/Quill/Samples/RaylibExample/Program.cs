@@ -1,4 +1,5 @@
 ﻿using Common;
+using FontStashSharp;
 using Prowl.Quill;
 using Prowl.Vector;
 using Raylib_cs;
@@ -12,6 +13,10 @@ namespace RaylibExample
         static float zoom = 1.0f;
         static float rotation = 0.0f;
 
+        static SpriteFontBase RobotoFont32;
+        static SpriteFontBase RobotoFont16;
+        static SpriteFontBase AlamakFont32;
+
         static void Main(string[] args)
         {
             // Initialize window
@@ -21,13 +26,26 @@ namespace RaylibExample
             InitWindow(screenWidth, screenHeight, "Raylib Quill Example");
             SetTargetFPS(60);
 
-            CanvasRenderer.Initialize();
+            var renderer = new RaylibCanvasRenderer();
 
             // Load textures
             Texture2D demoTexture = LoadTexture("Textures/wall.png");
+            FontSystem fonts = new FontSystem();
+            using(var stream = File.OpenRead("Fonts/Roboto.ttf"))
+            {
+                fonts.AddFont(stream);
+                RobotoFont32 = fonts.GetFont(32);
+                RobotoFont16 = fonts.GetFont(16);
+            }
+            fonts = new FontSystem();
+            using (var stream = File.OpenRead("Fonts/Alamak.ttf"))
+            {
+                fonts.AddFont(stream);
+                AlamakFont32 = fonts.GetFont(32);
+            }
 
-            Canvas canvas = new Canvas();
-            CanvasDemo demo = new CanvasDemo(canvas, screenWidth, screenHeight, demoTexture);
+            Canvas canvas = new Canvas(renderer);
+            CanvasDemo demo = new CanvasDemo(canvas, screenWidth, screenHeight, demoTexture, RobotoFont32, RobotoFont16, AlamakFont32);
 
             while (!WindowShouldClose())
             {
@@ -42,12 +60,14 @@ namespace RaylibExample
                 // Draw Canvas
                 BeginDrawing();
                 ClearBackground(Color.Black);
-                CanvasRenderer.Render(canvas);
+
+                canvas.Render();
+
                 EndDrawing();
             }
 
             UnloadTexture(demoTexture);
-            CanvasRenderer.Dispose();
+            canvas.Dispose();
             CloseWindow();
         }
 

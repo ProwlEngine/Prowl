@@ -5,9 +5,9 @@ using static Raylib_cs.Raylib;
 
 namespace RaylibExample
 {
-    public static class CanvasRenderer
+    public class RaylibCanvasRenderer : ICanvasRenderer
     {
-        public static string Stroke_FS = @"
+        public const string Stroke_FS = @"
 #version 330
 in vec2 fragTexCoord;
 in vec4 fragColor;
@@ -120,7 +120,7 @@ void main()
     finalColor = vec4(color.rgb, color.a * edgeAlpha * mask);
 }";
 
-        public static string Vertex_VS = @"
+        public const string Vertex_VS = @"
 #version 330
 in vec3 vertexPosition;
 in vec2 vertexTexCoord;
@@ -139,18 +139,19 @@ void main()
     fragPos = vertexPosition.xy;
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }";
-        static Shader shader;
-        static int scissorMatLoc;
-        static int scissorExtLoc;
+        
+        Shader shader;
+        int scissorMatLoc;
+        int scissorExtLoc;
 
-        static int _brushMatLoc;
-        static int _brushTypeLoc;
-        static int _brushColor1Loc;
-        static int _brushColor2Loc;
-        static int _brushParamsLoc;
-        static int _brushParams2Loc;
+        int _brushMatLoc;
+        int _brushTypeLoc;
+        int _brushColor1Loc;
+        int _brushColor2Loc;
+        int _brushParamsLoc;
+        int _brushParams2Loc;
 
-        public static void Initialize()
+        public RaylibCanvasRenderer()
         {
             // Load shader with scissoring support
             shader = LoadShaderFromMemory(Vertex_VS, Stroke_FS);
@@ -165,21 +166,30 @@ void main()
             _brushParams2Loc = GetShaderLocation(shader, "brushParams2");
         }
 
-        public static void Render(Canvas canvas)
+        public object CreateTexture(uint width, uint height)
         {
-            BeginBlendMode(BlendMode.Alpha);
-
-            BeginShaderMode(shader);
-            DrawCanvas(canvas, shader, scissorMatLoc, scissorExtLoc);
-            EndShaderMode();
+            var image = GenImageColor((int)width, (int)height, new Color(0, 0, 0, 0));
+            var texture = LoadTextureFromImage(image);
+            SetTextureFilter(texture, TextureFilter.Bilinear);
+            return texture;
         }
 
-        public static void Dispose()
+        public Vector2Int GetTextureSize(object texture)
         {
-            UnloadShader(shader);
+            if (texture is not Texture2D tex)
+                throw new ArgumentException("Texture must be of type Texture2D");
+            return new Vector2Int(tex.Width, tex.Height);
         }
 
-        static void SetUniforms(Prowl.Quill.DrawCall drawCall)
+        public void SetTextureData(object texture, IntRect bounds, byte[] data)
+        {
+            // Update the texture data with the provided byte array
+            if (texture is not Texture2D tex)
+                throw new ArgumentException("Texture must be of type Texture2D");
+            UpdateTextureRec(tex, new(bounds.x, bounds.y, bounds.width, bounds.height), data);
+        }
+
+        void SetUniforms(Prowl.Quill.DrawCall drawCall)
         {
             // Bind the texture if available, otherwise use default
             uint textureToUse = 0;
@@ -208,8 +218,11 @@ void main()
             }
         }
 
-        static void DrawCanvas(Canvas canvas, Shader shader, int scissorMatLoc, int scissorExtLoc)
+        public void RenderCalls(Canvas canvas, IReadOnlyList<Prowl.Quill.DrawCall> drawCalls)
         {
+            BeginBlendMode(BlendMode.Alpha);
+            BeginShaderMode(shader);
+
             Rlgl.DrawRenderBatchActive();
 
             int index = 0;
@@ -251,9 +264,12 @@ void main()
                 Rlgl.DrawRenderBatchActive();
             }
             Rlgl.SetTexture(0);
+
+            EndShaderMode();
         }
 
-        static System.Numerics.Vector4 ToVec4(System.Drawing.Color color) =>
-            new System.Numerics.Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
+        static System.Numerics.Vector4 ToVec4(System.Drawing.Color color) => new System.Numerics.Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
+
+        public void Dispose() => UnloadShader(shader);
     }
 }
