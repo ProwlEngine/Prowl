@@ -12,8 +12,7 @@ namespace OpenTKExample
     public class CanvasRenderer : ICanvasRenderer
     {
         // Shader source for the fragment shader
-        public const string STROKE_FRAGMENT_SHADER = @"
-#version 330
+        public const string STROKE_FRAGMENT_SHADER = @"#version 330
 in vec2 fragTexCoord;
 in vec4 fragColor;
 in vec2 fragPos;
@@ -126,8 +125,7 @@ void main()
 }";
 
         // Shader source for the vertex shader
-        private const string DEFAULT_VERTEX_SHADER = @"
-#version 330
+        private const string DEFAULT_VERTEX_SHADER = @"#version 330
 uniform mat4 projection;
 layout(location = 0) in vec2 aPosition;
 layout(location = 1) in vec2 aTexCoord;
