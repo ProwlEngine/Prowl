@@ -1154,6 +1154,7 @@ namespace Shared
                         bool isSelected = i == 0;
                         Color itemBgColor = isSelected ? Color.FromArgb(20, primaryColor) : Color.Transparent;
                         Color itemTextColor = isSelected ? primaryColor : textColor;
+                        var index = i;
 
                         using (Paper.Box($"SettingsCat_{i}")
                             .Height(50)
@@ -1161,7 +1162,7 @@ namespace Shared
                             .BackgroundColor(itemBgColor)
                             //.Style(BoxStyle.SolidRounded(itemBgColor, 8f))
                             .Text(Text.Left($"  {categories[i]}", fontSmall, itemTextColor))
-                            .OnClick((rect) => Console.WriteLine($"Category {categories[i]} clicked"))
+                            .OnClick((rect) => { Console.WriteLine($"Category {categories[index]} clicked"); })
                             .Enter()) { }
                     }
                 }
