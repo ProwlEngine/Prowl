@@ -12,8 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Paper\Paper.csproj" />
-    <ProjectReference Include="..\Samples\Shared\Shared.csproj" />
+    <ProjectReference Include="..\..\Paper\Paper.csproj" />
+    <ProjectReference Include="..\Shared\Shared.csproj" />
   </ItemGroup>
 
 </Project>

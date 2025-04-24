@@ -54,6 +54,8 @@ internal class Program
             EndDrawing();
         }
 
+        _renderer.Dispose();
+
         // Close the window
         CloseWindow();
     }
