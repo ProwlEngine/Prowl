@@ -53,7 +53,7 @@ internal static class PolylineMesher
     /// <param name="miterLimit">The miter limit (used when jointStyle is Miter)</param>
     /// <param name="allowOverlap">Whether to allow overlapping vertices for better results with close points</param>
     /// <returns>A list of triangles describing the path</returns>
-    public static IReadOnlyList<Triangle> Create(List<Vector2> points, double thickness, System.Drawing.Color color, JointStyle jointStyle = JointStyle.Miter, double miterLimit = 4.0f, bool allowOverlap = false, EndCapStyle startCap = EndCapStyle.Butt, EndCapStyle endCap = EndCapStyle.Butt)
+    public static IReadOnlyList<Triangle> Create(List<Vector2> points, double thickness, double pixelWidth, System.Drawing.Color color, JointStyle jointStyle = JointStyle.Miter, double miterLimit = 4.0f, bool allowOverlap = false, EndCapStyle startCap = EndCapStyle.Butt, EndCapStyle endCap = EndCapStyle.Butt)
     {
         // Reset caches
         PolySegmentCache.Clear();
@@ -75,7 +75,7 @@ internal static class PolylineMesher
         }
 
         // Minimum effective thickness to avoid rendering artifacts
-        thickness = Math.Max(1.0, thickness);
+        thickness = Math.Max(1.0, thickness) + pixelWidth;
 
         // Half thickness for calculations
         double halfThickness = thickness / 2;
