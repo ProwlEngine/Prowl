@@ -26,41 +26,21 @@ namespace Shared
         static float[] dataPoints = { 0.2f, 0.5f, 0.3f, 0.8f, 0.4f, 0.7f, 0.6f };
         static readonly string[] tabNames = { "Dashboard", "Analytics", "Profile", "Settings", "Windows" };
 
-
-        // Light Theme
-        //static readonly Color backgroundColor = Color.FromArgb(255, 243, 244, 246);
-        //static readonly Color cardBackground = Color.FromArgb(255, 255, 255, 255);
-        //static readonly Color primaryColor = Color.FromArgb(255, 59, 130, 246);
-        //static readonly Color secondaryColor = Color.FromArgb(255, 16, 185, 129);
-        //static readonly Color textColor = Color.FromArgb(255, 31, 41, 55);
-        //static readonly Color lightTextColor = Color.FromArgb(255, 107, 114, 128);
-        //static readonly Color[] colorPalette = {
-        //    Color.FromArgb(255, 59, 130, 246),   // Blue
-        //    Color.FromArgb(255, 16, 185, 129),   // Teal  
-        //    Color.FromArgb(255, 239, 68, 68),    // Red
-        //    Color.FromArgb(255, 245, 158, 11),   // Amber
-        //    Color.FromArgb(255, 139, 92, 246)    // Purple
-        //};
-
-        // Dark Theme
-        static readonly Color backgroundColor = Color.FromArgb(255, 18, 18, 23);
-        static readonly Color cardBackground = Color.FromArgb(255, 30, 30, 46);
-        static readonly Color primaryColor = Color.FromArgb(255, 94, 104, 202);
-        static readonly Color secondaryColor = Color.FromArgb(255, 162, 155, 254);
-        static readonly Color textColor = Color.FromArgb(255, 226, 232, 240);
-        static readonly Color lightTextColor = Color.FromArgb(255, 148, 163, 184);
-        static readonly Color[] colorPalette = {
-            Color.FromArgb(255, 94, 234, 212),   // Cyan
-            Color.FromArgb(255, 162, 155, 254),  // Purple  
-            Color.FromArgb(255, 249, 115, 22),   // Orange
-            Color.FromArgb(255, 248, 113, 113),  // Red
-            Color.FromArgb(255, 250, 204, 21)    // Yellow
-        };
+        //Theme
+        static Color backgroundColor;
+        static Color cardBackground;
+        static Color primaryColor;
+        static Color secondaryColor;
+        static Color textColor;
+        static Color lightTextColor;
+        static Color[] colorPalette;
+        static bool isDark;
 
         static float time = 0;
 
         public static void Initialize()
         {
+            ToggleTheme();
             fontSystem = new FontSystem();
 
             // Load fonts with different sizes
@@ -186,6 +166,47 @@ namespace Shared
             //);
         }
 
+        private static void ToggleTheme()
+        {
+            isDark = !isDark;
+
+            if (isDark)
+            {
+                //Dark
+                backgroundColor = Color.FromArgb(255, 18, 18, 23);
+                cardBackground = Color.FromArgb(255, 30, 30, 46);
+                primaryColor = Color.FromArgb(255, 94, 104, 202);
+                secondaryColor = Color.FromArgb(255, 162, 155, 254);
+                textColor = Color.FromArgb(255, 226, 232, 240);
+                lightTextColor = Color.FromArgb(255, 148, 163, 184);
+                colorPalette = [
+                    Color.FromArgb(255, 94, 234, 212),   // Cyan
+                    Color.FromArgb(255, 162, 155, 254),  // Purple  
+                    Color.FromArgb(255, 249, 115, 22),   // Orange
+                    Color.FromArgb(255, 248, 113, 113),  // Red
+                    Color.FromArgb(255, 250, 204, 21)    // Yellow
+                ];
+            }
+            else
+            {
+
+                //Light
+                backgroundColor = Color.FromArgb(255, 243, 244, 246);
+                cardBackground = Color.FromArgb(255, 255, 255, 255);
+                primaryColor = Color.FromArgb(255, 59, 130, 246);
+                secondaryColor = Color.FromArgb(255, 16, 185, 129);
+                textColor = Color.FromArgb(255, 31, 41, 55);
+                lightTextColor = Color.FromArgb(255, 107, 114, 128);
+                colorPalette = [
+                    Color.FromArgb(255, 59, 130, 246),   // Blue
+                    Color.FromArgb(255, 16, 185, 129),   // Teal  
+                    Color.FromArgb(255, 239, 68, 68),    // Red
+                    Color.FromArgb(255, 245, 158, 11),   // Amber
+                    Color.FromArgb(255, 139, 92, 246)    // Purple
+                ];
+            }
+        }
+
         private static void RenderTopNavBar()
         {
             using (Paper.Row("TopNavBar")
@@ -229,6 +250,16 @@ namespace Shared
                     //.Style(BoxStyle.SolidRounded(Color.FromArgb(50, 0, 0, 0), 20f))
                     .Margin(0, 15, 15, 0)
                     .Text(Text.Left($"    {Icons.MagnifyingGlass}    Search...", fontSmall, lightTextColor))
+                    .Enter()) { }
+
+                // Notification icon
+                using (Paper.Box("LightIcon")
+                    .Width(40)
+                    .Height(40)
+                    //.Style(BoxStyle.SolidRounded(Color.FromArgb(50, 0, 0, 0), 20f))
+                    .Margin(0, 10, 15, 0)
+                    .Text(Text.Center(Icons.Lightbulb, fontMedium))
+                    .OnClick((rect) => ToggleTheme())
                     .Enter()) { }
 
                 // Notification icon
