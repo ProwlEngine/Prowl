@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="FontStashSharp" Version="1.3.10" />
-    <PackageReference Include="Prowl.Quill" Version="0.4.0" />
+    <PackageReference Include="Prowl.Quill" Version="0.4.2" />
   </ItemGroup>
 
 </Project>
