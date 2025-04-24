@@ -20,7 +20,10 @@ A simple but high-performance hardware-accelerated vector graphics library for t
 	- Caps: Round, Bevel, Butt, Square
 	- Joins: Miter, Round, Bevel
   - Filled and stroked rendering modes
+  - Gradients
   - Transparency support
+  - Font/Text Rendering
+  - Concave Fill shapes
 
 - **Canvas Controls**
   - State stack for save/restore operations
