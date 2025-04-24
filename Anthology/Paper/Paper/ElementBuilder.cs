@@ -366,9 +366,11 @@ namespace Prowl.PaperUI
         #region Appearance Properties
 
         /// <summary>Sets the background color of the element.</summary>
+        public ElementBuilder BackgroundColor(byte r, byte g, byte b, byte a = 255) => BackgroundColor(Color.FromArgb(a, r, g, b));
         public ElementBuilder BackgroundColor(Color color) => SetValue(GuiProp.BackgroundColor, color);
 
         /// <summary>Sets the border color of the element.</summary>
+        public ElementBuilder BorderColor(byte r, byte g, byte b, byte a = 255) => BorderColor(Color.FromArgb(a, r, g, b));
         public ElementBuilder BorderColor(Color color) => SetValue(GuiProp.BorderColor, color);
 
         /// <summary>Sets the border width of the element.</summary>
