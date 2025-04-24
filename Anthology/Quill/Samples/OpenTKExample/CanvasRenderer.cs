@@ -126,7 +126,6 @@ void main()
     
     color *= edgeAlpha * mask;
     
-    
     finalColor = color;
 }";
 
