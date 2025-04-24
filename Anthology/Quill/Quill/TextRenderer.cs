@@ -44,19 +44,19 @@ namespace Prowl.Quill
 
             // Top-left vertex
             pos = _canvas.TransformPoint(new(topLeft.Position.X, topLeft.Position.Y));
-            var newTopLeft = new Vertex(pos, new(topLeft.TextureCoordinate.X, topLeft.TextureCoordinate.Y), ToColor(topLeft.Color));
+            var newTopLeft = new Vertex(new(Math.Round(pos.x), Math.Round(pos.y)), new(topLeft.TextureCoordinate.X, topLeft.TextureCoordinate.Y), ToColor(topLeft.Color));
 
             // Top-right vertex
             pos = _canvas.TransformPoint(new(topRight.Position.X, topRight.Position.Y));
-            var newTopRight = new Vertex(pos, new(topRight.TextureCoordinate.X, topRight.TextureCoordinate.Y), ToColor(topRight.Color));
+            var newTopRight = new Vertex(new(Math.Round(pos.x), Math.Round(pos.y)), new(topRight.TextureCoordinate.X, topRight.TextureCoordinate.Y), ToColor(topRight.Color));
 
             // Bottom-right vertex
             pos = _canvas.TransformPoint(new(bottomRight.Position.X, bottomRight.Position.Y));
-            var newBottomRight = new Vertex(pos, new(bottomRight.TextureCoordinate.X, bottomRight.TextureCoordinate.Y), ToColor(bottomRight.Color));
+            var newBottomRight = new Vertex(new(Math.Round(pos.x), Math.Round(pos.y)), new(bottomRight.TextureCoordinate.X, bottomRight.TextureCoordinate.Y), ToColor(bottomRight.Color));
 
             // Bottom-left vertex
             pos = _canvas.TransformPoint(new(bottomLeft.Position.X, bottomLeft.Position.Y));
-            var newBottomLeft = new Vertex(pos, new(bottomLeft.TextureCoordinate.X, bottomLeft.TextureCoordinate.Y), ToColor(bottomLeft.Color));
+            var newBottomLeft = new Vertex(new(Math.Round(pos.x), Math.Round(pos.y)), new(bottomLeft.TextureCoordinate.X, bottomLeft.TextureCoordinate.Y), ToColor(bottomLeft.Color));
 
             _canvas.SetTexture(texture);
 
