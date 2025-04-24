@@ -155,7 +155,7 @@ internal static class PolylineMesher
                 if (isClosed)
                 {
                     // Create joint between last and first segment
-                    CreateJoint(TriangleCache, color, segment, PolySegmentCache[0], jointStyle, miterLimit,
+                    CreateJoint(TriangleCache, color, segment, PolySegmentCache[0], thickness, jointStyle, miterLimit,
                         ref end1, ref end2, ref nextStart1, ref nextStart2,
                         startU, endU,
                         ref endUV1, ref endUV2, ref nextStartUV1, ref nextStartUV2,
@@ -177,7 +177,7 @@ internal static class PolylineMesher
             else
             {
                 // Create joint with next segment
-                CreateJoint(TriangleCache, color, segment, PolySegmentCache[i + 1], jointStyle, miterLimit,
+                CreateJoint(TriangleCache, color, segment, PolySegmentCache[i + 1], thickness, jointStyle, miterLimit,
                     ref end1, ref end2, ref nextStart1, ref nextStart2,
                     startU, endU,
                     ref endUV1, ref endUV2, ref nextStartUV1, ref nextStartUV2,
@@ -199,7 +199,7 @@ internal static class PolylineMesher
         return TriangleCache;
     }
 
-    private static void CreateJoint(List<Triangle> triangles, System.Drawing.Color color, PolySegment segment1, PolySegment segment2, JointStyle jointStyle, double miterLimit, ref Vector2 end1, ref Vector2 end2, ref Vector2 nextStart1, ref Vector2 nextStart2, double startU, double endU, ref Vector2 endUV1, ref Vector2 endUV2, ref Vector2 nextStartUV1, ref Vector2 nextStartUV2, bool allowOverlap)
+    private static void CreateJoint(List<Triangle> triangles, System.Drawing.Color color, PolySegment segment1, PolySegment segment2, double thickness, JointStyle jointStyle, double miterLimit, ref Vector2 end1, ref Vector2 end2, ref Vector2 nextStart1, ref Vector2 nextStart2, double startU, double endU, ref Vector2 endUV1, ref Vector2 endUV2, ref Vector2 nextStartUV1, ref Vector2 nextStartUV2, bool allowOverlap)
     {
         // Calculate the angle between the two line segments
         Vector2 dir1 = segment1.Center.Direction;
@@ -345,7 +345,7 @@ internal static class PolylineMesher
             {
                 // For round join, create a triangle fan with UVs
                 CreateTriangleFan(
-                    triangles, color, innerSec, segment1.Center.B, outer1.B, outer2.A,
+                    triangles, thickness, color, innerSec, segment1.Center.B, outer1.B, outer2.A,
                     innerUV, outerUV, nextOuterUV,
                     clockwise
                 );
@@ -429,7 +429,14 @@ internal static class PolylineMesher
             case EndCapStyle.Round or EndCapStyle.Bevel:
             {
                 // Create a semicircular cap using a triangle fan
-                int numSegments = capStyle == EndCapStyle.Bevel ? 2 : 6; // More segments for round cap
+                int numSegments = capStyle == EndCapStyle.Bevel ? 2 : 6;
+                // More segments for round cap
+                if (capStyle == EndCapStyle.Round)
+                {
+                    double distance = Math.PI * (thickness * 0.5);
+                    numSegments  = Math.Min(Math.Max(6, (int)Math.Floor(distance / Canvas.RoundingMinDistance)), 16);
+
+                }
 
                 // We'll generate points along the semicircle
                 for (int i = 0; i < numSegments; i++)
@@ -468,7 +475,7 @@ internal static class PolylineMesher
     /// <summary>
     /// Creates a partial circle between two points as a triangle fan with UV coordinates
     /// </summary>
-    private static void CreateTriangleFan(List<Triangle> triangles, System.Drawing.Color color, Vector2 connectTo, Vector2 origin,
+    private static void CreateTriangleFan(List<Triangle> triangles, double thickness, System.Drawing.Color color, Vector2 connectTo, Vector2 origin,
                                          Vector2 start, Vector2 end,
                                          Vector2 centerUV, Vector2 startUV, Vector2 endUV,
                                          bool clockwise)

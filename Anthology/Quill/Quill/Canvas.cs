@@ -181,7 +181,7 @@ public partial class Canvas
         }
     }
 
-    private const double RoundingMinDistance = 5;
+    internal const double RoundingMinDistance = 3;
     public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.Where(d => d.ElementCount != 0).ToList();
     public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
     public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
@@ -1498,7 +1498,7 @@ public partial class Canvas
 
     #region Helpers
 
-    private double CalculateArcLength(double radius, double startAngle, double endAngle)
+    internal static double CalculateArcLength(double radius, double startAngle, double endAngle)
     {
         // Make sure end angle is greater than start angle
         if (endAngle < startAngle)
