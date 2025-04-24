@@ -435,6 +435,13 @@ internal static class PolylineMesher
                     double distance = Math.PI * (thickness * 0.5);
                     numSegments  = Math.Min(Math.Max(6, (int)Math.Floor(distance / Canvas.RoundingMinDistance)), 16);
 
+                    thickness += 0.5;
+                }
+                else
+                { 
+                    // Havent fully delved into why we need a differant + thickness for Rounded or Bevels.. or why we even need them at all
+                    // Defintely something todo with how the UV's are and Anti Aliasing, but this seems to make them seamless sooo for now this works
+                    thickness += 1.0;
                 }
 
                 // We'll generate points along the semicircle
