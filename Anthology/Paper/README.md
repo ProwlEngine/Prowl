@@ -14,23 +14,25 @@
 
 1. [About The Project](#-about-the-project-)
 2. [Features](#-features-)
-3. [Getting Started](#🚀-getting-started-🚀)
+3. [Getting Started](#-getting-started-)
    * [Installation](#installation)
    * [Basic Usage](#basic-usage)
    * [Layouting](#layouting)
    * [Styling and Animation](#styling-and-animation)
    * [Event Handling](#event-handling)
    * [Input Handling](#input-handling)
-5. [Contributing](#🤝-contributing-🤝)
-6. [Contributors](#contributors-🌟)
-7. [Dependencies](#dependencies-📦)
-8. [License](#📜-license-📜)
+5. [Contributing](#-contributing-)
+6. [Contributors](#contributors-)
+7. [Dependencies](#dependencies-)
+8. [License](#-license-)
 
 # <span align="center">📝 About The Project 📝
 
 Paper is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** immediate-mode UI library built for the Prowl Game Engine. It provides a lightweight, flexible way to create highly reactive user interfaces with minimal effort.
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
+
+<image src="https://i.imgur.com/IjmlWxx.gif" width="100%"></video>
 
 Paper follows the immediate-mode GUI (IMGUI) paradigm, where UI elements are created and configured on every frame. Unlike retained-mode systems, it doesn't maintain persistent widget objects, making code simpler and more direct.
 Here's a basic example:
