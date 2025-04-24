@@ -280,6 +280,18 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
+        /// Sets the position of the pointer (mouse cursor).
+        /// </summary>
+        /// <param name="x">X coordinate</param>
+        /// <param name="y">Y coordinate</param>
+        public static void SetPointerPosition(double x, double y)
+        {
+            x *= _frameBufferScale.x;
+            y *= _frameBufferScale.y;
+            _pointerPos = new Vector2(x, y);
+        }
+
+        /// <summary>
         /// Sets the state of a mouse button or updates pointer position.
         /// </summary>
         /// <param name="btn">The mouse button</param>
