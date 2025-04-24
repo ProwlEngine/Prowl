@@ -755,9 +755,8 @@ public partial class Canvas
 
     #endregion
 
-    public void Fill() => FillFast();
-    public void FillFast()
-    {
+    public void Fill()
+    { 
         if (_subPaths.Count == 0)
             return;
 
@@ -892,13 +891,6 @@ public partial class Canvas
             }
 
             vertexCount += holePoints.Count;
-        }
-
-        // If no holes found inside this path, use simple fill
-        if (holeIndices.Count == 0)
-        {
-            FillSubPath(outerPath);
-            return;
         }
 
         // Triangulate using Earcut
