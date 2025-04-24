@@ -2,16 +2,16 @@
 {
     public partial class Element
     {
-        private const float DEFAULT_MIN = float.MinValue;
-        private const float DEFAULT_MAX = float.MaxValue;
-        private const float DEFAULT_BORDER_WIDTH = 0f;
+        private const double DEFAULT_MIN = double.MinValue;
+        private const double DEFAULT_MAX = double.MaxValue;
+        private const double DEFAULT_BORDER_WIDTH = 0f;
 
         internal UISize Layout()
         {
             var wValue = (UnitValue)_elementStyle.GetValue(GuiProp.Width);
             var hValue = (UnitValue)_elementStyle.GetValue(GuiProp.Height);
-            float width = wValue.IsPixels ? wValue.Value : throw new Exception("Root element must have fixed width");
-            float height = hValue.IsPixels ? hValue.Value : throw new Exception("Root element must have fixed height");
+            double width = wValue.IsPixels ? wValue.Value : throw new Exception("Root element must have fixed width");
+            double height = hValue.IsPixels ? hValue.Value : throw new Exception("Root element must have fixed height");
 
             RelativeX = 0;
             RelativeY = 0;
@@ -56,7 +56,7 @@
         private UnitValue GetBorderCrossBefore(LayoutType parentLayoutType) => GetProp(parentLayoutType, GuiProp.BorderTop, GuiProp.BorderLeft);
         private UnitValue GetBorderCrossAfter(LayoutType parentLayoutType) => GetProp(parentLayoutType, GuiProp.BorderBottom, GuiProp.BorderRight);
 
-        private (float, float)? ContentSizing(LayoutType parentLayoutType, float? parentMain, float? parentCross)
+        private (double, double)? ContentSizing(LayoutType parentLayoutType, double? parentMain, double? parentCross)
         {
             if (ContentSizer == null)
                 return null;
@@ -66,31 +66,31 @@
                 : ContentSizer(parentCross, parentMain)?.Let(t => (t.Item2, t.Item1));
         }
 
-        private static UISize DoLayout(Element element, LayoutType parentLayoutType, float parentMain, float parentCross)
+        private static UISize DoLayout(Element element, LayoutType parentLayoutType, double parentMain, double parentCross)
         {
             LayoutType layoutType = element.LayoutType;
 
             UnitValue main = element.GetMain(parentLayoutType);
             UnitValue cross = element.GetCross(parentLayoutType);
 
-            float minMain = main.IsStretch
+            double minMain = main.IsStretch
                 ? DEFAULT_MIN
                 : element.GetMinMain(parentLayoutType).ToPx(parentMain, DEFAULT_MIN);
 
-            float maxMain = main.IsStretch
+            double maxMain = main.IsStretch
                 ? DEFAULT_MAX
                 : element.GetMaxMain(parentLayoutType).ToPx(parentMain, DEFAULT_MAX);
 
-            float minCross = cross.IsStretch
+            double minCross = cross.IsStretch
                 ? DEFAULT_MIN
                 : element.GetMinCross(parentLayoutType).ToPx(parentCross, DEFAULT_MIN);
 
-            float maxCross = cross.IsStretch
+            double maxCross = cross.IsStretch
                 ? DEFAULT_MAX
                 : element.GetMaxCross(parentLayoutType).ToPx(parentCross, DEFAULT_MAX);
 
             // Compute main-axis size
-            float computedMain = 0;
+            double computedMain = 0;
             if (main.IsStretch)
                 computedMain = parentMain;
             else if (main.IsPixels || main.IsPercentage)
@@ -98,7 +98,7 @@
             // Auto stays at 0
 
             // Compute cross-axis size
-            float computedCross = 0;
+            double computedCross = 0;
             if(cross.IsStretch)
                 computedCross = parentCross;
             else if (cross.IsPixels || cross.IsPercentage)
@@ -107,27 +107,27 @@
 
 
             // Apply aspect ratio if set
-            var aspectRatio = (float)element._elementStyle.GetValue(GuiProp.AspectRatio);
+            var aspectRatio = (double)element._elementStyle.GetValue(GuiProp.AspectRatio);
             if (aspectRatio >= 0)
             {
                 // Handle aspect ratio differently based on which dimension is more constrained
                 if (main.IsAuto && !cross.IsAuto)
                 {
                     // Cross is fixed, calculate main from it
-                    float newMain = computedCross * aspectRatio;
+                    double newMain = computedCross * aspectRatio;
                     computedMain = Math.Min(maxMain, Math.Max(minMain, newMain));
                 }
                 else if (!main.IsAuto && cross.IsAuto)
                 {
                     // Main is fixed, calculate cross from it
-                    float newCross = computedMain / aspectRatio;
+                    double newCross = computedMain / aspectRatio;
                     computedCross = Math.Min(maxCross, Math.Max(minCross, newCross));
                 }
                 else if (main.IsAuto && cross.IsAuto)
                 {
                     // Both auto, use the parent constraints to determine the limiting factor
-                    float byWidth = parentMain;
-                    float byHeight = parentCross * aspectRatio;
+                    double byWidth = parentMain;
+                    double byHeight = parentCross * aspectRatio;
 
                     if (byWidth <= byHeight)
                     {
@@ -150,13 +150,13 @@
                 }
             }
 
-            float borderMainBefore = element.GetBorderMainBefore(parentLayoutType)
+            double borderMainBefore = element.GetBorderMainBefore(parentLayoutType)
                 .ToPx(computedMain, DEFAULT_BORDER_WIDTH);
-            float borderMainAfter = element.GetBorderMainAfter(parentLayoutType)
+            double borderMainAfter = element.GetBorderMainAfter(parentLayoutType)
                 .ToPx(computedMain, DEFAULT_BORDER_WIDTH);
-            float borderCrossBefore = element.GetBorderCrossBefore(parentLayoutType)
+            double borderCrossBefore = element.GetBorderCrossBefore(parentLayoutType)
                 .ToPx(computedCross, DEFAULT_BORDER_WIDTH);
-            float borderCrossAfter = element.GetBorderCrossAfter(parentLayoutType)
+            double borderCrossAfter = element.GetBorderCrossAfter(parentLayoutType)
                 .ToPx(computedCross, DEFAULT_BORDER_WIDTH);
 
             var visibleChildren = element.Children.Where(c => c.Visible).ToList();
@@ -166,14 +166,14 @@
                 .ToList();
             int numParentDirectedChildren = parentDirectedChildren.Count;
 
-            float mainSum = 0f;
-            float crossMax = 0f;
+            double mainSum = 0f;
+            double crossMax = 0f;
 
             // Apply content sizing for elements with no children
             if ((main.IsAuto || cross.IsAuto) && numParentDirectedChildren == 0)
             {
-                float? pMain = main.IsAuto ? null : (float?)computedMain;
-                float? pCross = cross.IsAuto ? null : (float?)computedCross;
+                double? pMain = main.IsAuto ? null : (double?)computedMain;
+                double? pCross = cross.IsAuto ? null : (double?)computedCross;
 
                 var contentSize = element.ContentSizing(parentLayoutType, pMain, pCross);
                 if (contentSize.HasValue)
@@ -186,8 +186,8 @@
             if ((element.GetMinMain(parentLayoutType).IsAuto || element.GetMinCross(parentLayoutType).IsAuto)
                 && numParentDirectedChildren == 0)
             {
-                float? pMain = element.GetMinMain(parentLayoutType).IsAuto ? null : (float?)computedMain;
-                float? pCross = element.GetMinCross(parentLayoutType).IsAuto ? null : (float?)computedCross;
+                double? pMain = element.GetMinMain(parentLayoutType).IsAuto ? null : (double?)computedMain;
+                double? pCross = element.GetMinCross(parentLayoutType).IsAuto ? null : (double?)computedCross;
 
                 var contentSize = element.ContentSizing(parentLayoutType, pMain, pCross);
                 if (contentSize.HasValue)
@@ -202,12 +202,12 @@
             computedCross = Math.Min(maxCross, Math.Max(minCross, computedCross));
 
             // Determine parent sizes for children based on layout types
-            (float actualParentMain, float actualParentCross) = parentLayoutType == layoutType
+            (double actualParentMain, double actualParentCross) = parentLayoutType == layoutType
                 ? (computedMain, computedCross)
                 : (computedCross, computedMain);
 
             // Sum of all space and size flex factors on the main-axis
-            float mainFlexSum = 0f;
+            double mainFlexSum = 0f;
 
             // Lists for layout calculations
             var children = new List<ChildElementInfo>(numChildren);
@@ -322,22 +322,22 @@
                 }
 
                 // Compute fixed-size child spaces
-                float computedChildCrossBefore = childCrossBefore.ToPxClamped(
+                double computedChildCrossBefore = childCrossBefore.ToPxClamped(
                     actualParentCross, 0f, childMinCrossBefore, childMaxCrossBefore);
-                float computedChildCrossAfter = childCrossAfter.ToPxClamped(
+                double computedChildCrossAfter = childCrossAfter.ToPxClamped(
                     actualParentCross, 0f, childMinCrossAfter, childMaxCrossAfter);
-                float computedChildMainBefore = childMainBefore.ToPxClamped(
+                double computedChildMainBefore = childMainBefore.ToPxClamped(
                     actualParentMain, 0f, childMinMainBefore, childMaxMainBefore);
-                float computedChildMainAfter = childMainAfter.ToPxClamped(
+                double computedChildMainAfter = childMainAfter.ToPxClamped(
                     actualParentMain, 0f, childMinMainAfter, childMaxMainAfter);
 
-                float computedChildMain = 0f;
-                float computedChildCross = childCross.ToPx(actualParentCross, 0f);
+                double computedChildMain = 0f;
+                double computedChildCross = childCross.ToPx(actualParentCross, 0f);
 
                 // Get auto min cross size if needed
                 if (child.GetMinCross(layoutType).IsAuto)
                 {
-                    float? pCross = child.GetMinCross(layoutType).IsAuto ? null : (float?)actualParentCross;
+                    double? pCross = child.GetMinCross(layoutType).IsAuto ? null : (double?)actualParentCross;
                     var contentSize = child.ContentSizing(layoutType, pCross, pCross);
                     if (contentSize.HasValue)
                     {
@@ -419,15 +419,15 @@
                 if (childCrossAfter.IsAuto)
                     childCrossAfter = elementChildCrossAfter;
 
-                float crossFlexSum = 0f;
+                double crossFlexSum = 0f;
                 var crossAxis = new List<StretchItem>();
 
                 // Collect stretch cross items
                 if (childCrossBefore.IsStretch)
                 {
-                    float childMinCrossBefore = child.Element.GetMinCrossBefore(layoutType)
+                    double childMinCrossBefore = child.Element.GetMinCrossBefore(layoutType)
                         .ToPx(actualParentCross, DEFAULT_MIN);
-                    float childMaxCrossBefore = child.Element.GetMaxCrossBefore(layoutType)
+                    double childMaxCrossBefore = child.Element.GetMaxCrossBefore(layoutType)
                         .ToPx(actualParentCross, DEFAULT_MAX);
 
                     crossFlexSum += childCrossBefore.Value;
@@ -444,9 +444,9 @@
 
                 if (childCross.IsStretch)
                 {
-                    float childMinCross = child.Element.GetMinCross(layoutType)
+                    double childMinCross = child.Element.GetMinCross(layoutType)
                         .ToPx(actualParentCross, DEFAULT_MIN);
-                    float childMaxCross = child.Element.GetMaxCross(layoutType)
+                    double childMaxCross = child.Element.GetMaxCross(layoutType)
                         .ToPx(actualParentCross, DEFAULT_MAX);
 
                     crossFlexSum += childCross.Value;
@@ -463,9 +463,9 @@
 
                 if (childCrossAfter.IsStretch)
                 {
-                    float childMinCrossAfter = child.Element.GetMinCrossAfter(layoutType)
+                    double childMinCrossAfter = child.Element.GetMinCrossAfter(layoutType)
                         .ToPx(actualParentCross, DEFAULT_MIN);
-                    float childMaxCrossAfter = child.Element.GetMaxCrossAfter(layoutType)
+                    double childMaxCrossAfter = child.Element.GetMaxCrossAfter(layoutType)
                         .ToPx(actualParentCross, DEFAULT_MAX);
 
                     crossFlexSum += childCrossAfter.Value;
@@ -483,18 +483,18 @@
                 // Calculate cross stretch
                 while (crossAxis.Any(item => !item.Frozen))
                 {
-                    float childCrossFreeSpace = actualParentCross
+                    double childCrossFreeSpace = actualParentCross
                         - borderCrossBefore
                         - borderCrossAfter
                         - child.CrossBefore
                         - child.Cross
                         - child.CrossAfter;
 
-                    float totalViolation = 0f;
+                    double totalViolation = 0f;
 
                     foreach (var item in crossAxis.Where(item => !item.Frozen))
                     {
-                        float actualCross = (item.Factor * childCrossFreeSpace / crossFlexSum);
+                        double actualCross = (item.Factor * childCrossFreeSpace / crossFlexSum);
 
                         if (item.ItemType == StretchItem.ItemTypes.Size && !child.Element.GetMain(layoutType).IsStretch)
                         {
@@ -509,7 +509,7 @@
                             mainSum += child.Main;
                         }
 
-                        float clamped = Math.Min(item.Max, Math.Max(item.Min, actualCross));
+                        double clamped = Math.Min(item.Max, Math.Max(item.Min, actualCross));
                         item.Violation = clamped - actualCross;
                         totalViolation += item.Violation;
 
@@ -589,17 +589,17 @@
             {
                 while (mainAxis.Any(item => !item.Frozen))
                 {
-                    float freeMainSpace = actualParentMain - mainSum - borderMainBefore - borderMainAfter;
-                    float totalViolation = 0f;
+                    double freeMainSpace = actualParentMain - mainSum - borderMainBefore - borderMainAfter;
+                    double totalViolation = 0f;
 
                     foreach (var item in mainAxis.Where(item => !item.Frozen))
                     {
-                        float actualMain = (item.Factor * freeMainSpace / mainFlexSum);
+                        double actualMain = (item.Factor * freeMainSpace / mainFlexSum);
                         var child = children[item.Index];
 
                         if (item.ItemType == StretchItem.ItemTypes.Size)
                         {
-                            float childCross = child.Element.GetCross(layoutType).IsStretch ?
+                            double childCross = child.Element.GetCross(layoutType).IsStretch ?
                                 child.Cross : actualParentCross;
 
                             var childSize = DoLayout(child.Element, layoutType, actualMain, childCross);
@@ -612,7 +612,7 @@
                             }
                         }
 
-                        float clamped = Math.Min(item.Max, Math.Max(item.Min, actualMain));
+                        double clamped = Math.Min(item.Max, Math.Max(item.Min, actualMain));
                         item.Violation = clamped - actualMain;
                         totalViolation += item.Violation;
                         item.Computed = clamped;
@@ -708,17 +708,17 @@
                     childCrossAfter = elementChildCrossAfter;
 
                 // Compute fixed spaces
-                float computedChildCrossBefore = childCrossBefore.ToPxClamped(
+                double computedChildCrossBefore = childCrossBefore.ToPxClamped(
                     actualParentCross, 0f, child.GetMinCrossBefore(layoutType), child.GetMaxCrossBefore(layoutType));
-                float computedChildCrossAfter = childCrossAfter.ToPxClamped(
+                double computedChildCrossAfter = childCrossAfter.ToPxClamped(
                     actualParentCross, 0f, child.GetMinCrossAfter(layoutType), child.GetMaxCrossAfter(layoutType));
-                float computedChildMainBefore = childMainBefore.ToPxClamped(
+                double computedChildMainBefore = childMainBefore.ToPxClamped(
                     actualParentMain, 0f, child.GetMinMainBefore(layoutType), child.GetMaxMainBefore(layoutType));
-                float computedChildMainAfter = childMainAfter.ToPxClamped(
+                double computedChildMainAfter = childMainAfter.ToPxClamped(
                     actualParentMain, 0f, child.GetMinMainAfter(layoutType), child.GetMaxMainAfter(layoutType));
 
-                float computedChildMain = 0f;
-                float computedChildCross = 0f;
+                double computedChildMain = 0f;
+                double computedChildCross = 0f;
 
                 // Compute fixed-size child sizes
                 if (!childMain.IsStretch && !childCross.IsStretch)
@@ -766,8 +766,8 @@
                 if (main.IsStretch && cross.IsStretch)
                 {
                     // Both stretch - constrain by the smaller dimension
-                    float byWidth = computedMain;
-                    float byHeight = computedCross * aspectRatio;
+                    double byWidth = computedMain;
+                    double byHeight = computedCross * aspectRatio;
 
                     if (byHeight < byWidth)
                     {
@@ -795,7 +795,7 @@
             }
 
             // Set bounds for all children
-            float mainPos = 0f;
+            double mainPos = 0f;
             foreach (var child in children)
             {
                 if (child.Element.PositionType == PositionType.SelfDirected)
@@ -830,10 +830,10 @@
         private static void ProcessChildCrossStretching(
             ChildElementInfo child,
             LayoutType layoutType,
-            float parentCross,
-            float parentMain,
-            float borderCrossBefore,
-            float borderCrossAfter,
+            double parentCross,
+            double parentMain,
+            double borderCrossBefore,
+            double borderCrossAfter,
             UnitValue elementChildCrossBefore,
             UnitValue elementChildCrossAfter,
             int childIndex)
@@ -848,14 +848,14 @@
             if (childCrossAfter.IsAuto)
                 childCrossAfter = elementChildCrossAfter;
 
-            float crossFlexSum = 0f;
+            double crossFlexSum = 0f;
             var crossAxis = new List<StretchItem>();
 
             // Collect stretch cross items
             if (childCrossBefore.IsStretch)
             {
-                float min = child.Element.GetMinCrossBefore(layoutType).ToPx(parentCross, DEFAULT_MIN);
-                float max = child.Element.GetMaxCrossBefore(layoutType).ToPx(parentCross, DEFAULT_MAX);
+                double min = child.Element.GetMinCrossBefore(layoutType).ToPx(parentCross, DEFAULT_MIN);
+                double max = child.Element.GetMaxCrossBefore(layoutType).ToPx(parentCross, DEFAULT_MAX);
 
                 crossFlexSum += childCrossBefore.Value;
                 child.CrossBefore = 0f;
@@ -865,8 +865,8 @@
 
             if (childCross.IsStretch)
             {
-                float min = child.Element.GetMinCross(layoutType).ToPx(parentCross, DEFAULT_MIN);
-                float max = child.Element.GetMaxCross(layoutType).ToPx(parentCross, DEFAULT_MAX);
+                double min = child.Element.GetMinCross(layoutType).ToPx(parentCross, DEFAULT_MIN);
+                double max = child.Element.GetMaxCross(layoutType).ToPx(parentCross, DEFAULT_MAX);
 
                 crossFlexSum += childCross.Value;
                 child.Cross = 0f;
@@ -876,8 +876,8 @@
 
             if (childCrossAfter.IsStretch)
             {
-                float min = child.Element.GetMinCrossAfter(layoutType).ToPx(parentCross, DEFAULT_MIN);
-                float max = child.Element.GetMaxCrossAfter(layoutType).ToPx(parentCross, DEFAULT_MAX);
+                double min = child.Element.GetMinCrossAfter(layoutType).ToPx(parentCross, DEFAULT_MIN);
+                double max = child.Element.GetMaxCrossAfter(layoutType).ToPx(parentCross, DEFAULT_MAX);
 
                 crossFlexSum += childCrossAfter.Value;
                 child.CrossAfter = 0f;
@@ -887,14 +887,14 @@
 
             while (crossAxis.Any(item => !item.Frozen))
             {
-                float crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
+                double crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
                     - child.CrossBefore - child.Cross - child.CrossAfter;
 
-                float totalViolation = 0f;
+                double totalViolation = 0f;
 
                 foreach (var item in crossAxis.Where(item => !item.Frozen))
                 {
-                    float actualCross = (item.Factor * crossFreeSpace / crossFlexSum);
+                    double actualCross = (item.Factor * crossFreeSpace / crossFlexSum);
 
                     if (item.ItemType == StretchItem.ItemTypes.Size && !child.Element.GetMain(layoutType).IsStretch)
                     {
@@ -906,7 +906,7 @@
                         child.Main = childSize.Main;
                     }
 
-                    float clamped = Math.Min(item.Max, Math.Max(item.Min, actualCross));
+                    double clamped = Math.Min(item.Max, Math.Max(item.Min, actualCross));
                     item.Violation = clamped - actualCross;
                     totalViolation += item.Violation;
                     item.Computed = clamped;
@@ -946,10 +946,10 @@
         private static void ProcessChildMainStretching(
             ChildElementInfo child,
             LayoutType layoutType,
-            float parentMain,
-            float parentCross,
-            float borderMainBefore,
-            float borderMainAfter,
+            double parentMain,
+            double parentCross,
+            double borderMainBefore,
+            double borderMainAfter,
             UnitValue elementChildMainBefore,
             UnitValue elementChildMainAfter,
             int childIndex)
@@ -964,14 +964,14 @@
             if (childMainAfter.IsAuto)
                 childMainAfter = elementChildMainAfter;
 
-            float mainFlexSum = 0f;
+            double mainFlexSum = 0f;
             var mainAxis = new List<StretchItem>();
 
             // Collect stretch main items
             if (childMainBefore.IsStretch)
             {
-                float min = child.Element.GetMinMainBefore(layoutType).ToPx(parentMain, DEFAULT_MIN);
-                float max = child.Element.GetMaxMainBefore(layoutType).ToPx(parentMain, DEFAULT_MAX);
+                double min = child.Element.GetMinMainBefore(layoutType).ToPx(parentMain, DEFAULT_MIN);
+                double max = child.Element.GetMaxMainBefore(layoutType).ToPx(parentMain, DEFAULT_MAX);
 
                 mainFlexSum += childMainBefore.Value;
                 mainAxis.Add(new StretchItem(childIndex, childMainBefore.Value, StretchItem.ItemTypes.Before, min, max));
@@ -979,8 +979,8 @@
 
             if (childMain.IsStretch)
             {
-                float min = child.Element.GetMinMain(layoutType).ToPx(parentMain, DEFAULT_MIN);
-                float max = child.Element.GetMaxMain(layoutType).ToPx(parentMain, DEFAULT_MAX);
+                double min = child.Element.GetMinMain(layoutType).ToPx(parentMain, DEFAULT_MIN);
+                double max = child.Element.GetMaxMain(layoutType).ToPx(parentMain, DEFAULT_MAX);
 
                 mainFlexSum += childMain.Value;
                 mainAxis.Add(new StretchItem(childIndex, childMain.Value, StretchItem.ItemTypes.Size, min, max));
@@ -988,8 +988,8 @@
 
             if (childMainAfter.IsStretch)
             {
-                float min = child.Element.GetMinMainAfter(layoutType).ToPx(parentMain, DEFAULT_MIN);
-                float max = child.Element.GetMaxMainAfter(layoutType).ToPx(parentMain, DEFAULT_MAX);
+                double min = child.Element.GetMinMainAfter(layoutType).ToPx(parentMain, DEFAULT_MIN);
+                double max = child.Element.GetMaxMainAfter(layoutType).ToPx(parentMain, DEFAULT_MAX);
 
                 mainFlexSum += childMainAfter.Value;
                 mainAxis.Add(new StretchItem(childIndex, childMainAfter.Value, StretchItem.ItemTypes.After, min, max));
@@ -997,18 +997,18 @@
 
             while (mainAxis.Any(item => !item.Frozen))
             {
-                float mainFreeSpace = parentMain - borderMainBefore - borderMainAfter
+                double mainFreeSpace = parentMain - borderMainBefore - borderMainAfter
                     - child.MainBefore - child.Main - child.MainAfter;
 
-                float totalViolation = 0f;
+                double totalViolation = 0f;
 
                 foreach (var item in mainAxis.Where(item => !item.Frozen))
                 {
-                    float actualMain = (item.Factor * mainFreeSpace / mainFlexSum);
+                    double actualMain = (item.Factor * mainFreeSpace / mainFlexSum);
 
                     if (item.ItemType == StretchItem.ItemTypes.Size)
                     {
-                        float childCross = child.Element.GetCross(layoutType).IsStretch ?
+                        double childCross = child.Element.GetCross(layoutType).IsStretch ?
                             child.Cross : parentCross;
 
                         var childSize = DoLayout(child.Element, layoutType, actualMain, childCross);
@@ -1020,7 +1020,7 @@
                         }
                     }
 
-                    float clamped = Math.Min(item.Max, Math.Max(item.Min, actualMain));
+                    double clamped = Math.Min(item.Max, Math.Max(item.Min, actualMain));
                     item.Violation = clamped - actualMain;
                     totalViolation += item.Violation;
                     item.Computed = clamped;
@@ -1060,9 +1060,9 @@
         private static void ProcessChildCrossSpacing(
             ChildElementInfo child,
             LayoutType layoutType,
-            float parentCross,
-            float borderCrossBefore,
-            float borderCrossAfter,
+            double parentCross,
+            double borderCrossBefore,
+            double borderCrossAfter,
             UnitValue elementChildCrossBefore,
             UnitValue elementChildCrossAfter)
         {
@@ -1079,15 +1079,15 @@
             if (!childCrossBefore.IsStretch && !childCrossAfter.IsStretch)
                 return;
 
-            float crossFlexSum = 0f;
+            double crossFlexSum = 0f;
             var crossAxis = new List<StretchItem>();
             int childIndex = 0; // Just a placeholder since we're only dealing with this specific child
 
             // Collect stretch cross items
             if (childCrossBefore.IsStretch)
             {
-                float min = child.Element.GetMinCrossBefore(layoutType).ToPx(parentCross, DEFAULT_MIN);
-                float max = child.Element.GetMaxCrossBefore(layoutType).ToPx(parentCross, DEFAULT_MAX);
+                double min = child.Element.GetMinCrossBefore(layoutType).ToPx(parentCross, DEFAULT_MIN);
+                double max = child.Element.GetMaxCrossBefore(layoutType).ToPx(parentCross, DEFAULT_MAX);
 
                 crossFlexSum += childCrossBefore.Value;
                 child.CrossBefore = 0f;
@@ -1097,8 +1097,8 @@
 
             if (childCrossAfter.IsStretch)
             {
-                float min = child.Element.GetMinCrossAfter(layoutType).ToPx(parentCross, DEFAULT_MIN);
-                float max = child.Element.GetMaxCrossAfter(layoutType).ToPx(parentCross, DEFAULT_MAX);
+                double min = child.Element.GetMinCrossAfter(layoutType).ToPx(parentCross, DEFAULT_MIN);
+                double max = child.Element.GetMaxCrossAfter(layoutType).ToPx(parentCross, DEFAULT_MAX);
 
                 crossFlexSum += childCrossAfter.Value;
                 child.CrossAfter = 0f;
@@ -1108,16 +1108,16 @@
 
             while (crossAxis.Any(item => !item.Frozen))
             {
-                float crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
+                double crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
                     - child.CrossBefore - child.Cross - child.CrossAfter;
 
-                float totalViolation = 0f;
+                double totalViolation = 0f;
 
                 foreach (var item in crossAxis.Where(item => !item.Frozen))
                 {
-                    float actualCross = (item.Factor * crossFreeSpace / crossFlexSum);
+                    double actualCross = (item.Factor * crossFreeSpace / crossFlexSum);
 
-                    float clamped = Math.Min(item.Max, Math.Max(item.Min, actualCross));
+                    double clamped = Math.Min(item.Max, Math.Max(item.Min, actualCross));
                     item.Violation = clamped - actualCross;
                     totalViolation += item.Violation;
                     item.Computed = clamped;
@@ -1151,7 +1151,7 @@
             }
         }
 
-        private static UISize DoLayout(Element element, LayoutType parentLayoutType, float parentMain, float parentCross, float? fixedCross = null)
+        private static UISize DoLayout(Element element, LayoutType parentLayoutType, double parentMain, double parentCross, double? fixedCross = null)
         {
             var size = DoLayout(element, parentLayoutType, parentMain, parentCross);
 
@@ -1171,7 +1171,7 @@
             return size;
         }
 
-        private static void SetElementBounds(Element element, LayoutType layoutType, float mainPos, float crossPos, float main, float cross)
+        private static void SetElementBounds(Element element, LayoutType layoutType, double mainPos, double crossPos, double main, double cross)
         {
             if (layoutType == LayoutType.Row)
             {
@@ -1189,7 +1189,7 @@
             }
         }
 
-        private void ComputeAbsolutePositions(float parentX = 0f, float parentY = 0f)
+        private void ComputeAbsolutePositions(double parentX = 0f, double parentY = 0f)
         {
             // Set absolute position based on parent's position
             X = parentX + RelativeX;

@@ -1,8 +1,9 @@
 ﻿using FontStashSharp;
 using Prowl.PaperUI;
 using Prowl.PaperUI.Extras;
+using Prowl.Vector;
+
 using System.Drawing;
-using System.Numerics;
 using System.Reflection;
 
 namespace Shared
@@ -16,14 +17,14 @@ namespace Shared
         static SpriteFontBase fontTitle;
 
         // Track state for interactive elements
-        static float sliderValue = 0.5f;
+        static double sliderValue = 0.5f;
         static int selectedTabIndex = 0;
         static Vector2 chartPosition = new Vector2(0, 0);
-        static float zoomLevel = 1.0f;
+        static double zoomLevel = 1.0f;
         static bool[] toggleState = { true, false, true, false, true };
 
         // Sample data for visualization
-        static float[] dataPoints = { 0.2f, 0.5f, 0.3f, 0.8f, 0.4f, 0.7f, 0.6f };
+        static double[] dataPoints = { 0.2f, 0.5f, 0.3f, 0.8f, 0.4f, 0.7f, 0.6f };
         static readonly string[] tabNames = { "Dashboard", "Analytics", "Profile", "Settings", "Windows" };
 
         //Theme
@@ -36,7 +37,7 @@ namespace Shared
         static Color[] colorPalette;
         static bool isDark;
 
-        static float time = 0;
+        static double time = 0;
 
         public static void Initialize()
         {
@@ -233,7 +234,7 @@ namespace Shared
                     using (Paper.Box("LogoText")
                         .PositionType(PositionType.SelfDirected)
                         .Left(50 + 15)
-                        .Text(Text.Left("PaperUI Demo", fontTitle, textColor, FontSystemEffect.Blurry, 1))
+                        .Text(Text.Left("PaperUI Demo", fontTitle, textColor))
                         .Enter()) { }
                 }
 
@@ -418,7 +419,7 @@ namespace Shared
                     Color tabColor = isSelected ? primaryColor : lightTextColor;
 
                     // Calculate tab width (dividing space equally)
-                    float tabWidth = 1.0f / tabNames.Length;
+                    double tabWidth = 1.0f / tabNames.Length;
 
                     using (Paper.Box($"Tab_{i}")
                         .Width(Paper.Stretch(tabWidth))
@@ -556,11 +557,11 @@ namespace Shared
                         .Enter())
                     {
                         using (Paper.Box("ChartCanvas")
-                            .Translate(chartPosition.X, chartPosition.Y)
+                            .Translate(chartPosition.x, chartPosition.y)
                             .Scale(zoomLevel)
                             //.TransformSelf((rect) => {
                             //    Transform t = Transform.CreateTranslation(chartPosition) * Transform.CreateScale(zoomLevel);
-                            //    //t.RotateWithOrigin(MathF.Abs(MathF.Sin(time * 0.01f)), rect.Center.X, rect.Center.Y);
+                            //    //t.RotateWithOrigin(Math.Abs(Math.Sin(time * 0.01f)), rect.Center.X, rect.Center.Y);
                             //    return t;
                             //})
                             .Enter())
@@ -571,31 +572,31 @@ namespace Shared
                                 // Draw grid lines
                                 for (int i = 0; i <= 5; i++)
                                 {
-                                    float y = rect.Y + (rect.Height / 5) * i;
+                                    double y = rect.y + (rect.height / 5) * i;
                                     vg.BeginPath();
-                                    vg.MoveTo(rect.X, y);
-                                    vg.LineTo(rect.X + rect.Width, y);
-                                    vg.StrokeColor(lightTextColor);
-                                    vg.StrokeWidth(1);
+                                    vg.MoveTo(rect.x, y);
+                                    vg.LineTo(rect.x + rect.width, y);
+                                    vg.SetStrokeColor(lightTextColor);
+                                    vg.SetStrokeWidth(1);
                                     vg.Stroke();
                                 }
 
                                 // Draw animated data points
                                 vg.BeginPath();
-                                float pointSpacing = rect.Width / (dataPoints.Length - 1);
-                                float animatedValue;
+                                double pointSpacing = rect.width / (dataPoints.Length - 1);
+                                double animatedValue;
 
                                 // Draw fill
-                                vg.MoveTo(rect.X, rect.Y + rect.Height);
+                                vg.MoveTo(rect.x, rect.y + rect.height);
 
                                 for (int i = 0; i < dataPoints.Length; i++)
                                 {
-                                    animatedValue = dataPoints[i] + MathF.Sin(time * 0.25f + i * 0.5f) * 0.1f;
-                                    //animatedValue = MathF.Clamp(animatedValue, 0.1f, 0.9f);
-                                    animatedValue = MathF.Min(MathF.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
+                                    animatedValue = dataPoints[i] + Math.Sin(time * 0.25f + i * 0.5f) * 0.1f;
+                                    //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
+                                    animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    float x = rect.X + i * pointSpacing;
-                                    float y = rect.Y + rect.Height - (animatedValue * rect.Height);
+                                    double x = rect.x + i * pointSpacing;
+                                    double y = rect.y + rect.height - (animatedValue * rect.height);
 
                                     if (i == 0)
                                         vg.MoveTo(x, y);
@@ -604,17 +605,20 @@ namespace Shared
                                 }
 
                                 // Complete the fill path
-                                vg.LineTo(rect.X + rect.Width, rect.Y + rect.Height);
-                                vg.LineTo(rect.X, rect.Y + rect.Height);
+                                vg.LineTo(rect.x + rect.width, rect.y + rect.height);
+                                vg.LineTo(rect.x, rect.y + rect.height);
 
                                 // Fill with gradient
-                                var paint = vg.LinearGradient(
-                                    rect.X, rect.Y,
-                                    rect.X, rect.Y + rect.Height,
-                                    Color.FromArgb(100, primaryColor),
-                                    Color.FromArgb(10, primaryColor));
-                                vg.FillPaint(paint);
-                                vg.Fill();
+                                //var paint = vg.LinearGradient(
+                                //    rect.x, rect.y,
+                                //    rect.x, rect.y + rect.height,
+                                //    Color.FromArgb(100, primaryColor),
+                                //    Color.FromArgb(10, primaryColor));
+                                //vg.SetFillPaint(paint);
+                                vg.SaveState();
+                                vg.SetLinearBrush(rect.x, rect.y, rect.x, rect.y + rect.height, Color.FromArgb(100, primaryColor), Color.FromArgb(10, primaryColor));
+                                vg.FillComplex();
+                                vg.RestoreState();
 
                                 vg.ClosePath();
 
@@ -622,12 +626,12 @@ namespace Shared
                                 vg.BeginPath();
                                 for (int i = 0; i < dataPoints.Length; i++)
                                 {
-                                    animatedValue = dataPoints[i] + MathF.Sin(time * 0.25f + i * 0.5f) * 0.1f;
-                                    //animatedValue = MathF.Clamp(animatedValue, 0.1f, 0.9f);
-                                    animatedValue = MathF.Min(MathF.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
+                                    animatedValue = dataPoints[i] + Math.Sin(time * 0.25f + i * 0.5f) * 0.1f;
+                                    //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
+                                    animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    float x = rect.X + i * pointSpacing;
-                                    float y = rect.Y + rect.Height - (animatedValue * rect.Height);
+                                    double x = rect.x + i * pointSpacing;
+                                    double y = rect.y + rect.height - (animatedValue * rect.height);
 
                                     if (i == 0)
                                         vg.MoveTo(x, y);
@@ -635,28 +639,28 @@ namespace Shared
                                         vg.LineTo(x, y);
                                 }
 
-                                vg.StrokeColor(primaryColor);
-                                vg.StrokeWidth(3);
+                                vg.SetStrokeColor(primaryColor);
+                                vg.SetStrokeWidth(3);
                                 vg.Stroke();
 
                                 // Draw points
                                 for (int i = 0; i < dataPoints.Length; i++)
                                 {
-                                    animatedValue = dataPoints[i] + MathF.Sin(time * 0.25f + i * 0.5f) * 0.1f;
-                                    //animatedValue = MathF.Clamp(animatedValue, 0.1f, 0.9f);
-                                    animatedValue = MathF.Min(MathF.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
+                                    animatedValue = dataPoints[i] + Math.Sin(time * 0.25f + i * 0.5f) * 0.1f;
+                                    //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
+                                    animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    float x = rect.X + i * pointSpacing;
-                                    float y = rect.Y + rect.Height - (animatedValue * rect.Height);
+                                    double x = rect.x + i * pointSpacing;
+                                    double y = rect.y + rect.height - (animatedValue * rect.height);
 
                                     vg.BeginPath();
                                     vg.Circle(x, y, 6);
-                                    vg.FillColor(Color.White);
+                                    vg.SetFillColor(Color.White);
                                     vg.Fill();
 
                                     vg.BeginPath();
                                     vg.Circle(x, y, 4);
-                                    vg.FillColor(primaryColor);
+                                    vg.SetFillColor(primaryColor);
                                     vg.Fill();
                                 }
 
@@ -784,8 +788,8 @@ namespace Shared
                             //.Style(BoxStyle.SolidRounded(Color.FromArgb(30, 0, 0, 0), 10f))
                             .Margin(0, 0, 20, 0)
                             .OnHeld((rect) => {
-                                float parentWidth = rect.Width;
-                                float pointerX = Paper.PointerPos.X - rect.X;
+                                double parentWidth = rect.width;
+                                double pointerX = Paper.PointerPos.x - rect.x;
 
                                 // Calculate new slider value based on pointer position
                                 sliderValue = Math.Clamp(pointerX / parentWidth, 0f, 1f);
@@ -819,15 +823,15 @@ namespace Shared
                     {
                         // Add a simple pie chart visualization
                         Paper.AddActionElement((vg, rect) => {
-                            float centerX = rect.X + rect.Width / 2;
-                            float centerY = rect.Y + rect.Height / 2;
-                            float radius = Math.Min(rect.Width, rect.Height) * 0.4f;
+                            double centerX = rect.x + rect.width / 2;
+                            double centerY = rect.y + rect.height / 2;
+                            double radius = Math.Min(rect.width, rect.height) * 0.4f;
 
-                            float startAngle = 0;
-                            float[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
+                            double startAngle = 0;
+                            double[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
 
                             // Normalize Values
-                            float total = values.Sum();
+                            double total = values.Sum();
                             for (int i = 0; i < values.Length; i++)
                                 values[i] /= total;
 
@@ -835,38 +839,38 @@ namespace Shared
                             for (int i = 0; i < values.Length; i++)
                             {
                                 // Calculate angles
-                                float angle = values[i] * MathF.PI * 2;
-                                float endAngle = startAngle + angle;
+                                double angle = values[i] * Math.PI * 2;
+                                double endAngle = startAngle + angle;
 
                                 // Draw pie slice
                                 vg.BeginPath();
                                 vg.MoveTo(centerX, centerY);
-                                vg.Arc(centerX, centerY, radius, startAngle, endAngle, Winding.ClockWise);
+                                vg.Arc(centerX, centerY, radius, startAngle, endAngle);
                                 vg.LineTo(centerX, centerY);
-                                vg.FillColor(colorPalette[i % colorPalette.Length]);
+                                vg.SetFillColor(colorPalette[i % colorPalette.Length]);
                                 vg.Fill();
 
                                 // Draw outline
                                 vg.BeginPath();
                                 vg.MoveTo(centerX, centerY);
-                                vg.Arc(centerX, centerY, radius, startAngle, endAngle, Winding.ClockWise);
+                                vg.Arc(centerX, centerY, radius, startAngle, endAngle);
                                 vg.LineTo(centerX, centerY);
-                                vg.StrokeColor(Color.White);
-                                vg.StrokeWidth(2);
+                                vg.SetStrokeColor(Color.White);
+                                vg.SetStrokeWidth(2);
                                 vg.Stroke();
 
                                 // Draw percentage labels
-                                float labelAngle = startAngle + angle / 2;
-                                float labelRadius = radius * 0.7f;
-                                float labelX = centerX + MathF.Cos(labelAngle) * labelRadius;
-                                float labelY = centerY + MathF.Sin(labelAngle) * labelRadius;
+                                double labelAngle = startAngle + angle / 2;
+                                double labelRadius = radius * 0.7f;
+                                double labelX = centerX + Math.Cos(labelAngle) * labelRadius;
+                                double labelY = centerY + Math.Sin(labelAngle) * labelRadius;
 
                                 string label = $"{values[i] * 100:F0}%";
-                                vg.FillColor(Color.White);
-                                vg.TextAlign(Align.Center | Align.Middle);
+                                vg.SetFillColor(Color.White);
+                                //vg.TextAlign(Align.Center | Align.Middle);
                                 //vg.FontSize(16);
                                 //vg.Text(labelX, labelY, label);
-                                vg.Text(fontSmall, label, labelX, labelY);
+                                vg.DrawText(fontSmall, label, labelX, labelY, Color.White);
 
                                 // Move to next slice
                                 startAngle = endAngle;
@@ -875,7 +879,7 @@ namespace Shared
                             // Draw center circle
                             vg.BeginPath();
                             vg.Circle(centerX, centerY, radius * 0.4f);
-                            vg.FillColor(Color.White);
+                            vg.SetFillColor(Color.White);
                             vg.Fill();
 
                             // Draw center text
@@ -1065,30 +1069,30 @@ namespace Shared
                             Paper.AddActionElement((vg, rect) => {
                                 int days = 7;
                                 int weeks = 4;
-                                float cellWidth = rect.Width / days;
-                                float cellHeight = rect.Height / weeks;
-                                float cellSize = Math.Min(cellWidth, cellHeight) * 0.8f;
-                                float cellMargin = Math.Min(cellWidth, cellHeight) * 0.1f;
+                                double cellWidth = rect.width / days;
+                                double cellHeight = rect.height / weeks;
+                                double cellSize = Math.Min(cellWidth, cellHeight) * 0.8f;
+                                double cellMargin = Math.Min(cellWidth, cellHeight) * 0.1f;
 
                                 for (int week = 0; week < days; week++)
                                 {
                                     for (int day = 0; day < weeks; day++)
-                                    {
+                                    {   
                                         // Calculate position
-                                        float x = rect.X + week * cellWidth + cellMargin;
-                                        float y = rect.Y + day * cellHeight + cellMargin;
+                                        double x = rect.x + week * cellWidth + cellMargin;
+                                        double y = rect.y + day * cellHeight + cellMargin;
 
                                         // Generate intensity based on position and time
-                                        float value = MathF.Sin(week * 0.4f + day * 0.7f + time) * 0.5f + 0.5f;
-                                        value = MathF.Pow(value, 1.5f);
+                                        double value = Math.Sin(week * 0.4f + day * 0.7f + time) * 0.5f + 0.5f;
+                                        value = Math.Pow(value, 1.5f);
 
                                         // Draw cell
                                         vg.BeginPath();
-                                        vg.RoundedRect(x, y, cellSize, cellSize, 3);
+                                        vg.RoundedRect(x, y, cellSize, cellSize, 3, 3, 3, 3);
 
                                         // Apply color based on intensity
                                         int alpha = (int)(40 + value * 215);
-                                        vg.FillColor(Color.FromArgb(alpha, primaryColor));
+                                        vg.SetFillColor(Color.FromArgb(alpha, primaryColor));
                                         vg.Fill();
                                     }
                                 }
@@ -1113,7 +1117,7 @@ namespace Shared
 
                         // Skill bars
                         string[] skills = { "Programming", "Design", "Communication", "Leadership", "Problem Solving" };
-                        float[] skillLevels = { 0.9f, 0.75f, 0.8f, 0.6f, 0.85f };
+                        double[] skillLevels = { 0.9f, 0.75f, 0.8f, 0.6f, 0.85f };
 
                         using (Paper.Column("SkillBars")
                             .Margin(20)
@@ -1140,7 +1144,7 @@ namespace Shared
                                         .Enter())
                                     {
                                         // Animate the skill level with time
-                                        float animatedLevel = skillLevels[i];
+                                        double animatedLevel = skillLevels[i];
 
                                         using (Paper.Box($"SkillBarFg_{i}")
                                             .Width(Paper.Percent(animatedLevel * 100f))

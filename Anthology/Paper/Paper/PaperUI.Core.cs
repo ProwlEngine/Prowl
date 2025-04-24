@@ -1,9 +1,10 @@
-﻿using Prowl.PaperUI.Graphics;
-using Prowl.PaperUI.LayoutEngine;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Drawing;
-using System.Numerics;
 using System.Runtime.CompilerServices;
+
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {
@@ -18,10 +19,10 @@ namespace Prowl.PaperUI
         private static readonly Dictionary<ulong, Element> _createdElements = [];
 
         // Rendering context
-        private static Canvas _nvgContext;
+        private static Canvas _canvas;
         private static ICanvasRenderer _renderer;
-        private static float _width;
-        private static float _height;
+        private static double _width;
+        private static double _height;
         private static Stopwatch _timer = new();
 
         // Events
@@ -51,7 +52,7 @@ namespace Prowl.PaperUI
         /// <param name="renderer">The canvas renderer implementation</param>
         /// <param name="width">Viewport width</param>
         /// <param name="height">Viewport height</param>
-        public static void Initialize(ICanvasRenderer renderer, float width, float height)
+        public static void Initialize(ICanvasRenderer renderer, double width, double height)
         {
             _width = width;
             _height = height;
@@ -73,7 +74,7 @@ namespace Prowl.PaperUI
             _elementStack.Push(_rootElement);
 
             // Create canvas
-            _nvgContext = new Canvas(renderer, true);
+            _canvas = new Canvas(renderer);
 
             InitializeInput();
         }
@@ -81,7 +82,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Updates the viewport resolution.
         /// </summary>
-        public static void SetResolution(float width, float height)
+        public static void SetResolution(double width, double height)
         {
             _width = width;
             _height = height;
@@ -92,7 +93,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="deltaTime">Time elapsed since the last frame</param>
         /// <param name="frameBufferScale">Optional framebuffer scaling factor</param>
-        public static void BeginFrame(float deltaTime, Vector2? frameBufferScale = null)
+        public static void BeginFrame(double deltaTime, Vector2? frameBufferScale = null)
         {
             _timer.Restart();
             SetTime(deltaTime);
@@ -112,9 +113,8 @@ namespace Prowl.PaperUI
             _IDStack.Push(0);
             _createdElements.Clear();
 
-            // Reset rendering state
-            _nvgContext.ResetScissor();
-            _nvgContext.ResetState();
+            // Reset Canvas
+            _canvas.Clear();
 
             StartInputFrame(frameBufferScale ?? new Vector2(1, 1));
         }
@@ -136,7 +136,7 @@ namespace Prowl.PaperUI
             CallPostLayoutRecursive(_rootElement);
 
             // Reset rendering state
-            _nvgContext.ResetState();
+            _canvas.ResetState();
 
             // Input and interaction handling
             HandleInteractions();
@@ -148,7 +148,7 @@ namespace Prowl.PaperUI
             CountOfAllElements = (uint)_createdElements.Count;
 
             // Finalize rendering
-            _nvgContext.Flush();
+            _canvas.Render();
             EndInputFrame();
 
             // Cleanup
@@ -184,34 +184,38 @@ namespace Prowl.PaperUI
                 return;
 
             var rect = new Rect(element.X, element.Y, element.LayoutWidth, element.LayoutHeight);
-            _nvgContext.SaveState();
+            _canvas.SaveState();
 
             // Apply element transform
-            Transform styleTransform = element._elementStyle.GetTransformForElement(rect);
-            _nvgContext._currentState.Transform.Premultiply(ref styleTransform);
+            Transform2D styleTransform = element._elementStyle.GetTransformForElement(rect);
+            _canvas.TransformBy(styleTransform);
 
             // Draw background
             var rounded = (Vector4)element._elementStyle.GetValue(GuiProp.Rounded);
             var backgroundColor = (Color)element._elementStyle.GetValue(GuiProp.BackgroundColor);
-            _nvgContext.BeginPath();
-            _nvgContext.RoundedRectVarying(rect.X, rect.Y, rect.Width, rect.Height, rounded.X, rounded.Y, rounded.Z, rounded.W);
-            _nvgContext.FillColor(backgroundColor);
-            _nvgContext.Fill();
+            //_canvas.BeginPath();
+            //_canvas.RoundedRect(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w);
+            //_canvas.SetFillColor(backgroundColor);
+            //_canvas.Fill();
+            if(backgroundColor.A > 0)
+                _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, backgroundColor);
 
             // Draw border if needed
             var borderColor = (Color)element._elementStyle.GetValue(GuiProp.BorderColor);
-            var borderWidth = (float)element._elementStyle.GetValue(GuiProp.BorderWidth);
+            var borderWidth = (double)element._elementStyle.GetValue(GuiProp.BorderWidth);
             if (borderWidth > 0.0f && borderColor.A > 0)
             {
-                _nvgContext.StrokeColor(borderColor);
-                _nvgContext.StrokeWidth(borderWidth);
-                _nvgContext.Stroke();
+                _canvas.BeginPath();
+                _canvas.RoundedRect(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w);
+                _canvas.SetStrokeColor(borderColor);
+                _canvas.SetStrokeWidth(borderWidth);
+                _canvas.Stroke();
             }
 
             // Apply scissor if enabled
             if (element._scissorEnabled)
             {
-                _nvgContext.IntersectScissor(rect.X, rect.Y, rect.Width, rect.Height);
+                _canvas.IntersectScissor(rect.x, rect.y, rect.width, rect.height);
             }
 
             // Process render commands
@@ -219,12 +223,12 @@ namespace Prowl.PaperUI
             {
                 foreach (var cmd in element._renderCommands)
                 {
-                    _nvgContext.SaveState();
+                    _canvas.SaveState();
                     if (cmd.Type == ElementRenderCommand.ElementType.Text)
-                        cmd.Text?.Draw(_nvgContext, rect);
+                        cmd.Text?.Draw(_canvas, rect);
                     else if (cmd.Type == ElementRenderCommand.ElementType.RenderAction)
-                        cmd.RenderAction?.Invoke(_nvgContext, rect);
-                    _nvgContext.RestoreState();
+                        cmd.RenderAction?.Invoke(_canvas, rect);
+                    _canvas.RestoreState();
                 }
             }
 
@@ -233,7 +237,7 @@ namespace Prowl.PaperUI
             foreach (var child in sortedChildren)
                 RenderElement(child);
 
-            _nvgContext.RestoreState();
+            _canvas.RestoreState();
         }
 
         #endregion
@@ -345,17 +349,17 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a stretch unit value with the specified factor.
         /// </summary>
-        public static UnitValue Stretch(float factor = 1f) => UnitValue.Stretch(factor);
+        public static UnitValue Stretch(double factor = 1f) => UnitValue.Stretch(factor);
 
         /// <summary>
         /// Creates a pixel-based unit value.
         /// </summary>
-        public static UnitValue Pixels(float value) => UnitValue.Pixels(value);
+        public static UnitValue Pixels(double value) => UnitValue.Pixels(value);
 
         /// <summary>
         /// Creates a percentage-based unit value with optional pixel offset.
         /// </summary>
-        public static UnitValue Percent(float value, float pixelOffset = 0f) => UnitValue.Percentage(value, pixelOffset);
+        public static UnitValue Percent(double value, double pixelOffset = 0f) => UnitValue.Percentage(value, pixelOffset);
 
         /// <summary>
         /// Creates an auto-sized unit value.

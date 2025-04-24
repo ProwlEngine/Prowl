@@ -1,5 +1,4 @@
-﻿using Prowl.PaperUI;
-using System.Numerics;
+﻿using Prowl.Vector;
 
 namespace Prowl.PaperUI.LayoutEngine
 {
@@ -19,7 +18,7 @@ namespace Prowl.PaperUI.LayoutEngine
         public Action<Rect>? OnRelease { get; set; }
         public Action<Rect>? OnDoubleClick { get; set; }
         public Action<Rect>? OnRightClick { get; set; }
-        public Action<float, Rect>? OnScroll { get; set; }
+        public Action<double, Rect>? OnScroll { get; set; }
         public Action<Rect>? OnHover { get; set; }
         public Action<Rect>? OnEnter { get; set; }
         public Action<Rect>? OnLeave { get; set; }
@@ -42,16 +41,16 @@ namespace Prowl.PaperUI.LayoutEngine
         internal List<Element> GetSortedChildren => Children.OrderBy(c => c.ZLayer).ToList();
 
         // Layout results
-        internal float X;
-        internal float Y;
-        internal float LayoutWidth;
-        internal float LayoutHeight;
-        internal float RelativeX;
-        internal float RelativeY;
+        internal double X;
+        internal double Y;
+        internal double LayoutWidth;
+        internal double LayoutHeight;
+        internal double RelativeX;
+        internal double RelativeY;
         internal Rect LayoutRect => new Rect(X, Y, LayoutWidth, LayoutHeight);
 
         // Content sizing for auto-sized elements
-        internal Func<float?, float?, (float, float)?> ContentSizer { get; set; }
+        internal Func<double?, double?, (double, double)?> ContentSizer { get; set; }
 
         internal void AddRenderElement(ElementRenderCommand element)
         {
