@@ -11,12 +11,13 @@
 > [!IMPORTANT]
 > Paper is a very new library. While an earlier iteration is actively used within the Prowl Game Engine, this specific library hasn't yet established a track record of reliability in production environments.
 
+### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 # <p align="center">An Immediate-Mode UI Library</p>
 
-### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 
 <span id="readme-top"></span>
 
+### <p align="center">Table of Contents</p>
 1. [About The Project](#-about-the-project-)
 2. [Features](#-features-)
 3. [Getting Started](#-getting-started-)
