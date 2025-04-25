@@ -46,16 +46,12 @@ Paper follows the immediate-mode GUI (IMGUI) paradigm, where UI elements are cre
 Here's a basic example:
 ```cs
 // Create a simple button
-using (Paper.Box("MyButton")
+Paper.Box("MyButton")
     .Size(100)
     .BackgroundColor(Color.ForestGreen)
     .Rounded(8)
     .Text(Text.Center("Click Me", myFont, Color.White))
-    .OnClick((rect) => Console.WriteLine("Button clicked!"))
-    .Enter())
-{
-    // Child elements would go here
-}
+    .OnClick((rect) => Console.WriteLine("Button clicked!"));
 ```
 Which produces this button you can click on:
 
