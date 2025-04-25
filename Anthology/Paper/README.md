@@ -8,6 +8,9 @@
 [![Discord](https://img.shields.io/discord/1151582593519722668?logo=discord
 )](https://discord.gg/BqnJ9Rn4sn)
 
+> [!IMPORTANT]
+> Paper is a very new library. While an earlier iteration is actively used within the Prowl Game Engine, this specific library hasn't yet established a track record of reliability in production environments.
+
 # <p align="center">An Immediate-Mode UI Library</p>
 
 <span id="readme-top"></span>
