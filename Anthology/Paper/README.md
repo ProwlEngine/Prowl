@@ -198,6 +198,10 @@ using (Paper.Box("CustomPositionedElement")
 
 ## Styling and Animation
 Paper provides a very powerful yet simple way to both draw and animate your UI
+> [!TIP]
+> Styling is executed in order of calls, so in this case, if YourCondition is true, even if it's being hovered, If(YourCondition) will take priority since it comes after.
+> [!TIP]
+> .Hovered, .Active and so on, are all just automatic versions of If() like If(Paper.IsNodeHovered(TheNode))
 ```cs
 // Basic styling
 using (Paper.Box("StyledElement")
