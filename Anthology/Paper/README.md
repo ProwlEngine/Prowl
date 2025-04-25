@@ -13,6 +13,8 @@
 
 # <p align="center">An Immediate-Mode UI Library</p>
 
+### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
+
 <span id="readme-top"></span>
 
 1. [About The Project](#-about-the-project-)
@@ -32,8 +34,6 @@
 # <span align="center">📝 About The Project 📝
 
 Paper is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** immediate-mode UI library built for the Prowl Game Engine. It provides a lightweight, flexible way to create highly reactive user interfaces with minimal effort.
-
-### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 
 
 
