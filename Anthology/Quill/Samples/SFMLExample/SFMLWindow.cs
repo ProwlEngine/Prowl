@@ -39,7 +39,7 @@ namespace SFMLExample
         private SpriteFontBase AlamakFont32;
         
         // Input tracking
-        private Vector2f _lastMousePos;
+        private Vector2i _lastMousePos;
         private Clock _clock = new Clock();
         
         public SFMLWindow(uint width, uint height, string title)
@@ -65,9 +65,6 @@ namespace SFMLExample
             _window.Closed += (_, _) => _window.Close();
             _window.Resized += OnResize;
             _window.MouseWheelScrolled += OnMouseWheelScrolled;
-            _window.MouseButtonPressed += OnMouseButtonPressed;
-            _window.MouseButtonReleased += OnMouseButtonReleased;
-            _window.MouseMoved += OnMouseMoved;
             
             // Initialize everything
             Initialize();
@@ -126,37 +123,10 @@ namespace SFMLExample
             if (_zoom < 0.1) _zoom = 0.1;
         }
         
-        private void OnMouseButtonPressed(object sender, MouseButtonEventArgs e)
-        {
-            if (e.Button == Mouse.Button.Left)
-            {
-                _lastMousePos = new Vector2f(e.X, e.Y);
-            }
-        }
-        
-        private void OnMouseButtonReleased(object sender, MouseButtonEventArgs e)
-        {
-            // Nothing needed for release
-        }
-        
-        private void OnMouseMoved(object sender, MouseMoveEventArgs e)
-        {
-            // Pan with left mouse button
-            if (Mouse.IsButtonPressed(Mouse.Button.Left))
-            {
-                Vector2f currentPos = new Vector2f(e.X, e.Y);
-                Vector2f delta = new Vector2f(currentPos.X - _lastMousePos.X, currentPos.Y - _lastMousePos.Y);
-                
-                _offset.x += delta.X * (1.0 / _zoom);
-                _offset.y += delta.Y * (1.0 / _zoom);
-                
-                _lastMousePos = currentPos;
-            }
-        }
-        
         public void Run()
         {
             // Main loop
+            DateTime now = DateTime.UtcNow;
             while (_window.IsOpen)
             {
                 // Process events
@@ -164,10 +134,12 @@ namespace SFMLExample
                 
                 // Handle input
                 HandleInput();
-                
+
                 // Update
-                float deltaTime = _clock.Restart().AsSeconds();
-                
+                //float deltaTime = _clock.Restart().AsSeconds();
+                float deltaTime = (float)(DateTime.UtcNow - now).TotalSeconds;
+                now = DateTime.UtcNow;
+
                 // Clear the canvas for new frame
                 _canvas.Clear();
                 
@@ -193,6 +165,18 @@ namespace SFMLExample
                 _rotation += 10.0 * deltaTime;
             if (Keyboard.IsKeyPressed(Keyboard.Key.E))
                 _rotation -= 10.0 * deltaTime;
+
+
+            Vector2i currentPos = Mouse.GetPosition(_window);
+            if (Mouse.IsButtonPressed(Mouse.Button.Left))
+            {
+                Vector2f delta = new Vector2f(currentPos.X - _lastMousePos.X, currentPos.Y - _lastMousePos.Y);
+
+                _offset.x += delta.X * (1.0 / _zoom);
+                _offset.y += delta.Y * (1.0 / _zoom);
+            }
+
+            _lastMousePos = currentPos;
         }
         
         public void Dispose()
