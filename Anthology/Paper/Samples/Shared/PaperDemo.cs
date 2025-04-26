@@ -911,7 +911,6 @@ namespace Shared
                         using (Paper.Column("LeftColumn")
                             .Width(Paper.Stretch(0.6))
                             .SetScroll(Scroll.ScrollY)
-                            .Margin(0, 10, 0, 0)
                             .Enter())
                         {
                             double scrollState = Paper.GetElementStorage<ScrollState>(Paper.CurrentParent, "ScrollState", new ScrollState()).Position.y;
