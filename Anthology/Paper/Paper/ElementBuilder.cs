@@ -315,6 +315,8 @@ namespace Prowl.PaperUI
         {
             _element = new LayoutEngine.Element();
             _element.ID = storageHash;
+
+            Paper.PushID(storageHash);
         }
 
         /// <summary>
@@ -864,6 +866,8 @@ namespace Prowl.PaperUI
             // Pop this element from the stack when the using block ends
             if (Paper._elementStack.Count > 1) // Don't pop the root
                 Paper._elementStack.Pop();
+
+            Paper.PopID();
         }
     }
 }
