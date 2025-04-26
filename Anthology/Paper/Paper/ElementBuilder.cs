@@ -1,6 +1,7 @@
 ﻿using System.Drawing;
 
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 using Prowl.Vector;
 
 namespace Prowl.PaperUI
@@ -836,6 +837,200 @@ namespace Prowl.PaperUI
         {
             _element.ZLayer = depth;
             return this;
+        }
+
+        /// <summary>
+        /// Configures scrolling behavior for the element.
+        /// </summary>
+        /// <param name="flags">Flags to control scroll behavior</param>
+        public ElementBuilder SetScroll(Scroll flags)
+        {
+            // Set the scroll flags directly on the element
+            _element.ScrollFlags = flags;
+
+            // Enable clipping for scrollable elements
+            if (flags != Scroll.None)
+            {
+                _element._scissorEnabled = true;
+
+                // Initialize scroll state if not already present
+                if (!Paper.HasElementStorage(_element, "ScrollState"))
+                {
+                    Paper.SetElementStorage(_element, "ScrollState", new ScrollState());
+                }
+
+                // Set up scrolling event handlers
+                ConfigureScrollHandlers();
+            }
+
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the scroll position of the element.
+        /// </summary>
+        public ElementBuilder SetScrollPosition(Vector2 position)
+        {
+            var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+            state.Position = position;
+            Paper.SetElementStorage(_element, "ScrollState", state);
+            return this;
+        }
+
+        /// <summary>
+        /// Sets a callback to customize the rendering of scrollbars.
+        /// </summary>
+        public ElementBuilder CustomScrollbarRenderer(Action<Canvas, Rect, ScrollState> renderer)
+        {
+            // Store the renderer directly on the element
+            _element.CustomScrollbarRenderer = renderer;
+            return this;
+        }
+
+
+
+        /// <summary>
+        /// Configures event handlers for scrolling interactions.
+        /// </summary>
+        private void ConfigureScrollHandlers()
+        {
+            // Update content and viewport sizes after layout
+            OnPostLayout((element, rect) => {
+                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+
+                // Set viewport size to current element size
+                state.ViewportSize = new Vector2(rect.width, rect.height);
+
+                // For content size, we need to measure all children
+                // Here we're assuming content size is the max bounds of all children
+                double maxX = 0;
+                double maxY = 0;
+
+                foreach (var child in element.Children)
+                {
+                    maxX = Math.Max(maxX, child.RelativeX + child.LayoutWidth);
+                    maxY = Math.Max(maxY, child.RelativeY + child.LayoutHeight);
+                }
+
+                state.ContentSize = new Vector2(maxX, maxY);
+                state.ClampScrollPosition();
+
+                Paper.SetElementStorage(_element, "ScrollState", state);
+            });
+
+            // Handle hover events to detect when cursor is over scrollbars
+            OnHover((rect) => {
+                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                Vector2 mousePos = Paper.PointerPos;
+
+                // Check if pointer is over scrollbars
+                state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, rect, _element.ScrollFlags);
+                state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, rect, _element.ScrollFlags);
+
+                Paper.SetElementStorage(_element, "ScrollState", state);
+            });
+
+            // Handle mouse leaving the element
+            OnLeave((rect) => {
+                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                state.IsVerticalScrollbarHovered = false;
+                state.IsHorizontalScrollbarHovered = false;
+                Paper.SetElementStorage(_element, "ScrollState", state);
+            });
+
+            // Handle scrolling with mouse wheel
+            OnScroll((delta, rect) => {
+                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+
+                // Don't handle wheel scrolling if actively dragging scrollbars
+                if (state.IsDraggingVertical || state.IsDraggingHorizontal)
+                    return;
+
+                if ((_element.ScrollFlags & Scroll.ScrollY) != 0)
+                {
+                    state.Position = new Vector2(
+                        state.Position.x,
+                        state.Position.y - delta * 30  // Adjust scroll speed as needed
+                    );
+                }
+                else if ((_element.ScrollFlags & Scroll.ScrollX) != 0)
+                {
+                    state.Position = new Vector2(
+                        state.Position.x - delta * 30,
+                        state.Position.y
+                    );
+                }
+
+                state.ClampScrollPosition();
+                Paper.SetElementStorage(_element, "ScrollState", state);
+            });
+
+            // Handle start scrollbar drag
+            OnDragStart((rect) => {
+                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+
+                if (state.AreScrollbarsHidden(Element.ScrollFlags)) return;
+
+                Vector2 mousePos = Paper.PointerPos;
+
+                // Check if click is on a scrollbar
+                bool onVertical = state.IsPointOverVerticalScrollbar(mousePos, rect, _element.ScrollFlags);
+                bool onHorizontal = state.IsPointOverHorizontalScrollbar(mousePos, rect, _element.ScrollFlags);
+
+                // Start dragging the appropriate scrollbar
+                if (onVertical)
+                {
+                    state.IsDraggingVertical = true;
+                    state.DragStartPosition = mousePos;
+                    state.ScrollStartPosition = state.Position;
+                }
+                else if (onHorizontal)
+                {
+                    state.IsDraggingHorizontal = true;
+                    state.DragStartPosition = mousePos;
+                    state.ScrollStartPosition = state.Position;
+                }
+
+                Paper.SetElementStorage(_element, "ScrollState", state);
+            });
+
+            // Handle dragging scrollbars
+            OnDragging((start, rect) => {
+                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+
+                if (state.AreScrollbarsHidden(Element.ScrollFlags)) return;
+
+                Vector2 mousePos = Paper.PointerPos;
+
+                // Handle scrollbar dragging
+                if (state.IsDraggingVertical)
+                {
+                    state.HandleVerticalScrollbarDrag(mousePos, rect, _element.ScrollFlags);
+                }
+                else if (state.IsDraggingHorizontal)
+                {
+                    state.HandleHorizontalScrollbarDrag(mousePos, rect, _element.ScrollFlags);
+                }
+
+                Paper.SetElementStorage(_element, "ScrollState", state);
+            });
+
+            // Handle after dragging
+            OnDragEnd((startPos, delta, rect) => {
+                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+
+                if (state.AreScrollbarsHidden(Element.ScrollFlags)) return;
+
+                state.IsDraggingVertical = false;
+                state.IsDraggingHorizontal = false;
+
+                // Update hover state on release
+                Vector2 mousePos = Paper.PointerPos;
+                state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, rect, _element.ScrollFlags);
+                state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, rect, _element.ScrollFlags);
+
+                Paper.SetElementStorage(_element, "ScrollState", state);
+            });
         }
 
         #endregion

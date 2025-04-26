@@ -205,7 +205,7 @@ namespace Prowl.PaperUI
             // Draw background
             var rounded = (Vector4)element._elementStyle.GetValue(GuiProp.Rounded);
             var backgroundColor = (Color)element._elementStyle.GetValue(GuiProp.BackgroundColor);
-            if(backgroundColor.A > 0)
+            if (backgroundColor.A > 0)
                 _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, backgroundColor);
 
             // Draw border if needed
@@ -235,9 +235,30 @@ namespace Prowl.PaperUI
                     if (cmd.Type == ElementRenderCommand.ElementType.Text)
                         cmd.Text?.Draw(_canvas, rect);
                     else if (cmd.Type == ElementRenderCommand.ElementType.RenderAction)
-                        cmd.RenderAction?.Invoke(_canvas, rect);
+                    {
+                        _elementStack.Push(element);
+                        try
+                        {
+                            cmd.RenderAction?.Invoke(_canvas, rect);
+                        }
+                        finally
+                        {
+                            _elementStack.Pop();
+                        }
+                    }
                     _canvas.RestoreState();
                 }
+            }
+
+            // Scrollbars offset the position of children
+            bool hasScrollState = Paper.HasElementStorage(element, "ScrollState");
+            ScrollState scrollState = new();
+            if (hasScrollState)
+            {
+                _canvas.SaveState();
+                scrollState = Paper.GetElementStorage<ScrollState>(element, "ScrollState");
+                var transform = Transform2D.CreateTranslation(-scrollState.Position);
+                _canvas.TransformBy(transform);
             }
 
             // Draw children sorted by Z-order
@@ -245,7 +266,78 @@ namespace Prowl.PaperUI
             foreach (var child in sortedChildren)
                 RenderElement(child);
 
+            // Draw scrollbars if needed
+            if (hasScrollState)
+            {
+                _canvas.RestoreState();
+
+                Scroll flags = element.ScrollFlags;
+                bool needsHorizontalScroll = scrollState.ContentSize.x > scrollState.ViewportSize.x && (flags & Scroll.ScrollX) != 0;
+                bool needsVerticalScroll = scrollState.ContentSize.y > scrollState.ViewportSize.y && (flags & Scroll.ScrollY) != 0;
+                bool shouldShowScrollbars = (flags & Scroll.Hidden) == 0 &&
+                                           (((flags & Scroll.AutoHide) == 0) || needsHorizontalScroll || needsVerticalScroll);
+
+                // Draw scrollbars if needed
+                if (shouldShowScrollbars)
+                {
+                    // Check for custom scrollbar renderer
+                    var customRenderer = element.CustomScrollbarRenderer;
+
+                    if (customRenderer != null)
+                    {
+                        // Use custom renderer
+                        customRenderer(_canvas, rect, scrollState);
+                    }
+                    else
+                    {
+                        // Use default scrollbar rendering
+                        DrawDefaultScrollbars(_canvas, rect, scrollState, flags);
+                    }
+                }
+            }
+
             _canvas.RestoreState();
+        }
+
+        /// <summary>
+        /// Draws the default scrollbars for a scrollable element.
+        /// </summary>
+        private static void DrawDefaultScrollbars(Canvas canvas, Rect rect, ScrollState state, Scroll flags)
+        {
+            // Calculate scrollbar positions and sizes
+            bool hasHorizontal = state.ContentSize.x > state.ViewportSize.x && (flags & Scroll.ScrollX) != 0;
+            bool hasVertical = state.ContentSize.y > state.ViewportSize.y && (flags & Scroll.ScrollY) != 0;
+
+            if (hasVertical)
+            {
+                var (trackX, trackY, trackWidth, trackHeight, thumbY, thumbHeight) = state.CalculateVerticalScrollbar(rect, flags);
+
+
+                // Draw vertical scrollbar track
+                canvas.RoundedRectFilled(trackX, trackY, trackWidth, trackHeight, 10, 10, 10, 10, Color.FromArgb(50, 0, 0, 0));
+
+                // Draw vertical scrollbar thumb - highlight if hovered or dragging
+                Color thumbColor = state.IsVerticalScrollbarHovered || state.IsDraggingVertical
+                    ? Color.FromArgb(220, 130, 130, 130)
+                    : Color.FromArgb(180, 100, 100, 100);
+
+                canvas.RoundedRectFilled(trackX + ScrollState.ScrollbarPadding, thumbY, trackWidth - ScrollState.ScrollbarPadding * 2, thumbHeight, 10, 10, 10, 10, thumbColor);
+            }
+
+            if (hasHorizontal)
+            {
+                var (trackX, trackY, trackWidth, trackHeight, thumbX, thumbWidth) = state.CalculateHorizontalScrollbar(rect, flags);
+
+                // Draw horizontal scrollbar track
+                canvas.RoundedRectFilled(trackX, trackY, trackWidth, trackHeight, 10, 10, 10, 10, Color.FromArgb(50, 0, 0, 0));
+
+                // Draw horizontal scrollbar thumb - highlight if hovered or dragging
+                Color thumbColor = state.IsHorizontalScrollbarHovered || state.IsDraggingHorizontal
+                    ? Color.FromArgb(220, 130, 130, 130)
+                    : Color.FromArgb(180, 100, 100, 100);
+
+                canvas.RoundedRectFilled(thumbX, trackY + ScrollState.ScrollbarPadding, thumbWidth, trackHeight - ScrollState.ScrollbarPadding * 2, 10, 10, 10, 10, thumbColor);
+            }
         }
 
         #endregion

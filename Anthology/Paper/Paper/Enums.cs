@@ -162,50 +162,29 @@
     public enum TextHorizontalAlignment { Left, Center, Right }
     public enum TextVerticalAlignment { Top, Center, Bottom }
 
+
     /// <summary>
-    /// Defines alignment options for positioning text.
-    /// Can be combined using bitwise
+    /// Defines scroll options for elements.
     /// </summary>
     [Flags]
-    public enum Align
+    public enum Scroll
     {
-        // Horizontal alignment options
+        /// <summary>No scrolling enabled.</summary>
+        None = 0,
 
-        /// <summary>
-        /// Aligns text horizontally to the left.
-        /// </summarytext
-        Left = 1 << 0,
+        /// <summary>Enables horizontal scrolling.</summary>
+        ScrollX = 1 << 0,
 
-        /// <summary>
-        /// Centers text horizontally.
-        /// </summary>
-        Center = 1 << 1,
+        /// <summary>Enables vertical scrolling.</summary>
+        ScrollY = 1 << 1,
 
-        /// <summary>
-        /// Aligns text horizontally to the right.
-        /// </summary>
-        Right = 1 << 2,
+        /// <summary>Enables both horizontal and vertical scrolling.</summary>
+        ScrollXY = ScrollX | ScrollY,
 
-        // Vertical alignment options
+        /// <summary>Auto-hides scrollbars when not needed.</summary>
+        AutoHide = 1 << 2,
 
-        /// <summary>
-        /// Aligns text vertically to the top.
-        /// </summary>
-        Top = 1 << 3,
-
-        /// <summary>
-        /// Centers text vertically.
-        /// </summary>
-        Middle = 1 << 4,
-
-        /// <summary>
-        /// Aligns text vertically to the bottom.
-        /// </summary>
-        Bottom = 1 << 5,
-
-        /// <summary>
-        /// Aligns text vertically to the baseline (default for text).
-        /// </summary>
-        Baseline = 1 << 6
+        /// <summary>Completely hides scrollbars but still allows scrolling.</summary>
+        Hidden = 1 << 3
     }
 }

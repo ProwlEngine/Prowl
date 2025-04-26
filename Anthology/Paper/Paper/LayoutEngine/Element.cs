@@ -1,4 +1,5 @@
-﻿using Prowl.Vector;
+﻿using Prowl.Quill;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI.LayoutEngine
 {
@@ -23,6 +24,9 @@ namespace Prowl.PaperUI.LayoutEngine
         public Action<Rect>? OnEnter { get; set; }
         public Action<Rect>? OnLeave { get; set; }
         public Action<Element, Rect>? OnPostLayout { get; set; }
+
+        public Scroll ScrollFlags { get; set; } = Scroll.None;
+        public Action<Canvas, Rect, ScrollState> CustomScrollbarRenderer { get; set; }
 
         public Element? Parent { get; internal set; }
         public List<Element> Children { get; } = [];

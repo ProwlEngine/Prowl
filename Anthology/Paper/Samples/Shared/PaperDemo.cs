@@ -900,18 +900,100 @@ namespace Shared
                     .Margin(15 / 2, 0, 15, 0)
                     .Enter())
                 {
-                    //Vector2 scroll = new Vector2(0, 0);
-                    //ImGui.ScrollView("test", ref scroll, true, true, () => {
-                    //
-                    //    using (ImGui.LayoutBox("ScrollTest")
-                    //        .Width(700)
-                    //        .Height(700)
-                    //        .Enter())
-                    //    {
-                    //        RenderProfileTab();
-                    //    }
-                    //
-                    //});
+                    // Dynamic content amount based on time
+                    int amount = (int)(Math.Abs(Math.Sin(time * 0.25)) * 25) + 10;
+
+                    // Create a grid layout for items
+                    using (Paper.Row("GridContainer")
+                        .Enter())
+                    {
+                        // Left column - cards
+                        using (Paper.Column("LeftColumn")
+                            .Width(Paper.Stretch(0.6))
+                            .SetScroll(Scroll.ScrollY)
+                            .Margin(0, 10, 0, 0)
+                            .Enter())
+                        {
+                            double scrollState = Paper.GetElementStorage<ScrollState>(Paper.CurrentParent, "ScrollState", new ScrollState()).Position.y;
+
+                            for (int i = 0; i < 10; i++)
+                            {
+                                // Calculate animations based on time and index
+                                double hue = (i * 25 + time * 20) % 360;
+                                double saturation = 0.7;
+                                double value = 0.8;
+
+                                // Convert HSV to RGB
+                                double h = hue / 60;
+                                int hi = (int)Math.Floor(h) % 6;
+                                double f = h - Math.Floor(h);
+                                double p = value * (1 - saturation);
+                                double q = value * (1 - f * saturation);
+                                double t = value * (1 - (1 - f) * saturation);
+
+                                double r, g, b;
+
+                                switch (hi)
+                                {
+                                    case 0: r = value; g = t; b = p; break;
+                                    case 1: r = q; g = value; b = p; break;
+                                    case 2: r = p; g = value; b = t; break;
+                                    case 3: r = p; g = q; b = value; break;
+                                    case 4: r = t; g = p; b = value; break;
+                                    default: r = value; g = p; b = q; break;
+                                }
+
+                                // Convert to Color
+                                Color itemColor = Color.FromArgb(255,
+                                    (int)(r * 255),
+                                    (int)(g * 255),
+                                    (int)(b * 255));
+
+                                // Custom icon for each card
+                                string icon = Icons.GetRandomIcon(i);
+
+                                using (Paper.Box($"Card_{i}")
+                                    .Height(70)
+                                    .Margin(10, 10, 5, 5)
+                                    .BackgroundColor(Color.FromArgb(230, itemColor))
+                                    .BorderColor(isDark ? Color.FromArgb(50, 255, 255, 255) : Color.FromArgb(50, 0, 0, 0))
+                                    .BorderWidth(1)
+                                    .Rounded(12)
+                                    .Enter())
+                                {
+                                    using (Paper.Row("CardContent")
+                                        .Margin(10)
+                                        .Enter())
+                                    {
+                                        // Icon
+                                        using (Paper.Box($"CardIcon_{i}")
+                                            .Width(50)
+                                            .Height(50)
+                                            .Rounded(25)
+                                            .BackgroundColor(Color.FromArgb(60, 255, 255, 255))
+                                            .Text(Text.Center(icon, fontMedium, textColor))
+                                            .Enter()) { }
+
+                                        // Content
+                                        using (Paper.Column($"CardTextColumn_{i}")
+                                            .Margin(10, 0, 0, 0)
+                                            .Enter())
+                                        {
+                                            using (Paper.Box($"CardTitle_{i}")
+                                                .Height(25)
+                                                .Text(Text.Left($"Item {i}", fontMedium, textColor))
+                                                .Enter()) { }
+
+                                            using (Paper.Box($"CardDescription_{i}")
+                                                .Text(Text.Left($"Interactive card with animations", fontSmall,
+                                                    Color.FromArgb(200, textColor)))
+                                                .Enter()) { }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

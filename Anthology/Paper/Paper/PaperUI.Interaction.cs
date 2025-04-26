@@ -141,6 +141,16 @@ namespace Prowl.PaperUI
             // If scissor is enabled, only check children if pointer is inside the element
             if (element._scissorEnabled == false || isPointerOverElement)
             {
+                // Scrollbars offset the position of children
+                bool hasScrollState = Paper.HasElementStorage(element, "ScrollState");
+                Transform2D childTransform = combinedTransform;
+                if (hasScrollState)
+                {
+                    ScrollState scrollState = Paper.GetElementStorage<ScrollState>(element, "ScrollState");
+                    var transform = Transform2D.CreateTranslation(-scrollState.Position);
+                    childTransform.Premultiply(ref transform);
+                }
+
                 // Check children first (front to back, respecting z-order)
                 if (element.Children != null && element.Children.Count > 0)
                 {
@@ -148,7 +158,7 @@ namespace Prowl.PaperUI
 
                     for (int i = sortedChildren.Count - 1; i >= 0; i--)
                     {
-                        var interactableChild = FindTopmostInteractableElement(sortedChildren[i], combinedTransform);
+                        var interactableChild = FindTopmostInteractableElement(sortedChildren[i], childTransform);
                         if (interactableChild != null)
                             return interactableChild;
                     }
