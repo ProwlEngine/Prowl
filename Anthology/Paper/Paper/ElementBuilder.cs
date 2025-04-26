@@ -622,7 +622,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs after layout calculation is complete.</summary>
         public ElementBuilder OnPostLayout(Action<Element, Rect> handler)
         {
-            _element.OnPostLayout = handler;
+            _element.OnPostLayout += handler;
             return this;
         }
 
@@ -633,7 +633,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is pressed.</summary>
         public ElementBuilder OnPress(Action<Rect> handler)
         {
-            _element.OnPress = handler;
+            _element.OnPress += handler;
             return this;
         }
 
@@ -644,7 +644,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is held down.</summary>
         public ElementBuilder OnHeld(Action<Rect> handler)
         {
-            _element.OnHeld = handler;
+            _element.OnHeld += handler;
             return this;
         }
 
@@ -655,7 +655,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is clicked.</summary>
         public ElementBuilder OnClick(Action<Rect> handler)
         {
-            _element.OnClick = handler;
+            _element.OnClick += handler;
             return this;
         }
 
@@ -666,7 +666,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is dragged.</summary>
         public ElementBuilder OnDragStart(Action<Rect> handler)
         {
-            _element.OnDragStart = handler;
+            _element.OnDragStart += handler;
             return this;
         }
 
@@ -677,7 +677,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is dragged.</summary>
         public ElementBuilder OnDragging(Action<Vector2, Rect> handler)
         {
-            _element.OnDragging = handler;
+            _element.OnDragging += handler;
             return this;
         }
 
@@ -688,7 +688,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is released after dragging.</summary>
         public ElementBuilder OnDragEnd(Action<Vector2, Vector2, Rect> handler)
         {
-            _element.OnDragEnd = handler;
+            _element.OnDragEnd += handler;
             return this;
         }
 
@@ -699,7 +699,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the mouse button is released after clicking this element.</summary>
         public ElementBuilder OnRelease(Action<Rect> handler)
         {
-            _element.OnRelease = handler;
+            _element.OnRelease += handler;
             return this;
         }
 
@@ -710,7 +710,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is double-clicked.</summary>
         public ElementBuilder OnDoubleClick(Action<Rect> handler)
         {
-            _element.OnDoubleClick = handler;
+            _element.OnDoubleClick += handler;
             return this;
         }
 
@@ -721,7 +721,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is right-clicked.</summary>
         public ElementBuilder OnRightClick(Action<Rect> handler)
         {
-            _element.OnRightClick = handler;
+            _element.OnRightClick += handler;
             return this;
         }
 
@@ -732,7 +732,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when scrolling occurs over the element.</summary>
         public ElementBuilder OnScroll(Action<double, Rect> handler)
         {
-            _element.OnScroll = handler;
+            _element.OnScroll += handler;
             return this;
         }
 
@@ -743,7 +743,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the cursor hovers over the element.</summary>
         public ElementBuilder OnHover(Action<Rect> handler)
         {
-            _element.OnHover = handler;
+            _element.OnHover += handler;
             return this;
         }
 
@@ -754,7 +754,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the cursor enters the element's bounds.</summary>
         public ElementBuilder OnEnter(Action<Rect> handler)
         {
-            _element.OnEnter = handler;
+            _element.OnEnter += handler;
             return this;
         }
 
@@ -765,7 +765,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the cursor leaves the element's bounds.</summary>
         public ElementBuilder OnLeave(Action<Rect> handler)
         {
-            _element.OnLeave = handler;
+            _element.OnLeave += handler;
             return this;
         }
 
