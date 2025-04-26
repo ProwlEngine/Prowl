@@ -167,10 +167,19 @@ namespace Prowl.PaperUI
         /// </summary>
         private static void CallPostLayoutRecursive(LayoutEngine.Element element)
         {
-            element?.OnPostLayout?.Invoke(element, new Rect(element.X, element.Y, element.LayoutWidth, element.LayoutHeight));
-            foreach (var child in element.Children)
+            _elementStack.Push(element);
+            try
             {
-                CallPostLayoutRecursive(child);
+                element?.OnPostLayout?.Invoke(element, new Rect(element.X, element.Y, element.LayoutWidth, element.LayoutHeight));
+                for (int i = 0; i < element?.Children.Count; i++)
+                {
+                    var child = element.Children[i];
+                    CallPostLayoutRecursive(child);
+                }
+            }
+            finally
+            {
+                _elementStack.Pop();
             }
         }
 
