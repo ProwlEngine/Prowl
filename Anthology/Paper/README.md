@@ -8,48 +8,60 @@
 [![Discord](https://img.shields.io/discord/1151582593519722668?logo=discord
 )](https://discord.gg/BqnJ9Rn4sn)
 
+> [!IMPORTANT]
+> Paper is a very new library. While an earlier iteration is actively used within the Prowl Game Engine, this specific library hasn't yet established a track record of reliability in production environments.
+
+### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 # <p align="center">An Immediate-Mode UI Library</p>
+
 
 <span id="readme-top"></span>
 
+### <p align="center">Table of Contents</p>
 1. [About The Project](#-about-the-project-)
 2. [Features](#-features-)
-3. [Getting Started](#🚀-getting-started-🚀)
+3. [Getting Started](#-getting-started-)
    * [Installation](#installation)
    * [Basic Usage](#basic-usage)
    * [Layouting](#layouting)
    * [Styling and Animation](#styling-and-animation)
    * [Event Handling](#event-handling)
    * [Input Handling](#input-handling)
-5. [Contributing](#🤝-contributing-🤝)
-6. [Contributors](#contributors-🌟)
-7. [Dependencies](#dependencies-📦)
-8. [License](#📜-license-📜)
+5. [Contributing](#-contributing-)
+6. [Contributors](#contributors-)
+7. [Dependencies](#dependencies-)
+8. [License](#-license-)
 
 # <span align="center">📝 About The Project 📝
 
 Paper is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** immediate-mode UI library built for the Prowl Game Engine. It provides a lightweight, flexible way to create highly reactive user interfaces with minimal effort.
 
-### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
+
+
+https://github.com/user-attachments/assets/d8206009-5a0f-4769-85a2-90cb5d434757
+
+
 
 Paper follows the immediate-mode GUI (IMGUI) paradigm, where UI elements are created and configured on every frame. Unlike retained-mode systems, it doesn't maintain persistent widget objects, making code simpler and more direct.
 Here's a basic example:
 ```cs
 // Create a simple button
-using (Paper.Box("MyButton")
+Paper.Box("MyButton")
     .Size(100)
     .BackgroundColor(Color.ForestGreen)
     .Rounded(8)
     .Text(Text.Center("Click Me", myFont, Color.White))
-    .OnClick((rect) => Console.WriteLine("Button clicked!"))
-    .Enter())
-{
-    // Child elements would go here
-}
+    .OnClick((rect) => Console.WriteLine("Button clicked!"));
 ```
 Which produces this button you can click on:
 
 <img src="https://i.imgur.com/4R3meKS.png" width="50%">
+
+Unlike Retained, you don't need to find elements or store references to change values.
+For example, If you want to animate the roundness it is as simple as
+```cs
+.Rounded(YourAnimatedFloat)
+```
 
 # <span align="center">✨ Features ✨</span>
 
@@ -177,12 +189,15 @@ using (Paper.Box("CustomPositionedElement")
     .Top(50)
     .Enter())
 {
-    // This element is positioned exactly at (100, 50)
+    // This element is positioned exactly at (100, 50) relative to its parent
 }
 ```
 
 ## Styling and Animation
 Paper provides a very powerful yet simple way to both draw and animate your UI
+> [!TIP]
+> Styling is executed in order of calls, so in this case, if YourCondition is true, even if it's being hovered, If(YourCondition) will take priority since it comes after.\
+> Also .Hovered, .Active and so on, are all just automatic versions of .If() like .If(Paper.IsNodeHovered(TheNode)).
 ```cs
 // Basic styling
 using (Paper.Box("StyledElement")
