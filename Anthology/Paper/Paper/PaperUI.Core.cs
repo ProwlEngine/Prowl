@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections;
+using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.CompilerServices;
 
@@ -17,6 +18,8 @@ namespace Prowl.PaperUI
         internal static Stack<LayoutEngine.Element> _elementStack = new Stack<LayoutEngine.Element>();
         private static readonly Stack<ulong> _IDStack = new();
         private static readonly Dictionary<ulong, Element> _createdElements = [];
+
+        private static readonly Dictionary<ulong, Hashtable> _storage = [];
 
         // Rendering context
         private static Canvas _canvas;
@@ -193,10 +196,6 @@ namespace Prowl.PaperUI
             // Draw background
             var rounded = (Vector4)element._elementStyle.GetValue(GuiProp.Rounded);
             var backgroundColor = (Color)element._elementStyle.GetValue(GuiProp.BackgroundColor);
-            //_canvas.BeginPath();
-            //_canvas.RoundedRect(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w);
-            //_canvas.SetFillColor(backgroundColor);
-            //_canvas.Fill();
             if(backgroundColor.A > 0)
                 _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, backgroundColor);
 
@@ -340,6 +339,44 @@ namespace Prowl.PaperUI
                 _IDStack.Pop();
             else
                 throw new Exception("Cannot pop the root ID.");
+        }
+
+        #endregion
+
+        #region Element Storage
+
+        /// <summary> Get a value from the global GUI storage this persists across all Frames and Elements </summary>
+        public static T GetRootStorage<T>(string key) where T : unmanaged => GetElementStorage<T>(_rootElement, key, default);
+        /// <summary> Set a value in the root element </summary>
+        public static void SetRootStorage<T>(string key, T value) where T : unmanaged => SetElementStorage(_rootElement, key, value);
+
+        /// <summary> Get a value from the current element's storage </summary>
+        public static T GetElementStorage<T>(string key, T defaultValue = default) where T : unmanaged => GetElementStorage(CurrentParent, key, defaultValue);
+
+        /// <summary> Get a value from the current element's storage </summary>
+        public static T GetElementStorage<T>(Element el, string key, T defaultValue = default) where T : unmanaged
+        {
+            if (!_storage.TryGetValue(el.ID, out var storage))
+                return defaultValue;
+
+            if (storage.ContainsKey(key))
+                return (T)storage[key]!;
+
+            return defaultValue;
+        }
+
+        /// <summary> Check if a key exists in the current element's storage </summary>
+        public static bool HasElementStorage(Element el, string key) => _storage.TryGetValue(el.ID, out var storage) && storage.ContainsKey(key);
+
+        /// <summary> Set a value in the current element's storage </summary>
+        public static void SetElementStorage<T>(string key, T value) where T : unmanaged => SetElementStorage(CurrentParent, key, value);
+        /// <summary> Set a value in the current element's storage </summary>
+        public static void SetElementStorage<T>(Element el, string key, T value) where T : unmanaged
+        {
+            if (!_storage.TryGetValue(el.ID, out var storage))
+                _storage[el.ID] = storage = [];
+
+            storage[key] = value;
         }
 
         #endregion
