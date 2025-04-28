@@ -108,6 +108,9 @@ namespace Prowl.PaperUI
 
             // Process mouse button events
             HandleMouseEvents();
+
+            // Process keyboard events for focused element
+            HandleKeyboardEvents();
         }
 
         #endregion
@@ -412,6 +415,36 @@ namespace Prowl.PaperUI
                         BubbleEventToParents(activeElement, parent => parent.OnDragging?.Invoke(startPos, parent.LayoutRect));
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Process keyboard events for the focused element
+        /// </summary>
+        private static void HandleKeyboardEvents()
+        {
+            // If no element has focus, there's nothing to do
+            if (_focusedElementId == 0)
+                return;
+
+            Element? focusedElement = FindElementByID(_focusedElementId);
+            if (focusedElement == null)
+                return;
+
+            // Process key presses
+            foreach (var key in KeyValues)
+            {
+                if (IsKeyPressed(key) && focusedElement.OnKeyPressed != null)
+                {
+                    focusedElement.OnKeyPressed(key);
+                }
+            }
+
+            // Process text input
+            while (InputString.Count > 0)
+            {
+                char c = InputString.Dequeue();
+                focusedElement.OnTextInput?.Invoke(c);
             }
         }
 

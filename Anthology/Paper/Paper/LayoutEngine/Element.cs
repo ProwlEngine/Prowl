@@ -19,6 +19,8 @@ namespace Prowl.PaperUI.LayoutEngine
         public Action<Rect>? OnRelease { get; set; }
         public Action<Rect>? OnDoubleClick { get; set; }
         public Action<Rect>? OnRightClick { get; set; }
+        public Action<PaperKey>? OnKeyPressed { get; set; }
+        public Action<char>? OnTextInput { get; set; }
         public Action<double, Rect>? OnScroll { get; set; }
         public Action<Rect>? OnHover { get; set; }
         public Action<bool>? OnFocusChange { get; set; }

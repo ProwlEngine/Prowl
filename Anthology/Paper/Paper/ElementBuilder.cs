@@ -615,10 +615,10 @@ namespace Prowl.PaperUI
 
         #region Event Handlers
 
-        /// <summary>Makes the element capable of receiving focus.</summary>
-        public ElementBuilder IsFocusable()
+        /// <summary>Makes the element incapable of receiving focus.</summary>
+        public ElementBuilder IsNotFocusable()
         {
-            _element.IsFocusable = true;
+            _element.IsFocusable = false;
             return this;
         }
 
@@ -742,6 +742,28 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when scrolling occurs over the element, with a captured value.</summary>
         public ElementBuilder OnScroll<T>(T capturedValue, Action<T, double, Rect> handler) =>
             OnScroll((double delta, Rect rect) => handler(capturedValue, delta, rect));
+
+        /// <summary>Sets a callback that runs when a key is pressed while the element is focused.</summary>
+        public ElementBuilder OnKeyPressed(Action<PaperKey> handler)
+        {
+            _element.OnKeyPressed += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when a key is pressed while the element is focused, with a captured value.</summary>
+        public ElementBuilder OnKeyPressed<T>(T capturedValue, Action<T, PaperKey> handler) =>
+            OnKeyPressed((PaperKey key) => handler(capturedValue, key));
+
+        /// <summary>Sets a callback that runs when a character is typed while the element is focused.</summary>
+        public ElementBuilder OnTextInput(Action<char> handler)
+        {
+            _element.OnTextInput += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when a character is typed while the element is focused, with a captured value.</summary>
+        public ElementBuilder OnTextInput<T>(T capturedValue, Action<T, char> handler) =>
+            OnTextInput((char character) => handler(capturedValue, character));
 
         /// <summary>Sets a callback that runs when the cursor hovers over the element.</summary>
         public ElementBuilder OnHover(Action<Rect> handler)
