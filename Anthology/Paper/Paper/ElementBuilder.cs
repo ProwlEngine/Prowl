@@ -754,6 +754,17 @@ namespace Prowl.PaperUI
         public ElementBuilder OnHover<T>(T capturedValue, Action<T, Rect> handler) =>
             OnHover((Rect rect) => handler(capturedValue, rect));
 
+        /// <summary>Sets a callback that runs when the Focused state changes.</summary>
+        public ElementBuilder OnFocusChange(Action<bool> handler)
+        {
+            _element.OnFocusChange += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the Focused state changes, with a captured value.</summary>
+        public ElementBuilder OnFocusChange<T>(T capturedValue, Action<T, bool> handler) =>
+            OnFocusChange((bool focused) => handler(capturedValue, focused));
+
         /// <summary>Sets a callback that runs when the cursor enters the element's bounds.</summary>
         public ElementBuilder OnEnter(Action<Rect> handler)
         {

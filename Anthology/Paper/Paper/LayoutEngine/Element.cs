@@ -8,7 +8,7 @@ namespace Prowl.PaperUI.LayoutEngine
         public ulong ID { get; internal set; } = 0;
 
         // Events
-        public bool IsFocusable { get; set; } = false;
+        public bool IsFocusable { get; set; } = true;
         public bool IsNotInteractable { get; set; } = false;
         public Action<Rect>? OnDragStart { get; set; }
         public Action<Vector2, Rect>? OnDragging { get; set; }
@@ -21,6 +21,7 @@ namespace Prowl.PaperUI.LayoutEngine
         public Action<Rect>? OnRightClick { get; set; }
         public Action<double, Rect>? OnScroll { get; set; }
         public Action<Rect>? OnHover { get; set; }
+        public Action<bool>? OnFocusChange { get; set; }
         public Action<Rect>? OnEnter { get; set; }
         public Action<Rect>? OnLeave { get; set; }
         public Action<Element, Rect>? OnPostLayout { get; set; }

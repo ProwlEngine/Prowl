@@ -334,7 +334,24 @@ namespace Prowl.PaperUI
 
                             // Update focus state
                             if (activeElement.IsFocusable)
-                                _focusedElementId = _activeElementId;
+                            {
+                                if (_focusedElementId != _activeElementId)
+                                {
+                                    activeElement.OnFocusChange?.Invoke(true);
+
+                                    if (_focusedElementId != 0)
+                                    {
+                                        Element? oldFocusedElement = FindElementByID(_focusedElementId);
+                                        if (oldFocusedElement != null)
+                                        {
+                                            oldFocusedElement.OnFocusChange?.Invoke(false);
+                                        }
+                                    }
+
+                                    // Update focused element ID
+                                    _focusedElementId = _activeElementId;
+                                }
+                            }
                         }
 
                         // Direct release event
