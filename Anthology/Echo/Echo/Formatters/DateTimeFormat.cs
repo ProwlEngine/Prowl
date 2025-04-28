@@ -23,7 +23,7 @@ internal sealed class DateTimeFormat : ISerializationFormat
                 compound["$type"] = new(EchoType.String, typeof(DateTime).FullName);
 
             // Serialize the DateTime properties
-            compound["value"] = new EchoObject(EchoType.Long, date.ToBinary());
+            compound["date"] = new EchoObject(EchoType.Long, date.ToBinary());
 
             return compound;
         }
@@ -35,7 +35,7 @@ internal sealed class DateTimeFormat : ISerializationFormat
     {
         if (value.TagType == EchoType.Compound)
         {
-            if (value.TryGet("value", out var dateTag) && dateTag.TagType == EchoType.Long)
+            if (value.TryGet("date", out var dateTag) && dateTag.TagType == EchoType.Long)
             {
                 long binary = dateTag.LongValue;
                 return DateTime.FromBinary(binary);
