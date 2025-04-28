@@ -22,6 +22,38 @@ namespace Prowl.PaperUI
         private static double[] _keyPressedTime;
         public static PaperKey LastKeyPressed { get; private set; } = PaperKey.Unknown;
 
+        #region Auto-Repeat Settings
+
+        // Auto-repeat configuration
+        private static bool _keyAutoRepeatEnabled = true;
+        private static double _autoRepeatDelay = 0.8; // Initial delay in seconds before repeating starts
+        private static double _autoRepeatRate = 0.05; // Time between repeats once started (20 repeats per second)
+
+        // Auto-repeat state tracking
+        private static double[] _keyRepeatTimer;
+        private static bool[] _keyRepeating;
+
+        // Public properties for configuration
+        public static bool KeyAutoRepeatEnabled
+        {
+            get => _keyAutoRepeatEnabled;
+            set => _keyAutoRepeatEnabled = value;
+        }
+
+        public static double AutoRepeatDelay
+        {
+            get => _autoRepeatDelay;
+            set => _autoRepeatDelay = Math.Max(0.1, value); // Minimum safe delay
+        }
+
+        public static double AutoRepeatRate
+        {
+            get => _autoRepeatRate;
+            set => _autoRepeatRate = Math.Max(0.01, value); // Maximum rate of 100 per second
+        }
+
+        #endregion
+
         #endregion
 
         #region Mouse State
@@ -90,6 +122,13 @@ namespace Prowl.PaperUI
         /// </summary>
         private static void InitializeInput()
         {
+            // Initialize keyboard arrays
+            _keyCurState = new bool[KeyValues.Length];
+            _keyPrevState = new bool[KeyValues.Length];
+            _keyPressedTime = new double[KeyValues.Length];
+            _keyRepeatTimer = new double[KeyValues.Length];
+            _keyRepeating = new bool[KeyValues.Length];
+            
             // Initialize keyboard arrays
             _keyCurState = new bool[KeyValues.Length];
             _keyPrevState = new bool[KeyValues.Length];
@@ -187,7 +226,29 @@ namespace Prowl.PaperUI
             // Update key pressed times
             for (var i = 0; i < _keyPressedTime.Length; ++i)
                 if (_keyCurState[i])
+                {
                     _keyPressedTime[i] += _deltaTime;
+
+                    // Handle auto-repeat for keys
+                    if (_keyAutoRepeatEnabled)
+                    {
+                        if (_keyRepeating[i])
+                        {
+                            _keyRepeatTimer[i] += _deltaTime;
+                            if (_keyRepeatTimer[i] >= _autoRepeatRate)
+                            {
+                                // Trigger a key press event
+                                _keyPrevState[i] = false;
+                                _keyRepeatTimer[i] = 0;
+                            }
+                        }
+                        else if (_keyPressedTime[i] >= _autoRepeatDelay)
+                        {
+                            _keyRepeating[i] = true;
+                            _keyRepeatTimer[i] = 0;
+                        }
+                    }
+                }
 
             // Update pointer pressed times
             for (var i = 0; i < _pointerPressedTime.Length; ++i)
@@ -206,7 +267,16 @@ namespace Prowl.PaperUI
                 _keyPrevState[i] = _keyCurState[i];
 
                 if (!_keyCurState[i])
+                {
                     _keyPressedTime[i] = 0.0f;
+
+                    if (!_keyCurState[i])
+                    {
+                        _keyPressedTime[i] = 0.0f;
+                        _keyRepeatTimer[i] = 0.0f;
+                        _keyRepeating[i] = false;
+                    }
+                }
             }
 
             // Update mouse state
@@ -272,6 +342,14 @@ namespace Prowl.PaperUI
         public static void SetKeyState(PaperKey key, bool isKeyDown)
         {
             var index = (int)key;
+
+            // If the key is being released, we need to reset the auto-repeat state
+            if (!isKeyDown)
+            {
+                _keyRepeating[index] = false;
+                _keyRepeatTimer[index] = 0;
+            }
+
             _keyPrevState[index] = _keyCurState[index];
             _keyCurState[index] = isKeyDown;
 
@@ -387,6 +465,18 @@ namespace Prowl.PaperUI
         /// Checks if a key has been held down for a while.
         /// </summary>
         public static bool IsKeyHeld(PaperKey key) => IsKeyDown(key) && _keyPressedTime[(int)key] >= 0.5f;
+
+        /// <summary>
+        /// Checks if a key is auto-repeating this frame.
+        /// </summary>
+        public static bool IsKeyRepeating(PaperKey key) =>
+            _keyAutoRepeatEnabled && _keyCurState[(int)key] && _keyRepeating[(int)key];
+
+        /// <summary>
+        /// Checks if a key was just pressed or is auto-repeating this frame.
+        /// </summary>
+        public static bool IsKeyPressedOrRepeating(PaperKey key) =>
+            IsKeyPressed(key) || (_keyAutoRepeatEnabled && _keyRepeating[(int)key] && _keyRepeatTimer[(int)key] < _autoRepeatRate * 0.5);
 
         #endregion
 
