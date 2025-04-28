@@ -1,3 +1,6 @@
+> [!NOTE]
+> Prowl is currently in early development and not yet stable for production use. While the core functionality is in place, expect frequent changes, missing features, and potential bugs. Enthusiasts and contributors are welcome to explore and help shape the engine, but we recommend waiting for a more stable release before using it for serious game projects.
+
 <img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="100%" alt="Prowl logo image">
 
 ![Github top languages](https://img.shields.io/github/languages/top/michaelsakharov/prowl)
