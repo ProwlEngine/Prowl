@@ -39,6 +39,9 @@ namespace Shared
 
         static double time = 0;
 
+        static string searchText = "";
+        static bool searchFocused = false;
+
         public static void Initialize()
         {
             ToggleTheme();
@@ -244,14 +247,58 @@ namespace Shared
 
                 // Search bar
                 using (Paper.Box("SearchBar")
-                    .Width(300)
-                    .Height(40)
-                    .Rounded(8)
-                    .BackgroundColor(Color.FromArgb(50, 0, 0, 0))
-                    //.Style(BoxStyle.SolidRounded(Color.FromArgb(50, 0, 0, 0), 20f))
-                    .Margin(0, 15, 15, 0)
-                    .Text(Text.Left($"    {Icons.MagnifyingGlass}    Search...", fontSmall, lightTextColor))
-                    .Enter()) { }
+                     .Width(300)
+                     .Height(40)
+                     .Rounded(8)
+                     .BackgroundColor(Color.FromArgb(50, 0, 0, 0))
+                     .Margin(0, 15, 15, 0)
+                     .Text(Text.Left($"    {Icons.MagnifyingGlass}    {searchText}", fontSmall,
+                         searchFocused ? textColor : lightTextColor))
+                     .OnFocusChange((focus) => {
+                         searchFocused = focus;
+                     })
+                     .OnKeyPressed((key) => {
+                         // Handle special keys
+                         if (key == PaperKey.Backspace && searchText.Length > 0)
+                             searchText = searchText.Substring(0, searchText.Length - 1);
+                         else if (key == PaperKey.Enter)
+                             Console.WriteLine($"Search query: {searchText}");
+                         else if (key == PaperKey.Escape)
+                         {
+                             searchFocused = false;
+                             if (string.IsNullOrEmpty(searchText))
+                                 searchText = "Search...";
+                         }
+                     })
+                     .OnTextInput((c) => {
+                         // Add character to search text (ignore control characters)
+                         if (!char.IsControl(c))
+                             searchText += c;
+                     })
+                     .Enter())
+                {
+
+                    // Add a blinking cursor when focused
+                    if (searchFocused)
+                    {
+                        Paper.AddActionElement((canvas, rect) => {
+                            // Only draw cursor during visible part of blink cycle
+                            if ((int)(time * 2) % 2 == 0)
+                            {
+                                double textWidth = fontSmall.MeasureString($"    {Icons.MagnifyingGlass}    {searchText}").X;
+                                double cursorX = rect.x + textWidth + 2;
+                                double cursorHeight = fontSmall.LineHeight;
+
+                                canvas.BeginPath();
+                                canvas.MoveTo(cursorX, rect.y + (rect.height - cursorHeight) / 2);
+                                canvas.LineTo(cursorX, rect.y + (rect.height - cursorHeight) / 2 + cursorHeight);
+                                canvas.SetStrokeColor(textColor);
+                                canvas.SetStrokeWidth(1);
+                                canvas.Stroke();
+                            }
+                        });
+                    }
+                }
 
                 // Theme Switch
                 using (Paper.Box("LightIcon")
