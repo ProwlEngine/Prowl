@@ -12,8 +12,11 @@ internal sealed class ArrayFormat : ISerializationFormat
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         var array = (Array)value;
-        var elementType = targetType!.GetElementType()
-            ?? throw new InvalidOperationException("Array element type is null");
+        var elementType = targetType!.GetElementType() ?? typeof(object);
+        Type actualType = value.GetType();
+
+        // Create a compound to store array data and type info
+        var arrCompound = EchoObject.NewCompound();
 
         if (array.Rank == 1)
         {
@@ -21,28 +24,37 @@ internal sealed class ArrayFormat : ISerializationFormat
             List<EchoObject> tags = new();
             foreach (var item in array)
                 tags.Add(Serializer.Serialize(elementType, item, context));
-            return new EchoObject(tags);
+            arrCompound["array"] = new EchoObject(tags);
         }
         else
         {
             // Multi-dimensional array
-            var compound = EchoObject.NewCompound();
-
-            // Store dimensions
             var dimensions = new int[array.Rank];
             for (int i = 0; i < array.Rank; i++)
                 dimensions[i] = array.GetLength(i);
 
-            compound["dimensions"] = Serializer.Serialize(dimensions, context);
+            arrCompound["dimensions"] = Serializer.Serialize(dimensions, context);
 
             // Store elements
             List<EchoObject> elements = new();
             SerializeMultiDimensionalArray(elementType, array, new int[array.Rank], 0, elements, context);
-            compound["elements"] = new EchoObject(elements);
-
-            return compound;
+            arrCompound["elements"] = new EchoObject(elements);
         }
+
+        // Handle type information based on TypeMode
+        bool shouldIncludeType = context.TypeMode switch {
+            TypeMode.Aggressive => true, // Always include type information
+            TypeMode.None => false, // Never include type information
+            TypeMode.Auto => targetType == typeof(object) || targetType != actualType, // Include type information if target is object or actual type is different
+            _ => true // Default to aggressive for safety
+        };
+
+        if (shouldIncludeType)
+            arrCompound["$type"] = new(EchoType.String, actualType.FullName);
+
+        return arrCompound;
     }
+
     private static void SerializeMultiDimensionalArray(
         Type elementType,
         Array array,
@@ -69,36 +81,51 @@ internal sealed class ArrayFormat : ISerializationFormat
         Type elementType = targetType.GetElementType()
             ?? throw new InvalidOperationException("Array element type is null");
 
-        if (value.TagType == EchoType.List)
+        // If value is a compound with type info
+        if (value.TagType == EchoType.Compound)
         {
             // Single dimensional array
-            var array = Array.CreateInstance(elementType, value.Count);
-            for (int idx = 0; idx < array.Length; idx++)
-                array.SetValue(Serializer.Deserialize(value[idx], elementType, context), idx);
-            return array;
-        }
-        else if (value.TagType == EchoType.Compound)
-        {
+            if (value.TryGet("array", out var arrayTag) && arrayTag.TagType == EchoType.List)
+            {
+                var array = Array.CreateInstance(elementType, arrayTag.Count);
+                for (int idx = 0; idx < array.Length; idx++)
+                {
+                    var item = arrayTag[idx];
+
+                    // Special handling for object arrays - check if the element has its own type info
+                    if (elementType == typeof(object) && item.TagType == EchoType.Compound && item.TryGet("$type", out var typeTag))
+                    {
+                        var actualType = ReflectionUtils.FindTypeByName(typeTag.StringValue);
+                        if (actualType != null)
+                        {
+                            // Deserialize using the specific type found in the element
+                            array.SetValue(Serializer.Deserialize(item, actualType, context), idx);
+                            continue;
+                        }
+                    }
+
+                    // Regular deserialization
+                    array.SetValue(Serializer.Deserialize(item, elementType, context), idx);
+                }
+                return array;
+            }
             // Multi-dimensional array
-            var dimensionsTag = value.Get("dimensions")
-                ?? throw new InvalidOperationException("Missing dimensions in multi-dimensional array");
-            var dimensions = (int[])Serializer.Deserialize(dimensionsTag, typeof(int[]), context)!;
+            else if (value.TryGet("dimensions", out var dimensionsTag))
+            {
+                var dimensions = (int[])Serializer.Deserialize(dimensionsTag, typeof(int[]), context)!;
+                var elementsTag = value.Get("elements")
+                    ?? throw new InvalidOperationException("Missing elements in multi-dimensional array");
 
-            var elementsTag = value.Get("elements")
-                ?? throw new InvalidOperationException("Missing elements in multi-dimensional array");
-            var elements = elementsTag.List;
+                var array = Array.CreateInstance(elementType, dimensions);
+                var indices = new int[dimensions.Length];
+                int elementIndex = 0;
 
-            var array = Array.CreateInstance(elementType, dimensions);
-            var indices = new int[dimensions.Length];
-            int elementIndex = 0;
-
-            DeserializeMultiDimensionalArray(array, indices, 0, elements, ref elementIndex, elementType, context);
-            return array;
+                DeserializeMultiDimensionalArray(array, indices, 0, elementsTag.List, ref elementIndex, elementType, context);
+                return array;
+            }
         }
-        else
-        {
-            throw new InvalidOperationException("Invalid tag type for array deserialization");
-        }
+
+        throw new InvalidOperationException("Invalid tag type for array deserialization");
     }
 
     private static void DeserializeMultiDimensionalArray(
@@ -112,7 +139,23 @@ internal sealed class ArrayFormat : ISerializationFormat
     {
         if (dimension == array.Rank)
         {
-            array.SetValue(Serializer.Deserialize(elements[elementIndex], elementType, context), indices);
+            var item = elements[elementIndex];
+
+            // Special handling for object arrays - check if the element has its own type info
+            if (elementType == typeof(object) && item.TagType == EchoType.Compound && item.TryGet("$type", out var typeTag))
+            {
+                var actualType = ReflectionUtils.FindTypeByName(typeTag.StringValue);
+                if (actualType != null)
+                {
+                    // Deserialize using the specific type found in the element
+                    array.SetValue(Serializer.Deserialize(item, actualType, context), indices);
+                    elementIndex++;
+                    return;
+                }
+            }
+
+            // Regular deserialization
+            array.SetValue(Serializer.Deserialize(item, elementType, context), indices);
             elementIndex++;
             return;
         }
