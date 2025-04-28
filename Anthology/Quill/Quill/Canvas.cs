@@ -3,6 +3,7 @@ using Prowl.Vector;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using Prowl.Quill.External.LibTessDotNet;
 
 namespace Prowl.Quill;
 
@@ -14,10 +15,10 @@ public enum BrushType
     Box = 3
 }
 
-public enum Solidity
+public enum WindingMode
 {
-    Solid,
-    Hole
+    OddEven,
+    NonZero
 }
 
 public struct DrawCall
@@ -125,6 +126,7 @@ internal struct ProwlCanvasState
 
 
     internal Color fillColor;
+    internal WindingMode fillMode;
 
     public ProwlCanvasState()
     {
@@ -144,6 +146,7 @@ internal struct ProwlCanvasState
         brush = new();
         brush.Transform = Transform2D.Identity;
         fillColor = Color.FromArgb(255, 0, 0, 0); // Default fill color (black)
+        fillMode = WindingMode.OddEven; // Default winding mode
     }
 
     internal void Reset()
@@ -163,6 +166,7 @@ internal struct ProwlCanvasState
         brush = new();
         brush.Transform = Transform2D.Identity;
         fillColor = Color.FromArgb(255, 0, 0, 0); // Default fill color (black)
+        fillMode = WindingMode.OddEven; // Default winding mode
     }
 }
 
@@ -172,13 +176,11 @@ public partial class Canvas
     {
         internal List<Vector2> Points { get; }
         internal bool IsClosed { get; }
-        internal Solidity Solidity { get; set; }
 
-        public SubPath(List<Vector2> points, bool isClosed, Solidity solidity = Solidity.Solid)
+        public SubPath(List<Vector2> points, bool isClosed)
         {
             Points = points;
             IsClosed = isClosed;
-            Solidity = solidity;
         }
     }
 
@@ -441,14 +443,16 @@ public partial class Canvas
     }
 
     public void AddTriangle() => AddTriangle(_vertices.Count - 3, _vertices.Count - 2, _vertices.Count - 1);
-    public void AddTriangle(int v1, int v2, int v3)
+    public void AddTriangle(int v1, int v2, int v3) => AddTriangle((uint)v1, (uint)v2, (uint)v3);
+    public void AddTriangle(uint v1, uint v2, uint v3)
     {
         if (_drawCalls.Count == 0)
             return;
+
         // Add the triangle indices to the list
-        _indices.Add((uint)v1);
-        _indices.Add((uint)v2);
-        _indices.Add((uint)v3);
+        _indices.Add(v1);
+        _indices.Add(v2);
+        _indices.Add(v3);
 
         AddTriangleCount(1);
     }
@@ -567,21 +571,7 @@ public partial class Canvas
     /// <summary>
     /// Sets the solidity order for the currently active path.
     /// </summary>
-    public void SetSolidity(Solidity solidity)
-    {
-        if (_currentSubPath != null)
-            _currentSubPath.Solidity = solidity;
-    }
-
-    /// <summary>
-    /// Sets the solidity order to be counter-clockwise to indicate that the path is a hole.
-    /// </summary>
-    public void SetAsHole() => SetSolidity(Solidity.Hole);
-
-    /// <summary>
-    /// Sets the solidity order to be clockwise to indicate that the path is solid.
-    /// </summary>
-    public void SetAsSolid() => SetSolidity(Solidity.Solid);
+    public void SetSolidity(WindingMode solidity) => _state.fillMode = solidity;
 
     /// <summary>
     /// Adds an arc to the current path.
@@ -826,19 +816,58 @@ public partial class Canvas
             FillSubPath(subPath);
     }
 
+    public void FillComplexAA()
+    {
+        FillComplex();
+
+        // Stroke with same color as Fill
+        SaveState();
+        SetStrokeColor(_state.fillColor);
+        SetStrokeWidth(1);
+        SetStrokeScale(1f);
+        SetStrokeJoint(JointStyle.Bevel);
+        SetStrokeCap(EndCapStyle.Butt);
+
+        Stroke();
+
+        RestoreState();
+    }
+
     public void FillComplex()
     {
         if (_subPaths.Count == 0)
             return;
 
-        // Group paths by winding order
-        var outerPaths = _subPaths.Where(p => p.Solidity == Solidity.Solid).ToList();
-        var holePaths = _subPaths.Where(p => p.Solidity == Solidity.Hole).ToList();
-
-        // Process each outer path with its holes
-        foreach (var outerPath in outerPaths)
+        var tess = new Tess();
+        foreach (var path in _subPaths)
         {
-            FillComplexSubPath(outerPath, holePaths);
+            var copy = path.Points.ToArray();
+            for (int i = 0; i < copy.Length; i++)
+                copy[i] = TransformPoint(copy[i]) + new Vector2(0.5, 0.5); // And offset by half a pixel to properly align it with Stroke()
+            var points = copy.Select(v => new ContourVertex() { Position = new Vec3() { X = v.x, Y = v.y } }).ToArray();
+
+            tess.AddContour(points, ContourOrientation.Original);
+        }
+        tess.Tessellate(_state.fillMode == WindingMode.OddEven ? WindingRule.EvenOdd : WindingRule.NonZero, ElementType.Polygons, 3);
+
+        var indices = tess.Elements;
+        var vertices = tess.Vertices;
+
+        // Create vertices and triangles
+        uint startVertexIndex = (uint)_vertices.Count;
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            var vertex = vertices[i];
+            Vector2 pos = new Vector2(vertex.Position.X, vertex.Position.Y);
+            AddVertex(new Vertex(pos, new(0.5, 0.5), _state.fillColor));
+        }
+        // Create triangles
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            uint v1 = (uint)(startVertexIndex + indices[i]);
+            uint v2 = (uint)(startVertexIndex + indices[i + 1]);
+            uint v3 = (uint)(startVertexIndex + indices[i + 2]);
+            AddTriangle(v1, v2, v3);
         }
     }
 
@@ -848,30 +877,30 @@ public partial class Canvas
         if (subPath.Points.Count < 3)
             return;
 
-        var copy = subPath.Points.ToArray();
         // Transform each point
-        for (int i = 0; i < subPath.Points.Count; i++)
-            subPath.Points[i] = TransformPoint(subPath.Points[i]) + new Vector2(0.5,0.5); // And offset by half a pixel to properly center it with Stroke()
-
         Vector2 center = Vector2.zero;
-        for (int i = 0; i < subPath.Points.Count; i++)
-            center += subPath.Points[i];
-        center /= subPath.Points.Count;
+        var copy = subPath.Points.ToArray();
+        for (int i = 0; i < copy.Length; i++)
+        {
+            var point = copy[i];
+            point = TransformPoint(point) + new Vector2(0.5, 0.5); // And offset by half a pixel to properly center it with Stroke()
+            center += point;
+            copy[i] = point;
+        }
+        center /= copy.Length;
 
         // Store the starting index to reference _vertices
         uint startVertexIndex = (uint)_vertices.Count;
 
-        var color = _state.fillColor;
-
         // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-        AddVertex(new Vertex(center, new(0.5f, 0.5f), color));
+        AddVertex(new Vertex(center, new(0.5f, 0.5f), _state.fillColor));
 
         // Generate vertices around the path
-        int segments = subPath.Points.Count;
+        int segments = copy.Length;
         for (int i = 0; i < segments; i++) // Edge vertices have UV at 0,0 for anti-aliasing
         {
-            Vector2 dirToPoint = (subPath.Points[i] - center).normalized;
-            AddVertex(new(subPath.Points[i] + (dirToPoint * _pixelWidth), new(0, 0), color));
+            Vector2 dirToPoint = (copy[i] - center).normalized;
+            AddVertex(new(copy[i] + (dirToPoint * _pixelWidth), new(0, 0), _state.fillColor));
         }
 
         // Create triangles (fan from center to edges)
@@ -912,126 +941,6 @@ public partial class Canvas
         }
 
         AddTriangleCount(segments);
-
-        // Reset the points to their original values
-        for (int i = 0; i < subPath.Points.Count; i++)
-            subPath.Points[i] = copy[i];
-    }
-
-    private void FillComplexSubPath(SubPath outerPath, List<SubPath> holePaths)
-    {
-        if (outerPath.Points.Count < 3)
-            return;
-
-        // Apply transform to all points
-        var outerPoints = outerPath.Points.Select(p => TransformPoint(p) + new Vector2(0.5, 0.5)).ToList();
-
-        // Prepare data for Earcut triangulation
-        List<double> vertices = new List<double>();
-        List<int> holeIndices = new List<int>();
-        List<Vector2> normals = new List<Vector2>();
-
-        // Calculate normals for outer path
-        CalculateClockwiseNormals(outerPoints, normals);
-
-        // Add outer path vertices
-        foreach (var point in outerPoints)
-        {
-            vertices.Add(point.x);
-            vertices.Add(point.y);
-        }
-
-        int vertexCount = outerPoints.Count;
-        foreach (var hole in holePaths)
-        {
-            holeIndices.Add(vertexCount);
-            // Add hole vertices
-            var holePoints = hole.Points.Select(p => TransformPoint(p) + new Vector2(0.5, 0.5)).ToList();
-
-            // Calculate normals for hole path
-            // We'll need to negate them to make them go outward
-            List<Vector2> holeNormals = new List<Vector2>();
-            CalculateClockwiseNormals(holePoints, holeNormals);
-            normals.AddRange(holeNormals);
-
-            foreach (var point in holePoints)
-            {
-                vertices.Add(point.x);
-                vertices.Add(point.y);
-            }
-            vertexCount += holePoints.Count;
-        }
-
-        // Triangulate using Earcut
-        var indices = Earcut.Tessellate(vertices, holeIndices);
-
-        // Create vertices and triangles
-        uint startVertexIndex = (uint)_vertices.Count;
-        var color = _state.fillColor;
-
-        // Add all points as vertices with extrusion applied
-        for (int i = 0; i < vertices.Count / 2; i++)
-        {
-            Vector2 point = new Vector2((float)vertices[i * 2], (float)vertices[i * 2 + 1]);
-            Vector2 normal = normals[i];
-
-            // Push the vertex outward along its normal by 15 units
-            Vector2 extrudedPoint = point - normal * _pixelWidth;
-
-            Vector2 uv = new Vector2(0.5, 0.5);
-            AddVertex(new Vertex(extrudedPoint, uv, color));
-        }
-
-        // Add triangle indices
-        int triangleCount = indices.Count / 3;
-        for (int i = 0; i < indices.Count; i += 3)
-        {
-            _indices.Add((uint)startVertexIndex + (uint)indices[i]);
-            _indices.Add((uint)startVertexIndex + (uint)indices[i + 2]);
-            _indices.Add((uint)startVertexIndex + (uint)indices[i + 1]);
-        }
-
-        // Make sure to add the triangle count to the draw call
-        AddTriangleCount(triangleCount);
-    }
-
-    private void CalculateClockwiseNormals(List<Vector2> points, List<Vector2> normals)
-    {
-        // Remove the Last Point, if it is the same as the first
-        if (points.Count > 1 && points[0] == points[^1])
-            points.RemoveAt(points.Count - 1);
-
-        int count = points.Count;
-        if (count < 3)
-            return;
-
-        for (int i = 0; i < count; i++)
-        {
-            // Get the previous and next points
-            Vector2 prev = points[(i + count - 1) % count];
-            Vector2 current = points[i];
-            Vector2 next = points[(i + 1) % count];
-
-            // Get the edges
-            Vector2 prevEdge = current - prev;
-            Vector2 nextEdge = next - current;
-
-            // Calculate normals for both edges (perpendicular)
-            Vector2 prevNormal = SafeNormalize(new Vector2(-prevEdge.y, prevEdge.x));
-            Vector2 nextNormal = SafeNormalize(new Vector2(-nextEdge.y, nextEdge.x));
-
-            // Average the two normals
-            Vector2 normal = SafeNormalize(prevNormal + nextNormal);
-            normals.Add(normal);
-        }
-    }
-
-    private Vector2 SafeNormalize(Vector2 vector)
-    {
-        double length = Math.Sqrt(vector.x * vector.x + vector.y * vector.y);
-        if (length < 0.0001)
-            return new Vector2(0, 0);
-        return new Vector2(vector.x / length, vector.y / length);
     }
 
     public void Stroke()

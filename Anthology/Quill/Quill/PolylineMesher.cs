@@ -72,10 +72,12 @@ internal static class PolylineMesher
                 color.G,
                 color.B
             );
+
+            thickness = 1.0;
         }
 
-        // Minimum effective thickness to avoid rendering artifacts
-        thickness = Math.Max(1.0, thickness) + pixelWidth;
+        // Expand the thickness to account for Anti-Aliasing
+        thickness += pixelWidth;
 
         // Half thickness for calculations
         double halfThickness = thickness / 2;
@@ -581,17 +583,7 @@ internal static class PolylineMesher
         public Vector2 B { get; }
 
         private Vector2? _cachedDirection;
-        public Vector2 Direction {
-            get {
-                if (_cachedDirection == null)
-                {
-                    Vector2 dir = B - A;
-                    _cachedDirection = Vector2.Normalize(dir);
-                }
-                return _cachedDirection.Value;
-            }
-        }
-
+        public Vector2 Direction => _cachedDirection ??= Vector2.Normalize(B - A);
         private Vector2? _cachedNormal;
 
         public LineSegment(Vector2 a, Vector2 b)
@@ -603,16 +595,7 @@ internal static class PolylineMesher
             _cachedNormal = null;
         }
 
-        public Vector2 Normal {
-            get {
-                if (_cachedNormal == null)
-                {
-                    Vector2 dir = Direction;
-                    _cachedNormal = new Vector2(-dir.y, dir.x);
-                }
-                return _cachedNormal.Value;
-            }
-        }
+        public Vector2 Normal => _cachedNormal ??= new Vector2(-Direction.y, Direction.x);
 
         public static Vector2? Intersection(LineSegment a, LineSegment b, bool infiniteLines)
         {

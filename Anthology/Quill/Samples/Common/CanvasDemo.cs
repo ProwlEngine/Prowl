@@ -905,7 +905,6 @@ namespace Common
 
                 // Inner path (counter-clockwise) - explicitly set as hole
                 _canvas.MoveTo(100, 15); // Start point at top-right of hole
-                _canvas.SetAsHole(); // Mark as hole (counter-clockwise)
                 _canvas.LineTo(80, 15);  // Top edge (right to left = CCW)
                 _canvas.LineTo(80, 35);  // Left edge
                 _canvas.LineTo(100, 35); // Bottom edge
@@ -953,32 +952,30 @@ namespace Common
                 double hole1Y = centerY - 5 + Math.Cos(time * 1.5) * 3;
                 double hole1Radius = 5 + Math.Sin(time * 2) * 1;
             
-                //_canvas.MoveTo(hole1X + hole1Radius, hole1Y);
-                //for (int i = segments; i >= 0; i--)
-                //{ // CCW direction
-                //    double angle = 2 * Math.PI * i / segments;
-                //    double px = hole1X + hole1Radius * Math.Cos(angle);
-                //    double py = hole1Y + hole1Radius * Math.Sin(angle);
-                //    _canvas.LineTo(px, py);
-                //}
-                //_canvas.ClosePath();
-                //_canvas.SetAsHole(); // Mark as hole
-                //
-                //// Inner hole 2 (counter-clockwise)
-                //double hole2X = centerX + 10 + Math.Cos(time) * 3;
-                //double hole2Y = centerY + 5 + Math.Sin(time * 2) * 3;
-                //double hole2Radius = 4 + Math.Cos(time * 3) * 1;
-                //
-                //_canvas.MoveTo(hole2X + hole2Radius, hole2Y);
-                //for (int i = segments; i >= 0; i--)
-                //{ // CCW direction
-                //    double angle = 2 * Math.PI * i / segments;
-                //    double px = hole2X + hole2Radius * Math.Cos(angle);
-                //    double py = hole2Y + hole2Radius * Math.Sin(angle);
-                //    _canvas.LineTo(px, py);
-                //}
-                //_canvas.ClosePath();
-                //_canvas.SetAsHole(); // Mark as hole
+                _canvas.MoveTo(hole1X + hole1Radius, hole1Y);
+                for (int i = segments; i >= 0; i--)
+                { // CCW direction
+                    double angle = 2 * Math.PI * i / segments;
+                    double px = hole1X + hole1Radius * Math.Cos(angle);
+                    double py = hole1Y + hole1Radius * Math.Sin(angle);
+                    _canvas.LineTo(px, py);
+                }
+                _canvas.ClosePath();
+                
+                // Inner hole 2 (counter-clockwise)
+                double hole2X = centerX + 10 + Math.Cos(time) * 3;
+                double hole2Y = centerY + 5 + Math.Sin(time * 2) * 3;
+                double hole2Radius = 4 + Math.Cos(time * 3) * 1;
+                
+                _canvas.MoveTo(hole2X + hole2Radius, hole2Y);
+                for (int i = segments; i >= 0; i--)
+                { // CCW direction
+                    double angle = 2 * Math.PI * i / segments;
+                    double px = hole2X + hole2Radius * Math.Cos(angle);
+                    double py = hole2Y + hole2Radius * Math.Sin(angle);
+                    _canvas.LineTo(px, py);
+                }
+                _canvas.ClosePath();
 
                 // Set fill color and stroke
                 _canvas.SetFillColor(Color.FromArgb(255, 150, 255, 150));
@@ -1006,9 +1003,13 @@ namespace Common
                     120, 80,
                     00, 80);
                 _canvas.ClosePath();
-            
+
+                double time = _time;
+
                 void AddHole(double holeX, double holeY, double holeSize)
                 {
+                    holeY += Math.Sin(time * 0.5) * 9;
+                    holeSize *= Math.Sin(time += 0.25);
                     _canvas.MoveTo(holeX + holeSize, holeY);
                     for (int j = 20; j >= 0; j--)
                     {
@@ -1018,19 +1019,17 @@ namespace Common
                         _canvas.LineTo(px, py);
                     }
                     _canvas.ClosePath();
-                    _canvas.SetAsHole();
                 }
 
-                double time = _time;
 
                 // Add a few holes
-                AddHole(20, 70, 8 * Math.Sin(time += 0.25));
-                AddHole(40, 71, 8 * Math.Sin(time += 0.25));
-                AddHole(60, 73, 8 * Math.Sin(time += 0.25));
-                AddHole(80, 76, 8 * Math.Sin(time += 0.25));
-                AddHole(100, 80, 8 * Math.Sin(time += 0.25));
-                AddHole(120, 86, 8 * Math.Sin(time += 0.25));
-                AddHole(140, 94, 8 * Math.Sin(time += 0.25));
+                AddHole(20, 70, 8);
+                AddHole(40, 71, 8);
+                AddHole(60, 73, 8);
+                AddHole(80, 76, 8);
+                AddHole(100, 80, 8);
+                AddHole(120, 86, 8);
+                AddHole(140, 94, 8);
 
                 // Set fill and stroke
                 _canvas.SetFillColor(Color.FromArgb(255, 255, 200, 100));
@@ -1038,7 +1037,7 @@ namespace Common
                 _canvas.SetStrokeWidth(1.5);
             
                 // Fill using auto-detection
-                _canvas.FillComplex(); // Will use complex fill since we have holes
+                _canvas.FillComplexAA();
                 //_canvas.Stroke();
             }
 
