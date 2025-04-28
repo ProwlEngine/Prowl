@@ -1,4 +1,5 @@
-﻿using Prowl.Quill;
+﻿using Prowl.PaperUI.Events;
+using Prowl.Quill;
 using Prowl.Vector;
 
 namespace Prowl.PaperUI.LayoutEngine
@@ -10,22 +11,27 @@ namespace Prowl.PaperUI.LayoutEngine
         // Events
         public bool IsFocusable { get; set; } = true;
         public bool IsNotInteractable { get; set; } = false;
-        public Action<Rect>? OnDragStart { get; set; }
-        public Action<Vector2, Rect>? OnDragging { get; set; }
-        public Action<Vector2, Vector2, Rect>? OnDragEnd { get; set; }
-        public Action<Rect>? OnPress { get; set; }
-        public Action<Rect>? OnHeld { get; set; }
-        public Action<Rect>? OnClick { get; set; }
-        public Action<Rect>? OnRelease { get; set; }
-        public Action<Rect>? OnDoubleClick { get; set; }
-        public Action<Rect>? OnRightClick { get; set; }
-        public Action<PaperKey>? OnKeyPressed { get; set; }
-        public Action<char>? OnTextInput { get; set; }
-        public Action<double, Rect>? OnScroll { get; set; }
-        public Action<Rect>? OnHover { get; set; }
-        public Action<bool>? OnFocusChange { get; set; }
-        public Action<Rect>? OnEnter { get; set; }
-        public Action<Rect>? OnLeave { get; set; }
+
+        public Action<ClickEvent>? OnClick { get; set; }
+        public Action<ClickEvent>? OnPress { get; set; }
+        public Action<ClickEvent>? OnRelease { get; set; }
+        public Action<ClickEvent>? OnDoubleClick { get; set; }
+        public Action<ClickEvent>? OnRightClick { get; set; }
+        public Action<ClickEvent>? OnHeld { get; set; }
+
+        public Action<DragEvent>? OnDragStart { get; set; }
+        public Action<DragEvent>? OnDragging { get; set; }
+        public Action<DragEvent>? OnDragEnd { get; set; }
+
+        public Action<ScrollEvent>? OnScroll { get; set; }
+        public Action<ElementEvent>? OnHover { get; set; }
+        public Action<ElementEvent>? OnEnter { get; set; }
+        public Action<ElementEvent>? OnLeave { get; set; }
+
+        public Action<KeyEvent>? OnKeyPressed { get; set; }
+        public Action<TextInputEvent>? OnTextInput { get; set; }
+        public Action<FocusEvent>? OnFocusChange { get; set; }
+
         public Action<Element, Rect>? OnPostLayout { get; set; }
 
         public Scroll ScrollFlags { get; set; } = Scroll.None;

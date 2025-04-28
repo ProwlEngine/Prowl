@@ -254,26 +254,26 @@ namespace Shared
                      .Margin(0, 15, 15, 0)
                      .Text(Text.Left($"    {Icons.MagnifyingGlass}    {searchText}", fontSmall,
                          searchFocused ? textColor : lightTextColor))
-                     .OnFocusChange((focus) => {
-                         searchFocused = focus;
+                     .OnFocusChange((e) => {
+                         searchFocused = e.IsFocused;
                      })
-                     .OnKeyPressed((key) => {
+                     .OnKeyPressed((e) => {
                          // Handle special keys
-                         if (key == PaperKey.Backspace && searchText.Length > 0)
+                         if (e.Key == PaperKey.Backspace && searchText.Length > 0)
                              searchText = searchText.Substring(0, searchText.Length - 1);
-                         else if (key == PaperKey.Enter)
+                         else if (e.Key == PaperKey.Enter)
                              Console.WriteLine($"Search query: {searchText}");
-                         else if (key == PaperKey.Escape)
+                         else if (e.Key == PaperKey.Escape)
                          {
                              searchFocused = false;
                              if (string.IsNullOrEmpty(searchText))
                                  searchText = "Search...";
                          }
                      })
-                     .OnTextInput((c) => {
+                     .OnTextInput((e) => {
                          // Add character to search text (ignore control characters)
-                         if (!char.IsControl(c))
-                             searchText += c;
+                         if (!char.IsControl(e.Character))
+                             searchText += e.Character;
                      })
                      .Enter())
                 {
@@ -598,8 +598,8 @@ namespace Shared
                     // Chart content
                     using (Paper.Box("Chart")
                         .Margin(20)
-                        .OnDragging((start, rect) => chartPosition += Paper.PointerDelta)
-                        .OnScroll((delta, rect) => zoomLevel = Math.Clamp(zoomLevel + delta * 0.1f, 0.5f, 2.0f))
+                        .OnDragging((e) => chartPosition += e.Delta)
+                        .OnScroll((e) => zoomLevel = Math.Clamp(zoomLevel + e.Delta * 0.1f, 0.5f, 2.0f))
                         .Clip()
                         .Enter())
                     {
@@ -835,9 +835,9 @@ namespace Shared
                             .BackgroundColor(Color.FromArgb(30, 0, 0, 0))
                             //.Style(BoxStyle.SolidRounded(Color.FromArgb(30, 0, 0, 0), 10f))
                             .Margin(0, 0, 20, 0)
-                            .OnHeld((rect) => {
-                                double parentWidth = rect.width;
-                                double pointerX = Paper.PointerPos.x - rect.x;
+                            .OnHeld((e) => {
+                                double parentWidth = e.ElementRect.width;
+                                double pointerX = e.PointerPosition.x - e.ElementRect.x;
 
                                 // Calculate new slider value based on pointer position
                                 sliderValue = Math.Clamp(pointerX / parentWidth, 0f, 1f);

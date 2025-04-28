@@ -1,5 +1,6 @@
 ﻿using System.Drawing;
 
+using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Vector;
@@ -634,180 +635,180 @@ namespace Prowl.PaperUI
             OnPostLayout((Element element, Rect rect) => handler(capturedValue, element, rect));
 
         /// <summary>Sets a callback that runs when the element is pressed.</summary>
-        public ElementBuilder OnPress(Action<Rect> handler)
+        public ElementBuilder OnPress(Action<ClickEvent> handler)
         {
             _element.OnPress += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the element is pressed, with a captured value.</summary>
-        public ElementBuilder OnPress<T>(T capturedValue, Action<T, Rect> handler) =>
-            OnPress((rect) => handler(capturedValue, rect));
+        public ElementBuilder OnPress<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnPress((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when the element is held down.</summary>
-        public ElementBuilder OnHeld(Action<Rect> handler)
+        public ElementBuilder OnHeld(Action<ClickEvent> handler)
         {
             _element.OnHeld += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the element is held down, with a captured value.</summary>
-        public ElementBuilder OnHeld<T>(T capturedValue, Action<T, Rect> handler) =>
-            OnHeld((rect) => handler(capturedValue, rect));
+        public ElementBuilder OnHeld<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnHeld((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when the element is clicked.</summary>
-        public ElementBuilder OnClick(Action<Rect> handler)
+        public ElementBuilder OnClick(Action<ClickEvent> handler)
         {
             _element.OnClick += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the element is clicked, with a captured value.</summary>
-        public ElementBuilder OnClick<T>(T capturedValue, Action<T, Rect> handler) =>
-            OnClick((rect) => handler(capturedValue, rect));
+        public ElementBuilder OnClick<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnClick((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when the element is dragged.</summary>
-        public ElementBuilder OnDragStart(Action<Rect> handler)
+        public ElementBuilder OnDragStart(Action<DragEvent> handler)
         {
             _element.OnDragStart += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the element is dragged, with a captured value.</summary>
-        public ElementBuilder OnDragStart<T>(T capturedValue, Action<T, Rect> handler) =>
-            OnDragStart((Rect rect) => handler(capturedValue, rect));
+        public ElementBuilder OnDragStart<T>(T capturedValue, Action<T, DragEvent> handler) =>
+            OnDragStart((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when the element is dragged.</summary>
-        public ElementBuilder OnDragging(Action<Vector2, Rect> handler)
+        public ElementBuilder OnDragging(Action<DragEvent> handler)
         {
             _element.OnDragging += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the element is dragged, with a captured value.</summary>
-        public ElementBuilder OnDragging<T>(T capturedValue, Action<T, Vector2, Rect> handler) =>
-            OnDragging((Vector2 start, Rect rect) => handler(capturedValue, start,  rect));
+        public ElementBuilder OnDragging<T>(T capturedValue, Action<T, DragEvent> handler) =>
+            OnDragging((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when the element is released after dragging.</summary>
-        public ElementBuilder OnDragEnd(Action<Vector2, Vector2, Rect> handler)
+        public ElementBuilder OnDragEnd(Action<DragEvent> handler)
         {
             _element.OnDragEnd += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the element is released after dragging, with a captured value.</summary>
-        public ElementBuilder OnDragEnd<T>(T capturedValue, Action<T, Vector2, Vector2, Rect> handler) =>
-            OnDragEnd((Vector2 start, Vector2 totalDelta, Rect rect) => handler(capturedValue, start, totalDelta, rect));
+        public ElementBuilder OnDragEnd<T>(T capturedValue, Action<T, DragEvent> handler) =>
+            OnDragEnd((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when the mouse button is released after clicking this element.</summary>
-        public ElementBuilder OnRelease(Action<Rect> handler)
+        public ElementBuilder OnRelease(Action<ClickEvent> handler)
         {
             _element.OnRelease += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the mouse button is released after clicking this element, with a captured value.</summary>
-        public ElementBuilder OnRelease<T>(T capturedValue, Action<T, Rect> handler) =>
-            OnRelease((rect) => handler(capturedValue, rect));
+        public ElementBuilder OnRelease<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnRelease((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when the element is double-clicked.</summary>
-        public ElementBuilder OnDoubleClick(Action<Rect> handler)
+        public ElementBuilder OnDoubleClick(Action<ClickEvent> handler)
         {
             _element.OnDoubleClick += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the element is double-clicked, with a captured value.</summary>
-        public ElementBuilder OnDoubleClick<T>(T capturedValue, Action<T, Rect> handler) =>
-            OnDoubleClick((rect) => handler(capturedValue, rect));
+        public ElementBuilder OnDoubleClick<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnDoubleClick((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when the element is right-clicked.</summary>
-        public ElementBuilder OnRightClick(Action<Rect> handler)
+        public ElementBuilder OnRightClick(Action<ClickEvent> handler)
         {
             _element.OnRightClick += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the element is right-clicked, with a captured value.</summary>
-        public ElementBuilder OnRightClick<T>(T capturedValue, Action<T, Rect> handler) =>
-            OnRightClick((rect) => handler(capturedValue, rect));
+        public ElementBuilder OnRightClick<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnRightClick((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when scrolling occurs over the element.</summary>
-        public ElementBuilder OnScroll(Action<double, Rect> handler)
+        public ElementBuilder OnScroll(Action<ScrollEvent> handler)
         {
             _element.OnScroll += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when scrolling occurs over the element, with a captured value.</summary>
-        public ElementBuilder OnScroll<T>(T capturedValue, Action<T, double, Rect> handler) =>
-            OnScroll((double delta, Rect rect) => handler(capturedValue, delta, rect));
+        public ElementBuilder OnScroll<T>(T capturedValue, Action<T, ScrollEvent> handler) =>
+            OnScroll((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when a key is pressed while the element is focused.</summary>
-        public ElementBuilder OnKeyPressed(Action<PaperKey> handler)
+        public ElementBuilder OnKeyPressed(Action<KeyEvent> handler)
         {
             _element.OnKeyPressed += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when a key is pressed while the element is focused, with a captured value.</summary>
-        public ElementBuilder OnKeyPressed<T>(T capturedValue, Action<T, PaperKey> handler) =>
-            OnKeyPressed((PaperKey key) => handler(capturedValue, key));
+        public ElementBuilder OnKeyPressed<T>(T capturedValue, Action<T, KeyEvent> handler) =>
+            OnKeyPressed((key) => handler(capturedValue, key));
 
         /// <summary>Sets a callback that runs when a character is typed while the element is focused.</summary>
-        public ElementBuilder OnTextInput(Action<char> handler)
+        public ElementBuilder OnTextInput(Action<TextInputEvent> handler)
         {
             _element.OnTextInput += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when a character is typed while the element is focused, with a captured value.</summary>
-        public ElementBuilder OnTextInput<T>(T capturedValue, Action<T, char> handler) =>
-            OnTextInput((char character) => handler(capturedValue, character));
+        public ElementBuilder OnTextInput<T>(T capturedValue, Action<T, TextInputEvent> handler) =>
+            OnTextInput((character) => handler(capturedValue, character));
 
         /// <summary>Sets a callback that runs when the cursor hovers over the element.</summary>
-        public ElementBuilder OnHover(Action<Rect> handler)
+        public ElementBuilder OnHover(Action<ElementEvent> handler)
         {
             _element.OnHover += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the cursor hovers over the element, with a captured value.</summary>
-        public ElementBuilder OnHover<T>(T capturedValue, Action<T, Rect> handler) =>
-            OnHover((Rect rect) => handler(capturedValue, rect));
+        public ElementBuilder OnHover<T>(T capturedValue, Action<T, ElementEvent> handler) =>
+            OnHover((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when the Focused state changes.</summary>
-        public ElementBuilder OnFocusChange(Action<bool> handler)
+        public ElementBuilder OnFocusChange(Action<FocusEvent> handler)
         {
             _element.OnFocusChange += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the Focused state changes, with a captured value.</summary>
-        public ElementBuilder OnFocusChange<T>(T capturedValue, Action<T, bool> handler) =>
-            OnFocusChange((bool focused) => handler(capturedValue, focused));
+        public ElementBuilder OnFocusChange<T>(T capturedValue, Action<T, FocusEvent> handler) =>
+            OnFocusChange((focused) => handler(capturedValue, focused));
 
         /// <summary>Sets a callback that runs when the cursor enters the element's bounds.</summary>
-        public ElementBuilder OnEnter(Action<Rect> handler)
+        public ElementBuilder OnEnter(Action<ElementEvent> handler)
         {
             _element.OnEnter += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the cursor enters the element's bounds, with a captured value.</summary>
-        public ElementBuilder OnEnter<T>(T capturedValue, Action<T, Rect> handler) =>
-            OnEnter((rect) => handler(capturedValue, rect));
+        public ElementBuilder OnEnter<T>(T capturedValue, Action<T, ElementEvent> handler) =>
+            OnEnter((e) => handler(capturedValue, e));
 
         /// <summary>Sets a callback that runs when the cursor leaves the element's bounds.</summary>
-        public ElementBuilder OnLeave(Action<Rect> handler)
+        public ElementBuilder OnLeave(Action<ElementEvent> handler)
         {
             _element.OnLeave += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs when the cursor leaves the element's bounds, with a captured value.</summary>
-        public ElementBuilder OnLeave<T>(T capturedValue, Action<T, Rect> handler) =>
-            OnLeave((rect) => handler(capturedValue, rect));
+        public ElementBuilder OnLeave<T>(T capturedValue, Action<T, ElementEvent> handler) =>
+            OnLeave((e) => handler(capturedValue, e));
 
         #endregion
 
@@ -952,13 +953,13 @@ namespace Prowl.PaperUI
             });
 
             // Handle hover events to detect when cursor is over scrollbars
-            OnHover((rect) => {
+            OnHover((e) => {
                 var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
                 Vector2 mousePos = Paper.PointerPos;
 
                 // Check if pointer is over scrollbars
-                state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, rect, _element.ScrollFlags);
-                state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, rect, _element.ScrollFlags);
+                state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
+                state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
 
                 Paper.SetElementStorage(_element, "ScrollState", state);
             });
@@ -972,7 +973,7 @@ namespace Prowl.PaperUI
             });
 
             // Handle scrolling with mouse wheel
-            OnScroll((delta, rect) => {
+            OnScroll((e) => {
                 var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
                 // Don't handle wheel scrolling if actively dragging scrollbars
@@ -983,13 +984,13 @@ namespace Prowl.PaperUI
                 {
                     state.Position = new Vector2(
                         state.Position.x,
-                        state.Position.y - delta * 30  // Adjust scroll speed as needed
+                        state.Position.y - e.Delta * 30  // Adjust scroll speed as needed
                     );
                 }
                 else if ((_element.ScrollFlags & Scroll.ScrollX) != 0)
                 {
                     state.Position = new Vector2(
-                        state.Position.x - delta * 30,
+                        state.Position.x - e.Delta * 30,
                         state.Position.y
                     );
                 }
@@ -999,7 +1000,7 @@ namespace Prowl.PaperUI
             });
 
             // Handle start scrollbar drag
-            OnDragStart((rect) => {
+            OnDragStart((e) => {
                 var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
                 if (state.AreScrollbarsHidden(Element.ScrollFlags)) return;
@@ -1007,8 +1008,8 @@ namespace Prowl.PaperUI
                 Vector2 mousePos = Paper.PointerPos;
 
                 // Check if click is on a scrollbar
-                bool onVertical = state.IsPointOverVerticalScrollbar(mousePos, rect, _element.ScrollFlags);
-                bool onHorizontal = state.IsPointOverHorizontalScrollbar(mousePos, rect, _element.ScrollFlags);
+                bool onVertical = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
+                bool onHorizontal = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
 
                 // Start dragging the appropriate scrollbar
                 if (onVertical)
@@ -1028,7 +1029,7 @@ namespace Prowl.PaperUI
             });
 
             // Handle dragging scrollbars
-            OnDragging((start, rect) => {
+            OnDragging((e) => {
                 var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
                 if (state.AreScrollbarsHidden(Element.ScrollFlags)) return;
@@ -1038,18 +1039,18 @@ namespace Prowl.PaperUI
                 // Handle scrollbar dragging
                 if (state.IsDraggingVertical)
                 {
-                    state.HandleVerticalScrollbarDrag(mousePos, rect, _element.ScrollFlags);
+                    state.HandleVerticalScrollbarDrag(mousePos, e.ElementRect, _element.ScrollFlags);
                 }
                 else if (state.IsDraggingHorizontal)
                 {
-                    state.HandleHorizontalScrollbarDrag(mousePos, rect, _element.ScrollFlags);
+                    state.HandleHorizontalScrollbarDrag(mousePos, e.ElementRect, _element.ScrollFlags);
                 }
 
                 Paper.SetElementStorage(_element, "ScrollState", state);
             });
 
             // Handle after dragging
-            OnDragEnd((startPos, delta, rect) => {
+            OnDragEnd((e) => {
                 var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
                 if (state.AreScrollbarsHidden(Element.ScrollFlags)) return;
@@ -1059,8 +1060,8 @@ namespace Prowl.PaperUI
 
                 // Update hover state on release
                 Vector2 mousePos = Paper.PointerPos;
-                state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, rect, _element.ScrollFlags);
-                state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, rect, _element.ScrollFlags);
+                state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
+                state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
 
                 Paper.SetElementStorage(_element, "ScrollState", state);
             });

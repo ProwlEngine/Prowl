@@ -263,11 +263,11 @@ namespace Prowl.PaperUI.Extras
                         BringWindowToFront(state.Id);
                     }
                 })
-                .OnDragging((start, rect) => {
+                .OnDragging((e) => {
                     if (state.IsDraggable)
                     {
                         // Update window position based on drag
-                        var totalDelta = Paper.PointerPos - start;
+                        var totalDelta = Paper.PointerPos - e.StartPosition;
                         state.Position = new Vector2(state.StartDraggingPosition.x + totalDelta.x, state.StartDraggingPosition.y + totalDelta.y);
 
                         BringWindowToFront(state.Id);
@@ -321,7 +321,7 @@ namespace Prowl.PaperUI.Extras
                 using (Paper.Box($"ResizeHandle_{handle.dir}_{state.Id}")
                     .PositionType(PositionType.SelfDirected)
                     .Left(handle.l).Top(handle.t).Width(handle.w).Height(handle.h)
-                    .OnDragging((start, rect) => ResizeWindow(state, Paper.PointerDelta, handle.dir))
+                    .OnDragging((e) => ResizeWindow(state, Paper.PointerDelta, handle.dir))
                     .OnHover((pos) => state.CurrentResizeDirection = handle.dir)
                     .OnLeave((PositionType) => state.CurrentResizeDirection = WindowState.ResizeDirection.None)
                     .Enter()) { }

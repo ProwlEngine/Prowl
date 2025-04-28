@@ -1,4 +1,5 @@
-﻿using Prowl.PaperUI.LayoutEngine;
+﻿using Prowl.PaperUI.Events;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
 
 namespace Prowl.PaperUI
@@ -101,8 +102,8 @@ namespace Prowl.PaperUI
                 Element? hoveredElement = FindElementByID(_theHoveredElementId);
                 if (hoveredElement != null)
                 {
-                    hoveredElement.OnScroll?.Invoke(PointerWheel, hoveredElement.LayoutRect);
-                    BubbleEventToParents(hoveredElement, parent => parent.OnScroll?.Invoke(PointerWheel, hoveredElement.LayoutRect));
+                    hoveredElement.OnScroll?.Invoke(new ScrollEvent(hoveredElement, hoveredElement.LayoutRect, PointerPos, PointerWheel));
+                    BubbleEventToParents(hoveredElement, parent => parent.OnScroll?.Invoke(new ScrollEvent(parent, parent.LayoutRect, PointerPos, PointerWheel)));
                 }
             }
 
@@ -234,7 +235,7 @@ namespace Prowl.PaperUI
                 Element? leftElement = FindElementByID(leftElementId);
                 if (leftElement != null && leftElement.OnLeave != null)
                 {
-                    leftElement.OnLeave(leftElement.LayoutRect);
+                    leftElement.OnLeave(new ElementEvent(leftElement, leftElement.LayoutRect, PointerPos));
                 }
                 _wasHoveredState[leftElementId] = false;
             }
@@ -249,10 +250,10 @@ namespace Prowl.PaperUI
 
                     // Only trigger enter event if element wasn't hovered before
                     if (!wasHovered && hoveredElement.OnEnter != null)
-                        hoveredElement.OnEnter(hoveredElement.LayoutRect);
+                        hoveredElement.OnEnter(new ElementEvent(hoveredElement, hoveredElement.LayoutRect, PointerPos));
 
                     // Always trigger hover event
-                    hoveredElement.OnHover?.Invoke(hoveredElement.LayoutRect);
+                    hoveredElement.OnHover?.Invoke(new ElementEvent(hoveredElement, hoveredElement.LayoutRect, PointerPos));
 
                     _wasHoveredState[hoveredId] = true;
                 }
@@ -273,10 +274,10 @@ namespace Prowl.PaperUI
                     if (hoveredElement != null)
                     {
                         // Direct event
-                        hoveredElement.OnDoubleClick?.Invoke(hoveredElement.LayoutRect);
+                        hoveredElement.OnDoubleClick?.Invoke(new ClickEvent(hoveredElement, hoveredElement.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
                         // Bubble event
-                        BubbleEventToParents(hoveredElement, parent => parent.OnDoubleClick?.Invoke(parent.LayoutRect));
+                        BubbleEventToParents(hoveredElement, parent => parent.OnDoubleClick?.Invoke(new ClickEvent(parent, parent.LayoutRect, PointerPos, PaperMouseBtn.Left)));
                     }
                 }
             }
@@ -294,10 +295,10 @@ namespace Prowl.PaperUI
                     if (activeElement != null)
                     {
                         // Direct event
-                        activeElement.OnPress?.Invoke(activeElement.LayoutRect);
+                        activeElement.OnPress?.Invoke(new ClickEvent(activeElement, activeElement.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
                         // Bubble event
-                        BubbleEventToParents(activeElement, parent => parent.OnPress?.Invoke(parent.LayoutRect));
+                        BubbleEventToParents(activeElement, parent => parent.OnPress?.Invoke(new ClickEvent(parent, parent.LayoutRect, PointerPos, PaperMouseBtn.Left)));
                     }
                 }
             }
@@ -318,10 +319,10 @@ namespace Prowl.PaperUI
                             Vector2 delta = endPos - startPos;
 
                             // Direct event
-                            activeElement.OnDragEnd?.Invoke(startPos, delta, activeElement.LayoutRect);
+                            activeElement.OnDragEnd?.Invoke(new DragEvent(activeElement, activeElement.LayoutRect, PointerPos, startPos, PointerDelta, delta));
 
                             // Bubble event
-                            BubbleEventToParents(activeElement, parent => parent.OnDragEnd?.Invoke(startPos, delta, parent.LayoutRect));
+                            BubbleEventToParents(activeElement, parent => parent.OnDragEnd?.Invoke(new DragEvent(parent, parent.LayoutRect, PointerPos, startPos, PointerDelta, delta)));
 
                             _isDragging[_activeElementId] = false;
                         }
@@ -330,24 +331,24 @@ namespace Prowl.PaperUI
                         if (_theHoveredElementId == _activeElementId)
                         {
                             // Direct click
-                            activeElement.OnClick?.Invoke(activeElement.LayoutRect);
+                            activeElement.OnClick?.Invoke(new ClickEvent(activeElement, activeElement.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
                             // Bubble click event
-                            BubbleEventToParents(activeElement, parent => parent.OnClick?.Invoke(parent.LayoutRect));
+                            BubbleEventToParents(activeElement, parent => parent.OnClick?.Invoke(new ClickEvent(parent, parent.LayoutRect, PointerPos, PaperMouseBtn.Left)));
 
                             // Update focus state
                             if (activeElement.IsFocusable)
                             {
                                 if (_focusedElementId != _activeElementId)
                                 {
-                                    activeElement.OnFocusChange?.Invoke(true);
+                                    activeElement.OnFocusChange?.Invoke(new FocusEvent(activeElement, true));
 
                                     if (_focusedElementId != 0)
                                     {
                                         Element? oldFocusedElement = FindElementByID(_focusedElementId);
                                         if (oldFocusedElement != null)
                                         {
-                                            oldFocusedElement.OnFocusChange?.Invoke(false);
+                                            oldFocusedElement.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
                                         }
                                     }
 
@@ -358,10 +359,10 @@ namespace Prowl.PaperUI
                         }
 
                         // Direct release event
-                        activeElement.OnRelease?.Invoke(activeElement.LayoutRect);
+                        activeElement.OnRelease?.Invoke(new ClickEvent(activeElement, activeElement.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
                         // Bubble release event
-                        BubbleEventToParents(activeElement, parent => parent.OnRelease?.Invoke(parent.LayoutRect));
+                        BubbleEventToParents(activeElement, parent => parent.OnRelease?.Invoke(new ClickEvent(parent, parent.LayoutRect, PointerPos, PaperMouseBtn.Left)));
                     }
 
                     _activeElementId = 0;
@@ -376,10 +377,10 @@ namespace Prowl.PaperUI
                     if (hoveredElement != null)
                     {
                         // Direct event
-                        hoveredElement.OnRightClick?.Invoke(hoveredElement.LayoutRect);
+                        hoveredElement.OnRightClick?.Invoke(new ClickEvent(hoveredElement, hoveredElement.LayoutRect, PointerPos, PaperMouseBtn.Right));
 
                         // Bubble event
-                        BubbleEventToParents(hoveredElement, parent => parent.OnRightClick?.Invoke(parent.LayoutRect));
+                        BubbleEventToParents(hoveredElement, parent => parent.OnRightClick?.Invoke(new ClickEvent(parent, parent.LayoutRect, PointerPos, PaperMouseBtn.Right)));
                     }
                 }
             }
@@ -391,10 +392,10 @@ namespace Prowl.PaperUI
                 if (activeElement != null)
                 {
                     // Direct event
-                    activeElement.OnHeld?.Invoke(activeElement.LayoutRect);
+                    activeElement.OnHeld?.Invoke(new ClickEvent(activeElement, activeElement.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
                     // Bubble event
-                    BubbleEventToParents(activeElement, parent => parent.OnHeld?.Invoke(parent.LayoutRect));
+                    BubbleEventToParents(activeElement, parent => parent.OnHeld?.Invoke(new ClickEvent(parent, parent.LayoutRect, PointerPos, PaperMouseBtn.Left)));
 
                     if (IsPointerMoving)
                     {
@@ -404,15 +405,15 @@ namespace Prowl.PaperUI
                         // Handle drag start
                         if (!wasDragging)
                         {
-                            activeElement.OnDragStart?.Invoke(activeElement.LayoutRect);
-                            BubbleEventToParents(activeElement, parent => parent.OnDragStart?.Invoke(parent.LayoutRect));
+                            activeElement.OnDragStart?.Invoke(new DragEvent(activeElement, activeElement.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
+                            BubbleEventToParents(activeElement, parent => parent.OnDragStart?.Invoke(new DragEvent(parent, parent.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta)));
 
                             _isDragging[_activeElementId] = true;
                         }
 
                         // Handle continuous dragging
-                        activeElement.OnDragging?.Invoke(startPos, activeElement.LayoutRect);
-                        BubbleEventToParents(activeElement, parent => parent.OnDragging?.Invoke(startPos, parent.LayoutRect));
+                        activeElement.OnDragging?.Invoke(new DragEvent(activeElement, activeElement.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
+                        BubbleEventToParents(activeElement, parent => parent.OnDragging?.Invoke(new DragEvent(parent, parent.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta)));
                     }
                 }
             }
@@ -436,7 +437,7 @@ namespace Prowl.PaperUI
             {
                 if (IsKeyPressed(key) && focusedElement.OnKeyPressed != null)
                 {
-                    focusedElement.OnKeyPressed(key);
+                    focusedElement.OnKeyPressed?.Invoke(new KeyEvent(focusedElement, key, IsKeyRepeating(key)));
                 }
             }
 
@@ -444,7 +445,7 @@ namespace Prowl.PaperUI
             while (InputString.Count > 0)
             {
                 char c = InputString.Dequeue();
-                focusedElement.OnTextInput?.Invoke(c);
+                focusedElement.OnTextInput?.Invoke(new TextInputEvent(focusedElement, c));
             }
         }
 
