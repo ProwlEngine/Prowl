@@ -1,6 +1,7 @@
 ﻿using FontStashSharp;
 using FontStashSharp.Interfaces;
 using Prowl.Vector;
+using System;
 using System.Drawing;
 
 namespace Prowl.Quill
@@ -31,7 +32,7 @@ namespace Prowl.Quill
         /// <summary>
         /// Updates texture data in the specified region.
         /// </summary>
-        public void SetTextureData(object texture, Rectangle bounds, byte[] data) => _canvas._renderer.SetTextureData(texture, new(bounds.X, bounds.Y, bounds.Width, bounds.Height), data);
+        public void SetTextureData(object texture, Rectangle bounds, byte[] data) => _canvas._renderer.SetTextureData(texture, new IntRect(bounds.X, bounds.Y, bounds.Width, bounds.Height), data);
 
         /// <summary>
         /// Draws a quad with the given texture and coordinates.
@@ -43,20 +44,20 @@ namespace Prowl.Quill
             Vector2 pos;
 
             // Top-left vertex
-            pos = _canvas.TransformPoint(new(topLeft.Position.X, topLeft.Position.Y));
-            var newTopLeft = new Vertex(new(Math.Round(pos.x), Math.Round(pos.y)), new(topLeft.TextureCoordinate.X, topLeft.TextureCoordinate.Y), ToColor(topLeft.Color));
+            pos = _canvas.TransformPoint(new Vector2(topLeft.Position.X, topLeft.Position.Y));
+            var newTopLeft = new Vertex(new Vector2(Math.Round(pos.x), Math.Round(pos.y)), new Vector2(topLeft.TextureCoordinate.X, topLeft.TextureCoordinate.Y), ToColor(topLeft.Color));
 
             // Top-right vertex
-            pos = _canvas.TransformPoint(new(topRight.Position.X, topRight.Position.Y));
-            var newTopRight = new Vertex(new(Math.Round(pos.x), Math.Round(pos.y)), new(topRight.TextureCoordinate.X, topRight.TextureCoordinate.Y), ToColor(topRight.Color));
+            pos = _canvas.TransformPoint(new Vector2(topRight.Position.X, topRight.Position.Y));
+            var newTopRight = new Vertex(new Vector2(Math.Round(pos.x), Math.Round(pos.y)), new Vector2(topRight.TextureCoordinate.X, topRight.TextureCoordinate.Y), ToColor(topRight.Color));
 
             // Bottom-right vertex
-            pos = _canvas.TransformPoint(new(bottomRight.Position.X, bottomRight.Position.Y));
-            var newBottomRight = new Vertex(new(Math.Round(pos.x), Math.Round(pos.y)), new(bottomRight.TextureCoordinate.X, bottomRight.TextureCoordinate.Y), ToColor(bottomRight.Color));
+            pos = _canvas.TransformPoint(new Vector2(bottomRight.Position.X, bottomRight.Position.Y));
+            var newBottomRight = new Vertex(new Vector2(Math.Round(pos.x), Math.Round(pos.y)), new Vector2(bottomRight.TextureCoordinate.X, bottomRight.TextureCoordinate.Y), ToColor(bottomRight.Color));
 
             // Bottom-left vertex
-            pos = _canvas.TransformPoint(new(bottomLeft.Position.X, bottomLeft.Position.Y));
-            var newBottomLeft = new Vertex(new(Math.Round(pos.x), Math.Round(pos.y)), new(bottomLeft.TextureCoordinate.X, bottomLeft.TextureCoordinate.Y), ToColor(bottomLeft.Color));
+            pos = _canvas.TransformPoint(new Vector2(bottomLeft.Position.X, bottomLeft.Position.Y));
+            var newBottomLeft = new Vertex(new Vector2(Math.Round(pos.x), Math.Round(pos.y)), new Vector2(bottomLeft.TextureCoordinate.X, bottomLeft.TextureCoordinate.Y), ToColor(bottomLeft.Color));
 
             _canvas.SetTexture(texture);
 
