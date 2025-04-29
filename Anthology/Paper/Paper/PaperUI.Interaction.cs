@@ -332,8 +332,10 @@ namespace Prowl.PaperUI
 
                     if (activeElement != null)
                     {
+                        bool wasDragging = _isDragging.TryGetValue(_activeElementId, out bool isDragging) && isDragging;
+
                         // Handle drag end if element was being dragged
-                        if (_isDragging.TryGetValue(_activeElementId, out bool isDragging) && isDragging)
+                        if (wasDragging)
                         {
                             Vector2 startPos = _dragStartPos[_activeElementId];
                             Vector2 endPos = PointerPos;
@@ -348,8 +350,8 @@ namespace Prowl.PaperUI
                             _isDragging[_activeElementId] = false;
                         }
 
-                        // If released over the same element that was pressed, it's a click
-                        if (_theHoveredElementId == _activeElementId)
+                        // If released over the same element that was pressed AND not dragging, it's a click
+                        if (_theHoveredElementId == _activeElementId && !wasDragging)
                         {
                             // Direct click
                             activeElement.OnClick?.Invoke(new ClickEvent(activeElement, activeElement.LayoutRect, PointerPos, PaperMouseBtn.Left));

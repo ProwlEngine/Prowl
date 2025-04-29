@@ -217,28 +217,23 @@ namespace Shared
                 .Height(70)
                 .Rounded(8)
                 .BackgroundColor(cardBackground)
-                //.Style(BoxStyle.SolidRoundedWithBorder(cardBackground, Color.FromArgb(30, 0, 0, 0), 4f, 1f))
                 .Margin(15, 15, 15, 0)
                 .Enter())
             {
                 // Logo
                 using (Paper.Box("Logo")
                     .Width(180)
-                    .Margin(0, 0, 0, 0)
                     .Enter())
                 {
-                    using (Paper.Box("LogoInner")
-                        .Width(50)
-                        .Height(50)
+                    Paper.Box("LogoInner")
+                        .Size(50)
                         .Margin(10)
-                        .Text(Text.Center(Icons.Newspaper, fontLarge, lightTextColor))
-                        .Enter()) { }
+                        .Text(Text.Center(Icons.Newspaper, fontLarge, lightTextColor));
 
-                    using (Paper.Box("LogoText")
+                    Paper.Box("LogoText")
                         .PositionType(PositionType.SelfDirected)
                         .Left(50 + 15)
-                        .Text(Text.Left("PaperUI Demo", fontTitle, textColor))
-                        .Enter()) { }
+                        .Text(Text.Left("PaperUI Demo", fontTitle, textColor));
                 }
 
                 // Spacer
@@ -246,59 +241,15 @@ namespace Shared
                     .Enter()) { }
 
                 // Search bar
-                using (Paper.Box("SearchBar")
-                     .Width(300)
-                     .Height(40)
-                     .Rounded(8)
-                     .BackgroundColor(Color.FromArgb(50, 0, 0, 0))
-                     .Margin(0, 15, 15, 0)
-                     .Text(Text.Left($"    {Icons.MagnifyingGlass}    {searchText}", fontSmall,
-                         searchFocused ? textColor : lightTextColor))
-                     .OnFocusChange((e) => {
-                         searchFocused = e.IsFocused;
-                     })
-                     .OnKeyPressed((e) => {
-                         // Handle special keys
-                         if (e.Key == PaperKey.Backspace && searchText.Length > 0)
-                             searchText = searchText.Substring(0, searchText.Length - 1);
-                         else if (e.Key == PaperKey.Enter)
-                             Console.WriteLine($"Search query: {searchText}");
-                         else if (e.Key == PaperKey.Escape)
-                         {
-                             searchFocused = false;
-                             if (string.IsNullOrEmpty(searchText))
-                                 searchText = "Search...";
-                         }
-                     })
-                     .OnTextInput((e) => {
-                         // Add character to search text (ignore control characters)
-                         if (!char.IsControl(e.Character))
-                             searchText += e.Character;
-                     })
-                     .Enter())
-                {
-
-                    // Add a blinking cursor when focused
-                    if (searchFocused)
-                    {
-                        Paper.AddActionElement((canvas, rect) => {
-                            // Only draw cursor during visible part of blink cycle
-                            if ((int)(time * 2) % 2 == 0)
-                            {
-                                double textWidth = fontSmall.MeasureString($"    {Icons.MagnifyingGlass}    {searchText}").X;
-                                double cursorX = rect.x + textWidth + 2;
-                                double cursorHeight = fontSmall.LineHeight;
-
-                                canvas.BeginPath();
-                                canvas.MoveTo(cursorX, rect.y + (rect.height - cursorHeight) / 2);
-                                canvas.LineTo(cursorX, rect.y + (rect.height - cursorHeight) / 2 + cursorHeight);
-                                canvas.SetStrokeColor(textColor);
-                                canvas.SetStrokeWidth(1);
-                                canvas.Stroke();
-                            }
-                        });
-                    }
-                }
+                Paper.Box("SearchTextField")
+                    .TextField(searchText, fontMedium, newValue => searchText = newValue, "Search...")
+                    .SetScroll(Scroll.ScrollX)
+                    .Width(300)
+                    .Height(40)
+                    .Rounded(8)
+                    .Rotate(2)
+                    .BackgroundColor(Color.FromArgb(50, 0, 0, 0))
+                    .Margin(0, 15, 15, 0);
 
                 // Theme Switch
                 using (Paper.Box("LightIcon")

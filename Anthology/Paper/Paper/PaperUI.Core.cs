@@ -480,6 +480,29 @@ namespace Prowl.PaperUI
             storage[key] = value;
         }
 
+        #region Text Field Storage Helpers
+
+        /// <summary>
+        /// Gets the current value of a text field.
+        /// </summary>
+        public static string GetTextFieldValue(Element element)
+        {
+            return Paper.GetElementStorage<string>(element, "Value", "");
+        }
+
+        /// <summary>
+        /// Sets the value of a text field.
+        /// </summary>
+        public static void SetTextFieldValue(Element element, string value)
+        {
+            Paper.SetElementStorage(element, "Value", value);
+            Paper.SetElementStorage(element, "CursorPosition", value.Length);
+            Paper.SetElementStorage(element, "SelectionStart", -1);
+            Paper.SetElementStorage(element, "SelectionEnd", -1);
+        }
+
+        #endregion
+
         #endregion
 
         #region Layout Helpers
