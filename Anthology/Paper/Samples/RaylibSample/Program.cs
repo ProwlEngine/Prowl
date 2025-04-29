@@ -27,6 +27,7 @@ internal class Program
 
         _renderer = new RaylibCanvasRenderer();
         Paper.Initialize(_renderer, width, height);
+        Paper.SetClipboardHandler(new RaylibClipboardHandler());
 
         // Initialize the Demo, this loads the Demo fonts and other resources
         PaperDemo.Initialize();
@@ -132,6 +133,12 @@ internal class Program
         HandleKey(KeyboardKey.KpAdd, PaperKey.KeypadPlus);
         HandleKey(KeyboardKey.KpEnter, PaperKey.KeypadEnter);
         HandleKey(KeyboardKey.KpEqual, PaperKey.KeypadEquals);
+    }
+
+    class RaylibClipboardHandler : IClipboardHandler
+    {
+        public string GetClipboardText() => Raylib.GetClipboardText_();
+        public void SetClipboardText(string text) => Raylib.SetClipboardText(text);
     }
 
     static void HandleKey(KeyboardKey rayKey, PaperKey paperKey)
