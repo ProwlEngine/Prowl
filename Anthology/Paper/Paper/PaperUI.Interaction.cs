@@ -299,6 +299,27 @@ namespace Prowl.PaperUI
 
                         // Bubble event
                         BubbleEventToParents(activeElement, parent => parent.OnPress?.Invoke(new ClickEvent(parent, parent.LayoutRect, PointerPos, PaperMouseBtn.Left)));
+
+                        // Update focus state
+                        if (activeElement.IsFocusable)
+                        {
+                            if (_focusedElementId != _activeElementId)
+                            {
+                                activeElement.OnFocusChange?.Invoke(new FocusEvent(activeElement, true));
+
+                                if (_focusedElementId != 0)
+                                {
+                                    Element? oldFocusedElement = FindElementByID(_focusedElementId);
+                                    if (oldFocusedElement != null)
+                                    {
+                                        oldFocusedElement.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
+                                    }
+                                }
+
+                                // Update focused element ID
+                                _focusedElementId = _activeElementId;
+                            }
+                        }
                     }
                 }
             }
@@ -335,27 +356,6 @@ namespace Prowl.PaperUI
 
                             // Bubble click event
                             BubbleEventToParents(activeElement, parent => parent.OnClick?.Invoke(new ClickEvent(parent, parent.LayoutRect, PointerPos, PaperMouseBtn.Left)));
-
-                            // Update focus state
-                            if (activeElement.IsFocusable)
-                            {
-                                if (_focusedElementId != _activeElementId)
-                                {
-                                    activeElement.OnFocusChange?.Invoke(new FocusEvent(activeElement, true));
-
-                                    if (_focusedElementId != 0)
-                                    {
-                                        Element? oldFocusedElement = FindElementByID(_focusedElementId);
-                                        if (oldFocusedElement != null)
-                                        {
-                                            oldFocusedElement.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
-                                        }
-                                    }
-
-                                    // Update focused element ID
-                                    _focusedElementId = _activeElementId;
-                                }
-                            }
                         }
 
                         // Direct release event
