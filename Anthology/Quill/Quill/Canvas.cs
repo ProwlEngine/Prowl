@@ -867,7 +867,7 @@ public partial class Canvas
             uint v1 = (uint)(startVertexIndex + indices[i]);
             uint v2 = (uint)(startVertexIndex + indices[i + 1]);
             uint v3 = (uint)(startVertexIndex + indices[i + 2]);
-            AddTriangle(v1, v2, v3);
+            AddTriangle(v1, v3, v2);
         }
     }
 
