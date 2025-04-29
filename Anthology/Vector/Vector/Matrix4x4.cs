@@ -2062,6 +2062,19 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     public static bool operator !=(Matrix4x4 value1, Matrix4x4 value2) => !value1.Equals(value2);
 
     /// <summary>
+    /// Converts this matrix instance to a System.Numerics.Matrix4x4.
+    /// </summary>
+    /// <param name="matrix">The source matrix.</param>
+    public static explicit operator System.Numerics.Matrix4x4(Matrix4x4 matrix)
+    {
+        return new System.Numerics.Matrix4x4(
+            (float)matrix.M11, (float)matrix.M12, (float)matrix.M13, (float)matrix.M14,
+            (float)matrix.M21, (float)matrix.M22, (float)matrix.M23, (float)matrix.M24,
+            (float)matrix.M31, (float)matrix.M32, (float)matrix.M33, (float)matrix.M34,
+            (float)matrix.M41, (float)matrix.M42, (float)matrix.M43, (float)matrix.M44);
+    }
+
+    /// <summary>
     /// Returns a boolean indicating whether this matrix instance is equal to the other given matrix.
     /// </summary>
     /// <param name="other">The matrix to compare this instance to.</param>
