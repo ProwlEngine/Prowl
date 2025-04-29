@@ -447,15 +447,15 @@ namespace Prowl.PaperUI
         #region Element Storage
 
         /// <summary> Get a value from the global GUI storage this persists across all Frames and Elements </summary>
-        public static T GetRootStorage<T>(string key) where T : unmanaged => GetElementStorage<T>(_rootElement, key, default);
+        public static T GetRootStorage<T>(string key) => GetElementStorage<T>(_rootElement, key, default);
         /// <summary> Set a value in the root element </summary>
-        public static void SetRootStorage<T>(string key, T value) where T : unmanaged => SetElementStorage(_rootElement, key, value);
+        public static void SetRootStorage<T>(string key, T value) => SetElementStorage(_rootElement, key, value);
 
         /// <summary> Get a value from the current element's storage </summary>
-        public static T GetElementStorage<T>(string key, T defaultValue = default) where T : unmanaged => GetElementStorage(CurrentParent, key, defaultValue);
+        public static T GetElementStorage<T>(string key, T defaultValue = default) => GetElementStorage(CurrentParent, key, defaultValue);
 
         /// <summary> Get a value from the current element's storage </summary>
-        public static T GetElementStorage<T>(Element el, string key, T defaultValue = default) where T : unmanaged
+        public static T GetElementStorage<T>(Element el, string key, T defaultValue = default)
         {
             if (!_storage.TryGetValue(el.ID, out var storage))
                 return defaultValue;
@@ -470,9 +470,9 @@ namespace Prowl.PaperUI
         public static bool HasElementStorage(Element el, string key) => _storage.TryGetValue(el.ID, out var storage) && storage.ContainsKey(key);
 
         /// <summary> Set a value in the current element's storage </summary>
-        public static void SetElementStorage<T>(string key, T value) where T : unmanaged => SetElementStorage(CurrentParent, key, value);
+        public static void SetElementStorage<T>(string key, T value) => SetElementStorage(CurrentParent, key, value);
         /// <summary> Set a value in the current element's storage </summary>
-        public static void SetElementStorage<T>(Element el, string key, T value) where T : unmanaged
+        public static void SetElementStorage<T>(Element el, string key, T value)
         {
             if (!_storage.TryGetValue(el.ID, out var storage))
                 _storage[el.ID] = storage = [];
