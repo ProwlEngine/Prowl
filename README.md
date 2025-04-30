@@ -54,7 +54,7 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Same Library for in-game and Editor UI
         - 3D Drawing in UI used for Gizmo's
         - Immediate Mode with retained properties
-    - .NET 8
+    - .NET 9
     - Editor with support for Editor Scripts and Custom Editors
     - Physics using [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
         - Colliders: Box, Sphere, Capsule, Cylinder, Cone, Convex Mesh
