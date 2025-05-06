@@ -41,8 +41,8 @@ namespace OpenTKExample
             base.OnLoad();
 
             // Create the Demo's Texture
-            _demoTexture = TextureTK.LoadFromFile("Textures/wall.png");
-            _whiteTexture = TextureTK.LoadFromFile("Textures/white.png");
+            _demoTexture = TextureTK.LoadFromFile("../Common/Textures/wall.png");
+            _whiteTexture = TextureTK.LoadFromFile("../Common/Textures/white.png");
 
             // Set clear color to black
             GL.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -55,14 +55,14 @@ namespace OpenTKExample
 
             // Load textures
             FontSystem fonts = new FontSystem();
-            using (var stream = File.OpenRead("Fonts/Roboto.ttf"))
+            using (var stream = File.OpenRead("../Common/Fonts/Roboto.ttf"))
             {
                 fonts.AddFont(stream);
                 RobotoFont32 = fonts.GetFont(32);
                 RobotoFont16 = fonts.GetFont(16);
             }
             fonts = new FontSystem();
-            using (var stream = File.OpenRead("Fonts/Alamak.ttf"))
+            using (var stream = File.OpenRead("../Common/Fonts/Alamak.ttf"))
             {
                 fonts.AddFont(stream);
                 AlamakFont32 = fonts.GetFont(32);
