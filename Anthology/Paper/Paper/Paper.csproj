@@ -1,19 +1,22 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>0.1.0</Version>
+    <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <Version>0.1.1</Version>
+    <Authors>Wulferis</Authors>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <Title>Paper</Title>
+    <Title>Prowl.Paper</Title>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Paper</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <Description>A powerful immediate mode .net UI Library powering the Prowl Game Engine!</Description>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+    <PackageTags>UI framework;immediate mode GUI;C#;.NET;layout engine;responsive design;fluid layouts;component library;animations;easing functions;transitions;event handling;input management;styling system;theme support;widget toolkit;interactive elements;vector graphics;fluent API;text rendering;scrolling;dragging;flexible layouts;Windows;user interface;GUI library;desktop applications;game UI;dark mode;light mode;reactive design;rendering engine;transform effects;UI components;window management;tooltips;text field;buttons;sliders</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

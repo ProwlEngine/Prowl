@@ -6,10 +6,15 @@
     /// </summary>
     /// <remarks> Initializes a new instance of the ArrayBuffer class with the specified capacity. </remarks>
     /// <param name="capacity">The initial capacity of the buffer.</param>
-    internal class ArrayBuffer<T>(int capacity)
+    internal class ArrayBuffer<T>
     {
-        private T[] _array = new T[capacity];        // Internal storage array
+        private T[] _array;        // Internal storage array
         private int _count = 0;    // Number of elements currently in use
+
+        public ArrayBuffer(int capacity)
+        {
+            _array = new T[capacity];
+        }
 
         /// <summary>
         /// Gets the underlying array regardless of how many elements are in use.

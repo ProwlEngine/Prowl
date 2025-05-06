@@ -18,8 +18,16 @@ namespace Prowl.PaperUI
     /// </remarks>
     /// <param name="owner">The element builder that owns this style state</param>
     /// <param name="isActive">Whether the style properties should be applied</param>
-    public struct StyleStateRef(ElementBuilder owner, bool isActive)
+    public struct StyleStateRef
     {
+        ElementBuilder _owner;
+        bool _isActive;
+
+        public StyleStateRef(ElementBuilder owner, bool isActive)
+        {
+            this._owner = owner;
+            this._isActive = isActive;
+        }
 
         /// <summary>
         /// Sets a style property value if the state is active.
@@ -29,8 +37,8 @@ namespace Prowl.PaperUI
         /// <returns>This style state reference for chaining</returns>
         private StyleStateRef SetValue(GuiProp property, object value)
         {
-            if (isActive)
-                Paper.SetStyleProperty(owner.Element.ID, property, value);
+            if (_isActive)
+                Paper.SetStyleProperty(_owner.Element.ID, property, value);
 
             return this;
         }
@@ -285,7 +293,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Returns to the element builder to continue the building chain.
         /// </summary>
-        public ElementBuilder End() => owner;
+        public ElementBuilder End() => _owner;
     }
 
     /// <summary>
