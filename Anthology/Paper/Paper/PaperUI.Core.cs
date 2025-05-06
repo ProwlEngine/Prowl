@@ -364,10 +364,16 @@ namespace Prowl.PaperUI
         /// <returns>A builder for configuring the element</returns>
         public static ElementBuilder Box(string stringID, [CallerLineNumber] int intID = 0)
         {
-            ulong storageHash = (ulong)HashCode.Combine(_IDStack.Peek(), stringID ?? string.Empty, intID);
+            ArgumentNullException.ThrowIfNull(stringID);
+
+            ulong storageHash = 0;
+            if(_IDStack.Count > 0)
+                storageHash = (ulong)HashCode.Combine(CurrentParent.ID, _IDStack.Peek(), stringID, intID);
+            else
+                storageHash = (ulong)HashCode.Combine(CurrentParent.ID, stringID, intID);
 
             if (_createdElements.ContainsKey(storageHash))
-                throw new Exception("Element already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + " Parent: " + _IDStack.Peek() + "\nPlease use a different ID.");
+                throw new Exception("Element already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + " Parent: " + CurrentParent.ID + "\nPlease use a different ID.");
 
             var builder = new ElementBuilder(storageHash);
             _createdElements.Add(storageHash, builder.Element);

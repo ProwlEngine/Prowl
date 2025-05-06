@@ -247,7 +247,7 @@ namespace Shared
                     .Width(300)
                     .Height(40)
                     .Rounded(8)
-                    .Rotate(2)
+                    //.Rotate(2)
                     .BackgroundColor(Color.FromArgb(50, 0, 0, 0))
                     .Margin(0, 15, 15, 0);
 
