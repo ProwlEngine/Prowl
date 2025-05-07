@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Octokit" Version="14.0.0" />
+    </ItemGroup>
+
+    <PropertyGroup>
+        <DefaultItemExcludes>$(DefaultItemExcludes);**\*.*</DefaultItemExcludes>
+    </PropertyGroup>
+
+	  <ItemGroup>
+        <Compile Include="UpdateSources.cs" />
+        <Compile Include="ProgressBar.cs" />
+    </ItemGroup>
+
+</Project>

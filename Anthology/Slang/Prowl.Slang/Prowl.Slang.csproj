@@ -1,0 +1,116 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <!-- <GenerateDocumentationFile>true</GenerateDocumentationFile> -->
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Slang.NET</PackageId>
+        <Version>0.0.1</Version>
+
+        <Authors>Prowl Group</Authors>
+        <Owners>Prowl Group</Owners>
+        <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
+
+        <Description>A cross-platform managed wrapper for the Slang shader compiler</Description>
+        <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Slang</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+
+        <PackageTags>shader compiler slang hlsl shader-programs spirv spir-v Vulkan OpenGL DirectX Metal</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
+
+        <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <WindowsX64LibPath>..\Native\lib\windows-x64\bin\*.dll</WindowsX64LibPath>
+        <WindowsArm64LibPath>..\Native\lib\windows-arm64\bin\*.dll</WindowsArm64LibPath>
+        <LinuxX64LibPath>..\Native\lib\linux-x64\lib\*.so</LinuxX64LibPath>
+        <LinuxArm64LibPath>..\Native\lib\linux-arm64\lib\*.so</LinuxArm64LibPath>
+        <MacosX64LibPath>..\Native\lib\macos-x64\lib\*.dylib</MacosX64LibPath>
+        <MacosArm64LibPath>..\Native\lib\macos-arm64\lib\*.dylib</MacosArm64LibPath>
+
+        <WindowsX64RuntimePath>runtimes\win-x64\native</WindowsX64RuntimePath>
+        <WindowsArm64RuntimePath>runtimes\win-arm64\native</WindowsArm64RuntimePath>
+        <LinuxX64RuntimePath>runtimes\linux-x64\native</LinuxX64RuntimePath>
+        <LinuxArm64RuntimePath>runtimes\linux-arm64\native</LinuxArm64RuntimePath>
+        <MacosX64RuntimePath>runtimes\osx-x64\native</MacosX64RuntimePath>
+        <MacosArm64RuntimePath>runtimes\osx-arm64\native</MacosArm64RuntimePath>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="../LICENSE" Pack="true" PackagePath="\"/>
+        <None Include="../README.md" Pack="true" PackagePath="\"/>
+
+        <Content Include="$(WindowsX64BinPath)">
+            <Pack>true</Pack>
+            <PackagePath>$(WindowsX64RuntimePath)</PackagePath>
+        </Content>
+
+        <Content Include="$(WindowsArm64BinPath)">
+            <Pack>true</Pack>
+            <PackagePath>$(WindowsArm64RuntimePath)</PackagePath>
+        </Content>
+
+        <Content Include="$(LinuxX64LibPath)">
+            <Pack>true</Pack>
+            <PackagePath>$(LinuxX64RuntimePath)</PackagePath>
+        </Content>
+
+        <Content Include="$(LinuxArm64LibPath)">
+            <Pack>true</Pack>
+            <PackagePath>$(LinuxArm64RuntimePath)</PackagePath>
+        </Content>
+
+        <Content Include="$(MacosX64LibPath)">
+            <Pack>true</Pack>
+            <PackagePath>$(MacosX64RuntimePath)</PackagePath>
+        </Content>
+
+        <Content Include="$(MacosArm64LibPath)">
+            <Pack>true</Pack>
+            <PackagePath>$(MacosArm64RuntimePath)</PackagePath>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup Condition="$([MSBuild]::IsOsPlatform('Windows')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64' ">
+        <Content Include="$(WindowsX64LibPath)">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup Condition="$([MSBuild]::IsOsPlatform('Windows')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64' ">
+        <Content Include="$(WindowsArm64LibPath)">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup Condition="$([MSBuild]::IsOsPlatform('Linux')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64' ">
+        <Content Include="$(LinuxX64LibPath)">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup Condition="$([MSBuild]::IsOsPlatform('Linux')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64' ">
+        <Content Include="$(LinuxArm64LibPath)">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup Condition="$([MSBuild]::IsOsPlatform('OSX')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64' ">
+        <Content Include="$(MacosX64LibPath)">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup Condition="$([MSBuild]::IsOsPlatform('OSX')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64' ">
+        <Content Include="$(MacosArm64LibPath)">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+</Project>
