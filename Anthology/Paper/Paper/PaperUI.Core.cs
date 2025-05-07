@@ -376,9 +376,9 @@ namespace Prowl.PaperUI
                 throw new Exception("Element already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + " Parent: " + CurrentParent.ID + "\nPlease use a different ID.");
 
             var builder = new ElementBuilder(storageHash);
-            _createdElements.Add(storageHash, builder.Element);
+            _createdElements.Add(storageHash, builder._element);
 
-            AddChild(builder.Element);
+            AddChild(builder._element);
 
             return builder;
         }

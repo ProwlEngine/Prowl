@@ -9,220 +9,200 @@ using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {
-    /// <summary>
-    /// Represents a reference to a style state that can be conditionally applied.
-    /// Provides a fluent API for setting style properties based on element state conditions.
-    /// </summary>
-    /// <remarks>
-    /// Creates a new style state reference.
-    /// </remarks>
-    /// <param name="owner">The element builder that owns this style state</param>
-    /// <param name="isActive">Whether the style properties should be applied</param>
-    public struct StyleStateRef
+    public interface IStyleSetter<T> where T : IStyleSetter<T>
     {
-        ElementBuilder _owner;
-        bool _isActive;
+        T SetStyleProperty(GuiProp property, object value);
+    }
 
-        public StyleStateRef(ElementBuilder owner, bool isActive)
+    public abstract class StyleSetterBase<T> : IStyleSetter<T> where T : StyleSetterBase<T>
+    {
+        public Element _element { get; }
+
+        protected StyleSetterBase(Element element)
         {
-            this._owner = owner;
-            this._isActive = isActive;
+            _element = element;
         }
 
-        /// <summary>
-        /// Sets a style property value if the state is active.
-        /// </summary>
-        /// <param name="property">The property to set</param>
-        /// <param name="value">The value to assign</param>
-        /// <returns>This style state reference for chaining</returns>
-        private StyleStateRef SetValue(GuiProp property, object value)
-        {
-            if (_isActive)
-                Paper.SetStyleProperty(_owner.Element.ID, property, value);
+        public abstract T SetStyleProperty(GuiProp property, object value);
 
-            return this;
-        }
+        // Shared implementation methods
 
         #region Appearance Properties
 
         /// <summary>Sets the background color of the element.</summary>
-        public StyleStateRef BackgroundColor(Color color) => SetValue(GuiProp.BackgroundColor, color);
+        public T BackgroundColor(Color color) => SetStyleProperty(GuiProp.BackgroundColor, color);
 
         /// <summary>Sets the border color of the element.</summary>
-        public StyleStateRef BorderColor(Color color) => SetValue(GuiProp.BorderColor, color);
+        public T BorderColor(Color color) => SetStyleProperty(GuiProp.BorderColor, color);
 
         /// <summary>Sets the border width of the element.</summary>
-        public StyleStateRef BorderWidth(double width) => SetValue(GuiProp.BorderWidth, width);
+        public T BorderWidth(double width) => SetStyleProperty(GuiProp.BorderWidth, width);
 
         #endregion
 
         #region Corner Rounding
 
         /// <summary>Rounds the top corners of the element.</summary>
-        public StyleStateRef RoundedTop(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, 0, 0));
+        public T RoundedTop(double radius) => SetStyleProperty(GuiProp.Rounded, new Vector4(radius, radius, 0, 0));
 
         /// <summary>Rounds the bottom corners of the element.</summary>
-        public StyleStateRef RoundedBottom(double radius) => SetValue(GuiProp.Rounded, new Vector4(0, 0, radius, radius));
+        public T RoundedBottom(double radius) => SetStyleProperty(GuiProp.Rounded, new Vector4(0, 0, radius, radius));
 
         /// <summary>Rounds the left corners of the element.</summary>
-        public StyleStateRef RoundedLeft(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, 0, 0, radius));
+        public T RoundedLeft(double radius) => SetStyleProperty(GuiProp.Rounded, new Vector4(radius, 0, 0, radius));
 
         /// <summary>Rounds the right corners of the element.</summary>
-        public StyleStateRef RoundedRight(double radius) => SetValue(GuiProp.Rounded, new Vector4(0, radius, radius, 0));
+        public T RoundedRight(double radius) => SetStyleProperty(GuiProp.Rounded, new Vector4(0, radius, radius, 0));
 
         /// <summary>Rounds all corners of the element with the same radius.</summary>
-        public StyleStateRef Rounded(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, radius, radius));
+        public T Rounded(double radius) => SetStyleProperty(GuiProp.Rounded, new Vector4(radius, radius, radius, radius));
 
         /// <summary>Rounds each corner of the element with individual radii.</summary>
         /// <param name="tlRadius">Top-left radius</param>
         /// <param name="trRadius">Top-right radius</param>
         /// <param name="brRadius">Bottom-right radius</param>
         /// <param name="blRadius">Bottom-left radius</param>
-        public StyleStateRef Rounded(double tlRadius, double trRadius, double brRadius, double blRadius) =>
-            SetValue(GuiProp.Rounded, new Vector4(tlRadius, trRadius, brRadius, blRadius));
+        public T Rounded(double tlRadius, double trRadius, double brRadius, double blRadius) =>
+            SetStyleProperty(GuiProp.Rounded, new Vector4(tlRadius, trRadius, brRadius, blRadius));
 
         #endregion
 
         #region Layout Properties
 
         /// <summary>Sets the aspect ratio (width/height) of the element.</summary>
-        public StyleStateRef AspectRatio(double ratio) => SetValue(GuiProp.AspectRatio, ratio);
+        public T AspectRatio(double ratio) => SetStyleProperty(GuiProp.AspectRatio, ratio);
 
         /// <summary>Sets both width and height to the same value.</summary>
-        public StyleStateRef Size(UnitValue sizeUniform) => Size(sizeUniform, sizeUniform);
+        public T Size(UnitValue sizeUniform) => Size(sizeUniform, sizeUniform);
 
         /// <summary>Sets the width and height of the element.</summary>
-        public StyleStateRef Size(UnitValue width, UnitValue height)
+        public T Size(UnitValue width, UnitValue height)
         {
-            SetValue(GuiProp.Width, width);
-            SetValue(GuiProp.Height, height);
-            return this;
+            SetStyleProperty(GuiProp.Width, width);
+            return SetStyleProperty(GuiProp.Height, height);
         }
 
         /// <summary>Sets the width of the element.</summary>
-        public StyleStateRef Width(UnitValue width) => SetValue(GuiProp.Width, width);
+        public T Width(UnitValue width) => SetStyleProperty(GuiProp.Width, width);
 
         /// <summary>Sets the height of the element.</summary>
-        public StyleStateRef Height(UnitValue height) => SetValue(GuiProp.Height, height);
+        public T Height(UnitValue height) => SetStyleProperty(GuiProp.Height, height);
 
         /// <summary>Sets the minimum width of the element.</summary>
-        public StyleStateRef MinWidth(UnitValue minWidth) => SetValue(GuiProp.MinWidth, minWidth);
+        public T MinWidth(UnitValue minWidth) => SetStyleProperty(GuiProp.MinWidth, minWidth);
 
         /// <summary>Sets the maximum width of the element.</summary>
-        public StyleStateRef MaxWidth(UnitValue maxWidth) => SetValue(GuiProp.MaxWidth, maxWidth);
+        public T MaxWidth(UnitValue maxWidth) => SetStyleProperty(GuiProp.MaxWidth, maxWidth);
 
         /// <summary>Sets the minimum height of the element.</summary>
-        public StyleStateRef MinHeight(UnitValue minHeight) => SetValue(GuiProp.MinHeight, minHeight);
+        public T MinHeight(UnitValue minHeight) => SetStyleProperty(GuiProp.MinHeight, minHeight);
 
         /// <summary>Sets the maximum height of the element.</summary>
-        public StyleStateRef MaxHeight(UnitValue maxHeight) => SetValue(GuiProp.MaxHeight, maxHeight);
+        public T MaxHeight(UnitValue maxHeight) => SetStyleProperty(GuiProp.MaxHeight, maxHeight);
 
         /// <summary>Sets the position of the element from the left and top edges.</summary>
-        public StyleStateRef Position(UnitValue left, UnitValue top)
+        public T Position(UnitValue left, UnitValue top)
         {
-            SetValue(GuiProp.Left, left);
-            SetValue(GuiProp.Top, top);
-            return this;
+            SetStyleProperty(GuiProp.Left, left);
+            return SetStyleProperty(GuiProp.Top, top);
         }
 
         /// <summary>Sets the left position of the element.</summary>
-        public StyleStateRef Left(UnitValue left) => SetValue(GuiProp.Left, left);
+        public T Left(UnitValue left) => SetStyleProperty(GuiProp.Left, left);
 
         /// <summary>Sets the right position of the element.</summary>
-        public StyleStateRef Right(UnitValue right) => SetValue(GuiProp.Right, right);
+        public T Right(UnitValue right) => SetStyleProperty(GuiProp.Right, right);
 
         /// <summary>Sets the top position of the element.</summary>
-        public StyleStateRef Top(UnitValue top) => SetValue(GuiProp.Top, top);
+        public T Top(UnitValue top) => SetStyleProperty(GuiProp.Top, top);
 
         /// <summary>Sets the bottom position of the element.</summary>
-        public StyleStateRef Bottom(UnitValue bottom) => SetValue(GuiProp.Bottom, bottom);
+        public T Bottom(UnitValue bottom) => SetStyleProperty(GuiProp.Bottom, bottom);
 
         /// <summary>Sets the minimum left position of the element.</summary>
-        public StyleStateRef MinLeft(UnitValue minLeft) => SetValue(GuiProp.MinLeft, minLeft);
+        public T MinLeft(UnitValue minLeft) => SetStyleProperty(GuiProp.MinLeft, minLeft);
 
         /// <summary>Sets the maximum left position of the element.</summary>
-        public StyleStateRef MaxLeft(UnitValue maxLeft) => SetValue(GuiProp.MaxLeft, maxLeft);
+        public T MaxLeft(UnitValue maxLeft) => SetStyleProperty(GuiProp.MaxLeft, maxLeft);
 
         /// <summary>Sets the minimum right position of the element.</summary>
-        public StyleStateRef MinRight(UnitValue minRight) => SetValue(GuiProp.MinRight, minRight);
+        public T MinRight(UnitValue minRight) => SetStyleProperty(GuiProp.MinRight, minRight);
 
         /// <summary>Sets the maximum right position of the element.</summary>
-        public StyleStateRef MaxRight(UnitValue maxRight) => SetValue(GuiProp.MaxRight, maxRight);
+        public T MaxRight(UnitValue maxRight) => SetStyleProperty(GuiProp.MaxRight, maxRight);
 
         /// <summary>Sets the minimum top position of the element.</summary>
-        public StyleStateRef MinTop(UnitValue minTop) => SetValue(GuiProp.MinTop, minTop);
+        public T MinTop(UnitValue minTop) => SetStyleProperty(GuiProp.MinTop, minTop);
 
         /// <summary>Sets the maximum top position of the element.</summary>
-        public StyleStateRef MaxTop(UnitValue maxTop) => SetValue(GuiProp.MaxTop, maxTop);
+        public T MaxTop(UnitValue maxTop) => SetStyleProperty(GuiProp.MaxTop, maxTop);
 
         /// <summary>Sets the minimum bottom position of the element.</summary>
-        public StyleStateRef MinBottom(UnitValue minBottom) => SetValue(GuiProp.MinBottom, minBottom);
+        public T MinBottom(UnitValue minBottom) => SetStyleProperty(GuiProp.MinBottom, minBottom);
 
         /// <summary>Sets the maximum bottom position of the element.</summary>
-        public StyleStateRef MaxBottom(UnitValue maxBottom) => SetValue(GuiProp.MaxBottom, maxBottom);
+        public T MaxBottom(UnitValue maxBottom) => SetStyleProperty(GuiProp.MaxBottom, maxBottom);
 
         /// <summary>Sets uniform margin on all sides.</summary>
-        public StyleStateRef Margin(UnitValue all) => Margin(all, all, all, all);
+        public T Margin(UnitValue all) => Margin(all, all, all, all);
 
         /// <summary>Sets horizontal and vertical margins.</summary>
-        public StyleStateRef Margin(UnitValue horizontal, UnitValue vertical) =>
+        public T Margin(UnitValue horizontal, UnitValue vertical) =>
             Margin(horizontal, horizontal, vertical, vertical);
 
         /// <summary>Sets individual margins for each side.</summary>
-        public StyleStateRef Margin(UnitValue left, UnitValue right, UnitValue top, UnitValue bottom)
+        public T Margin(UnitValue left, UnitValue right, UnitValue top, UnitValue bottom)
         {
-            SetValue(GuiProp.Left, left);
-            SetValue(GuiProp.Right, right);
-            SetValue(GuiProp.Top, top);
-            SetValue(GuiProp.Bottom, bottom);
-            return this;
+            SetStyleProperty(GuiProp.Left, left);
+            SetStyleProperty(GuiProp.Right, right);
+            SetStyleProperty(GuiProp.Top, top);
+            return SetStyleProperty(GuiProp.Bottom, bottom);
         }
 
         /// <summary>Sets the left padding for child elements.</summary>
-        public StyleStateRef ChildLeft(UnitValue childLeft) => SetValue(GuiProp.ChildLeft, childLeft);
+        public T ChildLeft(UnitValue childLeft) => SetStyleProperty(GuiProp.ChildLeft, childLeft);
 
         /// <summary>Sets the right padding for child elements.</summary>
-        public StyleStateRef ChildRight(UnitValue childRight) => SetValue(GuiProp.ChildRight, childRight);
+        public T ChildRight(UnitValue childRight) => SetStyleProperty(GuiProp.ChildRight, childRight);
 
         /// <summary>Sets the top padding for child elements.</summary>
-        public StyleStateRef ChildTop(UnitValue childTop) => SetValue(GuiProp.ChildTop, childTop);
+        public T ChildTop(UnitValue childTop) => SetStyleProperty(GuiProp.ChildTop, childTop);
 
         /// <summary>Sets the bottom padding for child elements.</summary>
-        public StyleStateRef ChildBottom(UnitValue childBottom) => SetValue(GuiProp.ChildBottom, childBottom);
+        public T ChildBottom(UnitValue childBottom) => SetStyleProperty(GuiProp.ChildBottom, childBottom);
 
         /// <summary>Sets the spacing between rows in a container.</summary>
-        public StyleStateRef RowBetween(UnitValue rowBetween) => SetValue(GuiProp.RowBetween, rowBetween);
+        public T RowBetween(UnitValue rowBetween) => SetStyleProperty(GuiProp.RowBetween, rowBetween);
 
         /// <summary>Sets the spacing between columns in a container.</summary>
-        public StyleStateRef ColBetween(UnitValue colBetween) => SetValue(GuiProp.ColBetween, colBetween);
+        public T ColBetween(UnitValue colBetween) => SetStyleProperty(GuiProp.ColBetween, colBetween);
 
         /// <summary>Sets the left border width.</summary>
-        public StyleStateRef BorderLeft(UnitValue borderLeft) => SetValue(GuiProp.BorderLeft, borderLeft);
+        public T BorderLeft(UnitValue borderLeft) => SetStyleProperty(GuiProp.BorderLeft, borderLeft);
 
         /// <summary>Sets the right border width.</summary>
-        public StyleStateRef BorderRight(UnitValue borderRight) => SetValue(GuiProp.BorderRight, borderRight);
+        public T BorderRight(UnitValue borderRight) => SetStyleProperty(GuiProp.BorderRight, borderRight);
 
         /// <summary>Sets the top border width.</summary>
-        public StyleStateRef BorderTop(UnitValue borderTop) => SetValue(GuiProp.BorderTop, borderTop);
+        public T BorderTop(UnitValue borderTop) => SetStyleProperty(GuiProp.BorderTop, borderTop);
 
         /// <summary>Sets the bottom border width.</summary>
-        public StyleStateRef BorderBottom(UnitValue borderBottom) => SetValue(GuiProp.BorderBottom, borderBottom);
+        public T BorderBottom(UnitValue borderBottom) => SetStyleProperty(GuiProp.BorderBottom, borderBottom);
 
         /// <summary>Sets uniform border width on all sides.</summary>
-        public StyleStateRef Border(UnitValue all) => Border(all, all, all, all);
+        public T Border(UnitValue all) => Border(all, all, all, all);
 
         /// <summary>Sets horizontal and vertical border widths.</summary>
-        public StyleStateRef Border(UnitValue horizontal, UnitValue vertical) =>
+        public T Border(UnitValue horizontal, UnitValue vertical) =>
             Border(horizontal, horizontal, vertical, vertical);
 
         /// <summary>Sets individual border widths for each side.</summary>
-        public StyleStateRef Border(UnitValue left, UnitValue right, UnitValue top, UnitValue bottom)
+        public T Border(UnitValue left, UnitValue right, UnitValue top, UnitValue bottom)
         {
-            SetValue(GuiProp.BorderLeft, left);
-            SetValue(GuiProp.BorderRight, right);
-            SetValue(GuiProp.BorderTop, top);
-            SetValue(GuiProp.BorderBottom, bottom);
-            return this;
+            SetStyleProperty(GuiProp.BorderLeft, left);
+            SetStyleProperty(GuiProp.BorderRight, right);
+            SetStyleProperty(GuiProp.BorderTop, top);
+            return SetStyleProperty(GuiProp.BorderBottom, bottom);
         }
 
         #endregion
@@ -230,69 +210,85 @@ namespace Prowl.PaperUI
         #region Transform Properties
 
         /// <summary>Sets horizontal translation.</summary>
-        public StyleStateRef TranslateX(double x) => SetValue(GuiProp.TranslateX, x);
+        public T TranslateX(double x) => SetStyleProperty(GuiProp.TranslateX, x);
 
         /// <summary>Sets vertical translation.</summary>
-        public StyleStateRef TranslateY(double y) => SetValue(GuiProp.TranslateY, y);
+        public T TranslateY(double y) => SetStyleProperty(GuiProp.TranslateY, y);
 
         /// <summary>Sets both horizontal and vertical translation.</summary>
-        public StyleStateRef Translate(double x, double y)
+        public T Translate(double x, double y)
         {
-            SetValue(GuiProp.TranslateX, x);
-            SetValue(GuiProp.TranslateY, y);
-            return this;
+            SetStyleProperty(GuiProp.TranslateX, x);
+            return SetStyleProperty(GuiProp.TranslateY, y);
         }
 
         /// <summary>Sets horizontal scaling factor.</summary>
-        public StyleStateRef ScaleX(double x) => SetValue(GuiProp.ScaleX, x);
+        public T ScaleX(double x) => SetStyleProperty(GuiProp.ScaleX, x);
 
         /// <summary>Sets vertical scaling factor.</summary>
-        public StyleStateRef ScaleY(double y) => SetValue(GuiProp.ScaleY, y);
+        public T ScaleY(double y) => SetStyleProperty(GuiProp.ScaleY, y);
 
         /// <summary>Sets uniform scaling in both directions.</summary>
-        public StyleStateRef Scale(double scale) => Scale(scale, scale);
+        public T Scale(double scale) => Scale(scale, scale);
 
         /// <summary>Sets individual scaling factors for each axis.</summary>
-        public StyleStateRef Scale(double x, double y)
+        public T Scale(double x, double y)
         {
-            SetValue(GuiProp.ScaleX, x);
-            SetValue(GuiProp.ScaleY, y);
-            return this;
+            SetStyleProperty(GuiProp.ScaleX, x);
+            return SetStyleProperty(GuiProp.ScaleY, y);
         }
 
         /// <summary>Sets rotation angle in degrees.</summary>
-        public StyleStateRef Rotate(double angleInDegrees) => SetValue(GuiProp.Rotate, angleInDegrees);
+        public T Rotate(double angleInDegrees) => SetStyleProperty(GuiProp.Rotate, angleInDegrees);
 
         /// <summary>Sets horizontal skew angle.</summary>
-        public StyleStateRef SkewX(double angle) => SetValue(GuiProp.SkewX, angle);
+        public T SkewX(double angle) => SetStyleProperty(GuiProp.SkewX, angle);
 
         /// <summary>Sets vertical skew angle.</summary>
-        public StyleStateRef SkewY(double angle) => SetValue(GuiProp.SkewY, angle);
+        public T SkewY(double angle) => SetStyleProperty(GuiProp.SkewY, angle);
 
         /// <summary>Sets both horizontal and vertical skew angles.</summary>
-        public StyleStateRef Skew(double x, double y)
+        public T Skew(double x, double y)
         {
-            SetValue(GuiProp.SkewX, x);
-            SetValue(GuiProp.SkewY, y);
-            return this;
+            SetStyleProperty(GuiProp.SkewX, x);
+            return SetStyleProperty(GuiProp.SkewY, y);
         }
 
         /// <summary>Sets the origin point for transformations.</summary>
-        public StyleStateRef TransformOrigin(double x, double y)
+        public T TransformOrigin(double x, double y)
         {
-            SetValue(GuiProp.OriginX, x);
-            SetValue(GuiProp.OriginY, y);
-            return this;
+            SetStyleProperty(GuiProp.OriginX, x);
+            return SetStyleProperty(GuiProp.OriginY, y);
         }
 
         /// <summary>Sets a complete transform matrix.</summary>
-        public StyleStateRef Transform(Transform2D transform) => SetValue(GuiProp.Transform, transform);
+        public T Transform(Transform2D transform) => SetStyleProperty(GuiProp.Transform, transform);
 
         #endregion
+    }
 
-        /// <summary>
-        /// Returns to the element builder to continue the building chain.
-        /// </summary>
+    /// <summary>
+    /// Represents a reference to a style state that can be conditionally applied.
+    /// Provides a fluent API for setting style properties based on element state conditions.
+    /// </summary>
+    public class StateDrivenStyle : StyleSetterBase<StateDrivenStyle>
+    {
+        private readonly ElementBuilder _owner;
+        private readonly bool _isActive;
+
+        public StateDrivenStyle(ElementBuilder owner, bool isActive) : base(owner._element)
+        {
+            _owner = owner;
+            _isActive = isActive;
+        }
+
+        public override StateDrivenStyle SetStyleProperty(GuiProp property, object value)
+        {
+            if (_isActive)
+                Paper.SetStyleProperty(_element.ID, property, value);
+            return this;
+        }
+
         public ElementBuilder End() => _owner;
     }
 
@@ -300,33 +296,28 @@ namespace Prowl.PaperUI
     /// Provides a fluent API for building and configuring UI elements.
     /// Implements IDisposable to support hierarchical element creation using 'using' blocks.
     /// </summary>
-    public class ElementBuilder : IDisposable
+    public class ElementBuilder : StyleSetterBase<ElementBuilder>, IDisposable
     {
-        private Element _element;
-
-        /// <summary>Gets the underlying Element being built.</summary>
-        public Element Element => _element;
-
         /// <summary>Style properties that are always applied.</summary>
-        public StyleStateRef Normal => new StyleStateRef(this, true);
+        public StateDrivenStyle Normal => new StateDrivenStyle(this, true);
 
         /// <summary>Style properties applied when the element is hovered.</summary>
-        public StyleStateRef Hovered => new StyleStateRef(this, Paper.IsElementHovered(_element.ID));
+        public StateDrivenStyle Hovered => new StateDrivenStyle(this, Paper.IsElementHovered(_element.ID));
 
         /// <summary>Style properties applied when the element is active (pressed).</summary>
-        public StyleStateRef Active => new StyleStateRef(this, Paper.IsElementActive(_element.ID));
+        public StateDrivenStyle Active => new StateDrivenStyle(this, Paper.IsElementActive(_element.ID));
 
         /// <summary>Style properties applied when the element has focus.</summary>
-        public StyleStateRef Focused => new StyleStateRef(this, Paper.IsElementFocused(_element.ID));
+        public StateDrivenStyle Focused => new StateDrivenStyle(this, Paper.IsElementFocused(_element.ID));
 
-        /// <summary>
-        /// Creates a new element builder with the specified ID.
-        /// </summary>
-        /// <param name="storageHash">Unique identifier for this element</param>
-        public ElementBuilder(ulong storageHash)
+        public ElementBuilder(ulong storageHash) : base(new Element { ID = storageHash })
         {
-            _element = new LayoutEngine.Element();
-            _element.ID = storageHash;
+        }
+
+        public override ElementBuilder SetStyleProperty(GuiProp property, object value)
+        {
+            Paper.SetStyleProperty(_element.ID, property, value);
+            return this;
         }
 
         /// <summary>
@@ -345,9 +336,7 @@ namespace Prowl.PaperUI
         /// Creates a conditional style state that only applies if the condition is true.
         /// </summary>
         /// <param name="condition">Boolean condition to evaluate</param>
-        public StyleStateRef If(bool condition) => new StyleStateRef(this, condition);
-
-        #region Normal Properties
+        public StateDrivenStyle If(bool condition) => new StateDrivenStyle(this, condition);
 
         /// <summary>
         /// Inherits style properties from the specified element or from the parent if not specified.
@@ -365,262 +354,6 @@ namespace Prowl.PaperUI
 
             return this;
         }
-
-        /// <summary>
-        /// Sets a style property value directly.
-        /// </summary>
-        private ElementBuilder SetValue(GuiProp property, object value)
-        {
-            Paper.SetStyleProperty(_element.ID, property, value);
-            return this;
-        }
-
-        #region Appearance Properties
-
-        /// <summary>Sets the background color of the element.</summary>
-        public ElementBuilder BackgroundColor(byte r, byte g, byte b, byte a = 255) => BackgroundColor(Color.FromArgb(a, r, g, b));
-        public ElementBuilder BackgroundColor(Color color) => SetValue(GuiProp.BackgroundColor, color);
-
-        /// <summary>Sets the border color of the element.</summary>
-        public ElementBuilder BorderColor(byte r, byte g, byte b, byte a = 255) => BorderColor(Color.FromArgb(a, r, g, b));
-        public ElementBuilder BorderColor(Color color) => SetValue(GuiProp.BorderColor, color);
-
-        /// <summary>Sets the border width of the element.</summary>
-        public ElementBuilder BorderWidth(double width) => SetValue(GuiProp.BorderWidth, width);
-
-        #endregion
-
-        #region Corner Rounding
-
-        /// <summary>Rounds the top corners of the element.</summary>
-        public ElementBuilder RoundedTop(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, 0, 0));
-
-        /// <summary>Rounds the bottom corners of the element.</summary>
-        public ElementBuilder RoundedBottom(double radius) => SetValue(GuiProp.Rounded, new Vector4(0, 0, radius, radius));
-
-        /// <summary>Rounds the left corners of the element.</summary>
-        public ElementBuilder RoundedLeft(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, 0, 0, radius));
-
-        /// <summary>Rounds the right corners of the element.</summary>
-        public ElementBuilder RoundedRight(double radius) => SetValue(GuiProp.Rounded, new Vector4(0, radius, radius, 0));
-
-        /// <summary>Rounds all corners of the element with the same radius.</summary>
-        public ElementBuilder Rounded(double radius) => SetValue(GuiProp.Rounded, new Vector4(radius, radius, radius, radius));
-
-        /// <summary>Rounds each corner of the element with individual radii.</summary>
-        public ElementBuilder Rounded(double tlRadius, double trRadius, double brRadius, double blRadius) =>
-            SetValue(GuiProp.Rounded, new Vector4(tlRadius, trRadius, brRadius, blRadius));
-
-        #endregion
-
-        #region Layout Properties
-
-        /// <summary>Sets the aspect ratio (width/height) of the element.</summary>
-        public ElementBuilder AspectRatio(double ratio) => SetValue(GuiProp.AspectRatio, ratio);
-
-        /// <summary>Sets both width and height to the same value.</summary>
-        public ElementBuilder Size(UnitValue sizeUniform) => Size(sizeUniform, sizeUniform);
-
-        /// <summary>Sets the width and height of the element.</summary>
-        public ElementBuilder Size(UnitValue width, UnitValue height)
-        {
-            SetValue(GuiProp.Width, width);
-            SetValue(GuiProp.Height, height);
-            return this;
-        }
-
-        /// <summary>Sets the width of the element.</summary>
-        public ElementBuilder Width(UnitValue width) => SetValue(GuiProp.Width, width);
-
-        /// <summary>Sets the height of the element.</summary>
-        public ElementBuilder Height(UnitValue height) => SetValue(GuiProp.Height, height);
-
-        /// <summary>Sets the minimum width of the element.</summary>
-        public ElementBuilder MinWidth(UnitValue minWidth) => SetValue(GuiProp.MinWidth, minWidth);
-
-        /// <summary>Sets the maximum width of the element.</summary>
-        public ElementBuilder MaxWidth(UnitValue maxWidth) => SetValue(GuiProp.MaxWidth, maxWidth);
-
-        /// <summary>Sets the minimum height of the element.</summary>
-        public ElementBuilder MinHeight(UnitValue minHeight) => SetValue(GuiProp.MinHeight, minHeight);
-
-        /// <summary>Sets the maximum height of the element.</summary>
-        public ElementBuilder MaxHeight(UnitValue maxHeight) => SetValue(GuiProp.MaxHeight, maxHeight);
-
-        /// <summary>Sets the position of the element from the left and top edges.</summary>
-        public ElementBuilder Position(UnitValue left, UnitValue top)
-        {
-            SetValue(GuiProp.Left, left);
-            SetValue(GuiProp.Top, top);
-            return this;
-        }
-
-        /// <summary>Sets the left position of the element.</summary>
-        public ElementBuilder Left(UnitValue left) => SetValue(GuiProp.Left, left);
-
-        /// <summary>Sets the right position of the element.</summary>
-        public ElementBuilder Right(UnitValue right) => SetValue(GuiProp.Right, right);
-
-        /// <summary>Sets the top position of the element.</summary>
-        public ElementBuilder Top(UnitValue top) => SetValue(GuiProp.Top, top);
-
-        /// <summary>Sets the bottom position of the element.</summary>
-        public ElementBuilder Bottom(UnitValue bottom) => SetValue(GuiProp.Bottom, bottom);
-
-        /// <summary>Sets the minimum left position of the element.</summary>
-        public ElementBuilder MinLeft(UnitValue minLeft) => SetValue(GuiProp.MinLeft, minLeft);
-
-        /// <summary>Sets the maximum left position of the element.</summary>
-        public ElementBuilder MaxLeft(UnitValue maxLeft) => SetValue(GuiProp.MaxLeft, maxLeft);
-
-        /// <summary>Sets the minimum right position of the element.</summary>
-        public ElementBuilder MinRight(UnitValue minRight) => SetValue(GuiProp.MinRight, minRight);
-
-        /// <summary>Sets the maximum right position of the element.</summary>
-        public ElementBuilder MaxRight(UnitValue maxRight) => SetValue(GuiProp.MaxRight, maxRight);
-
-        /// <summary>Sets the minimum top position of the element.</summary>
-        public ElementBuilder MinTop(UnitValue minTop) => SetValue(GuiProp.MinTop, minTop);
-
-        /// <summary>Sets the maximum top position of the element.</summary>
-        public ElementBuilder MaxTop(UnitValue maxTop) => SetValue(GuiProp.MaxTop, maxTop);
-
-        /// <summary>Sets the minimum bottom position of the element.</summary>
-        public ElementBuilder MinBottom(UnitValue minBottom) => SetValue(GuiProp.MinBottom, minBottom);
-
-        /// <summary>Sets the maximum bottom position of the element.</summary>
-        public ElementBuilder MaxBottom(UnitValue maxBottom) => SetValue(GuiProp.MaxBottom, maxBottom);
-
-        /// <summary>Sets uniform margin on all sides.</summary>
-        public ElementBuilder Margin(UnitValue all) => Margin(all, all, all, all);
-
-        /// <summary>Sets horizontal and vertical margins.</summary>
-        public ElementBuilder Margin(UnitValue horizontal, UnitValue vertical) =>
-            Margin(horizontal, horizontal, vertical, vertical);
-
-        /// <summary>Sets individual margins for each side.</summary>
-        public ElementBuilder Margin(UnitValue left, UnitValue right, UnitValue top, UnitValue bottom)
-        {
-            SetValue(GuiProp.Left, left);
-            SetValue(GuiProp.Right, right);
-            SetValue(GuiProp.Top, top);
-            SetValue(GuiProp.Bottom, bottom);
-            return this;
-        }
-
-        /// <summary>Sets the left padding for child elements.</summary>
-        public ElementBuilder ChildLeft(UnitValue childLeft) => SetValue(GuiProp.ChildLeft, childLeft);
-
-        /// <summary>Sets the right padding for child elements.</summary>
-        public ElementBuilder ChildRight(UnitValue childRight) => SetValue(GuiProp.ChildRight, childRight);
-
-        /// <summary>Sets the top padding for child elements.</summary>
-        public ElementBuilder ChildTop(UnitValue childTop) => SetValue(GuiProp.ChildTop, childTop);
-
-        /// <summary>Sets the bottom padding for child elements.</summary>
-        public ElementBuilder ChildBottom(UnitValue childBottom) => SetValue(GuiProp.ChildBottom, childBottom);
-
-        /// <summary>Sets the spacing between rows in a container.</summary>
-        public ElementBuilder RowBetween(UnitValue rowBetween) => SetValue(GuiProp.RowBetween, rowBetween);
-
-        /// <summary>Sets the spacing between columns in a container.</summary>
-        public ElementBuilder ColBetween(UnitValue colBetween) => SetValue(GuiProp.ColBetween, colBetween);
-
-        /// <summary>Sets the left border width.</summary>
-        public ElementBuilder BorderLeft(UnitValue borderLeft) => SetValue(GuiProp.BorderLeft, borderLeft);
-
-        /// <summary>Sets the right border width.</summary>
-        public ElementBuilder BorderRight(UnitValue borderRight) => SetValue(GuiProp.BorderRight, borderRight);
-
-        /// <summary>Sets the top border width.</summary>
-        public ElementBuilder BorderTop(UnitValue borderTop) => SetValue(GuiProp.BorderTop, borderTop);
-
-        /// <summary>Sets the bottom border width.</summary>
-        public ElementBuilder BorderBottom(UnitValue borderBottom) => SetValue(GuiProp.BorderBottom, borderBottom);
-
-        /// <summary>Sets uniform border width on all sides.</summary>
-        public ElementBuilder Border(UnitValue all) => Border(all, all, all, all);
-
-        /// <summary>Sets horizontal and vertical border widths.</summary>
-        public ElementBuilder Border(UnitValue horizontal, UnitValue vertical) =>
-            Border(horizontal, horizontal, vertical, vertical);
-
-        /// <summary>Sets individual border widths for each side.</summary>
-        public ElementBuilder Border(UnitValue left, UnitValue right, UnitValue top, UnitValue bottom)
-        {
-            SetValue(GuiProp.BorderLeft, left);
-            SetValue(GuiProp.BorderRight, right);
-            SetValue(GuiProp.BorderTop, top);
-            SetValue(GuiProp.BorderBottom, bottom);
-            return this;
-        }
-
-        #endregion
-
-        #region Transform Properties
-
-        /// <summary>Sets horizontal translation.</summary>
-        public ElementBuilder TranslateX(double x) => SetValue(GuiProp.TranslateX, x);
-
-        /// <summary>Sets vertical translation.</summary>
-        public ElementBuilder TranslateY(double y) => SetValue(GuiProp.TranslateY, y);
-
-        /// <summary>Sets both horizontal and vertical translation.</summary>
-        public ElementBuilder Translate(double x, double y)
-        {
-            SetValue(GuiProp.TranslateX, x);
-            SetValue(GuiProp.TranslateY, y);
-            return this;
-        }
-
-        /// <summary>Sets horizontal scaling factor.</summary>
-        public ElementBuilder ScaleX(double x) => SetValue(GuiProp.ScaleX, x);
-
-        /// <summary>Sets vertical scaling factor.</summary>
-        public ElementBuilder ScaleY(double y) => SetValue(GuiProp.ScaleY, y);
-
-        /// <summary>Sets uniform scaling in both directions.</summary>
-        public ElementBuilder Scale(double scale) => Scale(scale, scale);
-
-        /// <summary>Sets individual scaling factors for each axis.</summary>
-        public ElementBuilder Scale(double x, double y)
-        {
-            SetValue(GuiProp.ScaleX, x);
-            SetValue(GuiProp.ScaleY, y);
-            return this;
-        }
-
-        /// <summary>Sets rotation angle in degrees.</summary>
-        public ElementBuilder Rotate(double angleInDegrees) => SetValue(GuiProp.Rotate, angleInDegrees);
-
-        /// <summary>Sets horizontal skew angle.</summary>
-        public ElementBuilder SkewX(double angle) => SetValue(GuiProp.SkewX, angle);
-
-        /// <summary>Sets vertical skew angle.</summary>
-        public ElementBuilder SkewY(double angle) => SetValue(GuiProp.SkewY, angle);
-
-        /// <summary>Sets both horizontal and vertical skew angles.</summary>
-        public ElementBuilder Skew(double x, double y)
-        {
-            SetValue(GuiProp.SkewX, x);
-            SetValue(GuiProp.SkewY, y);
-            return this;
-        }
-
-        /// <summary>Sets the origin point for transformations.</summary>
-        public ElementBuilder TransformOrigin(double x, double y)
-        {
-            SetValue(GuiProp.OriginX, x);
-            SetValue(GuiProp.OriginY, y);
-            return this;
-        }
-
-        /// <summary>Sets a complete transform matrix.</summary>
-        public ElementBuilder Transform(Transform2D transform) => SetValue(GuiProp.Transform, transform);
-
-        #endregion
-
-        #endregion
 
         #region Event Handlers
 
@@ -1009,7 +742,7 @@ namespace Prowl.PaperUI
             OnDragStart((e) => {
                 var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
-                if (state.AreScrollbarsHidden(Element.ScrollFlags)) return;
+                if (state.AreScrollbarsHidden(_element.ScrollFlags)) return;
 
                 Vector2 mousePos = Paper.PointerPos;
 
@@ -1038,7 +771,7 @@ namespace Prowl.PaperUI
             OnDragging((e) => {
                 var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
-                if (state.AreScrollbarsHidden(Element.ScrollFlags)) return;
+                if (state.AreScrollbarsHidden(_element.ScrollFlags)) return;
 
                 Vector2 mousePos = Paper.PointerPos;
 
@@ -1059,7 +792,7 @@ namespace Prowl.PaperUI
             OnDragEnd((e) => {
                 var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
-                if (state.AreScrollbarsHidden(Element.ScrollFlags)) return;
+                if (state.AreScrollbarsHidden(_element.ScrollFlags)) return;
 
                 state.IsDraggingVertical = false;
                 state.IsDraggingHorizontal = false;
@@ -1100,7 +833,7 @@ namespace Prowl.PaperUI
             Clip();
 
             // Store the current value in element storage
-            Paper.SetElementStorage(Element, "Value", value);
+            Paper.SetElementStorage(_element, "Value", value);
 
             // Get the text to display (value or placeholder)
             bool isEmpty = string.IsNullOrEmpty(value);
@@ -1108,27 +841,27 @@ namespace Prowl.PaperUI
             Color textColor = isEmpty ? Color.FromArgb(160, 200, 200, 200) : Color.FromArgb(255, 250, 250, 250);
 
             // Store focus state
-            bool isFocused = Paper.IsElementFocused(Element.ID);
-            Paper.SetElementStorage(Element, "IsFocused", isFocused);
+            bool isFocused = Paper.IsElementFocused(_element.ID);
+            Paper.SetElementStorage(_element, "IsFocused", isFocused);
 
             // Create a blinking cursor position tracker
-            int cursorPosition = Paper.GetElementStorage(Element, "CursorPosition", value.Length);
+            int cursorPosition = Paper.GetElementStorage(_element, "CursorPosition", value.Length);
             // Clamp cursor position to valid range
             cursorPosition = Math.Clamp(cursorPosition, 0, value.Length);
-            Paper.SetElementStorage(Element, "CursorPosition", cursorPosition);
+            Paper.SetElementStorage(_element, "CursorPosition", cursorPosition);
 
             // Selection range (if text is selected)
-            int selectionStart = Paper.GetElementStorage(Element, "SelectionStart", -1);
-            int selectionEnd = Paper.GetElementStorage(Element, "SelectionEnd", -1);
+            int selectionStart = Paper.GetElementStorage(_element, "SelectionStart", -1);
+            int selectionEnd = Paper.GetElementStorage(_element, "SelectionEnd", -1);
             // Clamp selection range to valid range
             selectionStart = Math.Clamp(selectionStart, 0, value.Length);
             selectionEnd = Math.Clamp(selectionEnd, 0, value.Length);
-            Paper.SetElementStorage(Element, "SelectionStart", selectionStart);
-            Paper.SetElementStorage(Element, "SelectionEnd", selectionEnd);
+            Paper.SetElementStorage(_element, "SelectionStart", selectionStart);
+            Paper.SetElementStorage(_element, "SelectionEnd", selectionEnd);
 
             // Text scroll offset (for horizontal scrolling)
-            double scrollOffset = Paper.GetElementStorage(Element, "ScrollOffset", 0.0);
-            Paper.SetElementStorage(Element, "ScrollOffset", scrollOffset);
+            double scrollOffset = Paper.GetElementStorage(_element, "ScrollOffset", 0.0);
+            Paper.SetElementStorage(_element, "ScrollOffset", scrollOffset);
 
             // Set the text content
             //Text(PaperUI.Text.Left($"  {displayText}", font, textColor));
@@ -1136,16 +869,16 @@ namespace Prowl.PaperUI
             // Handle focus changes
             OnFocusChange((FocusEvent e) =>
             {
-                Paper.SetElementStorage(Element, "IsFocused", e.IsFocused);
+                Paper.SetElementStorage(_element, "IsFocused", e.IsFocused);
 
                 // When gaining focus, place cursor at the end of text
                 if (e.IsFocused)
                 {
-                    string currentValue = Paper.GetElementStorage<string>(Element, "Value", "");
+                    string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
                     int pos = currentValue.Length;
-                    Paper.SetElementStorage(Element, "CursorPosition", pos);
-                    Paper.SetElementStorage(Element, "SelectionStart", -1);
-                    Paper.SetElementStorage(Element, "SelectionEnd", -1);
+                    Paper.SetElementStorage(_element, "CursorPosition", pos);
+                    Paper.SetElementStorage(_element, "SelectionStart", -1);
+                    Paper.SetElementStorage(_element, "SelectionEnd", -1);
 
                     // Ensure cursor is visible
                     EnsureCursorVisible(currentValue, font, pos);
@@ -1155,19 +888,19 @@ namespace Prowl.PaperUI
             // Handle mouse clicks for cursor positioning
             OnClick((ClickEvent e) =>
             {
-                string currentValue = Paper.GetElementStorage<string>(Element, "Value", "");
-                double scrollOffsetValue = Paper.GetElementStorage<double>(Element, "ScrollOffset", 0.0);
+                string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
+                double scrollOffsetValue = Paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
 
                 // Calculate cursor position based on click position
                 var clickPos = e.RelativePosition.x - TextXPadding + scrollOffsetValue; // Adjust for padding
                 int newPosition = CalculateTextPosition(currentValue, font, clickPos);
                 newPosition = Math.Clamp(newPosition, 0, currentValue.Length);
 
-                Paper.SetElementStorage(Element, "CursorPosition", newPosition);
+                Paper.SetElementStorage(_element, "CursorPosition", newPosition);
 
                 // Clear selection on click
-                Paper.SetElementStorage(Element, "SelectionStart", -1);
-                Paper.SetElementStorage(Element, "SelectionEnd", -1);
+                Paper.SetElementStorage(_element, "SelectionStart", -1);
+                Paper.SetElementStorage(_element, "SelectionEnd", -1);
 
                 // Ensure cursor is visible
                 EnsureCursorVisible(currentValue, font, newPosition);
@@ -1176,16 +909,16 @@ namespace Prowl.PaperUI
             // Handle dragging for text selection
             OnDragStart((DragEvent e) =>
             {
-                string currentValue = Paper.GetElementStorage<string>(Element, "Value", "");
-                double scrollOffsetValue = Paper.GetElementStorage<double>(Element, "ScrollOffset", 0.0);
+                string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
+                double scrollOffsetValue = Paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
 
                 // Start selection at cursor position
                 int pos = CalculateTextPosition(currentValue, font, e.RelativePosition.x - TextXPadding + scrollOffsetValue);
                 pos = Math.Clamp(pos, 0, currentValue.Length);
 
-                Paper.SetElementStorage(Element, "CursorPosition", pos);
-                Paper.SetElementStorage(Element, "SelectionStart", pos);
-                Paper.SetElementStorage(Element, "SelectionEnd", pos);
+                Paper.SetElementStorage(_element, "CursorPosition", pos);
+                Paper.SetElementStorage(_element, "SelectionStart", pos);
+                Paper.SetElementStorage(_element, "SelectionEnd", pos);
 
                 // Ensure cursor is visible
                 EnsureCursorVisible(currentValue, font, pos);
@@ -1193,11 +926,11 @@ namespace Prowl.PaperUI
 
             OnDragging((DragEvent e) =>
             {
-                string currentValue = Paper.GetElementStorage<string>(Element, "Value", "");
-                double scrollOffsetValue = Paper.GetElementStorage<double>(Element, "ScrollOffset", 0.0);
+                string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
+                double scrollOffsetValue = Paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
 
                 // Update selection end while dragging
-                int start = Paper.GetElementStorage<int>(Element, "SelectionStart", -1);
+                int start = Paper.GetElementStorage<int>(_element, "SelectionStart", -1);
                 if (start >= 0)
                 {
                     // Auto-scroll when dragging near edges
@@ -1208,20 +941,20 @@ namespace Prowl.PaperUI
                     {
                         // Scroll left
                         scrollOffsetValue = Math.Max(0, scrollOffsetValue - scrollSpeed);
-                        Paper.SetElementStorage(Element, "ScrollOffset", scrollOffsetValue);
+                        Paper.SetElementStorage(_element, "ScrollOffset", scrollOffsetValue);
                     }
                     else if (e.RelativePosition.x > e.ElementRect.width - edgeScrollSensitivity)
                     {
                         // Scroll right
                         scrollOffsetValue += scrollSpeed;
-                        Paper.SetElementStorage(Element, "ScrollOffset", scrollOffsetValue);
+                        Paper.SetElementStorage(_element, "ScrollOffset", scrollOffsetValue);
                     }
 
                     int pos = CalculateTextPosition(currentValue, font, e.RelativePosition.x - TextXPadding + scrollOffsetValue);
                     pos = Math.Clamp(pos, 0, currentValue.Length);
 
-                    Paper.SetElementStorage(Element, "CursorPosition", pos);
-                    Paper.SetElementStorage(Element, "SelectionEnd", pos);
+                    Paper.SetElementStorage(_element, "CursorPosition", pos);
+                    Paper.SetElementStorage(_element, "SelectionEnd", pos);
 
                     // Ensure cursor is visible with updated scroll position
                     EnsureCursorVisible(currentValue, font, pos);
@@ -1233,10 +966,10 @@ namespace Prowl.PaperUI
             {
                 if (!isFocused) return;
 
-                string currentValue = Paper.GetElementStorage<string>(Element, "Value", "");
-                int curPos = Paper.GetElementStorage<int>(Element, "CursorPosition", 0);
-                int selStart = Paper.GetElementStorage<int>(Element, "SelectionStart", -1);
-                int selEnd = Paper.GetElementStorage<int>(Element, "SelectionEnd", -1);
+                string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
+                int curPos = Paper.GetElementStorage<int>(_element, "CursorPosition", 0);
+                int selStart = Paper.GetElementStorage<int>(_element, "SelectionStart", -1);
+                int selEnd = Paper.GetElementStorage<int>(_element, "SelectionEnd", -1);
 
                 bool valueChanged = false;
 
@@ -1401,10 +1134,10 @@ namespace Prowl.PaperUI
                 }
 
                 // Update stored values
-                Paper.SetElementStorage(Element, "Value", currentValue);
-                Paper.SetElementStorage(Element, "CursorPosition", curPos);
-                Paper.SetElementStorage(Element, "SelectionStart", selStart);
-                Paper.SetElementStorage(Element, "SelectionEnd", selEnd);
+                Paper.SetElementStorage(_element, "Value", currentValue);
+                Paper.SetElementStorage(_element, "CursorPosition", curPos);
+                Paper.SetElementStorage(_element, "SelectionStart", selStart);
+                Paper.SetElementStorage(_element, "SelectionEnd", selEnd);
 
                 // Ensure cursor is visible
                 EnsureCursorVisible(currentValue, font, curPos);
@@ -1427,10 +1160,10 @@ namespace Prowl.PaperUI
             {
                 if (!isFocused) return;
 
-                string currentValue = Paper.GetElementStorage<string>(Element, "Value", "");
-                int curPos = Paper.GetElementStorage<int>(Element, "CursorPosition", 0);
-                int selStart = Paper.GetElementStorage<int>(Element, "SelectionStart", -1);
-                int selEnd = Paper.GetElementStorage<int>(Element, "SelectionEnd", -1);
+                string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
+                int curPos = Paper.GetElementStorage<int>(_element, "CursorPosition", 0);
+                int selStart = Paper.GetElementStorage<int>(_element, "SelectionStart", -1);
+                int selEnd = Paper.GetElementStorage<int>(_element, "SelectionEnd", -1);
 
                 // If we have a selection, delete it first
                 if (selStart >= 0 && selEnd >= 0 && selStart != selEnd)
@@ -1445,10 +1178,10 @@ namespace Prowl.PaperUI
                     curPos++;
 
                     // Update the value
-                    Paper.SetElementStorage(Element, "Value", currentValue);
-                    Paper.SetElementStorage(Element, "CursorPosition", curPos);
-                    Paper.SetElementStorage(Element, "SelectionStart", selStart);
-                    Paper.SetElementStorage(Element, "SelectionEnd", selEnd);
+                    Paper.SetElementStorage(_element, "Value", currentValue);
+                    Paper.SetElementStorage(_element, "CursorPosition", curPos);
+                    Paper.SetElementStorage(_element, "SelectionStart", selStart);
+                    Paper.SetElementStorage(_element, "SelectionEnd", selEnd);
 
                     // Ensure cursor is visible
                     EnsureCursorVisible(currentValue, font, curPos);
@@ -1544,13 +1277,13 @@ namespace Prowl.PaperUI
         /// </summary>
         private void EnsureCursorVisible(string text, SpriteFontBase font, int cursorPosition)
         {
-            double scrollOffset = Paper.GetElementStorage<double>(Element, "ScrollOffset", 0.0);
+            double scrollOffset = Paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
 
             // Calculate current cursor position
             double cursorX = CalculateTextWidth(text.Substring(0, cursorPosition), font);
 
             // Get current visible area (estimate from last layout)
-            double visibleWidth = Element.LayoutWidth - 8; // Subtract padding
+            double visibleWidth = _element.LayoutWidth - 8; // Subtract padding
 
             const double margin = 20.0; // Margin to keep cursor away from edge
 
@@ -1568,7 +1301,7 @@ namespace Prowl.PaperUI
             }
 
             // Update scroll position
-            Paper.SetElementStorage(Element, "ScrollOffset", scrollOffset);
+            Paper.SetElementStorage(_element, "ScrollOffset", scrollOffset);
         }
 
         /// <summary>
