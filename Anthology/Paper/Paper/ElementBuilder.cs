@@ -315,6 +315,26 @@ namespace Prowl.PaperUI
             _isActive = isActive;
         }
 
+        public StateDrivenStyle Style(params string[] names)
+        {
+            if (_isActive)
+                foreach (var styleName in names)
+                    if (Paper.TryGetStyle(styleName, out var style))
+                        style.ApplyTo(_element.ID);
+
+            return this;
+        }
+
+        public StateDrivenStyle StyleIf(bool condition, params string[] names)
+        {
+            if (condition)
+            {
+                foreach(var styleName in names)
+                    Style(styleName);
+            }
+            return this;
+        }
+
         public override StateDrivenStyle SetStyleProperty(GuiProp property, object value)
         {
             if (_isActive)
@@ -368,17 +388,15 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
-        /// Applies all style properties in this template to an element builder
+        /// Applies a template to another template
         /// </summary>
-        /// <param name="builder">The element builder to apply styles to</param>
-        /// <returns>The element builder for chaining</returns>
-        public ElementBuilder ApplyTo(ElementBuilder builder)
+        public StyleTemplate ApplyTo(StyleTemplate other)
         {
-            if (builder != null && builder._element != null)
+            foreach (var kvp in _styleProperties)
             {
-                ApplyTo(builder._element.ID);
+                other.SetStyleProperty(kvp.Key, kvp.Value);
             }
-            return builder;
+            return other;
         }
 
         /// <summary>
@@ -456,6 +474,23 @@ namespace Prowl.PaperUI
             if (_element.Parent != null)
                 _element._elementStyle.SetParent(_element.Parent._elementStyle);
 
+            return this;
+        }
+
+        public ElementBuilder Style(params string[] names)
+        {
+            foreach (var name in names)
+                if (Paper.TryGetStyle(name, out var style))
+                    style.ApplyTo(_element.ID);
+
+            return this;
+        }
+
+        public ElementBuilder StyleIf(bool condition, params string[] names)
+        {
+            if(condition)
+                foreach (var name in names)
+                    Style(name);
             return this;
         }
 

@@ -69,6 +69,59 @@ namespace Shared
             fontMedium = fontSystem.GetFont(26);
             fontLarge = fontSystem.GetFont(32);
             fontTitle = fontSystem.GetFont(40);
+
+            DefineStyles();
+        }
+
+        private static void DefineStyles()
+        {
+            // Sidebar styles
+            Paper.DefineStyle("sidebar")
+                .BackgroundColor(cardBackground)
+                .Rounded(8)
+                .Width(75);
+
+            // Expanded sidebar
+            Paper.DefineStyle("sidebar.expanded")
+                .Width(240)
+                .BorderColor(primaryColor)
+                .BorderWidth(3)
+                .Rounded(16);
+
+            // Button
+            Paper.DefineStyle("button")
+                .Height(40)
+                .Rounded(8);
+
+            // Primary button
+            Paper.DefineStyle("button.primary")
+                .BackgroundColor(primaryColor);
+
+            // Toggle switch
+            Paper.DefineStyle("toggle")
+                .Width(60)
+                .Height(30)
+                .Rounded(20);
+
+            // Toggle on
+            Paper.DefineStyle("toggle.on", "toggle")
+                .BackgroundColor(secondaryColor);
+
+            // Toggle off
+            Paper.DefineStyle("toggle.off", "toggle")
+                .BackgroundColor(Color.FromArgb(100, lightTextColor));
+
+            // Toggle dot
+            Paper.DefineStyle("toggle.dot")
+                .Width(24)
+                .Height(24)
+                .Rounded(20)
+                .BackgroundColor(Color.White);
+
+            Paper.DefineStyle("separator")
+                .Height(1)
+                .Margin(15, 15, 0, 0)
+                .BackgroundColor(Color.FromArgb(30, 0, 0, 0));
         }
 
         public static void RenderUI()
@@ -209,6 +262,9 @@ namespace Shared
                     Color.FromArgb(255, 139, 92, 246)    // Purple
                 ];
             }
+
+            // Redefine styles with new theme colors
+            DefineStyles();
         }
 
         private static void RenderTopNavBar()
@@ -288,16 +344,8 @@ namespace Shared
         private static void RenderSidebar()
         {
             using (Paper.Column("Sidebar")
-                .Width(75)
-                .BackgroundColor(cardBackground)
-                .Rounded(8)
-                .Hovered
-                    .Width(240)
-                    .Margin(15)
-                    .BorderColor(primaryColor)
-                    .BorderWidth(3)
-                    .Rounded(16)
-                    .End()
+                .Style("sidebar")
+                .Hovered.Style("sidebar.expanded").End()
                 .Transition(GuiProp.Width, 0.25f, Paper.Easing.EaseIn)
                 .Transition(GuiProp.BorderColor, 0.75f)
                 .Transition(GuiProp.BorderWidth, 0.75f)
@@ -739,12 +787,7 @@ namespace Shared
                             // Add separator except for the last item
                             if (i < activities.Length - 1)
                             {
-                                using (Paper.Box($"Separator_{i}")
-                                    .Height(1)
-                                    .Margin(15, 15, 0, 0)
-                                    .BackgroundColor(Color.FromArgb(30, 0, 0, 0))
-                                    //.Style(BoxStyle.Solid(Color.FromArgb(30, 0, 0, 0)))
-                                    .Enter()) { }
+                                Paper.Box($"Separator_{i}").Style("seperator");
                             }
                         }
                     }
@@ -1322,11 +1365,8 @@ namespace Shared
 
                             int index = i;
                             using (Paper.Box($"ToggleSwitch_{i}")
-                                .Width(60)
-                                .Height(30)
-                                .Rounded(20)
-                                .BackgroundColor(isOn ? secondaryColor : Color.FromArgb(100, lightTextColor))
-                                //.Style(BoxStyle.SolidRounded(isOn ? secondaryColor : Color.FromArgb(100, lightTextColor), 15f))
+                                .StyleIf(!isOn, "toggle.off")
+                                .StyleIf(isOn, "toggle.on")
                                 .OnClick((rect) => {
                                     toggleState[index] = !toggleState[index];
                                     Console.WriteLine($"Toggle {options[index]}: {!isOn}");
@@ -1350,21 +1390,14 @@ namespace Shared
                         // Add separator except for the last item
                         if (i < options.Length - 1)
                         {
-                            using (Paper.Box($"SettingSeparator_{i}")
-                                .Height(1)
-                                .Margin(20, 20, 0, 0)
-                                .BackgroundColor(Color.FromArgb(30, 0, 0, 0))
-                                //.Style(BoxStyle.Solid(Color.FromArgb(30, 0, 0, 0)))
-                                .Enter()) { }
+                            Paper.Box($"Separator_{i}").Style("seperator");
                         }
                     }
 
                     // Save button
                     using (Paper.Box("SaveSettings")
-                        .Width(150)
                         .Height(50)
-                        .BackgroundColor(primaryColor)
-                        //.Style(BoxStyle.SolidRounded(primaryColor, 8f))
+                        .Style("button.primary")
                         .Text(Text.Center("Save Changes", fontMedium, Color.White))
                         .Margin(20, 0, 20, 20)
                         .OnClick((rect) => Console.WriteLine("Save settings clicked"))

@@ -775,5 +775,53 @@ namespace Prowl.PaperUI
         }
 
         #endregion
+
+        #region Style Templates
+
+        private static Dictionary<string, StyleTemplate> _styleTemplates = new Dictionary<string, StyleTemplate>();
+
+        /// <summary>
+        /// Creates a new style template.
+        /// </summary>
+        public static StyleTemplate DefineStyle(string name)
+        {
+            // Create a new style template
+            var template = new StyleTemplate();
+            _styleTemplates[name] = template;
+            return template;
+        }
+
+        /// <summary>
+        /// Creates a new style template. With one or more parent styles to inherit from.
+        /// </summary>
+        public static StyleTemplate DefineStyle(string name, params string[] inheritFrom)
+        {
+            // Create a new style template
+            var template = new StyleTemplate();
+
+            // Check if the parent style exists
+            foreach (var parent in inheritFrom)
+                if (_styleTemplates.TryGetValue(parent, out var parentTemplate))
+                {
+                    parentTemplate.ApplyTo(template);
+                }
+                else
+                {
+                    throw new ArgumentException($"Parent style '{parent}' does not exist yet.");
+                }
+
+            _styleTemplates[name] = template;
+            return template;
+        }
+
+        /// <summary>
+        /// Creates a new style template.
+        /// </summary>
+        public static bool TryGetStyle(string name, out StyleTemplate? template)
+        {
+            return _styleTemplates.TryGetValue(name, out template);
+        }
+
+        #endregion
     }
 }
