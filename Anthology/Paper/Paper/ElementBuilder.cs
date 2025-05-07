@@ -4,6 +4,7 @@ using FontStashSharp;
 
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.PaperUI.Utilities;
 using Prowl.Quill;
 using Prowl.Vector;
 
@@ -16,7 +17,7 @@ namespace Prowl.PaperUI
 
     public abstract class StyleSetterBase<T> : IStyleSetter<T> where T : StyleSetterBase<T>
     {
-        public Element _element { get; }
+        public Element _element { get; protected set; }
 
         protected StyleSetterBase(Element element)
         {
@@ -273,11 +274,43 @@ namespace Prowl.PaperUI
     /// </summary>
     public class StateDrivenStyle : StyleSetterBase<StateDrivenStyle>
     {
-        private readonly ElementBuilder _owner;
-        private readonly bool _isActive;
+        private ElementBuilder _owner;
+        private bool _isActive;
+        private static readonly ObjectPool<StateDrivenStyle> _pool = new ObjectPool<StateDrivenStyle>(() => new StateDrivenStyle());
 
-        public StateDrivenStyle(ElementBuilder owner, bool isActive) : base(owner._element)
+        // Private constructor for the pool
+        private StateDrivenStyle() : base(null)
         {
+            _owner = null;
+            _isActive = false;
+        }
+
+        // Constructor for direct creation (used internally)
+        private StateDrivenStyle(ElementBuilder owner, bool isActive) : base(owner._element)
+        {
+            _owner = owner;
+            _isActive = isActive;
+        }
+
+        /// <summary>
+        /// Gets a StateDrivenStyle from the pool
+        /// </summary>
+        internal static StateDrivenStyle Get(ElementBuilder owner, bool isActive)
+        {
+            var style = _pool.Get();
+            style.Initialize(owner, isActive);
+            return style;
+        }
+
+        /// <summary>
+        /// Initializes a pooled StateDrivenStyle with new values
+        /// </summary>
+        private void Initialize(ElementBuilder owner, bool isActive)
+        {
+            // Use reflection or another method to set base.Element
+            _element = owner._element;
+
+            // Set fields with new values
             _owner = owner;
             _isActive = isActive;
         }
@@ -289,7 +322,77 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        public ElementBuilder End() => _owner;
+        /// <summary>
+        /// Returns to the element builder to continue the building chain and
+        /// returns this object to the pool
+        /// </summary>
+        public ElementBuilder End()
+        {
+            var owner = _owner;
+            _pool.Return(this);
+            return owner;
+        }
+    }
+
+    /// <summary>
+    /// A template that can store and apply a collection of style properties
+    /// </summary>
+    public class StyleTemplate : StyleSetterBase<StyleTemplate>
+    {
+        private readonly Dictionary<GuiProp, object> _styleProperties = new Dictionary<GuiProp, object>();
+
+        /// <summary>
+        /// Creates a new style template
+        /// </summary>
+        public StyleTemplate() : base(null) { }
+
+        /// <summary>
+        /// Sets a style property in the template
+        /// </summary>
+        public override StyleTemplate SetStyleProperty(GuiProp property, object value)
+        {
+            _styleProperties[property] = value;
+            return this;
+        }
+
+        /// <summary>
+        /// Applies all style properties in this template to an element
+        /// </summary>
+        /// <param name="elementId">The ID of the element to apply styles to</param>
+        public void ApplyTo(ulong elementId)
+        {
+            foreach (var kvp in _styleProperties)
+            {
+                Paper.SetStyleProperty(elementId, kvp.Key, kvp.Value);
+            }
+        }
+
+        /// <summary>
+        /// Applies all style properties in this template to an element builder
+        /// </summary>
+        /// <param name="builder">The element builder to apply styles to</param>
+        /// <returns>The element builder for chaining</returns>
+        public ElementBuilder ApplyTo(ElementBuilder builder)
+        {
+            if (builder != null && builder._element != null)
+            {
+                ApplyTo(builder._element.ID);
+            }
+            return builder;
+        }
+
+        /// <summary>
+        /// Creates a copy of this template
+        /// </summary>
+        public StyleTemplate Clone()
+        {
+            var clone = new StyleTemplate();
+            foreach (var kvp in _styleProperties)
+            {
+                clone._styleProperties[kvp.Key] = kvp.Value;
+            }
+            return clone;
+        }
     }
 
     /// <summary>
@@ -298,17 +401,18 @@ namespace Prowl.PaperUI
     /// </summary>
     public class ElementBuilder : StyleSetterBase<ElementBuilder>, IDisposable
     {
+
         /// <summary>Style properties that are always applied.</summary>
-        public StateDrivenStyle Normal => new StateDrivenStyle(this, true);
+        public StateDrivenStyle Normal => StateDrivenStyle.Get(this, true);
 
         /// <summary>Style properties applied when the element is hovered.</summary>
-        public StateDrivenStyle Hovered => new StateDrivenStyle(this, Paper.IsElementHovered(_element.ID));
+        public StateDrivenStyle Hovered => StateDrivenStyle.Get(this, Paper.IsElementHovered(_element.ID));
 
         /// <summary>Style properties applied when the element is active (pressed).</summary>
-        public StateDrivenStyle Active => new StateDrivenStyle(this, Paper.IsElementActive(_element.ID));
+        public StateDrivenStyle Active => StateDrivenStyle.Get(this, Paper.IsElementActive(_element.ID));
 
         /// <summary>Style properties applied when the element has focus.</summary>
-        public StateDrivenStyle Focused => new StateDrivenStyle(this, Paper.IsElementFocused(_element.ID));
+        public StateDrivenStyle Focused => StateDrivenStyle.Get(this, Paper.IsElementFocused(_element.ID));
 
         public ElementBuilder(ulong storageHash) : base(new Element { ID = storageHash })
         {
@@ -336,7 +440,7 @@ namespace Prowl.PaperUI
         /// Creates a conditional style state that only applies if the condition is true.
         /// </summary>
         /// <param name="condition">Boolean condition to evaluate</param>
-        public StateDrivenStyle If(bool condition) => new StateDrivenStyle(this, condition);
+        public StateDrivenStyle If(bool condition) => StateDrivenStyle.Get(this, condition);
 
         /// <summary>
         /// Inherits style properties from the specified element or from the parent if not specified.
