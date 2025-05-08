@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Slang.Native;
@@ -10,6 +11,9 @@ namespace Prowl.Slang.Native;
 public static class ProxyEmitter
 {
     private static Dictionary<Type, Type> s_proxyCache = [];
+
+    private static Dictionary<MethodInfo, Delegate> s_delegateCache = [];
+
 
     private static AssemblyBuilder? _assemblyBuilder;
     private static ModuleBuilder? _moduleBuilder;
@@ -46,20 +50,20 @@ public static class ProxyEmitter
     }
 
 
-    public static unsafe T CreateVtableProxy<T>(T* nativeInterfacePtr) where T : IUnknown
+    public static unsafe T CreateProxy<T>(T* nativeInterfacePtr) where T : IUnknown
     {
         ValidateInterface<T>();
 
-        return (T)Activator.CreateInstance(GetVtableProxyType<T>(), (IntPtr)nativeInterfacePtr)!;
+        return (T)Activator.CreateInstance(GetProxyType<T>(), (IntPtr)nativeInterfacePtr)!;
     }
 
 
-    public static Type GetVtableProxyType<T>() where T : IUnknown
+    public static Type GetProxyType<T>() where T : IUnknown
     {
         ValidateInterface<T>();
 
         if (!s_proxyCache.TryGetValue(typeof(T), out Type? proxyType))
-            s_proxyCache[typeof(T)] = proxyType = CreateVtableProxyType<T>();
+            s_proxyCache[typeof(T)] = proxyType = CreateProxyType<T>();
 
         return proxyType;
     }
@@ -125,7 +129,7 @@ public static class ProxyEmitter
         ilg.Emit(OpCodes.Add);
         ilg.Emit(OpCodes.Ldind_I); // final function pointer
 
-        // Use 'calli' for unmanaged function pointer call
+        // Call unmanaged function pointer
         ilg.EmitCalli(
             OpCodes.Calli,
             CallingConvention.Cdecl,
@@ -151,7 +155,7 @@ public static class ProxyEmitter
     }
 
 
-    private static Type CreateVtableProxyType<T>()
+    private static Type CreateProxyType<T>()
     {
         TypeBuilder builder = ModuleBuilder.DefineType(GetProxyName<T>(), TypeAttributes.Public, typeof(ComProxy), [typeof(T)]);
 
@@ -175,28 +179,35 @@ public static class ProxyEmitter
 
         return builder.CreateType();
     }
-}
 
 
-public abstract class ComProxy : IUnknown
-{
-    protected IntPtr _comPtr;
-
-
-    public ComProxy(IntPtr nativePtr)
+    public static unsafe T* CreateNativeProxy<T>(NativeComProxy<T> managedObject) where T : IUnknown
     {
-        _comPtr = nativePtr;
-        AddRef();
+        ValidateInterface<T>();
+
+        List<MethodInfo> tree = GetMethodTree<T>();
+
+        void* nativeVtablePtr = NativeMemory.Alloc((nuint)(nint.Size * tree.Count));
+        void* managedVtablePtr = NativeMemory.Alloc((nuint)(nint.Size * tree.Count));
+
+        GCHandle handleObj = GCHandle.Alloc(managedObject);
+        void* managedObjPtr = (void*)handleObj.AddrOfPinnedObject();
+
+        ProxyVTable* proxy = (ProxyVTable*)NativeMemory.Alloc((nuint)sizeof(ProxyVTable));
+
+        proxy->VTable = nativeVtablePtr;
+        proxy->ManagedVTable = managedVtablePtr;
+        proxy->ManagedThis = managedObjPtr;
+
+        return (T*)proxy;
     }
 
 
-    public abstract uint AddRef();
-    public abstract SlangResult QueryInterface(ref Guid uuid, out nint obj);
-    public abstract uint Release();
-
-
-    ~ComProxy()
+    public static unsafe void FreeNativeProxy<T>(NativeComProxy<T> managedObject) where T : IUnknown
     {
-        Release();
+        ProxyVTable* proxy = (ProxyVTable*)managedObject.NativeInterfacePtr;
+
+        NativeMemory.Free(proxy->VTable);
+        NativeMemory.Free(proxy->ManagedVTable);
     }
 }

@@ -44,13 +44,20 @@ without it. ie for a facility 'DRIVER' it might make sense to have an error of t
 SLANG_E_DRIVER_OUT_OF_MEMORY
 */
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct SlangResult
+public unsafe struct SlangResult(uint value = 0x00000000)
 {
-    int _value;
+    uint _value = value;
+
+
+    public readonly bool IsOk()
+    {
+        return _value == 0x00000000;
+    }
+
 
     public readonly void Throw()
     {
-        Exception? ex = Marshal.GetExceptionForHR(_value);
+        Exception? ex = Marshal.GetExceptionForHR((int)_value);
 
         if (ex != null)
             throw ex;

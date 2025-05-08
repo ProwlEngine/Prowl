@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 namespace Prowl.Slang.Native;
 
 
-public unsafe readonly ref struct U8Str
+public readonly unsafe ref struct U8Str
 {
     private readonly ReadOnlySpan<byte> _span;
     public readonly byte* Pointer;
@@ -22,4 +22,17 @@ public unsafe readonly ref struct U8Str
     }
 
     public ReadOnlySpan<byte> Span => _span;
+}
+
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ConstU8String
+{
+    public byte* Data;
+
+
+    public static implicit operator ConstU8String(U8Str str)
+    {
+        return new ConstU8String { Data = str.Pointer };
+    }
 }

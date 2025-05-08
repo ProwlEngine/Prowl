@@ -12,7 +12,7 @@ public static class Program
     public static unsafe void Main(string[] args)
     {
         SlangNative.slang_createGlobalSession(0, out IGlobalSession* globalSessionPtr).Throw();
-        IGlobalSession globalSession = ProxyEmitter.CreateVtableProxy(globalSessionPtr);
+        IGlobalSession globalSession = ProxyEmitter.CreateProxy(globalSessionPtr);
 
         SessionDesc sessionDesc = new();
         TargetDesc targetDesc = new();
@@ -23,7 +23,7 @@ public static class Program
         sessionDesc.targets = &targetDesc;
         sessionDesc.targetCount = 1;
 
-        byte** paths = stackalloc byte*[1];
+        ConstU8String* paths = stackalloc ConstU8String[1];
 
         // CWD must have a Shaders/ folder in it.
         paths[0] = new U8Str("./Shaders/"u8);
@@ -32,36 +32,42 @@ public static class Program
         sessionDesc.searchPathCount = 1;
 
         globalSession.CreateSession(&sessionDesc, out ISession* sessionPtr).Throw();
-        ISession session = ProxyEmitter.CreateVtableProxy(sessionPtr);
+        ISession session = ProxyEmitter.CreateProxy(sessionPtr);
 
         IModule* modulePtr = session.LoadModule(new U8Str("MyShaders"u8), out ISlangBlob* diagnosticsPtr);
 
         if (diagnosticsPtr != null)
         {
-            ISlangBlob diagnostics = ProxyEmitter.CreateVtableProxy(diagnosticsPtr);
+            ISlangBlob diagnostics = ProxyEmitter.CreateProxy(diagnosticsPtr);
             Console.WriteLine(Marshal.PtrToStringUTF8((nint)diagnostics.GetBufferPointer()));
 
             return;
         }
 
-        IModule module = ProxyEmitter.CreateVtableProxy(modulePtr);
+        IModule module = ProxyEmitter.CreateProxy(modulePtr);
 
         module.FindEntryPointByName(new U8Str("computeMain"u8), out IEntryPoint* entryPointPtr).Throw();
-        IEntryPoint entryPoint = ProxyEmitter.CreateVtableProxy(entryPointPtr);
-
+        IEntryPoint entryPoint = ProxyEmitter.CreateProxy(entryPointPtr);
 
         IComponentType** componentTypes = stackalloc IComponentType*[2];
         componentTypes[0] = (IComponentType*)modulePtr;
         componentTypes[1] = (IComponentType*)entryPointPtr;
 
         session.CreateCompositeComponentType(componentTypes, 2, out IComponentType* programPtr, out _).Throw();
-        IComponentType program = ProxyEmitter.CreateVtableProxy(programPtr);
+        IComponentType program = ProxyEmitter.CreateProxy(programPtr);
 
-        program.getEntryPointCode(0, 0, out ISlangBlob* outCodePtr, out _).Throw();
-        ISlangBlob outCode = ProxyEmitter.CreateVtableProxy(outCodePtr);
+        program.GetEntryPointCode(0, 0, out ISlangBlob* outCodePtr, out _).Throw();
+        ISlangBlob outCode = ProxyEmitter.CreateProxy(outCodePtr);
 
-        string code = System.Text.Encoding.ASCII.GetString((byte*)outCode.GetBufferPointer(), (int)outCode.GetBufferSize());
+        ShaderReflection* layout = program.GetLayout(0, out _);
 
+        layout->toJson(out ISlangBlob* blob);
+        ISlangBlob outReflection = ProxyEmitter.CreateProxy(blob);
+
+        string code = System.Text.Encoding.UTF8.GetString((byte*)outCode.GetBufferPointer(), (int)outCode.GetBufferSize());
         Console.WriteLine(code);
+
+        string json = System.Text.Encoding.UTF8.GetString((byte*)outReflection.GetBufferPointer(), (int)outReflection.GetBufferSize());
+        Console.WriteLine(json);
     }
 }
