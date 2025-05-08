@@ -14,7 +14,7 @@ static class Build
 {
     public const string RepoOwner = "shader-slang";
     public const string Repo = "slang";
-    public const string ReleaseTag = "vulkan-sdk-1.4.313.0";
+    public const string ReleaseTag = "v2025.6.4";
 
 
     static readonly (string, string)?[] s_targets =
@@ -33,6 +33,8 @@ static class Build
     static async Task Main()
     {
         s_targetPath = Path.Join(Directory.GetCurrentDirectory(), "lib");
+
+        Directory.CreateDirectory(s_targetPath);
 
         GitHubClient client = new GitHubClient(new Octokit.ProductHeaderValue("UpdateSources"));
 
