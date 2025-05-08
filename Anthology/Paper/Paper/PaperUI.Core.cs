@@ -39,6 +39,7 @@ namespace Prowl.PaperUI
         // Public properties
         public static Rect ScreenRect => new Rect(0, 0, _width, _height);
         public static Element RootElement => _rootElement;
+        public static Canvas Canvas => _canvas;
 
         /// <summary>
         /// Gets the current parent element in the element hierarchy.
