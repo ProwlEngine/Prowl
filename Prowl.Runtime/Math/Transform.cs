@@ -175,7 +175,7 @@ public class Transform : ICloneExplicit
             if (_isLocalToWorldMatrixDirty)
             {
                 Matrix4x4 t = Matrix4x4.TRS(m_LocalPosition, m_LocalRotation, m_LocalScale);
-                _cachedLocalToWorldMatrix = parent != null ? parent.localToWorldMatrix * t : t;
+                _cachedLocalToWorldMatrix = parent != null ? t * parent.localToWorldMatrix : t;
                 _isLocalToWorldMatrixDirty = false;
             }
             return _cachedLocalToWorldMatrix;
