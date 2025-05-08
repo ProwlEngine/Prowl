@@ -1093,19 +1093,6 @@ public enum SlangParameterCategory : uint
 
     // Metal [[payload]] inputs
     METAL_PAYLOAD,
-
-    //
-    COUNT,
-
-    // Aliases for Metal-specific categories.
-    METAL_BUFFER = CONSTANT_BUFFER,
-    METAL_TEXTURE = SHADER_RESOURCE,
-    METAL_SAMPLER = SAMPLER_STATE,
-
-    // DEPRECATED:
-    VERTEX_INPUT = VARYING_INPUT,
-    FRAGMENT_OUTPUT = VARYING_OUTPUT,
-    COUNT_V1 = SUBPASS,
 }
 
 /** Types of API-managed bindings that a parameter might use.
