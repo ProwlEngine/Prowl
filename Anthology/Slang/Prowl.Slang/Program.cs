@@ -3,33 +3,65 @@ using System.Runtime.InteropServices;
 
 namespace Prowl.Slang.Native;
 
+
 public static class Program
 {
+
+
+
     public static unsafe void Main(string[] args)
     {
-        unsafe
+        SlangNative.slang_createGlobalSession(0, out IGlobalSession* globalSessionPtr).Throw();
+        IGlobalSession globalSession = ProxyEmitter.CreateVtableProxy(globalSessionPtr);
+
+        SessionDesc sessionDesc = new();
+        TargetDesc targetDesc = new();
+
+        targetDesc.format = SlangCompileTarget.METAL;
+        targetDesc.profile = globalSession.FindProfile(new U8Str("glsl_450"u8));
+
+        sessionDesc.targets = &targetDesc;
+        sessionDesc.targetCount = 1;
+
+        byte** paths = stackalloc byte*[1];
+
+        // CWD must have a Shaders/ folder in it.
+        paths[0] = new U8Str("./Shaders/"u8);
+
+        sessionDesc.searchPaths = paths;
+        sessionDesc.searchPathCount = 1;
+
+        globalSession.CreateSession(&sessionDesc, out ISession* sessionPtr).Throw();
+        ISession session = ProxyEmitter.CreateVtableProxy(sessionPtr);
+
+        IModule* modulePtr = session.LoadModule(new U8Str("MyShaders"u8), out ISlangBlob* diagnosticsPtr);
+
+        if (diagnosticsPtr != null)
         {
-            IGlobalSession* globalSession;
-            SlangNative.slang_createGlobalSession(0, &globalSession).Throw();
+            ISlangBlob diagnostics = ProxyEmitter.CreateVtableProxy(diagnosticsPtr);
+            Console.WriteLine(Marshal.PtrToStringUTF8((nint)diagnostics.GetBufferPointer()));
 
-            nint queryInterfacePtr = globalSession->lpVtbl->QueryInterface;
-            QueryInterfaceDelegate queryInterface = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(queryInterfacePtr);
-
-            SlangUUID uuid = new(0xc140b5fd, 0xc78, 0x452e, 0xba, 0x7c, 0x1a, 0x1e, 0x70, 0xc7, 0xf7, 0x1c);
-
-            queryInterface(globalSession, ref uuid, out IntPtr globalSesh).Throw();
-
-            Console.WriteLine($"Global session ptr: {(IntPtr)globalSession}. Query result: {globalSesh}");
-
-            // Get delegate from vtable
-            nint createSessionPtr = globalSession->lpVtbl->CreateSession;
-            CreateSessionDelegate createSession = Marshal.GetDelegateForFunctionPointer<CreateSessionDelegate>(createSessionPtr);
-
-            SessionDesc desc = new();
-
-            createSession(globalSession, &desc, out IntPtr outSession).Throw();
-
-            Console.WriteLine($"Session created successfully. Session ptr: {outSession}");
+            return;
         }
+
+        IModule module = ProxyEmitter.CreateVtableProxy(modulePtr);
+
+        module.FindEntryPointByName(new U8Str("computeMain"u8), out IEntryPoint* entryPointPtr).Throw();
+        IEntryPoint entryPoint = ProxyEmitter.CreateVtableProxy(entryPointPtr);
+
+
+        IComponentType** componentTypes = stackalloc IComponentType*[2];
+        componentTypes[0] = (IComponentType*)modulePtr;
+        componentTypes[1] = (IComponentType*)entryPointPtr;
+
+        session.CreateCompositeComponentType(componentTypes, 2, out IComponentType* programPtr, out _).Throw();
+        IComponentType program = ProxyEmitter.CreateVtableProxy(programPtr);
+
+        program.getEntryPointCode(0, 0, out ISlangBlob* outCodePtr, out _).Throw();
+        ISlangBlob outCode = ProxyEmitter.CreateVtableProxy(outCodePtr);
+
+        string code = System.Text.Encoding.ASCII.GetString((byte*)outCode.GetBufferPointer(), (int)outCode.GetBufferSize());
+
+        Console.WriteLine(code);
     }
 }
