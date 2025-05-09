@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace Prowl.Slang.Native;
+namespace Prowl.Slang.NativeAPI;
 
 
 internal static unsafe partial class SlangNative

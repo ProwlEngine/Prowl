@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace Prowl.Slang.Native;
+namespace Prowl.Slang.NativeAPI;
 
 
 /** A result code for a Slang API operation.

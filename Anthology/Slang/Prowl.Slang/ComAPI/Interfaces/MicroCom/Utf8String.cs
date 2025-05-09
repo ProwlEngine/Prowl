@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Prowl.Slang.Native;
+namespace Prowl.Slang.NativeAPI;
 
 
 public readonly unsafe struct U8Str

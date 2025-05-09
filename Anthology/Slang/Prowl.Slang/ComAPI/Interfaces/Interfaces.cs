@@ -1,5 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
+using System.Collections.Generic;
 
 using SlangUInt32 = uint;
 using SlangInt32 = int;
@@ -9,11 +11,9 @@ using SlangUInt = nuint;
 
 using SlangBool = bool;
 
-using static Prowl.Slang.Native.SlangNative_Dep;
-using System.Runtime.CompilerServices;
-using System.Collections.Generic;
+using static Prowl.Slang.NativeAPI.SlangNative_Dep;
 
-namespace Prowl.Slang.Native;
+namespace Prowl.Slang.NativeAPI;
 
 
 [StructLayout(LayoutKind.Sequential)]

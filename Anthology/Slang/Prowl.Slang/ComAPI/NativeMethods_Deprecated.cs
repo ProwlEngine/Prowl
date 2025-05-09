@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using SlangInt = nint;
 using SlangUInt = nuint;
 
-namespace Prowl.Slang.Native;
+namespace Prowl.Slang.NativeAPI;
 
 
 public unsafe struct ICompileRequest { }

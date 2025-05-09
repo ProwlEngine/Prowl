@@ -1,6 +1,6 @@
 using System;
 
-namespace Prowl.Slang.Native;
+namespace Prowl.Slang.NativeAPI;
 
 
 // Marshals invocations on a managed object to a native COM Vtable

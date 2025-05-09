@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.IO;
 using System.Linq;
 
-namespace Prowl.Slang.Native;
+namespace Prowl.Slang.NativeAPI;
 
 
 public static unsafe class Program
