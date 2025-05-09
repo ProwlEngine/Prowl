@@ -46,6 +46,10 @@ SLANG_E_DRIVER_OUT_OF_MEMORY
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct SlangResult(uint value = 0x00000000)
 {
+    public static readonly SlangResult Ok = new SlangResult(0x00000000);
+    public static readonly SlangResult Fail = new SlangResult(0x80004005);
+    public static readonly SlangResult NoInterface = new SlangResult(0x80004002);
+
     uint _value = value;
 
 

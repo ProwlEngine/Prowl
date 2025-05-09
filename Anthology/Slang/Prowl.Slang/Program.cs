@@ -1,18 +1,89 @@
 ﻿using System;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.IO;
+using System.Linq;
 
 namespace Prowl.Slang.Native;
 
 
-public static class Program
+public static unsafe class Program
 {
 
+    class Blob() : ManagedComProxy<ISlangBlob>, ISlangBlob
+    {
+        public byte* Bytes;
+        public nuint Length;
+
+        public void* GetBufferPointer()
+        {
+            Console.WriteLine("Getting buffer");
+            return Bytes;
+        }
+
+        public nuint GetBufferSize()
+        {
+            Console.WriteLine("Getting buffer size");
+            return Length;
+        }
+    }
 
 
-    public static unsafe void Main(string[] args)
+    class Filesystem : ManagedComProxy<ISlangFileSystem>, ISlangFileSystem
+    {
+        public void* CastAs(ref Guid guid)
+        {
+            return null;
+        }
+
+
+        public SlangResult LoadFile(ConstU8Str path, out ISlangBlob* outBlob)
+        {
+            Console.WriteLine($"Attempting to load file: {path.String}");
+
+            if (!File.Exists(path.String))
+            {
+                Console.WriteLine($"File {path.String} does not exist");
+                outBlob = null;
+                return SlangResult.Fail;
+            }
+
+            try
+            {
+                byte[] fileData = File.ReadAllBytes(path.String);
+                nuint length = (nuint)fileData.Length;
+
+                byte* unmanagedPtr = (byte*)Marshal.AllocHGlobal(fileData.Length);
+                Marshal.Copy(fileData, 0, (IntPtr)unmanagedPtr, fileData.Length);
+
+                Blob blob = new() { Bytes = unmanagedPtr, Length = length };
+                outBlob = blob;
+
+                return SlangResult.Ok;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to load file: {ex}");
+                outBlob = null;
+
+                return SlangResult.Fail;
+            }
+        }
+    }
+
+
+    public static void Main()
+    {
+        CompileCode();
+    }
+
+
+    private static void CompileCode()
     {
         SlangNative.slang_createGlobalSession(0, out IGlobalSession* globalSessionPtr).Throw();
-        IGlobalSession globalSession = ProxyEmitter.CreateProxy(globalSessionPtr);
+        IGlobalSession globalSession = ProxyEmitter.CreateNativeProxy(globalSessionPtr);
+
+        Filesystem filesystem = new();
 
         SessionDesc sessionDesc = new();
         TargetDesc targetDesc = new();
@@ -23,7 +94,7 @@ public static class Program
         sessionDesc.targets = &targetDesc;
         sessionDesc.targetCount = 1;
 
-        ConstU8String* paths = stackalloc ConstU8String[1];
+        ConstU8Str* paths = stackalloc ConstU8Str[1];
 
         // CWD must have a Shaders/ folder in it.
         paths[0] = new U8Str("./Shaders/"u8);
@@ -31,38 +102,40 @@ public static class Program
         sessionDesc.searchPaths = paths;
         sessionDesc.searchPathCount = 1;
 
+        sessionDesc.fileSystem = filesystem;
+
         globalSession.CreateSession(&sessionDesc, out ISession* sessionPtr).Throw();
-        ISession session = ProxyEmitter.CreateProxy(sessionPtr);
+        ISession session = ProxyEmitter.CreateNativeProxy(sessionPtr);
 
         IModule* modulePtr = session.LoadModule(new U8Str("MyShaders"u8), out ISlangBlob* diagnosticsPtr);
 
         if (diagnosticsPtr != null)
         {
-            ISlangBlob diagnostics = ProxyEmitter.CreateProxy(diagnosticsPtr);
+            ISlangBlob diagnostics = ProxyEmitter.CreateNativeProxy(diagnosticsPtr);
             Console.WriteLine(Marshal.PtrToStringUTF8((nint)diagnostics.GetBufferPointer()));
 
             return;
         }
 
-        IModule module = ProxyEmitter.CreateProxy(modulePtr);
+        IModule module = ProxyEmitter.CreateNativeProxy(modulePtr);
 
         module.FindEntryPointByName(new U8Str("computeMain"u8), out IEntryPoint* entryPointPtr).Throw();
-        IEntryPoint entryPoint = ProxyEmitter.CreateProxy(entryPointPtr);
+        IEntryPoint entryPoint = ProxyEmitter.CreateNativeProxy(entryPointPtr);
 
         IComponentType** componentTypes = stackalloc IComponentType*[2];
         componentTypes[0] = (IComponentType*)modulePtr;
         componentTypes[1] = (IComponentType*)entryPointPtr;
 
         session.CreateCompositeComponentType(componentTypes, 2, out IComponentType* programPtr, out _).Throw();
-        IComponentType program = ProxyEmitter.CreateProxy(programPtr);
+        IComponentType program = ProxyEmitter.CreateNativeProxy(programPtr);
 
         program.GetEntryPointCode(0, 0, out ISlangBlob* outCodePtr, out _).Throw();
-        ISlangBlob outCode = ProxyEmitter.CreateProxy(outCodePtr);
+        ISlangBlob outCode = ProxyEmitter.CreateNativeProxy(outCodePtr);
 
         ShaderReflection* layout = program.GetLayout(0, out _);
 
         layout->toJson(out ISlangBlob* blob);
-        ISlangBlob outReflection = ProxyEmitter.CreateProxy(blob);
+        ISlangBlob outReflection = ProxyEmitter.CreateNativeProxy(blob);
 
         string code = System.Text.Encoding.UTF8.GetString((byte*)outCode.GetBufferPointer(), (int)outCode.GetBufferSize());
         Console.WriteLine(code);

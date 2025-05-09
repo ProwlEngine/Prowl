@@ -21,5 +21,5 @@ internal static unsafe partial class SlangNative
     public static partial void slang_shutdown();
 
     [LibraryImport(LibName)]
-    public static partial ConstU8String slang_getLastInternalErrorMessage();
+    public static partial ConstU8Str slang_getLastInternalErrorMessage();
 }

@@ -8,20 +8,15 @@ using System.Runtime.InteropServices;
 
 namespace Prowl.Slang.Native;
 
-public static class ProxyEmitter
+public static partial class ProxyEmitter
 {
-    private static Dictionary<Type, Type> s_proxyCache = [];
-
-    private static Dictionary<MethodInfo, Delegate> s_delegateCache = [];
-
-
     private static AssemblyBuilder? _assemblyBuilder;
     private static ModuleBuilder? _moduleBuilder;
 
 
     private static void ValidateBuilders()
     {
-        AssemblyName aName = new("COMVtableProxy");
+        AssemblyName aName = new("COMProxy");
 
         if (_assemblyBuilder == null)
         {
@@ -29,7 +24,7 @@ public static class ProxyEmitter
         }
 
         if (_moduleBuilder == null)
-            _moduleBuilder = _assemblyBuilder.DefineDynamicModule(aName.Name ?? "COMVtableProxy");
+            _moduleBuilder = _assemblyBuilder.DefineDynamicModule(aName.Name ?? "COMProxy");
     }
 
 
@@ -40,32 +35,6 @@ public static class ProxyEmitter
             ValidateBuilders();
             return _moduleBuilder!;
         }
-    }
-
-
-    private static void ValidateInterface<T>() where T : IUnknown
-    {
-        if (!typeof(T).IsInterface)
-            throw new InvalidCastException($"{typeof(T).Name} is not an interface.");
-    }
-
-
-    public static unsafe T CreateProxy<T>(T* nativeInterfacePtr) where T : IUnknown
-    {
-        ValidateInterface<T>();
-
-        return (T)Activator.CreateInstance(GetProxyType<T>(), (IntPtr)nativeInterfacePtr)!;
-    }
-
-
-    public static Type GetProxyType<T>() where T : IUnknown
-    {
-        ValidateInterface<T>();
-
-        if (!s_proxyCache.TryGetValue(typeof(T), out Type? proxyType))
-            s_proxyCache[typeof(T)] = proxyType = CreateProxyType<T>();
-
-        return proxyType;
     }
 
 
@@ -87,127 +56,9 @@ public static class ProxyEmitter
     }
 
 
-    private static MethodBuilder BuildMethod(TypeBuilder builder, MethodInfo interfaceMethod, FieldInfo ptrField, int vtableIndex)
+    private static void ValidateInterface<T>() where T : IUnknown
     {
-        ParameterInfo[] parameters = interfaceMethod.GetParameters();
-
-        Type[] paramTypes = parameters.Select(p => p.ParameterType).ToArray();
-
-        MethodBuilder methodBuilder = builder.DefineMethod(
-            interfaceMethod.Name,
-            MethodAttributes.Public | MethodAttributes.Virtual,
-            interfaceMethod.ReturnType,
-            paramTypes
-        );
-
-        ILGenerator ilg = methodBuilder.GetILGenerator();
-
-        // Load calli args onto stack
-        ilg.Emit(OpCodes.Ldarg_0);
-        ilg.Emit(OpCodes.Ldfld, ptrField);
-
-        for (int i = 0; i < paramTypes.Length; i++)
-            ilg.Emit(OpCodes.Ldarg, i + 1);
-
-        // Load vtable method pointer
-        ilg.Emit(OpCodes.Ldarg_0);
-        ilg.Emit(OpCodes.Ldfld, ptrField); // load _comObject ptr onto stack
-
-        ilg.Emit(OpCodes.Ldind_I); // dereference _comObject => vtbl pointer
-
-        // Index vtable
-        if (IntPtr.Size == 8)
-        {
-            ilg.Emit(OpCodes.Ldc_I8, (long)vtableIndex * 8);
-            ilg.Emit(OpCodes.Conv_I);
-        }
-        else
-        {
-            ilg.Emit(OpCodes.Ldc_I4, vtableIndex * 4);
-        }
-
-        ilg.Emit(OpCodes.Add);
-        ilg.Emit(OpCodes.Ldind_I); // final function pointer
-
-        // Call unmanaged function pointer
-        ilg.EmitCalli(
-            OpCodes.Calli,
-            CallingConvention.Cdecl,
-            interfaceMethod.ReturnType,
-            [typeof(void*), .. paramTypes]
-        );
-
-        ilg.Emit(OpCodes.Ret);
-
-        builder.DefineMethodOverride(methodBuilder, interfaceMethod);
-
-        return methodBuilder;
-    }
-
-
-    private static string GetProxyName<T>()
-    {
-#if DEBUG
-        return $"{typeof(T).Name}Proxy";
-#else
-        return $"__DynamicImpl__{typeof(T).Name}__Proxy__";
-#endif
-    }
-
-
-    private static Type CreateProxyType<T>()
-    {
-        TypeBuilder builder = ModuleBuilder.DefineType(GetProxyName<T>(), TypeAttributes.Public, typeof(ComProxy), [typeof(T)]);
-
-        FieldInfo comPtrField = typeof(ComProxy).GetField("_comPtr", BindingFlags.Instance | BindingFlags.NonPublic)!;
-
-        List<MethodInfo> methods = GetMethodTree<T>();
-
-        for (int i = 0; i < methods.Count; i++)
-        {
-            BuildMethod(builder, methods[i], comPtrField, i);
-        }
-
-        ConstructorBuilder ctor = builder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [typeof(IntPtr)]);
-        ILGenerator ctorIL = ctor.GetILGenerator();
-
-        ConstructorInfo baseCtor = typeof(ComProxy).GetConstructor([typeof(IntPtr)])!;
-        ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Ldarg_1);        // IntPtr argument
-        ctorIL.Emit(OpCodes.Call, baseCtor); // call base(IntPtr)
-        ctorIL.Emit(OpCodes.Ret);
-
-        return builder.CreateType();
-    }
-
-
-    public static unsafe T* CreateNativeProxy<T>(NativeComProxy<T> managedObject) where T : IUnknown
-    {
-        ValidateInterface<T>();
-
-        List<MethodInfo> tree = GetMethodTree<T>();
-
-        void* nativeVtablePtr = NativeMemory.Alloc((nuint)(nint.Size * tree.Count));
-        void* managedVtablePtr = NativeMemory.Alloc((nuint)(nint.Size * tree.Count));
-
-        GCHandle handleObj = GCHandle.Alloc(managedObject);
-        void* managedObjPtr = (void*)handleObj.AddrOfPinnedObject();
-
-        ProxyVTable* proxy = (ProxyVTable*)NativeMemory.Alloc((nuint)sizeof(ProxyVTable));
-
-        proxy->VTable = nativeVtablePtr;
-        proxy->ManagedVTable = managedVtablePtr;
-        proxy->ManagedThis = managedObjPtr;
-
-        return (T*)proxy;
-    }
-
-
-    public static unsafe void FreeNativeProxy<T>(NativeComProxy<T> managedObject) where T : IUnknown
-    {
-        ProxyVTable* proxy = (ProxyVTable*)managedObject.NativeInterfacePtr;
-
-        NativeMemory.Free(proxy->VTable);
-        NativeMemory.Free(proxy->ManagedVTable);
+        if (!typeof(T).IsInterface)
+            throw new InvalidCastException($"{typeof(T).Name} is not an interface.");
     }
 }

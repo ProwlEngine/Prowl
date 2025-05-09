@@ -1,95 +1,50 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Reflection.Emit;
-using System.Runtime.InteropServices;
 
 namespace Prowl.Slang.Native;
 
 
-internal static class ReferenceCounter
+// Marshals invocations on a managed object to a native COM Vtable
+public abstract class NativeComProxy : IUnknown
 {
-    private static HashSet<object?> s_referenceTracker = new();
+    protected IntPtr _comPtr;
 
 
-    public static uint UpdateRef<T>(T obj, uint value)
+    public NativeComProxy(IntPtr nativePtr)
     {
-        if (value < 1)
-            s_referenceTracker.Remove(obj);
-        else
-            s_referenceTracker.Add(obj);
-
-        return value;
-    }
-}
-
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct ProxyVTable
-{
-    public void* VTable;           // Function pointers for native calls
-    public void* ManagedVTable;    // Function pointers for managed methods
-    public void* ManagedThis;      // GCHandle or raw object handle
-}
-
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe class NativeComProxy<T> : IUnknown where T : IUnknown
-{
-    private static HashSet<Guid> s_interfaceGuids = GetInterfaces();
-
-    private static HashSet<Guid> GetInterfaces()
-    {
-        HashSet<Guid> guids = new();
-
-        Type? type = typeof(T);
-
-        while (type != null)
-        {
-            guids.Add(UUIDAttribute.GetGuid(type));
-            type = type.GetInterfaces().FirstOrDefault();
-        }
-
-        return guids;
+        _comPtr = nativePtr;
+        AddRef();
     }
 
-    private uint _refCount;
 
-    private T* _nativeInterfacePtr = null;
-
-    public T* NativeInterfacePtr
+    public unsafe T As<T>() where T : IUnknown
     {
-        get
-        {
-            if (_nativeInterfacePtr == null)
-                _nativeInterfacePtr = ProxyEmitter.CreateNativeProxy(this);
+        Guid guid = UUIDAttribute.GetGuid<T>();
 
-            return _nativeInterfacePtr;
-        }
+        QueryInterface(ref guid, out nint objPtr).Throw();
 
-        internal set => _nativeInterfacePtr = value;
+        return ProxyEmitter.CreateNativeProxy((T*)objPtr);
     }
 
-    public uint AddRef() => ReferenceCounter.UpdateRef(this, ++_refCount);
 
-    public SlangResult QueryInterface(ref Guid uuid, out nint obj)
+    public unsafe bool TryAs<T>(out T? value) where T : IUnknown
     {
-        if (s_interfaceGuids.Contains(uuid))
-        {
-            obj = (nint)NativeInterfacePtr;
-            return new SlangResult();
-        }
+        Guid guid = UUIDAttribute.GetGuid<T>();
 
-        obj = 0;
-        return new SlangResult(0x80004002);
+        bool isOK = QueryInterface(ref guid, out nint objPtr).IsOk();
+
+        value = isOK ? ProxyEmitter.CreateNativeProxy((T*)objPtr) : default;
+
+        return isOK;
     }
 
-    public uint Release() => ReferenceCounter.UpdateRef(this, --_refCount);
+
+    public abstract uint AddRef();
+    public abstract SlangResult QueryInterface(ref Guid uuid, out nint obj);
+    public abstract uint Release();
 
 
     ~NativeComProxy()
     {
-        ProxyEmitter.FreeNativeProxy(this);
+        Release();
     }
 }

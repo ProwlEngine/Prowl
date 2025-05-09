@@ -19,7 +19,7 @@ internal static unsafe partial class SlangNative_Dep
 
     // User Attribute
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionUserAttribute_GetName(Attribute* attrib);
+    public static unsafe partial ConstU8Str spReflectionUserAttribute_GetName(Attribute* attrib);
 
     [LibraryImport(LibName)]
     public static unsafe partial uint spReflectionUserAttribute_GetArgumentCount(
@@ -48,7 +48,7 @@ internal static unsafe partial class SlangNative_Dep
        function will return nullptr.
 */
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionUserAttribute_GetArgumentValueString(
+    public static unsafe partial ConstU8Str spReflectionUserAttribute_GetArgumentValueString(
         Attribute* attrib,
         uint index,
         out nuint outSize);
@@ -67,7 +67,7 @@ internal static unsafe partial class SlangNative_Dep
     [LibraryImport(LibName)]
     public static unsafe partial Attribute* spReflectionType_FindUserAttributeByName(
         TypeReflection* type,
-        ConstU8String name);
+        ConstU8Str name);
 
     [LibraryImport(LibName)]
     public static unsafe partial TypeReflection* spReflectionType_applySpecializations(
@@ -114,7 +114,7 @@ a generic parameter that has not been bound to a specific value, this function r
             TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionType_GetName(TypeReflection* type);
+    public static unsafe partial ConstU8Str spReflectionType_GetName(TypeReflection* type);
     [LibraryImport(LibName)]
     public static unsafe partial SlangResult
     spReflectionType_GetFullName(TypeReflection* type, ISlangBlob** outNameBlob);
@@ -152,8 +152,8 @@ a generic parameter that has not been bound to a specific value, this function r
     [LibraryImport(LibName)]
     public static unsafe partial SlangInt spReflectionTypeLayout_findFieldIndexByName(
             TypeLayoutReflection* typeLayout,
-        ConstU8String nameBegin,
-        ConstU8String nameEnd);
+        ConstU8Str nameBegin,
+        ConstU8Str nameEnd);
 
     [LibraryImport(LibName)]
     public static unsafe partial VariableLayoutReflection* spReflectionTypeLayout_GetExplicitCounter(
@@ -299,7 +299,7 @@ a generic parameter that has not been bound to a specific value, this function r
     // Variable Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionVariable_GetName(VariableReflection* var);
+    public static unsafe partial ConstU8Str spReflectionVariable_GetName(VariableReflection* var);
 
     [LibraryImport(LibName)]
     public static unsafe partial TypeReflection* spReflectionVariable_GetType(VariableReflection* var);
@@ -321,7 +321,7 @@ a generic parameter that has not been bound to a specific value, this function r
     public static unsafe partial Attribute* spReflectionVariable_FindUserAttributeByName(
         VariableReflection* var,
         IGlobalSession* globalSession,
-        ConstU8String name);
+        ConstU8Str name);
 
     [LibraryImport(LibName)]
     [return: MarshalAs(UnmanagedType.I1)]
@@ -365,7 +365,7 @@ a generic parameter that has not been bound to a specific value, this function r
     spReflectionVariableLayout_GetImageFormat(VariableLayoutReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionVariableLayout_GetSemanticName(
+    public static unsafe partial ConstU8Str spReflectionVariableLayout_GetSemanticName(
         VariableLayoutReflection* var);
 
     [LibraryImport(LibName)]
@@ -375,7 +375,7 @@ a generic parameter that has not been bound to a specific value, this function r
 
     // Function Reflection
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionFunction_GetName(FunctionReflection* func);
+    public static unsafe partial ConstU8Str spReflectionFunction_GetName(FunctionReflection* func);
 
     [LibraryImport(LibName)]
     public static unsafe partial Modifier* spReflectionFunction_FindModifier(
@@ -395,7 +395,7 @@ a generic parameter that has not been bound to a specific value, this function r
     public static unsafe partial Attribute* spReflectionFunction_FindUserAttributeByName(
         FunctionReflection* func,
         IGlobalSession* globalSession,
-        ConstU8String name);
+        ConstU8Str name);
 
     [LibraryImport(LibName)]
     public static unsafe partial uint spReflectionFunction_GetParameterCount(FunctionReflection* func);
@@ -445,7 +445,7 @@ a generic parameter that has not been bound to a specific value, this function r
             DeclReflection* parentDecl,
         uint index);
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionDecl_getName(DeclReflection* decl);
+    public static unsafe partial ConstU8Str spReflectionDecl_getName(DeclReflection* decl);
     [LibraryImport(LibName)]
     public static unsafe partial SlangDeclKind spReflectionDecl_getKind(DeclReflection* decl);
     [LibraryImport(LibName)]
@@ -464,7 +464,7 @@ a generic parameter that has not been bound to a specific value, this function r
     [LibraryImport(LibName)]
     public static unsafe partial DeclReflection* spReflectionGeneric_asDecl(GenericReflection* generic);
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionGeneric_GetName(GenericReflection* generic);
+    public static unsafe partial ConstU8Str spReflectionGeneric_GetName(GenericReflection* generic);
     [LibraryImport(LibName)]
     public static unsafe partial uint spReflectionGeneric_GetTypeParameterCount(
             GenericReflection* generic);
@@ -535,10 +535,10 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
     // Entry Point Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionEntryPoint_getName(EntryPointReflection* entryPoint);
+    public static unsafe partial ConstU8Str spReflectionEntryPoint_getName(EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionEntryPoint_getNameOverride(
+    public static unsafe partial ConstU8Str spReflectionEntryPoint_getNameOverride(
         EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
@@ -586,7 +586,7 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
 
     // TypeParameterReflection
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflectionTypeParameter_GetName(
+    public static unsafe partial ConstU8Str spReflectionTypeParameter_GetName(
         TypeParameterReflection* typeParam);
     [LibraryImport(LibName)]
     public static unsafe partial uint spReflectionTypeParameter_GetIndex(TypeParameterReflection* typeParam);
@@ -626,12 +626,12 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
     [LibraryImport(LibName)]
     public static unsafe partial TypeParameterReflection* spReflection_FindTypeParameter(
             ShaderReflection* reflection,
-            ConstU8String name);
+            ConstU8Str name);
 
     [LibraryImport(LibName)]
     public static unsafe partial TypeReflection* spReflection_FindTypeByName(
             ShaderReflection* reflection,
-            ConstU8String name);
+            ConstU8Str name);
     [LibraryImport(LibName)]
     public static unsafe partial TypeLayoutReflection* spReflection_GetTypeLayout(
             ShaderReflection* reflection,
@@ -641,17 +641,17 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
     [LibraryImport(LibName)]
     public static unsafe partial FunctionReflection* spReflection_FindFunctionByName(
             ShaderReflection* reflection,
-            ConstU8String name);
+            ConstU8Str name);
     [LibraryImport(LibName)]
     public static unsafe partial FunctionReflection* spReflection_FindFunctionByNameInType(
             ShaderReflection* reflection,
         TypeReflection* reflType,
-            ConstU8String name);
+            ConstU8Str name);
     [LibraryImport(LibName)]
     public static unsafe partial VariableReflection* spReflection_FindVarByNameInType(
             ShaderReflection* reflection,
         TypeReflection* reflType,
-            ConstU8String name);
+            ConstU8Str name);
 
     [LibraryImport(LibName)]
     public static unsafe partial SlangUInt spReflection_getEntryPointCount(ShaderReflection* reflection);
@@ -662,7 +662,7 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
     [LibraryImport(LibName)]
     public static unsafe partial EntryPointReflection* spReflection_findEntryPointByName(
             ShaderReflection* reflection,
-            ConstU8String name);
+            ConstU8Str name);
 
     [LibraryImport(LibName)]
     public static unsafe partial SlangUInt spReflection_getGlobalConstantBufferBinding(ShaderReflection* reflection);
@@ -700,7 +700,7 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
     /// Get a hashed string. The number of chars is written in outCount.
     /// The count does *NOT* including terminating 0. The returned string will be 0 terminated.
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8String spReflection_getHashedString(
+    public static unsafe partial ConstU8Str spReflection_getHashedString(
         ShaderReflection* reflection,
         SlangUInt index,
         nuint* outCount);

@@ -22,8 +22,8 @@ public unsafe struct CompilerOptionValue()
     public CompilerOptionValueKind kind = CompilerOptionValueKind.Int;
     public int intValue0 = 0;
     public int intValue1 = 0;
-    public ConstU8String stringValue0;
-    public ConstU8String stringValue1;
+    public ConstU8Str stringValue0;
+    public ConstU8Str stringValue1;
 }
 
 
@@ -43,7 +43,7 @@ public unsafe interface ISlangCastable : IUnknown
     /// Can be used to cast to interfaces without reference counting.
     /// Also provides access to internal implementations, when they provide a guid
     /// Can simulate a 'generated' interface as long as kept in scope by cast from.
-    void* CastAs(in Guid guid);
+    void* CastAs(ref Guid guid);
 }
 
 
@@ -54,7 +54,7 @@ public unsafe interface ISlangClonable : ISlangCastable
     /// The object is returned *not* ref counted. Any type that can implements the interface,
     /// derives from ICastable, and so (not withstanding some other issue) will always return
     /// an ICastable interface which other interfaces/types are accessible from via castAs
-    void* Clone(in Guid guid);
+    void* Clone(ref Guid guid);
 }
 
 
@@ -107,7 +107,7 @@ public unsafe interface ISlangFileSystem : ISlangCastable
     If the load fails, the implementation should return a failure status
     (any negative value will do).
     */
-    SlangResult LoadFile(ConstU8String path, out ISlangBlob* outBlob);
+    SlangResult LoadFile(ConstU8Str path, out ISlangBlob* outBlob);
 }
 
 
@@ -119,7 +119,7 @@ public unsafe interface ISlangFileSystem : ISlangCastable
 [UUID(0x9c9d5bc5, 0xeb61, 0x496f, 0x80, 0xd7, 0xd1, 0x47, 0xc4, 0xa2, 0x37, 0x30)]
 public unsafe interface ISlangSharedLibrary_Dep1 : IUnknown
 {
-    void* FindSymbolAddressByName(ConstU8String name);
+    void* FindSymbolAddressByName(ConstU8Str name);
 }
 
 /** An interface that can be used to encapsulate access to a shared library. An implementation
@@ -132,7 +132,7 @@ public unsafe interface ISlangSharedLibrary : ISlangCastable
     @param name The name of the symbol
     @return The pointer related to the name or null if not found
     */
-    void* FindSymbolAddressByName(ConstU8String name);
+    void* FindSymbolAddressByName(ConstU8Str name);
 }
 
 
@@ -145,7 +145,7 @@ public unsafe interface ISlangSharedLibraryLoader : IUnknown
     'lib' prefix and '.so' extension
     @path path The unadorned filename and/or path for the shared library
     @ param sharedLibraryOut Holds the shared library if successfully loaded */
-    SlangResult LoadSharedLibrary(ConstU8String path, out ISlangSharedLibrary* sharedLibraryOut);
+    SlangResult LoadSharedLibrary(ConstU8Str path, out ISlangSharedLibrary* sharedLibraryOut);
 }
 
 
@@ -192,7 +192,7 @@ public unsafe interface ISlangFileSystemExt : ISlangFileSystem
     @param outUniqueIdentity
     @returns A `SlangResult` to indicate success or failure getting the uniqueIdentity.
     */
-    SlangResult GetFileUniqueIdentity(ConstU8String path, out ISlangBlob* outUniqueIdentity);
+    SlangResult GetFileUniqueIdentity(ConstU8Str path, out ISlangBlob* outUniqueIdentity);
 
     /** Calculate a path combining the 'fromPath' with 'path'
 
@@ -207,8 +207,8 @@ public unsafe interface ISlangFileSystemExt : ISlangFileSystem
     */
     SlangResult CalcCombinedPath(
         SlangPathType fromPathType,
-        ConstU8String fromPath,
-        ConstU8String path,
+        ConstU8Str fromPath,
+        ConstU8Str path,
         out ISlangBlob* pathOut);
 
     /** Gets the type of path that path is on the file system.
@@ -217,7 +217,7 @@ public unsafe interface ISlangFileSystemExt : ISlangFileSystem
     @returns SLANG_OK if located and type is known, else an error. SLANG_E_NOT_FOUND if not
     found.
     */
-    SlangResult GetPathType(ConstU8String path, out SlangPathType pathTypeOut);
+    SlangResult GetPathType(ConstU8Str path, out SlangPathType pathTypeOut);
 
     /** Get a path based on the kind.
 
@@ -227,7 +227,7 @@ public unsafe interface ISlangFileSystemExt : ISlangFileSystem
     @returns SLANG_OK if successfully simplified the path (SLANG_E_NOT_IMPLEMENTED if not
     implemented, or some other error code)
     */
-    SlangResult GetPath(PathKind kind, ConstU8String path, out ISlangBlob* outPath);
+    SlangResult GetPath(PathKind kind, ConstU8Str path, out ISlangBlob* outPath);
 
     /** Clears any cached information */
     void ClearCache();
@@ -242,7 +242,7 @@ public unsafe interface ISlangFileSystemExt : ISlangFileSystem
     @param userData This is passed to the callback
     @returns SLANG_OK if successful
     */
-    SlangResult EnumeratePathContents(ConstU8String path, void* callback, void* userData);
+    SlangResult EnumeratePathContents(ConstU8Str path, void* callback, void* userData);
 
     /** Returns how paths map to the OS file system
 
@@ -263,7 +263,7 @@ public unsafe interface ISlangMutableFileSystem : ISlangFileSystemExt
     @returns SLANG_OK if successful (SLANG_E_NOT_IMPLEMENTED if not implemented, or some other
     error code)
     */
-    SlangResult SaveFile(ConstU8String path, void* data, nuint size);
+    SlangResult SaveFile(ConstU8Str path, void* data, nuint size);
 
     /** Write data in the form of a blob to the specified path.
 
@@ -278,7 +278,7 @@ public unsafe interface ISlangMutableFileSystem : ISlangFileSystemExt
     @returns SLANG_OK if successful (SLANG_E_NOT_IMPLEMENTED if not implemented, or some other
     error code)
     */
-    SlangResult SaveFileBlob(ConstU8String path, ISlangBlob* dataBlob);
+    SlangResult SaveFileBlob(ConstU8Str path, ISlangBlob* dataBlob);
 
     /** Remove the entry in the path (directory of file). Will only delete an empty directory,
     if not empty will return an error.
@@ -286,7 +286,7 @@ public unsafe interface ISlangMutableFileSystem : ISlangFileSystemExt
     @param path The path to remove
     @returns SLANG_OK if successful
     */
-    SlangResult Remove(ConstU8String path);
+    SlangResult Remove(ConstU8Str path);
 
     /** Create a directory.
 
@@ -296,7 +296,7 @@ public unsafe interface ISlangMutableFileSystem : ISlangFileSystemExt
     an error.
     @returns SLANG_OK if successful
     */
-    SlangResult CreateDirectory(ConstU8String path);
+    SlangResult CreateDirectory(ConstU8Str path);
 }
 
 
@@ -324,7 +324,7 @@ public unsafe interface ISlangWriter : IUnknown
     @param chars The characters to write out
     @param numChars The amount of characters
     @returns SLANG_OK on success */
-    SlangResult Write(ConstU8String chars, nuint numChars);
+    SlangResult Write(ConstU8Str chars, nuint numChars);
 
     /** Flushes any content to the output */
     void Flush();
@@ -344,7 +344,7 @@ public unsafe interface ISlangWriter : IUnknown
 public unsafe interface ISlangProfiler : IUnknown
 {
     nuint GetEntryCount();
-    ConstU8String GetEntryName(uint index);
+    ConstU8Str GetEntryName(uint index);
     long GetEntryTimeMS(uint index);
     uint GetEntryInvocationTimes(uint index);
 }
@@ -369,7 +369,7 @@ public unsafe struct Attribute
 {
     Attribute* ptr => (Attribute*)Unsafe.AsPointer<Attribute>(ref this);
 
-    public ConstU8String getName()
+    public ConstU8Str getName()
     {
         return spReflectionUserAttribute_GetName(ptr);
     }
@@ -403,7 +403,7 @@ public unsafe struct Attribute
             value);
     }
 
-    public ConstU8String getArgumentValueString(uint index, out nuint outSize)
+    public ConstU8Str getArgumentValueString(uint index, out nuint outSize)
     {
         return spReflectionUserAttribute_GetArgumentValueString(
             ptr,
@@ -498,7 +498,7 @@ public unsafe struct TypeReflection
         return spReflectionType_GetResourceAccess(ptr);
     }
 
-    public ConstU8String getName()
+    public ConstU8Str getName()
     {
         return spReflectionType_GetName(ptr);
     }
@@ -518,14 +518,14 @@ public unsafe struct TypeReflection
         return spReflectionType_GetUserAttribute(ptr, index);
     }
 
-    public Attribute* findAttributeByName(ConstU8String name)
+    public Attribute* findAttributeByName(ConstU8Str name)
     {
         return spReflectionType_FindUserAttributeByName(
             ptr,
             name);
     }
 
-    public Attribute* findUserAttributeByName(ConstU8String name) { return findAttributeByName(name); }
+    public Attribute* findUserAttributeByName(ConstU8Str name) { return findAttributeByName(name); }
 
     public TypeReflection* applySpecializations(GenericReflection* generic)
     {
@@ -580,7 +580,7 @@ public unsafe struct TypeLayoutReflection
         return spReflectionTypeLayout_GetFieldByIndex(ptr, index);
     }
 
-    public SlangInt findFieldIndexByName(ConstU8String nameBegin, ConstU8String nameEnd)
+    public SlangInt findFieldIndexByName(ConstU8Str nameBegin, ConstU8Str nameEnd)
     {
         return spReflectionTypeLayout_findFieldIndexByName(
             ptr,
@@ -664,7 +664,7 @@ public unsafe struct TypeLayoutReflection
 
     public SlangResourceAccess getResourceAccess() { return getType()->getResourceAccess(); }
 
-    public ConstU8String getName() { return getType()->getName(); }
+    public ConstU8Str getName() { return getType()->getName(); }
 
     public SlangMatrixLayoutMode getMatrixLayoutMode()
     {
@@ -838,7 +838,7 @@ public unsafe struct VariableReflection
 {
     VariableReflection* ptr => (VariableReflection*)Unsafe.AsPointer<VariableReflection>(ref this);
 
-    public ConstU8String getName()
+    public ConstU8Str getName()
     {
         return spReflectionVariable_GetName(ptr);
     }
@@ -865,7 +865,7 @@ public unsafe struct VariableReflection
             index);
     }
 
-    public Attribute* findAttributeByName(IGlobalSession* globalSession, ConstU8String name)
+    public Attribute* findAttributeByName(IGlobalSession* globalSession, ConstU8Str name)
     {
         return spReflectionVariable_FindUserAttributeByName(
             ptr,
@@ -873,7 +873,7 @@ public unsafe struct VariableReflection
             name);
     }
 
-    public Attribute* findUserAttributeByName(IGlobalSession* globalSession, ConstU8String name)
+    public Attribute* findUserAttributeByName(IGlobalSession* globalSession, ConstU8Str name)
     {
         return findAttributeByName(globalSession, name);
     }
@@ -908,7 +908,7 @@ public unsafe struct VariableLayoutReflection
         return spReflectionVariableLayout_GetVariable(ptr);
     }
 
-    public ConstU8String getName()
+    public ConstU8Str getName()
     {
         return getVariable()->getName();
     }
@@ -958,7 +958,7 @@ public unsafe struct VariableLayoutReflection
         return spReflectionVariableLayout_GetImageFormat(ptr);
     }
 
-    public ConstU8String getSemanticName()
+    public ConstU8Str getSemanticName()
     {
         return spReflectionVariableLayout_GetSemanticName(ptr);
     }
@@ -984,7 +984,7 @@ public unsafe struct FunctionReflection
 {
     FunctionReflection* ptr => (FunctionReflection*)Unsafe.AsPointer<FunctionReflection>(ref this);
 
-    public ConstU8String getName()
+    public ConstU8Str getName()
     {
         return spReflectionFunction_GetName(ptr);
     }
@@ -1016,7 +1016,7 @@ public unsafe struct FunctionReflection
         return spReflectionFunction_GetUserAttribute(ptr, index);
     }
 
-    public Attribute* findAttributeByName(IGlobalSession* globalSession, ConstU8String name)
+    public Attribute* findAttributeByName(IGlobalSession* globalSession, ConstU8Str name)
     {
         return spReflectionFunction_FindUserAttributeByName(
             ptr,
@@ -1024,7 +1024,7 @@ public unsafe struct FunctionReflection
             name);
     }
 
-    public Attribute* findUserAttributeByName(IGlobalSession* globalSession, ConstU8String name)
+    public Attribute* findUserAttributeByName(IGlobalSession* globalSession, ConstU8Str name)
     {
         return findAttributeByName(globalSession, name);
     }
@@ -1081,7 +1081,7 @@ public unsafe struct GenericReflection
         return spReflectionGeneric_asDecl(ptr);
     }
 
-    public ConstU8String getName()
+    public ConstU8Str getName()
     {
         return spReflectionGeneric_GetName(ptr);
     }
@@ -1167,12 +1167,12 @@ public unsafe struct EntryPointReflection
 {
     EntryPointReflection* ptr => (EntryPointReflection*)Unsafe.AsPointer<EntryPointReflection>(ref this);
 
-    public ConstU8String getName()
+    public ConstU8Str getName()
     {
         return spReflectionEntryPoint_getName(ptr);
     }
 
-    public ConstU8String getNameOverride()
+    public ConstU8Str getNameOverride()
     {
         return spReflectionEntryPoint_getNameOverride(ptr);
     }
@@ -1244,7 +1244,7 @@ public unsafe struct TypeParameterReflection
 {
     TypeParameterReflection* ptr => (TypeParameterReflection*)Unsafe.AsPointer<TypeParameterReflection>(ref this);
 
-    public ConstU8String getName()
+    public ConstU8Str getName()
     {
         return spReflectionTypeParameter_GetName(ptr);
     }
@@ -1287,7 +1287,7 @@ public unsafe struct ShaderReflection
             index);
     }
 
-    public TypeParameterReflection* findTypeParameter(ConstU8String name)
+    public TypeParameterReflection* findTypeParameter(ConstU8Str name)
     {
         return
             spReflection_FindTypeParameter(ptr, name);
@@ -1326,17 +1326,17 @@ public unsafe struct ShaderReflection
         return spReflection_getGlobalConstantBufferSize(ptr);
     }
 
-    public TypeReflection* findTypeByName(ConstU8String name)
+    public TypeReflection* findTypeByName(ConstU8Str name)
     {
         return spReflection_FindTypeByName(ptr, name);
     }
 
-    public FunctionReflection* findFunctionByName(ConstU8String name)
+    public FunctionReflection* findFunctionByName(ConstU8Str name)
     {
         return spReflection_FindFunctionByName(ptr, name);
     }
 
-    public FunctionReflection* findFunctionByNameInType(TypeReflection* type, ConstU8String name)
+    public FunctionReflection* findFunctionByNameInType(TypeReflection* type, ConstU8Str name)
     {
         return spReflection_FindFunctionByNameInType(
             ptr,
@@ -1344,7 +1344,7 @@ public unsafe struct ShaderReflection
             name);
     }
 
-    public VariableReflection* findVarByNameInType(TypeReflection* type, ConstU8String name)
+    public VariableReflection* findVarByNameInType(TypeReflection* type, ConstU8Str name)
     {
         return spReflection_FindVarByNameInType(
             ptr,
@@ -1362,7 +1362,7 @@ public unsafe struct ShaderReflection
             rules);
     }
 
-    public EntryPointReflection* findEntryPointByName(ConstU8String name)
+    public EntryPointReflection* findEntryPointByName(ConstU8Str name)
     {
         return
             spReflection_findEntryPointByName(ptr, name);
@@ -1411,7 +1411,7 @@ public unsafe struct ShaderReflection
         return spReflection_getHashedStringCount(ptr);
     }
 
-    public ConstU8String getHashedString(SlangUInt index, nuint* outCount)
+    public ConstU8Str getHashedString(SlangUInt index, nuint* outCount)
     {
         return spReflection_getHashedString(ptr, index, outCount);
     }
@@ -1439,7 +1439,7 @@ public unsafe struct DeclReflection
 {
     DeclReflection* ptr => (DeclReflection*)Unsafe.AsPointer(ref this);
 
-    public ConstU8String getName()
+    public ConstU8Str getName()
     {
         return spReflectionDecl_getName(ptr);
     }
@@ -1565,7 +1565,7 @@ public unsafe interface IGlobalSession : IUnknown
     of the Slang library, so clients are expected to look up
     profiles by name at runtime.
     */
-    SlangProfileID FindProfile(ConstU8String name);
+    SlangProfileID FindProfile(ConstU8Str name);
 
     /** Set the path that downstream compilers (aka back end compilers) will
     be looked from.
@@ -1575,7 +1575,7 @@ public unsafe interface IGlobalSession : IUnknown
     For back ends that are dlls/shared libraries, it will mean the path will
     be prefixed with the path when calls are made out to ISlangSharedLibraryLoader.
     For executables - it will look for executables along the path */
-    void SetDownstreamCompilerPath(SlangPassThrough passThrough, ConstU8String path);
+    void SetDownstreamCompilerPath(SlangPassThrough passThrough, ConstU8Str path);
 
     /** DEPRECATED: Use setLanguagePrelude
 
@@ -1586,7 +1586,7 @@ public unsafe interface IGlobalSession : IUnknown
 
     That for pass-through usage, prelude is not pre-pended, preludes are for code generation only.
     */
-    void SetDownstreamCompilerPrelude(SlangPassThrough passThrough, ConstU8String preludeText);
+    void SetDownstreamCompilerPrelude(SlangPassThrough passThrough, ConstU8Str preludeText);
 
     /** DEPRECATED: Use getLanguagePrelude
 
@@ -1606,7 +1606,7 @@ public unsafe interface IGlobalSession : IUnknown
 
     @return The build tag string
     */
-    ConstU8String GetBuildTagString();
+    ConstU8Str GetBuildTagString();
 
     /* For a given source language set the default compiler.
     If a default cannot be chosen (for example the target cannot be achieved by the default),
@@ -1632,7 +1632,7 @@ public unsafe interface IGlobalSession : IUnknown
     Note! That for pass-through usage, prelude is not pre-pended, preludes are for code generation
     only.
     */
-    void SetLanguagePrelude(SlangSourceLanguage sourceLanguage, ConstU8String preludeText);
+    void SetLanguagePrelude(SlangSourceLanguage sourceLanguage, ConstU8Str preludeText);
 
     /** Get the 'prelude' associated with a specific source language.
     @param sourceLanguage The language the prelude should be inserted on.
@@ -1647,7 +1647,7 @@ public unsafe interface IGlobalSession : IUnknown
 
     /** Add new builtin declarations to be used in subsequent compiles.
      */
-    void AddBuiltins(ConstU8String sourcePath, ConstU8String sourceString);
+    void AddBuiltins(ConstU8Str sourcePath, ConstU8Str sourceString);
 
     /** Set the session shared library loader. If this changes the loader, it may cause shared
     libraries to be unloaded
@@ -1706,7 +1706,7 @@ public unsafe interface IGlobalSession : IUnknown
     of the Slang library, so clients are expected to look up
     capabilities by name at runtime.
     */
-    SlangCapabilityID FindCapability(ConstU8String name);
+    SlangCapabilityID FindCapability(ConstU8Str name);
 
     /** Set the downstream/pass through compiler to be used for a transition from the source type to
     the target type
@@ -1731,7 +1731,7 @@ public unsafe interface IGlobalSession : IUnknown
     /** Specify a spirv.core.grammar.json file to load and use when
      * parsing and checking any SPIR-V code
      */
-    SlangResult SetSPIRVCoreGrammar(ConstU8String jsonPath);
+    SlangResult SetSPIRVCoreGrammar(ConstU8Str jsonPath);
 
     /** Parse slangc command line options into a SessionDesc that can be used to create a session
      *   with all the compiler options specified in the command line.
@@ -1740,7 +1740,7 @@ public unsafe interface IGlobalSession : IUnknown
      *   @param outSessionDesc A pointer to a SessionDesc struct to receive parsed session desc.
      *   @param outAuxAllocation Auxiliary memory allocated to hold data used in the session desc.
      */
-    SlangResult ParseCommandLineArguments(int argc, ConstU8String* argv, SessionDesc* outSessionDesc, out IUnknown* outAuxAllocation);
+    SlangResult ParseCommandLineArguments(int argc, ConstU8Str* argv, SessionDesc* outSessionDesc, out IUnknown* outAuxAllocation);
 
     /** Computes a digest that uniquely identifies the session description.
      */
@@ -1818,8 +1818,8 @@ public unsafe struct TargetDesc()
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct PreprocessorMacroDesc
 {
-    public ConstU8String name;
-    public ConstU8String value;
+    public ConstU8Str name;
+    public ConstU8Str value;
 };
 
 
@@ -1845,7 +1845,7 @@ public unsafe struct SessionDesc()
 
     /** Paths to use when searching for `#include`d or `import`ed files.
      */
-    public ConstU8String* searchPaths = null;
+    public ConstU8Str* searchPaths = null;
     public SlangInt searchPathCount = 0;
 
     public PreprocessorMacroDesc* preprocessorMacros = null;
@@ -1900,13 +1900,13 @@ public unsafe interface ISession : IUnknown
 
     /** Load a module as it would be by code using `import`.
      */
-    IModule* LoadModule(ConstU8String moduleName, out ISlangBlob* outDiagnostics);
+    IModule* LoadModule(ConstU8Str moduleName, out ISlangBlob* outDiagnostics);
 
     /** Load a module from Slang source code.
      */
     IModule* loadModuleFromSource(
-        ConstU8String moduleName,
-        ConstU8String path,
+        ConstU8Str moduleName,
+        ConstU8Str path,
         ISlangBlob* source,
         out ISlangBlob* outDiagnostics);
 
@@ -2031,8 +2031,8 @@ public unsafe interface ISession : IUnknown
     /** Load a module from a Slang module blob.
      */
     IModule* LoadModuleFromIRBlob(
-        ConstU8String moduleName,
-        ConstU8String path,
+        ConstU8Str moduleName,
+        ConstU8Str path,
         ISlangBlob* source,
         out ISlangBlob* outDiagnostics);
 
@@ -2042,14 +2042,14 @@ public unsafe interface ISession : IUnknown
     /** Checks if a precompiled binary module is up-to-date with the current compiler
      *   option settings and the source file contents.
      */
-    bool IsBinaryModuleUpToDate(ConstU8String modulePath, ISlangBlob* binaryModuleBlob);
+    bool IsBinaryModuleUpToDate(ConstU8Str modulePath, ISlangBlob* binaryModuleBlob);
 
     /** Load a module from a string.
      */
     IModule* loadModuleFromSourceString(
-        ConstU8String moduleName,
-        ConstU8String path,
-        ConstU8String srcString,
+        ConstU8Str moduleName,
+        ConstU8Str path,
+        ConstU8Str srcString,
         out ISlangBlob* outDiagnostics);
 }
 
@@ -2250,7 +2250,7 @@ public unsafe interface IComponentType : IUnknown
     The current object must be a single EntryPoint, or a CompositeComponentType or
     SpecializedComponentType that contains one EntryPoint component.
     */
-    SlangResult RenameEntryPoint(ConstU8String newName, out IComponentType* outEntryPoint);
+    SlangResult RenameEntryPoint(ConstU8Str newName, out IComponentType* outEntryPoint);
 
     /** Link and specify additional compiler options when generating code
      *   from the linked program.
@@ -2313,7 +2313,7 @@ public unsafe interface IModule : IComponentType
     /// Note that this does not work in case the function is not explicitly designated as an entry
     /// point, e.g. using a `[shader("...")]` attribute. In such cases, consider using
     /// `IModule::findAndCheckEntryPoint` instead.
-    SlangResult FindEntryPointByName(ConstU8String name, out IEntryPoint* outEntryPoint);
+    SlangResult FindEntryPointByName(ConstU8Str name, out IEntryPoint* outEntryPoint);
 
     /// Get number of entry points defined in the module. An entry point defined in a module
     /// is by default not included in the linkage, so calls to `IComponentType::getEntryPointCount`
@@ -2328,21 +2328,21 @@ public unsafe interface IModule : IComponentType
     SlangResult Serialize(out ISlangBlob* outSerializedBlob);
 
     /// Write the serialized representation of this module to a file.
-    SlangResult WriteToFile(ConstU8String fileName);
+    SlangResult WriteToFile(ConstU8Str fileName);
 
     /// Get the name of the module.
-    ConstU8String GetName();
+    ConstU8Str GetName();
 
     /// Get the path of the module.
-    ConstU8String GetFilePath();
+    ConstU8Str GetFilePath();
 
     /// Get the unique identity of the module.
-    ConstU8String GetUniqueIdentity();
+    ConstU8Str GetUniqueIdentity();
 
     /// Find and validate an entry point by name, even if the function is
     /// not marked with the `[shader("...")]` attribute.
     SlangResult FindAndCheckEntryPoint(
-        ConstU8String name,
+        ConstU8Str name,
         SlangStage stage,
         out IEntryPoint* outEntryPoint,
         out ISlangBlob* outDiagnostics);
@@ -2354,7 +2354,7 @@ public unsafe interface IModule : IComponentType
     SlangInt32 GetDependencyFileCount();
 
     /// Get the path to a file this module depends on.
-    ConstU8String GetDependencyFilePath(SlangInt32 index);
+    ConstU8Str GetDependencyFilePath(SlangInt32 index);
 
     DeclReflection* GetModuleReflection();
 
