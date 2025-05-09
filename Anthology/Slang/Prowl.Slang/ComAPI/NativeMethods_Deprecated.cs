@@ -9,6 +9,7 @@ namespace Prowl.Slang.NativeAPI;
 public unsafe struct ICompileRequest { }
 
 
+// Functions officialy deprecated in the slang repo but still required for reflection.
 internal static unsafe partial class SlangNative_Dep
 {
     const string LibName = "slang";
@@ -38,15 +39,15 @@ internal static unsafe partial class SlangNative_Dep
 
     [LibraryImport(LibName)]
     public static unsafe partial SlangResult spReflectionUserAttribute_GetArgumentValueFloat(
-            Attribute* attrib,
+        Attribute* attrib,
         uint index,
-            float* rs);
+        float* rs);
 
     /** Returns the string-typed value of a user attribute argument
         The string returned is not null-terminated. The length of the string is returned via
        `outSize`. If index of out of range, or if the specified argument is not a string, the
        function will return nullptr.
-*/
+    */
     [LibraryImport(LibName)]
     public static unsafe partial ConstU8Str spReflectionUserAttribute_GetArgumentValueString(
         Attribute* attrib,
