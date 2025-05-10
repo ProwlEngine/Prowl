@@ -85,7 +85,7 @@ public unsafe class ManagedComProxy<T> : IUnknown where T : IUnknown
             if (_proxyVTable == null)
             {
                 if (!_handle.IsAllocated)
-                    _handle = GCHandle.Alloc(this);
+                    AddRef();
 
                 _proxyVTable = ProxyEmitter.CreateManagedProxyVTable<T>(_handle);
             }
