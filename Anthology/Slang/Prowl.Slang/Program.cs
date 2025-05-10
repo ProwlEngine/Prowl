@@ -9,7 +9,6 @@ namespace Prowl.Slang.NativeAPI;
 
 public static unsafe class Program
 {
-
     class Blob() : ManagedComProxy<ISlangBlob>, ISlangBlob
     {
         public byte* Bytes;
@@ -17,13 +16,11 @@ public static unsafe class Program
 
         public void* GetBufferPointer()
         {
-            Console.WriteLine("Getting buffer");
             return Bytes;
         }
 
         public nuint GetBufferSize()
         {
-            Console.WriteLine("Getting buffer size");
             return Length;
         }
     }
@@ -39,17 +36,18 @@ public static unsafe class Program
 
         public SlangResult LoadFile(ConstU8Str path, out ISlangBlob* outBlob)
         {
-            Console.WriteLine($"Attempting to load file: {path.String}");
-
             if (!File.Exists(path.String))
             {
                 Console.WriteLine($"File {path.String} does not exist");
+
                 outBlob = null;
                 return SlangResult.Fail;
             }
 
             try
             {
+                Console.WriteLine($"Loading file: {path.String}");
+
                 byte[] fileData = File.ReadAllBytes(path.String);
                 nuint length = (nuint)fileData.Length;
 
@@ -88,7 +86,7 @@ public static unsafe class Program
         SessionDesc sessionDesc = new();
         TargetDesc targetDesc = new();
 
-        targetDesc.format = SlangCompileTarget.METAL;
+        targetDesc.format = SlangCompileTarget.GLSL;
         targetDesc.profile = globalSession.FindProfile(new U8Str("glsl_450"u8));
 
         sessionDesc.targets = &targetDesc;
@@ -111,9 +109,7 @@ public static unsafe class Program
 
         if (diagnosticsPtr != null)
         {
-            ISlangBlob diagnostics = ProxyEmitter.CreateNativeProxy(diagnosticsPtr);
-            Console.WriteLine(Marshal.PtrToStringUTF8((nint)diagnostics.GetBufferPointer()));
-
+            PrintBlob(diagnosticsPtr);
             return;
         }
 
@@ -129,7 +125,14 @@ public static unsafe class Program
         session.CreateCompositeComponentType(componentTypes, 2, out IComponentType* programPtr, out _).Throw();
         IComponentType program = ProxyEmitter.CreateNativeProxy(programPtr);
 
-        program.GetEntryPointCode(0, 0, out ISlangBlob* outCodePtr, out _).Throw();
+        SlangResult result = program.GetEntryPointCode(0, 0, out ISlangBlob* outCodePtr, out ISlangBlob* resultDiagnosticsPtr);
+
+        if (result != SlangResult.Ok)
+        {
+            PrintBlob(resultDiagnosticsPtr);
+            return;
+        }
+
         ISlangBlob outCode = ProxyEmitter.CreateNativeProxy(outCodePtr);
 
         ShaderReflection* layout = program.GetLayout(0, out _);
@@ -141,6 +144,13 @@ public static unsafe class Program
         Console.WriteLine(code);
 
         string json = System.Text.Encoding.UTF8.GetString((byte*)outReflection.GetBufferPointer(), (int)outReflection.GetBufferSize());
-        Console.WriteLine(json);
+        Console.WriteLine("Got " + json.Length + " chars of json");
+    }
+
+
+    private static void PrintBlob(ISlangBlob* blobPtr)
+    {
+        ISlangBlob blob = ProxyEmitter.CreateNativeProxy(blobPtr);
+        Console.WriteLine(Marshal.PtrToStringUTF8((nint)blob.GetBufferPointer()));
     }
 }
