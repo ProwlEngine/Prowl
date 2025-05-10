@@ -38,11 +38,9 @@ public static partial class ProxyEmitter
     }
 
 
-    private static List<MethodInfo> GetMethodTree<T>()
+    private static List<MethodInfo> GetMethodTree(Type? type)
     {
         var methods = new List<MethodInfo>();
-
-        Type? type = typeof(T);
 
         while (type != null)
         {

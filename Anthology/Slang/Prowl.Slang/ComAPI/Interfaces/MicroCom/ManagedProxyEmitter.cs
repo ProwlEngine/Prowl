@@ -25,25 +25,22 @@ public static partial class ProxyEmitter
     public static MethodInfo GetProxyMethod(MethodInfo method)
     {
         if (!s_staticProxyMethods.TryGetValue(method, out MethodInfo? methodInfo))
-            s_staticProxyMethods[method] = methodInfo = BuildManagedProxyMethod(method);
+        {
+            BuildManagedProxyMethods(method.DeclaringType!);
+            methodInfo = s_staticProxyMethods[method];
+        }
 
         return methodInfo;
     }
 
 
-    private static string GetProxyMethodClassName(MethodInfo method)
+    private static string GetManagedProxyName(Type type)
     {
 #if DEBUG
-        return $"{method.DeclaringType!.Name}_{method.Name}_Proxy";
+        return $"{type.Name}ManagedProxy";
 #else
-        return $"__DynamicImpl__{method.DeclaringType!.Name}__{method.Name}__Proxy__";
+        return $"__DynamicImpl__{type.Name}__ManagedProxy__";
 #endif
-    }
-
-
-    private static string GetProxyMethodName()
-    {
-        return "__Interop__ProxyMain__";
     }
 
 
@@ -53,7 +50,28 @@ public static partial class ProxyEmitter
     }
 
 
-    private static MethodInfo BuildManagedProxyMethod(MethodInfo managedMethod)
+    private static void BuildManagedProxyMethods(Type declaringType)
+    {
+        TypeBuilder typeBuilder = ModuleBuilder.DefineType(GetManagedProxyName(declaringType), TypeAttributes.Public | TypeAttributes.Sealed);
+
+        MethodInfo[] typeMethods = declaringType.GetMethods();
+
+        for (int i = 0; i < typeMethods.Length; i++)
+            BuildManagedProxyMethod(typeBuilder, typeMethods[i]);
+
+        Type createdType = typeBuilder.CreateType();
+
+        for (int i = 0; i < typeMethods.Length; i++)
+        {
+            MethodInfo generatedMethod = createdType.GetMethod(typeMethods[i].Name, BindingFlags.Static | BindingFlags.Public)!;
+            RuntimeHelpers.PrepareMethod(generatedMethod.MethodHandle);
+
+            s_staticProxyMethods[typeMethods[i]] = generatedMethod;
+        }
+    }
+
+
+    private static void BuildManagedProxyMethod(TypeBuilder builder, MethodInfo managedMethod)
     {
         Type vtableType = typeof(ProxyVTable);
         MethodInfo getTarget = typeof(ProxyEmitter).GetMethod(nameof(GetTarget), BindingFlags.Static | BindingFlags.Public)!;
@@ -65,9 +83,8 @@ public static partial class ProxyEmitter
         // Define the proxy method signature
         Type[] methodArgs = [typeof(ProxyVTable*), .. paramTypes];
 
-        TypeBuilder builder = ModuleBuilder.DefineType(GetProxyMethodClassName(managedMethod), TypeAttributes.Public, null, null);
         MethodBuilder methodBuilder = builder.DefineMethod(
-            GetProxyMethodName(),
+            managedMethod.Name,
             MethodAttributes.Public | MethodAttributes.Static,
             managedMethod.ReturnType,
             methodArgs);
@@ -85,12 +102,6 @@ public static partial class ProxyEmitter
 
         il.Emit(OpCodes.Callvirt, managedMethod);
         il.Emit(OpCodes.Ret);
-
-        MethodInfo generatedMethod = builder.CreateType().GetMethod(GetProxyMethodName(), BindingFlags.Static | BindingFlags.Public)!;
-
-        RuntimeHelpers.PrepareMethod(generatedMethod.MethodHandle);
-
-        return generatedMethod;
     }
 
 
@@ -98,7 +109,7 @@ public static partial class ProxyEmitter
     {
         ValidateInterface<T>();
 
-        List<MethodInfo> tree = GetMethodTree<T>();
+        List<MethodInfo> tree = GetMethodTree(typeof(T));
 
         ProxyVTable* proxy = (ProxyVTable*)NativeMemory.Alloc((nuint)sizeof(ProxyVTable));
         nint* nativeVtablePtr = (nint*)NativeMemory.Alloc((nuint)(nint.Size * tree.Count));

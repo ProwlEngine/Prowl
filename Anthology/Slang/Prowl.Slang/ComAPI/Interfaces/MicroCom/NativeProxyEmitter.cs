@@ -26,7 +26,7 @@ public static partial class ProxyEmitter
         ValidateInterface<T>();
 
         if (!s_nativeProxyCache.TryGetValue(typeof(T), out Type? proxyType))
-            s_nativeProxyCache[typeof(T)] = proxyType = CreateNativeProxyType<T>();
+            s_nativeProxyCache[typeof(T)] = proxyType = CreateNativeProxyType(typeof(T));
 
         return proxyType;
     }
@@ -90,23 +90,23 @@ public static partial class ProxyEmitter
     }
 
 
-    private static string GetProxyName<T>()
+    private static string GetNativeProxyName(Type type)
     {
 #if DEBUG
-        return $"{typeof(T).Name}Proxy";
+        return $"{type.Name}NativeProxy";
 #else
-        return $"__DynamicImpl__{typeof(T).Name}__Proxy__";
+        return $"__DynamicImpl__{type.Name}__NativeProxy__";
 #endif
     }
 
 
-    private static Type CreateNativeProxyType<T>()
+    private static Type CreateNativeProxyType(Type type)
     {
-        TypeBuilder builder = ModuleBuilder.DefineType(GetProxyName<T>(), TypeAttributes.Public, typeof(NativeComProxy), [typeof(T)]);
+        TypeBuilder builder = ModuleBuilder.DefineType(GetNativeProxyName(type), TypeAttributes.Public | TypeAttributes.Sealed, typeof(NativeComProxy), [type]);
 
         FieldInfo comPtrField = typeof(NativeComProxy).GetField("_comPtr", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
-        List<MethodInfo> methods = GetMethodTree<T>();
+        List<MethodInfo> methods = GetMethodTree(type);
 
         for (int i = 0; i < methods.Count; i++)
         {
