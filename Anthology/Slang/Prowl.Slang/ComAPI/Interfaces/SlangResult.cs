@@ -66,4 +66,16 @@ public unsafe struct SlangResult(uint value = 0x00000000)
         if (ex != null)
             throw ex;
     }
+
+
+    public static bool operator !=(SlangResult a, SlangResult b)
+    {
+        return a._value != b._value;
+    }
+
+
+    public static bool operator ==(SlangResult a, SlangResult b)
+    {
+        return a._value == b._value;
+    }
 }
