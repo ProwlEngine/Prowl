@@ -117,12 +117,8 @@ public static partial class ProxyEmitter
         proxy->VTable = nativeVtablePtr;
         proxy->ManagedHandle = (void*)GCHandle.ToIntPtr(managedHandle);
 
-        List<MethodInfo> methods = new();
-
         for (int i = 0; i < tree.Count; i++)
-        {
             proxy->VTable[i] = GetProxyMethod(tree[i]).MethodHandle.GetFunctionPointer();
-        }
 
         return proxy;
     }
