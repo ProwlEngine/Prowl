@@ -160,7 +160,7 @@ namespace Prowl.Vector
         public static Vector2 right { get { return new Vector2(1.0, 0.0); } }
         public static Vector2 left { get { return new Vector2(-1.0, 0.0); } }
         public static Vector2 up { get { return new Vector2(0.0, 1.0); } }
-        public static Vector2 down { get { return new Vector2(0.0, 1.0); } }
+        public static Vector2 down { get { return new Vector2(0.0, -1.0); } }
 
         public static Vector2 infinity = new Vector2(MathD.Infinity, MathD.Infinity);
         #endregion Public Static Properties

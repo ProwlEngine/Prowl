@@ -178,6 +178,8 @@ namespace Prowl.Vector
         public static Vector3 backward { get { return new Vector3(0.0, 0.0, -1.0); } }
 
         public static Vector3 infinity = new Vector3(MathD.Infinity, MathD.Infinity, MathD.Infinity);
+        public static Vector3 maxValue = new Vector3(double.MaxValue, double.MaxValue, double.MaxValue);
+        public static Vector3 minValue = new Vector3(double.MinValue, double.MinValue, double.MinValue);
 
         #endregion Public Static Properties
 

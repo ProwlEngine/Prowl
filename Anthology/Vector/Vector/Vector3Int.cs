@@ -139,11 +139,23 @@ namespace Prowl.Vector
             return sb.ToString();
         }
 
-        public bool IsFinate() => MathD.IsValid(x) && MathD.IsValid(y) && MathD.IsValid(z);
         #endregion Public Instance Methods
+
+        #region Public Static Properties
 
         public static Vector3Int zero { get { return new Vector3Int(); } }
         public static Vector3Int one { get { return new Vector3Int(1, 1, 1); } }
+        public static Vector3Int right { get { return new Vector3Int(1, 0, 0); } }
+        public static Vector3Int left { get { return new Vector3Int(-1, 0, 0); } }
+        public static Vector3Int up { get { return new Vector3Int(0, 1, 0); } }
+        public static Vector3Int down { get { return new Vector3Int(0, -1, 0); } }
+        public static Vector3Int forward { get { return new Vector3Int(0, 0, 1); } }
+        public static Vector3Int backward { get { return new Vector3Int(0, 0, -1); } }
+
+        public static Vector3Int maxValue = new Vector3Int(int.MaxValue, int.MaxValue, int.MaxValue);
+        public static Vector3Int minValue = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
+
+        #endregion Public Static Properties
 
         #region Public Static Methods
 
@@ -231,6 +243,28 @@ namespace Prowl.Vector
         {
             return new Vector3Int(Math.Abs(value.x), Math.Abs(value.y), Math.Abs(value.z));
         }
+
+        /// <summary>
+        /// Returns a vector whose elements are floored to the nearest integer.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The floored vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector3Int FloorToInt(Vector3 value) => new Vector3Int((int)Math.Floor(value.x), (int)Math.Floor(value.y), (int)Math.Floor(value.z));
+        /// <summary>
+        /// Returns a vector whose elements are rounded to the nearest integer.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The rounded vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector3Int RoundToInt(Vector3 value) => new Vector3Int((int)Math.Round(value.x), (int)Math.Round(value.y), (int)Math.Round(value.z));
+        /// <summary>
+        /// Returns a vector whose elements are ceiled to the nearest integer.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The ceiled vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector3Int CeilToInt(Vector3 value) => new Vector3Int((int)Math.Ceiling(value.x), (int)Math.Ceiling(value.y), (int)Math.Ceiling(value.z));
 
         #endregion Public Static Methods
 

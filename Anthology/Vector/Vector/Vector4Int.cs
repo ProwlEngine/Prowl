@@ -42,7 +42,7 @@ namespace Prowl.Vector
                     case 2: return z;
                     case 3: return w;
                     default:
-                        throw new IndexOutOfRangeException("Invalid Vector2 index.");
+                        throw new IndexOutOfRangeException("Invalid Vector4Int index.");
                 }
             }
 
@@ -56,7 +56,7 @@ namespace Prowl.Vector
                     case 3: w = value; break;
 
                     default:
-                        throw new IndexOutOfRangeException("Invalid Vector2 index.");
+                        throw new IndexOutOfRangeException("Invalid Vector4Int index.");
                 }
             }
         }
@@ -148,10 +148,16 @@ namespace Prowl.Vector
             return sb.ToString();
         }
 
-        public bool IsFinate() => MathD.IsValid(x) && MathD.IsValid(y) && MathD.IsValid(z) && MathD.IsValid(w);
         #endregion Public Instance Methods
 
         public static Vector4Int zero { get { return new Vector4Int(); } }
+        public static Vector4Int one { get { return new Vector4Int(1, 1, 1, 1); } }
+        public static Vector4Int right { get { return new Vector4Int(1, 0, 0, 0); } }
+        public static Vector4Int up { get { return new Vector4Int(0, 1, 0, 0); } }
+        public static Vector4Int forward { get { return new Vector4Int(0, 0, 1, 0); } }
+        public static Vector4Int unitW { get { return new Vector4Int(0, 0, 0, 1); } }
+        public static Vector4Int maxValue { get { return new Vector4Int(int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue); } }
+        public static Vector4Int minValue { get { return new Vector4Int(int.MinValue, int.MinValue, int.MinValue, int.MinValue); } }
 
         #region Public Static Methods
 
@@ -227,6 +233,28 @@ namespace Prowl.Vector
         {
             return new Vector4Int(Math.Abs(value.x), Math.Abs(value.y), Math.Abs(value.z), Math.Abs(value.w));
         }
+
+        /// <summary>
+        /// Returns a vector whose elements are floored to the nearest integer.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The floored vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector4Int FloorToInt(Vector4 value) => new Vector4Int((int)Math.Floor(value.x), (int)Math.Floor(value.y), (int)Math.Floor(value.z), (int)Math.Floor(value.w));
+        /// <summary>
+        /// Returns a vector whose elements are rounded to the nearest integer.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The rounded vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector4Int RoundToInt(Vector4 value) => new Vector4Int((int)Math.Round(value.x), (int)Math.Round(value.y), (int)Math.Round(value.z), (int)Math.Round(value.w));
+        /// <summary>
+        /// Returns a vector whose elements are ceiled to the nearest integer.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The ceiled vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector4Int CeilToInt(Vector4 value) => new Vector4Int((int)Math.Ceiling(value.x), (int)Math.Ceiling(value.y), (int)Math.Ceiling(value.z), (int)Math.Ceiling(value.w));
 
         #endregion Public Static Methods
 

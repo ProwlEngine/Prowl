@@ -38,7 +38,7 @@ namespace Prowl.Vector
                     case 0: return x;
                     case 1: return y;
                     default:
-                        throw new IndexOutOfRangeException("Invalid Vector2 index.");
+                        throw new IndexOutOfRangeException("Invalid Vector2Int index.");
                 }
             }
 
@@ -49,7 +49,7 @@ namespace Prowl.Vector
                     case 0: x = value; break;
                     case 1: y = value; break;
                     default:
-                        throw new IndexOutOfRangeException("Invalid Vector2 index.");
+                        throw new IndexOutOfRangeException("Invalid Vector2Int index.");
                 }
             }
         }
@@ -132,10 +132,21 @@ namespace Prowl.Vector
             return sb.ToString();
         }
 
-        public bool IsFinate() => MathD.IsValid(x) && MathD.IsValid(y);
         #endregion Public Instance Methods
 
+        #region Public Static Properties
+
         public static Vector2Int zero { get { return new Vector2Int(); } }
+        public static Vector2Int one { get { return new Vector2Int(1, 1); } }
+        public static Vector2Int right { get { return new Vector2Int(1, 0); } }
+        public static Vector2Int left { get { return new Vector2Int(-1, 0); } }
+        public static Vector2Int up { get { return new Vector2Int(0, 1); } }
+        public static Vector2Int down { get { return new Vector2Int(0, -1); } }
+
+        public static Vector2Int maxValue { get { return new Vector2Int(int.MaxValue, int.MaxValue); } }
+        public static Vector2Int minValue { get { return new Vector2Int(int.MinValue, int.MinValue); } }
+
+        #endregion Public Static Properties
 
         #region Public Static Methods
 
@@ -216,6 +227,28 @@ namespace Prowl.Vector
         {
             return new Vector2Int(Math.Abs(value.x), Math.Abs(value.y));
         }
+
+        /// <summary>
+        /// Returns a vector whose elements are floored to the nearest integer.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The floored vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector2Int FloorToInt(Vector2 value) => new Vector2Int((int)Math.Floor(value.x), (int)Math.Floor(value.y));
+        /// <summary>
+        /// Returns a vector whose elements are rounded to the nearest integer.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The rounded vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector2Int RoundToInt(Vector2 value) => new Vector2Int((int)Math.Round(value.x), (int)Math.Round(value.y));
+        /// <summary>
+        /// Returns a vector whose elements are ceiled to the nearest integer.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The ceiled vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector2Int CeilToInt(Vector2 value) => new Vector2Int((int)Math.Ceiling(value.x), (int)Math.Ceiling(value.y));
 
         #endregion Public Static Methods
 

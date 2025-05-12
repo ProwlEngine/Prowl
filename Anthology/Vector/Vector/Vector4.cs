@@ -102,7 +102,7 @@ namespace Prowl.Vector
         public static Vector4 right { get { return new Vector4(1.0, 0.0, 0.0, 0.0); } }
         public static Vector4 up { get { return new Vector4(0.0, 1.0, 0.0, 0.0); } }
         public static Vector4 forward { get { return new Vector4(0.0, 0.0, 1.0, 0.0); } }
-        public static Vector4 unitw { get { return new Vector4(0.0, 0.0, 0.0, 1.0); } }
+        public static Vector4 unitW { get { return new Vector4(0.0, 0.0, 0.0, 1.0); } }
 
         public static Vector4 infinity = new Vector4(MathD.Infinity, MathD.Infinity, MathD.Infinity, MathD.Infinity);
         #endregion Public Static Properties
