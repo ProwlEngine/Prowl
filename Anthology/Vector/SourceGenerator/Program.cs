@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text;
 
 namespace SourceGenerator
@@ -860,7 +856,6 @@ namespace SourceGenerator
             }
         }
 
-        // Helper method remains the same as the previous version
         private static void GenerateScalarVectorOp(StringBuilder source, string op, string scalarType, string vectorType, string vectorPrimitiveType, string[] components, bool scalarFirst, bool castScalar)
         {
             string operand1, operand2;
@@ -1593,7 +1588,7 @@ namespace SourceGenerator
             {
                 zeroParams.Add($"{columnVectorType}.Zero"); // Assumes VectorType.Zero exists
             }
-            // For bool matrices, Zero might mean all false.
+            // For bool matrices, Zero means all false.
             if (componentType == "bool")
             {
                 zeroParams.Clear();

@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Reflection;
 
 namespace SourceGenerator
 {
@@ -54,6 +49,14 @@ namespace SourceGenerator
         protected string GetMathClass(string type)
         {
             return type == "float" ? "MathF" : "Math";
+        }
+
+        protected static string[] GetComponents(int dimension)
+        {
+            if (dimension == 2) return new[] { "X", "Y" };
+            if (dimension == 3) return new[] { "X", "Y", "Z" };
+            if (dimension == 4) return new[] { "X", "Y", "Z", "W" };
+            throw new ArgumentException($"Unsupported dimension: {dimension}");
         }
     }
 
