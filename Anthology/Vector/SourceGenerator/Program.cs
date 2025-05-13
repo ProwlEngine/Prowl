@@ -95,30 +95,73 @@ namespace SourceGenerator
             new VectorSwizzleConfig("ULong4", "ulong", new[] { "X", "Y", "Z", "W" }, "ULong")
         };
 
+        // Could probably not be a static array... should probably do that cause this is a whole lot of duplicate code
         private static readonly MatrixConfig[] s_matrixConfigs =
         {
-            // Square Matrices
+            // Square Matrices - Float
             new MatrixConfig("Float2x2", "float", 2, 2, "Float"),
             new MatrixConfig("Float3x3", "float", 3, 3, "Float"),
             new MatrixConfig("Float4x4", "float", 4, 4, "Float"),
+            
+            // Non-Square Matrices - Float
+            new MatrixConfig("Float2x3", "float", 2, 3, "Float"),
+            new MatrixConfig("Float2x4", "float", 2, 4, "Float"),
+            new MatrixConfig("Float3x2", "float", 3, 2, "Float"),
+            new MatrixConfig("Float3x4", "float", 3, 4, "Float"),
+            new MatrixConfig("Float4x2", "float", 4, 2, "Float"),
+            new MatrixConfig("Float4x3", "float", 4, 3, "Float"),
 
+            // Square Matrices - Double
             new MatrixConfig("Double2x2", "double", 2, 2, "Double"),
             new MatrixConfig("Double3x3", "double", 3, 3, "Double"),
             new MatrixConfig("Double4x4", "double", 4, 4, "Double"),
+            
+            // Non-Square Matrices - Double
+            new MatrixConfig("Double2x3", "double", 2, 3, "Double"),
+            new MatrixConfig("Double2x4", "double", 2, 4, "Double"),
+            new MatrixConfig("Double3x2", "double", 3, 2, "Double"),
+            new MatrixConfig("Double3x4", "double", 3, 4, "Double"),
+            new MatrixConfig("Double4x2", "double", 4, 2, "Double"),
+            new MatrixConfig("Double4x3", "double", 4, 3, "Double"),
 
-            // Integer matrices
+            // Square Matrices - Int
             new MatrixConfig("Int2x2", "int", 2, 2, "Int"),
             new MatrixConfig("Int3x3", "int", 3, 3, "Int"),
             new MatrixConfig("Int4x4", "int", 4, 4, "Int"),
+            
+            // Non-Square Matrices - Int
+            new MatrixConfig("Int2x3", "int", 2, 3, "Int"),
+            new MatrixConfig("Int2x4", "int", 2, 4, "Int"),
+            new MatrixConfig("Int3x2", "int", 3, 2, "Int"),
+            new MatrixConfig("Int3x4", "int", 3, 4, "Int"),
+            new MatrixConfig("Int4x2", "int", 4, 2, "Int"),
+            new MatrixConfig("Int4x3", "int", 4, 3, "Int"),
 
+            // Square Matrices - UInt
             new MatrixConfig("UInt2x2", "uint", 2, 2, "UInt"),
             new MatrixConfig("UInt3x3", "uint", 3, 3, "UInt"),
             new MatrixConfig("UInt4x4", "uint", 4, 4, "UInt"),
             
-            // Bool matrices (for results of comparisons)
+            // Non-Square Matrices - UInt
+            new MatrixConfig("UInt2x3", "uint", 2, 3, "UInt"),
+            new MatrixConfig("UInt2x4", "uint", 2, 4, "UInt"),
+            new MatrixConfig("UInt3x2", "uint", 3, 2, "UInt"),
+            new MatrixConfig("UInt3x4", "uint", 3, 4, "UInt"),
+            new MatrixConfig("UInt4x2", "uint", 4, 2, "UInt"),
+            new MatrixConfig("UInt4x3", "uint", 4, 3, "UInt"),
+            
+            // Square Bool Matrices (for results of comparisons)
             new MatrixConfig("Bool2x2", "bool", 2, 2, "Bool"),
             new MatrixConfig("Bool3x3", "bool", 3, 3, "Bool"),
             new MatrixConfig("Bool4x4", "bool", 4, 4, "Bool"),
+            
+            // Non-Square Bool Matrices (for results of comparisons)
+            new MatrixConfig("Bool2x3", "bool", 2, 3, "Bool"),
+            new MatrixConfig("Bool2x4", "bool", 2, 4, "Bool"),
+            new MatrixConfig("Bool3x2", "bool", 3, 2, "Bool"),
+            new MatrixConfig("Bool3x4", "bool", 3, 4, "Bool"),
+            new MatrixConfig("Bool4x2", "bool", 4, 2, "Bool"),
+            new MatrixConfig("Bool4x3", "bool", 4, 3, "Bool"),
         };
 
         private static readonly SwizzleCharSetDefinition[] s_swizzleCharSets =
@@ -1545,6 +1588,9 @@ namespace SourceGenerator
             // --- Component-wise Operators ---
             GenerateMatrixComponentWiseOperators(sb, config);
 
+            // --- Multiplication Operators ---
+            GenerateMatrixMultiplication(sb, config);
+
             // --- Indexer ---
             GenerateMatrixIndexer(sb, config);
 
@@ -1565,7 +1611,8 @@ namespace SourceGenerator
             var cols = config.Columns;
             var columnVectorType = config.GetColumnVectorType();
 
-            if (rows == cols) // Identity is typically for square matrices
+            // Identity matrix only makes sense for square matrices
+            if (rows == cols)
             {
                 sb.AppendLine($"        /// <summary>{structName} identity transform.</summary>");
                 var identityParams = new List<string>();
@@ -1582,13 +1629,14 @@ namespace SourceGenerator
                 sb.AppendLine();
             }
 
+            // Zero matrix works for all matrix dimensions
             sb.AppendLine($"        /// <summary>{structName} zero value.</summary>");
             var zeroParams = new List<string>();
             for (int c = 0; c < cols; c++)
             {
-                zeroParams.Add($"{columnVectorType}.Zero"); // Assumes VectorType.Zero exists
+                zeroParams.Add($"{columnVectorType}.Zero");
             }
-            // For bool matrices, Zero means all false.
+            // For bool matrices, Zero means all false
             if (componentType == "bool")
             {
                 zeroParams.Clear();
@@ -1669,7 +1717,7 @@ namespace SourceGenerator
             // Arithmetic operators (for non-bool types)
             if (componentType != "bool")
             {
-                string[] ops = { "+", "-", "*", "/", "%" };
+                string[] ops = { "+", "-", "/", "%" };
                 foreach (var op in ops)
                 {
                     // Matrix op Matrix
@@ -1734,9 +1782,50 @@ namespace SourceGenerator
             }
         }
 
+        private static void GenerateMatrixMultiplication(StringBuilder sb, MatrixConfig config)
+        {
+            var structName = config.StructName;
+            var componentType = config.ComponentTypeName;
+            var rows = config.Rows;
+            var cols = config.Columns;
+
+            // Only generate multiplication for numeric types
+            if (componentType == "bool") return;
+
+            // Matrix * Matrix multiplication (for square matrices)
+            if (rows == cols)
+            {
+                sb.AppendLine($"        /// <summary>Returns the product of two {structName} matrices.</summary>");
+                sb.AppendLine($"        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+                sb.AppendLine($"        public static {structName} operator *({structName} lhs, {structName} rhs)");
+                sb.AppendLine("        {");
+                sb.AppendLine("            return new " + structName + "(");
+
+                for (int col = 0; col < cols; col++)
+                {
+                    var components = new List<string>();
+                    for (int row = 0; row < rows; row++)
+                    {
+                        var dotProduct = new List<string>();
+                        for (int k = 0; k < rows; k++)
+                        {
+                            dotProduct.Add($"lhs.c{k}.{GetComponents(rows)[row]} * rhs.c{col}.{GetComponents(rows)[k]}");
+                        }
+                        components.Add($"({string.Join(" + ", dotProduct)})");
+                    }
+                    sb.AppendLine($"                new {config.GetColumnVectorType()}({string.Join(", ", components)}){(col < cols - 1 ? "," : "")}");
+                }
+
+                sb.AppendLine("            );");
+                sb.AppendLine("        }");
+                sb.AppendLine();
+            }
+        }
+
         private static void GenerateMatrixIndexer(StringBuilder sb, MatrixConfig config)
         {
             var structName = config.StructName;
+            var componentType = config.ComponentTypeName;
             var cols = config.Columns;
             var columnVectorType = config.GetColumnVectorType();
 
@@ -1758,6 +1847,27 @@ namespace SourceGenerator
             sb.AppendLine("            }");
             sb.AppendLine("        }");
             sb.AppendLine();
+
+            sb.AppendLine($"        /// <summary>Returns the element at row and column indices.</summary>");
+            sb.AppendLine($"        public {componentType} this[int row, int column]");
+            sb.AppendLine("        {");
+            sb.AppendLine("            [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine("            get");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                if ((uint)column >= {cols})");
+            sb.AppendLine($"                    throw new System.ArgumentOutOfRangeException(nameof(column));");
+            sb.AppendLine("                return this[column][row];");
+            sb.AppendLine("            }");
+            sb.AppendLine("            [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine("            set");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                if ((uint)column >= {cols})");
+            sb.AppendLine($"                    throw new System.ArgumentOutOfRangeException(nameof(column));");
+            sb.AppendLine("                var temp = this[column];");
+            sb.AppendLine("                temp[row] = value;");
+            sb.AppendLine("                this[column] = temp;");
+            sb.AppendLine("            }");
+            sb.AppendLine("        }");
         }
 
         private static void GenerateMatrixStandardMethods(StringBuilder sb, MatrixConfig config)
