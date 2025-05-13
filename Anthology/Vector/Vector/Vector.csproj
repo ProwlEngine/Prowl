@@ -17,6 +17,7 @@ Built for the Prowl Game Engine.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <Version>0.5.3</Version>
+    <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,6 +29,11 @@ Built for the Prowl Game Engine.</Description>
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Matrices\" />
+    <Folder Include="Vectors\" />
   </ItemGroup>
 
 </Project>
