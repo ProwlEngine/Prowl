@@ -2,6 +2,7 @@
 using System.Runtime.InteropServices;
 using System.IO;
 using System.Diagnostics;
+using System.Collections.Generic;
 
 namespace Prowl.Slang.NativeAPI;
 
@@ -93,129 +94,97 @@ public static unsafe class Program
     public static void Main()
     {
         Process currentProcess = Process.GetCurrentProcess();
-
         Stopwatch stopwatch = Stopwatch.StartNew();
 
-        SlangNative.slang_createGlobalSession(0, out IGlobalSession* globalSessionPtr).Throw();
-
-        if ((IntPtr)globalSessionPtr == IntPtr.Zero || globalSessionPtr == null)
+        using (var globalSession = SlangGlobalSession.Create())
         {
-            // This is a failure to create the global session, which is a fatal error.
-            // The Slang library will not work without this.
-            Console.WriteLine("Failed to create global session");
-            Console.ReadLine();
-            return;
-        }
-
-        IGlobalSession globalSession = NativeComProxy.Create(globalSessionPtr);
-
-        long c = 0;
-        while (true)
-        {
-            c++;
-            CompileCode(globalSession);
-
-            if (stopwatch.ElapsedMilliseconds / 1000 > .5)
+            long c = 0;
+            while (true)
             {
-                stopwatch.Restart();
+                c++;
+                CompileCode(globalSession);
 
-                // WorkingSet64 includes both managed and native allocations
+                if (stopwatch.ElapsedMilliseconds / 1000 > .5)
+                {
+                    stopwatch.Restart();
 
-                currentProcess.Refresh();
-                long memoryUsed = currentProcess.PrivateMemorySize64;
+                    // WorkingSet64 includes both managed and native allocations
 
-                Console.WriteLine($"Memory used: {memoryUsed / (1024.0 * 1024.0):F2} MB. Iterations: {c}");
+                    currentProcess.Refresh();
+                    long memoryUsed = currentProcess.PrivateMemorySize64;
+
+                    Console.WriteLine($"Memory used: {memoryUsed / (1024.0 * 1024.0):F2} MB. Iterations: {c}");
+                }
             }
         }
-
-        SlangNative.slang_shutdown();
     }
 
 
-    private static void CompileCode(IGlobalSession globalSession)
+    private static void CompileCode(SlangGlobalSession globalSession)
     {
-        Filesystem filesystem = new();
+        SlangTargetDesc targetDesc = new();
+        targetDesc.Format = SlangCompileTarget.SPIRV;
+        targetDesc.Profile = globalSession.FindProfile("glsl_450");
 
-        SessionDesc sessionDesc = new();
-        TargetDesc targetDesc = new();
+        SlangSessionDesc sessionDesc = new();
+        sessionDesc.Targets = [ targetDesc ];
+        sessionDesc.SearchPaths = ["./Shaders/"];
+        sessionDesc.FileSystem = new Filesystem();
 
-        targetDesc.format = SlangCompileTarget.GLSL;
-        targetDesc.profile = globalSession.FindProfile(new U8Str("glsl_450"u8));
+        SlangSession session = globalSession.CreateSession(sessionDesc);
 
-        sessionDesc.targets = &targetDesc;
-        sessionDesc.targetCount = 1;
+        SlangModule module = session.LoadModule("MyShaders", out string? diagnostics);
 
-        ConstU8Str* paths = stackalloc ConstU8Str[1];
-
-        // CWD must have a Shaders/ folder in it.
-        paths[0] = new U8Str("./Shaders/"u8);
-
-        sessionDesc.searchPaths = paths;
-        sessionDesc.searchPathCount = 1;
-
-        sessionDesc.fileSystem = filesystem;
-
-        globalSession.CreateSession(&sessionDesc, out ISession* sessionPtr).Throw();
-        ISession session = NativeComProxy.Create(sessionPtr);
-
-        IModule* modulePtr = session.LoadModule(new U8Str("MyShaders"u8), out ISlangBlob* diagnostics);
-
-        if ((IntPtr)modulePtr == IntPtr.Zero || modulePtr == null)
+        if (diagnostics != null)
         {
-            Console.WriteLine("Failed to load module");
-            Console.ReadLine();
+            Console.WriteLine(diagnostics);
             return;
         }
 
-        IModule module = NativeComProxy.Create(modulePtr);
+        SlangEntryPoint? entryPoint = module.FindEntryPointByName("computeMain");
+        if (entryPoint == null)
+            throw new Exception("Entry point not found");
 
-        PrintBlob(diagnostics);
+        List<SlangComponentType> componentTypes = [
+            module,
+            entryPoint
+            ];
 
-        module.FindEntryPointByName(new U8Str("computeMain"u8), out IEntryPoint* entryPointPtr).Throw();
-        IEntryPoint entryPoint = NativeComProxy.Create(entryPointPtr);
+        var program = session.CreateCompositeComponentType(componentTypes, out diagnostics);
 
-        IComponentType** componentTypes = stackalloc IComponentType*[2];
-        componentTypes[0] = (IComponentType*)modulePtr;
-        componentTypes[1] = (IComponentType*)entryPointPtr;
-
-        session.CreateCompositeComponentType(componentTypes, 2, out IComponentType* programPtr, out _).Throw();
-        IComponentType program = NativeComProxy.Create(programPtr);
-
-        program.GetEntryPointCode(0, 0, out ISlangBlob* outCodePtr, out diagnostics).Throw();
-
-        PrintBlob(diagnostics);
-
-        ShaderReflection* layout = program.GetLayout(0, out diagnostics);
-
-        PrintBlob(diagnostics);
-
-        layout->toJson(out ISlangBlob* reflectionBlob).Throw();
-
-        ISlangBlob outCode = NativeComProxy.Create(outCodePtr);
-        ISlangBlob outReflection = NativeComProxy.Create(reflectionBlob);
-
-        string code = System.Text.Encoding.UTF8.GetString((byte*)outCode.GetBufferPointer(), (int)outCode.GetBufferSize());
-        // Console.WriteLine("Got " + code.Length + " chars of code");
-
-        string json = System.Text.Encoding.UTF8.GetString((byte*)outReflection.GetBufferPointer(), (int)outReflection.GetBufferSize());
-        // Console.WriteLine("Got " + json.Length + " chars of json");
-
-        program.Release();
-        entryPoint.Release();
-        outCode.Release();
-        outReflection.Release();
-        session.Release();
-        filesystem.Release();
-    }
-
-
-    private static void PrintBlob(ISlangBlob* blobPtr)
-    {
-        if (blobPtr == null)
+        if (diagnostics != null)
+        {
+            Console.WriteLine(diagnostics);
             return;
+        }
 
-        ISlangBlob blob = NativeComProxy.Create(blobPtr);
-        Console.WriteLine(Marshal.PtrToStringUTF8((nint)blob.GetBufferPointer()));
-        blob.Release();
+        var outCode = program.GetEntryPointCode(0, 0, out diagnostics);
+        outCode.Dispose();
+
+        if (diagnostics != null)
+        {
+            Console.WriteLine(diagnostics);
+            return;
+        }
+
+        SlangReflectionLayout layout = program.GetLayout(0, out diagnostics);
+
+        if (diagnostics != null)
+        {
+            Console.WriteLine(diagnostics);
+            return;
+        }
+
+        var outReflection = layout.ToJson(out diagnostics);
+
+        if (diagnostics != null)
+        {
+            Console.WriteLine(diagnostics);
+            return;
+        }
+
+        program.Dispose();
+        entryPoint.Dispose();
+        session.Dispose();
     }
 }
