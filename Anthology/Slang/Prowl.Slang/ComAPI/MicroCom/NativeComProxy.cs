@@ -16,6 +16,12 @@ public abstract class NativeComProxy : IUnknown
     }
 
 
+    public static unsafe T Create<T>(T* ptr) where T : IUnknown
+    {
+        return ProxyEmitter.CreateNativeProxy(ptr);
+    }
+
+
     public unsafe T As<T>() where T : IUnknown
     {
         Guid guid = UUIDAttribute.GetGuid<T>();
@@ -36,6 +42,33 @@ public abstract class NativeComProxy : IUnknown
 
         return isOK;
     }
+
+
+    public static bool operator ==(NativeComProxy a, NativeComProxy b)
+    {
+        return a._comPtr == b._comPtr;
+    }
+
+
+    public static bool operator !=(NativeComProxy a, NativeComProxy b)
+    {
+        return a._comPtr != b._comPtr;
+    }
+
+
+    public override bool Equals(object? obj)
+    {
+        if (obj is NativeComProxy proxy)
+            return proxy._comPtr == _comPtr;
+
+        if (obj is IntPtr ptr)
+            return ptr == _comPtr;
+
+        return false;
+    }
+
+
+    public override int GetHashCode() => _comPtr.ToInt32();
 
 
     public abstract uint AddRef();

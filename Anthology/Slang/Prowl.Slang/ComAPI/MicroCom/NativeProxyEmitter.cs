@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Slang.NativeAPI;
+
 
 public static partial class ProxyEmitter
 {
@@ -32,7 +32,7 @@ public static partial class ProxyEmitter
     }
 
 
-    private static MethodBuilder BuildMethod(TypeBuilder builder, MethodInfo interfaceMethod, FieldInfo ptrField, int vtableIndex)
+    private static MethodBuilder BuildNativeProxyMethod(TypeBuilder builder, MethodInfo interfaceMethod, FieldInfo ptrField, int vtableIndex)
     {
         ParameterInfo[] parameters = interfaceMethod.GetParameters();
 
@@ -109,16 +109,14 @@ public static partial class ProxyEmitter
         List<MethodInfo> methods = GetMethodTree(type);
 
         for (int i = 0; i < methods.Count; i++)
-        {
-            BuildMethod(builder, methods[i], comPtrField, i);
-        }
+            BuildNativeProxyMethod(builder, methods[i], comPtrField, i);
 
         ConstructorBuilder ctor = builder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [typeof(IntPtr)]);
         ILGenerator ctorIL = ctor.GetILGenerator();
 
         ConstructorInfo baseCtor = typeof(NativeComProxy).GetConstructor([typeof(IntPtr)])!;
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Ldarg_1);        // IntPtr argument
+        ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Call, baseCtor); // call base(IntPtr)
         ctorIL.Emit(OpCodes.Ret);
 

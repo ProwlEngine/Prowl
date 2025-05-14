@@ -112,9 +112,8 @@ public static partial class ProxyEmitter
         List<MethodInfo> tree = GetMethodTree(typeof(T));
 
         ProxyVTable* proxy = (ProxyVTable*)NativeMemory.Alloc((nuint)sizeof(ProxyVTable));
-        nint* nativeVtablePtr = (nint*)NativeMemory.Alloc((nuint)(nint.Size * tree.Count));
 
-        proxy->VTable = nativeVtablePtr;
+        proxy->VTable = (nint*)NativeMemory.Alloc((nuint)(nint.Size * tree.Count));
         proxy->ManagedHandle = (void*)GCHandle.ToIntPtr(managedHandle);
 
         for (int i = 0; i < tree.Count; i++)
