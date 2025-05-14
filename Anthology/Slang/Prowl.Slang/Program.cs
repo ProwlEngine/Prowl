@@ -97,6 +97,16 @@ public static unsafe class Program
         Stopwatch stopwatch = Stopwatch.StartNew();
 
         SlangNative.slang_createGlobalSession(0, out IGlobalSession* globalSessionPtr).Throw();
+
+        if ((IntPtr)globalSessionPtr == IntPtr.Zero || globalSessionPtr == null)
+        {
+            // This is a failure to create the global session, which is a fatal error.
+            // The Slang library will not work without this.
+            Console.WriteLine("Failed to create global session");
+            Console.ReadLine();
+            return;
+        }
+
         IGlobalSession globalSession = NativeComProxy.Create(globalSessionPtr);
 
         long c = 0;
@@ -149,6 +159,14 @@ public static unsafe class Program
         ISession session = NativeComProxy.Create(sessionPtr);
 
         IModule* modulePtr = session.LoadModule(new U8Str("MyShaders"u8), out ISlangBlob* diagnostics);
+
+        if ((IntPtr)modulePtr == IntPtr.Zero || modulePtr == null)
+        {
+            Console.WriteLine("Failed to load module");
+            Console.ReadLine();
+            return;
+        }
+
         IModule module = NativeComProxy.Create(modulePtr);
 
         PrintBlob(diagnostics);
