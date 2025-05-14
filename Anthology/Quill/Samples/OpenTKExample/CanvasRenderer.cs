@@ -106,6 +106,7 @@ float scissorMask(vec2 p) {
 
 void main()
 {
+    //float pixelSize = length(vec2(dFdx(fragTexCoord.x), dFdy(fragTexCoord.y)));
     vec2 pixelSize = fwidth(fragTexCoord);
     vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
     float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);

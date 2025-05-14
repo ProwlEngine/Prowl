@@ -19,6 +19,7 @@ namespace OpenTKExample
         private Canvas _canvas;
         private CanvasDemo _demo;
         private CanvasRenderer _renderer;
+        private BenchmarkScene _benchmarkScene;
 
         // Camera/view properties
         private Vector2 _offset = Vector2.zero;
@@ -69,6 +70,7 @@ namespace OpenTKExample
             }
 
             _demo = new CanvasDemo(_canvas, ClientSize.X, ClientSize.Y, _demoTexture, RobotoFont32, RobotoFont16, AlamakFont32);
+            _benchmarkScene = new BenchmarkScene(_canvas, RobotoFont16);
         }
 
         protected override void OnRenderFrame(FrameEventArgs args)
@@ -80,6 +82,7 @@ namespace OpenTKExample
 
             // Let demo render to canvas
             _demo.RenderFrame(args.Time, _offset, _zoom, _rotation);
+            //_benchmarkScene.RenderFrame(args.Time, ClientSize.X, ClientSize.Y);
 
             // Draw the canvas content using OpenGL
             GL.Clear(ClearBufferMask.ColorBufferBit);

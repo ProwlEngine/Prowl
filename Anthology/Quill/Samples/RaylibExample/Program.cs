@@ -47,14 +47,20 @@ namespace RaylibExample
             Canvas canvas = new Canvas(renderer);
             CanvasDemo demo = new CanvasDemo(canvas, screenWidth, screenHeight, demoTexture, RobotoFont32, RobotoFont16, AlamakFont32);
 
+            var benchmarkScene = new BenchmarkScene(canvas, RobotoFont16);
+
+            // In your render loop
             while (!WindowShouldClose())
             {
                 HandleDemoInput(ref offset, ref zoom, ref rotation);
+                screenWidth = GetScreenWidth();
+                screenHeight = GetScreenHeight();
 
                 // Reset Canvas
-                canvas.Clear(); 
+                canvas.Clear();
 
                 // Draw demo into canvas
+                //benchmarkScene.RenderFrame(GetFrameTime(), screenWidth, screenHeight);
                 demo.RenderFrame(GetFrameTime(), offset, zoom, rotation);
 
                 // Draw Canvas
