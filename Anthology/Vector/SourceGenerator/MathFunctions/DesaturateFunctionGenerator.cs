@@ -1,22 +1,22 @@
-﻿namespace SourceGenerator.MathFunctions
+﻿namespace SourceGenerator.MathFunctions;
+
+[MathFunction("Desaturate")]
+public class DesaturateFunctionGenerator : MathFunctionGenerator
 {
-    [MathFunction("Desaturate")]
-    public class DesaturateFunctionGenerator : MathFunctionGenerator
+    public override string[] SupportedTypes => new[] { "float", "byte" };
+    public override int[] SupportedDimensions => new[] { 3, 4 };
+    public override bool SupportsScalars => false;
+
+    public override string GenerateFunction(string type, int dimension, string[] components)
     {
-        public override string[] SupportedTypes => new[] { "float", "byte" };
-        public override int[] SupportedDimensions => new[] { 3, 4 };
-        public override bool SupportsScalars => false;
+        var typeName = GetTypeName(type);
+        var vectorType = $"{typeName}{dimension}";
 
-        public override string GenerateFunction(string type, int dimension, string[] components)
+        // For byte types, we need different handling
+        if (type == "byte")
         {
-            var typeName = GetTypeName(type);
-            var vectorType = $"{typeName}{dimension}";
-
-            // For byte types, we need different handling
-            if (type == "byte")
-            {
-                var alphaHandling = dimension == 4 ? ", color.W" : "";
-                return $@"        /// <summary>Desaturates a color by blending it towards grayscale.</summary>
+            var alphaHandling = dimension == 4 ? ", color.W" : "";
+            return $@"        /// <summary>Desaturates a color by blending it towards grayscale.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} Desaturate({vectorType} color, float amount = 1f)
         {{
@@ -32,11 +32,11 @@
                 (byte)(color.Z + (gray.Z - color.Z) * amount){alphaHandling}
             );
         }}";
-            }
-            else
-            {
-                var alphaHandling = dimension == 4 ? ", color.W" : "";
-                return $@"        /// <summary>Desaturates a color by blending it towards grayscale.</summary>
+        }
+        else
+        {
+            var alphaHandling = dimension == 4 ? ", color.W" : "";
+            return $@"        /// <summary>Desaturates a color by blending it towards grayscale.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} Desaturate({vectorType} color, float amount = 1f)
         {{
@@ -46,7 +46,6 @@
             amount = Clamp(amount, 0f, 1f);
             return color + (gray - color) * amount;
         }}";
-            }
         }
     }
 }

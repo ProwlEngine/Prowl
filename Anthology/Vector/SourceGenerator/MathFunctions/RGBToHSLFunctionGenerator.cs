@@ -1,45 +1,45 @@
-﻿namespace SourceGenerator.MathFunctions
+﻿namespace SourceGenerator.MathFunctions;
+
+[MathFunction("RGBToHSL")]
+public class RGBToHSLFunctionGenerator : MathFunctionGenerator
 {
-    [MathFunction("RGBToHSL")]
-    public class RGBToHSLFunctionGenerator : MathFunctionGenerator
+    public override string[] SupportedTypes => new[] { "float", "byte" };
+    public override int[] SupportedDimensions => new[] { 3, 4 };
+    public override bool SupportsScalars => false;
+
+    public override string GenerateFunction(string type, int dimension, string[] components)
     {
-        public override string[] SupportedTypes => new[] { "float", "byte" };
-        public override int[] SupportedDimensions => new[] { 3, 4 };
-        public override bool SupportsScalars => false;
+        var typeName = GetTypeName(type);
+        var vectorType = $"{typeName}{dimension}";
 
-        public override string GenerateFunction(string type, int dimension, string[] components)
+        // For byte types, we need to normalize to 0-1 range for calculation
+        var normalizeR = type == "byte" ? "X / 255f" : "X";
+        var normalizeG = type == "byte" ? "Y / 255f" : "Y";
+        var normalizeB = type == "byte" ? "Z / 255f" : "Z";
+
+        string varName = $"rgb{(dimension == 4 ? "a" : "")}";
+
+        // Alpha handling - preserve alpha as-is
+        var alphaHandling = dimension == 4 ? ", " + varName + ".W" : "";
+
+        // For byte types, we need to convert HSL back to byte range
+        string formatH, formatS, formatL;
+        if (type == "byte")
         {
-            var typeName = GetTypeName(type);
-            var vectorType = $"{typeName}{dimension}";
+            // HSL values for byte types: H (0-255 mapped from 0-360), S (0-255), L (0-255)
+            formatH = "(byte)(h * 255f / 360f)";
+            formatS = "(byte)(s * 255f)";
+            formatL = "(byte)(l * 255f)";
+        }
+        else
+        {
+            // HSL values for float types: H (0-360), S (0-1), L (0-1)
+            formatH = "h";
+            formatS = "s";
+            formatL = "l";
+        }
 
-            // For byte types, we need to normalize to 0-1 range for calculation
-            var normalizeR = type == "byte" ? "X / 255f" : "X";
-            var normalizeG = type == "byte" ? "Y / 255f" : "Y";
-            var normalizeB = type == "byte" ? "Z / 255f" : "Z";
-
-            string varName = $"rgb{(dimension == 4 ? "a" : "")}";
-
-            // Alpha handling - preserve alpha as-is
-            var alphaHandling = dimension == 4 ? ", " + varName + ".W" : "";
-
-            // For byte types, we need to convert HSL back to byte range
-            string formatH, formatS, formatL;
-            if (type == "byte")
-            {
-                // HSL values for byte types: H (0-255 mapped from 0-360), S (0-255), L (0-255)
-                formatH = "(byte)(h * 255f / 360f)";
-                formatS = "(byte)(s * 255f)";
-                formatL = "(byte)(l * 255f)";
-            }
-            else
-            {
-                // HSL values for float types: H (0-360), S (0-1), L (0-1)
-                formatH = "h";
-                formatS = "s";
-                formatL = "l";
-            }
-
-            return $@"        /// <summary>Converts RGB to HSL color space.</summary>
+        return $@"        /// <summary>Converts RGB to HSL color space.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} RGBToHSL({vectorType} {varName})
         {{
@@ -66,6 +66,5 @@
 
             return new {vectorType}({formatH}, {formatS}, {formatL}{alphaHandling});
         }}";
-        }
     }
 }

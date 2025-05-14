@@ -1,76 +1,76 @@
 ﻿using System.Text;
 
-namespace SourceGenerator.MathFunctions
+namespace SourceGenerator.MathFunctions;
+
+[MathFunction("Inverse")]
+public class MatrixInverseGenerator : MathFunctionGenerator
 {
-    [MathFunction("Inverse")]
-    public class MatrixInverseGenerator : MathFunctionGenerator
+    public override string[] SupportedTypes => new[] { "float", "double" };
+    public override int[] SupportedDimensions => new[] { 2, 3, 4 };
+    public override bool SupportsScalars => false;
+
+    private readonly HashSet<string> _generatedFunctions = new HashSet<string>();
+
+    public override bool SupportsType(string type, int dimension)
     {
-        public override string[] SupportedTypes => new[] { "float", "double" };
-        public override int[] SupportedDimensions => new[] { 2, 3, 4 };
-        public override bool SupportsScalars => false;
+        return (type == "float" || type == "double") && SupportedDimensions.Contains(dimension);
+    }
 
-        private readonly HashSet<string> _generatedFunctions = new HashSet<string>();
+    public override string GenerateFunction(string type, int dimension, string[] components)
+    {
+        var sb = new StringBuilder();
+        var typeName = GetTypeName(type);
 
-        public override bool SupportsType(string type, int dimension)
+        foreach (int size in SupportedDimensions)
         {
-            return (type == "float" || type == "double") && SupportedDimensions.Contains(dimension);
+            var matrixType = $"{typeName}{size}x{size}";
+            var functionKey = $"Inverse_{matrixType}";
+
+            if (!_generatedFunctions.Add(functionKey)) continue;
+
+            sb.AppendLine(GenerateInverseFunction(type, typeName, size, matrixType));
         }
 
-        public override string GenerateFunction(string type, int dimension, string[] components)
+        return sb.ToString();
+    }
+
+    private string GenerateInverseFunction(string primitiveType, string typeName, int size, string matrixType)
+    {
+        var sb = new StringBuilder();
+        var vectorType = $"{typeName}{size}";
+        var epsilon = primitiveType == "float" ? "1e-6f" : "1e-14";
+        var mathClass = primitiveType == "float" ? "MathF" : "Math";
+
+        sb.AppendLine($"        /// <summary>Returns the inverse of a {matrixType} matrix using analytical formulas.</summary>");
+        sb.AppendLine($"        /// <param name=\"matrix\">The matrix to invert.</param>");
+        sb.AppendLine($"        /// <returns>The inverse matrix.</returns>");
+        sb.AppendLine($"        /// <exception cref=\"ArgumentException\">Thrown when the matrix is singular (non-invertible).</exception>");
+        sb.AppendLine($"        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine($"        public static {matrixType} Inverse({matrixType} matrix)");
+        sb.AppendLine("        {");
+
+        switch (size)
         {
-            var sb = new StringBuilder();
-            var typeName = GetTypeName(type);
-
-            foreach (int size in SupportedDimensions)
-            {
-                var matrixType = $"{typeName}{size}x{size}";
-                var functionKey = $"Inverse_{matrixType}";
-
-                if (!_generatedFunctions.Add(functionKey)) continue;
-
-                sb.AppendLine(GenerateInverseFunction(type, typeName, size, matrixType));
-            }
-
-            return sb.ToString();
+            case 2:
+                sb.AppendLine(Generate2x2Inverse(primitiveType, matrixType, vectorType, epsilon, mathClass));
+                break;
+            case 3:
+                sb.AppendLine(Generate3x3Inverse(primitiveType, matrixType, vectorType, epsilon, mathClass));
+                break;
+            case 4:
+                sb.AppendLine(Generate4x4Inverse(primitiveType, matrixType, vectorType, epsilon, mathClass));
+                break;
         }
 
-        private string GenerateInverseFunction(string primitiveType, string typeName, int size, string matrixType)
-        {
-            var sb = new StringBuilder();
-            var vectorType = $"{typeName}{size}";
-            var epsilon = primitiveType == "float" ? "1e-6f" : "1e-14";
-            var mathClass = primitiveType == "float" ? "MathF" : "Math";
+        sb.AppendLine("        }");
+        sb.AppendLine();
 
-            sb.AppendLine($"        /// <summary>Returns the inverse of a {matrixType} matrix using analytical formulas.</summary>");
-            sb.AppendLine($"        /// <param name=\"matrix\">The matrix to invert.</param>");
-            sb.AppendLine($"        /// <returns>The inverse matrix.</returns>");
-            sb.AppendLine($"        /// <exception cref=\"ArgumentException\">Thrown when the matrix is singular (non-invertible).</exception>");
-            sb.AppendLine($"        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-            sb.AppendLine($"        public static {matrixType} Inverse({matrixType} matrix)");
-            sb.AppendLine("        {");
+        return sb.ToString();
+    }
 
-            switch (size)
-            {
-                case 2:
-                    sb.AppendLine(Generate2x2Inverse(primitiveType, matrixType, vectorType, epsilon, mathClass));
-                    break;
-                case 3:
-                    sb.AppendLine(Generate3x3Inverse(primitiveType, matrixType, vectorType, epsilon, mathClass));
-                    break;
-                case 4:
-                    sb.AppendLine(Generate4x4Inverse(primitiveType, matrixType, vectorType, epsilon, mathClass));
-                    break;
-            }
-
-            sb.AppendLine("        }");
-            sb.AppendLine();
-
-            return sb.ToString();
-        }
-
-        private string Generate2x2Inverse(string primitiveType, string matrixType, string vectorType, string epsilon, string mathClass)
-        {
-            return $@"            // 2x2 analytical inverse
+    private string Generate2x2Inverse(string primitiveType, string matrixType, string vectorType, string epsilon, string mathClass)
+    {
+        return $@"            // 2x2 analytical inverse
             var a = matrix.c0.X; var b = matrix.c1.X;
             var c = matrix.c0.Y; var d = matrix.c1.Y;
             
@@ -84,11 +84,11 @@ namespace SourceGenerator.MathFunctions
                 new {vectorType}(d * invDet, -c * invDet),
                 new {vectorType}(-b * invDet, a * invDet)
             );";
-        }
+    }
 
-        private string Generate3x3Inverse(string primitiveType, string matrixType, string vectorType, string epsilon, string mathClass)
-        {
-            return $@"            // 3x3 analytical inverse using cofactor expansion
+    private string Generate3x3Inverse(string primitiveType, string matrixType, string vectorType, string epsilon, string mathClass)
+    {
+        return $@"            // 3x3 analytical inverse using cofactor expansion
             var m00 = matrix.c0.X; var m01 = matrix.c1.X; var m02 = matrix.c2.X;
             var m10 = matrix.c0.Y; var m11 = matrix.c1.Y; var m12 = matrix.c2.Y;
             var m20 = matrix.c0.Z; var m21 = matrix.c1.Z; var m22 = matrix.c2.Z;
@@ -121,31 +121,31 @@ namespace SourceGenerator.MathFunctions
                     (m00 * m11 - m01 * m10) * invDet   // c22
                 )
             );";
-        }
+    }
 
-        private string Generate4x4Inverse(string primitiveType, string matrixType, string vectorType, string epsilon, string mathClass)
-        {
-            string cof_00 = $"s0"; 
-            string cof_01 = $"-s1";
-            string cof_02 = $"s2"; 
-            string cof_03 = $"-s3";
+    private string Generate4x4Inverse(string primitiveType, string matrixType, string vectorType, string epsilon, string mathClass)
+    {
+        string cof_00 = $"s0";
+        string cof_01 = $"-s1";
+        string cof_02 = $"s2";
+        string cof_03 = $"-s3";
 
-            string cof_10 = $"-(m01 * (m22 * m33 - m23 * m32) - m02 * (m21 * m33 - m23 * m31) + m03 * (m21 * m32 - m22 * m31))";
-            string cof_11 = $" (m00 * (m22 * m33 - m23 * m32) - m02 * (m20 * m33 - m23 * m30) + m03 * (m20 * m32 - m22 * m30))";
-            string cof_12 = $"-(m00 * (m21 * m33 - m23 * m31) - m01 * (m20 * m33 - m23 * m30) + m03 * (m20 * m31 - m21 * m30))";
-            string cof_13 = $" (m00 * (m21 * m32 - m22 * m31) - m01 * (m20 * m32 - m22 * m30) + m02 * (m20 * m31 - m21 * m30))";
+        string cof_10 = $"-(m01 * (m22 * m33 - m23 * m32) - m02 * (m21 * m33 - m23 * m31) + m03 * (m21 * m32 - m22 * m31))";
+        string cof_11 = $" (m00 * (m22 * m33 - m23 * m32) - m02 * (m20 * m33 - m23 * m30) + m03 * (m20 * m32 - m22 * m30))";
+        string cof_12 = $"-(m00 * (m21 * m33 - m23 * m31) - m01 * (m20 * m33 - m23 * m30) + m03 * (m20 * m31 - m21 * m30))";
+        string cof_13 = $" (m00 * (m21 * m32 - m22 * m31) - m01 * (m20 * m32 - m22 * m30) + m02 * (m20 * m31 - m21 * m30))";
 
-            string cof_20 = $" (m01 * (m12 * m33 - m13 * m32) - m02 * (m11 * m33 - m13 * m31) + m03 * (m11 * m32 - m12 * m31))";
-            string cof_21 = $"-(m00 * (m12 * m33 - m13 * m32) - m02 * (m10 * m33 - m13 * m30) + m03 * (m10 * m32 - m12 * m30))";
-            string cof_22 = $" (m00 * (m11 * m33 - m13 * m31) - m01 * (m10 * m33 - m13 * m30) + m03 * (m10 * m31 - m11 * m30))";
-            string cof_23 = $"-(m00 * (m11 * m32 - m12 * m31) - m01 * (m10 * m32 - m12 * m30) + m02 * (m10 * m31 - m11 * m30))";
+        string cof_20 = $" (m01 * (m12 * m33 - m13 * m32) - m02 * (m11 * m33 - m13 * m31) + m03 * (m11 * m32 - m12 * m31))";
+        string cof_21 = $"-(m00 * (m12 * m33 - m13 * m32) - m02 * (m10 * m33 - m13 * m30) + m03 * (m10 * m32 - m12 * m30))";
+        string cof_22 = $" (m00 * (m11 * m33 - m13 * m31) - m01 * (m10 * m33 - m13 * m30) + m03 * (m10 * m31 - m11 * m30))";
+        string cof_23 = $"-(m00 * (m11 * m32 - m12 * m31) - m01 * (m10 * m32 - m12 * m30) + m02 * (m10 * m31 - m11 * m30))";
 
-            string cof_30 = $"-(m01 * (m12 * m23 - m13 * m22) - m02 * (m11 * m23 - m13 * m21) + m03 * (m11 * m22 - m12 * m21))";
-            string cof_31 = $" (m00 * (m12 * m23 - m13 * m22) - m02 * (m10 * m23 - m13 * m20) + m03 * (m10 * m22 - m12 * m20))";
-            string cof_32 = $"-(m00 * (m11 * m23 - m13 * m21) - m01 * (m10 * m23 - m13 * m20) + m03 * (m10 * m21 - m11 * m20))";
-            string cof_33 = $" (m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20) + m02 * (m10 * m21 - m11 * m20))";
+        string cof_30 = $"-(m01 * (m12 * m23 - m13 * m22) - m02 * (m11 * m23 - m13 * m21) + m03 * (m11 * m22 - m12 * m21))";
+        string cof_31 = $" (m00 * (m12 * m23 - m13 * m22) - m02 * (m10 * m23 - m13 * m20) + m03 * (m10 * m22 - m12 * m20))";
+        string cof_32 = $"-(m00 * (m11 * m23 - m13 * m21) - m01 * (m10 * m23 - m13 * m20) + m03 * (m10 * m21 - m11 * m20))";
+        string cof_33 = $" (m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20) + m02 * (m10 * m21 - m11 * m20))";
 
-            return $@"            // 4x4 analytical inverse using cofactor expansion
+        return $@"            // 4x4 analytical inverse using cofactor expansion
             var m00 = matrix.c0.X; var m01 = matrix.c1.X; var m02 = matrix.c2.X; var m03 = matrix.c3.X;
             var m10 = matrix.c0.Y; var m11 = matrix.c1.Y; var m12 = matrix.c2.Y; var m13 = matrix.c3.Y;
             var m20 = matrix.c0.Z; var m21 = matrix.c1.Z; var m22 = matrix.c2.Z; var m23 = matrix.c3.Z;
@@ -196,17 +196,15 @@ namespace SourceGenerator.MathFunctions
                     ({cof_33}) * invDet     // C33 / det
                 )
             );";
-        }
-
-        private string GetOneValue(string primitiveType)
-        {
-            return primitiveType == "float" ? "1f" : "1.0";
-        }
-
-        private string GetZeroValue(string primitiveType)
-        {
-            return primitiveType == "float" ? "0f" : "0.0";
-        }
     }
 
+    private string GetOneValue(string primitiveType)
+    {
+        return primitiveType == "float" ? "1f" : "1.0";
+    }
+
+    private string GetZeroValue(string primitiveType)
+    {
+        return primitiveType == "float" ? "0f" : "0.0";
+    }
 }

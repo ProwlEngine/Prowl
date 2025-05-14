@@ -1,9 +1,8 @@
-﻿namespace SourceGenerator.MathFunctions
+﻿namespace SourceGenerator.MathFunctions;
+
+[MathFunction("Sign")]
+public class SignFunctionGenerator : SimpleMathFunctionGenerator
 {
-    [MathFunction("Sign")]
-    public class SignFunctionGenerator : SimpleMathFunctionGenerator
-    {
-        public override string[] SupportedTypes => new[] { "float", "double", "int" };
-        protected override string MathMethodName => "Sign";
-    }
+    public override string[] SupportedTypes => new[] { "float", "double", "int" };
+    protected override string MathMethodName => "Sign";
 }

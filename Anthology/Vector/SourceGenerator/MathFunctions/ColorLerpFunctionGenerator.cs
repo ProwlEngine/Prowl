@@ -1,20 +1,20 @@
-﻿namespace SourceGenerator.MathFunctions
+﻿namespace SourceGenerator.MathFunctions;
+
+[MathFunction("ColorLerp")]
+public class ColorLerpFunctionGenerator : MathFunctionGenerator
 {
-    [MathFunction("ColorLerp")]
-    public class ColorLerpFunctionGenerator : MathFunctionGenerator
+    public override string[] SupportedTypes => new[] { "float", "byte" };
+    public override int[] SupportedDimensions => new[] { 3, 4 };
+    public override bool SupportsScalars => false;
+
+    public override string GenerateFunction(string type, int dimension, string[] components)
     {
-        public override string[] SupportedTypes => new[] { "float", "byte" };
-        public override int[] SupportedDimensions => new[] { 3, 4 };
-        public override bool SupportsScalars => false;
+        var typeName = GetTypeName(type);
+        var vectorType = $"{typeName}{dimension}";
 
-        public override string GenerateFunction(string type, int dimension, string[] components)
+        if (type == "byte")
         {
-            var typeName = GetTypeName(type);
-            var vectorType = $"{typeName}{dimension}";
-
-            if (type == "byte")
-            {
-                return $@"        /// <summary>Performs color-space aware linear interpolation between two RGB colors.</summary>
+            return $@"        /// <summary>Performs color-space aware linear interpolation between two RGB colors.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} ColorLerp({vectorType} from, {vectorType} to, float t)
         {{
@@ -60,10 +60,10 @@
             // Convert back to RGB
             return HSVToRGB(hsvResult);
         }}";
-            }
-            else
-            {
-                return $@"        /// <summary>Performs color-space aware linear interpolation between two RGB colors.</summary>
+        }
+        else
+        {
+            return $@"        /// <summary>Performs color-space aware linear interpolation between two RGB colors.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} ColorLerp({vectorType} from, {vectorType} to, float t)
         {{
@@ -92,7 +92,6 @@
             // Convert back to RGB
             return HSVToRGB(hsvResult);
         }}";
-            }
         }
     }
 }

@@ -1,9 +1,8 @@
-﻿namespace SourceGenerator.MathFunctions
+﻿namespace SourceGenerator.MathFunctions;
+
+[MathFunction("Atan")]
+public class AtanFunctionGenerator : SimpleMathFunctionGenerator
 {
-    [MathFunction("Atan")]
-    public class AtanFunctionGenerator : SimpleMathFunctionGenerator
-    {
-        public override string[] SupportedTypes => new[] { "float", "double" };
-        protected override string MathMethodName => "Atan";
-    }
+    public override string[] SupportedTypes => new[] { "float", "double" };
+    protected override string MathMethodName => "Atan";
 }

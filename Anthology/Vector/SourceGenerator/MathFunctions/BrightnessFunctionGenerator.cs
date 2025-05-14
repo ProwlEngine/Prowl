@@ -1,21 +1,21 @@
-﻿namespace SourceGenerator.MathFunctions
+﻿namespace SourceGenerator.MathFunctions;
+
+[MathFunction("Brightness")]
+public class BrightnessFunctionGenerator : MathFunctionGenerator
 {
-    [MathFunction("Brightness")]
-    public class BrightnessFunctionGenerator : MathFunctionGenerator
+    public override string[] SupportedTypes => new[] { "float", "byte" };
+    public override int[] SupportedDimensions => new[] { 3, 4 };
+    public override bool SupportsScalars => false;
+
+    public override string GenerateFunction(string type, int dimension, string[] components)
     {
-        public override string[] SupportedTypes => new[] { "float", "byte" };
-        public override int[] SupportedDimensions => new[] { 3, 4 };
-        public override bool SupportsScalars => false;
+        var typeName = GetTypeName(type);
+        var vectorType = $"{typeName}{dimension}";
 
-        public override string GenerateFunction(string type, int dimension, string[] components)
+        if (type == "byte")
         {
-            var typeName = GetTypeName(type);
-            var vectorType = $"{typeName}{dimension}";
-
-            if (type == "byte")
-            {
-                var alphaHandling = dimension == 4 ? ", color.W" : "";
-                return $@"        /// <summary>Adjusts the brightness of a color.</summary>
+            var alphaHandling = dimension == 4 ? ", color.W" : "";
+            return $@"        /// <summary>Adjusts the brightness of a color.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} Brightness({vectorType} color, float brightness)
         {{
@@ -25,11 +25,11 @@
                 (byte)Clamp(color.Z * brightness, 0f, 255f){alphaHandling}
             );
         }}";
-            }
-            else
-            {
-                var alphaHandling = dimension == 4 ? ", color.W" : "";
-                return $@"        /// <summary>Adjusts the brightness of a color.</summary>
+        }
+        else
+        {
+            var alphaHandling = dimension == 4 ? ", color.W" : "";
+            return $@"        /// <summary>Adjusts the brightness of a color.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} Brightness({vectorType} color, float brightness)
         {{
@@ -39,7 +39,6 @@
                 Max(0f, color.Z * brightness){alphaHandling}
             );
         }}";
-            }
         }
     }
 }

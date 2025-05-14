@@ -1,21 +1,21 @@
-﻿namespace SourceGenerator.MathFunctions
+﻿namespace SourceGenerator.MathFunctions;
+
+[MathFunction("Gamma")]
+public class GammaFunctionGenerator : MathFunctionGenerator
 {
-    [MathFunction("Gamma")]
-    public class GammaFunctionGenerator : MathFunctionGenerator
+    public override string[] SupportedTypes => new[] { "float", "byte" };
+    public override int[] SupportedDimensions => new[] { 3, 4 };
+    public override bool SupportsScalars => false;
+
+    public override string GenerateFunction(string type, int dimension, string[] components)
     {
-        public override string[] SupportedTypes => new[] { "float", "byte" };
-        public override int[] SupportedDimensions => new[] { 3, 4 };
-        public override bool SupportsScalars => false;
+        var typeName = GetTypeName(type);
+        var vectorType = $"{typeName}{dimension}";
 
-        public override string GenerateFunction(string type, int dimension, string[] components)
+        if (type == "byte")
         {
-            var typeName = GetTypeName(type);
-            var vectorType = $"{typeName}{dimension}";
-
-            if (type == "byte")
-            {
-                var alphaHandling = dimension == 4 ? ", color.W" : "";
-                return $@"        /// <summary>Applies gamma correction to a color.</summary>
+            var alphaHandling = dimension == 4 ? ", color.W" : "";
+            return $@"        /// <summary>Applies gamma correction to a color.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} Gamma({vectorType} color, float gamma = 2.2f)
         {{
@@ -25,11 +25,11 @@
                 (byte)(Pow(Max(0f, color.Z / 255f), 1f / gamma) * 255f){alphaHandling}
             );
         }}";
-            }
-            else
-            {
-                var alphaHandling = dimension == 4 ? ", color.W" : "";
-                return $@"        /// <summary>Applies gamma correction to a color.</summary>
+        }
+        else
+        {
+            var alphaHandling = dimension == 4 ? ", color.W" : "";
+            return $@"        /// <summary>Applies gamma correction to a color.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} Gamma({vectorType} color, float gamma = 2.2f)
         {{
@@ -39,7 +39,6 @@
                 Pow(Max(0f, color.Z), 1f / gamma){alphaHandling}
             );
         }}";
-            }
         }
     }
 }

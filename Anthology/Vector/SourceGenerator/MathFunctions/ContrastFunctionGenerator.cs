@@ -1,21 +1,21 @@
-﻿namespace SourceGenerator.MathFunctions
+﻿namespace SourceGenerator.MathFunctions;
+
+[MathFunction("Contrast")]
+public class ContrastFunctionGenerator : MathFunctionGenerator
 {
-    [MathFunction("Contrast")]
-    public class ContrastFunctionGenerator : MathFunctionGenerator
+    public override string[] SupportedTypes => new[] { "float", "byte" };
+    public override int[] SupportedDimensions => new[] { 3, 4 };
+    public override bool SupportsScalars => false;
+
+    public override string GenerateFunction(string type, int dimension, string[] components)
     {
-        public override string[] SupportedTypes => new[] { "float", "byte" };
-        public override int[] SupportedDimensions => new[] { 3, 4 };
-        public override bool SupportsScalars => false;
+        var typeName = GetTypeName(type);
+        var vectorType = $"{typeName}{dimension}";
 
-        public override string GenerateFunction(string type, int dimension, string[] components)
+        if (type == "byte")
         {
-            var typeName = GetTypeName(type);
-            var vectorType = $"{typeName}{dimension}";
-
-            if (type == "byte")
-            {
-                var alphaHandling = dimension == 4 ? ", color.W" : "";
-                return $@"        /// <summary>Adjusts the contrast of a color.</summary>
+            var alphaHandling = dimension == 4 ? ", color.W" : "";
+            return $@"        /// <summary>Adjusts the contrast of a color.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} Contrast({vectorType} color, float contrast)
         {{
@@ -26,11 +26,11 @@
                 (byte)Clamp((color.Z - midpoint) * contrast + midpoint, 0f, 255f){alphaHandling}
             );
         }}";
-            }
-            else
-            {
-                var alphaHandling = dimension == 4 ? ", color.W" : "";
-                return $@"        /// <summary>Adjusts the contrast of a color.</summary>
+        }
+        else
+        {
+            var alphaHandling = dimension == 4 ? ", color.W" : "";
+            return $@"        /// <summary>Adjusts the contrast of a color.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {vectorType} Contrast({vectorType} color, float contrast)
         {{
@@ -41,7 +41,6 @@
                 Clamp((color.Z - midpoint) * contrast + midpoint, 0f, 1f){alphaHandling}
             );
         }}";
-            }
         }
     }
 }

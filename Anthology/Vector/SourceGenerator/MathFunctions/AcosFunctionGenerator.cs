@@ -1,9 +1,8 @@
-﻿namespace SourceGenerator.MathFunctions
+﻿namespace SourceGenerator.MathFunctions;
+
+[MathFunction("Acos")]
+public class AcosFunctionGenerator : SimpleMathFunctionGenerator
 {
-    [MathFunction("Acos")]
-    public class AcosFunctionGenerator : SimpleMathFunctionGenerator
-    {
-        public override string[] SupportedTypes => new[] { "float", "double" };
-        protected override string MathMethodName => "Acos";
-    }
+    public override string[] SupportedTypes => new[] { "float", "double" };
+    protected override string MathMethodName => "Acos";
 }

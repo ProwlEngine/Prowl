@@ -1,19 +1,19 @@
-﻿namespace SourceGenerator.MathFunctions
+﻿namespace SourceGenerator.MathFunctions;
+
+[MathFunction("MoveTowards")]
+public class MoveTowardsFunctionGenerator : MathFunctionGenerator
 {
-    [MathFunction("MoveTowards")]
-    public class MoveTowardsFunctionGenerator : MathFunctionGenerator
+    public override string[] SupportedTypes => new[] { "float", "double" };
+    public override bool SupportsScalars => true;
+
+    public override string GenerateFunction(string type, int dimension, string[] components)
     {
-        public override string[] SupportedTypes => new[] { "float", "double" };
-        public override bool SupportsScalars => true;
+        var typeName = GetTypeName(type);
+        var returnType = dimension > 1 ? $"{typeName}{dimension}" : type;
 
-        public override string GenerateFunction(string type, int dimension, string[] components)
+        if (dimension == 1)
         {
-            var typeName = GetTypeName(type);
-            var returnType = dimension > 1 ? $"{typeName}{dimension}" : type;
-
-            if (dimension == 1)
-            {
-                return $@"        /// <summary>Moves a value current towards target.</summary>
+            return $@"        /// <summary>Moves a value current towards target.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {type} MoveTowards({type} current, {type} target, {type} maxDelta)
         {{
@@ -21,10 +21,10 @@
                 return target;
             return current + Sign(target - current) * maxDelta;
         }}";
-            }
-            else
-            {
-                return $@"        /// <summary>Moves a vector current towards target.</summary>
+        }
+        else
+        {
+            return $@"        /// <summary>Moves a vector current towards target.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static {returnType} MoveTowards({returnType} current, {returnType} target, {type} maxDistanceDelta)
         {{
@@ -34,7 +34,6 @@
                 return target;
             return current + toVector / distance * maxDistanceDelta;
         }}";
-            }
         }
     }
 }
