@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Slang.NativeAPI;
@@ -78,4 +79,16 @@ public unsafe struct SlangResult(uint value = 0x00000000)
     {
         return a._value == b._value;
     }
+
+
+    public override readonly bool Equals([NotNullWhen(true)] object? obj)
+    {
+        if (obj is not SlangResult other)
+            return false;
+
+        return other._value == _value;
+    }
+
+
+    public override readonly int GetHashCode() => (int)_value;
 }

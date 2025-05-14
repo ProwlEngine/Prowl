@@ -325,8 +325,7 @@ a generic parameter that has not been bound to a specific value, this function r
         ConstU8Str name);
 
     [LibraryImport(LibName)]
-    [return: MarshalAs(UnmanagedType.I1)]
-    public static unsafe partial bool spReflectionVariable_HasDefaultValue(VariableReflection* inVar);
+    public static unsafe partial CBool spReflectionVariable_HasDefaultValue(VariableReflection* inVar);
 
     [LibraryImport(LibName)]
     public static unsafe partial SlangResult
@@ -426,8 +425,7 @@ a generic parameter that has not been bound to a specific value, this function r
         TypeReflection** argTypes);
 
     [LibraryImport(LibName)]
-    [return: MarshalAs(UnmanagedType.I1)]
-    public static unsafe partial bool spReflectionFunction_isOverloaded(FunctionReflection* func);
+    public static unsafe partial CBool spReflectionFunction_isOverloaded(FunctionReflection* func);
 
     [LibraryImport(LibName)]
     public static unsafe partial uint spReflectionFunction_getOverloadCount(FunctionReflection* func);
@@ -688,8 +686,7 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
         out ISlangBlob* outDiagnostics);
 
     [LibraryImport(LibName)]
-    [return: MarshalAs(UnmanagedType.I1)]
-    public static unsafe partial bool spReflection_isSubType(
+    public static unsafe partial CBool spReflection_isSubType(
         ShaderReflection* reflection,
         TypeReflection* subType,
         TypeReflection* superType);
