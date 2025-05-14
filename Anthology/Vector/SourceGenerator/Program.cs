@@ -1203,6 +1203,12 @@ namespace SourceGenerator
                 source.AppendLine();
             }
 
+            // ToArray
+            source.AppendLine($"        /// <summary>Returns an array of components.</summary>");
+            source.AppendLine($"        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            source.AppendLine($"        public {primitiveType}[] ToArray() {{ return new {primitiveType}[] {{ {string.Join(", ", components)} }}; }}");
+            source.AppendLine($"        /// <summary>Returns an array of components.</summary>");
+
             // Equals
             source.AppendLine($"        public override bool Equals(object obj) {{ return obj is {structName} && Equals(({structName})obj); }}");
             source.AppendLine();
@@ -1876,6 +1882,18 @@ namespace SourceGenerator
             var componentType = config.ComponentTypeName;
             var rows = config.Rows;
             var cols = config.Columns;
+
+            // ToArray
+            sb.AppendLine($"        /// <summary>Returns an array of components.</summary>");
+            sb.AppendLine($"        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine($"        public {componentType}[] ToArray()");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            {componentType}[] array = new {componentType}[{rows * cols}];");
+            sb.AppendLine($"            for (int i = 0; i < {rows}; i++)");
+            sb.AppendLine($"                for (int j = 0; j < {cols}; j++)");
+            sb.AppendLine($"                    array[i * {cols} + j] = this[i, j];");
+            sb.AppendLine($"            return array;");
+            sb.AppendLine("        }");
 
             // Equals (strongly-typed)
             sb.AppendLine($"        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
