@@ -168,7 +168,6 @@ namespace SourceGenerator
         {
             new SwizzleCharSetDefinition(new[] { 'X', 'Y', 'Z', 'W' }), // Primary accessors
             new SwizzleCharSetDefinition(new[] { 'R', 'G', 'B', 'A' }), // Color accessors
-            new SwizzleCharSetDefinition(new[] { 'S', 'T', 'P', 'Q' })  // Texture coordinate accessors
         };
 
         private const int MAX_OUTPUT_SWIZZLE_DIMENSION = 4;
@@ -923,7 +922,8 @@ namespace SourceGenerator
                 string expr;
                 if (scalarFirst)
                 {
-                    expr = op switch {
+                    expr = op switch
+                    {
                         "+" => $"{(castScalar ? $"({vectorPrimitiveType})" : "")}scalar + v.{c}",
                         "-" => $"{(castScalar ? $"({vectorPrimitiveType})" : "")}scalar - v.{c}",
                         "*" => $"{(castScalar ? $"({vectorPrimitiveType})" : "")}scalar * v.{c}",
@@ -934,7 +934,8 @@ namespace SourceGenerator
                 }
                 else
                 {
-                    expr = op switch {
+                    expr = op switch
+                    {
                         "+" => $"v.{c} + {(castScalar ? $"({vectorPrimitiveType})" : "")}scalar",
                         "-" => $"v.{c} - {(castScalar ? $"({vectorPrimitiveType})" : "")}scalar",
                         "*" => $"v.{c} * {(castScalar ? $"({vectorPrimitiveType})" : "")}scalar",
@@ -1292,7 +1293,8 @@ namespace SourceGenerator
         private static bool IsNarrowingConversion(string fromType, string toType)
         {
             // Define type hierarchies for implicit conversion
-            var typeHierarchy = new Dictionary<string, int> {
+            var typeHierarchy = new Dictionary<string, int>
+            {
                 ["byte"] = 1,
                 ["ushort"] = 2,
                 ["uint"] = 3,
