@@ -113,4 +113,5 @@ namespace SourceGenerator.MathFunctions
             return string.Join(",\n", args);
         }
     }
+
 }
