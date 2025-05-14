@@ -7,6 +7,7 @@ using Prowl.Quill.External.LibTessDotNet;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Prowl.Quill
 {
@@ -414,12 +415,16 @@ namespace Prowl.Quill
             if (_drawCalls.Count == 0)
                 return;
 
-            var color = ApplyGlobalAlpha(vertex.Color);
+            if(_globalAlpha != 1.0f)
+                vertex.a = (byte)(vertex.a * _globalAlpha);
+
             // Premultiply
-            vertex.r = (byte)(color.R * (color.A / 255f));
-            vertex.g = (byte)(color.G * (color.A / 255f));
-            vertex.b = (byte)(color.B * (color.A / 255f));
-            vertex.a = color.A;
+            if (vertex.a != 255)
+            {
+                vertex.r = (byte)(vertex.r * (vertex.a / 255f));
+                vertex.g = (byte)(vertex.g * (vertex.a / 255f));
+                vertex.b = (byte)(vertex.b * (vertex.a / 255f));
+            }
 
 
             // Add the vertex to the list
@@ -983,16 +988,6 @@ namespace Prowl.Quill
         {
             Fill();
             Stroke();
-        }
-
-        private Color ApplyGlobalAlpha(Color color)
-        {
-            if (_globalAlpha < 1f)
-            {
-                byte a = (byte)(color.A * _globalAlpha);
-                return Color.FromArgb(a, color.R, color.G, color.B);
-            }
-            return color;
         }
 
         #region Primitives (Path-Based)
