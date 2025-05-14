@@ -1367,6 +1367,7 @@ namespace Shared
                             using (Paper.Box($"ToggleSwitch_{i}")
                                 .StyleIf(!isOn, "toggle.off")
                                 .StyleIf(isOn, "toggle.on")
+                                .Transition(GuiProp.BackgroundColor, 0.25f, Paper.Easing.CubicInOut)
                                 .OnClick((rect) => {
                                     toggleState[index] = !toggleState[index];
                                     Console.WriteLine($"Toggle {options[index]}: {!isOn}");
@@ -1379,6 +1380,7 @@ namespace Shared
                                     .Height(24)
                                     .Rounded(20)
                                     .BackgroundColor(Color.White)
+                                    .Transition(GuiProp.Left, 0.25f, Paper.Easing.CubicInOut)
                                     //.Style(BoxStyle.SolidRounded(Color.White, 12f))
                                     .PositionType(PositionType.SelfDirected)
                                     .Left(Paper.Pixels(isOn ? 32 : 4))
