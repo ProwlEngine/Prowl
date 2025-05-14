@@ -84,7 +84,7 @@ namespace SourceGenerator
                 var parameters = RequiresTwoParameters ? $"{type} x, {type} y" : $"{type} x";
                 var arguments = RequiresTwoParameters ? "x, y" : "x";
 
-                return $@"  /// <summary>{GetDocumentation(type, functionName, true)}</summary>
+                return $@"    /// <summary>{GetDocumentation(type, functionName, true)}</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static {type} {functionName}({parameters}) {{ return {mathClass}.{MathMethodName}({arguments}); }}";
             }
@@ -94,14 +94,14 @@ namespace SourceGenerator
                 if (RequiresTwoParameters)
                 {
                     componentExpressions = string.Join(", ", components.Select(c => $"{functionName}(x.{c}, y.{c})"));
-                    return $@"  /// <summary>{GetDocumentation(type, functionName, false)}</summary>
+                    return $@"    /// <summary>{GetDocumentation(type, functionName, false)}</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static {returnType} {functionName}({returnType} x, {returnType} y) {{ return new {returnType}({componentExpressions}); }}";
                 }
                 else
                 {
                     componentExpressions = string.Join(", ", components.Select(c => $"{functionName}(x.{c})"));
-                    return $@"  /// <summary>{GetDocumentation(type, functionName, false)}</summary>
+                    return $@"    /// <summary>{GetDocumentation(type, functionName, false)}</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static {returnType} {functionName}({returnType} x) {{ return new {returnType}({componentExpressions}); }}";
                 }
