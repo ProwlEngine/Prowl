@@ -24,8 +24,8 @@ public unsafe struct CompilerOptionValue()
 [StructLayout(LayoutKind.Sequential)]
 public struct CompilerOptionEntry
 {
-    CompilerOptionName name;
-    CompilerOptionValue value;
+    public CompilerOptionName name;
+    public CompilerOptionValue value;
 }
 
 
