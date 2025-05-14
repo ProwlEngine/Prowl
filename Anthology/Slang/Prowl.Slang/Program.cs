@@ -1,8 +1,7 @@
 ﻿using System;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.IO;
-using System.Linq;
+using System.Diagnostics;
 
 namespace Prowl.Slang.NativeAPI;
 
@@ -13,6 +12,7 @@ public static unsafe class Program
     {
         public byte* Bytes;
         public nuint Length;
+        public bool NeedsFree = false;
 
         public void* GetBufferPointer()
         {
@@ -22,6 +22,12 @@ public static unsafe class Program
         public nuint GetBufferSize()
         {
             return Length;
+        }
+
+        ~Blob()
+        {
+            if (NeedsFree)
+                NativeMemory.Free(Bytes);
         }
     }
 
@@ -38,7 +44,7 @@ public static unsafe class Program
         {
             if (!File.Exists(path.String))
             {
-                Console.WriteLine($"File {path.String} does not exist");
+                // Console.WriteLine($"File {path.String} does not exist");
 
                 outBlob = null;
                 return SlangResult.Fail;
@@ -46,18 +52,32 @@ public static unsafe class Program
 
             try
             {
-                Console.WriteLine($"Loading file: {path.String}");
+                // Console.WriteLine($"Loading file: {path.String}");
 
-                byte[] fileData = File.ReadAllBytes(path.String);
-                nuint length = (nuint)fileData.Length;
+                using (FileStream fs = new(path.String, FileMode.Open, FileAccess.Read))
+                {
+                    Blob blob = new Blob()
+                    {
+                        Bytes = (byte*)NativeMemory.Alloc((nuint)fs.Length),
+                        Length = (nuint)fs.Length,
+                        NeedsFree = true,
+                    };
 
-                byte* unmanagedPtr = (byte*)Marshal.AllocHGlobal(fileData.Length);
-                Marshal.Copy(fileData, 0, (IntPtr)unmanagedPtr, fileData.Length);
+                    int bytesRead = 0;
+                    while (bytesRead < fs.Length)
+                    {
+                        int read = fs.Read(new Span<byte>(blob.Bytes + bytesRead, (int)(fs.Length - bytesRead)));
 
-                Blob blob = new() { Bytes = unmanagedPtr, Length = length };
-                outBlob = blob;
+                        if (read == 0)
+                            break;
 
-                return SlangResult.Ok;
+                        bytesRead += read;
+                    }
+
+                    outBlob = blob;
+
+                    return SlangResult.Ok;
+                }
             }
             catch (Exception ex)
             {
@@ -72,15 +92,38 @@ public static unsafe class Program
 
     public static void Main()
     {
-        CompileCode();
+        Process currentProcess = Process.GetCurrentProcess();
+
+        Stopwatch stopwatch = Stopwatch.StartNew();
+
+        SlangNative.slang_createGlobalSession(0, out IGlobalSession* globalSessionPtr).Throw();
+        IGlobalSession globalSession = NativeComProxy.Create(globalSessionPtr);
+
+        long c = 0;
+        while (true)
+        {
+            c++;
+            CompileCode(globalSession);
+
+            if (stopwatch.ElapsedMilliseconds / 1000 > .5)
+            {
+                stopwatch.Restart();
+
+                // WorkingSet64 includes both managed and native allocations
+
+                currentProcess.Refresh();
+                long memoryUsed = currentProcess.PrivateMemorySize64;
+
+                Console.WriteLine($"Memory used: {memoryUsed / (1024.0 * 1024.0):F2} MB. Iterations: {c}");
+            }
+        }
+
+        SlangNative.slang_shutdown();
     }
 
 
-    private static void CompileCode()
+    private static void CompileCode(IGlobalSession globalSession)
     {
-        SlangNative.slang_createGlobalSession(0, out IGlobalSession* globalSessionPtr).Throw();
-        IGlobalSession globalSession = ProxyEmitter.CreateNativeProxy(globalSessionPtr);
-
         Filesystem filesystem = new();
 
         SessionDesc sessionDesc = new();
@@ -103,54 +146,58 @@ public static unsafe class Program
         sessionDesc.fileSystem = filesystem;
 
         globalSession.CreateSession(&sessionDesc, out ISession* sessionPtr).Throw();
-        ISession session = ProxyEmitter.CreateNativeProxy(sessionPtr);
+        ISession session = NativeComProxy.Create(sessionPtr);
 
-        IModule* modulePtr = session.LoadModule(new U8Str("MyShaders"u8), out ISlangBlob* diagnosticsPtr);
+        IModule* modulePtr = session.LoadModule(new U8Str("MyShaders"u8), out ISlangBlob* diagnostics);
+        IModule module = NativeComProxy.Create(modulePtr);
 
-        if (diagnosticsPtr != null)
-        {
-            PrintBlob(diagnosticsPtr);
-            return;
-        }
-
-        IModule module = ProxyEmitter.CreateNativeProxy(modulePtr);
+        PrintBlob(diagnostics);
 
         module.FindEntryPointByName(new U8Str("computeMain"u8), out IEntryPoint* entryPointPtr).Throw();
-        IEntryPoint entryPoint = ProxyEmitter.CreateNativeProxy(entryPointPtr);
+        IEntryPoint entryPoint = NativeComProxy.Create(entryPointPtr);
 
         IComponentType** componentTypes = stackalloc IComponentType*[2];
         componentTypes[0] = (IComponentType*)modulePtr;
         componentTypes[1] = (IComponentType*)entryPointPtr;
 
         session.CreateCompositeComponentType(componentTypes, 2, out IComponentType* programPtr, out _).Throw();
-        IComponentType program = ProxyEmitter.CreateNativeProxy(programPtr);
+        IComponentType program = NativeComProxy.Create(programPtr);
 
-        SlangResult result = program.GetEntryPointCode(0, 0, out ISlangBlob* outCodePtr, out ISlangBlob* resultDiagnosticsPtr);
+        program.GetEntryPointCode(0, 0, out ISlangBlob* outCodePtr, out diagnostics).Throw();
 
-        if (result != SlangResult.Ok)
-        {
-            PrintBlob(resultDiagnosticsPtr);
-            return;
-        }
+        PrintBlob(diagnostics);
 
-        ISlangBlob outCode = ProxyEmitter.CreateNativeProxy(outCodePtr);
+        ShaderReflection* layout = program.GetLayout(0, out diagnostics);
 
-        ShaderReflection* layout = program.GetLayout(0, out _);
+        PrintBlob(diagnostics);
 
-        layout->toJson(out ISlangBlob* blob);
-        ISlangBlob outReflection = ProxyEmitter.CreateNativeProxy(blob);
+        layout->toJson(out ISlangBlob* reflectionBlob).Throw();
+
+        ISlangBlob outCode = NativeComProxy.Create(outCodePtr);
+        ISlangBlob outReflection = NativeComProxy.Create(reflectionBlob);
 
         string code = System.Text.Encoding.UTF8.GetString((byte*)outCode.GetBufferPointer(), (int)outCode.GetBufferSize());
-        Console.WriteLine(code);
+        // Console.WriteLine("Got " + code.Length + " chars of code");
 
         string json = System.Text.Encoding.UTF8.GetString((byte*)outReflection.GetBufferPointer(), (int)outReflection.GetBufferSize());
-        Console.WriteLine("Got " + json.Length + " chars of json");
+        // Console.WriteLine("Got " + json.Length + " chars of json");
+
+        program.Release();
+        entryPoint.Release();
+        outCode.Release();
+        outReflection.Release();
+        session.Release();
+        filesystem.Release();
     }
 
 
     private static void PrintBlob(ISlangBlob* blobPtr)
     {
-        ISlangBlob blob = ProxyEmitter.CreateNativeProxy(blobPtr);
+        if (blobPtr == null)
+            return;
+
+        ISlangBlob blob = NativeComProxy.Create(blobPtr);
         Console.WriteLine(Marshal.PtrToStringUTF8((nint)blob.GetBufferPointer()));
+        blob.Release();
     }
 }
