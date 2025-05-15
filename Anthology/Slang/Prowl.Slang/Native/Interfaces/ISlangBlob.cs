@@ -11,3 +11,12 @@ public unsafe interface ISlangBlob : IUnknown
     void* GetBufferPointer();
     nuint GetBufferSize();
 }
+
+
+public static class BlobExtensions
+{
+    public static unsafe string GetString(this ISlangBlob blob)
+    {
+        return System.Text.Encoding.UTF8.GetString((byte*)blob.GetBufferPointer(), (int)blob.GetBufferSize());
+    }
+}
