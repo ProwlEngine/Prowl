@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 
 
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 [StructLayout(LayoutKind.Sequential)]

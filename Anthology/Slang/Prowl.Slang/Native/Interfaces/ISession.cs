@@ -1,6 +1,6 @@
 using SlangInt = nint;
 
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 /** A session provides a scope for code that is loaded.

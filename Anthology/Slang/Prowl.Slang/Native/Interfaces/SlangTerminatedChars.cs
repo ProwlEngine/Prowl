@@ -1,4 +1,4 @@
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 /* Can be requested from ISlangCastable cast to indicate the contained chars are null

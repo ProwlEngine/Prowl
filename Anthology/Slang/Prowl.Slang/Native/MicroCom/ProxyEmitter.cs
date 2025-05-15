@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 public static partial class ProxyEmitter
 {

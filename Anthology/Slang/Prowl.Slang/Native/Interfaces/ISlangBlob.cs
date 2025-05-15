@@ -1,4 +1,4 @@
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 /** A "blob" of binary data.

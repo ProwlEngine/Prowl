@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 /// <summary>

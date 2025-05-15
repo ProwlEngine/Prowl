@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 [AttributeUsage(AttributeTargets.Interface, AllowMultiple = false, Inherited = false)]

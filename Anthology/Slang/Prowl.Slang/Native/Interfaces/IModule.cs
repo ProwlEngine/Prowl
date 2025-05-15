@@ -1,6 +1,6 @@
 using SlangInt32 = int;
 
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 /** A module is the granularity of shader code compilation and loading.

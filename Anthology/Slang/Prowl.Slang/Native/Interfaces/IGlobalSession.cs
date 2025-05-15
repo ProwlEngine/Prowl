@@ -1,6 +1,6 @@
 using System;
 
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 /** A global session for interaction with the Slang library.

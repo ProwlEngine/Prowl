@@ -1,4 +1,4 @@
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 /** A stream typically of text, used for outputting diagnostic as well as other information.

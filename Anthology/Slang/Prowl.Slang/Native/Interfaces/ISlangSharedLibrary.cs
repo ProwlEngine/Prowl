@@ -1,4 +1,4 @@
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 /** An interface that can be used to encapsulate access to a shared library. An implementation

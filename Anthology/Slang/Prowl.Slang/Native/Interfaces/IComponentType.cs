@@ -1,6 +1,6 @@
 using SlangInt = nint;
 
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 /// <summary>

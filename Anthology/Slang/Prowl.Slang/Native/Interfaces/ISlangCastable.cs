@@ -1,6 +1,6 @@
 using System;
 
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 /* An interface to provide a mechanism to cast, that doesn't require ref counting

@@ -5,9 +5,9 @@ using System.Collections.Generic;
 using SlangInt = nint;
 using SlangUInt = nuint;
 
-using static Prowl.Slang.NativeAPI.SlangNative_Dep;
+using static Prowl.Slang.Native.SlangNative_Dep;
 
-namespace Prowl.Slang.NativeAPI;
+namespace Prowl.Slang.Native;
 
 
 [StructLayout(LayoutKind.Sequential)]
