@@ -979,11 +979,6 @@ public unsafe struct ShaderReflection
             index);
     }
 
-    public static ShaderReflection* get(ICompileRequest* request)
-    {
-        return spGetReflection(request);
-    }
-
     public SlangUInt getEntryPointCount()
     {
         return spReflection_getEntryPointCount(ptr);

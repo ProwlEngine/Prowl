@@ -1,3 +1,5 @@
+using System;
+
 using SlangInt = nint;
 
 namespace Prowl.Slang.Native;
@@ -137,7 +139,8 @@ public unsafe interface ISession : IUnknown
 
     /** Create a request to load/compile front-end code.
      */
-    SlangResult CreateCompileRequest(out ICompileRequest* outCompileRequest);
+    [Obsolete("Method is deprecated")]
+    SlangResult CreateCompileRequest(out /* ICompileRequest */ void* outCompileRequest);
 
 
     /** Creates a `IComponentType` that represents a type's conformance to an interface.

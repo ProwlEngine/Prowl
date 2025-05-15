@@ -6,17 +6,10 @@ using SlangUInt = nuint;
 namespace Prowl.Slang.Native;
 
 
-public unsafe struct ICompileRequest { }
-
-
 // Functions officialy deprecated in the slang repo but still required for reflection.
 internal static unsafe partial class SlangNative_Dep
 {
     const string LibName = "slang";
-
-    // get reflection data from a compilation request
-    [LibraryImport(LibName)]
-    public static unsafe partial ShaderReflection* spGetReflection(ICompileRequest* request);
 
     // User Attribute
     [LibraryImport(LibName)]
@@ -602,7 +595,7 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
     [LibraryImport(LibName)]
     public static unsafe partial SlangResult spReflection_ToJson(
         ShaderReflection* reflection,
-        ICompileRequest* request,
+        void* request,
         out ISlangBlob* outBlob);
 
     [LibraryImport(LibName)]
