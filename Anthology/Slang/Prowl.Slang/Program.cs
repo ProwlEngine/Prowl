@@ -124,12 +124,18 @@ public static unsafe class Program
                 currentProcess.Refresh();
                 long memoryUsed = currentProcess.PrivateMemorySize64;
 
-                Console.WriteLine($"Memory used: {memoryUsed / (1024.0 * 1024.0):F2} MB. Iterations: {c}");
+                Console.WriteLine($"Memory used: {memoryUsed / (1024.0):F2} KB. Iterations: {c}");
             }
         }
 
         SlangNative.slang_shutdown();
     }
+
+
+    static U8Str glsl_450 = new U8Str("glsl_450"u8);
+    static U8Str _shaders = new U8Str("./Shaders/"u8);
+    static U8Str _myShaders = new U8Str("MyShaders"u8);
+    static U8Str _computeMain = new U8Str("computeMain"u8);
 
 
     private static void CompileCode(IGlobalSession globalSession)
@@ -140,7 +146,7 @@ public static unsafe class Program
         TargetDesc targetDesc = new();
 
         targetDesc.format = SlangCompileTarget.GLSL;
-        targetDesc.profile = globalSession.FindProfile(new U8Str("glsl_450"u8));
+        targetDesc.profile = globalSession.FindProfile(glsl_450);
 
         sessionDesc.targets = &targetDesc;
         sessionDesc.targetCount = 1;
@@ -148,7 +154,7 @@ public static unsafe class Program
         ConstU8Str* paths = stackalloc ConstU8Str[1];
 
         // CWD must have a Shaders/ folder in it.
-        paths[0] = new U8Str("./Shaders/"u8);
+        paths[0] = _shaders;
 
         sessionDesc.searchPaths = paths;
         sessionDesc.searchPathCount = 1;
@@ -158,7 +164,7 @@ public static unsafe class Program
         globalSession.CreateSession(&sessionDesc, out ISession* sessionPtr).Throw();
         ISession session = NativeComProxy.Create(sessionPtr);
 
-        IModule* modulePtr = session.LoadModule(new U8Str("MyShaders"u8), out ISlangBlob* diagnostics);
+        IModule* modulePtr = session.LoadModule(_myShaders, out ISlangBlob* diagnostics);
 
         if ((IntPtr)modulePtr == IntPtr.Zero || modulePtr == null)
         {
@@ -167,11 +173,11 @@ public static unsafe class Program
             return;
         }
 
-        IModule module = NativeComProxy.Create(modulePtr);
+        IModule module = NativeComProxy.Create(modulePtr, false);
 
         PrintBlob(diagnostics);
 
-        module.FindEntryPointByName(new U8Str("computeMain"u8), out IEntryPoint* entryPointPtr).Throw();
+        module.FindEntryPointByName(_computeMain, out IEntryPoint* entryPointPtr).Throw();
         IEntryPoint entryPoint = NativeComProxy.Create(entryPointPtr);
 
         IComponentType** componentTypes = stackalloc IComponentType*[2];
@@ -199,13 +205,6 @@ public static unsafe class Program
 
         string json = System.Text.Encoding.UTF8.GetString((byte*)outReflection.GetBufferPointer(), (int)outReflection.GetBufferSize());
         // Console.WriteLine("Got " + json.Length + " chars of json");
-
-        program.Release();
-        entryPoint.Release();
-        outCode.Release();
-        outReflection.Release();
-        session.Release();
-        filesystem.Release();
     }
 
 
@@ -216,6 +215,5 @@ public static unsafe class Program
 
         ISlangBlob blob = NativeComProxy.Create(blobPtr);
         Console.WriteLine(Marshal.PtrToStringUTF8((nint)blob.GetBufferPointer()));
-        blob.Release();
     }
 }
