@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Slang.Native;
@@ -47,9 +48,36 @@ SLANG_E_DRIVER_OUT_OF_MEMORY
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct SlangResult(uint value = 0x00000000)
 {
+    private static SlangResult MakeError(ushort fac, ushort code)
+    {
+        return new SlangResult((((uint)fac) << 16) | (code) | 0x80000000);
+    }
+
+    private static SlangResult MakeWinError(ushort code)
+    {
+        return MakeError(0, code);
+    }
+
     public static readonly SlangResult Ok = new SlangResult(0x00000000);
-    public static readonly SlangResult Fail = new SlangResult(0x80004005);
-    public static readonly SlangResult NoInterface = new SlangResult(0x80004002);
+    public static readonly SlangResult Fail = MakeWinError(0x4005);
+
+    public static readonly SlangResult NotImplemented = MakeWinError(0x4001);
+    public static readonly SlangResult NoInterface = MakeWinError(0x4002);
+    public static readonly SlangResult Abort = MakeWinError(0x4004);
+
+    public static readonly SlangResult InvalidHandle = MakeError(7, 6);
+    public static readonly SlangResult InvalidArg = MakeError(7, 0x57);
+    public static readonly SlangResult OutOfMemory = MakeError(7, 0xe);
+
+    public static readonly SlangResult BufferTooSmall = MakeError(0x200, 1);
+    public static readonly SlangResult Uninitialized = MakeError(0x200, 2);
+    public static readonly SlangResult Pending = MakeError(0x200, 3);
+    public static readonly SlangResult CannotOpen = MakeError(0x200, 4);
+    public static readonly SlangResult NotFound = MakeError(0x200, 5);
+    public static readonly SlangResult InternalFail = MakeError(0x200, 6);
+    public static readonly SlangResult NotAvailable = MakeError(0x200, 7);
+    public static readonly SlangResult TimeOut = MakeError(0x200, 8);
+
 
     uint _value = value;
 
@@ -60,9 +88,38 @@ public unsafe struct SlangResult(uint value = 0x00000000)
     }
 
 
+    public readonly Exception? GetException()
+    {
+        if (this == InvalidHandle)
+            return new InvalidHandleException("Invalid handle: " + SlangNative.slang_getLastInternalErrorMessage().String);
+        if (this == InvalidArg)
+            return new ArgumentException("Invalid argument: " + SlangNative.slang_getLastInternalErrorMessage().String);
+        if (this == OutOfMemory)
+            return new OutOfMemoryException("Out of memory: " + SlangNative.slang_getLastInternalErrorMessage().String);
+        if (this == BufferTooSmall)
+            return new ArgumentOutOfRangeException("Buffer is too small: " + SlangNative.slang_getLastInternalErrorMessage().String);
+        if (this == Uninitialized)
+            return new NullReferenceException("Value is uninitialized: " + SlangNative.slang_getLastInternalErrorMessage().String);
+        if (this == Pending)
+            return new PendingException();
+        if (this == CannotOpen)
+            return new UnauthorizedAccessException("Cannot open file: " + SlangNative.slang_getLastInternalErrorMessage().String);
+        if (this == NotFound)
+            return new FileNotFoundException("File not found: " + SlangNative.slang_getLastInternalErrorMessage().String);
+        if (this == InternalFail)
+            return new Exception("Internal Failure: " + SlangNative.slang_getLastInternalErrorMessage().String);
+        if (this == NotAvailable)
+            return new NotSupportedException("Not supported: " + SlangNative.slang_getLastInternalErrorMessage().String);
+        if (this == TimeOut)
+            return new TimeoutException();
+
+        return Marshal.GetExceptionForHR((int)_value);
+    }
+
+
     public readonly void Throw()
     {
-        Exception? ex = Marshal.GetExceptionForHR((int)_value);
+        Exception? ex = GetException();
 
         if (ex != null)
             throw ex;
@@ -91,4 +148,22 @@ public unsafe struct SlangResult(uint value = 0x00000000)
 
 
     public override readonly int GetHashCode() => (int)_value;
+}
+
+
+[Serializable]
+public class InvalidHandleException : Exception
+{
+    public InvalidHandleException() { }
+    public InvalidHandleException(string message) : base(message) { }
+    public InvalidHandleException(string message, Exception inner) : base(message, inner) { }
+}
+
+
+[Serializable]
+public class PendingException : Exception
+{
+    public PendingException() { }
+    public PendingException(string message) : base(message) { }
+    public PendingException(string message, Exception inner) : base(message, inner) { }
 }

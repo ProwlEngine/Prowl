@@ -1227,7 +1227,7 @@ public unsafe struct TargetDesc()
 
     /** The target format to generate code for (e.g., SPIR-V, DXIL, etc.)
      */
-    public SlangCompileTarget format = SlangCompileTarget.TARGET_UNKNOWN;
+    public SlangCompileTarget format = SlangCompileTarget.Unknown;
 
     /** The compilation profile supported by the target (e.g., "Shader Model 5.1")
      */
@@ -1321,7 +1321,7 @@ public unsafe struct SlangGlobalSessionDesc()
     public uint ApiVersion = 0;
 
     /// Slang language version.
-    public uint LanguageVersion = 2025;
+    public SlangLanguageVersion LanguageVersion = SlangLanguageVersion._2025;
 
     /// Whether to enable GLSL support.
     public CBool EnableGLSL = false;

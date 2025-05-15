@@ -47,6 +47,7 @@ public unsafe interface IGlobalSession : IUnknown
 
     That for pass-through usage, prelude is not pre-pended, preludes are for code generation only.
     */
+    [Obsolete("Method is deprecated")]
     void SetDownstreamCompilerPrelude(SlangPassThrough passThrough, ConstU8Str preludeText);
 
     /** DEPRECATED: Use getLanguagePrelude
@@ -56,6 +57,7 @@ public unsafe interface IGlobalSession : IUnknown
     to it.
     @param outPrelude  On exit holds a blob that holds the string of the prelude.
     */
+    [Obsolete("Method is deprecated")]
     void GetDownstreamCompilerPrelude(SlangPassThrough passThrough, out ISlangBlob* outPrelude);
 
     /** Get the build version 'tag' string. The string is the same as produced via `git describe
