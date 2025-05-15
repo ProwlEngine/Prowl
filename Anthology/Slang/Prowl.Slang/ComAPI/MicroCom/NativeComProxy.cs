@@ -7,18 +7,19 @@ namespace Prowl.Slang.NativeAPI;
 public abstract class NativeComProxy : IUnknown
 {
     protected IntPtr _comPtr;
+    protected bool _trackReferences = true;
 
 
-    public NativeComProxy(IntPtr nativePtr)
+    internal void Initialize(IntPtr nativePtr, bool trackReferences = true)
     {
         _comPtr = nativePtr;
-        AddRef();
+        _trackReferences = trackReferences;
     }
 
 
-    public static unsafe T Create<T>(T* ptr) where T : IUnknown
+    public static unsafe T Create<T>(T* ptr, bool trackReferences = true) where T : IUnknown
     {
-        return ProxyEmitter.CreateNativeProxy(ptr);
+        return ProxyEmitter.CreateNativeProxy(ptr, trackReferences);
     }
 
 
@@ -78,6 +79,7 @@ public abstract class NativeComProxy : IUnknown
 
     ~NativeComProxy()
     {
-        Release();
+        if (_trackReferences)
+            Release();
     }
 }

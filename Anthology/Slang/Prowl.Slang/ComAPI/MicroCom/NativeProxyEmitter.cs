@@ -13,11 +13,15 @@ public static partial class ProxyEmitter
     private static Dictionary<Type, Type> s_nativeProxyCache = [];
 
 
-    public static unsafe T CreateNativeProxy<T>(T* nativeInterfacePtr) where T : IUnknown
+    public static unsafe T CreateNativeProxy<T>(T* nativeInterfacePtr, bool releaseOnFinalizer = true) where T : IUnknown
     {
         ValidateInterface<T>();
 
-        return (T)Activator.CreateInstance(GetNativeProxyType<T>(), (IntPtr)nativeInterfacePtr)!;
+        NativeComProxy proxy = (Activator.CreateInstance(GetNativeProxyType<T>()) as NativeComProxy)!;
+
+        proxy.Initialize((nint)nativeInterfacePtr, releaseOnFinalizer);
+
+        return (T)(object)proxy;
     }
 
 
@@ -110,15 +114,6 @@ public static partial class ProxyEmitter
 
         for (int i = 0; i < methods.Count; i++)
             BuildNativeProxyMethod(builder, methods[i], comPtrField, i);
-
-        ConstructorBuilder ctor = builder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [typeof(IntPtr)]);
-        ILGenerator ctorIL = ctor.GetILGenerator();
-
-        ConstructorInfo baseCtor = typeof(NativeComProxy).GetConstructor([typeof(IntPtr)])!;
-        ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Ldarg_1);
-        ctorIL.Emit(OpCodes.Call, baseCtor); // call base(IntPtr)
-        ctorIL.Emit(OpCodes.Ret);
 
         return builder.CreateType();
     }
