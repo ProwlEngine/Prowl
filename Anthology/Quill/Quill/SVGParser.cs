@@ -11,6 +11,8 @@ namespace Prowl.Quill
 {
     public class SvgElement
     {
+
+
         public TagType tag;
         public int depth;
         public Dictionary<string, string> Attributes { get; }
@@ -68,9 +70,9 @@ namespace Prowl.Quill
             if (attribute.Equals("none", StringComparison.OrdinalIgnoreCase))
                 color = Color.Transparent;
             else if (attribute.Equals("currentColor", StringComparison.OrdinalIgnoreCase))
-                color = Color.Transparent;
-            else 
-                color = ColorTranslator2.FromHtml(attribute);
+                color = Color.Transparent; // Placeholder: currentColor requires context (e.g., inherited color)
+            else
+                color = ColorParser.Parse(attribute);
 
             return color;
         }
@@ -202,8 +204,9 @@ namespace Prowl.Quill
         {
             var sb = new StringBuilder();
             sb.Append($"{type} relative:{relative} parameters:");
-            foreach (var para in param)
-                sb.Append($"{para} ");
+            if (param != null)
+                foreach (var para in param)
+                    sb.Append($"{para} ");
 
             return sb.ToString();
         }
