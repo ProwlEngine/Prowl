@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Xml;
 using System.IO;
-using Prowl.Vector;
 using System.Text.RegularExpressions;
 using System.Globalization;
 using System.Text;
@@ -72,6 +71,21 @@ namespace Prowl.Quill
                 var parametersString = commandSegment.Length > 1 ? commandSegment.Substring(1).Trim() : "";
                 var command = commandSegment[0];
 
+                drawCommand.relative = char.IsLower(command);
+
+                switch (char.ToLower(command))
+                {
+                    case 'm': drawCommand.type = DrawType.MoveTo; break;
+                    case 'l': drawCommand.type = DrawType.LineTo; break;
+                    case 'h': drawCommand.type = DrawType.HorizontalLineTo; break;
+                    case 'v': drawCommand.type = DrawType.VerticalLineTo; break;
+                    case 'q': drawCommand.type = DrawType.QuadraticCurveTo; break;
+                    case 't': drawCommand.type = DrawType.BezierCurveTo; break;
+                    case 'c': drawCommand.type = DrawType.BezierCurveTo; break;
+                    case 's': drawCommand.type = DrawType.BezierCurveTo; break;
+                    case 'z': drawCommand.type = DrawType.ClosePath; break;
+                }
+
 
                 if (!string.IsNullOrEmpty(parametersString))
                 {
@@ -83,7 +97,7 @@ namespace Prowl.Quill
                         else
                             Console.WriteLine($"Warning: Could not parse coordinate '{parts[j]}' in command '{commandSegment}'");
                 }
-                drawCommands[i]=drawCommand;
+                drawCommands[i] = drawCommand;
             }
         }
 
@@ -96,17 +110,37 @@ namespace Prowl.Quill
             return sb.ToString();
         }
 
-        public struct DrawCommand
-        {
-            public DrawType type;
-            public bool relative;
-            public double[] parameters;
 
-            public override string ToString()
-            {
-                return $"{type} relative:{relative} parameters:{parameters?.Length}";
-            }
+    }
+
+    public struct DrawCommand
+    {
+        public DrawType type;
+        public bool relative;
+        public double[] parameters;
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+            sb.Append($"{type} relative:{relative} parameters:");
+            foreach (var para in parameters)
+                sb.Append($"{para} ");
+
+            return sb.ToString();
         }
+    }
+
+    public enum DrawType
+    {
+        MoveTo,
+        LineTo,
+        VerticalLineTo,
+        HorizontalLineTo,
+        BezierCurveTo,
+        SmoothBezierCurveTo,
+        QuadraticCurveTo,
+        SmoothQuadraticCurveTo,
+        ClosePath
     }
 
     public static class SVGParser

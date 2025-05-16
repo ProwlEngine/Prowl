@@ -9,15 +9,6 @@ namespace Prowl.Quill
         private readonly Canvas _canvas;
 
         public SVGRenderer(Canvas canvas) => _canvas = canvas;
-        DrawCommand[] drawCommands;
-
-        public DrawCommand[] ParseSVGElement(SvgElement element)
-        {
-            //Console.WriteLine(svgData);
-
-
-            return new DrawCommand[0];
-        }
 
         public void DrawToCanvas()
         {
@@ -44,21 +35,5 @@ namespace Prowl.Quill
             //    }
             //}
         }
-
-        public struct DrawCommand
-        {
-            public DrawType type;
-            public bool relative;
-            public double[] parmeters;            
-        }
-    }
-
-
-    public enum DrawType
-    {
-        MoveTo,
-        LineTo,
-        QuadraticBezier,
-        ClosePath
     }
 }

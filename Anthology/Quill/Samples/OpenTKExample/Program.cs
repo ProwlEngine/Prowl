@@ -13,8 +13,14 @@ namespace OpenTKExample
         public static void Main(string[] args)
         {
             var svgRenderer = new SVGRenderer(null);
+            const string input = "../../../../Common/SVGs/bezier.svg";
+            var element = SVGParser.ParseSVGDocument(input);
+            var elements = element.Flatten();
+            foreach (var elem in elements)
+                Console.WriteLine(elem);
 
-            svgRenderer.ParseSVGFile("../../../../Common/SVGs/mlc.svg");
+
+            //svgRenderer.ParseSVGFile();
             return;
 
             // Create window with appropriate settings
