@@ -187,16 +187,14 @@ namespace Prowl.Quill
                     case 'z': drawCommand.type = DrawType.ClosePath; break;
                 }
 
+                Console.WriteLine($"{command} {parametersString}");
 
                 if (!string.IsNullOrEmpty(parametersString))
                 {
-                    var parts = parametersString.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
-                    drawCommand.param = new double[parts.Length];
-                    for (int j = 0; j < parts.Length; j++)
-                        if (double.TryParse(parts[j], NumberStyles.Any, CultureInfo.InvariantCulture, out double coord))
-                            drawCommand.param[j] = coord;
-                        else
-                            Console.WriteLine($"Warning: Could not parse coordinate '{parts[j]}' in command '{commandSegment}'");
+                    var matches2 = Regex.Matches(parametersString, @"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?");
+                    foreach (var m in matches2)
+                        ;
+
                 }
                 drawCommands[i] = drawCommand;
             }

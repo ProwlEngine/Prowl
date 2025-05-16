@@ -22,7 +22,6 @@ namespace Prowl.Quill
 
         static void DrawPath(Canvas canvas, SvgPathElement pathElement)
         {
-            Console.WriteLine("");
             canvas.BeginPath();
             canvas.SetStrokeColor(pathElement.stroke);
             canvas.SetFillColor(pathElement.fill);
@@ -31,8 +30,8 @@ namespace Prowl.Quill
             {
                 var cmd = pathElement.drawCommands[i];
                 var offset = cmd.relative ? canvas.CurrentPoint : Vector2.zero;
-                Console.WriteLine(offset);
-                Console.WriteLine(cmd);
+                //Console.WriteLine(offset);
+                //Console.WriteLine(cmd);
 
                 //switch (cmd.type)
                 //{
