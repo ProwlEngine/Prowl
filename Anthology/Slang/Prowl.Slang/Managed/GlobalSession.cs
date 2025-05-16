@@ -67,9 +67,9 @@ public static unsafe class GlobalSession
     /// </summary>
     public static SlangProfileID FindProfile(string name)
     {
-        U8Str str = U8Str.Alloc(name);
+        using U8Str str = U8Str.Alloc(name);
+
         SlangProfileID ID = s_session.FindProfile(str);
-        U8Str.Free(str);
 
         return ID;
     }
@@ -84,9 +84,9 @@ public static unsafe class GlobalSession
     For executables - it will look for executables along the path */
     public static void SetDownstreamCompilerPath(SlangPassThrough passThrough, string path)
     {
-        U8Str str = U8Str.Alloc(path);
+        using U8Str str = U8Str.Alloc(path);
+
         s_session.SetDownstreamCompilerPath(passThrough, str);
-        U8Str.Free(str);
     }
 
     /** Get the build version 'tag' string. The string is the same as produced via `git describe
@@ -135,9 +135,9 @@ public static unsafe class GlobalSession
     */
     public static void SetLanguagePrelude(SlangSourceLanguage sourceLanguage, string preludeText)
     {
-        U8Str str = U8Str.Alloc(preludeText);
+        using U8Str str = U8Str.Alloc(preludeText);
+
         s_session.SetLanguagePrelude(sourceLanguage, str);
-        U8Str.Free(str);
     }
 
     /** Get the 'prelude' associated with a specific source language.
@@ -156,13 +156,10 @@ public static unsafe class GlobalSession
      */
     public static void AddBuiltins(string sourcePath, string sourceString)
     {
-        U8Str str = U8Str.Alloc(sourcePath);
-        U8Str str2 = U8Str.Alloc(sourceString);
+        using U8Str strA = U8Str.Alloc(sourcePath);
+        using U8Str strB = U8Str.Alloc(sourceString);
 
-        s_session.AddBuiltins(str, str2);
-
-        U8Str.Free(str);
-        U8Str.Free(str2);
+        s_session.AddBuiltins(strA, strB);
     }
 
     /** Set the session shared library loader. If this changes the loader, it may cause shared
@@ -231,9 +228,9 @@ public static unsafe class GlobalSession
     */
     public static SlangCapabilityID FindCapability(string name)
     {
-        U8Str str = U8Str.Alloc(name);
+        using U8Str str = U8Str.Alloc(name);
+
         SlangCapabilityID id = s_session.FindCapability(str);
-        U8Str.Free(str);
 
         return id;
     }
@@ -272,9 +269,9 @@ public static unsafe class GlobalSession
      */
     public static void SetSPIRVCoreGrammar(string jsonPath)
     {
-        U8Str str = U8Str.Alloc(jsonPath);
+        using U8Str str = U8Str.Alloc(jsonPath);
+
         s_session.SetSPIRVCoreGrammar(str).Throw();
-        U8Str.Free(str);
     }
 
     /** Parse slangc command line options into a SessionDesc that can be used to create a session
@@ -286,14 +283,17 @@ public static unsafe class GlobalSession
      */
     public static void ParseCommandLineArguments(string[] args, out SessionDescription sessionDesc)
     {
-        U8Str[] strs = args.Select(U8Str.Alloc).ToArray();
+        U8Str[] strs = [.. args.Select(U8Str.Alloc)];
 
         ConstU8Str* strsPtr = stackalloc ConstU8Str[strs.Length];
 
-        Native.SessionDescription* outSession = null;
+        for (int i = 0; i < strs.Length; i++)
+            strsPtr[i] = strs[i];
 
         try
         {
+            Native.SessionDescription* outSession = null;
+
             s_session.ParseCommandLineArguments(strs.Length, strsPtr, outSession, out IUnknown* allocationPtr).Throw();
 
             sessionDesc = outSession->Read();
@@ -315,10 +315,9 @@ public static unsafe class GlobalSession
         nativeDesc.Allocate(sessionDesc, out FileSystem? fsAllocation);
 
         s_session.GetSessionDescDigest(&nativeDesc, out ISlangBlob* outBlobPtr);
-        ISlangBlob outBlob = NativeComProxy.Create(outBlobPtr);
 
         nativeDesc.Free(fsAllocation);
 
-        return outBlob.GetString();
+        return NativeComProxy.Create(outBlobPtr).GetString();
     }
 }
