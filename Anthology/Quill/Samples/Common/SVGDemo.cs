@@ -40,8 +40,10 @@ namespace Common
 
         void ParseSVG()
         {
+            //const string input = "../../../../Common/SVGs/mlc.svg";
             //const string input = "../../../../Common/SVGs/bezier.svg";
-            const string input = "../../../../Common/SVGs/bx--calendar-x.svg";
+            //const string input = "../../../../Common/SVGs/bx--calendar-x.svg";
+            const string input = "../../../../Common/SVGs/bx--arrow-to-top.svg";
             _svgElement = SVGParser.ParseSVGDocument(input);
 
         }

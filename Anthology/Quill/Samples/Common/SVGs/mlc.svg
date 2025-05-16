@@ -1,4 +1,5 @@
- <svg height="210" width="400" xmlns="http://www.w3.org/2000/svg">
-  <path d="M150 5 L75 200 L225 200 Z"
-  style="fill:none;stroke:green;stroke-width:3" />
+ <svg height="100" width="100" xmlns="http://www.w3.org/2000/svg">
+  <!-- <path d="M0 0 L50 0 L0 50 Z" stroke="red" style="fill:none;stroke-width:3" /> -->
+  <!-- <path d="M100 100 L100 0 L0 100 Z" stroke="green" stroke-width="1" style="fill:none;stroke-width:3" /> -->
+  <path d="M100 100 l-50 -50 l0 50 Z" stroke="yellow" stroke-width="2" style="fill:none;stroke-width:3" />
 </svg> 

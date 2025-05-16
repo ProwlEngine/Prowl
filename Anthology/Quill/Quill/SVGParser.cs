@@ -191,11 +191,15 @@ namespace Prowl.Quill
 
                 if (!string.IsNullOrEmpty(parametersString))
                 {
+                    var param = new List<double>();
                     var matches2 = Regex.Matches(parametersString, @"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?");
-                    foreach (var m in matches2)
-                        ;
+                    for (int j = 0; j < matches2.Count; j++)
+                        for (int k = 0; k < matches2[j].Groups.Count; k++)
+                            param.Add(double.Parse(matches2[j].Groups[k].ToString()));
 
+                    drawCommand.param = param.ToArray();
                 }
+                Console.WriteLine(drawCommand.ToString());
                 drawCommands[i] = drawCommand;
             }
         }

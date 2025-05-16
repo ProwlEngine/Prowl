@@ -8,6 +8,8 @@ namespace Prowl.Quill
     {
         public static void DrawToCanvas(Canvas canvas, SvgElement svgElement)
         {
+            if (!printed)
+                Console.WriteLine("DrawToCanvas");
             var elements = svgElement.Flatten();
 
             for (var i = 0; i < elements.Count; i++)
@@ -17,46 +19,56 @@ namespace Prowl.Quill
 
                 if (element is SvgPathElement pathElement)
                     DrawPath(canvas, pathElement);
+
             }
+            printed = true;
         }
+
+        static bool printed = false;
 
         static void DrawPath(Canvas canvas, SvgPathElement pathElement)
         {
             canvas.BeginPath();
             canvas.SetStrokeColor(pathElement.stroke);
             canvas.SetFillColor(pathElement.fill);
+            canvas.SetStrokeWidth(1);
 
             for (var i = 0; i < pathElement.drawCommands.Length; i++)
             {
                 var cmd = pathElement.drawCommands[i];
                 var offset = cmd.relative ? canvas.CurrentPoint : Vector2.zero;
-                //Console.WriteLine(offset);
-                //Console.WriteLine(cmd);
 
-                //switch (cmd.type)
-                //{
-                //    case DrawType.MoveTo:
-                //        canvas.MoveTo(offset.x + cmd.param[0], offset.y + cmd.param[1]);
-                //        break;
-                //    case DrawType.LineTo:
-                //        canvas.LineTo(offset.x + cmd.param[0], offset.y + cmd.param[1]);
-                //        break;
-                //    case DrawType.HorizontalLineTo:
-                //        canvas.LineTo(offset.x + cmd.param[0], canvas.CurrentPoint.y);
-                //        break;
-                //    case DrawType.VerticalLineTo:
-                //        canvas.LineTo(canvas.CurrentPoint.x, offset.y + cmd.param[0]);
-                //        break;
-                //    case DrawType.QuadraticCurveTo:
-                //        canvas.QuadraticCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3]);
-                //        break;
-                //    case DrawType.BezierCurveTo:
-                //        canvas.BezierCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3], offset.x + cmd.param[4], offset.y + cmd.param[5]);
-                //        break;
-                //    case DrawType.ClosePath:
-                //        canvas.ClosePath();
-                //        break;
-                //}
+                if (!printed)
+                {
+                    Console.WriteLine(offset);
+                    Console.WriteLine(cmd);
+                }
+
+                switch (cmd.type)
+                {
+                    case DrawType.MoveTo:
+                        canvas.MoveTo(offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        break;
+                    case DrawType.LineTo:
+                        canvas.LineTo(offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        break;
+                    case DrawType.HorizontalLineTo:
+                        canvas.LineTo(offset.x + cmd.param[0], canvas.CurrentPoint.y);
+                        break;
+                    case DrawType.VerticalLineTo:
+                        canvas.LineTo(canvas.CurrentPoint.x, offset.y + cmd.param[0]);
+                        break;
+                    case DrawType.QuadraticCurveTo:
+                        canvas.QuadraticCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3]);
+                        break;
+                    case DrawType.BezierCurveTo:
+                        canvas.BezierCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3], offset.x + cmd.param[4], offset.y + cmd.param[5]);
+                        break;
+                    case DrawType.ClosePath:
+                        canvas.ClosePath();
+                        //canvas.Fill();
+                        break;
+                }
             }
             canvas.Stroke();
         }

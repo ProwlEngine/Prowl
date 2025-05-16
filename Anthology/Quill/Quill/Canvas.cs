@@ -171,7 +171,10 @@ namespace Prowl.Quill
         public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.Where(d => d.ElementCount != 0).ToList();
         public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
         public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
-        public Vector2 CurrentPoint => _currentSubPath != null ? _currentSubPath.Points[0] : Vector2.zero;
+        public Vector2 CurrentPoint => 
+            _currentSubPath != null && _currentSubPath.Points.Count > 0 ?
+            _currentSubPath.Points[_currentSubPath.Points.Count - 1] :
+            Vector2.zero;
 
         internal ICanvasRenderer _renderer;
 
