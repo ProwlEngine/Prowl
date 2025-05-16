@@ -1,39 +1,62 @@
-﻿using System;
-using System.IO;
-using System.Numerics;
+﻿using Prowl.Vector;
+using System;
 
 namespace Prowl.Quill
 {
-    public class SVGRenderer
+    public static class SVGRenderer
     {
-        private readonly Canvas _canvas;
-
-        public SVGRenderer(Canvas canvas) => _canvas = canvas;
-
-        public void DrawToCanvas()
+        public static void DrawToCanvas(Canvas canvas, SvgElement svgElement)
         {
-            //render the svg every frame
+            var elements = svgElement.Flatten();
 
-            //for (int i = 0; i < drawCommands.Length; i++)
-            //{
-            //    var command = drawCommands[i];
-            //    var data = command.data;
-            //    switch (command.type)
-            //    {
-            //        case DrawType.MoveTo:
-            //            _canvas.MoveTo(data.X, data.Y);
-            //            break;
-            //        case DrawType.LineTo:
-            //            _canvas.LineTo(data.X, data.Y);
-            //            break;
-            //        case DrawType.QuadraticBezier:
-            //            _canvas.QuadraticCurveTo(data.X, data.Y, data.Z, data.W);
-            //            break;
-            //        case DrawType.ClosePath:
-            //            _canvas.ClosePath();
-            //            break;
-            //    }
-            //}
+            for (var i = 0; i < elements.Count; i++)
+            {
+                var element = elements[i];
+                //Console.WriteLine(element);
+
+                if (element is SvgPathElement pathElement)
+                    DrawPath(canvas, pathElement);
+            }
+        }
+
+        static void DrawPath(Canvas canvas, SvgPathElement pathElement)
+        {
+            canvas.BeginPath();
+            canvas.SetStrokeColor(pathElement.stroke);
+            canvas.SetFillColor(pathElement.fill);
+
+            for (var i = 0; i < pathElement.drawCommands.Length; i++)
+            {
+                var cmd = pathElement.drawCommands[i];
+                var offset = cmd.relative ? canvas.CurrentPoint : Vector2.zero;
+                Console.WriteLine(cmd);
+
+                switch (cmd.type)
+                {
+                    case DrawType.MoveTo:
+                        canvas.MoveTo(offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        break;
+                    case DrawType.LineTo:
+                        canvas.LineTo(cmd.param[0], cmd.param[1]);
+                        break;
+                    case DrawType.HorizontalLineTo:
+                        canvas.LineTo(offset.x + cmd.param[0], canvas.CurrentPoint.y);
+                        break;
+                    case DrawType.VerticalLineTo:
+                        canvas.LineTo(canvas.CurrentPoint.x, offset.y + cmd.param[0]);
+                        break;
+                    case DrawType.QuadraticCurveTo:
+                        canvas.QuadraticCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3]);
+                        break;
+                    case DrawType.BezierCurveTo:
+                        canvas.BezierCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3], offset.x + cmd.param[4], offset.y + cmd.param[5]);
+                        break;
+                    case DrawType.ClosePath:
+                        canvas.ClosePath();
+                        break;
+                }
+            }
+            canvas.Stroke();
         }
     }
 }

@@ -5,6 +5,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Globalization;
 using System.Text;
+using System.Drawing;
 
 namespace Prowl.Quill
 {
@@ -15,6 +16,9 @@ namespace Prowl.Quill
         public Dictionary<string, string> Attributes { get; }
         public List<SvgElement> Children { get; }
         public DrawCommand[] drawCommands;
+
+        public Color stroke;
+        public Color fill;
 
         public SvgElement()
         {
@@ -41,7 +45,35 @@ namespace Prowl.Quill
                 child.AddChildren(child, list);
         }
 
-        public virtual void Parse() { }
+        public virtual void Parse()
+        {
+            stroke = ParseColor("stroke");
+            fill = ParseColor("fill");
+        }
+
+        string? ParseString(string key)
+        {
+            if (Attributes.ContainsKey(key))
+                return Attributes[key];
+            return null;
+        }
+
+        Color ParseColor(string key)
+        {
+            var color = Color.Transparent;
+            var attribute = "white";
+            if (Attributes.ContainsKey(key))
+                attribute = Attributes[key];
+
+            if (attribute.Equals("none", StringComparison.OrdinalIgnoreCase))
+                color = Color.Transparent;
+            else if (attribute.Equals("currentColor", StringComparison.OrdinalIgnoreCase))
+                color = Color.Transparent;
+            else 
+                color = ColorTranslator2.FromHtml(attribute);
+
+            return color;
+        }
 
         public enum TagType
         {
@@ -54,10 +86,9 @@ namespace Prowl.Quill
 
     public class SvgRectElement : SvgElement
     {
-
         public override void Parse()
         {
-            
+            base.Parse();
         }
     }
 
@@ -65,7 +96,7 @@ namespace Prowl.Quill
     {
         public override void Parse()
         {
-
+            base.Parse();
         }
     }
 
@@ -73,7 +104,7 @@ namespace Prowl.Quill
     {
         public override void Parse()
         {
-
+            base.Parse();
         }
     }
 
@@ -81,7 +112,7 @@ namespace Prowl.Quill
     {
         public override void Parse()
         {
-
+            base.Parse();
         }
     }
 
@@ -89,7 +120,7 @@ namespace Prowl.Quill
     {
         public override void Parse()
         {
-
+            base.Parse();
         }
     }
 
@@ -97,7 +128,7 @@ namespace Prowl.Quill
     {
         public override void Parse()
         {
-
+            base.Parse();
         }
     }
 
@@ -105,6 +136,8 @@ namespace Prowl.Quill
     {
         public override void Parse()
         {
+            base.Parse();
+
             var pathData = Attributes["d"];
             if (string.IsNullOrEmpty(pathData))
                 throw new InvalidDataException();
@@ -138,10 +171,10 @@ namespace Prowl.Quill
                 if (!string.IsNullOrEmpty(parametersString))
                 {
                     var parts = parametersString.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
-                    drawCommand.parameters = new double[parts.Length];
+                    drawCommand.param = new double[parts.Length];
                     for (int j = 0; j < parts.Length; j++)
                         if (double.TryParse(parts[j], NumberStyles.Any, CultureInfo.InvariantCulture, out double coord))
-                            drawCommand.parameters[j] = coord;
+                            drawCommand.param[j] = coord;
                         else
                             Console.WriteLine($"Warning: Could not parse coordinate '{parts[j]}' in command '{commandSegment}'");
                 }
@@ -163,13 +196,13 @@ namespace Prowl.Quill
     {
         public DrawType type;
         public bool relative;
-        public double[] parameters;
+        public double[] param;
 
         public override string ToString()
         {
             var sb = new StringBuilder();
             sb.Append($"{type} relative:{relative} parameters:");
-            foreach (var para in parameters)
+            foreach (var para in param)
                 sb.Append($"{para} ");
 
             return sb.ToString();

@@ -18,7 +18,7 @@ namespace OpenTKExample
         // Canvas and demo
         private Canvas _canvas;
         private List<IDemo> _demos;
-        private int _currentDemoIndex;
+        private int _currentDemoIndex = 1;
         private CanvasRenderer _renderer;
         private BenchmarkScene _benchmarkScene;
 

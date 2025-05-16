@@ -1,6 +1,7 @@
 ﻿using Prowl.Quill;
 using Prowl.Vector;
 using System.Drawing;
+using System.Xml.Linq;
 
 namespace Common
 {
@@ -9,6 +10,8 @@ namespace Common
         private Canvas _canvas;
         private double _width;
         private double _height;
+
+        SvgElement _svgElement;
 
         public SVGDemo(Canvas canvas, double width, double height)
         {
@@ -38,12 +41,14 @@ namespace Common
 
         void ParseSVG()
         {
-            var svgRenderer = new SVGRenderer(null);
             const string input = "../../../../Common/SVGs/bezier.svg";
-            var element = SVGParser.ParseSVGDocument(input);
-            var elements = element.Flatten();
-            foreach (var elem in elements)
-                Console.WriteLine(elem);
+            _svgElement = SVGParser.ParseSVGDocument(input);
+
+        }
+
+        void DrawSVG()
+        {
+            SVGRenderer.DrawToCanvas(_canvas, _svgElement);
         }
 
         private void DrawGrid(int x, int y, double cellSize, Color color)
@@ -115,10 +120,12 @@ namespace Common
             _canvas.SaveState();
 
             // Draw 2D grid for reference
-            DrawGrid(16, 17, 50, Color.FromArgb(40, 255, 255, 255));
+            //DrawGrid(16, 17, 50, Color.FromArgb(40, 255, 255, 255));
 
             // Draw coordinate system at center
             DrawCoordinateSystem(0, 0, 50);
+
+            DrawSVG();
 
             // Restore the canvas state
             _canvas.RestoreState();
