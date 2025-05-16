@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Slang.Native;
 
@@ -59,38 +59,41 @@ public unsafe class Session
     }
 
 
-    /** Combine multiple component types to create a composite component type.
-
-    The `componentTypes` array must contain `componentTypeCount` pointers
-    to component types that were loaded or created using the same session.
-
-    The shader parameters and specialization parameters of the composite will
-    be the union of those in `componentTypes`. The relative order of child
-    component types is significant, and will affect the order in which
-    parameters are reflected and laid out.
-
-    The entry-point functions of the composite will be the union of those in
-    `componentTypes`, and will follow the ordering of `componentTypes`.
-
-    The requirements of the composite component type will be a subset of
-    those in `componentTypes`. If an entry in `componentTypes` has a requirement
-    that can be satisfied by another entry, then the composition will
-    satisfy the requirement and it will not appear as a requirement of
-    the composite. If multiple entries in `componentTypes` have a requirement
-    for the same type, then only the first such requirement will be retained
-    on the composite. The relative ordering of requirements on the composite
-    will otherwise match that of `componentTypes`.
-
-    If any diagnostics are generated during creation of the composite, they
-    will be written to `outDiagnostics`. If an error is encountered, the
-    function will return null.
-
-    It is an error to create a composite component type that recursively
-    aggregates a single module more than once.
-    */
+    /// <summary>
+    /// <para>
+    /// Combine multiple component types to create a composite component type.
+    /// </para>
+    /// <para>
+    /// The shader parameters and specialization parameters of the composite will
+    /// be the union of those in `componentTypes`. The relative order of child
+    /// component types is significant, and will affect the order in which
+    /// parameters are reflected and laid out.
+    /// </para>
+    /// <para>
+    /// The entry-point functions of the composite will be the union of those in
+    /// `componentTypes`, and will follow the ordering of `componentTypes`.
+    /// </para>
+    /// <para>
+    /// The requirements of the composite component type will be a subset of
+    /// those in `componentTypes`. If an entry in `componentTypes` has a requirement
+    /// that can be satisfied by another entry, then the composition will
+    /// satisfy the requirement and it will not appear as a requirement of
+    /// the composite. If multiple entries in `componentTypes` have a requirement
+    /// for the same type, then only the first such requirement will be retained
+    /// on the composite. The relative ordering of requirements on the composite
+    /// will otherwise match that of `componentTypes`.
+    /// </para>
+    /// <para>
+    /// It is an error to create a composite component type that recursively
+    /// aggregates a single module more than once.
+    /// </para>
+    /// </summary>
     public ComponentType? CreateCompositeComponentType(ComponentType[] componentTypes, out string? diagnostics)
     {
         diagnostics = null;
+
+        if (componentTypes.Any(x => x._session != this))
+            throw new InvalidComponentException("Component not created by this session found!");
 
         IComponentType** componentsPtr = stackalloc IComponentType*[componentTypes.Length];
 
@@ -107,7 +110,7 @@ public unsafe class Session
         if (!result.IsOk())
             return null;
 
-        return new ComponentType(NativeComProxy.Create(componentPtr));
+        return new ComponentType(NativeComProxy.Create(componentPtr), this);
     }
 
 
