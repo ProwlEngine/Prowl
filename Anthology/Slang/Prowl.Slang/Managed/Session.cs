@@ -1,5 +1,5 @@
 using System;
-using System.Runtime.InteropServices;
+using System.Collections.Generic;
 
 using Prowl.Slang.Native;
 
@@ -20,52 +20,42 @@ public unsafe class Session
 
     /** Load a module as it would be by code using `import`.
      */
-    public bool LoadModule(string moduleName, out Module? module, out string? diagnostics)
+    public Module? LoadModule(string moduleName, out string? diagnostics)
     {
-        module = null;
         diagnostics = null;
 
-        U8Str str = U8Str.Alloc(moduleName);
+        using U8Str str = U8Str.Alloc(moduleName);
+
         IModule* modulePtr = _session.LoadModule(str, out ISlangBlob* diagnosticsPtr);
-        U8Str.Free(str);
 
-        if (modulePtr == null || diagnosticsPtr != null)
-        {
-            if (diagnosticsPtr != null)
-                diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
+        if (diagnosticsPtr != null)
+            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
 
-            return false;
-        }
+        if (modulePtr == null)
+            return null;
 
-        module = new Module(NativeComProxy.Create(modulePtr, false));
-
-        return true;
+        return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
 
 
     /** Load a module from Slang source code.
      */
-    public bool LoadModuleFromSource(string moduleName, string path, Memory<byte> source, out Module? module, out string? diagnostics)
+    public Module? LoadModuleFromSource(string moduleName, string path, Memory<byte> source, out string? diagnostics)
     {
-        module = null;
         diagnostics = null;
 
-        U8Str str = U8Str.Alloc(moduleName);
-        U8Str strA = U8Str.Alloc(path);
+        using U8Str strA = U8Str.Alloc(moduleName);
+        using U8Str strB = U8Str.Alloc(path);
 
-        IModule* modulePtr = _session.LoadModuleFromSource(str, strA, ManagedBlob.FromMemory(source), out ISlangBlob* diagnosticsPtr);
+        IModule* modulePtr = _session.LoadModuleFromSource(strA, strB, ManagedBlob.FromMemory(source), out ISlangBlob* diagnosticsPtr);
 
-        if (modulePtr == null || diagnosticsPtr != null)
-        {
-            if (diagnosticsPtr != null)
-                diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
+        if (diagnosticsPtr != null)
+            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
 
-            return false;
-        }
+        if (modulePtr == null)
+            return null;
 
-        module = new Module(NativeComProxy.Create(modulePtr, false));
-
-        return true;
+        return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
 
 
@@ -98,9 +88,8 @@ public unsafe class Session
     It is an error to create a composite component type that recursively
     aggregates a single module more than once.
     */
-    public bool CreateCompositeComponentType(ComponentType[] componentTypes, out ComponentType? componentType, out string? diagnostics)
+    public ComponentType? CreateCompositeComponentType(ComponentType[] componentTypes, out string? diagnostics)
     {
-        componentType = null;
         diagnostics = null;
 
         IComponentType** componentsPtr = stackalloc IComponentType*[componentTypes.Length];
@@ -115,10 +104,10 @@ public unsafe class Session
         if (diagnosticsPtr != null)
             diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
 
-        if (result.IsOk())
-            componentType = new ComponentType(NativeComProxy.Create(componentPtr));
+        if (!result.IsOk())
+            return null;
 
-        return result.IsOk();
+        return new ComponentType(NativeComProxy.Create(componentPtr));
     }
 
 
@@ -209,11 +198,24 @@ public unsafe class Session
 
     /** Load a module from a Slang module blob.
      */
-    IModule* LoadModuleFromIRBlob(
-        ConstU8Str moduleName,
-        ConstU8Str path,
-        ISlangBlob* source,
-        out ISlangBlob* outDiagnostics);
+    public Module? LoadModuleFromIRBlob(string moduleName, string path, Memory<byte> source, out string? diagnostics)
+    {
+        diagnostics = null;
+
+        using U8Str strA = U8Str.Alloc(moduleName);
+        using U8Str strB = U8Str.Alloc(path);
+
+        IModule* modulePtr = _session.LoadModuleFromIRBlob(strA, strB, ManagedBlob.FromMemory(source), out ISlangBlob* diagnosticsPtr);
+
+        if (diagnosticsPtr != null)
+            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
+
+        if (modulePtr == null)
+            return null;
+
+        return new Module(NativeComProxy.Create(modulePtr, false), this);
+    }
+
 
 
     public int GetLoadedModuleCount()
@@ -222,9 +224,14 @@ public unsafe class Session
     }
 
 
-    public Module GetLoadedModule(int index)
+    public Module? GetLoadedModule(int index)
     {
-        return new Module(NativeComProxy.Create(_session.GetLoadedModule(index), false));
+        IModule* modulePtr = _session.GetLoadedModule(index);
+
+        if (modulePtr == null)
+            return null;
+
+        return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
 
 
@@ -233,9 +240,8 @@ public unsafe class Session
      */
     public bool IsBinaryModuleUpToDate(string modulePath, Memory<byte> binaryModuleBlob)
     {
-        U8Str str = U8Str.Alloc(modulePath);
+        using U8Str str = U8Str.Alloc(modulePath);
         bool result = _session.IsBinaryModuleUpToDate(str, ManagedBlob.FromMemory(binaryModuleBlob));
-        U8Str.Free(str);
 
         return result;
     }
@@ -243,9 +249,22 @@ public unsafe class Session
 
     /** Load a module from a string.
      */
-    IModule* loadModuleFromSourceString(
-        ConstU8Str moduleName,
-        ConstU8Str path,
-        ConstU8Str srcString,
-        out ISlangBlob* outDiagnostics);
+    public Module? LoadModuleFromSourceString(string moduleName, string path, string srcString, out string? diagnostics)
+    {
+        diagnostics = null;
+
+        using U8Str strA = U8Str.Alloc(moduleName);
+        using U8Str strB = U8Str.Alloc(path);
+        using U8Str strC = U8Str.Alloc(srcString);
+
+        IModule* modulePtr = _session.LoadModuleFromSourceString(strA, strB, strC, out ISlangBlob* diagnosticsPtr);
+
+        if (diagnosticsPtr != null)
+            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
+
+        if (modulePtr == null)
+            return null;
+
+        return new Module(NativeComProxy.Create(modulePtr, false), this);
+    }
 }
