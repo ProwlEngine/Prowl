@@ -109,9 +109,11 @@ a generic parameter that has not been bound to a specific value, this function r
 
     [LibraryImport(LibName)]
     public static unsafe partial ConstU8Str spReflectionType_GetName(TypeReflection* type);
+
     [LibraryImport(LibName)]
     public static unsafe partial SlangResult
-    spReflectionType_GetFullName(TypeReflection* type, ISlangBlob** outNameBlob);
+    spReflectionType_GetFullName(TypeReflection* type, out ISlangBlob* outNameBlob);
+
     [LibraryImport(LibName)]
     public static unsafe partial GenericReflection* spReflectionType_GetGenericContainer(
             TypeReflection* type);
@@ -321,8 +323,7 @@ a generic parameter that has not been bound to a specific value, this function r
     public static unsafe partial CBool spReflectionVariable_HasDefaultValue(VariableReflection* inVar);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangResult
-    spReflectionVariable_GetDefaultValueInt(VariableReflection* inVar, long* rs);
+    public static unsafe partial SlangResult spReflectionVariable_GetDefaultValueInt(VariableReflection* inVar, out long rs);
 
     [LibraryImport(LibName)]
     public static unsafe partial GenericReflection* spReflectionVariable_GetGenericContainer(
