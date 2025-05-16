@@ -84,7 +84,7 @@ public unsafe struct SlangResult(uint value = 0x00000000)
 
     public readonly bool IsOk()
     {
-        return _value == 0x00000000;
+        return this == Ok;
     }
 
 
