@@ -1,7 +1,6 @@
 ﻿using Prowl.Quill;
 using Prowl.Vector;
 using System.Drawing;
-using System.Xml.Linq;
 
 namespace Common
 {
@@ -41,7 +40,8 @@ namespace Common
 
         void ParseSVG()
         {
-            const string input = "../../../../Common/SVGs/bezier.svg";
+            //const string input = "../../../../Common/SVGs/bezier.svg";
+            const string input = "../../../../Common/SVGs/bx--calendar-x.svg";
             _svgElement = SVGParser.ParseSVGDocument(input);
 
         }
