@@ -1,6 +1,5 @@
 ﻿using Prowl.Vector;
 using System;
-using System.Drawing;
 
 namespace Prowl.Quill
 {
@@ -15,10 +14,14 @@ namespace Prowl.Quill
             for (var i = 0; i < elements.Count; i++)
             {
                 var element = elements[i];
-                //Console.WriteLine(element);
+
+                SetState(canvas, element);
 
                 if (element is SvgPathElement pathElement)
                     DrawPath(canvas, pathElement);
+
+                if (element is SvgCircleElement circleElement)
+                    DrawCircle(canvas, circleElement);
 
             }
             printed = true;
@@ -26,12 +29,16 @@ namespace Prowl.Quill
 
         static bool printed = false;
 
+        static void SetState(Canvas canvas, SvgElement pathElement)
+        {
+            canvas.SetStrokeColor(pathElement.stroke);
+            canvas.SetFillColor(pathElement.fill);
+            canvas.SetStrokeWidth(pathElement.strokeWidth);
+        }
+
         static void DrawPath(Canvas canvas, SvgPathElement pathElement)
         {
             canvas.BeginPath();
-            canvas.SetStrokeColor(pathElement.stroke);
-            canvas.SetFillColor(pathElement.fill);
-            canvas.SetStrokeWidth(1);
 
             for (var i = 0; i < pathElement.drawCommands.Length; i++)
             {
@@ -64,13 +71,28 @@ namespace Prowl.Quill
                     case DrawType.BezierCurveTo:
                         canvas.BezierCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3], offset.x + cmd.param[4], offset.y + cmd.param[5]);
                         break;
+                    case DrawType.ArcTo:
+                        //todo add support for ellipse in canvas to fully support svg arc
+                        canvas.ArcTo(offset.x, offset.y, offset.x + cmd.param[5], offset.y + cmd.param[6], cmd.param[0]);
+                        break;
                     case DrawType.ClosePath:
                         canvas.ClosePath();
-                        //canvas.Fill();
+                        if (pathElement.hasFill)
+                            canvas.Fill();
                         break;
                 }
             }
-            canvas.Stroke();
+
+            if (pathElement.hasStroke)
+                canvas.Stroke();
+        }
+
+        static void DrawCircle(Canvas canvas, SvgCircleElement element)
+        {
+            if (element.hasFill)
+                canvas.CircleFilled(element.cx, element.cy, element.r, element.fill);
+            else
+                canvas.Circle(element.cx, element.cy, element.r);
         }
     }
 }

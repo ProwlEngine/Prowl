@@ -10,8 +10,6 @@ namespace Prowl.Quill
 {
     public class SvgElement
     {
-
-
         public TagType tag;
         public int depth;
         public Dictionary<string, string> Attributes { get; }
@@ -20,6 +18,9 @@ namespace Prowl.Quill
 
         public Color stroke;
         public Color fill;
+        public bool hasStroke;
+        public bool hasFill;
+        public double strokeWidth;
 
         public SvgElement()
         {
@@ -48,8 +49,11 @@ namespace Prowl.Quill
 
         public virtual void Parse()
         {
+            hasStroke = Attributes.ContainsKey("stroke");
+            hasFill = Attributes.ContainsKey("fill");
             stroke = ParseColor("stroke");
             fill = ParseColor("fill");
+            strokeWidth = ParseDouble("stroke-wdith");
         }
 
         string? ParseString(string key)
@@ -57,6 +61,13 @@ namespace Prowl.Quill
             if (Attributes.ContainsKey(key))
                 return Attributes[key];
             return null;
+        }
+
+        protected double ParseDouble(string key)
+        {
+            if (Attributes.ContainsKey(key))
+                return double.Parse(Attributes[key]);
+            return 0;
         }
 
         Color ParseColor(string key)
@@ -95,9 +106,14 @@ namespace Prowl.Quill
 
     public class SvgCircleElement : SvgElement
     {
+        public double cx, cy, r;
+
         public override void Parse()
         {
             base.Parse();
+            cx = ParseDouble("cx");
+            cy = ParseDouble("cy");
+            r = ParseDouble("r");
         }
     }
 
@@ -162,9 +178,10 @@ namespace Prowl.Quill
                     case 'h': drawCommand.type = DrawType.HorizontalLineTo; break;
                     case 'v': drawCommand.type = DrawType.VerticalLineTo; break;
                     case 'q': drawCommand.type = DrawType.QuadraticCurveTo; break;
-                    case 't': drawCommand.type = DrawType.BezierCurveTo; break;
+                    case 't': drawCommand.type = DrawType.QuadraticCurveTo; break;
                     case 'c': drawCommand.type = DrawType.BezierCurveTo; break;
                     case 's': drawCommand.type = DrawType.BezierCurveTo; break;
+                    case 'a': drawCommand.type = DrawType.ArcTo; break;
                     case 'z': drawCommand.type = DrawType.ClosePath; break;
                 }
 
@@ -223,6 +240,7 @@ namespace Prowl.Quill
         SmoothBezierCurveTo,
         QuadraticCurveTo,
         SmoothQuadraticCurveTo,
+        ArcTo,
         ClosePath
     }
 
@@ -251,6 +269,9 @@ namespace Prowl.Quill
             {
                 case SvgElement.TagType.path:
                     svgElement = new SvgPathElement();
+                    break;
+                case SvgElement.TagType.circle:
+                    svgElement = new SvgCircleElement();
                     break;
                 default:
                     svgElement = new SvgElement();

@@ -45,6 +45,8 @@ namespace Common
             //const string input = "../../../../Common/SVGs/bx--calendar-x.svg";
             //const string input = "../../../../Common/SVGs/bx--arrow-to-top.svg";
             const string input = "../../../../Common/SVGs/bx--wifi.svg";
+            //const string input = "../../../../Common/SVGs/bx--qr.svg";
+            //const string input = "../../../../Common/SVGs/bx--injection.svg"; 
             _svgElement = SVGParser.ParseSVGDocument(input);
 
         }
