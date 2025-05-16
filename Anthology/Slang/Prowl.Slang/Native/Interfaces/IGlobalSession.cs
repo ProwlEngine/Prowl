@@ -18,7 +18,7 @@ public unsafe interface IGlobalSession : IUnknown
 {
     /** Create a new session for loading and compiling code.
      */
-    SlangResult CreateSession(SessionDesc* desc, out ISession* outSession);
+    SlangResult CreateSession(SessionDescription* desc, out ISession* outSession);
 
     /** Look up the internal ID of a profile by its `name`.
 
@@ -203,11 +203,11 @@ public unsafe interface IGlobalSession : IUnknown
      *   @param outSessionDesc A pointer to a SessionDesc struct to receive parsed session desc.
      *   @param outAuxAllocation Auxiliary memory allocated to hold data used in the session desc.
      */
-    SlangResult ParseCommandLineArguments(int argc, ConstU8Str* argv, SessionDesc* outSessionDesc, out IUnknown* outAuxAllocation);
+    SlangResult ParseCommandLineArguments(int argc, ConstU8Str* argv, SessionDescription* outSessionDesc, out IUnknown* outAuxAllocation);
 
     /** Computes a digest that uniquely identifies the session description.
      */
-    SlangResult GetSessionDescDigest(SessionDesc* sessionDesc, out ISlangBlob* outBlob);
+    SlangResult GetSessionDescDigest(SessionDescription* sessionDesc, out ISlangBlob* outBlob);
 
     /** Compile from (embedded source) the builtin module on the session.
     Will return a failure if there is already a builtin module available.
