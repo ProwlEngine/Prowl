@@ -14,6 +14,7 @@ namespace Prowl.Quill
         public int depth;
         public Dictionary<string, string> Attributes { get; }
         public List<SvgElement> Children { get; }
+        public DrawCommand[] drawCommands;
 
         public SvgElement()
         {
@@ -51,10 +52,57 @@ namespace Prowl.Quill
         }
     }
 
+    public class SvgRectElement : SvgElement
+    {
+
+        public override void Parse()
+        {
+            
+        }
+    }
+
+    public class SvgCircleElement : SvgElement
+    {
+        public override void Parse()
+        {
+
+        }
+    }
+
+    public class SvgEllipseElement : SvgElement
+    {
+        public override void Parse()
+        {
+
+        }
+    }
+
+    public class SvgLineElement : SvgElement
+    {
+        public override void Parse()
+        {
+
+        }
+    }
+
+    public class SvgPolylineElement : SvgElement
+    {
+        public override void Parse()
+        {
+
+        }
+    }
+
+    public class SvgPolygonElement : SvgElement
+    {
+        public override void Parse()
+        {
+
+        }
+    }
+
     public class SvgPathElement : SvgElement
     {
-        public DrawCommand[] drawCommands;
-
         public override void Parse()
         {
             var pathData = Attributes["d"];
@@ -109,8 +157,6 @@ namespace Prowl.Quill
                 sb.AppendLine(command.ToString());
             return sb.ToString();
         }
-
-
     }
 
     public struct DrawCommand
