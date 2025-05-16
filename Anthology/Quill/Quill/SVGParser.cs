@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Xml;
 using System.IO;
 using System.Text.RegularExpressions;
-using System.Globalization;
 using System.Text;
 using System.Drawing;
 
@@ -143,24 +142,6 @@ namespace Prowl.Quill
             var pathData = Attributes["d"];
             if (string.IsNullOrEmpty(pathData))
                 throw new InvalidDataException();
-
-            //sample input
-            //m8.293 16.293l1.414 1.414L12 15.414l2.293 2.293l1.414-1.414L13.414 14l2.293-2.293l-1.414-1.414L12 12.586l-2.293-2.293l-1.414 1.414L10.586 14z
-
-            //sample output
-            //m8.293 16.293
-            //l1.414 1.414
-            //L12 15.414
-            //l2.293 2.293
-            //l1.414-1.414
-            //L13.414 14
-            //l2.293-2.293
-            //l-1.414-1.414
-            //L12 12.586
-            //l-2.293-2.293
-            //l-1.414 1.414
-            //L10.586 14
-            //z
 
             var matches = Regex.Matches(pathData, @"([A-Za-z])([-0-9.,\s]*)");
             drawCommands = new DrawCommand[matches.Count];
