@@ -43,7 +43,7 @@ public unsafe interface ISession : IUnknown
 
     /** Load a module from Slang source code.
      */
-    IModule* loadModuleFromSource(
+    IModule* LoadModuleFromSource(
         ConstU8Str moduleName,
         ConstU8Str path,
         ISlangBlob* source,
@@ -86,7 +86,7 @@ public unsafe interface ISession : IUnknown
 
     /** Specialize a type based on type arguments.
      */
-    TypeReflection* specializeType(
+    TypeReflection* SpecializeType(
         TypeReflection* type,
         SpecializationArg* specializationArgs,
         SlangInt specializationArgCount,
@@ -95,7 +95,7 @@ public unsafe interface ISession : IUnknown
 
     /** Get the layout `type` on the chosen `target`.
      */
-    TypeLayoutReflection* getTypeLayout(
+    TypeLayoutReflection* GetTypeLayout(
         TypeReflection* type,
         SlangInt targetIndex,
         SlangLayoutRules rules,
@@ -108,7 +108,7 @@ public unsafe interface ISession : IUnknown
         @param `containerType`: the type of the container to wrap `elementType` in.
         @param `outDiagnostics`: a blob to receive diagnostic messages.
     */
-    TypeReflection* getContainerType(
+    TypeReflection* GetContainerType(
         TypeReflection* elementType,
         ContainerType containerType,
         out ISlangBlob* outDiagnostics);
@@ -186,7 +186,7 @@ public unsafe interface ISession : IUnknown
 
     /** Load a module from a string.
      */
-    IModule* loadModuleFromSourceString(
+    IModule* LoadModuleFromSourceString(
         ConstU8Str moduleName,
         ConstU8Str path,
         ConstU8Str srcString,
