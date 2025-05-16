@@ -6,6 +6,8 @@ namespace Prowl.Slang.Native;
 // Marshals invocations on a managed object to a native COM Vtable
 public abstract class NativeComProxy : IUnknown
 {
+    public IntPtr ComPtr => _comPtr;
+
     protected IntPtr _comPtr;
     protected bool _trackReferences = true;
 
