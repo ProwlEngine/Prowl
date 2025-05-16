@@ -11,7 +11,7 @@ internal static unsafe partial class SlangNative
     public static partial SlangResult slang_createGlobalSession(int apiVersion, out IGlobalSession* outGlobalSession);
 
     [LibraryImport(LibName)]
-    public static partial SlangResult slang_createGlobalSession2(SlangGlobalSessionDesc* desc, out IGlobalSession* outGlobalSession);
+    public static partial SlangResult slang_createGlobalSession2(GlobalSessionDescription* desc, out IGlobalSession* outGlobalSession);
 
     [LibraryImport(LibName)]
     public static partial SlangResult slang_createGlobalSessionWithoutCoreModule(int apiVersion, out IGlobalSession* outGlobalSession);

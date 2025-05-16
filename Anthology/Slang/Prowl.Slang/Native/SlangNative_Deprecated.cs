@@ -7,7 +7,7 @@ namespace Prowl.Slang.Native;
 
 
 // Functions officialy deprecated in the slang repo but still required for reflection.
-internal static unsafe partial class SlangNative_Dep
+internal static unsafe partial class SlangNative_Deprecated
 {
     const string LibName = "slang";
 
