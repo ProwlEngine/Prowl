@@ -24,13 +24,7 @@ public readonly unsafe struct U8Str
     /// <exception cref="OutOfMemoryException">Thrown if native memory allocation fails.</exception>
     public static U8Str Alloc(string text)
     {
-        if (text == null)
-        {
-            // Or, depending on desired behavior, could return new U8Str(null, 0)
-            // if the native API gracefully handles null pointers for optional strings.
-            // For required strings like module names, throwing is often safer.
-            throw new ArgumentNullException(nameof(text));
-        }
+        ArgumentNullException.ThrowIfNull(text);
 
         // Get the number of bytes required to encode the string in UTF-8.
         // This count does NOT include the null terminator.
