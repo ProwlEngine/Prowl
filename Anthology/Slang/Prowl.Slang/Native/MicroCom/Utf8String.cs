@@ -10,7 +10,7 @@ namespace Prowl.Slang.Native;
 /// Represents a UTF-8 encoded string primarily for interop with native code.
 /// Manages the lifetime of the allocated native memory for the string.
 /// </summary>
-public readonly unsafe struct U8Str
+public readonly unsafe struct U8Str : IDisposable
 {
     public readonly byte* Pointer; // Pointer to the beginning of the UTF-8 byte sequence.
     public readonly int Length;    // Length of the string content in bytes, excluding any null terminator.
@@ -61,6 +61,11 @@ public readonly unsafe struct U8Str
         {
             NativeMemory.Free(val.Pointer);
         }
+    }
+
+    public void Dispose()
+    {
+        Free(this);
     }
 
     /// <summary>
