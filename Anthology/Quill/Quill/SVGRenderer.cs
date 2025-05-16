@@ -1,16 +1,30 @@
-﻿using System.Numerics;
+﻿using System;
+using System.IO;
+using System.Numerics;
 
 namespace Prowl.Quill
 {
-    internal class SVGRenderer
+    public class SVGRenderer
     {
         private readonly Canvas _canvas;
 
         public SVGRenderer(Canvas canvas) => _canvas = canvas;
         DrawCommand[] drawCommands;
 
-        public DrawCommand[] ParseSVG(string svgData)
+        public DrawCommand[] ParseSVGFile(string path)
         {
+            if (File.Exists(path))
+            {
+                var data = File.ReadAllText(path);
+                return ParseSVGData(data);
+            }
+            throw new FileNotFoundException($"{path} not exist");
+        }
+
+        public DrawCommand[] ParseSVGData(string svgData)
+        {
+            Console.WriteLine(svgData);
+
             //use anglesharp to parse svg document and create a DrawCommand array
             //because we don't want to parse the svg text every frame
 
