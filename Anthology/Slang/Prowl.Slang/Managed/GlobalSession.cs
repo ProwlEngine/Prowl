@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 using Prowl.Slang.Native;
 
@@ -42,7 +43,13 @@ public static unsafe class GlobalSession
     /// </summary>
     public static Session CreateSession(in SessionDescription description)
     {
-        s_session.CreateSession(description, out ISession* sessionPtr);
+        Native.SessionDescription nativeDesc = new();
+
+        nativeDesc.Allocate(description, out FileSystem? fsAllocation);
+
+        s_session.CreateSession(&nativeDesc, out ISession* sessionPtr);
+
+        nativeDesc.Free(fsAllocation);
 
         return new Session(NativeComProxy.Create(sessionPtr));
     }
@@ -279,16 +286,38 @@ public static unsafe class GlobalSession
      */
     public static void ParseCommandLineArguments(string[] args, out SessionDescription sessionDesc)
     {
-        s_session.ParseCommandLineArguments().Throw();
-    }
+        U8Str[] strs = args.Select(U8Str.Alloc).ToArray();
 
+        ConstU8Str* strsPtr = stackalloc ConstU8Str[strs.Length];
+
+        Native.SessionDescription* outSession = null;
+
+        try
+        {
+            s_session.ParseCommandLineArguments(strs.Length, strsPtr, outSession, out IUnknown* allocationPtr).Throw();
+
+            sessionDesc = outSession->Read();
+
+            IUnknown allocation = NativeComProxy.Create(allocationPtr);
+        }
+        finally
+        {
+            Array.ForEach(strs, U8Str.Free);
+        }
+    }
 
     /** Computes a digest that uniquely identifies the session description.
      */
     public static string GetSessionDescDigest(in SessionDescription sessionDesc)
     {
-        s_session.GetSessionDescDigest(sessionDesc, out ISlangBlob* outBlobPtr);
+        Native.SessionDescription nativeDesc = new();
+
+        nativeDesc.Allocate(sessionDesc, out FileSystem? fsAllocation);
+
+        s_session.GetSessionDescDigest(&nativeDesc, out ISlangBlob* outBlobPtr);
         ISlangBlob outBlob = NativeComProxy.Create(outBlobPtr);
+
+        nativeDesc.Free(fsAllocation);
 
         return outBlob.GetString();
     }
