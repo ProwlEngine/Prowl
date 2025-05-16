@@ -1,8 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;netstandard2.1</TargetFrameworks>
     <Nullable>enable</Nullable>
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
     <PackageId>Prowl.$(AssemblyName)</PackageId>
@@ -10,7 +9,7 @@
     <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Quill</PackageProjectUrl>
     <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Quill</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Version>0.4.2</Version>
+    <Version>0.4.3</Version>
     <Title>Prowl.Quill</Title>
     <Authors>Wulferis</Authors>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
@@ -33,7 +32,36 @@
   <ItemGroup>
     <PackageReference Include="AngleSharp" Version="1.3.0" />
     <PackageReference Include="FontStashSharp" Version="1.3.10" />
-    <PackageReference Include="Prowl.Vector" Version="0.5.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
+    <PackageReference Include="Prowl.Vector">
+      <Version>0.5.2</Version>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net7.0'">
+    <PackageReference Include="Prowl.Vector">
+      <Version>0.5.2</Version>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="Prowl.Vector">
+      <Version>0.5.2</Version>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageReference Include="Prowl.Vector">
+      <Version>0.5.2</Version>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="Prowl.Vector">
+      <Version>0.5.2</Version>
+    </PackageReference>
   </ItemGroup>
 
 </Project>
