@@ -2,6 +2,10 @@
 using System.Collections.Generic;
 using System.Xml;
 using System.IO;
+using Prowl.Vector;
+using System.Text.RegularExpressions;
+using System.Globalization;
+using System.Text;
 
 namespace Prowl.Quill
 {
@@ -37,12 +41,71 @@ namespace Prowl.Quill
                 child.AddChildren(child, list);
         }
 
+        public virtual void Parse() { }
+
         public enum TagType
         {
             svg,
             path,
             circle,
             g,
+        }
+    }
+
+    public class SvgPathElement : SvgElement
+    {
+        public DrawCommand[] drawCommands;
+
+        public override void Parse()
+        {
+            var pathData = Attributes["d"];
+            if (string.IsNullOrEmpty(pathData))
+                throw new InvalidDataException();
+
+            var matches = Regex.Matches(pathData, @"([a-zA-Z])([^a-zA-Z]*)");
+            drawCommands = new DrawCommand[matches.Count];
+            for (int i = 0; i < matches.Count; i++)
+            {
+                var match = matches[i];
+                var drawCommand = new DrawCommand();
+                var commandSegment = match.Groups[1].Value + match.Groups[2].Value.Trim();
+                var parametersString = commandSegment.Length > 1 ? commandSegment.Substring(1).Trim() : "";
+                var command = commandSegment[0];
+
+
+                if (!string.IsNullOrEmpty(parametersString))
+                {
+                    var parts = parametersString.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                    drawCommand.parameters = new double[parts.Length];
+                    for (int j = 0; j < parts.Length; j++)
+                        if (double.TryParse(parts[j], NumberStyles.Any, CultureInfo.InvariantCulture, out double coord))
+                            drawCommand.parameters[j] = coord;
+                        else
+                            Console.WriteLine($"Warning: Could not parse coordinate '{parts[j]}' in command '{commandSegment}'");
+                }
+                drawCommands[i]=drawCommand;
+            }
+        }
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"<{tag} Depth={depth} Attributes='{Attributes.Count}' Children='{Children.Count}'>");
+            foreach (var command in drawCommands)
+                sb.AppendLine(command.ToString());
+            return sb.ToString();
+        }
+
+        public struct DrawCommand
+        {
+            public DrawType type;
+            public bool relative;
+            public double[] parameters;
+
+            public override string ToString()
+            {
+                return $"{type} relative:{relative} parameters:{parameters?.Length}";
+            }
         }
     }
 
@@ -64,10 +127,20 @@ namespace Prowl.Quill
 
         private static SvgElement ParseXmlElement(XmlElement xmlElement, int depth)
         {
-            SvgElement svgElement = new SvgElement();
+            SvgElement svgElement;// = new SvgElement();
 
+            var tag = Enum.Parse<SvgElement.TagType>(xmlElement.Name);
+            switch (tag)
+            {
+                case SvgElement.TagType.path:
+                    svgElement = new SvgPathElement();
+                    break;
+                default:
+                    svgElement = new SvgElement();
+                    break;
+            }
             svgElement.depth = depth;
-            svgElement.tag = Enum.Parse<SvgElement.TagType>(xmlElement.Name);
+            svgElement.tag = tag;
 
             foreach (XmlAttribute attribute in xmlElement.Attributes)
                 svgElement.Attributes[attribute.Name] = attribute.Value;
@@ -75,6 +148,8 @@ namespace Prowl.Quill
             foreach (XmlNode childNode in xmlElement.ChildNodes)
                 if (childNode.NodeType == XmlNodeType.Element)
                     svgElement.Children.Add(ParseXmlElement((XmlElement)childNode, depth + 1));
+
+            svgElement.Parse();
 
             return svgElement;
         }
