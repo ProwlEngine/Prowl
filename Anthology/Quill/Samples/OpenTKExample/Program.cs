@@ -1,7 +1,6 @@
 ﻿using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
-using Prowl.Quill;
 
 namespace OpenTKExample
 {
@@ -12,17 +11,6 @@ namespace OpenTKExample
     {
         public static void Main(string[] args)
         {
-            var svgRenderer = new SVGRenderer(null);
-            const string input = "../../../../Common/SVGs/bezier.svg";
-            var element = SVGParser.ParseSVGDocument(input);
-            var elements = element.Flatten();
-            foreach (var elem in elements)
-                Console.WriteLine(elem);
-
-
-            //svgRenderer.ParseSVGFile();
-            return;
-
             // Create window with appropriate settings
             var nativeWindowSettings = new NativeWindowSettings {
                 ClientSize = new Vector2i(1280, 720),
