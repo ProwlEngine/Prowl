@@ -112,6 +112,8 @@ public unsafe struct SlangResult(uint value = 0x00000000)
             return new NotSupportedException("Not supported: " + SlangNative.slang_getLastInternalErrorMessage().String);
         if (this == TimeOut)
             return new TimeoutException();
+        if (this == Fail)
+            return new Exception("Failure: " + SlangNative.slang_getLastInternalErrorMessage().String);
 
         return Marshal.GetExceptionForHR((int)_value);
     }
