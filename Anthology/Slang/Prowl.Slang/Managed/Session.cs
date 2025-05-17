@@ -116,20 +116,50 @@ public unsafe class Session
 
     /** Specialize a type based on type arguments.
      */
-    TypeReflection* specializeType(
-        TypeReflection* type,
-        SpecializationArg* specializationArgs,
-        SlangInt specializationArgCount,
-        out ISlangBlob* outDiagnostics);
+    public TypeReflection? SpecializeType(
+        TypeReflection type,
+        TypeReflection[] specializationArgs,
+        out string? diagnostics)
+    {
+        diagnostics = null;
+
+        SpecializationArg* argsPtr = stackalloc SpecializationArg[specializationArgs.Length];
+
+        for (int i = 0; i < specializationArgs.Length; i++)
+            argsPtr[i] = SpecializationArg.FromType(specializationArgs[i]._ptr);
+
+        Native.TypeReflection* reflectionPtr = _session.SpecializeType(type._ptr, argsPtr, specializationArgs.Length, out ISlangBlob* diagnosticsPtr);
+
+        if (diagnosticsPtr != null)
+            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
+
+        if (reflectionPtr == null)
+            return null;
+
+        return new TypeReflection(reflectionPtr, this);
+    }
 
 
     /** Get the layout `type` on the chosen `target`.
      */
-    TypeLayoutReflection* getTypeLayout(
-        TypeReflection* type,
-        SlangInt targetIndex,
+    public TypeLayoutReflection? GetTypeLayout(
+        TypeReflection type,
+        int targetIndex,
         SlangLayoutRules rules,
-        out ISlangBlob* outDiagnostics);
+        out string? diagnostics)
+    {
+        diagnostics = null;
+
+        Native.TypeLayoutReflection* reflectionPtr = _session.GetTypeLayout(type._ptr, (nint)targetIndex, rules, out ISlangBlob* diagnosticsPtr);
+
+        if (diagnosticsPtr != null)
+            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
+
+        if (reflectionPtr == null)
+            return null;
+
+        return new TypeLayoutReflection(reflectionPtr, this);
+    }
 
 
     /** Get a container type from `elementType`. For example, given type `T`, returns
@@ -139,64 +169,102 @@ public unsafe class Session
         @param `containerType`: the type of the container to wrap `elementType` in.
         @param `outDiagnostics`: a blob to receive diagnostic messages.
     */
-    TypeReflection* getContainerType(
-        TypeReflection* elementType,
+    public TypeReflection? GetContainerType(
+        TypeReflection elementType,
         ContainerType containerType,
-        out ISlangBlob* outDiagnostics);
+        out string? diagnostics)
+    {
+        diagnostics = null;
+
+        Native.TypeReflection* reflectionPtr = _session.GetContainerType(elementType._ptr, containerType, out ISlangBlob* diagnosticsPtr);
+
+        if (diagnosticsPtr != null)
+            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
+
+        if (reflectionPtr == null)
+            return null;
+
+        return new TypeReflection(reflectionPtr, this);
+    }
 
 
     /** Return a `TypeReflection` that represents the `__Dynamic` type.
         This type can be used as a specialization argument to indicate using
         dynamic dispatch.
     */
-    TypeReflection* GetDynamicType();
+    public TypeReflection GetDynamicType()
+    {
+        return new TypeReflection(_session.GetDynamicType(), this);
+    }
 
 
     /** Get the mangled name for a type RTTI object.
      */
-    SlangResult GetTypeRTTIMangledName(TypeReflection* type, out ISlangBlob* outNameBlob);
+    public string GetTypeRTTIMangledName(TypeReflection type)
+    {
+        _session.GetTypeRTTIMangledName(type._ptr, out ISlangBlob* nameBlob).Throw();
+        return NativeComProxy.Create(nameBlob).GetString();
+    }
 
 
     /** Get the mangled name for a type witness.
      */
-    SlangResult GetTypeConformanceWitnessMangledName(
-        TypeReflection* type,
-        TypeReflection* interfaceType,
-        out ISlangBlob* outNameBlob);
+    public string GetTypeConformanceWitnessMangledName(TypeReflection type, TypeReflection interfaceType)
+    {
+        _session.GetTypeConformanceWitnessMangledName(type._ptr, interfaceType._ptr, out ISlangBlob* nameBlob).Throw();
+        return NativeComProxy.Create(nameBlob).GetString();
+    }
 
 
     /** Get the sequential ID used to identify a type witness in a dynamic object.
      */
-    SlangResult GetTypeConformanceWitnessSequentialID(
-        TypeReflection* type,
-        TypeReflection* interfaceType,
-        out nuint outId);
+    public nuint GetTypeConformanceWitnessSequentialID(TypeReflection type, TypeReflection interfaceType)
+    {
+        _session.GetTypeConformanceWitnessSequentialID(type._ptr, interfaceType._ptr, out nuint outId).Throw();
+        return outId;
+    }
 
 
-    /** Creates a `IComponentType` that represents a type's conformance to an interface.
-        The retrieved `ITypeConformance` objects can be included in a composite `IComponentType`
-        to explicitly specify which implementation types should be included in the final compiled
-        code. For example, if an module defines `IMaterial` interface and `AMaterial`,
-        `BMaterial`, `CMaterial` types that implements the interface, the user can exclude
-        `CMaterial` implementation from the resulting shader code by explicitly adding
-        `AMaterial:IMaterial` and `BMaterial:IMaterial` conformances to a composite
-        `IComponentType` and get entry point code from it. The resulting code will not have
-        anything related to `CMaterial` in the dynamic dispatch logic. If the user does not
-        explicitly include any `TypeConformances` to an interface type, all implementations to
-        that interface will be included by default. By linking a `ITypeConformance`, the user is
-        also given the opportunity to specify the dispatch ID of the implementation type. If
-        `conformanceIdOverride` is -1, there will be no override behavior and Slang will
-        automatically assign IDs to implementation types. The automatically assigned IDs can be
-        queried via `ISession::getTypeConformanceWitnessSequentialID`.
 
-        Returns SLANG_OK if succeeds, or SLANG_FAIL if `type` does not conform to `interfaceType`.
-    */
-    SlangResult CreateTypeConformanceComponentType(
-        TypeReflection* type,
-        TypeReflection* interfaceType,
-        out ITypeConformance* outConformance,
-        SlangInt conformanceIdOverride,
-        out ISlangBlob* outDiagnostics);
+    /// <summary>
+    /// Creates a `IComponentType` that represents a type's conformance to an interface.
+    /// The retrieved `ITypeConformance` objects can be included in a composite `IComponentType`
+    /// to explicitly specify which implementation types should be included in the final compiled
+    /// code.
+    ///
+    /// For example, if an module defines `IMaterial` interface and `AMaterial`,
+    /// `BMaterial`, `CMaterial` types that implements the interface, the user can exclude
+    /// `CMaterial` implementation from the resulting shader code by explicitly adding
+    /// `AMaterial:IMaterial` and `BMaterial:IMaterial` conformances to a composite
+    /// `IComponentType` and get entry point code from it. The resulting code will not have
+    /// anything related to `CMaterial` in the dynamic dispatch logic.
+    ///
+    /// If the user does not explicitly include any `TypeConformances` to an interface type, all implementations to
+    /// that interface will be included by default. By linking a `ITypeConformance`, the user is
+    /// also given the opportunity to specify the dispatch ID of the implementation type.
+    ///
+    /// If `conformanceIdOverride` is -1, there will be no override behavior and Slang will
+    /// automatically assign IDs to implementation types.The automatically assigned IDs can be
+    /// queried via `ISession::getTypeConformanceWitnessSequentialID`.
+    /// </summary>
+    ComponentType? CreateTypeConformanceComponentType(
+        TypeReflection type,
+        TypeReflection interfaceType,
+        int conformanceIdOverride,
+        out string? diagnostics)
+    {
+        diagnostics = null;
+
+        SlangResult result = _session.CreateTypeConformanceComponentType(type._ptr, interfaceType._ptr, out ITypeConformance* outConformance, conformanceIdOverride, out ISlangBlob* diagnosticsPtr);
+
+        if (diagnosticsPtr != null)
+            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
+
+        if (!result.IsOk())
+            return null;
+
+        return new ComponentType(NativeComProxy.Create(outConformance), this);
+    }
 
 
     /** Load a module from a Slang module blob.
