@@ -18,11 +18,13 @@ public unsafe struct SpecializationArg
     /** A type specialization argument, used for `Kind::Type`. */
     public TypeReflection* type;
 
-    public static SpecializationArg fromType(TypeReflection* inType)
+    public static SpecializationArg FromType(TypeReflection* inType)
     {
         SpecializationArg rs;
+
         rs.kind = Kind.Type;
         rs.type = inType;
+
         return rs;
     }
 };
