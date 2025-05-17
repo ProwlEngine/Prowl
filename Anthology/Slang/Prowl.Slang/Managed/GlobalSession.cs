@@ -24,7 +24,7 @@ namespace Prowl.Slang;
 /// </summary>
 public static unsafe class GlobalSession
 {
-    private static readonly IGlobalSession s_session = CreateSession();
+    internal static readonly IGlobalSession s_session = CreateSession();
 
 
     private static IGlobalSession CreateSession()
