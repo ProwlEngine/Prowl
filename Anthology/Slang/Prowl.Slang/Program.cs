@@ -63,9 +63,27 @@ public static class Program
 
         Session session = GlobalSession.CreateSession(sessionDesc);
 
-        if (!session.LoadModule("MyShaders", out Module? module, out string? diagnostics))
+        Module? module = session.LoadModule("MyShaders", out string? diagnostics);
+
+        if (module == null)
         {
             Console.WriteLine("Error loading module: " + diagnostics);
+            return;
+        }
+
+        EntryPoint? entry = module.FindEntryPointByName("computeMain");
+
+        if (entry == null)
+        {
+            Console.WriteLine("Failed to load entrypoint 'computeMain'");
+            return;
+        }
+
+        ComponentType? program = session.CreateCompositeComponentType([module, entry], out diagnostics);
+
+        if (program == null)
+        {
+            Console.WriteLine("Failed to create composite component: " + diagnostics);
         }
     }
 }
