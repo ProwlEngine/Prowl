@@ -1,11 +1,11 @@
 using System;
-
-using SlangInt = nint;
+using System.Collections.Generic;
 
 using Prowl.Slang.Native;
 
 using static Prowl.Slang.Native.SlangNative_Deprecated;
-using System.Collections.Generic;
+
+using SlangInt = nint;
 
 
 namespace Prowl.Slang;
