@@ -84,36 +84,38 @@ public unsafe struct SlangResult(uint value = 0x00000000)
 
     public readonly bool IsOk()
     {
-        return this == Ok;
+        return (_value & 0x80000000) == 0;
     }
 
 
-    public readonly Exception? GetException()
+    public readonly Exception? GetException(string? exceptionMsg = null)
     {
+        exceptionMsg ??= "";
+
         if (this == InvalidHandle)
-            return new InvalidHandleException("Invalid handle: " + SlangNative.slang_getLastInternalErrorMessage().String);
+            return new InvalidHandleException(exceptionMsg);
         if (this == InvalidArg)
-            return new ArgumentException("Invalid argument: " + SlangNative.slang_getLastInternalErrorMessage().String);
+            return new ArgumentException(exceptionMsg);
         if (this == OutOfMemory)
-            return new OutOfMemoryException("Out of memory: " + SlangNative.slang_getLastInternalErrorMessage().String);
+            return new OutOfMemoryException(exceptionMsg);
         if (this == BufferTooSmall)
-            return new ArgumentOutOfRangeException("Buffer is too small: " + SlangNative.slang_getLastInternalErrorMessage().String);
+            return new ArgumentOutOfRangeException(exceptionMsg);
         if (this == Uninitialized)
-            return new NullReferenceException("Value is uninitialized: " + SlangNative.slang_getLastInternalErrorMessage().String);
+            return new NullReferenceException(exceptionMsg);
         if (this == Pending)
             return new PendingException();
         if (this == CannotOpen)
-            return new UnauthorizedAccessException("Cannot open file: " + SlangNative.slang_getLastInternalErrorMessage().String);
+            return new UnauthorizedAccessException(exceptionMsg);
         if (this == NotFound)
-            return new FileNotFoundException("File not found: " + SlangNative.slang_getLastInternalErrorMessage().String);
+            return new FileNotFoundException(exceptionMsg);
         if (this == InternalFail)
             return new Exception("Internal Failure: " + SlangNative.slang_getLastInternalErrorMessage().String);
         if (this == NotAvailable)
-            return new NotSupportedException("Not supported: " + SlangNative.slang_getLastInternalErrorMessage().String);
+            return new NotSupportedException(exceptionMsg);
         if (this == TimeOut)
             return new TimeoutException();
         if (this == Fail)
-            return new Exception("Failure: " + SlangNative.slang_getLastInternalErrorMessage().String);
+            return new Exception(exceptionMsg);
 
         return Marshal.GetExceptionForHR((int)_value);
     }
@@ -122,6 +124,20 @@ public unsafe struct SlangResult(uint value = 0x00000000)
     public readonly void Throw()
     {
         Exception? ex = GetException();
+
+        if (ex != null)
+            throw ex;
+    }
+
+
+    internal readonly void ThrowOrDiagnose(ISlangBlob* diagPtr, out string? diagnostics)
+    {
+        diagnostics = null;
+
+        if (diagPtr != null)
+            diagnostics = NativeComProxy.Create(diagPtr).GetString();
+
+        Exception? ex = GetException(diagnostics);
 
         if (ex != null)
             throw ex;

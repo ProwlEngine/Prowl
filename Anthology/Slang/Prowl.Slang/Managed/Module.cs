@@ -21,13 +21,10 @@ public unsafe class Module : ComponentType
     /// Note that this does not work in case the function is not explicitly designated as an entry
     /// point, e.g. using a `[shader("...")]` attribute. In such cases, consider using
     /// `IModule::findAndCheckEntryPoint` instead.
-    public EntryPoint? FindEntryPointByName(string name)
+    public EntryPoint FindEntryPointByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        SlangResult result = _module.FindEntryPointByName(str, out IEntryPoint* entryPointPtr);
-
-        if (!result.IsOk())
-            return null;
+        _module.FindEntryPointByName(str, out IEntryPoint* entryPointPtr).Throw();
 
         return new EntryPoint(NativeComProxy.Create(entryPointPtr), _session);
     }
@@ -42,22 +39,20 @@ public unsafe class Module : ComponentType
     }
 
     /// Get the name of an entry point defined in the module.
-    public EntryPoint? GetDefinedEntryPoint(int index)
+    public EntryPoint GetDefinedEntryPoint(int index)
     {
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, GetDefinedEntryPointCount(), nameof(index));
         ArgumentOutOfRangeException.ThrowIfLessThan(index, 0, nameof(index));
 
-        if (!_module.GetDefinedEntryPoint(index, out IEntryPoint* entryPointPtr).IsOk())
-            return null;
+        _module.GetDefinedEntryPoint(index, out IEntryPoint* entryPointPtr).Throw();
 
         return new EntryPoint(NativeComProxy.Create(entryPointPtr), _session);
     }
 
     /// Get a serialized representation of the checked module.
-    public Memory<byte>? Serialize()
+    public Memory<byte> Serialize()
     {
-        if (!_module.Serialize(out ISlangBlob* serializedPtr).IsOk())
-            return null;
+        _module.Serialize(out ISlangBlob* serializedPtr).Throw();
 
         return NativeComProxy.Create(serializedPtr).ReadBytes();
     }
@@ -89,18 +84,11 @@ public unsafe class Module : ComponentType
 
     /// Find and validate an entry point by name, even if the function is
     /// not marked with the `[shader("...")]` attribute.
-    public EntryPoint? FindAndCheckEntryPoint(string name, SlangStage stage, out string? diagnostics)
+    public EntryPoint FindAndCheckEntryPoint(string name, SlangStage stage, out string? diagnostics)
     {
-        diagnostics = null;
-
         using U8Str str = U8Str.Alloc(name);
-        SlangResult result = _module.FindAndCheckEntryPoint(str, stage, out IEntryPoint* entryPointPtr, out ISlangBlob* diagnosticsPtr);
 
-        if (diagnosticsPtr != null)
-            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
-
-        if (!result.IsOk())
-            return null;
+        _module.FindAndCheckEntryPoint(str, stage, out IEntryPoint* entryPointPtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new EntryPoint(NativeComProxy.Create(entryPointPtr), _session);
     }
@@ -127,10 +115,9 @@ public unsafe class Module : ComponentType
 
     /** Disassemble a module.
      */
-    public Memory<byte>? Disassemble()
+    public Memory<byte> Disassemble()
     {
-        if (!_module.Disassemble(out ISlangBlob* blobPtr).IsOk())
-            return null;
+        _module.Disassemble(out ISlangBlob* blobPtr).Throw();
 
         return NativeComProxy.Create(blobPtr).ReadBytes();
     }

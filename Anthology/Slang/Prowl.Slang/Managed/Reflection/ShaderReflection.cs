@@ -162,15 +162,10 @@ public unsafe struct ShaderReflection
     public VariableLayoutReflection GlobalParamsVarLayout =>
         new(spReflection_getGlobalParamsVarLayout(_ptr), _session);
 
-    public bool ToJson(out string? json)
+    public string ToJson()
     {
-        json = null;
+        spReflection_ToJson(_ptr, null, out ISlangBlob* outJsonPtr).Throw();
 
-        SlangResult result = spReflection_ToJson(_ptr, null, out ISlangBlob* outJsonPtr);
-
-        if (result.IsOk())
-            json = NativeComProxy.Create(outJsonPtr).GetString();
-
-        return result.IsOk();
+        return NativeComProxy.Create(outJsonPtr).GetString();
     }
 }

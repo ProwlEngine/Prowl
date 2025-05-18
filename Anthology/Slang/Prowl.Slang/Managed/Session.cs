@@ -20,19 +20,15 @@ public unsafe class Session
 
     /** Load a module as it would be by code using `import`.
      */
-    public Module? LoadModule(string moduleName, out string? diagnostics)
+    public Module LoadModule(string moduleName, out string? diagnostics)
     {
-        diagnostics = null;
-
         using U8Str str = U8Str.Alloc(moduleName);
 
         IModule* modulePtr = _session.LoadModule(str, out ISlangBlob* diagnosticsPtr);
 
-        if (diagnosticsPtr != null)
-            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
-
+        diagnostics = null;
         if (modulePtr == null)
-            return null;
+            SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
@@ -40,20 +36,16 @@ public unsafe class Session
 
     /** Load a module from Slang source code.
      */
-    public Module? LoadModuleFromSource(string moduleName, string path, Memory<byte> source, out string? diagnostics)
+    public Module LoadModuleFromSource(string moduleName, string path, Memory<byte> source, out string? diagnostics)
     {
-        diagnostics = null;
-
         using U8Str strA = U8Str.Alloc(moduleName);
         using U8Str strB = U8Str.Alloc(path);
 
         IModule* modulePtr = _session.LoadModuleFromSource(strA, strB, ManagedBlob.FromMemory(source), out ISlangBlob* diagnosticsPtr);
 
-        if (diagnosticsPtr != null)
-            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
-
+        diagnostics = null;
         if (modulePtr == null)
-            return null;
+            SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
@@ -88,10 +80,8 @@ public unsafe class Session
     /// aggregates a single module more than once.
     /// </para>
     /// </summary>
-    public ComponentType? CreateCompositeComponentType(ComponentType[] componentTypes, out string? diagnostics)
+    public ComponentType CreateCompositeComponentType(ComponentType[] componentTypes, out string? diagnostics)
     {
-        diagnostics = null;
-
         if (componentTypes.Any(x => x._session != this))
             throw new InvalidComponentException("Component not created by this session found!");
 
@@ -102,13 +92,7 @@ public unsafe class Session
             componentsPtr[i] = (IComponentType*)((NativeComProxy)componentTypes[i]._componentType).ComPtr;
         }
 
-        SlangResult result = _session.CreateCompositeComponentType(componentsPtr, componentTypes.Length, out IComponentType* componentPtr, out ISlangBlob* diagnosticsPtr);
-
-        if (diagnosticsPtr != null)
-            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
-
-        if (!result.IsOk())
-            return null;
+        _session.CreateCompositeComponentType(componentsPtr, componentTypes.Length, out IComponentType* componentPtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new ComponentType(NativeComProxy.Create(componentPtr), this);
     }
@@ -116,13 +100,11 @@ public unsafe class Session
 
     /** Specialize a type based on type arguments.
      */
-    public TypeReflection? SpecializeType(
+    public TypeReflection SpecializeType(
         TypeReflection type,
         TypeReflection[] specializationArgs,
         out string? diagnostics)
     {
-        diagnostics = null;
-
         SpecializationArg* argsPtr = stackalloc SpecializationArg[specializationArgs.Length];
 
         for (int i = 0; i < specializationArgs.Length; i++)
@@ -130,11 +112,9 @@ public unsafe class Session
 
         Native.TypeReflection* reflectionPtr = _session.SpecializeType(type._ptr, argsPtr, specializationArgs.Length, out ISlangBlob* diagnosticsPtr);
 
-        if (diagnosticsPtr != null)
-            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
-
+        diagnostics = null;
         if (reflectionPtr == null)
-            return null;
+            SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new TypeReflection(reflectionPtr, this);
     }
@@ -142,21 +122,17 @@ public unsafe class Session
 
     /** Get the layout `type` on the chosen `target`.
      */
-    public TypeLayoutReflection? GetTypeLayout(
+    public TypeLayoutReflection GetTypeLayout(
         TypeReflection type,
         int targetIndex,
         SlangLayoutRules rules,
         out string? diagnostics)
     {
-        diagnostics = null;
-
         Native.TypeLayoutReflection* reflectionPtr = _session.GetTypeLayout(type._ptr, (nint)targetIndex, rules, out ISlangBlob* diagnosticsPtr);
 
-        if (diagnosticsPtr != null)
-            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
-
+        diagnostics = null;
         if (reflectionPtr == null)
-            return null;
+            SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new TypeLayoutReflection(reflectionPtr, this);
     }
@@ -169,20 +145,16 @@ public unsafe class Session
         @param `containerType`: the type of the container to wrap `elementType` in.
         @param `outDiagnostics`: a blob to receive diagnostic messages.
     */
-    public TypeReflection? GetContainerType(
+    public TypeReflection GetContainerType(
         TypeReflection elementType,
         ContainerType containerType,
         out string? diagnostics)
     {
-        diagnostics = null;
-
         Native.TypeReflection* reflectionPtr = _session.GetContainerType(elementType._ptr, containerType, out ISlangBlob* diagnosticsPtr);
 
-        if (diagnosticsPtr != null)
-            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
-
+        diagnostics = null;
         if (reflectionPtr == null)
-            return null;
+            SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new TypeReflection(reflectionPtr, this);
     }
@@ -247,21 +219,13 @@ public unsafe class Session
     /// automatically assign IDs to implementation types.The automatically assigned IDs can be
     /// queried via `ISession::getTypeConformanceWitnessSequentialID`.
     /// </summary>
-    ComponentType? CreateTypeConformanceComponentType(
+    public ComponentType CreateTypeConformanceComponentType(
         TypeReflection type,
         TypeReflection interfaceType,
         int conformanceIdOverride,
         out string? diagnostics)
     {
-        diagnostics = null;
-
-        SlangResult result = _session.CreateTypeConformanceComponentType(type._ptr, interfaceType._ptr, out ITypeConformance* outConformance, conformanceIdOverride, out ISlangBlob* diagnosticsPtr);
-
-        if (diagnosticsPtr != null)
-            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
-
-        if (!result.IsOk())
-            return null;
+        _session.CreateTypeConformanceComponentType(type._ptr, interfaceType._ptr, out ITypeConformance* outConformance, conformanceIdOverride, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new ComponentType(NativeComProxy.Create(outConformance), this);
     }
@@ -269,20 +233,16 @@ public unsafe class Session
 
     /** Load a module from a Slang module blob.
      */
-    public Module? LoadModuleFromIRBlob(string moduleName, string path, Memory<byte> source, out string? diagnostics)
+    public Module LoadModuleFromIRBlob(string moduleName, string path, Memory<byte> source, out string? diagnostics)
     {
-        diagnostics = null;
-
         using U8Str strA = U8Str.Alloc(moduleName);
         using U8Str strB = U8Str.Alloc(path);
 
         IModule* modulePtr = _session.LoadModuleFromIRBlob(strA, strB, ManagedBlob.FromMemory(source), out ISlangBlob* diagnosticsPtr);
 
-        if (diagnosticsPtr != null)
-            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
-
+        diagnostics = null;
         if (modulePtr == null)
-            return null;
+            SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
@@ -295,12 +255,12 @@ public unsafe class Session
     }
 
 
-    public Module? GetLoadedModule(int index)
+    public Module GetLoadedModule(int index)
     {
-        IModule* modulePtr = _session.GetLoadedModule(index);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, GetLoadedModuleCount(), nameof(index));
+        ArgumentOutOfRangeException.ThrowIfLessThan(index, 0, nameof(index));
 
-        if (modulePtr == null)
-            return null;
+        IModule* modulePtr = _session.GetLoadedModule(index);
 
         return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
@@ -320,21 +280,17 @@ public unsafe class Session
 
     /** Load a module from a string.
      */
-    public Module? LoadModuleFromSourceString(string moduleName, string path, string srcString, out string? diagnostics)
+    public Module LoadModuleFromSourceString(string moduleName, string path, string srcString, out string? diagnostics)
     {
-        diagnostics = null;
-
         using U8Str strA = U8Str.Alloc(moduleName);
         using U8Str strB = U8Str.Alloc(path);
         using U8Str strC = U8Str.Alloc(srcString);
 
         IModule* modulePtr = _session.LoadModuleFromSourceString(strA, strB, strC, out ISlangBlob* diagnosticsPtr);
 
-        if (diagnosticsPtr != null)
-            diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
-
+        diagnostics = null;
         if (modulePtr == null)
-            return null;
+            SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new Module(NativeComProxy.Create(modulePtr, false), this);
     }

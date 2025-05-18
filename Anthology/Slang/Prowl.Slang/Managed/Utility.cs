@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Slang.Native;
+
 
 namespace Prowl.Slang;
 
@@ -11,5 +13,14 @@ public static class Utility
     {
         for (uint i = 0; i < range; i++)
             yield return getter.Invoke(i);
+    }
+
+
+    internal static unsafe string? GetDiagnostic(ISlangBlob* blob)
+    {
+        if (blob == null)
+            return null;
+
+        return NativeComProxy.Create(blob).GetString();
     }
 }
