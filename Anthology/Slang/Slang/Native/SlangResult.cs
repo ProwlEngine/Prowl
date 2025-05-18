@@ -6,47 +6,8 @@ using System.Runtime.InteropServices;
 namespace Prowl.Slang.Native;
 
 
-/** A result code for a Slang API operation.
-
-This type is generally compatible with the Windows API `HRESULT` type. In particular, negative
-values indicate failure results, while zero or positive results indicate success.
-
-In general, Slang APIs always return a zero result on success, unless documented otherwise.
-Strictly speaking a negative value indicates an error, a positive (or 0) value indicates
-success. This can be tested for with the macros SLANG_SUCCEEDED(x) or SLANG_FAILED(x).
-
-It can represent if the call was successful or not. It can also specify in an extensible manner
-what facility produced the result (as the integral 'facility') as well as what caused it (as an
-integral 'code'). Under the covers SlangResult is represented as a int32_t.
-
-SlangResult is designed to be compatible with COM HRESULT.
-
-It's layout in bits is as follows
-
-Severity | Facility | Code
----------|----------|-----
-31       |    30-16 | 15-0
-
-Severity - 1 fail, 0 is success - as SlangResult is signed 32 bits, means negative number
-indicates failure. Facility is where the error originated from. Code is the code specific to the
-facility.
-
-Result codes have the following styles,
-1) SLANG_name
-2) SLANG_s_f_name
-3) SLANG_s_name
-
-where s is S for success, E for error
-f is the short version of the facility name
-
-Style 1 is reserved for SLANG_OK and SLANG_FAIL as they are so commonly used.
-
-It is acceptable to expand 'f' to a longer name to differentiate a name or drop if unique
-without it. ie for a facility 'DRIVER' it might make sense to have an error of the form
-SLANG_E_DRIVER_OUT_OF_MEMORY
-*/
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct SlangResult(uint value = 0x00000000)
+internal unsafe struct SlangResult(uint value = 0x00000000)
 {
     private static SlangResult MakeError(ushort fac, ushort code)
     {
@@ -90,32 +51,30 @@ public unsafe struct SlangResult(uint value = 0x00000000)
 
     public readonly Exception? GetException(string? exceptionMsg = null)
     {
-        exceptionMsg ??= "";
-
         if (this == InvalidHandle)
-            return new InvalidHandleException(exceptionMsg);
+            return new InvalidOperationException(exceptionMsg ?? "Invalid handle");
         if (this == InvalidArg)
-            return new ArgumentException(exceptionMsg);
+            return new ArgumentException(exceptionMsg ?? "Invalid argument");
         if (this == OutOfMemory)
-            return new OutOfMemoryException(exceptionMsg);
+            return new OutOfMemoryException(exceptionMsg ?? "Out of memory");
         if (this == BufferTooSmall)
-            return new ArgumentOutOfRangeException(exceptionMsg);
+            return new ArgumentOutOfRangeException(exceptionMsg ?? "Buffer too small");
         if (this == Uninitialized)
-            return new NullReferenceException(exceptionMsg);
+            return new NullReferenceException(exceptionMsg ?? "Value uninitialized");
         if (this == Pending)
-            return new PendingException();
+            return new Exception(exceptionMsg ?? "Pending");
         if (this == CannotOpen)
-            return new UnauthorizedAccessException(exceptionMsg);
+            return new UnauthorizedAccessException(exceptionMsg ?? "Cannot open file");
         if (this == NotFound)
-            return new FileNotFoundException(exceptionMsg);
+            return new FileNotFoundException(exceptionMsg ?? "File not found");
         if (this == InternalFail)
-            return new Exception("Internal Failure: " + SlangNative.slang_getLastInternalErrorMessage().String);
+            return new Exception(exceptionMsg ?? SlangNative.slang_getLastInternalErrorMessage().String);
         if (this == NotAvailable)
-            return new NotSupportedException(exceptionMsg);
+            return new NotSupportedException(exceptionMsg ?? "Feature not available");
         if (this == TimeOut)
-            return new TimeoutException();
+            return new TimeoutException(exceptionMsg ?? "Request timed out");
         if (this == Fail)
-            return new Exception(exceptionMsg);
+            return new Exception(exceptionMsg ?? "Failure");
 
         return Marshal.GetExceptionForHR((int)_value);
     }
@@ -166,22 +125,4 @@ public unsafe struct SlangResult(uint value = 0x00000000)
 
 
     public override readonly int GetHashCode() => (int)_value;
-}
-
-
-[Serializable]
-public class InvalidHandleException : Exception
-{
-    public InvalidHandleException() { }
-    public InvalidHandleException(string message) : base(message) { }
-    public InvalidHandleException(string message, Exception inner) : base(message, inner) { }
-}
-
-
-[Serializable]
-public class PendingException : Exception
-{
-    public PendingException() { }
-    public PendingException(string message) : base(message) { }
-    public PendingException(string message, Exception inner) : base(message, inner) { }
 }
