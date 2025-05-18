@@ -9,7 +9,7 @@ dotnet tool install -g dotnet-script
 
 To run a script:
 ```
-dotnet script BuildNative.csx
+dotnet script UpdateSources.csx
 ```
 
 #### BuildNative.csx
