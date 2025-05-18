@@ -23,6 +23,9 @@ public static class Program
 
     public static void Main()
     {
+        CompileCode();
+
+        /*
         Process currentProcess = Process.GetCurrentProcess();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
@@ -45,6 +48,7 @@ public static class Program
                 Console.WriteLine($"Memory used: {memoryUsed / (1024.0 * 1024.0 * 1024):F2} GB. Iterations: {c}");
             }
         }
+        */
     }
 
 
@@ -68,7 +72,7 @@ public static class Program
         if (diagnostics != null)
             Console.WriteLine(diagnostics);
 
-        EntryPoint entry = module.FindEntryPointByName("computeMain");
+        EntryPoint entry = module.FindEntryPointByName("computerMain");
         ComponentType program = session.CreateCompositeComponentType([module, entry], out diagnostics);
 
         if (diagnostics != null)
@@ -86,7 +90,7 @@ public static class Program
 
         string json = reflection.ToJson();
 
-        // Console.WriteLine("Got " + compiledCode.Length + " bytes of code");
-        // Console.WriteLine("Got " + json.Length + " chars of json");
+        // Console.WriteLine(System.Text.Encoding.UTF8.GetString(compiledCode.ToArray()));
+        Console.WriteLine(json);
     }
 }
