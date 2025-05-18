@@ -63,27 +63,30 @@ public static class Program
 
         Session session = GlobalSession.CreateSession(sessionDesc);
 
-        Module? module = session.LoadModule("MyShaders", out string? diagnostics);
+        Module module = session.LoadModule("MyShaders", out string? diagnostics);
 
-        if (module == null)
-        {
-            Console.WriteLine("Error loading module: " + diagnostics);
-            return;
-        }
+        if (diagnostics != null)
+            Console.WriteLine(diagnostics);
 
-        EntryPoint? entry = module.FindEntryPointByName("computeMain");
+        EntryPoint entry = module.FindEntryPointByName("computeMain");
+        ComponentType program = session.CreateCompositeComponentType([module, entry], out diagnostics);
 
-        if (entry == null)
-        {
-            Console.WriteLine("Failed to load entrypoint 'computeMain'");
-            return;
-        }
+        if (diagnostics != null)
+            Console.WriteLine(diagnostics);
 
-        ComponentType? program = session.CreateCompositeComponentType([module, entry], out diagnostics);
+        Memory<byte> compiledCode = program.GetEntryPointCode(0, 0, out diagnostics);
 
-        if (program == null)
-        {
-            Console.WriteLine("Failed to create composite component: " + diagnostics);
-        }
+        if (diagnostics != null)
+            Console.WriteLine(diagnostics);
+
+        ShaderReflection reflection = program.GetLayout(0, out diagnostics);
+
+        if (diagnostics != null)
+            Console.WriteLine(diagnostics);
+
+        string json = reflection.ToJson();
+
+        // Console.WriteLine("Got " + compiledCode.Length + " bytes of code");
+        // Console.WriteLine("Got " + json.Length + " chars of json");
     }
 }
