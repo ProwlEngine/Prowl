@@ -21,7 +21,7 @@ public unsafe struct VariableLayoutReflection
         _ptr = ptr;
     }
 
-    public VariableReflection Variable =>
+    public readonly VariableReflection Variable =>
         new(spReflectionVariableLayout_GetVariable(_ptr), _session);
 
     public string Name =>
@@ -30,7 +30,7 @@ public unsafe struct VariableLayoutReflection
     public Modifier FindModifier(SlangModifierID id) =>
         Variable.FindModifier(id);
 
-    public TypeLayoutReflection TypeLayout =>
+    public readonly TypeLayoutReflection TypeLayout =>
         new(spReflectionVariableLayout_GetTypeLayout(_ptr), _session);
 
     public SlangParameterCategory Category =>
@@ -45,33 +45,33 @@ public unsafe struct VariableLayoutReflection
     public IEnumerable<SlangParameterCategory> Categories =>
         Utility.For(CategoryCount, GetCategoryByIndex);
 
-    public nuint GetOffset(SlangParameterCategory category) =>
+    public readonly nuint GetOffset(SlangParameterCategory category) =>
         spReflectionVariableLayout_GetOffset(_ptr, category);
 
     public TypeReflection Type =>
         Variable.Type;
 
-    public uint BindingIndex =>
+    public readonly uint BindingIndex =>
         spReflectionParameter_GetBindingIndex(_ptr);
 
-    public uint BindingSpace =>
+    public readonly uint BindingSpace =>
         spReflectionParameter_GetBindingSpace(_ptr);
 
-    public nuint GetBindingSpace(SlangParameterCategory category) =>
+    public readonly nuint GetBindingSpace(SlangParameterCategory category) =>
         spReflectionVariableLayout_GetSpace(_ptr, category);
 
-    public SlangImageFormat ImageFormat =>
+    public readonly SlangImageFormat ImageFormat =>
         spReflectionVariableLayout_GetImageFormat(_ptr);
 
-    public string SemanticName =>
+    public readonly string SemanticName =>
         spReflectionVariableLayout_GetSemanticName(_ptr).String;
 
-    public nuint SemanticIndex =>
+    public readonly nuint SemanticIndex =>
         spReflectionVariableLayout_GetSemanticIndex(_ptr);
 
-    public SlangStage Stage =>
+    public readonly SlangStage Stage =>
         spReflectionVariableLayout_getStage(_ptr);
 
-    public VariableLayoutReflection PendingDataLayout =>
+    public readonly VariableLayoutReflection PendingDataLayout =>
         new(spReflectionVariableLayout_getPendingDataLayout(_ptr), _session);
 };

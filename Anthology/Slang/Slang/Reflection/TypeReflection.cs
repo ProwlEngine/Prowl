@@ -26,14 +26,14 @@ public unsafe struct TypeReflection
         _ptr = ptr;
     }
 
-    public SlangTypeKind Kind =>
+    public readonly SlangTypeKind Kind =>
         spReflectionType_GetKind(_ptr);
 
     // only useful if `getKind() == Kind::Struct`
-    public uint FieldCount =>
+    public readonly uint FieldCount =>
         spReflectionType_GetFieldCount(_ptr);
 
-    public VariableReflection GetFieldByIndex(uint index) =>
+    public readonly VariableReflection GetFieldByIndex(uint index) =>
         new(spReflectionType_GetFieldByIndex(_ptr, index), _session);
 
     public IEnumerable<VariableReflection> Fields =>
@@ -42,7 +42,7 @@ public unsafe struct TypeReflection
     public bool IsArray =>
         Kind == SlangTypeKind.ARRAY;
 
-    public TypeReflection UnwrapArray()
+    public readonly TypeReflection UnwrapArray()
     {
         TypeReflection type = this;
 
@@ -53,7 +53,7 @@ public unsafe struct TypeReflection
     }
 
     // only useful if `getKind() == Kind::Array`
-    public nuint ElementCount =>
+    public readonly nuint ElementCount =>
         spReflectionType_GetElementCount(_ptr);
 
     public nuint GetTotalArrayElementCount()
@@ -73,31 +73,31 @@ public unsafe struct TypeReflection
         }
     }
 
-    public TypeReflection ElementType =>
+    public readonly TypeReflection ElementType =>
         new(spReflectionType_GetElementType(_ptr), _session);
 
-    public uint RowCount =>
+    public readonly uint RowCount =>
         spReflectionType_GetRowCount(_ptr);
 
-    public uint ColumnCount =>
+    public readonly uint ColumnCount =>
         spReflectionType_GetColumnCount(_ptr);
 
-    public SlangScalarType ScalarType =>
+    public readonly SlangScalarType ScalarType =>
         spReflectionType_GetScalarType(_ptr);
 
-    public TypeReflection ResourceResultType =>
+    public readonly TypeReflection ResourceResultType =>
         new(spReflectionType_GetResourceResultType(_ptr), _session);
 
-    public SlangResourceShape ResourceShape =>
+    public readonly SlangResourceShape ResourceShape =>
         spReflectionType_GetResourceShape(_ptr);
 
-    public SlangResourceAccess ResourceAccess =>
+    public readonly SlangResourceAccess ResourceAccess =>
         spReflectionType_GetResourceAccess(_ptr);
 
-    public string Name =>
+    public readonly string Name =>
         spReflectionType_GetName(_ptr).String;
 
-    public string FullName
+    public readonly string FullName
     {
         get
         {
@@ -106,24 +106,24 @@ public unsafe struct TypeReflection
         }
     }
 
-    public uint UserAttributeCount =>
+    public readonly uint UserAttributeCount =>
         spReflectionType_GetUserAttributeCount(_ptr);
 
-    public Attribute GetUserAttributeByIndex(uint index) =>
+    public readonly Attribute GetUserAttributeByIndex(uint index) =>
         new(spReflectionType_GetUserAttribute(_ptr, index), _session);
 
     public IEnumerable<Attribute> UserAttributes =>
         Utility.For(UserAttributeCount, GetUserAttributeByIndex);
 
-    public Attribute FindAttributeByName(ConstU8Str name) =>
+    public readonly Attribute FindAttributeByName(ConstU8Str name) =>
         new(spReflectionType_FindUserAttributeByName(_ptr, name), _session);
 
     public Attribute FindUserAttributeByName(ConstU8Str name) =>
         FindAttributeByName(name);
 
-    public TypeReflection ApplySpecializations(GenericReflection generic) =>
+    public readonly TypeReflection ApplySpecializations(GenericReflection generic) =>
         new(spReflectionType_applySpecializations(_ptr, generic._ptr), _session);
 
-    public GenericReflection GenericContainer =>
+    public readonly GenericReflection GenericContainer =>
         new(spReflectionType_GetGenericContainer(_ptr), _session);
 }

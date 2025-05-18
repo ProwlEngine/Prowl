@@ -24,31 +24,31 @@ public unsafe struct FunctionReflection
     }
 
 
-    public string Name =>
+    public readonly string Name =>
         spReflectionFunction_GetName(_ptr).String;
 
-    public TypeReflection ReturnType =>
+    public readonly TypeReflection ReturnType =>
         new(spReflectionFunction_GetResultType(_ptr), _session);
 
-    public uint ParameterCount =>
+    public readonly uint ParameterCount =>
         spReflectionFunction_GetParameterCount(_ptr);
 
-    public VariableReflection GetParameterByIndex(uint index) =>
+    public readonly VariableReflection GetParameterByIndex(uint index) =>
         new(spReflectionFunction_GetParameter(_ptr, index), _session);
 
     public IEnumerable<VariableReflection> Parameters =>
         Utility.For(ParameterCount, GetParameterByIndex);
 
-    public uint UserAttributeCount =>
+    public readonly uint UserAttributeCount =>
         spReflectionFunction_GetUserAttributeCount(_ptr);
 
-    public Attribute GetUserAttributeByIndex(uint index) =>
+    public readonly Attribute GetUserAttributeByIndex(uint index) =>
         new(spReflectionFunction_GetUserAttribute(_ptr, index), _session);
 
     public IEnumerable<Attribute> UserAttributes =>
     Utility.For(UserAttributeCount, GetUserAttributeByIndex);
 
-    public Attribute FindAttributeByName(string name)
+    public readonly Attribute FindAttributeByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
         return new(spReflectionFunction_FindUserAttributeByName(_ptr, (IGlobalSession*)((NativeComProxy)GlobalSession.s_session).ComPtr, str), _session);
@@ -57,16 +57,16 @@ public unsafe struct FunctionReflection
     public Attribute FindUserAttributeByName(string name) =>
         FindAttributeByName(name);
 
-    public Modifier FindModifier(SlangModifierID id) =>
+    public readonly Modifier FindModifier(SlangModifierID id) =>
         new(spReflectionFunction_FindModifier(_ptr, id), _session);
 
-    public GenericReflection GenericContainer =>
+    public readonly GenericReflection GenericContainer =>
         new(spReflectionFunction_GetGenericContainer(_ptr), _session);
 
-    public FunctionReflection ApplySpecializations(GenericReflection generic) =>
+    public readonly FunctionReflection ApplySpecializations(GenericReflection generic) =>
         new(spReflectionFunction_applySpecializations(_ptr, generic._ptr), _session);
 
-    public FunctionReflection SpecializeWithArgTypes(TypeReflection[] types)
+    public readonly FunctionReflection SpecializeWithArgTypes(TypeReflection[] types)
     {
         Native.TypeReflection** typesPtr = stackalloc Native.TypeReflection*[types.Length];
 
@@ -76,13 +76,13 @@ public unsafe struct FunctionReflection
         return new(spReflectionFunction_specializeWithArgTypes(_ptr, types.Length, typesPtr), _session);
     }
 
-    public bool IsOverloaded =>
+    public readonly bool IsOverloaded =>
         spReflectionFunction_isOverloaded(_ptr);
 
-    public uint OverloadCount =>
+    public readonly uint OverloadCount =>
         spReflectionFunction_getOverloadCount(_ptr);
 
-    public FunctionReflection GetOverload(uint index) =>
+    public readonly FunctionReflection GetOverload(uint index) =>
         new(spReflectionFunction_getOverload(_ptr, index), _session);
 
     public IEnumerable<FunctionReflection> Overloads =>

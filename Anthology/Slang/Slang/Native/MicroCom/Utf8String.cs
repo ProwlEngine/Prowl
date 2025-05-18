@@ -86,5 +86,5 @@ internal unsafe struct ConstU8Str
     }
 
 
-    public string String => Data == null ? "" : (Marshal.PtrToStringUTF8((IntPtr)Data) ?? "");
+    public readonly string String => Data == null ? "" : (Marshal.PtrToStringUTF8((IntPtr)Data) ?? "");
 }

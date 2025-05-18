@@ -24,25 +24,25 @@ public unsafe struct VariableReflection
     }
 
 
-    public string Name =>
+    public readonly string Name =>
         spReflectionVariable_GetName(_ptr).String;
 
-    public TypeReflection Type =>
+    public readonly TypeReflection Type =>
         new(spReflectionVariable_GetType(_ptr), _session);
 
-    public Modifier FindModifier(SlangModifierID id) =>
+    public readonly Modifier FindModifier(SlangModifierID id) =>
         new(spReflectionVariable_FindModifier(_ptr, id), _session);
 
-    public uint UserAttributeCount =>
+    public readonly uint UserAttributeCount =>
         spReflectionVariable_GetUserAttributeCount(_ptr);
 
-    public Attribute GetUserAttributeByIndex(uint index) =>
+    public readonly Attribute GetUserAttributeByIndex(uint index) =>
         new(spReflectionVariable_GetUserAttribute(_ptr, index), _session);
 
     public IEnumerable<Attribute> UserAttributes =>
         Utility.For(UserAttributeCount, GetUserAttributeByIndex);
 
-    public Attribute FindAttributeByName(IGlobalSession* globalSession, string name)
+    public readonly Attribute FindAttributeByName(IGlobalSession* globalSession, string name)
     {
         using U8Str str = U8Str.Alloc(name);
         return new(spReflectionVariable_FindUserAttributeByName(_ptr, globalSession, str), _session);
@@ -51,18 +51,18 @@ public unsafe struct VariableReflection
     public Attribute FindUserAttributeByName(IGlobalSession* globalSession, string name)
         => FindAttributeByName(globalSession, name);
 
-    public bool HasDefaultValue =>
+    public readonly bool HasDefaultValue =>
         spReflectionVariable_HasDefaultValue(_ptr);
 
-    public long GetDefaultValueInt()
+    public readonly long GetDefaultValueInt()
     {
         spReflectionVariable_GetDefaultValueInt(_ptr, out long value).Throw();
         return value;
     }
 
-    public GenericReflection GenericContainer =>
+    public readonly GenericReflection GenericContainer =>
         new(spReflectionVariable_GetGenericContainer(_ptr), _session);
 
-    public VariableReflection ApplySpecializations(GenericReflection generic) =>
+    public readonly VariableReflection ApplySpecializations(GenericReflection generic) =>
         new(spReflectionVariable_applySpecializations(_ptr, generic._ptr), _session);
 };

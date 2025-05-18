@@ -23,16 +23,16 @@ public unsafe struct TypeParameterReflection
     }
 
 
-    public string Name =>
+    public readonly string Name =>
         spReflectionTypeParameter_GetName(_ptr).String;
 
-    public uint Index =>
+    public readonly uint Index =>
         spReflectionTypeParameter_GetIndex(_ptr);
 
-    public uint ConstraintCount =>
+    public readonly uint ConstraintCount =>
         spReflectionTypeParameter_GetConstraintCount(_ptr);
 
-    public TypeReflection GetConstraintByIndex(uint index) =>
+    public readonly TypeReflection GetConstraintByIndex(uint index) =>
         new(spReflectionTypeParameter_GetConstraintByIndex(_ptr, index), _session);
 
     public IEnumerable<TypeReflection> GetConstraints() =>

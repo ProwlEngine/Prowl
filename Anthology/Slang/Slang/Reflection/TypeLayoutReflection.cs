@@ -26,31 +26,31 @@ public unsafe struct TypeLayoutReflection
     }
 
 
-    public TypeReflection ReflectionType =>
+    public readonly TypeReflection ReflectionType =>
         new(spReflectionTypeLayout_GetType(_ptr), _session);
 
-    public SlangTypeKind Kind =>
+    public readonly SlangTypeKind Kind =>
         spReflectionTypeLayout_getKind(_ptr);
 
-    public nuint GetSize(SlangParameterCategory category) =>
+    public readonly nuint GetSize(SlangParameterCategory category) =>
         spReflectionTypeLayout_GetSize(_ptr, category);
 
-    public nuint GetStride(SlangParameterCategory category) =>
+    public readonly nuint GetStride(SlangParameterCategory category) =>
         spReflectionTypeLayout_GetStride(_ptr, category);
 
-    public int GetAlignment(SlangParameterCategory category) =>
+    public readonly int GetAlignment(SlangParameterCategory category) =>
         spReflectionTypeLayout_getAlignment(_ptr, category);
 
-    public uint FieldCount =>
+    public readonly uint FieldCount =>
         spReflectionTypeLayout_GetFieldCount(_ptr);
 
-    public VariableLayoutReflection GetFieldByIndex(uint index) =>
+    public readonly VariableLayoutReflection GetFieldByIndex(uint index) =>
         new(spReflectionTypeLayout_GetFieldByIndex(_ptr, index), _session);
 
     public IEnumerable<VariableLayoutReflection> Fields =>
         Utility.For(FieldCount, GetFieldByIndex);
 
-    public SlangInt FindFieldIndexByName(string nameBegin, string nameEnd)
+    public readonly SlangInt FindFieldIndexByName(string nameBegin, string nameEnd)
     {
         using U8Str strA = U8Str.Alloc(nameBegin);
         using U8Str strB = U8Str.Alloc(nameEnd);
@@ -58,13 +58,13 @@ public unsafe struct TypeLayoutReflection
         return spReflectionTypeLayout_findFieldIndexByName(_ptr, strA, strB);
     }
 
-    public VariableLayoutReflection ExplicitCounter =>
+    public readonly VariableLayoutReflection ExplicitCounter =>
         new(spReflectionTypeLayout_GetExplicitCounter(_ptr), _session);
 
     public bool IsArray =>
         ReflectionType.IsArray;
 
-    public TypeLayoutReflection UnwrapArray()
+    public readonly TypeLayoutReflection UnwrapArray()
     {
         TypeLayoutReflection typeLayout = this;
 
@@ -81,26 +81,26 @@ public unsafe struct TypeLayoutReflection
     public nuint TotalArrayElementCount =>
         ReflectionType.GetTotalArrayElementCount();
 
-    public nuint GetElementStride(SlangParameterCategory category) =>
+    public readonly nuint GetElementStride(SlangParameterCategory category) =>
         spReflectionTypeLayout_GetElementStride(_ptr, category);
 
-    public TypeLayoutReflection ElementTypeLayout =>
+    public readonly TypeLayoutReflection ElementTypeLayout =>
         new(spReflectionTypeLayout_GetElementTypeLayout(_ptr), _session);
 
-    public VariableLayoutReflection ElementVarLayout =>
+    public readonly VariableLayoutReflection ElementVarLayout =>
         new(spReflectionTypeLayout_GetElementVarLayout(_ptr), _session);
 
-    public VariableLayoutReflection ContainerVarLayout =>
+    public readonly VariableLayoutReflection ContainerVarLayout =>
         new(spReflectionTypeLayout_getContainerVarLayout(_ptr), _session);
 
     // How is this type supposed to be bound?
-    public SlangParameterCategory ParameterCategory =>
+    public readonly SlangParameterCategory ParameterCategory =>
         spReflectionTypeLayout_GetParameterCategory(_ptr);
 
-    public uint CategoryCount =>
+    public readonly uint CategoryCount =>
         spReflectionTypeLayout_GetCategoryCount(_ptr);
 
-    public SlangParameterCategory GetCategoryByIndex(uint index) =>
+    public readonly SlangParameterCategory GetCategoryByIndex(uint index) =>
         spReflectionTypeLayout_GetCategoryByIndex(_ptr, index);
 
     public IEnumerable<SlangParameterCategory> Categories =>
@@ -127,84 +127,84 @@ public unsafe struct TypeLayoutReflection
     public string Name =>
         ReflectionType.Name;
 
-    public SlangMatrixLayoutMode MatrixLayoutMode =>
+    public readonly SlangMatrixLayoutMode MatrixLayoutMode =>
         spReflectionTypeLayout_GetMatrixLayoutMode(_ptr);
 
-    public int GenericParamIndex =>
+    public readonly int GenericParamIndex =>
         spReflectionTypeLayout_getGenericParamIndex(_ptr);
 
-    public TypeLayoutReflection PendingDataTypeLayout =>
+    public readonly TypeLayoutReflection PendingDataTypeLayout =>
         new(spReflectionTypeLayout_getPendingDataTypeLayout(_ptr), _session);
 
-    public VariableLayoutReflection SpecializedTypePendingDataVarLayout =>
+    public readonly VariableLayoutReflection SpecializedTypePendingDataVarLayout =>
         new(spReflectionTypeLayout_getSpecializedTypePendingDataVarLayout(_ptr), _session);
 
-    public SlangInt BindingRangeCount =>
+    public readonly SlangInt BindingRangeCount =>
         spReflectionTypeLayout_getBindingRangeCount(_ptr);
 
-    public SlangBindingType GetBindingRangeType(SlangInt index) =>
+    public readonly SlangBindingType GetBindingRangeType(SlangInt index) =>
         spReflectionTypeLayout_getBindingRangeType(_ptr, index);
 
-    public bool IsBindingRangeSpecializable(SlangInt index) =>
+    public readonly bool IsBindingRangeSpecializable(SlangInt index) =>
         spReflectionTypeLayout_isBindingRangeSpecializable(_ptr, index) == 1;
 
-    public SlangInt GetBindingRangeBindingCount(SlangInt index) =>
+    public readonly SlangInt GetBindingRangeBindingCount(SlangInt index) =>
         spReflectionTypeLayout_getBindingRangeBindingCount(_ptr, index);
 
-    public SlangInt GetFieldBindingRangeOffset(SlangInt fieldIndex) =>
+    public readonly SlangInt GetFieldBindingRangeOffset(SlangInt fieldIndex) =>
         spReflectionTypeLayout_getFieldBindingRangeOffset(_ptr, fieldIndex);
 
-    public SlangInt ExplicitCounterBindingRangeOffset =>
+    public readonly SlangInt ExplicitCounterBindingRangeOffset =>
         spReflectionTypeLayout_getExplicitCounterBindingRangeOffset(_ptr);
 
-    public TypeLayoutReflection GetBindingRangeLeafTypeLayout(SlangInt index) =>
+    public readonly TypeLayoutReflection GetBindingRangeLeafTypeLayout(SlangInt index) =>
         new(spReflectionTypeLayout_getBindingRangeLeafTypeLayout(_ptr, index), _session);
 
-    public VariableReflection GetBindingRangeLeafVariable(SlangInt index) =>
+    public readonly VariableReflection GetBindingRangeLeafVariable(SlangInt index) =>
         new(spReflectionTypeLayout_getBindingRangeLeafVariable(_ptr, index), _session);
 
-    public SlangImageFormat GetBindingRangeImageFormat(SlangInt index) =>
+    public readonly SlangImageFormat GetBindingRangeImageFormat(SlangInt index) =>
         spReflectionTypeLayout_getBindingRangeImageFormat(_ptr, index);
 
-    public SlangInt GetBindingRangeDescriptorSetIndex(SlangInt index) =>
+    public readonly SlangInt GetBindingRangeDescriptorSetIndex(SlangInt index) =>
         spReflectionTypeLayout_getBindingRangeDescriptorSetIndex(_ptr, index);
 
-    public SlangInt GetBindingRangeFirstDescriptorRangeIndex(SlangInt index) =>
+    public readonly SlangInt GetBindingRangeFirstDescriptorRangeIndex(SlangInt index) =>
         spReflectionTypeLayout_getBindingRangeFirstDescriptorRangeIndex(_ptr, index);
 
-    public SlangInt GetBindingRangeDescriptorRangeCount(SlangInt index) =>
+    public readonly SlangInt GetBindingRangeDescriptorRangeCount(SlangInt index) =>
         spReflectionTypeLayout_getBindingRangeDescriptorRangeCount(_ptr, index);
 
-    public SlangInt DescriptorSetCount =>
+    public readonly SlangInt DescriptorSetCount =>
         spReflectionTypeLayout_getDescriptorSetCount(_ptr);
 
-    public SlangInt GetDescriptorSetSpaceOffset(SlangInt setIndex) =>
+    public readonly SlangInt GetDescriptorSetSpaceOffset(SlangInt setIndex) =>
         spReflectionTypeLayout_getDescriptorSetSpaceOffset(_ptr, setIndex);
 
-    public SlangInt GetDescriptorSetDescriptorRangeCount(SlangInt setIndex) =>
+    public readonly SlangInt GetDescriptorSetDescriptorRangeCount(SlangInt setIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeCount(_ptr, setIndex);
 
-    public SlangInt GetDescriptorSetDescriptorRangeIndexOffset(SlangInt setIndex, SlangInt rangeIndex) =>
+    public readonly SlangInt GetDescriptorSetDescriptorRangeIndexOffset(SlangInt setIndex, SlangInt rangeIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeIndexOffset(_ptr, setIndex, rangeIndex);
 
-    public SlangInt GetDescriptorSetDescriptorRangeDescriptorCount(SlangInt setIndex, SlangInt rangeIndex) =>
+    public readonly SlangInt GetDescriptorSetDescriptorRangeDescriptorCount(SlangInt setIndex, SlangInt rangeIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeDescriptorCount(_ptr, setIndex, rangeIndex);
 
-    public SlangBindingType GetDescriptorSetDescriptorRangeType(SlangInt setIndex, SlangInt rangeIndex) =>
+    public readonly SlangBindingType GetDescriptorSetDescriptorRangeType(SlangInt setIndex, SlangInt rangeIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeType(_ptr, setIndex, rangeIndex);
 
-    public SlangParameterCategory GetDescriptorSetDescriptorRangeCategory(SlangInt setIndex, SlangInt rangeIndex) =>
+    public readonly SlangParameterCategory GetDescriptorSetDescriptorRangeCategory(SlangInt setIndex, SlangInt rangeIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeCategory(_ptr, setIndex, rangeIndex);
 
-    public SlangInt SubObjectRangeCount =>
+    public readonly SlangInt SubObjectRangeCount =>
         spReflectionTypeLayout_getSubObjectRangeCount(_ptr);
 
-    public SlangInt GetSubObjectRangeBindingRangeIndex(SlangInt subObjectRangeIndex) =>
+    public readonly SlangInt GetSubObjectRangeBindingRangeIndex(SlangInt subObjectRangeIndex) =>
         spReflectionTypeLayout_getSubObjectRangeBindingRangeIndex(_ptr, subObjectRangeIndex);
 
-    public SlangInt GetSubObjectRangeSpaceOffset(SlangInt subObjectRangeIndex) =>
+    public readonly SlangInt GetSubObjectRangeSpaceOffset(SlangInt subObjectRangeIndex) =>
         spReflectionTypeLayout_getSubObjectRangeSpaceOffset(_ptr, subObjectRangeIndex);
 
-    public VariableLayoutReflection GetSubObjectRangeOffset(SlangInt subObjectRangeIndex) =>
+    public readonly VariableLayoutReflection GetSubObjectRangeOffset(SlangInt subObjectRangeIndex) =>
         new(spReflectionTypeLayout_getSubObjectRangeOffset(_ptr, subObjectRangeIndex), _session);
 };

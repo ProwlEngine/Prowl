@@ -23,82 +23,82 @@ public unsafe struct ShaderReflection
         _ptr = ptr;
     }
 
-    public uint ParameterCount =>
+    public readonly uint ParameterCount =>
         spReflection_GetParameterCount(_ptr);
 
-    public uint TypeParameterCount =>
+    public readonly uint TypeParameterCount =>
         spReflection_GetTypeParameterCount(_ptr);
 
-    public Session Session =>
+    public readonly Session Session =>
         _session;
 
-    public TypeParameterReflection GetTypeParameterByIndex(uint index) =>
+    public readonly TypeParameterReflection GetTypeParameterByIndex(uint index) =>
         new(spReflection_GetTypeParameterByIndex(_ptr, index), _session);
 
     public IEnumerable<TypeParameterReflection> TypeParameters =>
         Utility.For(TypeParameterCount, GetTypeParameterByIndex);
 
-    public TypeParameterReflection FindTypeParameter(string name)
+    public readonly TypeParameterReflection FindTypeParameter(string name)
     {
         using U8Str str = U8Str.Alloc(name);
         return new(spReflection_FindTypeParameter(_ptr, str), _session);
     }
 
-    public VariableLayoutReflection GetParameterByIndex(uint index) =>
+    public readonly VariableLayoutReflection GetParameterByIndex(uint index) =>
         new(spReflection_GetParameterByIndex(_ptr, index), _session);
 
     public IEnumerable<VariableLayoutReflection> Parameters =>
         Utility.For(ParameterCount, GetParameterByIndex);
 
-    public uint EntryPointCount =>
+    public readonly uint EntryPointCount =>
         (uint)spReflection_getEntryPointCount(_ptr);
 
-    public EntryPointReflection GetEntryPointByIndex(uint index) =>
+    public readonly EntryPointReflection GetEntryPointByIndex(uint index) =>
         new(spReflection_getEntryPointByIndex(_ptr, index), _session);
 
     public IEnumerable<EntryPointReflection> EntryPoints =>
         Utility.For(EntryPointCount, GetEntryPointByIndex);
 
-    public nuint GlobalConstantBufferBinding =>
+    public readonly nuint GlobalConstantBufferBinding =>
         spReflection_getGlobalConstantBufferBinding(_ptr);
 
-    public nuint GlobalConstantBufferSize =>
+    public readonly nuint GlobalConstantBufferSize =>
         spReflection_getGlobalConstantBufferSize(_ptr);
 
-    public TypeReflection FindTypeByName(string name)
+    public readonly TypeReflection FindTypeByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
         return new(spReflection_FindTypeByName(_ptr, str), _session);
     }
 
-    public FunctionReflection FindFunctionByName(string name)
+    public readonly FunctionReflection FindFunctionByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
         return new(spReflection_FindFunctionByName(_ptr, str), _session);
     }
 
-    public FunctionReflection FindFunctionByNameInType(TypeReflection type, string name)
+    public readonly FunctionReflection FindFunctionByNameInType(TypeReflection type, string name)
     {
         using U8Str str = U8Str.Alloc(name);
         return new(spReflection_FindFunctionByNameInType(_ptr, type._ptr, str), _session);
     }
 
-    public VariableReflection FindVarByNameInType(TypeReflection type, string name)
+    public readonly VariableReflection FindVarByNameInType(TypeReflection type, string name)
     {
         using U8Str str = U8Str.Alloc(name);
         return new(spReflection_FindVarByNameInType(_ptr, type._ptr, str), _session);
     }
 
-    public TypeLayoutReflection GetTypeLayout(TypeReflection type, SlangLayoutRules rules) =>
+    public readonly TypeLayoutReflection GetTypeLayout(TypeReflection type, SlangLayoutRules rules) =>
         new(spReflection_GetTypeLayout(_ptr, type._ptr, rules), _session);
 
-    public EntryPointReflection FindEntryPointByName(string name)
+    public readonly EntryPointReflection FindEntryPointByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
         return new(spReflection_findEntryPointByName(_ptr, str), _session);
     }
 
-    public TypeReflection SpecializeType(
+    public readonly TypeReflection SpecializeType(
         TypeReflection type,
         TypeReflection[] specializationArgs,
         out string? diagnostics)
@@ -120,7 +120,7 @@ public unsafe struct ShaderReflection
         return new(reflectionPtr, _session);
     }
 
-    public GenericReflection SpecializeGeneric(
+    public readonly GenericReflection SpecializeGeneric(
         GenericReflection generic,
         (SlangReflectionGenericArgType, GenericArgReflection)[] specializationArgs,
         out string? diagnostics)
@@ -147,22 +147,22 @@ public unsafe struct ShaderReflection
         return new(genericPtr, _session);
     }
 
-    public bool IsSubType(TypeReflection subType, TypeReflection superType) =>
+    public readonly bool IsSubType(TypeReflection subType, TypeReflection superType) =>
         spReflection_isSubType(_ptr, subType._ptr, superType._ptr);
 
-    public nuint HashedStringCount =>
+    public readonly nuint HashedStringCount =>
         spReflection_getHashedStringCount(_ptr);
 
-    public string GetHashedString(nuint index, out nuint outCount) =>
+    public readonly string GetHashedString(nuint index, out nuint outCount) =>
         spReflection_getHashedString(_ptr, index, out outCount).String;
 
-    public TypeLayoutReflection GlobalParamsTypeLayout =>
+    public readonly TypeLayoutReflection GlobalParamsTypeLayout =>
         new(spReflection_getGlobalParamsTypeLayout(_ptr), _session);
 
-    public VariableLayoutReflection GlobalParamsVarLayout =>
+    public readonly VariableLayoutReflection GlobalParamsVarLayout =>
         new(spReflection_getGlobalParamsVarLayout(_ptr), _session);
 
-    public string ToJson()
+    public readonly string ToJson()
     {
         spReflection_ToJson(_ptr, null, out ISlangBlob* outJsonPtr).Throw();
 

@@ -25,34 +25,34 @@ public unsafe struct DeclReflection
     }
 
 
-    public string Name =>
+    public readonly string Name =>
         spReflectionDecl_getName(_ptr).String;
 
-    public SlangDeclKind Kind =>
+    public readonly SlangDeclKind Kind =>
         spReflectionDecl_getKind(_ptr);
 
-    public uint ChildrenCount =>
+    public readonly uint ChildrenCount =>
         spReflectionDecl_getChildrenCount(_ptr);
 
-    public DeclReflection GetChild(uint index) =>
+    public readonly DeclReflection GetChild(uint index) =>
         new(spReflectionDecl_getChild(_ptr, index), _session);
 
     public IEnumerable<DeclReflection> Children =>
         Utility.For(ChildrenCount, GetChild);
 
-    public TypeReflection Type =>
+    public readonly TypeReflection Type =>
         new(spReflection_getTypeFromDecl(_ptr), _session);
 
-    public VariableReflection AsVariable() =>
+    public readonly VariableReflection AsVariable() =>
         new(spReflectionDecl_castToVariable(_ptr), _session);
 
-    public FunctionReflection AsFunction() =>
+    public readonly FunctionReflection AsFunction() =>
         new(spReflectionDecl_castToFunction(_ptr), _session);
 
-    public GenericReflection AsGeneric() =>
+    public readonly GenericReflection AsGeneric() =>
         new(spReflectionDecl_castToGeneric(_ptr), _session);
 
-    public DeclReflection Parent =>
+    public readonly DeclReflection Parent =>
         new(spReflectionDecl_getParent(_ptr), _session);
 
     public IEnumerable<DeclReflection> GetChildrenOfKind(SlangDeclKind kind) =>

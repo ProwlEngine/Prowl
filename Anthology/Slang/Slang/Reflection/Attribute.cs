@@ -23,16 +23,16 @@ public unsafe struct Attribute
     }
 
 
-    public string Name =>
+    public readonly string Name =>
         spReflectionUserAttribute_GetName(_ptr).String;
 
-    public uint ArgumentCount =>
+    public readonly uint ArgumentCount =>
         spReflectionUserAttribute_GetArgumentCount(_ptr);
 
-    public TypeReflection GetArgumentType(uint index) =>
+    public readonly TypeReflection GetArgumentType(uint index) =>
         new(spReflectionUserAttribute_GetArgumentType(_ptr, index), _session);
 
-    public int? GetArgumentValueInt(uint index)
+    public readonly int? GetArgumentValueInt(uint index)
     {
         SlangResult result = spReflectionUserAttribute_GetArgumentValueInt(_ptr, index, out int value);
 
@@ -42,7 +42,7 @@ public unsafe struct Attribute
         return value;
     }
 
-    public float? GetArgumentValueFloat(uint index)
+    public readonly float? GetArgumentValueFloat(uint index)
     {
         SlangResult result = spReflectionUserAttribute_GetArgumentValueFloat(_ptr, index, out float value);
 
@@ -52,7 +52,7 @@ public unsafe struct Attribute
         return value;
     }
 
-    public string? GetArgumentValueString(uint index)
+    public readonly string? GetArgumentValueString(uint index)
     {
         ConstU8Str str = spReflectionUserAttribute_GetArgumentValueString(_ptr, index, out nuint outSize);
 

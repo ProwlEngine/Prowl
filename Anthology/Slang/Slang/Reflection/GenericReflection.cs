@@ -24,51 +24,51 @@ public unsafe struct GenericReflection
     }
 
 
-    public DeclReflection AsDecl() =>
+    public readonly DeclReflection AsDecl() =>
         new(spReflectionGeneric_asDecl(_ptr), _session);
 
-    public string Name =>
+    public readonly string Name =>
         spReflectionGeneric_GetName(_ptr).String;
 
-    public uint TypeParameterCount =>
+    public readonly uint TypeParameterCount =>
         spReflectionGeneric_GetTypeParameterCount(_ptr);
 
-    public VariableReflection GetTypeParameter(uint index) =>
+    public readonly VariableReflection GetTypeParameter(uint index) =>
         new(spReflectionGeneric_GetTypeParameter(_ptr, index), _session);
 
     public IEnumerable<VariableReflection> TypeParameters =>
         Utility.For(TypeParameterCount, GetTypeParameter);
 
-    public uint ValueParameterCount =>
+    public readonly uint ValueParameterCount =>
         spReflectionGeneric_GetValueParameterCount(_ptr);
 
-    public VariableReflection GetValueParameter(uint index) =>
+    public readonly VariableReflection GetValueParameter(uint index) =>
         new(spReflectionGeneric_GetValueParameter(_ptr, index), _session);
 
     public IEnumerable<VariableReflection> ValueParameters =>
         Utility.For(ValueParameterCount, GetValueParameter);
 
-    public uint GetTypeParameterConstraintCount(VariableReflection typeParam) =>
+    public readonly uint GetTypeParameterConstraintCount(VariableReflection typeParam) =>
         spReflectionGeneric_GetTypeParameterConstraintCount(_ptr, typeParam._ptr);
 
-    public TypeReflection GetTypeParameterConstraintType(VariableReflection typeParam, uint index) =>
+    public readonly TypeReflection GetTypeParameterConstraintType(VariableReflection typeParam, uint index) =>
         new(spReflectionGeneric_GetTypeParameterConstraintType(_ptr, typeParam._ptr, index), _session);
 
-    public DeclReflection InnerDecl =>
+    public readonly DeclReflection InnerDecl =>
         new(spReflectionGeneric_GetInnerDecl(_ptr), _session);
 
-    public SlangDeclKind InnerKind =>
+    public readonly SlangDeclKind InnerKind =>
         spReflectionGeneric_GetInnerKind(_ptr);
 
-    public GenericReflection OuterGenericContainer =>
+    public readonly GenericReflection OuterGenericContainer =>
         new(spReflectionGeneric_GetOuterGenericContainer(_ptr), _session);
 
-    public TypeReflection GetConcreteType(VariableReflection typeParam) =>
+    public readonly TypeReflection GetConcreteType(VariableReflection typeParam) =>
         new(spReflectionGeneric_GetConcreteType(_ptr, typeParam._ptr), _session);
 
-    public long GetConcreteIntVal(VariableReflection valueParam) =>
+    public readonly long GetConcreteIntVal(VariableReflection valueParam) =>
         spReflectionGeneric_GetConcreteIntVal(_ptr, valueParam._ptr);
 
-    public GenericReflection ApplySpecializations(GenericReflection generic) =>
+    public readonly GenericReflection ApplySpecializations(GenericReflection generic) =>
         new(spReflectionGeneric_applySpecializations(_ptr, generic._ptr), _session);
 };
