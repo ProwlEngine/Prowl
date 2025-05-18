@@ -166,7 +166,7 @@ public static unsafe class GlobalSession
     libraries to be unloaded
     @param loader The loader to set. Setting null sets the default loader.
     */
-    public static void SetSharedLibraryLoader(SharedLibraryLoader loader)
+    internal static void SetSharedLibraryLoader(SharedLibraryLoader loader)
     {
         s_session.SetSharedLibraryLoader(loader);
     }
@@ -174,7 +174,7 @@ public static unsafe class GlobalSession
     /** Gets the currently set shared library loader
     @return Gets the currently set loader. If returns null, it's the default loader
     */
-    public static ISlangSharedLibraryLoader? GetSharedLibraryLoader()
+    internal static ISlangSharedLibraryLoader? GetSharedLibraryLoader()
     {
         ISlangSharedLibraryLoader* loaderPtr = s_session.GetSharedLibraryLoader();
 
