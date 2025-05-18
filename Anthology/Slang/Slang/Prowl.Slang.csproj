@@ -2,15 +2,15 @@
 
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
-        <OutputType>Exe</OutputType>
+        <OutputType>Library</OutputType>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <NoWarn>8500</NoWarn>
-        <!-- <GenerateDocumentationFile>true</GenerateDocumentationFile> -->
+        <NoWarn>8500</NoWarn> <!-- Takes the address of a managed type -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
 
     <PropertyGroup>
-        <PackageId>Slang.NET</PackageId>
+        <PackageId>Prowl.Slang</PackageId>
         <Version>0.0.1</Version>
 
         <Authors>Prowl Group</Authors>
@@ -21,7 +21,7 @@
         <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Slang</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
 
-        <PackageTags>shader compiler slang hlsl shader-programs spirv spir-v Vulkan OpenGL DirectX Metal</PackageTags>
+        <PackageTags>shader compiler slang hlsl glsl shader-programs spirv spir-v Vulkan OpenGL DirectX Metal</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE</PackageLicenseFile>
 

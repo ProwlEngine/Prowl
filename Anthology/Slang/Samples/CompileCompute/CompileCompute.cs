@@ -1,14 +1,15 @@
-﻿using System;
-using System.Runtime.InteropServices;
+using System;
 using System.IO;
-using System.Diagnostics;
-using Prowl.Slang.Native;
+using System.Runtime.CompilerServices;
 
-namespace Prowl.Slang;
+using Prowl.Slang;
 
 
 public static class Program
 {
+    static string GetScriptPath([CallerFilePath] string filePath = "") => Directory.GetParent(filePath)!.FullName;
+
+
     public class FileProvider : IFileProvider
     {
         public Memory<byte>? LoadFile(string path)
@@ -23,6 +24,8 @@ public static class Program
 
     public static void Main()
     {
+        Environment.CurrentDirectory = GetScriptPath();
+
         CompileCode();
 
         /*
@@ -54,25 +57,27 @@ public static class Program
 
     private static void CompileCode()
     {
-        SessionDescription sessionDesc = new();
-        TargetDescription targetDesc = new();
+        TargetDescription targetDesc = new()
+        {
+            Format = SlangCompileTarget.Glsl,
+            Profile = GlobalSession.FindProfile("glsl_450")
+        };
 
-        targetDesc.Format = SlangCompileTarget.Glsl;
-        targetDesc.Profile = GlobalSession.FindProfile("glsl_450");
-
-        sessionDesc.Targets = [targetDesc];
-        sessionDesc.SearchPaths = ["./Shaders/"];
-
-        sessionDesc.FileProvider = new FileProvider();
+        SessionDescription sessionDesc = new()
+        {
+            Targets = [targetDesc],
+            SearchPaths = ["../Shaders/"],
+            FileProvider = new FileProvider()
+        };
 
         Session session = GlobalSession.CreateSession(sessionDesc);
 
-        Module module = session.LoadModule("MyShaders", out string? diagnostics);
+        Module module = session.LoadModule("compute", out string? diagnostics);
 
         if (diagnostics != null)
             Console.WriteLine(diagnostics);
 
-        EntryPoint entry = module.FindEntryPointByName("computerMain");
+        EntryPoint entry = module.FindEntryPointByName("computeMain");
         ComponentType program = session.CreateCompositeComponentType([module, entry], out diagnostics);
 
         if (diagnostics != null)
@@ -90,7 +95,6 @@ public static class Program
 
         string json = reflection.ToJson();
 
-        // Console.WriteLine(System.Text.Encoding.UTF8.GetString(compiledCode.ToArray()));
         Console.WriteLine(json);
     }
 }
