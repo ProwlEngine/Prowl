@@ -35,7 +35,7 @@ public unsafe struct ShaderReflection
     public readonly TypeParameterReflection GetTypeParameterByIndex(uint index) =>
         new(spReflection_GetTypeParameterByIndex(_ptr, index), _session);
 
-    public IEnumerable<TypeParameterReflection> TypeParameters =>
+    public readonly IEnumerable<TypeParameterReflection> TypeParameters =>
         Utility.For(TypeParameterCount, GetTypeParameterByIndex);
 
     public readonly TypeParameterReflection FindTypeParameter(string name)
@@ -47,7 +47,7 @@ public unsafe struct ShaderReflection
     public readonly VariableLayoutReflection GetParameterByIndex(uint index) =>
         new(spReflection_GetParameterByIndex(_ptr, index), _session);
 
-    public IEnumerable<VariableLayoutReflection> Parameters =>
+    public readonly IEnumerable<VariableLayoutReflection> Parameters =>
         Utility.For(ParameterCount, GetParameterByIndex);
 
     public readonly uint EntryPointCount =>
@@ -56,7 +56,7 @@ public unsafe struct ShaderReflection
     public readonly EntryPointReflection GetEntryPointByIndex(uint index) =>
         new(spReflection_getEntryPointByIndex(_ptr, index), _session);
 
-    public IEnumerable<EntryPointReflection> EntryPoints =>
+    public readonly IEnumerable<EntryPointReflection> EntryPoints =>
         Utility.For(EntryPointCount, GetEntryPointByIndex);
 
     public readonly nuint GlobalConstantBufferBinding =>

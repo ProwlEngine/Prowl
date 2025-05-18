@@ -37,7 +37,7 @@ public unsafe struct DeclReflection
     public readonly DeclReflection GetChild(uint index) =>
         new(spReflectionDecl_getChild(_ptr, index), _session);
 
-    public IEnumerable<DeclReflection> Children =>
+    public readonly IEnumerable<DeclReflection> Children =>
         Utility.For(ChildrenCount, GetChild);
 
     public readonly TypeReflection Type =>
@@ -55,6 +55,6 @@ public unsafe struct DeclReflection
     public readonly DeclReflection Parent =>
         new(spReflectionDecl_getParent(_ptr), _session);
 
-    public IEnumerable<DeclReflection> GetChildrenOfKind(SlangDeclKind kind) =>
+    public readonly IEnumerable<DeclReflection> GetChildrenOfKind(SlangDeclKind kind) =>
         Children.Where(x => x.Kind == kind);
 };

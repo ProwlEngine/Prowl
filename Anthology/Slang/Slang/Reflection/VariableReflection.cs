@@ -39,17 +39,17 @@ public unsafe struct VariableReflection
     public readonly Attribute GetUserAttributeByIndex(uint index) =>
         new(spReflectionVariable_GetUserAttribute(_ptr, index), _session);
 
-    public IEnumerable<Attribute> UserAttributes =>
+    public readonly IEnumerable<Attribute> UserAttributes =>
         Utility.For(UserAttributeCount, GetUserAttributeByIndex);
 
-    public readonly Attribute FindAttributeByName(IGlobalSession* globalSession, string name)
+    public readonly Attribute FindAttributeByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        return new(spReflectionVariable_FindUserAttributeByName(_ptr, globalSession, str), _session);
+        return new(spReflectionVariable_FindUserAttributeByName(_ptr, (IGlobalSession*)((NativeComProxy)GlobalSession.s_session).ComPtr, str), _session);
     }
 
-    public Attribute FindUserAttributeByName(IGlobalSession* globalSession, string name)
-        => FindAttributeByName(globalSession, name);
+    public readonly Attribute FindUserAttributeByName(string name)
+        => FindAttributeByName(name);
 
     public readonly bool HasDefaultValue =>
         spReflectionVariable_HasDefaultValue(_ptr);

@@ -47,7 +47,7 @@ public unsafe struct TypeLayoutReflection
     public readonly VariableLayoutReflection GetFieldByIndex(uint index) =>
         new(spReflectionTypeLayout_GetFieldByIndex(_ptr, index), _session);
 
-    public IEnumerable<VariableLayoutReflection> Fields =>
+    public readonly IEnumerable<VariableLayoutReflection> Fields =>
         Utility.For(FieldCount, GetFieldByIndex);
 
     public readonly SlangInt FindFieldIndexByName(string nameBegin, string nameEnd)
@@ -61,7 +61,7 @@ public unsafe struct TypeLayoutReflection
     public readonly VariableLayoutReflection ExplicitCounter =>
         new(spReflectionTypeLayout_GetExplicitCounter(_ptr), _session);
 
-    public bool IsArray =>
+    public readonly bool IsArray =>
         ReflectionType.IsArray;
 
     public readonly TypeLayoutReflection UnwrapArray()
@@ -75,10 +75,10 @@ public unsafe struct TypeLayoutReflection
     }
 
     // only useful if `getKind() == Kind::Array`
-    public nuint ElementCount =>
+    public readonly nuint ElementCount =>
         ReflectionType.ElementCount;
 
-    public nuint TotalArrayElementCount =>
+    public readonly nuint TotalArrayElementCount =>
         ReflectionType.GetTotalArrayElementCount();
 
     public readonly nuint GetElementStride(SlangParameterCategory category) =>
@@ -103,28 +103,28 @@ public unsafe struct TypeLayoutReflection
     public readonly SlangParameterCategory GetCategoryByIndex(uint index) =>
         spReflectionTypeLayout_GetCategoryByIndex(_ptr, index);
 
-    public IEnumerable<SlangParameterCategory> Categories =>
+    public readonly IEnumerable<SlangParameterCategory> Categories =>
         Utility.For(CategoryCount, GetCategoryByIndex);
 
-    public uint RowCount =>
+    public readonly uint RowCount =>
         ReflectionType.RowCount;
 
-    public uint ColumnCount =>
+    public readonly uint ColumnCount =>
         ReflectionType.ColumnCount;
 
-    public SlangScalarType ScalarType =>
+    public readonly SlangScalarType ScalarType =>
         ReflectionType.ScalarType;
 
-    public TypeReflection ResourceResultType =>
+    public readonly TypeReflection ResourceResultType =>
         ReflectionType.ResourceResultType;
 
-    public SlangResourceShape ResourceShape =>
+    public readonly SlangResourceShape ResourceShape =>
         ReflectionType.ResourceShape;
 
-    public SlangResourceAccess ResourceAccess =>
+    public readonly SlangResourceAccess ResourceAccess =>
         ReflectionType.ResourceAccess;
 
-    public string Name =>
+    public readonly string Name =>
         ReflectionType.Name;
 
     public readonly SlangMatrixLayoutMode MatrixLayoutMode =>

@@ -35,6 +35,6 @@ public unsafe struct TypeParameterReflection
     public readonly TypeReflection GetConstraintByIndex(uint index) =>
         new(spReflectionTypeParameter_GetConstraintByIndex(_ptr, index), _session);
 
-    public IEnumerable<TypeReflection> GetConstraints() =>
+    public readonly IEnumerable<TypeReflection> GetConstraints() =>
         Utility.For(ConstraintCount, GetConstraintByIndex);
 }

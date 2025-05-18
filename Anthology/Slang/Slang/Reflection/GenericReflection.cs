@@ -36,7 +36,7 @@ public unsafe struct GenericReflection
     public readonly VariableReflection GetTypeParameter(uint index) =>
         new(spReflectionGeneric_GetTypeParameter(_ptr, index), _session);
 
-    public IEnumerable<VariableReflection> TypeParameters =>
+    public readonly IEnumerable<VariableReflection> TypeParameters =>
         Utility.For(TypeParameterCount, GetTypeParameter);
 
     public readonly uint ValueParameterCount =>
@@ -45,7 +45,7 @@ public unsafe struct GenericReflection
     public readonly VariableReflection GetValueParameter(uint index) =>
         new(spReflectionGeneric_GetValueParameter(_ptr, index), _session);
 
-    public IEnumerable<VariableReflection> ValueParameters =>
+    public readonly IEnumerable<VariableReflection> ValueParameters =>
         Utility.For(ValueParameterCount, GetValueParameter);
 
     public readonly uint GetTypeParameterConstraintCount(VariableReflection typeParam) =>

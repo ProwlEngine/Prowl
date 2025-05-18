@@ -24,31 +24,31 @@ public unsafe struct VariableLayoutReflection
     public readonly VariableReflection Variable =>
         new(spReflectionVariableLayout_GetVariable(_ptr), _session);
 
-    public string Name =>
+    public readonly string Name =>
         Variable.Name;
 
-    public Modifier FindModifier(SlangModifierID id) =>
+    public readonly Modifier FindModifier(SlangModifierID id) =>
         Variable.FindModifier(id);
 
     public readonly TypeLayoutReflection TypeLayout =>
         new(spReflectionVariableLayout_GetTypeLayout(_ptr), _session);
 
-    public SlangParameterCategory Category =>
+    public readonly SlangParameterCategory Category =>
         TypeLayout.ParameterCategory;
 
-    public uint CategoryCount =>
+    public readonly uint CategoryCount =>
         TypeLayout.CategoryCount;
 
-    public SlangParameterCategory GetCategoryByIndex(uint index) =>
+    public readonly SlangParameterCategory GetCategoryByIndex(uint index) =>
         TypeLayout.GetCategoryByIndex(index);
 
-    public IEnumerable<SlangParameterCategory> Categories =>
+    public readonly IEnumerable<SlangParameterCategory> Categories =>
         Utility.For(CategoryCount, GetCategoryByIndex);
 
     public readonly nuint GetOffset(SlangParameterCategory category) =>
         spReflectionVariableLayout_GetOffset(_ptr, category);
 
-    public TypeReflection Type =>
+    public readonly TypeReflection Type =>
         Variable.Type;
 
     public readonly uint BindingIndex =>

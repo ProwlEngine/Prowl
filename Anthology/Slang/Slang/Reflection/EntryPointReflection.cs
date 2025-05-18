@@ -39,7 +39,7 @@ public unsafe struct EntryPointReflection
     public readonly VariableLayoutReflection GetParameterByIndex(uint index) =>
         new(spReflectionEntryPoint_getParameterByIndex(_ptr, index), _session);
 
-    public IEnumerable<VariableLayoutReflection> Parameters =>
+    public readonly IEnumerable<VariableLayoutReflection> Parameters =>
         Utility.For(ParameterCount, GetParameterByIndex);
 
     public readonly SlangStage Stage =>
@@ -61,7 +61,7 @@ public unsafe struct EntryPointReflection
     public readonly VariableLayoutReflection VarLayout =>
         new(spReflectionEntryPoint_getVarLayout(_ptr), _session);
 
-    public TypeLayoutReflection TypeLayout =>
+    public readonly TypeLayoutReflection TypeLayout =>
         VarLayout.TypeLayout;
 
     public readonly VariableLayoutReflection ResultVarLayout =>

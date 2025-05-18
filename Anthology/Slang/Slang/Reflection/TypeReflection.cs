@@ -36,10 +36,10 @@ public unsafe struct TypeReflection
     public readonly VariableReflection GetFieldByIndex(uint index) =>
         new(spReflectionType_GetFieldByIndex(_ptr, index), _session);
 
-    public IEnumerable<VariableReflection> Fields =>
+    public readonly IEnumerable<VariableReflection> Fields =>
         Utility.For(FieldCount, GetFieldByIndex);
 
-    public bool IsArray =>
+    public readonly bool IsArray =>
         Kind == SlangTypeKind.ARRAY;
 
     public readonly TypeReflection UnwrapArray()
@@ -56,7 +56,7 @@ public unsafe struct TypeReflection
     public readonly nuint ElementCount =>
         spReflectionType_GetElementCount(_ptr);
 
-    public nuint GetTotalArrayElementCount()
+    public readonly nuint GetTotalArrayElementCount()
     {
         if (!IsArray)
             return 0;
@@ -112,13 +112,16 @@ public unsafe struct TypeReflection
     public readonly Attribute GetUserAttributeByIndex(uint index) =>
         new(spReflectionType_GetUserAttribute(_ptr, index), _session);
 
-    public IEnumerable<Attribute> UserAttributes =>
+    public readonly IEnumerable<Attribute> UserAttributes =>
         Utility.For(UserAttributeCount, GetUserAttributeByIndex);
 
-    public readonly Attribute FindAttributeByName(ConstU8Str name) =>
-        new(spReflectionType_FindUserAttributeByName(_ptr, name), _session);
+    public readonly Attribute FindAttributeByName(string name)
+    {
+        using U8Str str = U8Str.Alloc(name);
+        return new(spReflectionType_FindUserAttributeByName(_ptr, str), _session);
+    }
 
-    public Attribute FindUserAttributeByName(ConstU8Str name) =>
+    public readonly Attribute FindUserAttributeByName(string name) =>
         FindAttributeByName(name);
 
     public readonly TypeReflection ApplySpecializations(GenericReflection generic) =>

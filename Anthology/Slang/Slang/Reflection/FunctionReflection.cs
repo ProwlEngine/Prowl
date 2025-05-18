@@ -36,7 +36,7 @@ public unsafe struct FunctionReflection
     public readonly VariableReflection GetParameterByIndex(uint index) =>
         new(spReflectionFunction_GetParameter(_ptr, index), _session);
 
-    public IEnumerable<VariableReflection> Parameters =>
+    public readonly IEnumerable<VariableReflection> Parameters =>
         Utility.For(ParameterCount, GetParameterByIndex);
 
     public readonly uint UserAttributeCount =>
@@ -45,7 +45,7 @@ public unsafe struct FunctionReflection
     public readonly Attribute GetUserAttributeByIndex(uint index) =>
         new(spReflectionFunction_GetUserAttribute(_ptr, index), _session);
 
-    public IEnumerable<Attribute> UserAttributes =>
+    public readonly IEnumerable<Attribute> UserAttributes =>
     Utility.For(UserAttributeCount, GetUserAttributeByIndex);
 
     public readonly Attribute FindAttributeByName(string name)
@@ -54,7 +54,7 @@ public unsafe struct FunctionReflection
         return new(spReflectionFunction_FindUserAttributeByName(_ptr, (IGlobalSession*)((NativeComProxy)GlobalSession.s_session).ComPtr, str), _session);
     }
 
-    public Attribute FindUserAttributeByName(string name) =>
+    public readonly Attribute FindUserAttributeByName(string name) =>
         FindAttributeByName(name);
 
     public readonly Modifier FindModifier(SlangModifierID id) =>
@@ -85,6 +85,6 @@ public unsafe struct FunctionReflection
     public readonly FunctionReflection GetOverload(uint index) =>
         new(spReflectionFunction_getOverload(_ptr, index), _session);
 
-    public IEnumerable<FunctionReflection> Overloads =>
+    public readonly IEnumerable<FunctionReflection> Overloads =>
         Utility.For(OverloadCount, GetOverload);
 };
