@@ -10,14 +10,14 @@ namespace Prowl.Slang.Native;
 
 
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct ProxyVTable
+internal unsafe struct ProxyVTable
 {
     public nint* VTable;
     public void* ManagedHandle;
 }
 
 
-public static partial class ProxyEmitter
+internal static partial class ProxyEmitter
 {
     private static Dictionary<MethodInfo, MethodInfo> s_staticProxyMethods = [];
 

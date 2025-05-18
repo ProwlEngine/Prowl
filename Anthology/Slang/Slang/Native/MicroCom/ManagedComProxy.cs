@@ -8,7 +8,7 @@ namespace Prowl.Slang.Native;
 
 // Marshals a managed class to a compatible native COM pointer
 [StructLayout(LayoutKind.Sequential)]
-public unsafe class ManagedComProxy<T> : IUnknown where T : IUnknown
+internal unsafe class ManagedComProxy<T> : IUnknown where T : IUnknown
 {
     private static HashSet<Guid> s_interfaceGuids = GetInterfaces();
 

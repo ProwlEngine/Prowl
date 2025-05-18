@@ -2,7 +2,7 @@ namespace Prowl.Slang.Native;
 
 
 [UUID(0xa058675c, 0x1d65, 0x452a, 0x84, 0x58, 0xcc, 0xde, 0xd1, 0x42, 0x71, 0x5)]
-public unsafe interface ISlangMutableFileSystem : ISlangFileSystemExt
+internal unsafe interface ISlangMutableFileSystem : ISlangFileSystemExt
 {
     /** Write data to the specified path.
 

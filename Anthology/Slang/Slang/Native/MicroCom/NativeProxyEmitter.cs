@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 namespace Prowl.Slang.Native;
 
 
-public static partial class ProxyEmitter
+internal static partial class ProxyEmitter
 {
     private static Dictionary<Type, Type> s_nativeProxyCache = [];
 

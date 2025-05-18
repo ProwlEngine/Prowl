@@ -2,7 +2,7 @@ namespace Prowl.Slang.Native;
 
 
 [UUID(0x8f241361, 0xf5bd, 0x4ca0, 0xa3, 0xac, 0x2, 0xf7, 0xfa, 0x24, 0x2, 0xb8)]
-public unsafe interface IEntryPoint : IComponentType
+internal unsafe interface IEntryPoint : IComponentType
 {
     FunctionReflection* GetFunctionReflection();
 }

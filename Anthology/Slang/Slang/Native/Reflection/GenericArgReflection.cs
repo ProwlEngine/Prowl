@@ -4,7 +4,7 @@ namespace Prowl.Slang.Native;
 
 
 [StructLayout(LayoutKind.Explicit)]
-public unsafe struct GenericArgReflection
+internal unsafe struct GenericArgReflection
 {
     [FieldOffset(0)]
     public TypeReflection* typeVal;

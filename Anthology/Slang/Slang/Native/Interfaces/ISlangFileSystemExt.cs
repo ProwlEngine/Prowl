@@ -10,7 +10,7 @@ All paths as input byte*, or output as ISlangBlobs are always encoded as UTF-8 s
 Blobs that contain strings are always zero terminated.
 */
 [UUID(0x5fb632d2, 0x979d, 0x4481, 0x9f, 0xee, 0x66, 0x3c, 0x3f, 0x14, 0x49, 0xe1)]
-public unsafe interface ISlangFileSystemExt : ISlangFileSystem
+internal unsafe interface ISlangFileSystemExt : ISlangFileSystem
 {
     /** Get a uniqueIdentity which uniquely identifies an object of the file system.
 

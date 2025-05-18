@@ -1,6 +1,6 @@
 namespace Prowl.Slang.Native;
 
 
-public unsafe struct DeclReflection
+internal unsafe struct DeclReflection
 {
 }

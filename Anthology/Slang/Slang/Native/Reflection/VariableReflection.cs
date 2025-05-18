@@ -1,6 +1,6 @@
 namespace Prowl.Slang.Native;
 
 
-public unsafe struct VariableReflection
+internal unsafe struct VariableReflection
 {
 }

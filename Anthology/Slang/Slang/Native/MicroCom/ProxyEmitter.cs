@@ -6,7 +6,7 @@ using System.Reflection.Emit;
 
 namespace Prowl.Slang.Native;
 
-public static partial class ProxyEmitter
+internal static partial class ProxyEmitter
 {
     private static AssemblyBuilder? _assemblyBuilder;
     private static ModuleBuilder? _moduleBuilder;

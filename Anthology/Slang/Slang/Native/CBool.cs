@@ -5,7 +5,7 @@ namespace Prowl.Slang.Native;
 
 
 [StructLayout(LayoutKind.Sequential)]
-public struct CBool
+internal struct CBool
 {
     private byte _value;
 

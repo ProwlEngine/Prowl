@@ -2,6 +2,6 @@ namespace Prowl.Slang.Native;
 
 
 [UUID(0x73eb3147, 0xe544, 0x41b5, 0xb8, 0xf0, 0xa2, 0x44, 0xdf, 0x21, 0x94, 0xb)]
-public interface ITypeConformance : IComponentType
+internal interface ITypeConformance : IComponentType
 {
 }

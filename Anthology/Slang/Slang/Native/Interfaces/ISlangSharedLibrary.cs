@@ -5,7 +5,7 @@ namespace Prowl.Slang.Native;
 does not have to implement the library as a shared library
 */
 [UUID(0x70dbc7c4, 0xdc3b, 0x4a07, 0xae, 0x7e, 0x75, 0x2a, 0xf6, 0xa8, 0x15, 0x55)]
-public unsafe interface ISlangSharedLibrary : ISlangCastable
+internal unsafe interface ISlangSharedLibrary : ISlangCastable
 {
     /** Get a symbol by name. If the library is unloaded will only return null.
     @param name The name of the symbol

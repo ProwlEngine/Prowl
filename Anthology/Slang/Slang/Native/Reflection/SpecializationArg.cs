@@ -4,19 +4,19 @@ namespace Prowl.Slang.Native;
 
 
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct SpecializationArg
+internal unsafe struct SpecializationArg
 {
     public enum Kind : int
     {
-        Unknown, /**< An invalid specialization argument. */
-        Type,    /**< Specialize to a type. */
+        Unknown,
+        Type,
     };
 
-    /** The kind of specialization argument. */
+
     public Kind kind;
 
-    /** A type specialization argument, used for `Kind::Type`. */
     public TypeReflection* type;
+
 
     public static SpecializationArg FromType(TypeReflection* inType)
     {

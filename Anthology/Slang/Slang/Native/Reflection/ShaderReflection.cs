@@ -1,6 +1,6 @@
 namespace Prowl.Slang.Native;
 
 
-public unsafe struct ShaderReflection
+internal unsafe struct ShaderReflection
 {
 }
