@@ -30,9 +30,6 @@ public unsafe struct VariableReflection
     public readonly TypeReflection Type =>
         new(spReflectionVariable_GetType(_ptr), _component);
 
-    public readonly Modifier FindModifier(SlangModifierID id) =>
-        new(spReflectionVariable_FindModifier(_ptr, id), _component);
-
     public readonly uint UserAttributeCount =>
         spReflectionVariable_GetUserAttributeCount(_ptr);
 

@@ -27,9 +27,6 @@ public unsafe struct VariableLayoutReflection
     public readonly string Name =>
         Variable.Name;
 
-    public readonly Modifier FindModifier(SlangModifierID id) =>
-        Variable.FindModifier(id);
-
     public readonly TypeLayoutReflection TypeLayout =>
         new(spReflectionVariableLayout_GetTypeLayout(_ptr), _component);
 
