@@ -5,7 +5,7 @@ namespace Prowl.Quill
 {
     public static class SVGRenderer
     {
-        public static void DrawToCanvas(Canvas canvas, SvgElement svgElement)
+        public static void DrawToCanvas(Canvas canvas, Vector2 position, SvgElement svgElement)
         {
             if (!printed)
                 Console.WriteLine("DrawToCanvas");
@@ -18,10 +18,10 @@ namespace Prowl.Quill
                 SetState(canvas, element);
 
                 if (element is SvgPathElement pathElement)
-                    DrawPath(canvas, pathElement);
+                    DrawPath(canvas, position, pathElement);
 
                 if (element is SvgCircleElement circleElement)
-                    DrawCircle(canvas, circleElement);
+                    DrawCircle(canvas, position, circleElement);
 
             }
             printed = true;
@@ -36,14 +36,14 @@ namespace Prowl.Quill
             canvas.SetStrokeWidth(pathElement.strokeWidth);
         }
 
-        static void DrawPath(Canvas canvas, SvgPathElement pathElement)
+        static void DrawPath(Canvas canvas, Vector2 position, SvgPathElement pathElement)
         {
             canvas.BeginPath();
 
             for (var i = 0; i < pathElement.drawCommands.Length; i++)
             {
                 var cmd = pathElement.drawCommands[i];
-                var offset = cmd.relative ? canvas.CurrentPoint : Vector2.zero;
+                var offset = cmd.relative ? canvas.CurrentPoint : position;
 
                 if (!printed)
                 {
@@ -87,12 +87,14 @@ namespace Prowl.Quill
                 canvas.Stroke();
         }
 
-        static void DrawCircle(Canvas canvas, SvgCircleElement element)
+        static void DrawCircle(Canvas canvas, Vector2 position, SvgCircleElement element)
         {
+            var pos = position + new Vector2(element.cx, element.cy);
+
             if (element.hasFill)
-                canvas.CircleFilled(element.cx, element.cy, element.r, element.fill);
+                canvas.CircleFilled(pos.x, pos.y, element.r, element.fill);
             else
-                canvas.Circle(element.cx, element.cy, element.r);
+                canvas.Circle(pos.x, pos.y, element.r);
         }
     }
 }

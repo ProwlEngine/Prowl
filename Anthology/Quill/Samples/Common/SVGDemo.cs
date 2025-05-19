@@ -10,7 +10,7 @@ namespace Common
         private double _width;
         private double _height;
 
-        SvgElement _svgElement;
+        List<SvgElement> svgElements;
 
         public SVGDemo(Canvas canvas, double width, double height)
         {
@@ -44,16 +44,23 @@ namespace Common
             //const string input = "../../../../Common/SVGs/bezier.svg";
             //const string input = "../../../../Common/SVGs/bx--calendar-x.svg";
             //const string input = "../../../../Common/SVGs/bx--arrow-to-top.svg";
-            const string input = "../../../../Common/SVGs/bx--wifi.svg";
+            //const string input = "../../../../Common/SVGs/bx--wifi.svg";
             //const string input = "../../../../Common/SVGs/bx--qr.svg";
             //const string input = "../../../../Common/SVGs/bx--injection.svg"; 
-            _svgElement = SVGParser.ParseSVGDocument(input);
+            svgElements = new List<SvgElement>();
+            var svgFiles = Directory.GetFiles("../../../../Common/SVGs/");
 
+            foreach (var svgFile in svgFiles)
+            {
+                var svgElement = SVGParser.ParseSVGDocument(svgFile);
+                svgElements.Add(svgElement);
+            }
         }
 
         void DrawSVG()
         {
-            SVGRenderer.DrawToCanvas(_canvas, _svgElement);
+            for (int i = 0; i < svgElements.Count; i++)
+                SVGRenderer.DrawToCanvas(_canvas, new Vector2(i * 30, 0), svgElements[i]);
         }
 
         private void DrawGrid(int x, int y, double cellSize, Color color)
