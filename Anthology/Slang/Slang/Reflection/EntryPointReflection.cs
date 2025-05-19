@@ -38,7 +38,7 @@ public unsafe struct EntryPointReflection
         spReflectionEntryPoint_getNameOverride(_ptr).String;
 
     /// <summary>
-    /// The number of variable parameters in this entrypoint.
+    /// Gets the total number of parameters in this entrypoint.
     /// </summary>
     public readonly uint ParameterCount =>
         spReflectionEntryPoint_getParameterCount(_ptr);
@@ -56,7 +56,7 @@ public unsafe struct EntryPointReflection
         new(spReflectionEntryPoint_getParameterByIndex(_ptr, index), _component);
 
     /// <summary>
-    /// The parameters in this entrypoint.
+    /// Variable information for the parameters in this entrypoint.
     /// </summary>
     public readonly IEnumerable<VariableLayoutReflection> Parameters =>
         Utility.For(ParameterCount, GetParameterByIndex);
@@ -78,7 +78,7 @@ public unsafe struct EntryPointReflection
     }
 
     /// <summary>
-    /// If this entrypoint is a compute or pixel kernel, gets the amount of lanes in a single wave/warp/wavefront.
+    /// If this entrypoint is a compute or pixel kernel, gets the amount of lanes in a single wavefront.
     /// </summary>
     public readonly uint GetComputeWaveSize()
     {

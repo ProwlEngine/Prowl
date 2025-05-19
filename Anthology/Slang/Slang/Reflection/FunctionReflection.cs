@@ -84,12 +84,21 @@ public unsafe struct FunctionReflection
         return new(spReflectionFunction_FindUserAttributeByName(_ptr, (IGlobalSession*)((NativeComProxy)GlobalSession.s_session).ComPtr, str), _component);
     }
 
+    /// <summary>
+    /// The generic container for this function.
+    /// </summary>
     public readonly GenericReflection GenericContainer =>
         new(spReflectionFunction_GetGenericContainer(_ptr), _component);
 
+    /// <summary>
+    /// Create a concrete function definition for a generic function from generic reflection information.
+    /// </summary>
     public readonly FunctionReflection ApplySpecializations(GenericReflection generic) =>
         new(spReflectionFunction_applySpecializations(_ptr, generic._ptr), _component);
 
+    /// <summary>
+    /// Create a concrete function defintion for a generic function from type information.
+    /// </summary>
     public readonly FunctionReflection SpecializeWithArgTypes(TypeReflection[] types)
     {
         Native.TypeReflection** typesPtr = stackalloc Native.TypeReflection*[types.Length];
@@ -101,7 +110,7 @@ public unsafe struct FunctionReflection
     }
 
     /// <summary>
-    /// Indicates if this function has overloads.
+    /// Indicates if this function has any defined overloads.
     /// </summary>
     public readonly bool IsOverloaded =>
         spReflectionFunction_isOverloaded(_ptr);
@@ -113,7 +122,7 @@ public unsafe struct FunctionReflection
         spReflectionFunction_getOverloadCount(_ptr);
 
     /// <summary>
-    /// Returns an overload for this <see cref="FunctionReflection"/> at the given index.
+    /// Returns an overload from this function's overload list at the given index.
     /// </summary>
     public readonly FunctionReflection GetOverload(uint index) =>
         new(spReflectionFunction_getOverload(_ptr, index), _component);

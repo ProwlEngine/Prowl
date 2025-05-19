@@ -7,6 +7,9 @@ using static Prowl.Slang.Native.SlangNative_Deprecated;
 namespace Prowl.Slang;
 
 
+/// <summary>
+/// Reflection information for a generic type.
+/// </summary>
 public unsafe struct GenericReflection
 {
     internal ComponentType _component;
@@ -22,18 +25,33 @@ public unsafe struct GenericReflection
     }
 
 
+    /// <summary>
+    /// Gets this <see cref="GenericReflection"/> instance as a <see cref="DeclReflection"/> instance.
+    /// </summary>
     public readonly DeclReflection AsDecl() =>
         new(spReflectionGeneric_asDecl(_ptr), _component);
 
+    /// <summary>
+    /// The name of this <see cref="GenericReflection"/>.
+    /// </summary>
     public readonly string Name =>
         spReflectionGeneric_GetName(_ptr).String;
 
+    /// <summary>
+    /// Gets the total number of type parameters in this generic type.
+    /// </summary>
     public readonly uint TypeParameterCount =>
         spReflectionGeneric_GetTypeParameterCount(_ptr);
 
+    /// <summary>
+    /// Returns the <see cref="VariableReflection"/> in the generic type parameter list at the given index.
+    /// </summary>
     public readonly VariableReflection GetTypeParameter(uint index) =>
         new(spReflectionGeneric_GetTypeParameter(_ptr, index), _component);
 
+    /// <summary>
+    /// Type parameters of this generic.
+    /// </summary>
     public readonly IEnumerable<VariableReflection> TypeParameters =>
         Utility.For(TypeParameterCount, GetTypeParameter);
 

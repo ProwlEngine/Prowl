@@ -1,10 +1,16 @@
 namespace Prowl.Slang;
 
 
+///
 public struct GenericArgReflection
 {
+    ///
     public TypeReflection TypeVal;
+
+    ///
     public long IntVal;
+
+    ///
     public bool BoolVal;
 
     internal unsafe Native.GenericArgReflection ToNative()
