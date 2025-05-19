@@ -110,7 +110,7 @@ public unsafe class Module : ComponentType
 
     public DeclReflection GetModuleReflection()
     {
-        return new DeclReflection(_module.GetModuleReflection(), _session);
+        return new DeclReflection(_module.GetModuleReflection(), this);
     }
 
     /** Disassemble a module.
