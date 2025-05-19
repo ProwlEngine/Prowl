@@ -195,6 +195,8 @@ namespace Prowl.Quill
         private double _devicePixelRatio = 1.0f;
         private double _pixelWidth = 1.0f;
         private double _pixelHalf = 0.5f;
+        private double tess_tol = 0.5f; // Auto-tessellated
+
         public double DevicePixelRatio
         {
             get => _devicePixelRatio;
@@ -567,6 +569,11 @@ namespace Prowl.Quill
         public void SetSolidity(WindingMode solidity) => _state.fillMode = solidity;
 
         /// <summary>
+        /// Sets the tessellation tolerance for bezier curve
+        /// </summary>
+        public void SetTessellationTolerance(double tolerance) => tess_tol = Math.Clamp(tolerance, 0.01, 1);
+
+        /// <summary>
         /// Adds an arc to the current path.
         /// </summary>
         /// <param name="x">The x-coordinate of the center of the arc.</param>
@@ -731,8 +738,6 @@ namespace Prowl.Quill
             Vector2 p3 = new Vector2(cp2x, cp2y);
             Vector2 p4 = new Vector2(x, y);
 
-            // Auto-tessellated
-            const double tess_tol = 0.5f;
             PathBezierToCasteljau(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y, tess_tol, 0);
         }
 

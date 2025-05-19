@@ -35,6 +35,7 @@ namespace Common
 
             DrawDemo2D();
 
+            _canvas.SetTessellationTolerance(0.1f);
             _canvas.ResetState();
         }
 
