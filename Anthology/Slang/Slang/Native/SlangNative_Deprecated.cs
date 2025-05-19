@@ -564,7 +564,7 @@ point *or* at the global scope of a stage-specific GLSL code file (e.g.,
 an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
 */
     [LibraryImport(LibName)]
-    public static unsafe partial SlangStage spReflectionVariableLayout_getStage(VariableLayoutReflection* var);
+    public static unsafe partial ShaderStage spReflectionVariableLayout_getStage(VariableLayoutReflection* var);
 
 
     [LibraryImport(LibName)]
@@ -601,7 +601,7 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangStage spReflectionEntryPoint_getStage(EntryPointReflection* entryPoint);
+    public static unsafe partial ShaderStage spReflectionEntryPoint_getStage(EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
     public static unsafe partial void spReflectionEntryPoint_getComputeThreadGroupSize(

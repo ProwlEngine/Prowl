@@ -64,7 +64,7 @@ public unsafe struct EntryPointReflection
     /// <summary>
     /// The shader stage this entrypoint targets.
     /// </summary>
-    public readonly SlangStage Stage =>
+    public readonly ShaderStage Stage =>
         spReflectionEntryPoint_getStage(_ptr);
 
     /// <summary>

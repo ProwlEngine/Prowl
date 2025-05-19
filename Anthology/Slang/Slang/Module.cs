@@ -84,7 +84,7 @@ public unsafe class Module : ComponentType
 
     /// Find and validate an entry point by name, even if the function is
     /// not marked with the `[shader("...")]` attribute.
-    public EntryPoint FindAndCheckEntryPoint(string name, SlangStage stage, out string? diagnostics)
+    public EntryPoint FindAndCheckEntryPoint(string name, ShaderStage stage, out string? diagnostics)
     {
         using U8Str str = U8Str.Alloc(name);
 

@@ -316,23 +316,28 @@ public enum SlangMatrixLayoutMode : uint
 }
 
 
-public enum SlangStage : uint
+/// <summary>
+/// Possible shader stages an entrypoint can target.
+/// </summary>
+public enum ShaderStage : uint
 {
-    NONE,
-    VERTEX,
-    HULL,
-    DOMAIN,
-    GEOMETRY,
-    FRAGMENT,
-    COMPUTE,
-    RAY_GENERATION,
-    INTERSECTION,
-    ANY_HIT,
-    CLOSEST_HIT,
-    MISS,
-    CALLABLE,
-    MESH,
-    AMPLIFICATION
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
+    None,
+    Vertex,
+    Hull,
+    Domain,
+    Geometry,
+    Fragment,
+    Compute,
+    RayGeneration,
+    Intersection,
+    AnyHit,
+    ClosestHit,
+    Miss,
+    Callable,
+    Mesh,
+    Amplification
+#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
 }
 
 

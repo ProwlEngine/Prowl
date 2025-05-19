@@ -24,7 +24,7 @@ internal unsafe interface IModule : IComponentType
 
     SlangResult FindAndCheckEntryPoint(
         ConstU8Str name,
-        SlangStage stage,
+        ShaderStage stage,
         out IEntryPoint* outEntryPoint,
         out ISlangBlob* outDiagnostics);
 

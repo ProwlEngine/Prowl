@@ -69,7 +69,7 @@ public unsafe struct VariableLayoutReflection
     public readonly nuint SemanticIndex =>
         spReflectionVariableLayout_GetSemanticIndex(_ptr);
 
-    public readonly SlangStage Stage =>
+    public readonly ShaderStage Stage =>
         spReflectionVariableLayout_getStage(_ptr);
 
     public readonly VariableLayoutReflection PendingDataLayout =>
