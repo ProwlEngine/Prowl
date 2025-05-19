@@ -475,7 +475,7 @@ a generic parameter that has not been bound to a specific value, this function r
     public static unsafe partial ConstU8Str spReflectionDecl_getName(DeclReflection* decl);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangDeclKind spReflectionDecl_getKind(DeclReflection* decl);
+    public static unsafe partial DeclKind spReflectionDecl_getKind(DeclReflection* decl);
 
     [LibraryImport(LibName)]
     public static unsafe partial FunctionReflection* spReflectionDecl_castToFunction(DeclReflection* decl);
@@ -530,7 +530,7 @@ a generic parameter that has not been bound to a specific value, this function r
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangDeclKind spReflectionGeneric_GetInnerKind(GenericReflection* generic);
+    public static unsafe partial DeclKind spReflectionGeneric_GetInnerKind(GenericReflection* generic);
 
     [LibraryImport(LibName)]
     public static unsafe partial DeclReflection* spReflectionGeneric_GetInnerDecl(

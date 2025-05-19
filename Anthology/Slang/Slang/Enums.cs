@@ -683,20 +683,7 @@ public enum SlangScalarType : uint
     UINT16,
     INTPTR,
     UINTPTR
-};
-
-
-// abstract decl reflection
-public enum SlangDeclKind : uint
-{
-    UNSUPPORTED_FOR_REFLECTION,
-    STRUCT,
-    FUNC,
-    MODULE,
-    GENERIC,
-    VARIABLE,
-    NAMESPACE
-};
+}
 
 
 public enum SlangResourceShape : uint
@@ -745,7 +732,7 @@ public enum SlangResourceAccess : uint
     WRITE,
     FEEDBACK,
     UNKNOWN = 0x7FFFFFFF,
-};
+}
 
 
 public enum SlangParameterCategory : uint
@@ -894,7 +881,7 @@ public enum SlangLayoutRules : uint
 {
     DEFAULT,
     METAL_ARGUMENT_BUFFER_TIER_2,
-};
+}
 
 
 public enum SlangModifierID : uint
@@ -910,7 +897,7 @@ public enum SlangModifierID : uint
     IN,
     OUT,
     INOUT
-};
+}
 
 
 public enum SlangImageFormat : uint
@@ -966,6 +953,7 @@ public enum CompileCoreModuleFlags : uint
     WriteDocumentation = 0x1,
 }
 
+
 public enum BuiltinModuleName : int
 {
     Core,
@@ -980,7 +968,7 @@ public enum ContainerType : int
     StructuredBuffer,
     ConstantBuffer,
     ParameterBlock
-};
+}
 
 
 // Passed into functions to create globalSession to identify the API version client code is
@@ -989,10 +977,10 @@ public enum ContainerType : int
 public enum SlangLanguageVersion : uint
 {
     _2025 = 2025
-};
+}
 
 
 public enum SessionFlags : uint
 {
     None = 0
-};
+}

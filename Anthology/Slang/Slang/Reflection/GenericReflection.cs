@@ -55,7 +55,7 @@ public unsafe struct GenericReflection
     public readonly DeclReflection InnerDecl =>
         new(spReflectionGeneric_GetInnerDecl(_ptr), _component);
 
-    public readonly SlangDeclKind InnerKind =>
+    public readonly DeclKind InnerKind =>
         spReflectionGeneric_GetInnerKind(_ptr);
 
     public readonly GenericReflection OuterGenericContainer =>
