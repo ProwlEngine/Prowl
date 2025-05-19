@@ -35,21 +35,14 @@ namespace Common
 
             DrawDemo2D();
 
-            _canvas.SetTessellationTolerance(0.1f);
+            _canvas.SetTessellationTolerance(0.05f);
             _canvas.ResetState();
         }
 
         void ParseSVG()
         {
-            //const string input = "../../../../Common/SVGs/mlc.svg";
-            //const string input = "../../../../Common/SVGs/bezier.svg";
-            //const string input = "../../../../Common/SVGs/bx--calendar-x.svg";
-            //const string input = "../../../../Common/SVGs/bx--arrow-to-top.svg";
-            //const string input = "../../../../Common/SVGs/bx--wifi.svg";
-            //const string input = "../../../../Common/SVGs/bx--qr.svg";
-            //const string input = "../../../../Common/SVGs/bx--injection.svg"; 
             svgElements = new List<SvgElement>();
-            var svgFiles = Directory.GetFiles("../../../../Common/SVGs/");
+            var svgFiles = Directory.GetFiles("../../../../Common/SVGs/test");
 
             foreach (var svgFile in svgFiles)
             {

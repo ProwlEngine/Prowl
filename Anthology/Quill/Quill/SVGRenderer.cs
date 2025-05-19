@@ -5,10 +5,13 @@ namespace Prowl.Quill
 {
     public static class SVGRenderer
     {
+        //for debug
+        //static bool printed = false;
+
         public static void DrawToCanvas(Canvas canvas, Vector2 position, SvgElement svgElement)
         {
-            if (!printed)
-                Console.WriteLine("DrawToCanvas");
+            //if (!printed)
+            //    Console.WriteLine("DrawToCanvas");
             var elements = svgElement.Flatten();
 
             for (var i = 0; i < elements.Count; i++)
@@ -24,10 +27,8 @@ namespace Prowl.Quill
                     DrawCircle(canvas, position, circleElement);
 
             }
-            printed = true;
+            //printed = true;
         }
-
-        static bool printed = false;
 
         static void SetState(Canvas canvas, SvgElement pathElement)
         {
@@ -38,6 +39,9 @@ namespace Prowl.Quill
 
         static void DrawPath(Canvas canvas, Vector2 position, SvgPathElement pathElement)
         {
+            if (pathElement.drawCommands == null)
+                return;
+
             canvas.BeginPath();
 
             for (var i = 0; i < pathElement.drawCommands.Length; i++)
@@ -45,11 +49,11 @@ namespace Prowl.Quill
                 var cmd = pathElement.drawCommands[i];
                 var offset = cmd.relative ? canvas.CurrentPoint : position;
 
-                if (!printed)
-                {
-                    Console.WriteLine(offset);
-                    Console.WriteLine(cmd);
-                }
+                //if (!printed)
+                //{
+                //    Console.WriteLine(offset);
+                //    Console.WriteLine(cmd);
+                //}
 
                 switch (cmd.type)
                 {
@@ -77,7 +81,6 @@ namespace Prowl.Quill
                         break;
                     case DrawType.ClosePath:
                         canvas.ClosePath();
-
                         break;
                 }
             }

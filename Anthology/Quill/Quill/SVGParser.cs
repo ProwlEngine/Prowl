@@ -155,6 +155,9 @@ namespace Prowl.Quill
         {
             base.Parse();
 
+            //if (!Attributes.ContainsKey("d"))
+            //    return;
+
             var pathData = Attributes["d"];
             if (string.IsNullOrEmpty(pathData))
                 throw new InvalidDataException();
@@ -178,14 +181,14 @@ namespace Prowl.Quill
                     case 'h': drawCommand.type = DrawType.HorizontalLineTo; break;
                     case 'v': drawCommand.type = DrawType.VerticalLineTo; break;
                     case 'q': drawCommand.type = DrawType.QuadraticCurveTo; break;
-                    case 't': drawCommand.type = DrawType.QuadraticCurveTo; break;
+                    case 't': drawCommand.type = DrawType.QuadraticCurveTo; break;//todo handle smooth qudratic curve
                     case 'c': drawCommand.type = DrawType.BezierCurveTo; break;
-                    case 's': drawCommand.type = DrawType.BezierCurveTo; break;
+                    case 's': drawCommand.type = DrawType.BezierCurveTo; break;//todo handle smooth cubic curve's 4 parameter
                     case 'a': drawCommand.type = DrawType.ArcTo; break;
                     case 'z': drawCommand.type = DrawType.ClosePath; break;
                 }
 
-                Console.WriteLine($"{command} {parametersString}");
+                //Console.WriteLine($"{command} {parametersString}");
 
                 if (!string.IsNullOrEmpty(parametersString))
                 {
@@ -197,8 +200,30 @@ namespace Prowl.Quill
 
                     drawCommand.param = param.ToArray();
                 }
-                Console.WriteLine(drawCommand.ToString());
+                //Console.WriteLine(drawCommand.ToString());
                 drawCommands[i] = drawCommand;
+                if (!ValidateParameterCount(drawCommand))
+                {
+                    Console.WriteLine(pathData);
+                    Console.WriteLine($"{match.Groups[0].Value}=>{drawCommand}");
+                }
+            }
+        }
+
+        bool ValidateParameterCount(DrawCommand command)
+        {
+            //Console.WriteLine(command.param?.Length);
+            switch (command.type)
+            {
+                case DrawType.MoveTo: return command.param.Length == 2;
+                case DrawType.LineTo: return command.param.Length == 2;
+                case DrawType.HorizontalLineTo: return command.param.Length == 1;
+                case DrawType.VerticalLineTo: return command.param.Length == 1;
+                case DrawType.QuadraticCurveTo: return command.param.Length == 4;
+                case DrawType.BezierCurveTo: return command.param.Length == 6;
+                case DrawType.ArcTo: return command.param.Length == 7;
+                case DrawType.ClosePath: return command.param == null;
+                default: return true;
             }
         }
 
@@ -221,7 +246,8 @@ namespace Prowl.Quill
         public override string ToString()
         {
             var sb = new StringBuilder();
-            sb.Append($"{type} relative:{relative} parameters:");
+            var relativeString = relative ? " relative" : "";
+            sb.Append($"{type}{relativeString}:");
             if (param != null)
                 foreach (var para in param)
                     sb.Append($"{para} ");
@@ -264,6 +290,10 @@ namespace Prowl.Quill
         {
             SvgElement svgElement;// = new SvgElement();
 
+            var supported = Enum.TryParse<SvgElement.TagType>(xmlElement.Name, out var result);
+            if (!supported)
+                return null;
+
             var tag = Enum.Parse<SvgElement.TagType>(xmlElement.Name);
             switch (tag)
             {
@@ -285,7 +315,11 @@ namespace Prowl.Quill
 
             foreach (XmlNode childNode in xmlElement.ChildNodes)
                 if (childNode.NodeType == XmlNodeType.Element)
-                    svgElement.Children.Add(ParseXmlElement((XmlElement)childNode, depth + 1));
+                {
+                    var child = ParseXmlElement((XmlElement)childNode, depth + 1);
+                    if (child != null)
+                        svgElement.Children.Add(child);
+                }
 
             svgElement.Parse();
 
