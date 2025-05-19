@@ -116,7 +116,7 @@ public unsafe class Session
         if (reflectionPtr == null)
             SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
-        return new TypeReflection(reflectionPtr, this);
+        return new TypeReflection(reflectionPtr, type._component);
     }
 
 
@@ -134,7 +134,7 @@ public unsafe class Session
         if (reflectionPtr == null)
             SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
-        return new TypeLayoutReflection(reflectionPtr, this);
+        return new TypeLayoutReflection(reflectionPtr, type._component);
     }
 
 
@@ -156,7 +156,7 @@ public unsafe class Session
         if (reflectionPtr == null)
             SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
-        return new TypeReflection(reflectionPtr, this);
+        return new TypeReflection(reflectionPtr, elementType._component);
     }
 
 
@@ -164,23 +164,24 @@ public unsafe class Session
         This type can be used as a specialization argument to indicate using
         dynamic dispatch.
     */
-    public TypeReflection GetDynamicType()
-    {
-        return new TypeReflection(_session.GetDynamicType(), this);
-    }
+    // public TypeReflection GetDynamicType()
+    // {
+    //     return new TypeReflection(_session.GetDynamicType(), null);
+    // }
 
 
-    /** Get the mangled name for a type RTTI object.
-     */
+    /// <summary>
+    /// Get the mangled name for a type RTTI object.
+    /// </summary>
     public string GetTypeRTTIMangledName(TypeReflection type)
     {
         _session.GetTypeRTTIMangledName(type._ptr, out ISlangBlob* nameBlob).Throw();
         return NativeComProxy.Create(nameBlob).GetString();
     }
 
-
-    /** Get the mangled name for a type witness.
-     */
+    /// <summary>
+    /// Get the mangled name for a type witness.
+    /// </summary>
     public string GetTypeConformanceWitnessMangledName(TypeReflection type, TypeReflection interfaceType)
     {
         _session.GetTypeConformanceWitnessMangledName(type._ptr, interfaceType._ptr, out ISlangBlob* nameBlob).Throw();
@@ -272,9 +273,7 @@ public unsafe class Session
     public bool IsBinaryModuleUpToDate(string modulePath, Memory<byte> binaryModuleBlob)
     {
         using U8Str str = U8Str.Alloc(modulePath);
-        bool result = _session.IsBinaryModuleUpToDate(str, ManagedBlob.FromMemory(binaryModuleBlob));
-
-        return result;
+        return _session.IsBinaryModuleUpToDate(str, ManagedBlob.FromMemory(binaryModuleBlob));
     }
 
 
