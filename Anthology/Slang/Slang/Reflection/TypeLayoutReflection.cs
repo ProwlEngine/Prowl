@@ -13,21 +13,21 @@ namespace Prowl.Slang;
 
 public unsafe struct TypeLayoutReflection
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.TypeLayoutReflection* _ptr;
 
 
-    internal TypeLayoutReflection(Native.TypeLayoutReflection* ptr, Session session)
+    internal TypeLayoutReflection(Native.TypeLayoutReflection* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 
 
     public readonly TypeReflection ReflectionType =>
-        new(spReflectionTypeLayout_GetType(_ptr), _session);
+        new(spReflectionTypeLayout_GetType(_ptr), _component);
 
     public readonly SlangTypeKind Kind =>
         spReflectionTypeLayout_getKind(_ptr);
@@ -45,7 +45,7 @@ public unsafe struct TypeLayoutReflection
         spReflectionTypeLayout_GetFieldCount(_ptr);
 
     public readonly VariableLayoutReflection GetFieldByIndex(uint index) =>
-        new(spReflectionTypeLayout_GetFieldByIndex(_ptr, index), _session);
+        new(spReflectionTypeLayout_GetFieldByIndex(_ptr, index), _component);
 
     public readonly IEnumerable<VariableLayoutReflection> Fields =>
         Utility.For(FieldCount, GetFieldByIndex);
@@ -59,7 +59,7 @@ public unsafe struct TypeLayoutReflection
     }
 
     public readonly VariableLayoutReflection ExplicitCounter =>
-        new(spReflectionTypeLayout_GetExplicitCounter(_ptr), _session);
+        new(spReflectionTypeLayout_GetExplicitCounter(_ptr), _component);
 
     public readonly bool IsArray =>
         ReflectionType.IsArray;
@@ -85,13 +85,13 @@ public unsafe struct TypeLayoutReflection
         spReflectionTypeLayout_GetElementStride(_ptr, category);
 
     public readonly TypeLayoutReflection ElementTypeLayout =>
-        new(spReflectionTypeLayout_GetElementTypeLayout(_ptr), _session);
+        new(spReflectionTypeLayout_GetElementTypeLayout(_ptr), _component);
 
     public readonly VariableLayoutReflection ElementVarLayout =>
-        new(spReflectionTypeLayout_GetElementVarLayout(_ptr), _session);
+        new(spReflectionTypeLayout_GetElementVarLayout(_ptr), _component);
 
     public readonly VariableLayoutReflection ContainerVarLayout =>
-        new(spReflectionTypeLayout_getContainerVarLayout(_ptr), _session);
+        new(spReflectionTypeLayout_getContainerVarLayout(_ptr), _component);
 
     // How is this type supposed to be bound?
     public readonly SlangParameterCategory ParameterCategory =>
@@ -134,10 +134,10 @@ public unsafe struct TypeLayoutReflection
         spReflectionTypeLayout_getGenericParamIndex(_ptr);
 
     public readonly TypeLayoutReflection PendingDataTypeLayout =>
-        new(spReflectionTypeLayout_getPendingDataTypeLayout(_ptr), _session);
+        new(spReflectionTypeLayout_getPendingDataTypeLayout(_ptr), _component);
 
     public readonly VariableLayoutReflection SpecializedTypePendingDataVarLayout =>
-        new(spReflectionTypeLayout_getSpecializedTypePendingDataVarLayout(_ptr), _session);
+        new(spReflectionTypeLayout_getSpecializedTypePendingDataVarLayout(_ptr), _component);
 
     public readonly SlangInt BindingRangeCount =>
         spReflectionTypeLayout_getBindingRangeCount(_ptr);
@@ -158,10 +158,10 @@ public unsafe struct TypeLayoutReflection
         spReflectionTypeLayout_getExplicitCounterBindingRangeOffset(_ptr);
 
     public readonly TypeLayoutReflection GetBindingRangeLeafTypeLayout(SlangInt index) =>
-        new(spReflectionTypeLayout_getBindingRangeLeafTypeLayout(_ptr, index), _session);
+        new(spReflectionTypeLayout_getBindingRangeLeafTypeLayout(_ptr, index), _component);
 
     public readonly VariableReflection GetBindingRangeLeafVariable(SlangInt index) =>
-        new(spReflectionTypeLayout_getBindingRangeLeafVariable(_ptr, index), _session);
+        new(spReflectionTypeLayout_getBindingRangeLeafVariable(_ptr, index), _component);
 
     public readonly SlangImageFormat GetBindingRangeImageFormat(SlangInt index) =>
         spReflectionTypeLayout_getBindingRangeImageFormat(_ptr, index);
@@ -206,5 +206,5 @@ public unsafe struct TypeLayoutReflection
         spReflectionTypeLayout_getSubObjectRangeSpaceOffset(_ptr, subObjectRangeIndex);
 
     public readonly VariableLayoutReflection GetSubObjectRangeOffset(SlangInt subObjectRangeIndex) =>
-        new(spReflectionTypeLayout_getSubObjectRangeOffset(_ptr, subObjectRangeIndex), _session);
+        new(spReflectionTypeLayout_getSubObjectRangeOffset(_ptr, subObjectRangeIndex), _component);
 };

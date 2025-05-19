@@ -9,20 +9,20 @@ namespace Prowl.Slang;
 
 public unsafe struct VariableLayoutReflection
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.VariableLayoutReflection* _ptr;
 
 
-    internal VariableLayoutReflection(Native.VariableLayoutReflection* ptr, Session session)
+    internal VariableLayoutReflection(Native.VariableLayoutReflection* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 
     public readonly VariableReflection Variable =>
-        new(spReflectionVariableLayout_GetVariable(_ptr), _session);
+        new(spReflectionVariableLayout_GetVariable(_ptr), _component);
 
     public readonly string Name =>
         Variable.Name;
@@ -31,7 +31,7 @@ public unsafe struct VariableLayoutReflection
         Variable.FindModifier(id);
 
     public readonly TypeLayoutReflection TypeLayout =>
-        new(spReflectionVariableLayout_GetTypeLayout(_ptr), _session);
+        new(spReflectionVariableLayout_GetTypeLayout(_ptr), _component);
 
     public readonly SlangParameterCategory Category =>
         TypeLayout.ParameterCategory;
@@ -73,5 +73,5 @@ public unsafe struct VariableLayoutReflection
         spReflectionVariableLayout_getStage(_ptr);
 
     public readonly VariableLayoutReflection PendingDataLayout =>
-        new(spReflectionVariableLayout_getPendingDataLayout(_ptr), _session);
+        new(spReflectionVariableLayout_getPendingDataLayout(_ptr), _component);
 };

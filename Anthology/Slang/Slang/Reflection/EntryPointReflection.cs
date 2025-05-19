@@ -9,15 +9,15 @@ namespace Prowl.Slang;
 
 public unsafe struct EntryPointReflection
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.EntryPointReflection* _ptr;
 
 
-    internal EntryPointReflection(Native.EntryPointReflection* ptr, Session session)
+    internal EntryPointReflection(Native.EntryPointReflection* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 
@@ -32,10 +32,10 @@ public unsafe struct EntryPointReflection
         spReflectionEntryPoint_getParameterCount(_ptr);
 
     public readonly FunctionReflection Function =>
-        new(spReflectionEntryPoint_getFunction(_ptr), _session);
+        new(spReflectionEntryPoint_getFunction(_ptr), _component);
 
     public readonly VariableLayoutReflection GetParameterByIndex(uint index) =>
-        new(spReflectionEntryPoint_getParameterByIndex(_ptr, index), _session);
+        new(spReflectionEntryPoint_getParameterByIndex(_ptr, index), _component);
 
     public readonly IEnumerable<VariableLayoutReflection> Parameters =>
         Utility.For(ParameterCount, GetParameterByIndex);
@@ -57,13 +57,13 @@ public unsafe struct EntryPointReflection
         spReflectionEntryPoint_usesAnySampleRateInput(_ptr) != 0;
 
     public readonly VariableLayoutReflection VarLayout =>
-        new(spReflectionEntryPoint_getVarLayout(_ptr), _session);
+        new(spReflectionEntryPoint_getVarLayout(_ptr), _component);
 
     public readonly TypeLayoutReflection TypeLayout =>
         VarLayout.TypeLayout;
 
     public readonly VariableLayoutReflection ResultVarLayout =>
-        new(spReflectionEntryPoint_getResultVarLayout(_ptr), _session);
+        new(spReflectionEntryPoint_getResultVarLayout(_ptr), _component);
 
     public readonly bool HasDefaultConstantBuffer =>
         spReflectionEntryPoint_hasDefaultConstantBuffer(_ptr) != 0;

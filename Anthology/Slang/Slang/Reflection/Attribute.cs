@@ -10,15 +10,15 @@ namespace Prowl.Slang;
 
 public unsafe struct Attribute
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.Attribute* _ptr;
 
 
-    internal Attribute(Native.Attribute* ptr, Session session)
+    internal Attribute(Native.Attribute* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 
@@ -30,7 +30,7 @@ public unsafe struct Attribute
         spReflectionUserAttribute_GetArgumentCount(_ptr);
 
     public readonly TypeReflection GetArgumentType(uint index) =>
-        new(spReflectionUserAttribute_GetArgumentType(_ptr, index), _session);
+        new(spReflectionUserAttribute_GetArgumentType(_ptr, index), _component);
 
     public readonly int? GetArgumentValueInt(uint index)
     {

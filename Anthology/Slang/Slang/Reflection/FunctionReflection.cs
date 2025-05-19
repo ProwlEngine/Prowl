@@ -11,15 +11,15 @@ namespace Prowl.Slang;
 
 public unsafe struct FunctionReflection
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.FunctionReflection* _ptr;
 
 
-    internal FunctionReflection(Native.FunctionReflection* ptr, Session session)
+    internal FunctionReflection(Native.FunctionReflection* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 
@@ -28,13 +28,13 @@ public unsafe struct FunctionReflection
         spReflectionFunction_GetName(_ptr).String;
 
     public readonly TypeReflection ReturnType =>
-        new(spReflectionFunction_GetResultType(_ptr), _session);
+        new(spReflectionFunction_GetResultType(_ptr), _component);
 
     public readonly uint ParameterCount =>
         spReflectionFunction_GetParameterCount(_ptr);
 
     public readonly VariableReflection GetParameterByIndex(uint index) =>
-        new(spReflectionFunction_GetParameter(_ptr, index), _session);
+        new(spReflectionFunction_GetParameter(_ptr, index), _component);
 
     public readonly IEnumerable<VariableReflection> Parameters =>
         Utility.For(ParameterCount, GetParameterByIndex);
@@ -43,7 +43,7 @@ public unsafe struct FunctionReflection
         spReflectionFunction_GetUserAttributeCount(_ptr);
 
     public readonly Attribute GetUserAttributeByIndex(uint index) =>
-        new(spReflectionFunction_GetUserAttribute(_ptr, index), _session);
+        new(spReflectionFunction_GetUserAttribute(_ptr, index), _component);
 
     public readonly IEnumerable<Attribute> UserAttributes =>
     Utility.For(UserAttributeCount, GetUserAttributeByIndex);
@@ -51,20 +51,20 @@ public unsafe struct FunctionReflection
     public readonly Attribute FindAttributeByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        return new(spReflectionFunction_FindUserAttributeByName(_ptr, (IGlobalSession*)((NativeComProxy)GlobalSession.s_session).ComPtr, str), _session);
+        return new(spReflectionFunction_FindUserAttributeByName(_ptr, (IGlobalSession*)((NativeComProxy)GlobalSession.s_session).ComPtr, str), _component);
     }
 
     public readonly Attribute FindUserAttributeByName(string name) =>
         FindAttributeByName(name);
 
     public readonly Modifier FindModifier(SlangModifierID id) =>
-        new(spReflectionFunction_FindModifier(_ptr, id), _session);
+        new(spReflectionFunction_FindModifier(_ptr, id), _component);
 
     public readonly GenericReflection GenericContainer =>
-        new(spReflectionFunction_GetGenericContainer(_ptr), _session);
+        new(spReflectionFunction_GetGenericContainer(_ptr), _component);
 
     public readonly FunctionReflection ApplySpecializations(GenericReflection generic) =>
-        new(spReflectionFunction_applySpecializations(_ptr, generic._ptr), _session);
+        new(spReflectionFunction_applySpecializations(_ptr, generic._ptr), _component);
 
     public readonly FunctionReflection SpecializeWithArgTypes(TypeReflection[] types)
     {
@@ -73,7 +73,7 @@ public unsafe struct FunctionReflection
         for (int i = 0; i < types.Length; i++)
             typesPtr[i] = types[i]._ptr;
 
-        return new(spReflectionFunction_specializeWithArgTypes(_ptr, types.Length, typesPtr), _session);
+        return new(spReflectionFunction_specializeWithArgTypes(_ptr, types.Length, typesPtr), _component);
     }
 
     public readonly bool IsOverloaded =>
@@ -83,7 +83,7 @@ public unsafe struct FunctionReflection
         spReflectionFunction_getOverloadCount(_ptr);
 
     public readonly FunctionReflection GetOverload(uint index) =>
-        new(spReflectionFunction_getOverload(_ptr, index), _session);
+        new(spReflectionFunction_getOverload(_ptr, index), _component);
 
     public readonly IEnumerable<FunctionReflection> Overloads =>
         Utility.For(OverloadCount, GetOverload);

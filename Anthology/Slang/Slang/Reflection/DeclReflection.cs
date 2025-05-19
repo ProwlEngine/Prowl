@@ -10,15 +10,15 @@ namespace Prowl.Slang;
 
 public unsafe struct DeclReflection
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.DeclReflection* _ptr;
 
 
-    internal DeclReflection(Native.DeclReflection* ptr, Session session)
+    internal DeclReflection(Native.DeclReflection* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 
@@ -33,25 +33,25 @@ public unsafe struct DeclReflection
         spReflectionDecl_getChildrenCount(_ptr);
 
     public readonly DeclReflection GetChild(uint index) =>
-        new(spReflectionDecl_getChild(_ptr, index), _session);
+        new(spReflectionDecl_getChild(_ptr, index), _component);
 
     public readonly IEnumerable<DeclReflection> Children =>
         Utility.For(ChildrenCount, GetChild);
 
     public readonly TypeReflection Type =>
-        new(spReflection_getTypeFromDecl(_ptr), _session);
+        new(spReflection_getTypeFromDecl(_ptr), _component);
 
     public readonly VariableReflection AsVariable() =>
-        new(spReflectionDecl_castToVariable(_ptr), _session);
+        new(spReflectionDecl_castToVariable(_ptr), _component);
 
     public readonly FunctionReflection AsFunction() =>
-        new(spReflectionDecl_castToFunction(_ptr), _session);
+        new(spReflectionDecl_castToFunction(_ptr), _component);
 
     public readonly GenericReflection AsGeneric() =>
-        new(spReflectionDecl_castToGeneric(_ptr), _session);
+        new(spReflectionDecl_castToGeneric(_ptr), _component);
 
     public readonly DeclReflection Parent =>
-        new(spReflectionDecl_getParent(_ptr), _session);
+        new(spReflectionDecl_getParent(_ptr), _component);
 
     public readonly IEnumerable<DeclReflection> GetChildrenOfKind(SlangDeclKind kind) =>
         Children.Where(x => x.Kind == kind);

@@ -60,7 +60,7 @@ public unsafe class ComponentType
         if (reflectionPtr == null)
             SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
-        return new ShaderReflection(reflectionPtr, _session);
+        return new ShaderReflection(reflectionPtr, this);
     }
 
     /** Get the number of (unspecialized) specialization parameters for the component type.

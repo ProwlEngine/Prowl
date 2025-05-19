@@ -5,15 +5,15 @@ namespace Prowl.Slang;
 
 public unsafe struct Modifier
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.Modifier* _ptr;
 
 
-    internal Modifier(Native.Modifier* ptr, Session session)
+    internal Modifier(Native.Modifier* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 }

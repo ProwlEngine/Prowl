@@ -11,15 +11,15 @@ namespace Prowl.Slang;
 
 public unsafe struct ShaderReflection
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.ShaderReflection* _ptr;
 
 
-    internal ShaderReflection(Native.ShaderReflection* ptr, Session session)
+    internal ShaderReflection(Native.ShaderReflection* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 
@@ -29,11 +29,8 @@ public unsafe struct ShaderReflection
     public readonly uint TypeParameterCount =>
         spReflection_GetTypeParameterCount(_ptr);
 
-    public readonly Session Session =>
-        _session;
-
     public readonly TypeParameterReflection GetTypeParameterByIndex(uint index) =>
-        new(spReflection_GetTypeParameterByIndex(_ptr, index), _session);
+        new(spReflection_GetTypeParameterByIndex(_ptr, index), _component);
 
     public readonly IEnumerable<TypeParameterReflection> TypeParameters =>
         Utility.For(TypeParameterCount, GetTypeParameterByIndex);
@@ -41,11 +38,11 @@ public unsafe struct ShaderReflection
     public readonly TypeParameterReflection FindTypeParameter(string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        return new(spReflection_FindTypeParameter(_ptr, str), _session);
+        return new(spReflection_FindTypeParameter(_ptr, str), _component);
     }
 
     public readonly VariableLayoutReflection GetParameterByIndex(uint index) =>
-        new(spReflection_GetParameterByIndex(_ptr, index), _session);
+        new(spReflection_GetParameterByIndex(_ptr, index), _component);
 
     public readonly IEnumerable<VariableLayoutReflection> Parameters =>
         Utility.For(ParameterCount, GetParameterByIndex);
@@ -54,7 +51,7 @@ public unsafe struct ShaderReflection
         (uint)spReflection_getEntryPointCount(_ptr);
 
     public readonly EntryPointReflection GetEntryPointByIndex(uint index) =>
-        new(spReflection_getEntryPointByIndex(_ptr, index), _session);
+        new(spReflection_getEntryPointByIndex(_ptr, index), _component);
 
     public readonly IEnumerable<EntryPointReflection> EntryPoints =>
         Utility.For(EntryPointCount, GetEntryPointByIndex);
@@ -68,34 +65,34 @@ public unsafe struct ShaderReflection
     public readonly TypeReflection FindTypeByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        return new(spReflection_FindTypeByName(_ptr, str), _session);
+        return new(spReflection_FindTypeByName(_ptr, str), _component);
     }
 
     public readonly FunctionReflection FindFunctionByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        return new(spReflection_FindFunctionByName(_ptr, str), _session);
+        return new(spReflection_FindFunctionByName(_ptr, str), _component);
     }
 
     public readonly FunctionReflection FindFunctionByNameInType(TypeReflection type, string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        return new(spReflection_FindFunctionByNameInType(_ptr, type._ptr, str), _session);
+        return new(spReflection_FindFunctionByNameInType(_ptr, type._ptr, str), _component);
     }
 
     public readonly VariableReflection FindVarByNameInType(TypeReflection type, string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        return new(spReflection_FindVarByNameInType(_ptr, type._ptr, str), _session);
+        return new(spReflection_FindVarByNameInType(_ptr, type._ptr, str), _component);
     }
 
     public readonly TypeLayoutReflection GetTypeLayout(TypeReflection type, SlangLayoutRules rules) =>
-        new(spReflection_GetTypeLayout(_ptr, type._ptr, rules), _session);
+        new(spReflection_GetTypeLayout(_ptr, type._ptr, rules), _component);
 
     public readonly EntryPointReflection FindEntryPointByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        return new(spReflection_findEntryPointByName(_ptr, str), _session);
+        return new(spReflection_findEntryPointByName(_ptr, str), _component);
     }
 
     public readonly TypeReflection SpecializeType(
@@ -117,7 +114,7 @@ public unsafe struct ShaderReflection
 
         diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
 
-        return new(reflectionPtr, _session);
+        return new(reflectionPtr, _component);
     }
 
     public readonly GenericReflection SpecializeGeneric(
@@ -144,7 +141,7 @@ public unsafe struct ShaderReflection
 
         diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
 
-        return new(genericPtr, _session);
+        return new(genericPtr, _component);
     }
 
     public readonly bool IsSubType(TypeReflection subType, TypeReflection superType) =>
@@ -157,10 +154,10 @@ public unsafe struct ShaderReflection
         spReflection_getHashedString(_ptr, index, out outCount).String;
 
     public readonly TypeLayoutReflection GlobalParamsTypeLayout =>
-        new(spReflection_getGlobalParamsTypeLayout(_ptr), _session);
+        new(spReflection_getGlobalParamsTypeLayout(_ptr), _component);
 
     public readonly VariableLayoutReflection GlobalParamsVarLayout =>
-        new(spReflection_getGlobalParamsVarLayout(_ptr), _session);
+        new(spReflection_getGlobalParamsVarLayout(_ptr), _component);
 
     public readonly string ToJson()
     {

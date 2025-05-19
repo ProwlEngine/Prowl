@@ -17,6 +17,6 @@ public unsafe class EntryPoint : ComponentType
 
     public FunctionReflection GetFunctionReflection()
     {
-        return new FunctionReflection(_entryPoint.GetFunctionReflection(), _session);
+        return new FunctionReflection(_entryPoint.GetFunctionReflection(), this);
     }
 }

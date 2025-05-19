@@ -10,15 +10,15 @@ namespace Prowl.Slang;
 
 public unsafe struct TypeParameterReflection
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.TypeParameterReflection* _ptr;
 
 
-    internal TypeParameterReflection(Native.TypeParameterReflection* ptr, Session session)
+    internal TypeParameterReflection(Native.TypeParameterReflection* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 
@@ -33,7 +33,7 @@ public unsafe struct TypeParameterReflection
         spReflectionTypeParameter_GetConstraintCount(_ptr);
 
     public readonly TypeReflection GetConstraintByIndex(uint index) =>
-        new(spReflectionTypeParameter_GetConstraintByIndex(_ptr, index), _session);
+        new(spReflectionTypeParameter_GetConstraintByIndex(_ptr, index), _component);
 
     public readonly IEnumerable<TypeReflection> GetConstraints() =>
         Utility.For(ConstraintCount, GetConstraintByIndex);

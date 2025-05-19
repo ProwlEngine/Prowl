@@ -11,15 +11,15 @@ namespace Prowl.Slang;
 
 public unsafe struct VariableReflection
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.VariableReflection* _ptr;
 
 
-    internal VariableReflection(Native.VariableReflection* ptr, Session session)
+    internal VariableReflection(Native.VariableReflection* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 
@@ -28,16 +28,16 @@ public unsafe struct VariableReflection
         spReflectionVariable_GetName(_ptr).String;
 
     public readonly TypeReflection Type =>
-        new(spReflectionVariable_GetType(_ptr), _session);
+        new(spReflectionVariable_GetType(_ptr), _component);
 
     public readonly Modifier FindModifier(SlangModifierID id) =>
-        new(spReflectionVariable_FindModifier(_ptr, id), _session);
+        new(spReflectionVariable_FindModifier(_ptr, id), _component);
 
     public readonly uint UserAttributeCount =>
         spReflectionVariable_GetUserAttributeCount(_ptr);
 
     public readonly Attribute GetUserAttributeByIndex(uint index) =>
-        new(spReflectionVariable_GetUserAttribute(_ptr, index), _session);
+        new(spReflectionVariable_GetUserAttribute(_ptr, index), _component);
 
     public readonly IEnumerable<Attribute> UserAttributes =>
         Utility.For(UserAttributeCount, GetUserAttributeByIndex);
@@ -45,7 +45,7 @@ public unsafe struct VariableReflection
     public readonly Attribute FindAttributeByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        return new(spReflectionVariable_FindUserAttributeByName(_ptr, (IGlobalSession*)((NativeComProxy)GlobalSession.s_session).ComPtr, str), _session);
+        return new(spReflectionVariable_FindUserAttributeByName(_ptr, (IGlobalSession*)((NativeComProxy)GlobalSession.s_session).ComPtr, str), _component);
     }
 
     public readonly Attribute FindUserAttributeByName(string name)
@@ -61,8 +61,8 @@ public unsafe struct VariableReflection
     }
 
     public readonly GenericReflection GenericContainer =>
-        new(spReflectionVariable_GetGenericContainer(_ptr), _session);
+        new(spReflectionVariable_GetGenericContainer(_ptr), _component);
 
     public readonly VariableReflection ApplySpecializations(GenericReflection generic) =>
-        new(spReflectionVariable_applySpecializations(_ptr, generic._ptr), _session);
+        new(spReflectionVariable_applySpecializations(_ptr, generic._ptr), _component);
 };

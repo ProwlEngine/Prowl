@@ -14,15 +14,15 @@ namespace Prowl.Slang;
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct TypeReflection
 {
-    internal Session _session;
+    internal ComponentType _component;
     internal Native.TypeReflection* _ptr;
 
 
-    internal TypeReflection(Native.TypeReflection* ptr, Session session)
+    internal TypeReflection(Native.TypeReflection* ptr, ComponentType component)
     {
         ArgumentNullException.ThrowIfNull(ptr, nameof(ptr));
 
-        _session = session;
+        _component = component;
         _ptr = ptr;
     }
 
@@ -34,7 +34,7 @@ public unsafe struct TypeReflection
         spReflectionType_GetFieldCount(_ptr);
 
     public readonly VariableReflection GetFieldByIndex(uint index) =>
-        new(spReflectionType_GetFieldByIndex(_ptr, index), _session);
+        new(spReflectionType_GetFieldByIndex(_ptr, index), _component);
 
     public readonly IEnumerable<VariableReflection> Fields =>
         Utility.For(FieldCount, GetFieldByIndex);
@@ -74,7 +74,7 @@ public unsafe struct TypeReflection
     }
 
     public readonly TypeReflection ElementType =>
-        new(spReflectionType_GetElementType(_ptr), _session);
+        new(spReflectionType_GetElementType(_ptr), _component);
 
     public readonly uint RowCount =>
         spReflectionType_GetRowCount(_ptr);
@@ -86,7 +86,7 @@ public unsafe struct TypeReflection
         spReflectionType_GetScalarType(_ptr);
 
     public readonly TypeReflection ResourceResultType =>
-        new(spReflectionType_GetResourceResultType(_ptr), _session);
+        new(spReflectionType_GetResourceResultType(_ptr), _component);
 
     public readonly SlangResourceShape ResourceShape =>
         spReflectionType_GetResourceShape(_ptr);
@@ -110,7 +110,7 @@ public unsafe struct TypeReflection
         spReflectionType_GetUserAttributeCount(_ptr);
 
     public readonly Attribute GetUserAttributeByIndex(uint index) =>
-        new(spReflectionType_GetUserAttribute(_ptr, index), _session);
+        new(spReflectionType_GetUserAttribute(_ptr, index), _component);
 
     public readonly IEnumerable<Attribute> UserAttributes =>
         Utility.For(UserAttributeCount, GetUserAttributeByIndex);
@@ -118,15 +118,15 @@ public unsafe struct TypeReflection
     public readonly Attribute FindAttributeByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        return new(spReflectionType_FindUserAttributeByName(_ptr, str), _session);
+        return new(spReflectionType_FindUserAttributeByName(_ptr, str), _component);
     }
 
     public readonly Attribute FindUserAttributeByName(string name) =>
         FindAttributeByName(name);
 
     public readonly TypeReflection ApplySpecializations(GenericReflection generic) =>
-        new(spReflectionType_applySpecializations(_ptr, generic._ptr), _session);
+        new(spReflectionType_applySpecializations(_ptr, generic._ptr), _component);
 
     public readonly GenericReflection GenericContainer =>
-        new(spReflectionType_GetGenericContainer(_ptr), _session);
+        new(spReflectionType_GetGenericContainer(_ptr), _component);
 }
