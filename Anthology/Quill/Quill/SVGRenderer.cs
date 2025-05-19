@@ -77,11 +77,13 @@ namespace Prowl.Quill
                         break;
                     case DrawType.ClosePath:
                         canvas.ClosePath();
-                        if (pathElement.hasFill)
-                            canvas.Fill();
+
                         break;
                 }
             }
+
+            if (pathElement.hasFill)
+                canvas.FillComplex();
 
             if (pathElement.hasStroke)
                 canvas.Stroke();
