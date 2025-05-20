@@ -181,9 +181,9 @@ namespace Prowl.Quill
                     case 'h': drawCommand.type = DrawType.HorizontalLineTo; break;
                     case 'v': drawCommand.type = DrawType.VerticalLineTo; break;
                     case 'q': drawCommand.type = DrawType.QuadraticCurveTo; break;
-                    case 't': drawCommand.type = DrawType.QuadraticCurveTo; break;//todo handle smooth qudratic curve
-                    case 'c': drawCommand.type = DrawType.BezierCurveTo; break;
-                    case 's': drawCommand.type = DrawType.BezierCurveTo; break;//todo handle smooth cubic curve's 4 parameter
+                    case 't': drawCommand.type = DrawType.SmoothQuadraticCurveTo; break;
+                    case 'c': drawCommand.type = DrawType.CubicCurveTo; break;
+                    case 's': drawCommand.type = DrawType.SmoothCubicCurveTo; break;
                     case 'a': drawCommand.type = DrawType.ArcTo; break;
                     case 'z': drawCommand.type = DrawType.ClosePath; break;
                 }
@@ -220,7 +220,9 @@ namespace Prowl.Quill
                 case DrawType.HorizontalLineTo: return command.param.Length == 1;
                 case DrawType.VerticalLineTo: return command.param.Length == 1;
                 case DrawType.QuadraticCurveTo: return command.param.Length == 4;
-                case DrawType.BezierCurveTo: return command.param.Length == 6;
+                case DrawType.SmoothQuadraticCurveTo: return command.param.Length == 2;
+                case DrawType.CubicCurveTo: return command.param.Length == 6;
+                case DrawType.SmoothCubicCurveTo: return command.param.Length == 4;
                 case DrawType.ArcTo: return command.param.Length == 7;
                 case DrawType.ClosePath: return command.param == null;
                 default: return true;
@@ -262,8 +264,8 @@ namespace Prowl.Quill
         LineTo,
         VerticalLineTo,
         HorizontalLineTo,
-        BezierCurveTo,
-        SmoothBezierCurveTo,
+        CubicCurveTo,
+        SmoothCubicCurveTo,
         QuadraticCurveTo,
         SmoothQuadraticCurveTo,
         ArcTo,

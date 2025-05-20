@@ -42,12 +42,16 @@ namespace Common
         void ParseSVG()
         {
             svgElements = new List<SvgElement>();
-            var svgFiles = Directory.GetFiles("../../../../Common/SVGs/test");
+            var svgFiles = Directory.GetFiles("../../../../Common/SVGs");
 
             foreach (var svgFile in svgFiles)
             {
-                var svgElement = SVGParser.ParseSVGDocument(svgFile);
-                svgElements.Add(svgElement);
+                if (Path.GetExtension(svgFile) == ".svg")
+                {
+                    Console.WriteLine(svgFile);
+                    var svgElement = SVGParser.ParseSVGDocument(svgFile);
+                    svgElements.Add(svgElement);
+                }
             }
         }
 
