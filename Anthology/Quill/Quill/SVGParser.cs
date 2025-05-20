@@ -53,7 +53,7 @@ namespace Prowl.Quill
             hasFill = Attributes.ContainsKey("fill");
             stroke = ParseColor("stroke");
             fill = ParseColor("fill");
-            strokeWidth = ParseDouble("stroke-wdith");
+            strokeWidth = ParseDouble("stroke-width");
         }
 
         string? ParseString(string key)
