@@ -49,7 +49,7 @@ namespace Prowl.Quill
             {
                 var cmd = pathElement.drawCommands[i];
                 var offset = cmd.relative ? canvas.CurrentPoint : position;
-
+                var cp = ReflectPoint(canvas.CurrentPoint, lastControlPoint);
                 //if (!printed)
                 //{
                 //    Console.WriteLine(offset);
@@ -75,14 +75,14 @@ namespace Prowl.Quill
                         lastControlPoint = new Vector2(offset.x + cmd.param[0], offset.y + cmd.param[1]);
                         break;
                     case DrawType.SmoothQuadraticCurveTo:
-                        var cp = ReflectPoint(canvas.CurrentPoint, lastControlPoint);
                         canvas.QuadraticCurveTo(cp.x, cp.y, offset.x + cmd.param[0], offset.y + cmd.param[1]);
                         break;
                     case DrawType.CubicCurveTo:
                         canvas.BezierCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3], offset.x + cmd.param[4], offset.y + cmd.param[5]);
+                        lastControlPoint = new Vector2(offset.x + cmd.param[2], offset.y + cmd.param[3]);
                         break;
                     case DrawType.SmoothCubicCurveTo:
-                        //canvas.BezierCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3]);
+                        canvas.BezierCurveTo(cp.x, cp.y, offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3]);
                         break;
                     case DrawType.ArcTo:
                         //todo add support for ellipse in canvas to fully support svg arc
