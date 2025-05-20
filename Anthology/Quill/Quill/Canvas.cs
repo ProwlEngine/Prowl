@@ -173,6 +173,7 @@ namespace Prowl.Quill
             _currentSubPath != null && _currentSubPath.Points.Count > 0 ?
             _currentSubPath.Points[_currentSubPath.Points.Count - 1] :
             Vector2.zero;
+        //todo use CurrentPoint in ArcTo and BezierCurveTo
 
         internal ICanvasRenderer _renderer;
 
