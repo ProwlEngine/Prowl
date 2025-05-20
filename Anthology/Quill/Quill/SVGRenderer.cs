@@ -1,5 +1,4 @@
 ﻿using Prowl.Vector;
-using System;
 
 namespace Prowl.Quill
 {
@@ -101,7 +100,7 @@ namespace Prowl.Quill
                 canvas.Stroke();
         }
 
-        static Vector2 ReflectPoint(Vector2 mirrorPoint,Vector2 inputPoint)
+        static Vector2 ReflectPoint(Vector2 mirrorPoint, Vector2 inputPoint)
         {
             return 2 * mirrorPoint - inputPoint;
         }
