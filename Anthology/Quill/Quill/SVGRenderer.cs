@@ -1,9 +1,13 @@
 ﻿using Prowl.Vector;
+using System;
+using System.Drawing;
 
 namespace Prowl.Quill
 {
     public static class SVGRenderer
     {
+        public static Color currentColor = Color.White;
+
         //for debug
         //static bool printed = false;
 
@@ -31,8 +35,25 @@ namespace Prowl.Quill
 
         static void SetState(Canvas canvas, SvgElement pathElement)
         {
-            canvas.SetStrokeColor(pathElement.stroke);
-            canvas.SetFillColor(pathElement.fill);
+            switch (pathElement.strokeType)
+            {
+                case SvgElement.ColorType.specific:
+                    canvas.SetStrokeColor(pathElement.stroke);
+                    break;
+                case SvgElement.ColorType.currentColor:
+                    canvas.SetStrokeColor(currentColor);
+                    break;
+            }
+            switch (pathElement.fillType)
+            {
+                case SvgElement.ColorType.specific:
+                    canvas.SetFillColor(pathElement.stroke);
+                    break;
+                case SvgElement.ColorType.currentColor:
+                    canvas.SetFillColor(currentColor);
+                    break;
+            }
+
             canvas.SetStrokeWidth(pathElement.strokeWidth);
         }
 
@@ -93,10 +114,10 @@ namespace Prowl.Quill
                 }
             }
 
-            if (pathElement.hasFill)
+            if (pathElement.fillType != SvgElement.ColorType.none)
                 canvas.FillComplex();
 
-            if (pathElement.hasStroke)
+            if (pathElement.strokeType != SvgElement.ColorType.none)
                 canvas.Stroke();
         }
 
@@ -109,7 +130,7 @@ namespace Prowl.Quill
         {
             var pos = position + new Vector2(element.cx, element.cy);
 
-            if (element.hasFill)
+            if (element.fillType != SvgElement.ColorType.none)
                 canvas.CircleFilled(pos.x, pos.y, element.r, element.fill);
             else
                 canvas.Circle(pos.x, pos.y, element.r);

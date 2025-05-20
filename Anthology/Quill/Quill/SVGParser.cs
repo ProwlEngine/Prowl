@@ -18,8 +18,8 @@ namespace Prowl.Quill
 
         public Color stroke;
         public Color fill;
-        public bool hasStroke;
-        public bool hasFill;
+        public ColorType strokeType;
+        public ColorType fillType;
         public double strokeWidth;
 
         public SvgElement()
@@ -49,10 +49,15 @@ namespace Prowl.Quill
 
         public virtual void Parse()
         {
-            hasStroke = Attributes.ContainsKey("stroke");
-            hasFill = Attributes.ContainsKey("fill");
-            stroke = ParseColor("stroke");
-            fill = ParseColor("fill");
+            var strokeText = ParseString("stroke");
+            strokeType = ParseColorType("stroke");
+            fillType = ParseColorType("fill");
+
+            if (strokeType == ColorType.specific)
+                stroke = ParseColor("stroke");
+            if (fillType == ColorType.specific)
+                fill = ParseColor("fill");
+
             strokeWidth = ParseDouble("stroke-width");
         }
 
@@ -61,6 +66,18 @@ namespace Prowl.Quill
             if (Attributes.ContainsKey(key))
                 return Attributes[key];
             return null;
+        }
+
+        ColorType ParseColorType(string key)
+        {
+            if (Attributes.ContainsKey(key))
+            {
+                var value = Attributes[key];
+                if (Enum.TryParse<ColorType>(value, true, out var result))
+                    return result;
+                return ColorType.specific;
+            }
+            return ColorType.none;
         }
 
         protected double ParseDouble(string key)
@@ -93,6 +110,13 @@ namespace Prowl.Quill
             path,
             circle,
             g,
+        }
+
+        public enum ColorType
+        {
+            none,
+            currentColor,
+            specific
         }
     }
 
@@ -200,7 +224,7 @@ namespace Prowl.Quill
 
                     drawCommand.param = param.ToArray();
                 }
-                //Console.WriteLine(drawCommand.ToString());
+                Console.WriteLine(drawCommand.ToString());
                 drawCommands[i] = drawCommand;
                 if (!ValidateParameterCount(drawCommand))
                 {
@@ -290,7 +314,7 @@ namespace Prowl.Quill
 
         private static SvgElement ParseXmlElement(XmlElement xmlElement, int depth)
         {
-            SvgElement svgElement;// = new SvgElement();
+            SvgElement svgElement;
 
             var supported = Enum.TryParse<SvgElement.TagType>(xmlElement.Name, out var result);
             if (!supported)
