@@ -8,7 +8,7 @@ namespace Prowl.Slang;
 
 
 /// <summary>
-/// Reflection information for a shader entrypoint defined in a module.
+/// Provides reflection information for an entry point in a shader module.
 /// </summary>
 public unsafe struct EntryPointReflection
 {
@@ -24,45 +24,46 @@ public unsafe struct EntryPointReflection
         _ptr = ptr;
     }
 
-
     /// <summary>
-    /// The name of the entrypoint.
+    /// Gets the original name of the entry point as defined in the shader source.
     /// </summary>
     public readonly string Name =>
         spReflectionEntryPoint_getName(_ptr).String;
 
     /// <summary>
-    /// The name override for this <see cref="EntryPointReflection"/>
+    /// Gets the overridden name of the entry point, if any.
     /// </summary>
     public readonly string NameOverride =>
         spReflectionEntryPoint_getNameOverride(_ptr).String;
 
     /// <summary>
-    /// Gets the total number of parameters in this entrypoint.
+    /// Gets the number of parameters for this entry point.
     /// </summary>
     public readonly uint ParameterCount =>
         spReflectionEntryPoint_getParameterCount(_ptr);
 
     /// <summary>
-    /// The inner <see cref="FunctionReflection"/> of this entrypoint.
+    /// Gets the function reflection information for this entry point.
     /// </summary>
     public readonly FunctionReflection Function =>
         new(spReflectionEntryPoint_getFunction(_ptr), _component);
 
     /// <summary>
-    /// Returns the <see cref="VariableLayoutReflection"/> in this entrypoint's parameter list at the given index.
+    /// Gets the variable layout reflection for a parameter at the specified index.
     /// </summary>
+    /// <param name="index">The zero-based index of the parameter.</param>
+    /// <returns>A <see cref="VariableLayoutReflection"/> object containing the parameter's layout information.</returns>
     public readonly VariableLayoutReflection GetParameterByIndex(uint index) =>
         new(spReflectionEntryPoint_getParameterByIndex(_ptr, index), _component);
 
     /// <summary>
-    /// Variable information for the parameters in this entrypoint.
+    /// Gets an enumerable collection of all parameters for this entry point.
     /// </summary>
     public readonly IEnumerable<VariableLayoutReflection> Parameters =>
         Utility.For(ParameterCount, GetParameterByIndex);
 
     /// <summary>
-    /// The shader stage this entrypoint targets.
+    /// Gets the shader stage this entry point is designed for (e.g., vertex, fragment, compute).
     /// </summary>
     public readonly ShaderStage Stage =>
         spReflectionEntryPoint_getStage(_ptr);
@@ -87,32 +88,34 @@ public unsafe struct EntryPointReflection
     }
 
     /// <summary>
-    /// Indicates if this entrypoint accepts an input of any sample rate.
+    /// Determines whether this entry point uses any sample-rate input.
     /// </summary>
+    /// <returns>True if the entry point uses sample-rate input; otherwise, false.</returns>
     public readonly bool UsesAnySampleRateInput =>
         spReflectionEntryPoint_usesAnySampleRateInput(_ptr) != 0;
 
     /// <summary>
-    /// The variable layout for this entrypoint.
+    /// Gets the variable layout reflection information for this entry point.
     /// </summary>
     public readonly VariableLayoutReflection VarLayout =>
         new(spReflectionEntryPoint_getVarLayout(_ptr), _component);
 
     /// <summary>
-    /// The type layout information for this entrypoint.
+    /// Gets the type layout reflection information for this entry point.
     /// </summary>
     public readonly TypeLayoutReflection TypeLayout =>
         VarLayout.TypeLayout;
 
     /// <summary>
-    /// The result variable information for this entrypoint.
+    /// Gets the variable layout reflection information for the result of this entry point.
     /// </summary>
     public readonly VariableLayoutReflection ResultVarLayout =>
         new(spReflectionEntryPoint_getResultVarLayout(_ptr), _component);
 
     /// <summary>
-    /// Indicates if this entrypoint uses a default constant buffer (global cbuffer in HLSL).
+    /// Determines whether this entry point has a default constant buffer.
     /// </summary>
+    /// <returns>True if the entry point has a default constant buffer; otherwise, false.</returns>
     public readonly bool HasDefaultConstantBuffer =>
         spReflectionEntryPoint_hasDefaultConstantBuffer(_ptr) != 0;
 }
