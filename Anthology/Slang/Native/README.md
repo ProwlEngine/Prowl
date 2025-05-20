@@ -12,6 +12,6 @@ To run a script:
 dotnet script UpdateSources.csx
 ```
 
-#### BuildNative.csx
+#### UpdateSources.csx
 
 This script downloads, copies, and organizes the precompiled slang binaries so that it can be used by the repository.
