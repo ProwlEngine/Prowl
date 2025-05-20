@@ -43,6 +43,7 @@ namespace Prowl.Quill
                 return;
 
             canvas.BeginPath();
+            var lastControlPoint = Vector2.zero;
 
             for (var i = 0; i < pathElement.drawCommands.Length; i++)
             {
@@ -71,9 +72,16 @@ namespace Prowl.Quill
                         break;
                     case DrawType.QuadraticCurveTo:
                         canvas.QuadraticCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3]);
+                        lastControlPoint = new Vector2(offset.x + cmd.param[0], offset.y + cmd.param[1]);
                         break;
-                    case DrawType.BezierCurveTo:
+                    case DrawType.SmoothQuadraticCurveTo:
+                        canvas.QuadraticCurveTo(offset.x + lastControlPoint.x, offset.y + lastControlPoint.y, offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        break;
+                    case DrawType.CubicCurveTo:
                         canvas.BezierCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3], offset.x + cmd.param[4], offset.y + cmd.param[5]);
+                        break;
+                    case DrawType.SmoothCubicCurveTo:
+                        //canvas.BezierCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3]);
                         break;
                     case DrawType.ArcTo:
                         //todo add support for ellipse in canvas to fully support svg arc
