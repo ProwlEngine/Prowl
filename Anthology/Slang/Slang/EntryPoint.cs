@@ -4,6 +4,9 @@ using Prowl.Slang.Native;
 namespace Prowl.Slang;
 
 
+/// <summary>
+/// An entrypoint defined in a shader module.
+/// </summary>
 public unsafe class EntryPoint : ComponentType
 {
     internal IEntryPoint _entryPoint;
@@ -15,6 +18,9 @@ public unsafe class EntryPoint : ComponentType
     }
 
 
+    /// <summary>
+    /// Gets the reflection information for the entrypoint function.
+    /// </summary>
     public FunctionReflection GetFunctionReflection()
     {
         return new FunctionReflection(_entryPoint.GetFunctionReflection(), this);

@@ -74,14 +74,18 @@ public static unsafe class GlobalSession
         return ID;
     }
 
-    /** Set the path that downstream compilers (aka back end compilers) will
-    be looked from.
-    @param passThrough Identifies the downstream compiler
-    @param path The path to find the downstream compiler (shared library/dll/executable)
 
-    For back ends that are dlls/shared libraries, it will mean the path will
-    be prefixed with the path when calls are made out to ISlangSharedLibraryLoader.
-    For executables - it will look for executables along the path */
+    /// <summary>
+    /// Set the path that downstream compilers (aka back end compilers) will
+    /// be looked from.
+    /// </summary>
+    /// <param name="passThrough">Identifies the downstream compiler.</param>
+    /// <param name="path">The path to find the downstream compiler(shared library/dll/executable).</param>
+    /// <remarks>
+    /// For back ends that are dlls/shared libraries, it will mean the path will
+    /// be prefixed with the path when calls are made out to ISlangSharedLibraryLoader.
+    /// For executables - it will look for executables along the path
+    /// </remarks>
     public static void SetDownstreamCompilerPath(SlangPassThrough passThrough, string path)
     {
         using U8Str str = U8Str.Alloc(path);
@@ -89,28 +93,23 @@ public static unsafe class GlobalSession
         s_session.SetDownstreamCompilerPath(passThrough, str);
     }
 
-    /** Get the build version 'tag' string. The string is the same as produced via `git describe
-    --tags` for the project. If Slang is built separately from the automated build scripts the
-    contents will by default be 'unknown'. Any string can be set by changing the contents of
-    'slang-tag-version.h' file and recompiling the project.
-
-    This method will return exactly the same result as the free function spGetBuildTagString.
-
-    @return The build tag string
-    */
+    /// <summary>
+    /// Get the build version 'tag' string. The string is the same as produced via `git describe
+    /// --tags` for the project. If Slang is built separately from the automated build scripts the
+    /// contents will by default be 'unknown'.
+    /// </summary>
     public static string GetBuildTagString()
     {
         return s_session.GetBuildTagString().String;
     }
 
-    /* For a given source language set the default compiler.
-    If a default cannot be chosen (for example the target cannot be achieved by the default),
-    the default will not be used.
-
-    @param sourceLanguage the source language
-    @param defaultCompiler the default compiler for that language
-    @return
-    */
+    /// <summary>
+    /// For a given source language set the default compiler.
+    /// If a default cannot be chosen (for example the target cannot be achieved by the default),
+    /// the default will not be used.
+    /// </summary>
+    /// <param name="sourceLanguage">The source language.</param>
+    /// <param name="defaultCompiler">The default compiler for that language.</param>
     public static void SetDefaultDownstreamCompiler(SlangSourceLanguage sourceLanguage, SlangPassThrough defaultCompiler)
     {
         s_session.SetDefaultDownstreamCompiler(sourceLanguage, defaultCompiler).Throw();
@@ -131,8 +130,7 @@ public static unsafe class GlobalSession
     @param preludeText The text added pre-pended verbatim before the generated source
 
     Note! That for pass-through usage, prelude is not pre-pended, preludes are for code generation
-    only.
-    */
+    only. */
     public static void SetLanguagePrelude(SlangSourceLanguage sourceLanguage, string preludeText)
     {
         using U8Str str = U8Str.Alloc(preludeText);
@@ -306,8 +304,9 @@ public static unsafe class GlobalSession
         }
     }
 
-    /** Computes a digest that uniquely identifies the session description.
-     */
+    /// <summary>
+    /// Computes a digest that uniquely identifies the session description.
+    /// </summary>
     public static string GetSessionDescDigest(in SessionDescription sessionDesc)
     {
         Native.SessionDescription nativeDesc = new();
