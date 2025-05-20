@@ -75,7 +75,8 @@ namespace Prowl.Quill
                         lastControlPoint = new Vector2(offset.x + cmd.param[0], offset.y + cmd.param[1]);
                         break;
                     case DrawType.SmoothQuadraticCurveTo:
-                        canvas.QuadraticCurveTo(offset.x + lastControlPoint.x, offset.y + lastControlPoint.y, offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        var cp = ReflectPoint(canvas.CurrentPoint, lastControlPoint);
+                        canvas.QuadraticCurveTo(cp.x, cp.y, offset.x + cmd.param[0], offset.y + cmd.param[1]);
                         break;
                     case DrawType.CubicCurveTo:
                         canvas.BezierCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3], offset.x + cmd.param[4], offset.y + cmd.param[5]);
@@ -98,6 +99,11 @@ namespace Prowl.Quill
 
             if (pathElement.hasStroke)
                 canvas.Stroke();
+        }
+
+        static Vector2 ReflectPoint(Vector2 mirrorPoint,Vector2 inputPoint)
+        {
+            return 2 * mirrorPoint - inputPoint;
         }
 
         static void DrawCircle(Canvas canvas, Vector2 position, SvgCircleElement element)
