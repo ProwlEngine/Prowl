@@ -102,7 +102,7 @@ namespace Common
 
             _canvas.MoveTo(275, 175);
             _canvas.LineTo(275, 25);
-            _canvas.EllipticalArcTo(150, 150, 0, 0, 0, 125, 175);
+            _canvas.EllipticalArcTo(150, 150, 0, false, false, 125, 175);
             _canvas.ClosePath();
 
             _canvas.Stroke();
