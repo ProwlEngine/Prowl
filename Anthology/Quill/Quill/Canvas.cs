@@ -1,11 +1,13 @@
 ﻿using FontStashSharp;
 using Prowl.Vector;
+using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using Prowl.Quill.External.LibTessDotNet;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Prowl.Quill
 {
@@ -169,11 +171,7 @@ namespace Prowl.Quill
         public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.Where(d => d.ElementCount != 0).ToList();
         public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
         public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
-        public Vector2 CurrentPoint =>
-            _currentSubPath != null && _currentSubPath.Points.Count > 0 ?
-            _currentSubPath.Points[_currentSubPath.Points.Count - 1] :
-            Vector2.zero;
-        //todo use CurrentPoint in ArcTo and BezierCurveTo
+        public Vector2 CurrentPoint => _currentSubPath != null && _currentSubPath.Points.Count > 0 ? _currentSubPath.Points[_currentSubPath.Points.Count - 1] : Vector2.zero;
 
         internal ICanvasRenderer _renderer;
 
@@ -197,7 +195,6 @@ namespace Prowl.Quill
         private double _pixelWidth = 1.0f;
         private double _pixelHalf = 0.5f;
         private double tess_tol = 0.5f; // Auto-tessellated
-
         public double DevicePixelRatio
         {
             get => _devicePixelRatio;
@@ -714,26 +711,20 @@ namespace Prowl.Quill
         /// <summary>
         /// Adds an elliptical arc to the path with the specified control points and radius.
         /// </summary>
-        /// <param name="rx">The x-coordinate of the first control point.</param>
-        /// <param name="ry">The y-coordinate of the first control point.</param>
+        /// <param name="rx">The x-axis radius of the ellipse.</param>
+        /// <param name="ry">The y-axis radius of the ellipse.</param>
         /// <param name="xAxisRotation">The x-coordinate of the second control point.</param>
         /// <param name="largeArcFlag">If largeArcFlag is '1', then one of the two larger arc sweeps will be chosen; otherwise, if largeArcFlag is '0', one of the smaller arc sweeps will be chosen.</param>
         /// <param name="sweepFlag">If sweepFlag is '1', then the arc will be drawn in a "positive-angle" direction. A value of 0 causes the arc to be drawn in a "negative-angle" direction</param>
         /// <param name="x">The x-coordinate of the endpoint.</param>
         /// <param name="y">The y-coordinate of the endpoint.</param>
         /// <remarks>
-        /// This method creates an arc that is tangent to both the line from the current position to (x1,y1)
-        /// and the line from (x1,y1) to (x2,y2) with the specified radius.
+        /// This method creates an elliptical arc with radii (rx,ry) from current point to (x_end,y_end)
         /// </remarks>
-        public void EllipticalArcTo(double rx, double ry, double xAxisRotationDegrees, double largeArcFlagDouble, double sweepFlagDouble, double x_end, double y_end)
+        public void EllipticalArcTo(double rx, double ry, double xAxisRotationDegrees, bool largeArcFlag, bool sweepFlag, double x_end, double y_end)
         {
-            Vector2 p1_vec = CurrentPoint;
-            double x1 = p1_vec.x;
-            double y1 = p1_vec.y;
-
-            // Cast flags to bool
-            bool largeArcFlag = largeArcFlagDouble != 0;
-            bool sweepFlag = sweepFlagDouble != 0;
+            double x = CurrentPoint.x;
+            double y = CurrentPoint.y;
 
             // Ensure radii are positive
             double rx_abs = Math.Abs(rx);
@@ -746,7 +737,7 @@ namespace Prowl.Quill
                 return;
             }
 
-            if (x1 == x_end && y1 == y_end)
+            if (x == x_end && y == y_end)
             {
                 // No arc to draw, points are identical
                 return;
@@ -757,8 +748,8 @@ namespace Prowl.Quill
             double sinPhi = Math.Sin(phi);
 
             // Step 1: Compute (x1', y1') - coordinates of p1 transformed relative to p_end
-            double dx_half = (x1 - x_end) / 2.0;
-            double dy_half = (y1 - y_end) / 2.0;
+            double dx_half = (x - x_end) / 2.0;
+            double dy_half = (y - y_end) / 2.0;
 
             double x1_prime = cosPhi * dx_half + sinPhi * dy_half;
             double y1_prime = -sinPhi * dx_half + cosPhi * dy_half;
@@ -782,11 +773,11 @@ namespace Prowl.Quill
             // Step 3: Compute (cx', cy') - center of ellipse in transformed (prime) coordinates
             double term_numerator = (rx_sq * ry_sq) - (rx_sq * y1_prime_sq) - (ry_sq * x1_prime_sq);
             double term_denominator = (rx_sq * y1_prime_sq) + (ry_sq * x1_prime_sq);
-            
+
             double term_sqrt_arg = 0;
             if (term_denominator != 0) // Avoid division by zero
                 term_sqrt_arg = term_numerator / term_denominator;
-            
+
             term_sqrt_arg = Math.Max(0, term_sqrt_arg); // Clamp to avoid issues with floating point inaccuracies
 
             double sign_coef = (largeArcFlag == sweepFlag) ? -1.0 : 1.0;
@@ -796,8 +787,8 @@ namespace Prowl.Quill
             double cy_prime = coef * -((ry_abs * x1_prime) / rx_abs);
 
             // Step 4: Compute (cx, cy) - center of ellipse in original coordinates
-            double x_mid = (x1 + x_end) / 2.0;
-            double y_mid = (y1 + y_end) / 2.0;
+            double x_mid = (x + x_end) / 2.0;
+            double y_mid = (y + y_end) / 2.0;
 
             double cx = cosPhi * cx_prime - sinPhi * cy_prime + x_mid;
             double cy = sinPhi * cx_prime + cosPhi * cy_prime + y_mid;
@@ -1405,7 +1396,7 @@ namespace Prowl.Quill
         public void RoundedRectFilled(double x, double y, double width, double height,
                                      double radius, System.Drawing.Color color)
         {
-            RoundedRectFilled(x,y,width, height, radius, radius, radius, radius, color);
+            RoundedRectFilled(x, y, width, height, radius, radius, radius, radius, color);
         }
 
         /// <summary>
