@@ -171,8 +171,9 @@ namespace Prowl.Quill
         public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.Where(d => d.ElementCount != 0).ToList();
         public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
         public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
-        public Vector2 CurrentPoint => _currentSubPath != null && _currentSubPath.Points.Count > 0 ? _currentSubPath.Points[_currentSubPath.Points.Count - 1] : Vector2.zero;
+        public Vector2 CurrentPoint => _currentSubPath != null && _currentSubPath.Points.Count > 0 ? CurrentPointInternal : Vector2.zero;
 
+        internal Vector2 CurrentPointInternal => _currentSubPath.Points[_currentSubPath.Points.Count - 1];
         internal ICanvasRenderer _renderer;
 
         internal List<DrawCall> _drawCalls = new List<DrawCall>();
@@ -646,7 +647,7 @@ namespace Prowl.Quill
                 return;
             }
 
-            Vector2 p0 = _currentSubPath.Points[_currentSubPath.Points.Count - 1];
+            Vector2 p0 = CurrentPointInternal;
             Vector2 p1 = new Vector2(x1, y1);
             Vector2 p2 = new Vector2(x2, y2);
 
@@ -715,8 +716,8 @@ namespace Prowl.Quill
         /// </remarks>
         public void EllipticalArcTo(double rx, double ry, double xAxisRotationDegrees, bool largeArcFlag, bool sweepFlag, double x_end, double y_end)
         {
-            double x = CurrentPoint.x;
-            double y = CurrentPoint.y;
+            double x = CurrentPointInternal.x;
+            double y = CurrentPointInternal.y;
 
             // Ensure radii are positive
             double rx_abs = Math.Abs(rx);
@@ -856,7 +857,7 @@ namespace Prowl.Quill
             }
 
             //Vector2 p1 = _currentSubPath!.Points[^1];
-            Vector2 p1 = _currentSubPath.Points[_currentSubPath.Points.Count - 1];
+            Vector2 p1 = CurrentPointInternal;
             Vector2 p2 = new Vector2(cp1x, cp1y);
             Vector2 p3 = new Vector2(cp2x, cp2y);
             Vector2 p4 = new Vector2(x, y);
@@ -914,7 +915,7 @@ namespace Prowl.Quill
                 return;
             }
 
-            Vector2 p1 = _currentSubPath.Points[_currentSubPath.Points.Count - 1];
+            Vector2 p1 = CurrentPointInternal;
             Vector2 p2 = new Vector2(cpx, cpy);
             Vector2 p3 = new Vector2(x, y);
 
