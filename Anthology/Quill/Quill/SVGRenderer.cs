@@ -118,9 +118,7 @@ namespace Prowl.Quill
                         lastControlPoint = new Vector2(offset.x + cmd.param[0], offset.y + cmd.param[1]);
                         break;
                     case DrawType.ArcTo:
-                        //todo add support for ellipse in canvas to fully support svg arc
-                        canvas.ArcTo(offset.x, offset.y, offset.x + cmd.param[5], offset.y + cmd.param[6], cmd.param[0]);
-                        lastControlPoint = new Vector2(offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        canvas.EllipticalArcTo(cmd.param[0], cmd.param[1], cmd.param[2], cmd.param[3], cmd.param[4], offset.x + cmd.param[5], offset.y + cmd.param[6]);
                         break;
                     case DrawType.ClosePath:
                         canvas.ClosePath();
