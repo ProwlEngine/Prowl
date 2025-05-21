@@ -646,7 +646,7 @@ namespace Prowl.Quill
                 return;
             }
 
-            Vector2 p0 = _currentSubPath.Points[_currentSubPath.Points.Count - 1];
+            Vector2 p0 = CurrentPoint;
             Vector2 p1 = new Vector2(x1, y1);
             Vector2 p2 = new Vector2(x2, y2);
 
@@ -856,7 +856,7 @@ namespace Prowl.Quill
             }
 
             //Vector2 p1 = _currentSubPath!.Points[^1];
-            Vector2 p1 = _currentSubPath.Points[_currentSubPath.Points.Count - 1];
+            Vector2 p1 = CurrentPoint;
             Vector2 p2 = new Vector2(cp1x, cp1y);
             Vector2 p3 = new Vector2(cp2x, cp2y);
             Vector2 p4 = new Vector2(x, y);
@@ -914,7 +914,7 @@ namespace Prowl.Quill
                 return;
             }
 
-            Vector2 p1 = _currentSubPath.Points[_currentSubPath.Points.Count - 1];
+            Vector2 p1 = CurrentPoint;
             Vector2 p2 = new Vector2(cpx, cpy);
             Vector2 p3 = new Vector2(x, y);
 
