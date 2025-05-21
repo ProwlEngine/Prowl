@@ -118,7 +118,7 @@ namespace Prowl.Quill
                         lastControlPoint = new Vector2(offset.x + cmd.param[0], offset.y + cmd.param[1]);
                         break;
                     case DrawType.ArcTo:
-                        canvas.EllipticalArcTo(cmd.param[0], cmd.param[1], cmd.param[2], cmd.param[3], cmd.param[4], offset.x + cmd.param[5], offset.y + cmd.param[6]);
+                        canvas.EllipticalArcTo(cmd.param[0], cmd.param[1], cmd.param[2], cmd.param[3] != 0, cmd.param[4] != 0, offset.x + cmd.param[5], offset.y + cmd.param[6]);
                         break;
                     case DrawType.ClosePath:
                         canvas.ClosePath();
