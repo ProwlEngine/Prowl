@@ -122,6 +122,7 @@ namespace Prowl.Quill
         internal double strokeWidth;
         internal double strokeScale;
         internal double miterLimit;
+        internal double tess_tol;
 
         internal object? texture;
         internal Transform2D scissor;
@@ -142,6 +143,7 @@ namespace Prowl.Quill
             strokeWidth = 1f; // Default stroke width
             strokeScale = 1f; // Default stroke scale
             miterLimit = 4; // Default miter limit
+            tess_tol = 0.5; // Default tessellation tolerance
             texture = null;
             scissor.Zero();
             scissorExtent.x = -1.0f;
@@ -254,6 +256,7 @@ namespace Prowl.Quill
         public void SetStrokeWidth(double width = 2f) => _state.strokeWidth = width;
         public void SetStrokeScale(double scale) => _state.strokeScale = scale;
         public void SetMiterLimit(double limit = 4) => _state.miterLimit = limit;
+        public void SetTessellationTolerance(double tolerance = 0.5) => _state.tess_tol = tolerance;
         public void SetTexture(object texture) => _state.texture = texture;
         public void SetLinearBrush(double x1, double y1, double x2, double y2, Color color1, Color color2)
         {
@@ -861,9 +864,7 @@ namespace Prowl.Quill
             Vector2 p3 = new Vector2(cp2x, cp2y);
             Vector2 p4 = new Vector2(x, y);
 
-            // Auto-tessellated
-            const double tess_tol = 0.5f;
-            PathBezierToCasteljau(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y, tess_tol, 0);
+            PathBezierToCasteljau(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y, _state.tess_tol, 0);
         }
 
         private void PathBezierToCasteljau(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, double tess_tol, int level)
