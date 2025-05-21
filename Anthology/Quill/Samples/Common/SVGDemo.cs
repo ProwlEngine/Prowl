@@ -85,6 +85,16 @@ namespace Common
             _canvas.Stroke();
         }
 
+        private void DrawEllipse(Color color)
+        {
+            _canvas.SetStrokeColor(color);
+            _canvas.SetStrokeWidth(4);
+
+            _canvas.Ellipse(0, 0, 250, 100);
+
+            _canvas.Stroke();
+        }
+
         private void DrawCoordinateSystem(double x, double y, double size)
         {
             // X axis
@@ -134,7 +144,7 @@ namespace Common
 
             // Draw coordinate system at center
             DrawCoordinateSystem(0, 0, 50);
-
+            DrawEllipse(Color.Red);
             DrawSVG();
 
             // Restore the canvas state
