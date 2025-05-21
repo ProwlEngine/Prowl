@@ -1020,6 +1020,19 @@ namespace Prowl.Quill
         /// <param name="y">The y-coordinate of the top-left corner of the rectangle.</param>
         /// <param name="width">The width of the rectangle.</param>
         /// <param name="height">The height of the rectangle.</param>
+        /// <param name="radius">The radius of the corners.</param>
+        public void RoundedRect(double x, double y, double width, double height, double radius)
+        {
+            RoundedRect(x, y, width, height, radius, radius, radius, radius);
+        }
+
+        /// <summary>
+        /// Creates a Closed Rounded Rect Path
+        /// </summary>
+        /// <param name="x">The x-coordinate of the top-left corner of the rectangle.</param>
+        /// <param name="y">The y-coordinate of the top-left corner of the rectangle.</param>
+        /// <param name="width">The width of the rectangle.</param>
+        /// <param name="height">The height of the rectangle.</param>
         /// <param name="tlRadii">The radius of the top-left corner.</param>
         /// <param name="trRadii">The radius of the top-right corner.</param>
         /// <param name="brRadii">The radius of the bottom-right corner.</param>
@@ -1193,6 +1206,23 @@ namespace Prowl.Quill
             SetTexture(texture);
             RectFilled(x, y, width, height, color);
             SetTexture(null);
+        }
+
+        /// <summary>
+        /// Paints a Hardware-accelerated rounded rectangle on the canvas.
+        /// This does not modify or use the current path.
+        /// </summary>
+        /// <param name="x">The x-coordinate of the top-left corner of the rounded rectangle.</param>
+        /// <param name="y">The y-coordinate of the top-left corner of the rounded rectangle.</param>
+        /// <param name="width">The width of the rounded rectangle.</param>
+        /// <param name="height">The height of the rounded rectangle.</param>
+        /// <param name="radius">The radius of the corners.</param>
+        /// <param name="color">The color of the rounded rectangle.</param>
+        /// <remarks>This is significantly faster than using the path API to draw a rounded rectangle.</remarks>
+        public void RoundedRectFilled(double x, double y, double width, double height,
+                                     double radius, System.Drawing.Color color)
+        {
+            RoundedRectFilled(x, y, width, height, radius, radius, radius, radius, color);
         }
 
         /// <summary>
