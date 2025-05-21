@@ -122,6 +122,7 @@ namespace Prowl.Quill
         internal double strokeWidth;
         internal double strokeScale;
         internal double miterLimit;
+        internal double tess_tol;
 
         internal object? texture;
         internal Transform2D scissor;
@@ -142,6 +143,7 @@ namespace Prowl.Quill
             strokeWidth = 1f; // Default stroke width
             strokeScale = 1f; // Default stroke scale
             miterLimit = 4; // Default miter limit
+            tess_tol = 0.5; // Default tessellation tolerance
             texture = null;
             scissor.Zero();
             scissorExtent.x = -1.0f;
@@ -194,7 +196,6 @@ namespace Prowl.Quill
         private double _devicePixelRatio = 1.0f;
         private double _pixelWidth = 1.0f;
         private double _pixelHalf = 0.5f;
-        private double tess_tol = 0.5f; // Auto-tessellated
         public double DevicePixelRatio
         {
             get => _devicePixelRatio;
@@ -257,6 +258,7 @@ namespace Prowl.Quill
         public void SetStrokeWidth(double width = 2f) => _state.strokeWidth = width;
         public void SetStrokeScale(double scale) => _state.strokeScale = scale;
         public void SetMiterLimit(double limit = 4) => _state.miterLimit = limit;
+        public void SetTessellationTolerance(double tolerance = 0.5) => _state.tess_tol = tolerance;
         public void SetTexture(object texture) => _state.texture = texture;
         public void SetLinearBrush(double x1, double y1, double x2, double y2, Color color1, Color color2)
         {
@@ -567,11 +569,6 @@ namespace Prowl.Quill
         public void SetSolidity(WindingMode solidity) => _state.fillMode = solidity;
 
         /// <summary>
-        /// Sets the tessellation tolerance for bezier curve
-        /// </summary>
-        public void SetTessellationTolerance(double tolerance) => tess_tol = Math.Clamp(tolerance, 0.01, 1);
-
-        /// <summary>
         /// Adds an arc to the current path.
         /// </summary>
         /// <param name="x">The x-coordinate of the center of the arc.</param>
@@ -869,7 +866,7 @@ namespace Prowl.Quill
             Vector2 p3 = new Vector2(cp2x, cp2y);
             Vector2 p4 = new Vector2(x, y);
 
-            PathBezierToCasteljau(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y, tess_tol, 0);
+            PathBezierToCasteljau(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y, _state.tess_tol, 0);
         }
 
         private void PathBezierToCasteljau(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, double tess_tol, int level)
