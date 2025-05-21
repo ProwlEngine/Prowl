@@ -133,6 +133,9 @@ namespace OpenTKExample
                 _currentDemoIndex = _currentDemoIndex - 1 < 0 ? _demos.Count - 1 : _currentDemoIndex - 1;
             if (keyboard.IsKeyReleased(Keys.Right))
                 _currentDemoIndex = _currentDemoIndex + 1 == _demos.Count ? 0 : _currentDemoIndex + 1;
+            if (keyboard.IsKeyReleased(Keys.Space))
+                if (_demos[_currentDemoIndex] is SVGDemo svgDemo)
+                    svgDemo.ParseSVG();
         }
 
         protected override void OnResize(ResizeEventArgs e)

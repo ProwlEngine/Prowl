@@ -38,7 +38,7 @@ namespace Common
             _canvas.ResetState();
         }
 
-        void ParseSVG()
+        public void ParseSVG()
         {
             svgElements = new List<SvgElement>();
             var svgFiles = Directory.GetFiles("../../../../Common/SVGs/test");
@@ -58,8 +58,13 @@ namespace Common
         {
             _canvas.SetTessellationTolerance(0.01f);
 
+            const int iconPerLine = 10;
             for (int i = 0; i < svgElements.Count; i++)
-                SVGRenderer.DrawToCanvas(_canvas, new Vector2(i * 30, 0), svgElements[i]);
+            {
+                var x = i % iconPerLine;
+                var y = i / iconPerLine;
+                SVGRenderer.DrawToCanvas(_canvas, new Vector2(x * 30, y * 30), svgElements[i]);
+            }
 
             _canvas.ResetState();
         }
