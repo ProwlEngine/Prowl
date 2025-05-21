@@ -58,7 +58,7 @@ namespace Prowl.Quill
             switch (pathElement.fillType)
             {
                 case SvgElement.ColorType.specific:
-                    canvas.SetFillColor(pathElement.stroke);
+                    canvas.SetFillColor(pathElement.fill);
                     break;
                 case SvgElement.ColorType.currentColor:
                     canvas.SetFillColor(currentColor);
