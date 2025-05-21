@@ -25,12 +25,23 @@ namespace Prowl.Quill
 
                 if (element is SvgPathElement pathElement)
                     DrawPath(canvas, position, pathElement);
-
-                if (element is SvgCircleElement circleElement)
+                else if (element is SvgCircleElement circleElement)
                     DrawCircle(canvas, position, circleElement);
+                else if (element is SvgRectElement rectElement)
+                    DrawRect(canvas, position, rectElement);
 
+                ApplyFillStroke(canvas, element);
             }
             //printed = true;
+        }
+
+        static void ApplyFillStroke(Canvas canvas, SvgElement element)
+        {
+            if (element.fillType != SvgElement.ColorType.none)
+                canvas.FillComplex();
+
+            if (element.strokeType != SvgElement.ColorType.none)
+                canvas.Stroke();
         }
 
         static void SetState(Canvas canvas, SvgElement pathElement)
@@ -116,12 +127,6 @@ namespace Prowl.Quill
                         break;
                 }
             }
-
-            if (pathElement.fillType != SvgElement.ColorType.none)
-                canvas.FillComplex();
-
-            if (pathElement.strokeType != SvgElement.ColorType.none)
-                canvas.Stroke();
         }
 
         static Vector2 ReflectPoint(Vector2 mirrorPoint, Vector2 inputPoint)
@@ -137,6 +142,29 @@ namespace Prowl.Quill
                 canvas.CircleFilled(pos.x, pos.y, element.r, element.fill);
             else
                 canvas.Circle(pos.x, pos.y, element.r);
+        }
+
+        static void DrawRect(Canvas canvas, Vector2 position, SvgRectElement element)
+        {
+            var pos = element.pos;
+            var size = element.size;
+
+            if (element.radius.x == 0)
+            {
+
+                if (element.fillType != SvgElement.ColorType.none)
+                    canvas.Rect(pos.x, pos.y, size.x, size.y);
+                else
+                    canvas.RectFilled(pos.x, pos.y, size.x, size.y, element.fill);
+            }
+            else
+            {
+                if (element.fillType != SvgElement.ColorType.none)
+                    canvas.RoundedRect(pos.x, pos.y, size.x, size.y, element.radius.x);
+                else
+                    canvas.RoundedRectFilled(pos.x, pos.y, size.x, size.y, element.radius.x, element.fill);
+            }
+
         }
     }
 }

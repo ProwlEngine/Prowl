@@ -5,6 +5,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Text;
 using System.Drawing;
+using Prowl.Vector;
 
 namespace Prowl.Quill
 {
@@ -109,6 +110,7 @@ namespace Prowl.Quill
             svg,
             path,
             circle,
+            rect,
             g,
         }
 
@@ -122,9 +124,19 @@ namespace Prowl.Quill
 
     public class SvgRectElement : SvgElement
     {
+        public Vector2 pos;
+        public Vector2 size;
+        public Vector2 radius;
+
         public override void Parse()
         {
             base.Parse();
+            pos.x = ParseDouble("x");
+            pos.y = ParseDouble("y");
+            size.x = ParseDouble("width");
+            size.y = ParseDouble("height");
+            radius.x = ParseDouble("rx");
+            radius.y = ParseDouble("ry");
         }
     }
 
@@ -320,7 +332,7 @@ namespace Prowl.Quill
             if (!supported)
                 return null;
 
-            var tag = Enum.Parse<SvgElement.TagType>(xmlElement.Name);
+            var tag = Enum.Parse<SvgElement.TagType>(xmlElement.Name, true);
             switch (tag)
             {
                 case SvgElement.TagType.path:
@@ -328,6 +340,9 @@ namespace Prowl.Quill
                     break;
                 case SvgElement.TagType.circle:
                     svgElement = new SvgCircleElement();
+                    break;
+                case SvgElement.TagType.rect:
+                    svgElement = new SvgRectElement();
                     break;
                 default:
                     svgElement = new SvgElement();
