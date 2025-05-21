@@ -171,6 +171,7 @@ namespace Prowl.Quill
         public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.Where(d => d.ElementCount != 0).ToList();
         public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
         public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
+        public Vector2 CurrentPoint => _currentSubPath != null && _currentSubPath.Points.Count > 0 ? _currentSubPath.Points[_currentSubPath.Points.Count - 1] : Vector2.zero;
 
         internal ICanvasRenderer _renderer;
 
@@ -697,6 +698,139 @@ namespace Prowl.Quill
 
             // Draw the arc
             Arc(center.x, center.y, radius, startAngle, endAngle, (v1.x * v2.y - v1.y * v2.x) < 0);
+        }
+
+        /// <summary>
+        /// Adds an elliptical arc to the path with the specified control points and radius.
+        /// </summary>
+        /// <param name="rx">The x-axis radius of the ellipse.</param>
+        /// <param name="ry">The y-axis radius of the ellipse.</param>
+        /// <param name="xAxisRotation">The x-coordinate of the second control point.</param>
+        /// <param name="largeArcFlag">If largeArcFlag is '1', then one of the two larger arc sweeps will be chosen; otherwise, if largeArcFlag is '0', one of the smaller arc sweeps will be chosen.</param>
+        /// <param name="sweepFlag">If sweepFlag is '1', then the arc will be drawn in a "positive-angle" direction. A value of 0 causes the arc to be drawn in a "negative-angle" direction</param>
+        /// <param name="x">The x-coordinate of the endpoint.</param>
+        /// <param name="y">The y-coordinate of the endpoint.</param>
+        /// <remarks>
+        /// This method creates an elliptical arc with radii (rx,ry) from current point to (x_end,y_end)
+        /// </remarks>
+        public void EllipticalArcTo(double rx, double ry, double xAxisRotationDegrees, bool largeArcFlag, bool sweepFlag, double x_end, double y_end)
+        {
+            double x = CurrentPoint.x;
+            double y = CurrentPoint.y;
+
+            // Ensure radii are positive
+            double rx_abs = Math.Abs(rx);
+            double ry_abs = Math.Abs(ry);
+
+            // If rx or ry is zero, or if start and end points are the same, treat as a line segment (or do nothing if start=end)
+            if (rx_abs == 0 || ry_abs == 0)
+            {
+                LineTo(x_end, y_end);
+                return;
+            }
+
+            if (x == x_end && y == y_end)
+            {
+                // No arc to draw, points are identical
+                return;
+            }
+
+            double phi = xAxisRotationDegrees * (Math.PI / 180.0); // Convert degrees to radians
+            double cosPhi = Math.Cos(phi);
+            double sinPhi = Math.Sin(phi);
+
+            // Step 1: Compute (x1', y1') - coordinates of p1 transformed relative to p_end
+            double dx_half = (x - x_end) / 2.0;
+            double dy_half = (y - y_end) / 2.0;
+
+            double x1_prime = cosPhi * dx_half + sinPhi * dy_half;
+            double y1_prime = -sinPhi * dx_half + cosPhi * dy_half;
+
+            // Step 2: Ensure radii are large enough
+            double rx_sq = rx_abs * rx_abs;
+            double ry_sq = ry_abs * ry_abs;
+            double x1_prime_sq = x1_prime * x1_prime;
+            double y1_prime_sq = y1_prime * y1_prime;
+
+            double radii_check = (x1_prime_sq / rx_sq) + (y1_prime_sq / ry_sq);
+            if (radii_check > 1.0)
+            {
+                double scaleFactor = Math.Sqrt(radii_check);
+                rx_abs *= scaleFactor;
+                ry_abs *= scaleFactor;
+                rx_sq = rx_abs * rx_abs; // Update squared radii
+                ry_sq = ry_abs * ry_abs;
+            }
+
+            // Step 3: Compute (cx', cy') - center of ellipse in transformed (prime) coordinates
+            double term_numerator = (rx_sq * ry_sq) - (rx_sq * y1_prime_sq) - (ry_sq * x1_prime_sq);
+            double term_denominator = (rx_sq * y1_prime_sq) + (ry_sq * x1_prime_sq);
+            
+            double term_sqrt_arg = 0;
+            if (term_denominator != 0) // Avoid division by zero
+                term_sqrt_arg = term_numerator / term_denominator;
+            
+            term_sqrt_arg = Math.Max(0, term_sqrt_arg); // Clamp to avoid issues with floating point inaccuracies
+
+            double sign_coef = (largeArcFlag == sweepFlag) ? -1.0 : 1.0;
+            double coef = sign_coef * Math.Sqrt(term_sqrt_arg);
+
+            double cx_prime = coef * ((rx_abs * y1_prime) / ry_abs);
+            double cy_prime = coef * -((ry_abs * x1_prime) / rx_abs);
+
+            // Step 4: Compute (cx, cy) - center of ellipse in original coordinates
+            double x_mid = (x + x_end) / 2.0;
+            double y_mid = (y + y_end) / 2.0;
+
+            double cx = cosPhi * cx_prime - sinPhi * cy_prime + x_mid;
+            double cy = sinPhi * cx_prime + cosPhi * cy_prime + y_mid;
+
+            // Step 5: Compute startAngle (theta1) and extentAngle (deltaTheta)
+            double vec_start_x = (x1_prime - cx_prime) / rx_abs;
+            double vec_start_y = (y1_prime - cy_prime) / ry_abs;
+            double vec_end_x = (-x1_prime - cx_prime) / rx_abs;
+            double vec_end_y = (-y1_prime - cy_prime) / ry_abs;
+
+            double theta1 = CalculateVectorAngle(1, 0, vec_start_x, vec_start_y);
+            double deltaTheta = CalculateVectorAngle(vec_start_x, vec_start_y, vec_end_x, vec_end_y);
+
+            if (!sweepFlag && deltaTheta > 0)
+            {
+                deltaTheta -= 2 * Math.PI;
+            }
+            else if (sweepFlag && deltaTheta < 0)
+            {
+                deltaTheta += 2 * Math.PI;
+            }
+
+            // Step 6: Draw the arc using line segments
+            double estimatedArcLength = Math.Abs(deltaTheta) * (rx_abs + ry_abs) / 2.0;
+            int segments = Math.Max(1, (int)Math.Ceiling(estimatedArcLength / RoundingMinDistance));
+            if (Math.Abs(deltaTheta) > 1e-9 && segments == 0) segments = 1; // Ensure at least one segment for tiny arcs
+
+            for (int i = 1; i <= segments; i++)
+            {
+                double t = (double)i / segments;
+                double angle = theta1 + deltaTheta * t;
+
+                double cosAngle = Math.Cos(angle);
+                double sinAngle = Math.Sin(angle);
+
+                double ellipse_pt_x_prime = rx_abs * cosAngle;
+                double ellipse_pt_y_prime = ry_abs * sinAngle;
+
+                double final_x = cosPhi * ellipse_pt_x_prime - sinPhi * ellipse_pt_y_prime + cx;
+                double final_y = sinPhi * ellipse_pt_x_prime + cosPhi * ellipse_pt_y_prime + cy;
+
+                if (i == segments)
+                {
+                    LineTo(x_end, y_end); // Ensure final point is exact
+                }
+                else
+                {
+                    LineTo(final_x, final_y);
+                }
+            }
         }
 
         /// <summary>
@@ -1520,6 +1654,14 @@ namespace Prowl.Quill
             if (endAngle < startAngle)
                 endAngle += 2 * Math.PI;
             return radius * (endAngle - startAngle);
+        }
+
+        // Helper function to calculate the signed angle from vector u to vector v
+        internal static double CalculateVectorAngle(double ux, double uy, double vx, double vy)
+        {
+            double dot = ux * vx + uy * vy;
+            double det = ux * vy - uy * vx; // 2D cross product
+            return Math.Atan2(det, dot); // Returns angle in radians from -PI to PI
         }
 
         #endregion
