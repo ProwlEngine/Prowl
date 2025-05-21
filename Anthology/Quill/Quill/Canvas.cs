@@ -1088,6 +1088,40 @@ namespace Prowl.Quill
         }
 
         /// <summary>
+        /// Creates a Closed Ellipse Path
+        /// </summary>
+        /// <param name="x">The x-coordinate of the center of the circle.</param>
+        /// <param name="y">The y-coordinate of the center of the circle.</param>
+        /// <param name="rx">The x-axis radius of the ellipse.</param>
+        /// <param name="ry">The y-axis radius of the ellipse.</param>
+        /// <param name="segments">The number of segments used to approximate the circle. Higher values create smoother circles.</param>
+        public void Ellipse(double x, double y, double rx, double ry, int segments = -1)
+        {
+            if (segments == -1)
+            {
+                // Calculate number of segments based on radius size
+                double distance = Math.PI * 2 * Math.Max(rx, ry);
+                segments = Math.Max(1, (int)Math.Ceiling(distance / RoundingMinDistance));
+            }
+
+            if (rx <= 0 || ry <= 0 || segments < 3)
+                return;
+
+            BeginPath();
+
+            for (int i = 0; i <= segments; i++)
+            {
+                double angle = 2 * Math.PI * i / segments;
+                double vx = x + rx * Math.Cos(angle);
+                double vy = y + ry * Math.Sin(angle);
+
+                LineTo(vx, vy);
+            }
+
+            ClosePath();
+        }
+
+        /// <summary>
         /// Creates a Closed Pie Path
         /// </summary>
         /// <param name="x">The x-coordinate of the center of the pie.</param>
