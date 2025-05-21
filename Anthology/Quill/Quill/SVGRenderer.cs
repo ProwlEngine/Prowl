@@ -151,7 +151,6 @@ namespace Prowl.Quill
 
             if (element.radius.x == 0)
             {
-
                 if (element.fillType != SvgElement.ColorType.none)
                     canvas.Rect(pos.x, pos.y, size.x, size.y);
                 else
@@ -164,7 +163,6 @@ namespace Prowl.Quill
                 else
                     canvas.RoundedRectFilled(pos.x, pos.y, size.x, size.y, element.radius.x, element.fill);
             }
-
         }
     }
 }

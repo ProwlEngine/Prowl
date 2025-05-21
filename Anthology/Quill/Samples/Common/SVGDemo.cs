@@ -42,7 +42,7 @@ namespace Common
         void ParseSVG()
         {
             svgElements = new List<SvgElement>();
-            var svgFiles = Directory.GetFiles("../../../../Common/SVGs");
+            var svgFiles = Directory.GetFiles("../../../../Common/SVGs/test");
 
             foreach (var svgFile in svgFiles)
             {
