@@ -95,6 +95,19 @@ namespace Common
             _canvas.Stroke();
         }
 
+        private void DrawEllipseArc(Color color)
+        {
+            _canvas.SetStrokeColor(color);
+            _canvas.SetStrokeWidth(4);
+
+            _canvas.MoveTo(275, 175);
+            _canvas.LineTo(275, 25);
+            _canvas.EllipticalArcTo(150, 150, 0, 0, 0, 125, 175);
+            _canvas.ClosePath();
+
+            _canvas.Stroke();
+        }
+
         private void DrawCoordinateSystem(double x, double y, double size)
         {
             // X axis
@@ -144,7 +157,9 @@ namespace Common
 
             // Draw coordinate system at center
             DrawCoordinateSystem(0, 0, 50);
-            DrawEllipse(Color.Red);
+            //DrawEllipse(Color.Red);
+            //DrawEllipseArc(Color.Green);
+
             DrawSVG();
 
             // Restore the canvas state
