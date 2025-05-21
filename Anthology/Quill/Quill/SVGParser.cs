@@ -59,6 +59,8 @@ namespace Prowl.Quill
             if (fillType == ColorType.specific)
                 fill = ParseColor("fill");
 
+            Console.WriteLine($"{tag} => {fillType}");
+            Console.WriteLine($"{tag} => {fill}");
             strokeWidth = ParseDouble("stroke-width");
         }
 
@@ -236,13 +238,13 @@ namespace Prowl.Quill
 
                     drawCommand.param = param.ToArray();
                 }
-                Console.WriteLine(drawCommand.ToString());
+                //Console.WriteLine(drawCommand.ToString());
                 drawCommands[i] = drawCommand;
-                if (!ValidateParameterCount(drawCommand))
-                {
-                    Console.WriteLine(pathData);
-                    Console.WriteLine($"{match.Groups[0].Value}=>{drawCommand}");
-                }
+                //if (!ValidateParameterCount(drawCommand))
+                //{
+                //    Console.WriteLine(pathData);
+                //    Console.WriteLine($"{match.Groups[0].Value}=>{drawCommand}");
+                //}
             }
         }
 

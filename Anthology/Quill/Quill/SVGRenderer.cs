@@ -1,6 +1,7 @@
 ﻿using Prowl.Vector;
 using System;
 using System.Drawing;
+using System.Xml.Linq;
 
 namespace Prowl.Quill
 {
@@ -9,12 +10,10 @@ namespace Prowl.Quill
         public static Color currentColor = Color.White;
 
         //for debug
-        //static bool printed = false;
+        static bool debug;
 
         public static void DrawToCanvas(Canvas canvas, Vector2 position, SvgElement svgElement)
         {
-            //if (!printed)
-            //    Console.WriteLine("DrawToCanvas");
             var elements = svgElement.Flatten();
 
             for (var i = 0; i < elements.Count; i++)
@@ -29,19 +28,7 @@ namespace Prowl.Quill
                     DrawCircle(canvas, position, circleElement);
                 else if (element is SvgRectElement rectElement)
                     DrawRect(canvas, position, rectElement);
-
-                ApplyFillStroke(canvas, element);
             }
-            //printed = true;
-        }
-
-        static void ApplyFillStroke(Canvas canvas, SvgElement element)
-        {
-            if (element.fillType != SvgElement.ColorType.none)
-                canvas.FillComplex();
-
-            if (element.strokeType != SvgElement.ColorType.none)
-                canvas.Stroke();
         }
 
         static void SetState(Canvas canvas, SvgElement pathElement)
@@ -68,20 +55,35 @@ namespace Prowl.Quill
             canvas.SetStrokeWidth(pathElement.strokeWidth);
         }
 
-        static void DrawPath(Canvas canvas, Vector2 position, SvgPathElement pathElement)
+        static void DrawPath(Canvas canvas, Vector2 position, SvgPathElement element)
         {
-            if (pathElement.drawCommands == null)
+            if (element.drawCommands == null)
                 return;
 
+            if (element.fillType != SvgElement.ColorType.none)
+            {
+                DrawElement(canvas, element, position);
+                canvas.FillComplex();
+            }
+
+            if (element.strokeType != SvgElement.ColorType.none)
+            {
+                DrawElement(canvas, element, position);
+                canvas.Stroke();
+            }
+        }
+
+        static void DrawElement(Canvas canvas, SvgPathElement element, Vector2 position)
+        {
             canvas.BeginPath();
             var lastControlPoint = Vector2.zero;
 
-            for (var i = 0; i < pathElement.drawCommands.Length; i++)
+            for (var i = 0; i < element.drawCommands.Length; i++)
             {
-                var cmd = pathElement.drawCommands[i];
+                var cmd = element.drawCommands[i];
                 var offset = cmd.relative ? canvas.CurrentPoint : position;
                 var cp = ReflectPoint(canvas.CurrentPoint, lastControlPoint);
-                //if (!printed)
+                //if (debug)
                 //{
                 //    Console.WriteLine(offset);
                 //    Console.WriteLine(cmd);
@@ -137,9 +139,15 @@ namespace Prowl.Quill
             var pos = position + new Vector2(element.cx, element.cy);
 
             if (element.fillType != SvgElement.ColorType.none)
+            {
                 canvas.CircleFilled(pos.x, pos.y, element.r, element.fill);
+                canvas.Fill();
+            }
             else
+            {
                 canvas.Circle(pos.x, pos.y, element.r);
+                canvas.Stroke();
+            }
         }
 
         static void DrawRect(Canvas canvas, Vector2 position, SvgRectElement element)
@@ -150,16 +158,28 @@ namespace Prowl.Quill
             if (element.radius.x == 0)
             {
                 if (element.fillType != SvgElement.ColorType.none)
+                {
                     canvas.Rect(pos.x, pos.y, size.x, size.y);
+                    canvas.Fill();
+                }
                 else
+                {
                     canvas.RectFilled(pos.x, pos.y, size.x, size.y, element.fill);
+                    canvas.Stroke();
+                }
             }
             else
             {
                 if (element.fillType != SvgElement.ColorType.none)
+                {
                     canvas.RoundedRect(pos.x, pos.y, size.x, size.y, element.radius.x);
+                    canvas.Fill();
+                }
                 else
+                {
                     canvas.RoundedRectFilled(pos.x, pos.y, size.x, size.y, element.radius.x, element.fill);
+                    canvas.Stroke();
+                }
             }
         }
     }

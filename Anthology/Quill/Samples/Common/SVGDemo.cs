@@ -35,7 +35,6 @@ namespace Common
 
             DrawDemo2D();
 
-            _canvas.SetTessellationTolerance(0.05f);
             _canvas.ResetState();
         }
 
@@ -57,8 +56,12 @@ namespace Common
 
         void DrawSVG()
         {
+            _canvas.SetTessellationTolerance(0.01f);
+
             for (int i = 0; i < svgElements.Count; i++)
                 SVGRenderer.DrawToCanvas(_canvas, new Vector2(i * 30, 0), svgElements[i]);
+
+            _canvas.ResetState();
         }
 
         private void DrawGrid(int x, int y, double cellSize, Color color)
