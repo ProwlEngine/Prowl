@@ -40,7 +40,7 @@ namespace Common
 
         public void ParseSVG()
         {
-            SVGRenderer.debug = true;
+            //SVGRenderer.debug = true;
             svgElements = new List<SvgElement>();
             var svgFiles = Directory.GetFiles("SVGs/");
 
