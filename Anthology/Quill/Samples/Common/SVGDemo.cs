@@ -57,6 +57,7 @@ namespace Common
         void DrawSVG()
         {
             _canvas.SetTessellationTolerance(0.01f);
+            _canvas.SetRoundingMinDistance(0.5);
 
             const int iconPerLine = 10;
             for (int i = 0; i < svgElements.Count; i++)
