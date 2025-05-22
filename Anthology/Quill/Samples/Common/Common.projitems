@@ -33,4 +33,10 @@
   <ItemGroup>
     <Folder Include="$(MSBuildThisFileDirectory)SVGs\" />
   </ItemGroup>
+  <ItemGroup>
+    <SampleSVGs Include="$(MSBuildThisFileDirectory)SVGs\*.*" />
+  </ItemGroup>
+  <Target Name="CopyCustomContent" AfterTargets="AfterBuild">
+    <Copy SourceFiles="@(SampleSVGs)" DestinationFolder="$(OutDir)SVGs" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
