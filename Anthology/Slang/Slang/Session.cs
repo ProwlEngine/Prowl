@@ -7,6 +7,39 @@ using Prowl.Slang.Native;
 namespace Prowl.Slang;
 
 
+/// <summary>
+/// <para>
+/// A session provides a scope for code that is loaded.
+/// </para>
+/// <para>
+/// A session can be used to load modules of Slang source code,
+/// and to request target-specific compiled binaries and layout
+/// information.
+/// </para>
+/// <para>
+/// In order to be able to load code, the session owns a set
+/// of active "search paths" for resolving `#include` directives
+/// and `import` declarations, as well as a set of global
+/// preprocessor definitions that will be used for all code
+/// that gets `import`ed in the session.
+/// </para>
+/// <para>
+/// If multiple user shaders are loaded in the same session,
+/// and import the same module (e.g., two source files do `import X`)
+/// then there will only be one copy of `X` loaded within the session.
+/// </para>
+/// <para>
+/// In order to be able to generate target code, the session
+/// owns a list of available compilation targets, which specify
+/// code generation options.
+/// </para>
+/// <para>
+/// Code loaded and compiled within a session is owned by the session
+/// and will remain resident in memory until the session is released.
+/// Applications wishing to control the memory usage for compiled
+/// and loaded code should use multiple sessions.
+/// </para>
+/// </summary>
 public unsafe class Session
 {
     internal ISession _session;
@@ -18,8 +51,9 @@ public unsafe class Session
     }
 
 
-    /** Load a module as it would be by code using `import`.
-     */
+    /// <summary>
+    /// Load a module as it would be by code using `import`.
+    /// </summary>
     public Module LoadModule(string moduleName, out string? diagnostics)
     {
         using U8Str str = U8Str.Alloc(moduleName);
@@ -34,8 +68,9 @@ public unsafe class Session
     }
 
 
-    /** Load a module from Slang source code.
-     */
+    /// <summary>
+    /// Load a module from Slang source code.
+    /// </summary>
     public Module LoadModuleFromSource(string moduleName, string path, Memory<byte> source, out string? diagnostics)
     {
         using U8Str strA = U8Str.Alloc(moduleName);
@@ -98,8 +133,9 @@ public unsafe class Session
     }
 
 
-    /** Specialize a type based on type arguments.
-     */
+    /// <summary>
+    /// Specialize a type based on type arguments.
+    /// </summary>
     public TypeReflection SpecializeType(
         TypeReflection type,
         TypeReflection[] specializationArgs,
@@ -119,9 +155,9 @@ public unsafe class Session
         return new TypeReflection(reflectionPtr, type._component);
     }
 
-
-    /** Get the layout `type` on the chosen `target`.
-     */
+    /// <summary>
+    /// Get the layout `type` on the chosen `target`.
+    /// </summary>
     public TypeLayoutReflection GetTypeLayout(
         TypeReflection type,
         int targetIndex,
@@ -138,13 +174,14 @@ public unsafe class Session
     }
 
 
-    /** Get a container type from `elementType`. For example, given type `T`, returns
-        a type that represents `StructuredBuffer<T>`.
-
-        @param `elementType`: the element type to wrap around.
-        @param `containerType`: the type of the container to wrap `elementType` in.
-        @param `outDiagnostics`: a blob to receive diagnostic messages.
-    */
+    /// <summary>
+    /// Get a container type from `elementType`. For example, given type `T`, returns
+    /// a type that represents `StructuredBuffer{T}`.
+    /// </summary>
+    /// <param name="elementType">The element type to wrap around.</param>
+    /// <param name="containerType">The type of the container to wrap `elementType` in.</param>
+    /// <param name="diagnostics">A string to receive diagnostic messages.</param>
+    /// <returns></returns>
     public TypeReflection GetContainerType(
         TypeReflection elementType,
         ContainerType containerType,
@@ -160,7 +197,7 @@ public unsafe class Session
     }
 
 
-    /** Return a `TypeReflection` that represents the `__Dynamic` type.
+    /* Return a `TypeReflection` that represents the `__Dynamic` type.
         This type can be used as a specialization argument to indicate using
         dynamic dispatch.
     */
@@ -189,8 +226,9 @@ public unsafe class Session
     }
 
 
-    /** Get the sequential ID used to identify a type witness in a dynamic object.
-     */
+    /// <summary>
+    /// Get the sequential ID used to identify a type witness in a dynamic object.
+    /// </summary>
     public nuint GetTypeConformanceWitnessSequentialID(TypeReflection type, TypeReflection interfaceType)
     {
         _session.GetTypeConformanceWitnessSequentialID(type._ptr, interfaceType._ptr, out nuint outId).Throw();
@@ -200,25 +238,30 @@ public unsafe class Session
 
 
     /// <summary>
+    /// <para>
     /// Creates a `IComponentType` that represents a type's conformance to an interface.
     /// The retrieved `ITypeConformance` objects can be included in a composite `IComponentType`
     /// to explicitly specify which implementation types should be included in the final compiled
     /// code.
-    ///
+    /// </para>
+    /// <para>
     /// For example, if an module defines `IMaterial` interface and `AMaterial`,
     /// `BMaterial`, `CMaterial` types that implements the interface, the user can exclude
     /// `CMaterial` implementation from the resulting shader code by explicitly adding
     /// `AMaterial:IMaterial` and `BMaterial:IMaterial` conformances to a composite
     /// `IComponentType` and get entry point code from it. The resulting code will not have
     /// anything related to `CMaterial` in the dynamic dispatch logic.
-    ///
+    /// </para>
+    /// <para>
     /// If the user does not explicitly include any `TypeConformances` to an interface type, all implementations to
     /// that interface will be included by default. By linking a `ITypeConformance`, the user is
     /// also given the opportunity to specify the dispatch ID of the implementation type.
-    ///
+    /// </para>
+    /// <para>
     /// If `conformanceIdOverride` is -1, there will be no override behavior and Slang will
     /// automatically assign IDs to implementation types.The automatically assigned IDs can be
     /// queried via `ISession::getTypeConformanceWitnessSequentialID`.
+    /// </para>
     /// </summary>
     public ComponentType CreateTypeConformanceComponentType(
         TypeReflection type,
@@ -232,8 +275,9 @@ public unsafe class Session
     }
 
 
-    /** Load a module from a Slang module blob.
-     */
+    /// <summary>
+    /// Load a module from a Slang module blob.
+    /// </summary>
     public Module LoadModuleFromIRBlob(string moduleName, string path, Memory<byte> source, out string? diagnostics)
     {
         using U8Str strA = U8Str.Alloc(moduleName);
@@ -249,13 +293,18 @@ public unsafe class Session
     }
 
 
-
+    /// <summary>
+    /// Gets the numer of loaded modules in this session.
+    /// </summary>
     public int GetLoadedModuleCount()
     {
         return (int)_session.GetLoadedModuleCount();
     }
 
 
+    /// <summary>
+    /// Gets the loaded module at a given index.
+    /// </summary>
     public Module GetLoadedModule(int index)
     {
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, GetLoadedModuleCount(), nameof(index));
@@ -267,9 +316,10 @@ public unsafe class Session
     }
 
 
-    /** Checks if a precompiled binary module is up-to-date with the current compiler
-     *   option settings and the source file contents.
-     */
+    /// <summary>
+    /// Checks if a precompiled binary module is up-to-date with the current compiler
+    /// option settings and the source file contents.
+    /// </summary>
     public bool IsBinaryModuleUpToDate(string modulePath, Memory<byte> binaryModuleBlob)
     {
         using U8Str str = U8Str.Alloc(modulePath);
@@ -277,8 +327,9 @@ public unsafe class Session
     }
 
 
-    /** Load a module from a string.
-     */
+    /// <summary>
+    /// Load a module from a string.
+    /// </summary>
     public Module LoadModuleFromSourceString(string moduleName, string path, string srcString, out string? diagnostics)
     {
         using U8Str strA = U8Str.Alloc(moduleName);

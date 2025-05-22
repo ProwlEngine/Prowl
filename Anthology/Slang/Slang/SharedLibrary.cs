@@ -4,7 +4,7 @@ using Prowl.Slang.Native;
 namespace Prowl.Slang;
 
 
-public unsafe class SharedLibrary
+internal unsafe class SharedLibrary
 {
     internal ISlangSharedLibrary _library;
 

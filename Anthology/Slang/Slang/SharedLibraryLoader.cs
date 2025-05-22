@@ -4,7 +4,7 @@ using Prowl.Slang.Native;
 namespace Prowl.Slang;
 
 
-internal unsafe abstract class SharedLibraryLoader : ManagedComProxy<ISlangSharedLibraryLoader>, ISlangSharedLibraryLoader
+internal abstract unsafe class SharedLibraryLoader : ManagedComProxy<ISlangSharedLibraryLoader>, ISlangSharedLibraryLoader
 {
-    public unsafe abstract SlangResult LoadSharedLibrary(ConstU8Str path, out ISlangSharedLibrary* sharedLibraryOut);
+    public abstract unsafe SlangResult LoadSharedLibrary(ConstU8Str path, out ISlangSharedLibrary* sharedLibraryOut);
 }

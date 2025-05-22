@@ -7,7 +7,7 @@ using Prowl.Slang.Native;
 namespace Prowl.Slang;
 
 
-public static class Utility
+internal static class Utility
 {
     public static IEnumerable<T> For<T>(uint range, Func<uint, T> getter)
     {

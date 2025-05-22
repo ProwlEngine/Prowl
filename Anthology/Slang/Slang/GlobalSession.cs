@@ -26,7 +26,6 @@ public static unsafe class GlobalSession
 {
     internal static readonly IGlobalSession s_session = CreateSession();
 
-
     private static IGlobalSession CreateSession()
     {
         SlangResult result = SlangNative.slang_createGlobalSession(0, out IGlobalSession* globalSessionPtr);
@@ -115,22 +114,25 @@ public static unsafe class GlobalSession
         s_session.SetDefaultDownstreamCompiler(sourceLanguage, defaultCompiler).Throw();
     }
 
-    /* For a source type get the default compiler
-
-    @param sourceLanguage the source language
-    @return The downstream compiler for that source language */
+    /// <summary>
+    /// For a source type get the default compiler.
+    /// </summary>
+    /// <param name="sourceLanguage">The source language.</param>
+    /// <returns>The downstream compiler for that source language.</returns>
     public static SlangPassThrough GetDefaultDownstreamCompiler(SlangSourceLanguage sourceLanguage)
     {
         return s_session.GetDefaultDownstreamCompiler(sourceLanguage);
     }
 
-    /* Set the 'prelude' placed before generated code for a specific language type.
-
-    @param sourceLanguage The language the prelude should be inserted on.
-    @param preludeText The text added pre-pended verbatim before the generated source
-
-    Note! That for pass-through usage, prelude is not pre-pended, preludes are for code generation
-    only. */
+    /// <summary>
+    /// /* Set the 'prelude' placed before generated code for a specific language type.
+    /// </summary>
+    /// <param name="sourceLanguage">The language the prelude should be inserted on.</param>
+    /// <param name="preludeText">The text added pre-pended verbatim before the generated source.</param>
+    /// <remarks>
+    /// Note: For pass-through usage, prelude is not pre-pended, preludes are for code generation
+    /// only.
+    /// </remarks>
     public static void SetLanguagePrelude(SlangSourceLanguage sourceLanguage, string preludeText)
     {
         using U8Str str = U8Str.Alloc(preludeText);
@@ -138,10 +140,11 @@ public static unsafe class GlobalSession
         s_session.SetLanguagePrelude(sourceLanguage, str);
     }
 
-    /** Get the 'prelude' associated with a specific source language.
-    @param sourceLanguage The language the prelude should be inserted on.
-    @param outPrelude  On exit holds a blob that holds the string of the prelude.
-    */
+    /// <summary>
+    /// Get the 'prelude' associated with a specific source language.
+    /// </summary>
+    /// <param name="sourceLanguage">The language the prelude should be inserted on.</param>
+    /// <returns>A string that holds the language prelude.</returns>
     public static string GetLanguagePrelude(SlangSourceLanguage sourceLanguage)
     {
         s_session.GetLanguagePrelude(sourceLanguage, out ISlangBlob* blobPtr);
@@ -150,8 +153,11 @@ public static unsafe class GlobalSession
         return blob.GetString();
     }
 
-    /** Add new builtin declarations to be used in subsequent compiles.
-     */
+    /// <summary>
+    /// Add new builtin declarations to be used in subsequent compiles.
+    /// </summary>
+    /// <param name="sourcePath">The source path for the builtin declaration to use.</param>
+    /// <param name="sourceString">The source string of the declaration.</param>
     public static void AddBuiltins(string sourcePath, string sourceString)
     {
         using U8Str strA = U8Str.Alloc(sourcePath);
@@ -160,18 +166,20 @@ public static unsafe class GlobalSession
         s_session.AddBuiltins(strA, strB);
     }
 
-    /** Set the session shared library loader. If this changes the loader, it may cause shared
-    libraries to be unloaded
-    @param loader The loader to set. Setting null sets the default loader.
-    */
+    /// <summary>
+    /// Set the session shared library loader. If this changes the loader, it may cause shared
+    /// libraries to be unloaded
+    /// </summary>
+    /// <param name="loader">The loader to set. Setting null sets the default loader.</param>
     internal static void SetSharedLibraryLoader(SharedLibraryLoader loader)
     {
         s_session.SetSharedLibraryLoader(loader);
     }
 
-    /** Gets the currently set shared library loader
-    @return Gets the currently set loader. If returns null, it's the default loader
-    */
+    /// <summary>
+    /// Gets the currently set shared library loader.
+    /// </summary>
+    /// <returns>Gets the currently set loader. If returns null, it's the default loader</returns>
     internal static ISlangSharedLibraryLoader? GetSharedLibraryLoader()
     {
         ISlangSharedLibraryLoader* loaderPtr = s_session.GetSharedLibraryLoader();
@@ -182,14 +190,14 @@ public static unsafe class GlobalSession
         return null;
     }
 
-    /** Returns SLANG_OK if the compilation target is supported for this session
 
-    @param target The compilation target to test
-    @return SLANG_OK if the target is available
-    SLANG_E_NOT_IMPLEMENTED if not implemented in this build
-    SLANG_E_NOT_FOUND if other resources (such as shared libraries) required to make target work could not be found
-    SLANG_FAIL other kinds of failures
-    */
+    /// <summary>
+    /// Checks if the compilation target is supported for this session
+    /// </summary>
+    /// <param name="target">The compilation target to test.</param>
+    /// <param name="notImplemented">True if not implemented in this build.</param>
+    /// <param name="notFound">True if other resources (such as shared libraries) required to make target work could not be found.</param>
+    /// <returns>True if the target is available, false otherwise.</returns>
     public static bool CheckCompileTargetSupport(SlangCompileTarget target, out bool notImplemented, out bool notFound)
     {
         SlangResult result = s_session.CheckCompileTargetSupport(target);
@@ -200,14 +208,14 @@ public static unsafe class GlobalSession
         return result.IsOk();
     }
 
-    /** Returns SLANG_OK if the pass through support is supported for this session
-    @param session Session
-    @param target The compilation target to test
-    @return SLANG_OK if the target is available
-    SLANG_E_NOT_IMPLEMENTED if not implemented in this build
-    SLANG_E_NOT_FOUND if other resources (such as shared libraries) required to make target work could not be found
-    SLANG_FAIL other kinds of failures
-    */
+
+    /// <summary>
+    /// Checks if the pass through support is supported for this session
+    /// </summary>
+    /// <param name="passThrough">The pass through type to test.</param>
+    /// <param name="notImplemented">True if not implemented in this build.</param>
+    /// <param name="notFound">True if other resources(such as shared libraries) required to make target work could not be found.</param>
+    /// <returns>Trie if passthroughs are supported, false otherwise.</returns>
     public static bool CheckPassThroughSupport(SlangPassThrough passThrough, out bool notImplemented, out bool notFound)
     {
         SlangResult result = s_session.CheckPassThroughSupport(passThrough);
@@ -218,12 +226,15 @@ public static unsafe class GlobalSession
         return result.IsOk();
     }
 
-    /** Look up the internal ID of a capability by its `name`.
 
-    Capability IDs are *not* guaranteed to be stable across versions
-    of the Slang library, so clients are expected to look up
-    capabilities by name at runtime.
-    */
+    /// <summary>
+    /// Look up the internal ID of a capability by its `name`.
+    /// Capability IDs are *not* guaranteed to be stable across versions
+    /// of the Slang library, so clients are expected to look up
+    /// capabilities by name at runtime.
+    /// </summary>
+    /// <param name="name">The capability name to search for.</param>
+    /// <returns>The internal capability ID.</returns>
     public static SlangCapabilityID FindCapability(string name)
     {
         using U8Str str = U8Str.Alloc(name);
@@ -233,38 +244,47 @@ public static unsafe class GlobalSession
         return id;
     }
 
-    /** Set the downstream/pass through compiler to be used for a transition from the source type to
-    the target type
-    @param source The source 'code gen target'
-    @param target The target 'code gen target'
-    @param compiler The compiler/pass through to use for the transition from source to target
-    */
+
+    /// <summary>
+    /// Set the downstream/pass through compiler to be used for a transition from the source type to
+    /// the target type.
+    /// </summary>
+    /// <param name="source">The source 'code gen target'</param>
+    /// <param name="target">The target 'code gen target'</param>
+    /// <param name="compiler">The compiler/pass through to use for the transition from source to target.</param>
     public static void SetDownstreamCompilerForTransition(SlangCompileTarget source, SlangCompileTarget target, SlangPassThrough compiler)
     {
         s_session.SetDownstreamCompilerForTransition(source, target, compiler);
     }
 
-    /** Get the downstream/pass through compiler for a transition specified by source and target
-    @param source The source 'code gen target'
-    @param target The target 'code gen target'
-    @return The compiler that is used for the transition. Returns NONE it is not
-    defined
-    */
+
+    /// <summary>
+    /// Get the downstream/pass through compiler for a transition specified by source and target.
+    /// </summary>
+    /// <param name="source">The source 'code gen target'</param>
+    /// <param name="target">The target 'code gen target'</param>
+    /// <returns>The compiler that is used for the transition. Returns 'None' if is not defined.</returns>
     public static SlangPassThrough GetDownstreamCompilerForTransition(SlangCompileTarget source, SlangCompileTarget target)
     {
         return s_session.GetDownstreamCompilerForTransition(source, target);
     }
 
-    /** Get the time in seconds spent in the slang and downstream compiler.
-     */
+
+    /// <summary>
+    /// Get the time in seconds spent in the slang and downstream compiler.
+    /// </summary>
+    /// <param name="outTotalTime">Total time in seconds spent in the slang compiler.</param>
+    /// <param name="outDownstreamTime">Total time in seconds spent by the downstream compiler.</param>
     public static void GetCompilerElapsedTime(out double outTotalTime, out double outDownstreamTime)
     {
         s_session.GetCompilerElapsedTime(out outTotalTime, out outDownstreamTime);
     }
 
-    /** Specify a spirv.core.grammar.json file to load and use when
-     * parsing and checking any SPIR-V code
-     */
+    /// <summary>
+    /// Specify a spirv.core.grammar.json file to load and use when
+    /// parsing and checking any SPIR-V code
+    /// </summary>
+    /// <param name="jsonPath">JSON source grammar path.</param>
     public static void SetSPIRVCoreGrammar(string jsonPath)
     {
         using U8Str str = U8Str.Alloc(jsonPath);
@@ -272,14 +292,14 @@ public static unsafe class GlobalSession
         s_session.SetSPIRVCoreGrammar(str).Throw();
     }
 
-    /** Parse slangc command line options into a SessionDesc that can be used to create a session
-     *   with all the compiler options specified in the command line.
-     *   @param argc The number of command line arguments.
-     *   @param argv An input array of command line arguments to parse.
-     *   @param outSessionDesc A pointer to a SessionDesc struct to receive parsed session desc.
-     *   @param outAuxAllocation Auxiliary memory allocated to hold data used in the session desc.
-     */
-    public static void ParseCommandLineArguments(string[] args, out SessionDescription sessionDesc)
+
+    /// <summary>
+    /// Parse slangc command line options into a SessionDesc that can be used to create a session
+    /// with all the compiler options specified in the command line.
+    /// </summary>
+    /// <param name="args">The command line arguments.</param>
+    /// <returns>The resulting parsed session description.</returns>
+    public static SessionDescription ParseCommandLineArguments(string[] args)
     {
         U8Str[] strs = [.. args.Select(U8Str.Alloc)];
 
@@ -294,9 +314,9 @@ public static unsafe class GlobalSession
 
             s_session.ParseCommandLineArguments(strs.Length, strsPtr, outSession, out IUnknown* allocationPtr).Throw();
 
-            sessionDesc = outSession->Read();
-
             IUnknown allocation = NativeComProxy.Create(allocationPtr);
+
+            return outSession->Read();
         }
         finally
         {

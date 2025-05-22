@@ -292,7 +292,7 @@ public unsafe class ComponentType
     /// Requires a compilation target of SLANG_HOST_CALLABLE.
     /// </remarks>
     /// </summary>
-    public SharedLibrary GetEntryPointHostCallable(int entryPointIndex, int targetIndex, out string? diagnostics)
+    internal SharedLibrary GetEntryPointHostCallable(int entryPointIndex, int targetIndex, out string? diagnostics)
     {
         _componentType.GetEntryPointHostCallable(entryPointIndex, targetIndex, out ISlangSharedLibrary* sharedLibPtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
