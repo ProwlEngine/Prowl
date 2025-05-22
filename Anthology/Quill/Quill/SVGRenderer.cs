@@ -63,7 +63,7 @@ namespace Prowl.Quill
             if (element.fillType != SvgElement.ColorType.none)
             {
                 DrawElement(canvas, element, position);
-                canvas.FillComplex();
+                canvas.FillComplexAA();
             }
 
             if (element.strokeType != SvgElement.ColorType.none)
@@ -141,7 +141,7 @@ namespace Prowl.Quill
             if (element.fillType != SvgElement.ColorType.none)
             {
                 canvas.CircleFilled(pos.x, pos.y, element.r, element.fill);
-                canvas.Fill();
+                canvas.FillComplexAA();
             }
             else
             {
@@ -160,7 +160,7 @@ namespace Prowl.Quill
                 if (element.fillType != SvgElement.ColorType.none)
                 {
                     canvas.Rect(pos.x, pos.y, size.x, size.y);
-                    canvas.Fill();
+                    canvas.FillComplexAA();
                 }
                 else
                 {
@@ -173,7 +173,7 @@ namespace Prowl.Quill
                 if (element.fillType != SvgElement.ColorType.none)
                 {
                     canvas.RoundedRect(pos.x, pos.y, size.x, size.y, element.radius.x);
-                    canvas.Fill();
+                    canvas.FillComplexAA();
                 }
                 else
                 {
