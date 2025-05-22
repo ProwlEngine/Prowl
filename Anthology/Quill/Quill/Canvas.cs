@@ -123,6 +123,7 @@ namespace Prowl.Quill
         internal double strokeScale;
         internal double miterLimit;
         internal double tess_tol;
+        internal double roundingMinDistance;
 
         internal object? texture;
         internal Transform2D scissor;
@@ -144,6 +145,7 @@ namespace Prowl.Quill
             strokeScale = 1f; // Default stroke scale
             miterLimit = 4; // Default miter limit
             tess_tol = 0.5; // Default tessellation tolerance
+            roundingMinDistance = 3; //Default _state.roundingMinDistance
             texture = null;
             scissor.Zero();
             scissorExtent.x = -1.0f;
@@ -169,7 +171,6 @@ namespace Prowl.Quill
             }
         }
 
-        internal const double RoundingMinDistance = 3;
         public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.Where(d => d.ElementCount != 0).ToList();
         public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
         public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
@@ -260,6 +261,7 @@ namespace Prowl.Quill
         public void SetStrokeScale(double scale) => _state.strokeScale = scale;
         public void SetMiterLimit(double limit = 4) => _state.miterLimit = limit;
         public void SetTessellationTolerance(double tolerance = 0.5) => _state.tess_tol = tolerance;
+        public void SetRoundingMinDistance(double distance = 3) => _state.roundingMinDistance = distance;
         public void SetTexture(object texture) => _state.texture = texture;
         public void SetLinearBrush(double x1, double y1, double x2, double y2, Color color1, Color color2)
         {
@@ -590,7 +592,7 @@ namespace Prowl.Quill
 
             // Calculate number of segments based on radius size
             double distance = CalculateArcLength(radius, startAngle, endAngle);
-            int segments = Math.Max(1, (int)Math.Ceiling(distance / RoundingMinDistance));
+            int segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
 
             if (counterclockwise && startAngle < endAngle)
             {
@@ -811,7 +813,7 @@ namespace Prowl.Quill
 
             // Step 6: Draw the arc using line segments
             double estimatedArcLength = Math.Abs(deltaTheta) * (rx_abs + ry_abs) / 2.0;
-            int segments = Math.Max(1, (int)Math.Ceiling(estimatedArcLength / RoundingMinDistance));
+            int segments = Math.Max(1, (int)Math.Ceiling(estimatedArcLength / _state.roundingMinDistance));
             if (Math.Abs(deltaTheta) > 1e-9 && segments == 0) segments = 1; // Ensure at least one segment for tiny arcs
 
             for (int i = 1; i <= segments; i++)
@@ -1218,7 +1220,7 @@ namespace Prowl.Quill
             {
                 // Calculate number of segments based on radius size
                 double distance = Math.PI * 2 * radius;
-                segments = Math.Max(1, (int)Math.Ceiling(distance / RoundingMinDistance));
+                segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
             }
 
             if (radius <= 0 || segments < 3)
@@ -1252,7 +1254,7 @@ namespace Prowl.Quill
             {
                 // Calculate number of segments based on radius size
                 double distance = Math.PI * 2 * Math.Max(rx, ry);
-                segments = Math.Max(1, (int)Math.Ceiling(distance / RoundingMinDistance));
+                segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
             }
 
             if (rx <= 0 || ry <= 0 || segments < 3)
@@ -1286,7 +1288,7 @@ namespace Prowl.Quill
             if (segments == -1)
             {
                 double distance = CalculateArcLength(radius, startAngle, endAngle);
-                segments = Math.Max(1, (int)Math.Ceiling(distance / RoundingMinDistance));
+                segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
             }
 
             if (radius <= 0 || segments < 1)
@@ -1432,10 +1434,10 @@ namespace Prowl.Quill
             height += _pixelWidth;
 
             // Calculate segment counts for each corner based on radius size
-            int tlSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * tlRadii / 2 / RoundingMinDistance));
-            int trSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * trRadii / 2 / RoundingMinDistance));
-            int brSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * brRadii / 2 / RoundingMinDistance));
-            int blSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * blRadii / 2 / RoundingMinDistance));
+            int tlSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * tlRadii / 2 / _state.roundingMinDistance));
+            int trSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * trRadii / 2 / _state.roundingMinDistance));
+            int brSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * brRadii / 2 / _state.roundingMinDistance));
+            int blSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * blRadii / 2 / _state.roundingMinDistance));
 
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
@@ -1554,7 +1556,7 @@ namespace Prowl.Quill
             {
                 // Calculate number of segments based on radius size
                 double distance = Math.PI * 2 * radius;
-                segments = Math.Max(1, (int)Math.Ceiling(distance / RoundingMinDistance));
+                segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
             }
 
             if (radius <= 0 || segments < 3)
@@ -1617,7 +1619,7 @@ namespace Prowl.Quill
             if (segments == -1)
             {
                 double distance = CalculateArcLength(radius, startAngle, endAngle);
-                segments = Math.Max(1, (int)Math.Ceiling(distance / RoundingMinDistance));
+                segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
             }
 
             if (radius <= 0 || segments < 1)
