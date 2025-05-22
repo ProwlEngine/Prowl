@@ -81,7 +81,8 @@ namespace Prowl.Quill
             for (var i = 0; i < element.drawCommands.Length; i++)
             {
                 var cmd = element.drawCommands[i];
-                var offset = cmd.relative ? canvas.CurrentPoint : position;
+                var currentPoint = i == 0 ? position : canvas.CurrentPoint;
+                var offset = cmd.relative ? currentPoint : position;
                 var cp = ReflectPoint(canvas.CurrentPoint, lastControlPoint);
                 //if (debug)
                 //{
