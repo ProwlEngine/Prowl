@@ -437,8 +437,9 @@ namespace Prowl.Quill
                     // More segments for round cap
                     if (capStyle == EndCapStyle.Round)
                     {
+                        const double RoundingMinDistance = 3; //todo use the RoundingMinDistance in canvas state
                         double distance = Math.PI * (thickness * 0.5);
-                        numSegments  = Math.Min(Math.Max(6, (int)Math.Floor(distance / Canvas.RoundingMinDistance)), 16);
+                        numSegments  = Math.Min(Math.Max(6, (int)Math.Floor(distance / RoundingMinDistance)), 16);
 
                         thickness += 0.5;
                     }
