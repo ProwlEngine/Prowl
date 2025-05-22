@@ -59,8 +59,6 @@ namespace Prowl.Quill
             if (fillType == ColorType.specific)
                 fill = ParseColor("fill");
 
-            Console.WriteLine($"{tag} => {fillType}");
-            Console.WriteLine($"{tag} => {fill}");
             strokeWidth = ParseDouble("stroke-width");
         }
 
