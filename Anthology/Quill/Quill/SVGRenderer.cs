@@ -10,7 +10,7 @@ namespace Prowl.Quill
         public static Color currentColor = Color.White;
 
         //for debug
-        static bool debug;
+        public static bool debug;
 
         public static void DrawToCanvas(Canvas canvas, Vector2 position, SvgElement svgElement)
         {
@@ -29,6 +29,7 @@ namespace Prowl.Quill
                 else if (element is SvgRectElement rectElement)
                     DrawRect(canvas, position, rectElement);
             }
+            debug = false;
         }
 
         static void SetState(Canvas canvas, SvgElement pathElement)
@@ -83,12 +84,10 @@ namespace Prowl.Quill
                 var cmd = element.drawCommands[i];
                 var currentPoint = i == 0 ? position : canvas.CurrentPoint;
                 var offset = cmd.relative ? currentPoint : position;
+
                 var cp = ReflectPoint(canvas.CurrentPoint, lastControlPoint);
-                //if (debug)
-                //{
-                //    Console.WriteLine(offset);
-                //    Console.WriteLine(cmd);
-                //}
+                if (debug)
+                    Console.WriteLine($"[{i}]{offset} cmd:{cmd}");
 
                 switch (cmd.type)
                 {

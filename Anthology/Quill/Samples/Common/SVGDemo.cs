@@ -40,6 +40,7 @@ namespace Common
 
         public void ParseSVG()
         {
+            SVGRenderer.debug = true;
             svgElements = new List<SvgElement>();
             var svgFiles = Directory.GetFiles("../../../../Common/SVGs/test");
 
@@ -60,11 +61,12 @@ namespace Common
             _canvas.SetRoundingMinDistance(0.5);
 
             const int iconPerLine = 10;
+            var offset = new Vector2(30, 30);
             for (int i = 0; i < svgElements.Count; i++)
             {
                 var x = i % iconPerLine;
                 var y = i / iconPerLine;
-                SVGRenderer.DrawToCanvas(_canvas, new Vector2(x * 30, y * 30), svgElements[i]);
+                SVGRenderer.DrawToCanvas(_canvas, new Vector2(x * 30, y * 30) + offset, svgElements[i]);
             }
 
             _canvas.ResetState();
