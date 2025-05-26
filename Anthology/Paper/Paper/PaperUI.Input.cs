@@ -6,6 +6,9 @@ namespace Prowl.PaperUI
     {
         #region Fields & Properties
 
+        private static bool _capturedKeyboard = false; // Whether keyboard input is captured by an element
+        public static bool WantsCaptureKeyboard { get; private set; }
+
         // Enums
         public static readonly PaperKey[] KeyValues = Enum.GetValues<PaperKey>();
         public static readonly PaperMouseBtn[] MouseValues = Enum.GetValues<PaperMouseBtn>();
@@ -195,6 +198,11 @@ namespace Prowl.PaperUI
 
         #region Text Input Handling
 
+        public static void CaptureKeyboard()
+        {
+            _capturedKeyboard = true;
+        }
+
         /// <summary>
         /// Adds a character to the input queue.
         /// </summary>
@@ -254,6 +262,9 @@ namespace Prowl.PaperUI
             for (var i = 0; i < _pointerPressedTime.Length; ++i)
                 if (_pointerCurState[i])
                     _pointerPressedTime[i] += _deltaTime;
+
+            _capturedKeyboard = false;
+
         }
 
         /// <summary>
@@ -298,6 +309,8 @@ namespace Prowl.PaperUI
             PointerWheel = 0;
             PreviousPointerPos = PointerPos;
             InputString.Clear();
+
+            WantsCaptureKeyboard = _capturedKeyboard;
         }
 
         /// <summary>

@@ -69,6 +69,8 @@ namespace Prowl.PaperUI
         public static ulong ActiveElementId => _activeElementId;
         public static ulong FocusedElementId => _focusedElementId;
 
+        public static bool WantsCapturePointer => _theHoveredElementId != 0 || _activeElementId != 0;
+
         #endregion
 
         #region Interaction Processing

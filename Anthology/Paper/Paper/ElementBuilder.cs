@@ -1356,6 +1356,8 @@ namespace Prowl.PaperUI
 
                     if (isFocused)
                     {
+                        Paper.CaptureKeyboard();
+
                         // Draw text selection if applicable
                         int selStart = Paper.GetElementStorage<int>(el, "SelectionStart", -1);
                         int selEnd = Paper.GetElementStorage<int>(el, "SelectionEnd", -1);
