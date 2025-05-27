@@ -701,6 +701,13 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>Makes any event on this element not trigger any parent events.</summary>
+        public ElementBuilder StopEventPropagation()
+        {
+            _element.StopPropagation = true;
+            return this;
+        }
+
         /// <summary>Sets the layout direction for child elements.</summary>
         /// <param name="layoutType">How child elements should be arranged (Row or Column)</param>
         public ElementBuilder LayoutType(LayoutType layoutType)

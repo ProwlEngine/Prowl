@@ -197,10 +197,15 @@ namespace Prowl.PaperUI
         /// </summary>
         private static void BuildBubblePath(Element element)
         {
+            if (element.StopPropagation)
+                return;
+
             Element? current = element;
             while (current != null)
             {
                 _elementsInBubblePath.Add(current.ID);
+                if (current.StopPropagation)
+                    break;
                 current = current.Parent;
             }
         }
@@ -210,10 +215,15 @@ namespace Prowl.PaperUI
         /// </summary>
         private static void BubbleEventToParents(Element element, Action<Element> eventHandler)
         {
+            if (element.StopPropagation)
+                return;
+
             Element? current = element.Parent;
             while (current != null)
             {
                 eventHandler(current);
+                if (current.StopPropagation)
+                    break;
                 current = current.Parent;
             }
         }

@@ -11,6 +11,7 @@ namespace Prowl.PaperUI.LayoutEngine
         // Events
         public bool IsFocusable { get; set; } = true;
         public bool IsNotInteractable { get; set; } = false;
+        public bool StopPropagation { get; set; } = false;
 
         public Action<ClickEvent>? OnClick { get; set; }
         public Action<ClickEvent>? OnPress { get; set; }
