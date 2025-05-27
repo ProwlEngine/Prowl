@@ -334,11 +334,6 @@ a generic parameter that has not been bound to a specific value, this function r
     public static unsafe partial TypeReflection* spReflectionVariable_GetType(VariableReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial Modifier* spReflectionVariable_FindModifier(
-        VariableReflection* var,
-        SlangModifierID modifierID);
-
-    [LibraryImport(LibName)]
     public static unsafe partial uint spReflectionVariable_GetUserAttributeCount(VariableReflection* var);
 
     [LibraryImport(LibName)]
@@ -402,11 +397,6 @@ a generic parameter that has not been bound to a specific value, this function r
     // Function Reflection
     [LibraryImport(LibName)]
     public static unsafe partial ConstU8Str spReflectionFunction_GetName(FunctionReflection* func);
-
-    [LibraryImport(LibName)]
-    public static unsafe partial Modifier* spReflectionFunction_FindModifier(
-        FunctionReflection* var,
-        SlangModifierID modifierID);
 
     [LibraryImport(LibName)]
     public static unsafe partial uint spReflectionFunction_GetUserAttributeCount(
