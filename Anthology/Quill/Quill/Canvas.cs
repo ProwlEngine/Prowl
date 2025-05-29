@@ -1,13 +1,11 @@
 ﻿using FontStashSharp;
-using Prowl.Vector;
-using System.Diagnostics;
-using System.Drawing;
-using System.Runtime.InteropServices;
 using Prowl.Quill.External.LibTessDotNet;
-using System.Collections.Generic;
-using System.Linq;
+using Prowl.Vector;
 using System;
-using System.Runtime.CompilerServices;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace Prowl.Quill
 {
@@ -121,6 +119,8 @@ namespace Prowl.Quill
         internal EndCapStyle strokeEndCap;
         internal double strokeWidth;
         internal double strokeScale;
+        internal List<double> strokeDashPattern;
+        internal double strokeDashOffset;
         internal double miterLimit;
         internal double tess_tol;
         internal double roundingMinDistance;
@@ -143,6 +143,8 @@ namespace Prowl.Quill
             strokeEndCap = EndCapStyle.Butt; // Default end cap style
             strokeWidth = 1f; // Default stroke width
             strokeScale = 1f; // Default stroke scale
+            strokeDashPattern = null; // Default: solid line
+            strokeDashOffset = 0.0;   // Default: no offset
             miterLimit = 4; // Default miter limit
             tess_tol = 0.5; // Default tessellation tolerance
             roundingMinDistance = 3; //Default _state.roundingMinDistance
@@ -259,6 +261,39 @@ namespace Prowl.Quill
         public void SetStrokeEndCap(EndCapStyle cap) => _state.strokeEndCap = cap;
         public void SetStrokeWidth(double width = 2f) => _state.strokeWidth = width;
         public void SetStrokeScale(double scale) => _state.strokeScale = scale;
+
+
+        /// <summary>
+        /// Sets the dash pattern for strokes.
+        /// </summary>
+        /// <param name="pattern">A list of doubles representing the lengths of dashes and gaps (e.g., [dash1_len, gap1_len, dash2_len, ...]). 
+        /// If null or empty, a solid line will be drawn. If the number of elements in the array is odd, the elements of the array get copied and concatenated.</param>
+        /// <param name="offset">The offset at which to start the dash pattern along the path.</param>
+        public void SetStrokeDash(List<double> pattern, double offset = 0.0)
+        {
+            int patternCount = pattern?.Count ?? 0;
+
+            // if the count is odd, duplicate the entire pattern and concatenate it
+            if (patternCount > 0 && patternCount % 2 != 0)
+            {
+                var newPattern = new List<double>(pattern);
+                newPattern.AddRange(pattern);
+                pattern = newPattern;
+            }
+
+            _state.strokeDashPattern = pattern;
+            _state.strokeDashOffset = offset;
+        }
+
+        /// <summary>
+        /// Clears any previously set stroke dash pattern, reverting to a solid line.
+        /// </summary>
+        public void ClearStrokeDash()
+        {
+            _state.strokeDashPattern = null;
+            _state.strokeDashOffset = 0.0;
+        }
+
         public void SetMiterLimit(double limit = 4) => _state.miterLimit = limit;
         public void SetTessellationTolerance(double tolerance = 0.5) => _state.tess_tol = tolerance;
         public void SetRoundingMinDistance(double distance = 3) => _state.roundingMinDistance = distance;
@@ -1095,16 +1130,25 @@ namespace Prowl.Quill
                 subPath.Points[i] = TransformPoint(subPath.Points[i]);
 
             bool isClosed = subPath.IsClosed;
-            var triangles = PolylineMesher.Create(subPath.Points, _state.strokeWidth * _state.strokeScale, _pixelWidth, _state.strokeColor, _state.strokeJoint, _state.miterLimit, false, _state.strokeStartCap, _state.strokeEndCap);
+
+            List<double> dashPattern = null;
+            if (_state.strokeDashPattern != null)
+            {
+                dashPattern = new List<double>(_state.strokeDashPattern);
+                for (int i = 0; i < dashPattern.Count; i++)
+                {
+                    dashPattern[i] *= _state.strokeScale; // Scale the dash pattern by stroke scale
+                }
+            }
+
+            var triangles = PolylineMesher.Create(subPath.Points, _state.strokeWidth * _state.strokeScale, _pixelWidth, _state.strokeColor, _state.strokeJoint, _state.miterLimit, false, _state.strokeStartCap, _state.strokeEndCap, dashPattern, _state.strokeDashOffset * _state.strokeScale);
+
 
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
             foreach (var triangle in triangles)
             {
                 var color = triangle.Color;
-
-                // TODO: Calculate Normals and push each vertex out by _pixelWidth / 0.5; for AntiAliasing
-
                 AddVertex(new Vertex(triangle.V1, triangle.UV1, color));
                 AddVertex(new Vertex(triangle.V2, triangle.UV2, color));
                 AddVertex(new Vertex(triangle.V3, triangle.UV3, color));

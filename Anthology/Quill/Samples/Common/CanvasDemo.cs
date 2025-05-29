@@ -494,11 +494,23 @@ namespace Common
             _canvas.SetStrokeColor(Color.FromArgb(255, 255, 100, 100));
             _canvas.Stroke();
 
-            // Dashed line (simulation with multiple segments)
-            DrawDashedLine(0, 40 + 5, 160, 40 - 5, 10, 5, Color.FromArgb(255, 100, 255, 100), 4);
+            // Dashed line
+            _canvas.SetStrokeColor(Color.FromArgb(255, 100, 255, 100));
+            _canvas.SetStrokeWidth(4);
 
-            // Dotted line (simulation with small segments)
-            DrawDashedLine(0, 60 + 5, 160, 60 - 5, 2, 4, Color.FromArgb(255, 100, 100, 255), 4);
+            _canvas.BeginPath();
+            _canvas.MoveTo(0, 40 + 5);
+            _canvas.LineTo(160, 40 - 5);
+            _canvas.SetStrokeColor(Color.FromArgb(255, 255, 100, 100));
+            _canvas.SetStrokeDash(new List<double>() { 10, 5, 2, 2 }, 0);
+            _canvas.Stroke();
+
+            _canvas.BeginPath();
+            _canvas.MoveTo(0, 60 + 5);
+            _canvas.LineTo(160, 60 - 5);
+            _canvas.SetStrokeColor(Color.FromArgb(255, 100, 100, 255));
+            _canvas.SetStrokeDash(new List<double>() { 5, 5 }, 0);
+            _canvas.Stroke();
 
             _canvas.RestoreState();
         }
