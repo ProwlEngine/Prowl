@@ -63,7 +63,7 @@ public struct TargetDescription()
     /// <summary>
     /// The compilation profile supported by the target (e.g., "Shader Model 5.1")
     /// </summary>
-    public SlangProfileID Profile = SlangProfileID.UNKNOWN;
+    public SlangProfileID Profile = SlangProfileID.Unknown;
 
     /// <summary>
     /// Flags for the code generation target. Currently unused.
@@ -73,12 +73,12 @@ public struct TargetDescription()
     /// <summary>
     /// Default mode to use for floating-point operations on the target.
     /// </summary>
-    public SlangFloatingPointMode FloatingPointMode = SlangFloatingPointMode.DEFAULT;
+    public SlangFloatingPointMode FloatingPointMode = SlangFloatingPointMode.Default;
 
     /// <summary>
     /// The line directive mode for output source code.
     /// </summary>
-    public SlangLineDirectiveMode LineDirectiveMode = SlangLineDirectiveMode.DEFAULT;
+    public SlangLineDirectiveMode LineDirectiveMode = SlangLineDirectiveMode.Default;
 
     /// <summary>
     /// Whether to force `scalar` layout for glsl shader storage buffers.
@@ -127,7 +127,7 @@ public struct SessionDescription()
     /// <summary>
     /// Default layout to assume for variables with matrix types.
     /// </summary>
-    public SlangMatrixLayoutMode DefaultMatrixLayoutMode = SlangMatrixLayoutMode.ROW_MAJOR;
+    public SlangMatrixLayoutMode DefaultMatrixLayoutMode = SlangMatrixLayoutMode.RowMajor;
 
     /// <summary>
     /// Paths to use when searching for `#include`d or `import`ed files.

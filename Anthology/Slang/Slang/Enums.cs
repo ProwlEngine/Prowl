@@ -357,8 +357,11 @@ public enum SlangTargetFlags : uint
     /// </summary>
     DumpIR = 1 << 9,
 
-    // GENERATE_SPIRV_DIRECTLY = 1 << 10,
-    // Default = GENERATE_SPIRV_DIRECTLY
+    ///
+    GenerateSpirvDirectly = 1 << 10,
+
+    ///
+    Default = GenerateSpirvDirectly,
 }
 
 
@@ -735,8 +738,8 @@ public enum CompilerOptionValueKind : int
 /* Type that identifies how a path should be interpreted */
 internal enum SlangPathType : uint
 {
-    Directory, /// Path specified specifies a directory.
-    File,      /// Path specified is to a file.
+    Directory, // Path specified specifies a directory.
+    File,      // Path specified is to a file.
 }
 
 /* Callback to enumerate the contents of of a directory in a ISlangFileSystemExt.
@@ -750,8 +753,8 @@ internal enum OSPathKind : byte
 {
     None,            /// Paths do not map to the file system
     Direct,          /// Paths map directly to the file system
-    OperatingSystem, /// Only paths gained via PathKind::OperatingSystem map to the operating
-                     /// system file system
+    OperatingSystem, // Only paths gained via PathKind::OperatingSystem map to the operating
+                     // system file system
 }
 
 /* Used to determine what kind of path is required from an input path */
@@ -816,16 +819,27 @@ public enum SlangWriterMode : uint
 */
 // typedef void (* SlangDiagnosticCallback) (byte* message, void* userData);
 
-/*
-Forward declarations of types used in the reflection interface;
-*/
 
+/// <summary>
+/// Forward declarations of types used in the reflection interface.
+/// </summary>
 public enum SlangReflectionGenericArgType : int
 {
-    TYPE = 0,
-    INT = 1,
-    BOOL = 2
-};
+    /// <summary>
+    /// A type that is not a generic argument, but rather a regular type.
+    /// </summary>
+    Type = 0,
+
+    /// <summary>
+    /// Integer argument type.
+    /// </summary>
+    Int = 1,
+
+    /// <summary>
+    /// Boolean argument type.
+    /// </summary>
+    Bool = 2
+}
 
 // type reflection
 public enum SlangTypeKind : uint
@@ -924,6 +938,9 @@ public enum SlangResourceAccess : uint
 }
 
 
+/// <summary>
+///
+/// </summary>
 public enum SlangParameterCategory : uint
 {
     NONE,
@@ -953,59 +970,82 @@ public enum SlangParameterCategory : uint
     CALLABLE_PAYLOAD,
     SHADER_RECORD,
 
-    // An existential type parameter represents a "hole" that
-    // needs to be filled with a concrete type to enable
-    // generation of specialized code.
-    //
-    // Consider this example:
-    //
-    //      struct MyParams
-    //      {
-    //          IMaterial material;
-    //          ILight lights[3];
-    //      };
-    //
-    // This `MyParams` type introduces two existential type parameters:
-    // one for `material` and one for `lights`. Even though `lights`
-    // is an array, it only introduces one type parameter, because
-    // we need to have a *single* concrete type for all the array
-    // elements to be able to generate specialized code.
-    //
+
+    /// <summary>
+    /// <para>
+    /// An existential type parameter represents a "hole" that
+    /// needs to be filled with a concrete type to enable
+    /// generation of specialized code.
+    /// </para>
+    /// <para>
+    /// Consider this example:
+    /// </para>
+    /// <code>
+    /// struct MyParams
+    /// {
+    ///     IMaterial material;
+    ///     ILight lights[3];
+    /// };
+    /// </code>
+    /// <para>
+    /// This `MyParams` type introduces two existential type parameters:
+    /// one for `material` and one for `lights`. Even though `lights`
+    /// is an array, it only introduces one type parameter, because
+    /// we need to have a *single* concrete type for all the array
+    /// elements to be able to generate specialized code.
+    /// </para>
+    /// </summary>
     EXISTENTIAL_TYPE_PARAM,
 
-    // An existential object parameter represents a value
-    // that needs to be passed in to provide data for some
-    // interface-type shader parameter.
-    //
-    // Consider this example:
-    //
-    //      struct MyParams
-    //      {
-    //          IMaterial material;
-    //          ILight lights[3];
-    //      };
-    //
-    // This `MyParams` type introduces four existential object parameters:
-    // one for `material` and three for `lights` (one for each array
-    // element). This is consistent with the number of interface-type
-    // "objects" that are being passed through to the shader.
-    //
-    EXISTENTIAL_OBJECT_PARAM,
+    /// <summary>
+    /// <para>
+    /// An existential object parameter represents a value
+    /// that needs to be passed in to provide data for some
+    /// interface-type shader parameter.
+    /// </para>
+    /// <para>
+    /// Consider this example:
+    /// </para>
+    /// <code>
+    /// struct MyParams
+    /// {
+    ///     IMaterial material;
+    ///     ILight lights[3];
+    /// };
+    /// </code>
+    /// <para>
+    /// This `MyParams` type introduces four existential object parameters:
+    /// one for `material` and three for `lights` (one for each array
+    /// element). This is consistent with the number of interface-type
+    /// "objects" that are being passed through to the shader.
+    /// </para>
+    /// </summary>
+    ExistentialObjectParam,
 
-    // The register space offset for the sub-elements that occupies register spaces.
-    SUB_ELEMENT_REGISTER_SPACE,
+    /// <summary>
+    /// The register space offset for the sub-elements that occupies register spaces.
+    /// </summary>
+    SubElementRegisterSpace,
 
-    // The input_attachment_index subpass occupancy tracker
-    SUBPASS,
+    /// <summary>
+    /// The input_attachment_index subpass occupancy tracker.
+    /// </summary>
+    Subpass,
 
-    // Metal tier-1 argument buffer element [[id]].
-    METAL_ARGUMENT_BUFFER_ELEMENT,
+    /// <summary>
+    /// Metal tier-1 argument buffer element [[id]].
+    /// </summary>
+    MetalArgumentBufferElement,
 
-    // Metal [[attribute]] inputs.
-    METAL_ATTRIBUTE,
+    /// <summary>
+    /// Metal [[attribute]] inputs.
+    /// </summary>
+    MetalAttribute,
 
-    // Metal [[payload]] inputs
-    METAL_PAYLOAD,
+    /// <summary>
+    /// Metal [[payload]] inputs.
+    /// </summary>
+    MetalPayload,
 }
 
 /// <summary>
@@ -1016,7 +1056,7 @@ public enum SlangParameterCategory : uint
 /// `SlangBindingType` represents the distinct types of binding ranges that might be
 /// understood by an underlying graphics API or cross-API abstraction layer.
 /// Several of the enumeration cases here correspond to cases of `VkDescriptorType`
-/// defined by the Vulkan API.Note however that the values of this enumeration
+/// defined by the Vulkan API. Note however that the values of this enumeration
 /// are not the same as those of any particular API.
 /// </para>
 /// <para>
@@ -1040,40 +1080,120 @@ public enum SlangParameterCategory : uint
 /// </summary>
 public enum SlangBindingType : uint
 {
-    UNKNOWN = 0,
+    /// <summary>
+    /// Unknown binding type.
+    /// </summary>
+    Unknown = 0,
 
-    SAMPLER,
-    TEXTURE,
-    CONSTANT_BUFFER,
-    PARAMETER_BLOCK,
-    TYPED_BUFFER,
-    RAW_BUFFER,
-    COMBINED_TEXTURE_SAMPLER,
-    INPUT_RENDER_TARGET,
-    INLINE_UNIFORM_DATA,
-    RAY_TRACING_ACCELERATION_STRUCTURE,
+    /// <summary>
+    /// Sampler binding type.
+    /// </summary>
+    Sampler,
 
-    VARYING_INPUT,
-    VARYING_OUTPUT,
+    /// <summary>
+    /// Texture binding type.
+    /// </summary>
+    Texture,
 
-    EXISTENTIAL_VALUE,
-    PUSH_CONSTANT,
+    /// <summary>
+    /// Constant buffer binding type.
+    /// </summary>
+    ConstantBuffer,
 
-    MUTABLE_FLAG = 0x100,
+    /// <summary>
+    /// Parameter block binding type.
+    /// </summary>
+    ParameterBlock,
 
-    MUTABLE_TETURE = TEXTURE | MUTABLE_FLAG,
-    MUTABLE_TYPED_BUFFER = TYPED_BUFFER | MUTABLE_FLAG,
-    MUTABLE_RAW_BUFFER = RAW_BUFFER | MUTABLE_FLAG,
+    /// <summary>
+    /// Typed buffer binding type.
+    /// </summary>
+    TypedBuffer,
 
-    BASE_MASK = 0x00FF,
-    EXT_MASK = 0xFF00,
+    /// <summary>
+    /// Raw buffer binding type.
+    /// </summary>
+    RawBuffer,
+
+    /// <summary>
+    /// Combined texture-sampler binding type.
+    /// </summary>
+    CombinedTextureSampler,
+
+    /// <summary>
+    /// Input render target binding type.
+    /// </summary>
+    InputRenderTarget,
+
+    /// <summary>
+    /// Inline uniform data binding type.
+    /// </summary>
+    InlineUniformData,
+
+    /// <summary>
+    /// RT acceleration structure binding type.
+    /// </summary>
+    RayTracingAccelerationStructure,
+
+    /// <summary>
+    /// Varying input binding type.
+    /// </summary>
+    VaryingInput,
+
+    /// <summary>
+    /// Varying output binding type.
+    /// </summary>
+    VaryingOutput,
+
+    /// <summary>
+    /// Existential value binding type.
+    /// </summary>
+    ExistentialValue,
+
+    /// <summary>
+    /// Push constant binding type.
+    /// </summary>
+    PushConstant,
+
+    // MUTABLE_FLAG = 0x100,
+
+    /// <summary>
+    /// A mutable (read/write) texture binding type.
+    /// </summary>
+    MutableTexture = Texture | 0x100,
+
+    /// <summary>
+    /// A mutable (read/write) typed buffer binding type.
+    /// </summary>
+    MutableTypedBuffer = TypedBuffer | 0x100,
+
+    /// <summary>
+    /// A mutable (read/write) raw buffer binding type.
+    /// </summary>
+    MutableRawBuffer = RawBuffer | 0x100,
+
+    ///
+    BaseMask = 0x00FF,
+
+    ///
+    ExtMask = 0xFF00,
 }
 
 
+/// <summary>
+/// The type of memory layout used by a shader for a type.
+/// </summary>
 public enum SlangLayoutRules : uint
 {
-    DEFAULT,
-    METAL_ARGUMENT_BUFFER_TIER_2,
+    /// <summary>
+    /// Default layout.
+    /// </summary>
+    Default,
+
+    /// <summary>
+    /// Tier 2 MTL arguments buffer.
+    /// </summary>
+    MetalArgumentBufferTier2,
 }
 
 
