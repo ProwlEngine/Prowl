@@ -37,91 +37,86 @@ namespace Prowl.PaperUI.Extras
     public class WindowStyle
     {
         // Visual properties
-        public bool HasBackground = true;
-        public Color BackgroundStyle { get; set; } = Color.FromArgb(255, 30, 30, 46);
+
+        public StyleTemplate? BackgroundStyle = null;
+
+        public StyleTemplate? TitlebarStyle = null;
+        public StyleTemplate? TitlebarHoveredStyle = null;
+
+        public StyleTemplate? CloseButtonStyle = null;
+        public StyleTemplate? CloseButtonHoveredStyle = null;
+
+        public StyleTemplate? ContentStyle = null;
+
+        public UnitValue TitleMargin = 8f; // Margin around the title text
+
         public bool HasTitleBar { get; set; } = true;
-        public Color TitleBarStyle { get; set; } = Color.FromArgb(255, 40, 40, 56);
         public Color TextColor { get; set; } = Color.FromArgb(255, 226, 232, 240);
-        public Color BorderColor { get; set; } = Color.FromArgb(100, 255, 255, 255);
-        public Color CloseButtonStyle { get; set; } = Color.FromArgb(80, 255, 100, 100);
-        public Color CloseButtonHoverColor { get; set; } = Color.FromArgb(120, 255, 120, 120);
-        public Color CloseButtonPressedColor { get; set; } = Color.FromArgb(150, 255, 80, 80); // For future use
         public Color ResizeHandleIndicatorColor { get; set; } = Color.FromArgb(180, 94, 104, 202);
 
-        public double BorderWidth { get; set; } = 1.0f;
-        public double CornerRadius { get; set; } = 8.0f; // Assuming PaperUI supports this in rendering
-        public double TitleBarHeight { get; set; } = 32.0f;
-
-        // New style properties
-        public Thickness ContentPadding { get; set; } = new Thickness(8);
-        public Thickness CloseButtonPadding { get; set; } = new Thickness(0, Paper.Stretch(), 8, Paper.Stretch());
-        public UnitValue CloseButtonSize { get; set; } = 24;
         public string CloseButtonIcon { get; set; } = "×";
         public bool ShowCloseButton { get; set; } = true; // Effective only if ShowTitleBar is true
         public SpriteFontBase? TitleFont { get; set; } // If null, WindowManager's default font is used
         public HorizontalAlignment TitleAlignment { get; set; } = HorizontalAlignment.Left;
 
-
-        // Predefined styles
-        public static WindowStyle Default => new WindowStyle();
-
-        public static WindowStyle Dark => new WindowStyle
+        internal StyleTemplate GetBackgroundTemplate()
         {
-            BackgroundStyle = Color.FromArgb(255, 20, 20, 30),
-            TitleBarStyle = Color.FromArgb(255, 30, 30, 40),
-            TextColor = Color.FromArgb(255, 200, 200, 210),
-            BorderColor = Color.FromArgb(100, 100, 100, 120),
-            ContentPadding = new Thickness(8),
-            CloseButtonPadding = new Thickness(0, Paper.Stretch(), 8, Paper.Stretch()),
-            CloseButtonSize = 24,
-            CloseButtonIcon = "×",
-            HasTitleBar = true,
-            ShowCloseButton = true,
-            TitleAlignment = HorizontalAlignment.Left,
-        };
+            var baseStyle = new StyleTemplate();
+            baseStyle.BackgroundColor(Color.FromArgb(255, 30, 30, 46));
+            baseStyle.BorderColor(Color.FromArgb(100, 255, 255, 255));
+            baseStyle.BorderWidth(1.0f);
+            baseStyle.Rounded(8.0f);
 
-        public static WindowStyle Light => new WindowStyle
-        {
-            BackgroundStyle = Color.FromArgb(255, 240, 240, 245),
-            TitleBarStyle = Color.FromArgb(255, 220, 220, 230),
-            TextColor = Color.FromArgb(255, 40, 40, 50),
-            BorderColor = Color.FromArgb(100, 180, 180, 190),
-            CloseButtonStyle = Color.FromArgb(80, 100, 100, 100),
-            CloseButtonHoverColor = Color.FromArgb(120, 120, 120, 120),
-            ContentPadding = new Thickness(8),
-            CloseButtonPadding = new Thickness(0, Paper.Stretch(), 8, Paper.Stretch()),
-            CloseButtonSize = 24,
-            CloseButtonIcon = "×",
-            HasTitleBar = true,
-            ShowCloseButton = true,
-            TitleAlignment = HorizontalAlignment.Left,
-        };
+            if (BackgroundStyle != null)
+                BackgroundStyle.ApplyTo(baseStyle);
 
-        // Clone the style
-        public WindowStyle Clone()
+            return baseStyle;
+        }
+
+        internal StyleTemplate GetTitlebarTemplate()
         {
-            return new WindowStyle
-            {
-                BackgroundStyle = this.BackgroundStyle,
-                TitleBarStyle = this.TitleBarStyle,
-                TextColor = this.TextColor,
-                BorderColor = this.BorderColor,
-                CloseButtonStyle = this.CloseButtonStyle,
-                CloseButtonHoverColor = this.CloseButtonHoverColor,
-                CloseButtonPressedColor = this.CloseButtonPressedColor,
-                ResizeHandleIndicatorColor = this.ResizeHandleIndicatorColor,
-                BorderWidth = this.BorderWidth,
-                CornerRadius = this.CornerRadius,
-                TitleBarHeight = this.TitleBarHeight,
-                ContentPadding = this.ContentPadding,
-                CloseButtonPadding = this.CloseButtonPadding,
-                CloseButtonSize = this.CloseButtonSize,
-                CloseButtonIcon = this.CloseButtonIcon,
-                HasTitleBar = this.HasTitleBar,
-                ShowCloseButton = this.ShowCloseButton,
-                TitleFont = this.TitleFont, // Reference copy is fine for fonts
-                TitleAlignment = this.TitleAlignment
-            };
+            var baseStyle = new StyleTemplate();
+            baseStyle.BackgroundColor(Color.FromArgb(255, 40, 40, 56));
+            baseStyle.RoundedTop(8.0f);
+            baseStyle.Margin(1f); // So background border doesn't overlap with title bar
+            baseStyle.Height(32f);
+
+            if (TitlebarStyle != null)
+                TitlebarStyle.ApplyTo(baseStyle);
+
+            return baseStyle;
+        }
+
+        internal StyleTemplate GetTitlebarHoveredTemplate() => TitlebarHoveredStyle ?? new();
+
+        internal StyleTemplate GetCloseButtonTemplate()
+        {
+            var baseStyle = new StyleTemplate();
+            baseStyle.BackgroundColor(Color.FromArgb(80, 255, 100, 100));
+            baseStyle.Rounded(4.0f);
+            baseStyle.Size(24f);
+            baseStyle.Margin(Paper.Stretch(), 8, Paper.Stretch(), Paper.Stretch());
+            if (CloseButtonStyle != null)
+                CloseButtonStyle.ApplyTo(baseStyle);
+            return baseStyle;
+        }
+
+        internal StyleTemplate GetCloseButtonHoveredTemplate()
+        {
+            var baseStyle = new StyleTemplate();
+            baseStyle.BackgroundColor(Color.FromArgb(120, 255, 120, 120));
+            if (CloseButtonHoveredStyle != null)
+                CloseButtonHoveredStyle.ApplyTo(baseStyle);
+            return baseStyle;
+        }
+
+        internal StyleTemplate GetContentTemplate()
+        {
+            var baseStyle = new StyleTemplate();
+            baseStyle.Margin(8f);
+            if (ContentStyle != null)
+                ContentStyle.ApplyTo(baseStyle);
+            return baseStyle;
         }
     }
 
@@ -247,6 +242,7 @@ namespace Prowl.PaperUI.Extras
             }
 
             // Main window container
+            var bgStyle = style.GetBackgroundTemplate();
             using (Paper.Box($"Window_{state.Id}")
                 .Depth(100_000 + state.ZOrder)
                 .PositionType(PositionType.SelfDirected)
@@ -257,12 +253,7 @@ namespace Prowl.PaperUI.Extras
                 .MaxTop(Paper.Percent(100, -state.Size.y))
                 .MinWidth(state.MinSize.x)
                 .MinHeight(state.MinSize.y)
-                .If(style.HasBackground)
-                    .BackgroundColor(style.BackgroundStyle)
-                    .End()
-                .Rounded(style.CornerRadius)
-                .BorderColor(style.BorderColor)
-                .BorderWidth(style.BorderWidth)
+                .Style(bgStyle)
                 .OnClick((rect) => BringWindowToFront(state.Id))
                 .OnPostLayout((node, rect) => {
                     // Set the window position to the new position layouting calculated
@@ -305,8 +296,9 @@ namespace Prowl.PaperUI.Extras
                     RenderTitleBar(style, state);
 
                 // Content area
+                var contentStyle = style.GetContentTemplate();
                 using (Paper.Box($"WindowContent_{state.Id}")
-                    .Margin(style.ContentPadding.Left, style.ContentPadding.Right, style.ContentPadding.Top, style.ContentPadding.Bottom) // Apply padding
+                    .Style(contentStyle)
                     .Clip() // Ensures content doesn't draw outside this box
                     .Enter())
                 {
@@ -324,11 +316,13 @@ namespace Prowl.PaperUI.Extras
 
         private static void RenderTitleBar(WindowStyle style, WindowState state)
         {
+            var titleBarStyle = style.GetTitlebarTemplate();
+            var titleBarHoverStyle = style.GetTitlebarHoveredTemplate();
             using (Paper.Row($"WindowTitleBar_{state.Id}")
-                .Height(style.TitleBarHeight)
-                .BackgroundColor(style.TitleBarStyle)
-                .RoundedTop(style.CornerRadius)
-                .Margin(1)
+                .Style(titleBarStyle)
+                .Hovered
+                    .Style(titleBarHoverStyle)
+                    .End()
                 .OnDragStart((pos) => {
                     if (state.IsDraggable)
                     {
@@ -356,14 +350,14 @@ namespace Prowl.PaperUI.Extras
                 }
 
                 // Title Text
-                var paperTextAligner = Text.Left; // PaperUI specific text alignment
+                var paperTextAligner = Text.Left;
                 if (style.TitleAlignment == HorizontalAlignment.Center) paperTextAligner = Text.Center;
                 else if (style.TitleAlignment == HorizontalAlignment.Right) paperTextAligner = Text.Right;
 
                 using (Paper.Box($"WindowTitle_{state.Id}")
                     // Adjust margin for alignment: only left margin for left-align, only right for right-align
-                    .Margin(style.TitleAlignment == HorizontalAlignment.Left ? style.ContentPadding.Left : 0, // Use ContentPadding.Left as a sensible title margin
-                            style.TitleAlignment == HorizontalAlignment.Right ? style.ContentPadding.Right : 0,
+                    .Margin(style.TitleAlignment == HorizontalAlignment.Left ? style.TitleMargin : 0,
+                            style.TitleAlignment == HorizontalAlignment.Right ? style.TitleMargin : 0,
                             0, 0)
                     .Text(paperTextAligner(state.Title, titleFont, style.TextColor))
                     .Enter()) { }
@@ -376,14 +370,15 @@ namespace Prowl.PaperUI.Extras
                 // Close Button
                 if (style.ShowCloseButton)
                 {
+                    var closeButtonStyle = style.GetCloseButtonTemplate();
+                    var closeButtonHoverStyle = style.GetCloseButtonHoveredTemplate();
                     Paper.Box($"CloseButton_{state.Id}")
-                        .Size(style.CloseButtonSize)
-                        .Margin(style.CloseButtonPadding.Left, style.CloseButtonPadding.Right, style.CloseButtonPadding.Top, style.CloseButtonPadding.Bottom)
-                        .BackgroundColor(style.CloseButtonStyle)
+                        .PositionType(PositionType.SelfDirected)
+                        .Style(closeButtonStyle)
                         .Text(Text.Center(style.CloseButtonIcon, titleFont, style.TextColor)) // Use titleFont for close button for consistency
                         .OnClick((_) => state.IsOpen = false) // Set window to close
                         .Hovered
-                            .BackgroundColor(style.CloseButtonHoverColor)
+                            .Style(closeButtonHoverStyle)
                             .End();
                 }
             }
