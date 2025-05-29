@@ -5,7 +5,7 @@ using System.Drawing;
 
 namespace Common
 {
-    internal class BenchmarkScene
+    internal class BenchmarkScene : IDemo
     {
         private Canvas _canvas;
         private double _width;
@@ -13,8 +13,8 @@ namespace Common
         private double _time;
 
         // Benchmark parameters
-        private const int RECT_COUNT = 40000;
-        private const int CIRCLE_COUNT = 40000;
+        private const int RECT_COUNT = 79000;
+        private const int CIRCLE_COUNT = 1000;
         private const double MAX_SIZE = 20.0;
         private const double MIN_SIZE = 5.0;
 
@@ -25,27 +25,33 @@ namespace Common
 
         private SpriteFontBase _font;
 
-        public BenchmarkScene(Canvas canvas, SpriteFontBase font)
+        public BenchmarkScene(Canvas canvas, SpriteFontBase font, double width, double height)
         {
             _canvas = canvas;
             _font = font;
-        }
-
-        public void RenderFrame(double deltaTime, double width, double height)
-        {
-            _time += deltaTime;
 
             _width = width;
             _height = height;
+        }
+
+        public void RenderFrame(double deltaTime, Vector2 offset, double zoom, double rotate)
+        {
+            _time += deltaTime;
 
             // Track performance
             UpdatePerformanceMetrics(deltaTime);
 
             // Clear the canvas
             _canvas.ResetState();
+            _canvas.SaveState();
+
+            _canvas.TransformBy(Transform2D.CreateTranslation(_width / 2, _height / 2));
+            _canvas.TransformBy(Transform2D.CreateRotate(rotate) * Transform2D.CreateTranslation(offset.x, offset.y) * Transform2D.CreateScale(zoom, zoom));
+            _canvas.SetStrokeScale(zoom);
 
             // Run the benchmark
             DrawBenchmarkShapes();
+            _canvas.RestoreState();
 
             // Draw performance overlay
             DrawPerformanceOverlay();
@@ -77,6 +83,7 @@ namespace Common
             double radiusRange = (MAX_SIZE - MIN_SIZE) / 2;
 
             _canvas.SaveState();
+            var curTransform = _canvas.GetTransform();
 
             // Draw rectangles
             for (int i = 0; i < RECT_COUNT; i++)
@@ -95,7 +102,8 @@ namespace Common
                 byte g = (byte)(128 + 127 * Math.Sin(colorTimeG + i * 0.015));
                 byte b = (byte)(128 + 127 * Math.Sin(colorTimeB + i * 0.008));
 
-                _canvas.CurrentTransform(Transform2D.CreateTranslation(x, y));
+                _canvas.CurrentTransform(curTransform);
+                _canvas.TransformBy(Transform2D.CreateTranslation(x, y));
                 _canvas.TransformBy(Transform2D.CreateRotate(rotation));
                 _canvas.TransformBy(Transform2D.CreateScale(scale, scale));
                 _canvas.RectFilled(-width / 2, -height / 2, width, height, Color.FromArgb(180, r, g, b));
@@ -120,7 +128,8 @@ namespace Common
                 byte g = (byte)(128 + 127 * Math.Cos(circleColorTimeG + i * 0.008));
                 byte b = (byte)(128 + 127 * Math.Cos(circleColorTimeB + i * 0.020));
 
-                _canvas.CurrentTransform(Transform2D.CreateTranslation(x, y));
+                _canvas.CurrentTransform(curTransform);
+                _canvas.TransformBy(Transform2D.CreateTranslation(x, y));
                 _canvas.TransformBy(Transform2D.CreateScale(totalScale, totalScale));
                 _canvas.CircleFilled(0, 0, radius, Color.FromArgb(160, r, g, b));
             }

@@ -73,9 +73,9 @@ namespace OpenTKExample
             _demos = new List<IDemo>
             {
                 new CanvasDemo(_canvas, ClientSize.X, ClientSize.Y, _demoTexture, RobotoFont32, RobotoFont16, AlamakFont32),
-                new SVGDemo(_canvas, ClientSize.X, ClientSize.Y)
+                new SVGDemo(_canvas, ClientSize.X, ClientSize.Y),
+                new BenchmarkScene(_canvas, RobotoFont16, ClientSize.X, ClientSize.Y),
             };
-            _benchmarkScene = new BenchmarkScene(_canvas, RobotoFont16);
         }
 
         protected override void OnRenderFrame(FrameEventArgs args)
