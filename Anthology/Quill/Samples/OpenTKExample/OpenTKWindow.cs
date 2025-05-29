@@ -17,7 +17,8 @@ namespace OpenTKExample
     {
         // Canvas and demo
         private Canvas _canvas;
-        private CanvasDemo _demo;
+        private List<IDemo> _demos;
+        private int _currentDemoIndex;
         private CanvasRenderer _renderer;
         private BenchmarkScene _benchmarkScene;
 
@@ -69,7 +70,11 @@ namespace OpenTKExample
                 AlamakFont32 = fonts.GetFont(32);
             }
 
-            _demo = new CanvasDemo(_canvas, ClientSize.X, ClientSize.Y, _demoTexture, RobotoFont32, RobotoFont16, AlamakFont32);
+            _demos = new List<IDemo>
+            {
+                new CanvasDemo(_canvas, ClientSize.X, ClientSize.Y, _demoTexture, RobotoFont32, RobotoFont16, AlamakFont32),
+                new SVGDemo(_canvas, ClientSize.X, ClientSize.Y)
+            };
             _benchmarkScene = new BenchmarkScene(_canvas, RobotoFont16);
         }
 
@@ -81,7 +86,7 @@ namespace OpenTKExample
             _canvas.Clear();
 
             // Let demo render to canvas
-            _demo.RenderFrame(args.Time, _offset, _zoom, _rotation);
+            _demos[_currentDemoIndex].RenderFrame(args.Time, _offset, _zoom, _rotation);
             //_benchmarkScene.RenderFrame(args.Time, ClientSize.X, ClientSize.Y);
 
             // Draw the canvas content using OpenGL
@@ -122,6 +127,15 @@ namespace OpenTKExample
             // Rotate with Q/E keys
             if (keyboard.IsKeyDown(Keys.Q)) _rotation += 10.0 * args.Time;
             if (keyboard.IsKeyDown(Keys.E)) _rotation -= 10.0 * args.Time;
+
+
+            if (keyboard.IsKeyReleased(Keys.Left))
+                _currentDemoIndex = _currentDemoIndex - 1 < 0 ? _demos.Count - 1 : _currentDemoIndex - 1;
+            if (keyboard.IsKeyReleased(Keys.Right))
+                _currentDemoIndex = _currentDemoIndex + 1 == _demos.Count ? 0 : _currentDemoIndex + 1;
+            if (keyboard.IsKeyReleased(Keys.Space))
+                if (_demos[_currentDemoIndex] is SVGDemo svgDemo)
+                    svgDemo.ParseSVG();
         }
 
         protected override void OnResize(ResizeEventArgs e)

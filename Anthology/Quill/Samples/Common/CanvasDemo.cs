@@ -5,7 +5,7 @@ using System.Drawing;
 
 namespace Common
 {
-    internal class CanvasDemo
+    internal class CanvasDemo: IDemo
     {
         private Canvas _canvas;
         private Canvas3D _canvas3D;

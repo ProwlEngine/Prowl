@@ -12,6 +12,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)BenchmarkScene.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Canvas3D.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CanvasDemo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IDemo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SVGDemo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)VectorFont.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -28,4 +30,13 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="$(MSBuildThisFileDirectory)SVGs\" />
+  </ItemGroup>
+  <ItemGroup>
+    <SampleSVGs Include="$(MSBuildThisFileDirectory)SVGs\*.*" />
+  </ItemGroup>
+  <Target Name="CopyCustomContent" AfterTargets="AfterBuild">
+    <Copy SourceFiles="@(SampleSVGs)" DestinationFolder="$(OutDir)SVGs" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
