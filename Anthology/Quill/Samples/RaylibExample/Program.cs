@@ -45,14 +45,21 @@ namespace RaylibExample
             }
 
             Canvas canvas = new Canvas(renderer);
-            CanvasDemo demo = new CanvasDemo(canvas, screenWidth, screenHeight, demoTexture, RobotoFont32, RobotoFont16, AlamakFont32);
 
-            var benchmarkScene = new BenchmarkScene(canvas, RobotoFont16);
+            var demos = new List<IDemo>
+            {
+                new CanvasDemo(canvas, screenWidth, screenHeight, demoTexture, RobotoFont32, RobotoFont16, AlamakFont32),
+                new SVGDemo(canvas, screenWidth, screenHeight),
+                new BenchmarkScene(canvas, RobotoFont16, screenWidth, screenHeight)
+            };
+
+
+            int currentDemoIndex = 0;
 
             // In your render loop
             while (!WindowShouldClose())
             {
-                HandleDemoInput(ref offset, ref zoom, ref rotation);
+                HandleDemoInput(ref offset, ref zoom, ref rotation, ref currentDemoIndex, demos.Count);
                 screenWidth = GetScreenWidth();
                 screenHeight = GetScreenHeight();
 
@@ -60,8 +67,7 @@ namespace RaylibExample
                 canvas.Clear();
 
                 // Draw demo into canvas
-                //benchmarkScene.RenderFrame(GetFrameTime(), screenWidth, screenHeight);
-                demo.RenderFrame(GetFrameTime(), offset, zoom, rotation);
+                demos[currentDemoIndex].RenderFrame(GetFrameTime(), offset, zoom, rotation);
 
                 // Draw Canvas
                 BeginDrawing();
@@ -77,9 +83,8 @@ namespace RaylibExample
             CloseWindow();
         }
 
-        private static void HandleDemoInput(ref Vector2 offset, ref float zoom, ref float rotation)
+        private static void HandleDemoInput(ref Vector2 offset, ref float zoom, ref float rotation, ref int currentDemoIndex, int demoCount)
         {
-
             // Handle input
             if (IsMouseButtonDown(MouseButton.Left))
             {
@@ -96,6 +101,11 @@ namespace RaylibExample
 
             if (IsKeyDown(KeyboardKey.Q)) rotation += 10.0f * GetFrameTime();
             if (IsKeyDown(KeyboardKey.E)) rotation -= 10.0f * GetFrameTime();
+
+            if (IsKeyPressed(KeyboardKey.Left))
+                currentDemoIndex = currentDemoIndex - 1 < 0 ? demoCount - 1 : currentDemoIndex - 1;
+            if (IsKeyPressed(KeyboardKey.Right))
+                currentDemoIndex = currentDemoIndex + 1 == demoCount ? 0 : currentDemoIndex + 1;
         }
     }
 }
