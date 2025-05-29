@@ -13,7 +13,7 @@ internal unsafe class ManagedBlob : ManagedComProxy<ISlangBlob>, ISlangBlob
     {
         ManagedBlob blob = new()
         {
-            Bytes = NativeUtility.Alloc<byte>(source.Length),
+            Bytes = NativeUtility.Alloc<byte>(source.Length == 0 ? 1 : source.Length),
             Length = (nuint)source.Length,
             NeedsFree = true,
         };
