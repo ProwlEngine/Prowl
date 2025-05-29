@@ -570,111 +570,328 @@ public enum SlangEmitSpirvMethod : int
 
 */
 
+/// <summary>
+/// Types of compiler options that can be specified during session setup.
+/// </summary>
 public enum CompilerOptionName : int
 {
-    MacroDefine, // stringValue0: macro name;  stringValue1: macro value
+#pragma warning disable CS1591
+
+    /// <summary>
+    /// StringValue0: macro name; StringValue1: macro value
+    /// </summary>
+    MacroDefine,
+
     DepFile,
     EntryPointName,
     Specialize,
     Help,
     HelpStyle,
-    Include, // stringValue: additional include path.
+
+    /// <summary>
+    /// StringValue: additional include path.
+    /// </summary>
+    Include,
+
     Language,
-    MatrixLayoutColumn,         // bool
-    MatrixLayoutRow,            // bool
-    ZeroInitialize,             // bool
-    IgnoreCapabilities,         // bool
-    RestrictiveCapabilityCheck, // bool
-    ModuleName,                 // stringValue0: module name.
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    MatrixLayoutColumn,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    MatrixLayoutRow,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    ZeroInitialize,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    IgnoreCapabilities,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    RestrictiveCapabilityCheck,
+
+    /// <summary>
+    /// StringValue0: module name.
+    /// </summary>
+    ModuleName,
+
     Output,
-    Profile, // intValue0: profile
-    Stage,   // intValue0: stage
-    Target,  // intValue0: CodeGenTarget
+
+    /// <summary>
+    /// IntValue0: profile
+    /// </summary>
+    Profile,
+
+    /// <summary>
+    /// IntValue0: stage
+    /// </summary>
+    Stage,
+
+    /// <summary>
+    /// IntValue0: CodeGenTarget
+    /// </summary>
+    Target,
+
     Version,
-    WarningsAsErrors, // stringValue0: "all" or comma separated list of warning codes or names.
-    DisableWarnings,  // stringValue0: comma separated list of warning codes or names.
-    EnableWarning,    // stringValue0: warning code or name.
-    DisableWarning,   // stringValue0: warning code or name.
+
+    /// <summary>
+    /// StringValue0: "all" or comma separated list of warning codes or names.
+    /// </summary>
+    WarningsAsErrors,
+
+    /// <summary>
+    /// StringValue0: comma separated list of warning codes or names.
+    /// </summary>
+    DisableWarnings,
+
+    /// <summary>
+    /// StringValue0: warning code or name.
+    /// </summary>
+    EnableWarning,
+
+    /// <summary>
+    /// StringValue0: warning code or name.
+    /// </summary>
+    DisableWarning,
+
     DumpWarningDiagnostics,
     InputFilesRemain,
-    EmitIr,                        // bool
-    ReportDownstreamTime,          // bool
-    ReportPerfBenchmark,           // bool
-    ReportCheckpointIntermediates, // bool
-    SkipSPIRVValidation,           // bool
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    EmitIr,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    ReportDownstreamTime,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    ReportPerfBenchmark,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    ReportCheckpointIntermediates,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    SkipSPIRVValidation,
+
+    /// <summary>
+    /// bool
+    /// </summary>
     SourceEmbedStyle,
+
     SourceEmbedName,
     SourceEmbedLanguage,
-    DisableShortCircuit,            // bool
-    MinimumSlangOptimization,       // bool
-    DisableNonEssentialValidations, // bool
-    DisableSourceMap,               // bool
-    UnscopedEnum,                   // bool
-    PreserveParameters, // bool: preserve all resource parameters in the output code.
 
-    // Target
+    /// <summary>
+    /// bool
+    /// </summary>
+    DisableShortCircuit,
 
-    Capability,                // intValue0: CapabilityName
-    DefaultImageFormatUnknown, // bool
-    DisableDynamicDispatch,    // bool
-    DisableSpecialization,     // bool
-    FloatingPointMode,         // intValue0: FloatingPointMode
-    DebugInformation,          // intValue0: DebugInfoLevel
+    /// <summary>
+    /// bool
+    /// </summary>
+    MinimumSlangOptimization,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    DisableNonEssentialValidations,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    DisableSourceMap,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    UnscopedEnum,
+
+    /// <summary>
+    /// bool: preserve all resource parameters in the output code.
+    /// </summary>
+    PreserveParameters,
+
+    /// <summary>
+    /// IntValue0: CapabilityName
+    /// </summary>
+    Capability,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    DefaultImageFormatUnknown,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    DisableDynamicDispatch,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    DisableSpecialization,
+
+    /// <summary>
+    /// IntValue0: FloatingPointMode
+    /// </summary>
+    FloatingPointMode,
+
+    /// <summary>
+    /// IntValue0: DebugInfoLevel
+    /// </summary>
+    DebugInformation,
+
     LineDirectiveMode,
-    Optimization, // intValue0: OptimizationLevel
-    Obfuscate,    // bool
 
-    VulkanBindShift, // intValue0 (higher 8 bits): kind; intValue0(lower bits): set; intValue1:
-                     // shift
-    VulkanBindGlobals,       // intValue0: index; intValue1: set
-    VulkanInvertY,           // bool
-    VulkanUseDxPositionW,    // bool
-    VulkanUseEntryPointName, // bool
-    VulkanUseGLLayout,       // bool
-    VulkanEmitReflection,    // bool
+    /// <summary>
+    /// IntValue0: OptimizationLevel
+    /// </summary>
+    Optimization,
 
-    GLSLForceScalarLayout,   // bool
-    EnableEffectAnnotations, // bool
+    /// <summary>
+    /// bool
+    /// </summary>
+    Obfuscate,
 
-    EmitSpirvViaGLSL,     // bool (will be deprecated)
-    EmitSpirvDirectly,    // bool (will be deprecated)
-    SPIRVCoreGrammarJSON, // stringValue0: json path
-    IncompleteLibrary,    // bool, when set, will not issue an error when the linked program has
-                          // unresolved extern function symbols.
+    /// <summary>
+    /// IntValue0 (higher 8 bits): kind; IntValue0(lower bits): set; IntValue1: shift
+    /// </summary>
+    VulkanBindShift,
 
-    // Downstream
+    /// <summary>
+    /// IntValue0: index; IntValue1: set
+    /// </summary>
+    VulkanBindGlobals,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    VulkanInvertY,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    VulkanUseDxPositionW,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    VulkanUseEntryPointName,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    VulkanUseGLLayout,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    VulkanEmitReflection,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    GLSLForceScalarLayout,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    EnableEffectAnnotations,
+
+    /// <summary>
+    /// bool (will be deprecated)
+    /// </summary>
+    EmitSpirvViaGLSL,
+
+    /// <summary>
+    /// bool (will be deprecated)
+    /// </summary>
+    EmitSpirvDirectly,
+
+    /// <summary>
+    /// StringValue0: json path
+    /// </summary>
+    SPIRVCoreGrammarJSON,
+
+    /// <summary>
+    /// bool, when set, will not issue an error when the linked program has unresolved extern function symbols.
+    /// </summary>
+    IncompleteLibrary,
 
     CompilerPath,
     DefaultDownstreamCompiler,
-    DownstreamArgs, // stringValue0: downstream compiler name. stringValue1: argument list, one
-                    // per line.
+
+    /// <summary>
+    /// StringValue0: downstream compiler name. StringValue1: argument list, one per line.
+    /// </summary>
+    DownstreamArgs,
+
     PassThrough,
-
-    // Repro
-
     DumpRepro,
     DumpReproOnError,
     ExtractRepro,
     LoadRepro,
     LoadReproDirectory,
     ReproFallbackDirectory,
-
-    // Debugging
-
     DumpAst,
     DumpIntermediatePrefix,
-    DumpIntermediates, // bool
-    DumpIr,            // bool
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    DumpIntermediates,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    DumpIr,
+
     DumpIrIds,
     PreprocessorOutput,
     OutputIncludes,
     ReproFileSystem,
-    SerialIr,    // bool
-    SkipCodeGen, // bool
-    ValidateIr,  // bool
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    SerialIr,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    SkipCodeGen,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    ValidateIr,
+
     VerbosePaths,
     VerifyDebugSerialIr,
-    NoCodeGen, // Not used.
+
+    /// <summary>
+    /// Not used.
+    /// </summary>
+    NoCodeGen,
 
     // Experimental
 
@@ -686,9 +903,11 @@ public enum CompilerOptionName : int
     ValidateUniformity,
     AllowGLSL,
     EnableExperimentalPasses,
-    BindlessSpaceIndex, // int
 
-    // Internal
+    /// <summary>
+    /// int
+    /// </summary>
+    BindlessSpaceIndex,
 
     ArchiveType,
     CompileCoreModule,
@@ -699,38 +918,89 @@ public enum CompilerOptionName : int
     SaveCoreModule,
     SaveCoreModuleBinSource,
     TrackLiveness,
-    LoopInversion, // bool, enable loop inversion optimization
 
-    // Deprecated
+    /// <summary>
+    /// bool, enable loop inversion optimization.
+    /// </summary>
+    LoopInversion,
+
+    /// <summary>
+    /// Deprecated.
+    /// </summary>
     ParameterBlocksUseRegisterSpaces,
 
     CountOfParsableOptions,
 
     // Used in parsed options only.
-    DebugInformationFormat,  // intValue0: DebugInfoFormat
-    VulkanBindShiftAll,      // intValue0: kind; intValue1: shift
-    GenerateWholeProgram,    // bool
-    UseUpToDateBinaryModule, // bool, when set, will only load
-                             // precompiled modules if it is up-to-date with its source.
-    EmbedDownstreamIR,       // bool
-    ForceDXLayout,           // bool
 
-    // Add this new option to the end of the list to avoid breaking ABI as much as possible.
-    // Setting of EmitSpirvDirectly or EmitSpirvViaGLSL will turn into this option internally.
-    EmitSpirvMethod, // enum SlangEmitSpirvMethod
+    /// <summary>
+    /// Used in parsed options only. <br/>
+    /// IntValue0: DebugInfoFormat
+    /// </summary>
+    DebugInformationFormat,
 
-    EmitReflectionJSON, // bool
+    /// <summary>
+    /// IntValue0: kind; IntValue1: shift
+    /// </summary>
+    VulkanBindShiftAll,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    GenerateWholeProgram,
+
+    /// <summary>
+    /// bool, when set, will only load precompiled modules if it is up-to-date with its source.
+    /// </summary>
+    UseUpToDateBinaryModule,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    EmbedDownstreamIR,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    ForceDXLayout,
+
+    /// <summary>
+    /// Add this new option to the end of the list to avoid breaking ABI as much as possible.
+    /// Setting of EmitSpirvDirectly or EmitSpirvViaGLSL will turn into this option internally.
+    /// </summary>
+    EmitSpirvMethod,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    EmitReflectionJSON,
+
     SaveGLSLModuleBinSource,
 
-    SkipDownstreamLinking, // bool, experimental
+    /// <summary>
+    /// bool, experimental.
+    /// </summary>
+    SkipDownstreamLinking,
+
     DumpModule,
-    CountOf,
+
+#pragma warning restore CS1591
 }
 
 
+/// <summary>
+/// Type of value a compiler option holds.
+/// </summary>
 public enum CompilerOptionValueKind : int
 {
+    /// <summary>
+    /// Integer value type.
+    /// </summary>
     Int,
+
+    /// <summary>
+    /// String value type.
+    /// </summary>
     String
 }
 
@@ -841,135 +1111,154 @@ public enum SlangReflectionGenericArgType : int
     Bool = 2
 }
 
-// type reflection
+
+/// <summary>
+/// The type kind of a shader type.
+/// </summary>
 public enum SlangTypeKind : uint
 {
-    NONE,
-    STRUCT,
-    ARRAY,
-    MATRIX,
-    VECTOR,
-    SCALAR,
-    CONSTANT_BUFFER,
-    RESOURCE,
-    SAMPLER_STATE,
-    TEXTURE_BUFFER,
-    SHADER_STORAGE_BUFFER,
-    PARAMETER_BLOCK,
-    GENERIC_TYPE_PARAMETER,
-    INTERFACE,
-    OUTPUT_STREAM,
-    MESH_OUTPUT,
-    SPECIALIZED,
-    FEEDBACK,
-    POINTER,
-    DYNAMIC_RESOURCE,
-    COUNT,
-}
-
-
-public enum SlangScalarType : uint
-{
-    NONE,
-    VOID,
-    BOOL,
-    INT32,
-    UINT32,
-    INT64,
-    UINT64,
-    FLOAT16,
-    FLOAT32,
-    FLOAT64,
-    INT8,
-    UINT8,
-    INT16,
-    UINT16,
-    INTPTR,
-    UINTPTR
-}
-
-
-public enum SlangResourceShape : uint
-{
-    RESOURCE_BASE_SHAPE_MASK = 0x0F,
-
-    RESOURCE_NONE = 0x00,
-
-    TEXTURE_1D = 0x01,
-    TEXTURE_2D = 0x02,
-    TEXTURE_3D = 0x03,
-    TEXTURE_CUBE = 0x04,
-    TEXTURE_BUFFER = 0x05,
-
-    STRUCTURED_BUFFER = 0x06,
-    BYTE_ADDRESS_BUFFER = 0x07,
-    RESOURCE_UNKNOWN = 0x08,
-    ACCELERATION_STRUCTURE = 0x09,
-    TEXTURE_SUBPASS = 0x0A,
-
-    RESOURCE_EXT_SHAPE_MASK = 0xF0,
-
-    TEXTURE_FEEDBACK_FLAG = 0x10,
-    TEXTURE_SHADOW_FLAG = 0x20,
-    TEXTURE_ARRAY_FLAG = 0x40,
-    TEXTURE_MULTISAMPLE_FLAG = 0x80,
-
-    SLANG_TEXTURE_1D_ARRAY = TEXTURE_1D | TEXTURE_ARRAY_FLAG,
-    SLANG_TEXTURE_2D_ARRAY = TEXTURE_2D | TEXTURE_ARRAY_FLAG,
-    SLANG_TEXTURE_CUBE_ARRAY = TEXTURE_CUBE | TEXTURE_ARRAY_FLAG,
-
-    SLANG_TEXTURE_2D_MULTISAMPLE = TEXTURE_2D | TEXTURE_MULTISAMPLE_FLAG,
-    SLANG_TEXTURE_2D_MULTISAMPLE_ARRAY = TEXTURE_2D | TEXTURE_MULTISAMPLE_FLAG | TEXTURE_ARRAY_FLAG,
-    SLANG_TEXTURE_SUBPASS_MULTISAMPLE = TEXTURE_SUBPASS | TEXTURE_MULTISAMPLE_FLAG,
-}
-
-
-public enum SlangResourceAccess : uint
-{
-    NONE,
-    READ,
-    READ_WRITE,
-    RASTER_ORDERED,
-    APPEND,
-    CONSUME,
-    WRITE,
-    FEEDBACK,
-    UNKNOWN = 0x7FFFFFFF,
+#pragma warning disable CS1591
+    None,
+    Struct,
+    Array,
+    Matrix,
+    Vector,
+    Scalar,
+    ConstantBuffer,
+    Resource,
+    SamplerState,
+    TextureBuffer,
+    ShaderStorageBuffer,
+    ParameterBlock,
+    GenericTypeParameter,
+    Interface,
+    OutputStream,
+    MeshOutput,
+    Specialized,
+    Feedback,
+    Pointer,
+    DynamicResource
+#pragma warning restore CS1591
 }
 
 
 /// <summary>
-///
+/// Scalar value types.
+/// </summary>
+public enum SlangScalarType : uint
+{
+#pragma warning disable CS1591
+    None,
+    Void,
+    Bool,
+    Int32,
+    UInt32,
+    Int64,
+    UInt64,
+    Float16,
+    Float32,
+    Float64,
+    Int8,
+    UInt8,
+    Int16,
+    UInt16,
+    IntPtr,
+    UIntPtr
+#pragma warning restore CS1591
+}
+
+
+/// <summary>
+/// The shape of a shader resource
+/// </summary>
+public enum SlangResourceShape : uint
+{
+#pragma warning disable CS1591
+    BaseShapeMask = 0x0F,
+    None = 0x00,
+
+    Texture1D = 0x01,
+    Texture2D = 0x02,
+    Texture3D = 0x03,
+    TextureCube = 0x04,
+    TextureBuffer = 0x05,
+
+    StructuredBuffer = 0x06,
+    ByteAddressBuffer = 0x07,
+    Unknown = 0x08,
+    AccelerationStructure = 0x09,
+    TextureSubpass = 0x0A,
+
+    ExtShapeMask = 0xF0,
+
+    TextureFeedbackFlag = 0x10,
+    TextureShadowFlag = 0x20,
+    TextureArrayFlag = 0x40,
+    TextureMultisampleFlag = 0x80,
+
+    SlangTexture1DArray = Texture1D | TextureArrayFlag,
+    SlangTexture2DArray = Texture2D | TextureArrayFlag,
+    SlangTextureCubeArray = TextureCube | TextureArrayFlag,
+
+    SlangTexture2DMultisample = Texture2D | TextureMultisampleFlag,
+    SlangTexture2DMultisampleArray = Texture2D | TextureMultisampleFlag | TextureArrayFlag,
+    SlangTextureSubpassMultisample = TextureSubpass | TextureMultisampleFlag,
+#pragma warning restore CS1591
+}
+
+
+/// <summary>
+/// The resource access type of a shader uniform.
+/// </summary>
+public enum SlangResourceAccess : uint
+{
+#pragma warning disable CS1591
+    None,
+    Read,
+    ReadWrite,
+    RasterOrdered,
+    Append,
+    Consume,
+    Write,
+    Feedback,
+    Unknown = 0x7FFFFFFF,
+#pragma warning restore CS1591
+}
+
+
+/// <summary>
+/// The category of a parameter in a shader.
 /// </summary>
 public enum SlangParameterCategory : uint
 {
-    NONE,
-    MIXED,
-    CONSTANT_BUFFER,
-    SHADER_RESOURCE,
-    UNORDERED_ACCESS,
-    VARYING_INPUT,
-    VARYING_OUTPUT,
-    SAMPLER_STATE,
-    UNIFORM,
-    DESCRIPTOR_TABLE_SLOT,
-    SPECIALIZATION_CONSTANT,
-    PUSH_CONSTANT_BUFFER,
+#pragma warning disable CS1591
+    None,
+    Mixed,
+    ConstantBuffer,
+    ShaderResource,
+    UnorderedAccess,
+    VaryingInput,
+    VaryingOutput,
+    SamplerState,
+    Uniform,
+    DescriptorTableSlot,
+    SpecializationConstant,
+    PushConstantBuffer,
 
-    // HLSL register `space`, Vulkan GLSL `set`
-    REGISTER_SPACE,
+    /// <summary>
+    /// HLSL register `space`, Vulkan GLSL `set`
+    /// </summary>
+    RegisterSpace,
 
-    // TODO: Ellie, Both APIs treat mesh outputs as more or less varying output,
-    // Does it deserve to be represented here??
+    /// <summary>
+    /// A parameter whose type is to be specialized by a global generic type argument.
+    /// </summary>
+    Generic,
 
-    // A parameter whose type is to be specialized by a global generic type argument
-    GENERIC,
-
-    RAY_PAYLOAD,
-    HIT_ATTRIBUTES,
-    CALLABLE_PAYLOAD,
-    SHADER_RECORD,
-
+    RayPayload,
+    HitAttributes,
+    CallablePayload,
+    ShaderRecord,
 
     /// <summary>
     /// <para>
@@ -995,7 +1284,7 @@ public enum SlangParameterCategory : uint
     /// elements to be able to generate specialized code.
     /// </para>
     /// </summary>
-    EXISTENTIAL_TYPE_PARAM,
+    ExistentialTypeParam,
 
     /// <summary>
     /// <para>
@@ -1046,6 +1335,7 @@ public enum SlangParameterCategory : uint
     /// Metal [[payload]] inputs.
     /// </summary>
     MetalPayload,
+#pragma warning restore CS1591
 }
 
 /// <summary>
@@ -1172,11 +1462,10 @@ public enum SlangBindingType : uint
     /// </summary>
     MutableRawBuffer = RawBuffer | 0x100,
 
-    ///
+#pragma warning disable CS1591
     BaseMask = 0x00FF,
-
-    ///
     ExtMask = 0xFF00,
+#pragma warning restore CS1591
 }
 
 
