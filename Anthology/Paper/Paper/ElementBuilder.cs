@@ -315,6 +315,14 @@ namespace Prowl.PaperUI
             _isActive = isActive;
         }
 
+        public StateDrivenStyle Style(StyleTemplate style)
+        {
+            if (_isActive)
+                style.ApplyTo(_element.ID);
+
+            return this;
+        }
+
         public StateDrivenStyle Style(params string[] names)
         {
             if (_isActive)
@@ -474,6 +482,12 @@ namespace Prowl.PaperUI
             if (_element.Parent != null)
                 _element._elementStyle.SetParent(_element.Parent._elementStyle);
 
+            return this;
+        }
+
+        public ElementBuilder Style(StyleTemplate style)
+        {
+            style.ApplyTo(_element.ID);
             return this;
         }
 
