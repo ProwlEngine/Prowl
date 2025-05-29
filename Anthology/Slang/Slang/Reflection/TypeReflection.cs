@@ -37,7 +37,7 @@ public unsafe struct TypeReflection
 
     /// <summary>
     /// Gets the number of fields in this type.
-    /// Only meaningful when <see cref="Kind"/> is <see cref="SlangTypeKind.STRUCT"/>.
+    /// Only meaningful when <see cref="Kind"/> is <see cref="SlangTypeKind.Struct"/>.
     /// </summary>
     public readonly uint FieldCount =>
         spReflectionType_GetFieldCount(_ptr);
