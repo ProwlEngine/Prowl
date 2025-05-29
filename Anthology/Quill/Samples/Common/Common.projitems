@@ -29,111 +29,15 @@
     <Content Include="$(MSBuildThisFileDirectory)Textures\white.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="$(MSBuildThisFileDirectory)SVGs\*.*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <SampleSVGs Include="$(MSBuildThisFileDirectory)SVGs\*.*" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)SVGs\24-hours-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\24-hours-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\4k-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\4k-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\a-b.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\accessibility-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\accessibility-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-box-2-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-box-2-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-box-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-box-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-circle-2-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-circle-2-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-circle-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-circle-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-pin-box-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-pin-box-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-pin-circle-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\account-pin-circle-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\add-box-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\add-box-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\add-circle-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\add-circle-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\add-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\add-large-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\add-large-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\add-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\admin-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\admin-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\advertisement-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\advertisement-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\aed-electrodes-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\aed-electrodes-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\aed-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\aed-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\ai-generate-2.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\ai-generate-text.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\ai-generate.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\airplay-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\airplay-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alarm-add-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alarm-add-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alarm-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alarm-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alarm-snooze-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alarm-snooze-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alarm-warning-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alarm-warning-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\album-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\album-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alert-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alert-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alibaba-cloud-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alibaba-cloud-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\aliens-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\aliens-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-bottom.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-center.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-bottom-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-bottom-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-horizontal-center-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-horizontal-center-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-left-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-left-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-right-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-right-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-top-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-top-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-vertical-center-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-item-vertical-center-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-justify.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-left.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-right.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-top.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\align-vertically.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alipay-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\alipay-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\amazon-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\amazon-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\anchor-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\anchor-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\ancient-gate-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\ancient-gate-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\ancient-pavilion-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\ancient-pavilion-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\android-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\android-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\angularjs-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\angularjs-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\anthropic-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\anthropic-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\anticlockwise-2-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\anticlockwise-2-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\anticlockwise-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\anticlockwise-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\apple-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\apple-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\apps-2-add-fill.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\apps-2-add-line.svg" />
-    <None Include="$(MSBuildThisFileDirectory)SVGs\apps-2-ai-fill.svg" />
+    <None Include="$(MSBuildThisFileDirectory)SVGs\*.*" />
   </ItemGroup>
   <Target Name="CopyCustomContent" AfterTargets="AfterBuild">
     <Copy SourceFiles="@(SampleSVGs)" DestinationFolder="$(OutDir)SVGs" SkipUnchangedFiles="true" />
