@@ -12,13 +12,13 @@ internal unsafe struct TargetDescription()
 
     public SlangCompileTarget Format = SlangCompileTarget.Unknown;
 
-    public SlangProfileID Profile = SlangProfileID.UNKNOWN;
+    public SlangProfileID Profile = SlangProfileID.Unknown;
 
     public SlangTargetFlags Flags = SlangTargetFlags.Default;
 
-    public SlangFloatingPointMode FloatingPointMode = SlangFloatingPointMode.DEFAULT;
+    public SlangFloatingPointMode FloatingPointMode = SlangFloatingPointMode.Default;
 
-    public SlangLineDirectiveMode LineDirectiveMode = SlangLineDirectiveMode.DEFAULT;
+    public SlangLineDirectiveMode LineDirectiveMode = SlangLineDirectiveMode.Default;
 
     public CBool ForceGLSLScalarBufferLayout = false;
 

@@ -60,7 +60,7 @@ public unsafe struct TypeReflection
     /// Gets a value indicating whether this type is an array.
     /// </summary>
     public readonly bool IsArray =>
-        Kind == SlangTypeKind.ARRAY;
+        Kind == SlangTypeKind.Array;
 
     /// <summary>
     /// Unwraps nested array types to get the innermost element type.
