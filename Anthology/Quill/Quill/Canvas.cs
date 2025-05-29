@@ -413,6 +413,8 @@ namespace Prowl.Quill
         public void CurrentTransform(Transform2D xform) => _state.transform = xform;
         public Vector2 TransformPoint(Vector2 point) => _state.transform.TransformPoint(point);
 
+        public Transform2D GetTransform() => _state.transform;
+
         #endregion
 
         #region Draw Calls
