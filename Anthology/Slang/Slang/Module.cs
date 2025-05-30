@@ -132,11 +132,12 @@ public unsafe class Module : ComponentType
     /// Find and validate an entry point by name, even if the function is
     /// not marked with the `[shader("...")]` attribute.
     /// </summary>
-    public EntryPoint FindAndCheckEntryPoint(string name, ShaderStage stage, out string? diagnostics)
+    public EntryPoint FindAndCheckEntryPoint(string name, ShaderStage stage, out DiagnosticInfo diagnostics)
     {
         using U8Str str = U8Str.Alloc(name);
 
-        _module.FindAndCheckEntryPoint(str, stage, out IEntryPoint* entryPointPtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+        _module.FindAndCheckEntryPoint(str, stage, out IEntryPoint* entryPointPtr, out ISlangBlob* diagnosticsPtr)
+            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new EntryPoint(NativeComProxy.Create(entryPointPtr), _session);
     }

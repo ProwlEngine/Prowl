@@ -61,7 +61,7 @@ internal unsafe interface ISession : IUnknown
     TypeLayoutReflection* GetTypeLayout(
         TypeReflection* type,
         SlangInt targetIndex,
-        SlangLayoutRules rules,
+        LayoutRules rules,
         out ISlangBlob* outDiagnostics);
 
     TypeReflection* GetContainerType(

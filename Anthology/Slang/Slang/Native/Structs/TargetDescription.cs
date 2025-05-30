@@ -13,15 +13,15 @@ internal unsafe struct TargetDescription()
 {
     private nuint _structureSize = (nuint)sizeof(TargetDescription);
 
-    public SlangCompileTarget Format = SlangCompileTarget.Unknown;
+    public CompileTarget Format = CompileTarget.Unknown;
 
-    public SlangProfileID Profile = SlangProfileID.Unknown;
+    public ProfileID Profile = ProfileID.Unknown;
 
-    public SlangTargetFlags Flags = SlangTargetFlags.Default;
+    public TargetFlags Flags = TargetFlags.Default;
 
-    public SlangFloatingPointMode FloatingPointMode = SlangFloatingPointMode.Default;
+    public FloatingPointMode FloatingPointMode = FloatingPointMode.Default;
 
-    public SlangLineDirectiveMode LineDirectiveMode = SlangLineDirectiveMode.Default;
+    public LineDirectiveMode LineDirectiveMode = LineDirectiveMode.Default;
 
     public CBool ForceGLSLScalarBufferLayout = false;
 

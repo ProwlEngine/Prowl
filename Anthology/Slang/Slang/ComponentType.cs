@@ -153,15 +153,11 @@ public unsafe class ComponentType
     /// the same when it is used in a composition.
     /// </para>
     /// </summary>
-    public ShaderReflection GetLayout(nint targetIndex, out string? diagnostics)
+    public ShaderReflection GetLayout(nint targetIndex, out DiagnosticInfo diagnostics)
     {
         Native.ShaderReflection* reflectionPtr = _componentType.GetLayout(targetIndex, out ISlangBlob* diagnosticsPtr);
 
-        diagnostics = null;
-        if (reflectionPtr == null)
-            SlangResult.Uninitialized.ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
-
-        return new ShaderReflection(reflectionPtr, this);
+        return new ShaderReflection(Utility.ValidateRaw(reflectionPtr, diagnosticsPtr, out diagnostics), this);
     }
 
     /// <summary>
@@ -188,9 +184,10 @@ public unsafe class ComponentType
     /// (if non-null) will be filled in with a blob of messages diagnosing the error.
     /// </para>
     /// </summary>
-    public Memory<byte> GetEntryPointCode(nint entryPointIndex, nint targetIndex, out string? diagnostics)
+    public Memory<byte> GetEntryPointCode(nint entryPointIndex, nint targetIndex, out DiagnosticInfo diagnostics)
     {
-        _componentType.GetEntryPointCode(entryPointIndex, targetIndex, out ISlangBlob* codePtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+        _componentType.GetEntryPointCode(entryPointIndex, targetIndex, out ISlangBlob* codePtr, out ISlangBlob* diagnosticsPtr)
+            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return NativeComProxy.Create(codePtr).ReadBytes();
     }
@@ -237,16 +234,15 @@ public unsafe class ComponentType
     /// If any diagnostics (error or warnings) are produced, they will be written to `outDiagnostics`.
     /// </para>
     /// </summary>
-    public ComponentType Specialize(TypeReflection[] specializationArgs, out string? diagnostics)
+    public ComponentType Specialize(TypeReflection[] specializationArgs, out DiagnosticInfo diagnostics)
     {
         SpecializationArg* specializationArgsPtr = stackalloc SpecializationArg[specializationArgs.Length];
 
         for (int i = 0; i < specializationArgs.Length; i++)
             specializationArgsPtr[i] = SpecializationArg.FromType(specializationArgs[i]._ptr);
 
-        _componentType.Specialize(specializationArgsPtr, specializationArgs.Length, out IComponentType* componentPtr, out ISlangBlob* diagnosticsPtr).Throw();
-
-        diagnostics = Utility.GetDiagnostic(diagnosticsPtr);
+        _componentType.Specialize(specializationArgsPtr, specializationArgs.Length, out IComponentType* componentPtr, out ISlangBlob* diagnosticsPtr)
+            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new ComponentType(NativeComProxy.Create(componentPtr), _session);
     }
@@ -276,9 +272,10 @@ public unsafe class ComponentType
     /// but is not currently documented.
     /// </para>
     /// </summary>
-    public ComponentType Link(out string? diagnostics)
+    public ComponentType Link(out DiagnosticInfo diagnostics)
     {
-        _componentType.Link(out IComponentType* componentPtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+        _componentType.Link(out IComponentType* componentPtr, out ISlangBlob* diagnosticsPtr)
+            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new ComponentType(NativeComProxy.Create(componentPtr), _session);
     }
@@ -295,9 +292,10 @@ public unsafe class ComponentType
     /// Requires a compilation target of SLANG_HOST_CALLABLE.
     /// </remarks>
     /// </summary>
-    internal SharedLibrary GetEntryPointHostCallable(int entryPointIndex, int targetIndex, out string? diagnostics)
+    internal SharedLibrary GetEntryPointHostCallable(int entryPointIndex, int targetIndex, out DiagnosticInfo diagnostics)
     {
-        _componentType.GetEntryPointHostCallable(entryPointIndex, targetIndex, out ISlangSharedLibrary* sharedLibPtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+        _componentType.GetEntryPointHostCallable(entryPointIndex, targetIndex, out ISlangSharedLibrary* sharedLibPtr, out ISlangBlob* diagnosticsPtr)
+            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return new SharedLibrary(NativeComProxy.Create(sharedLibPtr));
     }
@@ -325,14 +323,15 @@ public unsafe class ComponentType
     /// Link and specify additional compiler options when generating code
     /// from the linked program.
     /// </summary>
-    public ComponentType LinkWithOptions(CompilerOptionEntry[] compilerOptionEntries, out string? diagnostics)
+    public ComponentType LinkWithOptions(CompilerOptionEntry[] compilerOptionEntries, out DiagnosticInfo diagnostics)
     {
         Native.CompilerOptionEntry* compilerOptionEntriesPtr = stackalloc Native.CompilerOptionEntry[compilerOptionEntries.Length];
 
         for (int i = 0; i < compilerOptionEntries.Length; i++)
             compilerOptionEntriesPtr[i].Allocate(compilerOptionEntries[i]);
 
-        _componentType.LinkWithOptions(out IComponentType* linkedComponentPtr, (uint)compilerOptionEntries.Length, compilerOptionEntriesPtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+        _componentType.LinkWithOptions(out IComponentType* linkedComponentPtr, (uint)compilerOptionEntries.Length, compilerOptionEntriesPtr, out ISlangBlob* diagnosticsPtr)
+            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         for (int i = 0; i < compilerOptionEntries.Length; i++)
             compilerOptionEntriesPtr[i].Free();
@@ -344,9 +343,10 @@ public unsafe class ComponentType
     /// <summary>
     /// Gets the compiled code for the target at a given index.
     /// </summary>
-    public Memory<byte> GetTargetCode(int targetIndex, out string? diagnostics)
+    public Memory<byte> GetTargetCode(int targetIndex, out DiagnosticInfo diagnostics)
     {
-        _componentType.GetTargetCode(targetIndex, out ISlangBlob* codePtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+        _componentType.GetTargetCode(targetIndex, out ISlangBlob* codePtr, out ISlangBlob* diagnosticsPtr)
+            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
 
         return NativeComProxy.Create(codePtr).ReadBytes();
     }
@@ -355,9 +355,11 @@ public unsafe class ComponentType
     /// <summary>
     /// Gets the metadata information for the target at a given index.
     /// </summary>
-    public Metadata GetTargetMetadata(int targetIndex, out string? diagnostics)
+    public Metadata GetTargetMetadata(int targetIndex, out DiagnosticInfo diagnostics)
     {
-        _componentType.GetTargetMetadata(targetIndex, out IMetadata* metadataPtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+        _componentType.GetTargetMetadata(targetIndex, out IMetadata* metadataPtr, out ISlangBlob* diagnosticsPtr)
+            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+
         return new Metadata(NativeComProxy.Create(metadataPtr));
     }
 
@@ -365,9 +367,11 @@ public unsafe class ComponentType
     /// <summary>
     /// Gets the metadata information for the specified entrypoint and target at a given index.
     /// </summary>
-    public Metadata GetEntryPointMetadata(int entryPointIndex, int targetIndex, out string? diagnostics)
+    public Metadata GetEntryPointMetadata(int entryPointIndex, int targetIndex, out DiagnosticInfo diagnostics)
     {
-        _componentType.GetEntryPointMetadata(entryPointIndex, targetIndex, out IMetadata* metadataPtr, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+        _componentType.GetEntryPointMetadata(entryPointIndex, targetIndex, out IMetadata* metadataPtr, out ISlangBlob* diagnosticsPtr)
+            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+
         return new Metadata(NativeComProxy.Create(metadataPtr));
     }
 }

@@ -67,11 +67,11 @@ public static unsafe class GlobalSession
     /// profiles by name at runtime.
     /// </para>
     /// </summary>
-    public static SlangProfileID FindProfile(string name)
+    public static ProfileID FindProfile(string name)
     {
         using U8Str str = U8Str.Alloc(name);
 
-        SlangProfileID ID = s_session.FindProfile(str);
+        ProfileID ID = s_session.FindProfile(str);
 
         return ID;
     }
@@ -88,7 +88,7 @@ public static unsafe class GlobalSession
     /// be prefixed with the path when calls are made out to ISlangSharedLibraryLoader.
     /// For executables - it will look for executables along the path
     /// </remarks>
-    public static void SetDownstreamCompilerPath(SlangPassThrough passThrough, string path)
+    public static void SetDownstreamCompilerPath(PassThrough passThrough, string path)
     {
         using U8Str str = U8Str.Alloc(path);
 
@@ -112,7 +112,7 @@ public static unsafe class GlobalSession
     /// </summary>
     /// <param name="sourceLanguage">The source language.</param>
     /// <param name="defaultCompiler">The default compiler for that language.</param>
-    public static void SetDefaultDownstreamCompiler(SlangSourceLanguage sourceLanguage, SlangPassThrough defaultCompiler)
+    public static void SetDefaultDownstreamCompiler(SourceLanguage sourceLanguage, PassThrough defaultCompiler)
     {
         s_session.SetDefaultDownstreamCompiler(sourceLanguage, defaultCompiler).Throw();
     }
@@ -122,7 +122,7 @@ public static unsafe class GlobalSession
     /// </summary>
     /// <param name="sourceLanguage">The source language.</param>
     /// <returns>The downstream compiler for that source language.</returns>
-    public static SlangPassThrough GetDefaultDownstreamCompiler(SlangSourceLanguage sourceLanguage)
+    public static PassThrough GetDefaultDownstreamCompiler(SourceLanguage sourceLanguage)
     {
         return s_session.GetDefaultDownstreamCompiler(sourceLanguage);
     }
@@ -136,7 +136,7 @@ public static unsafe class GlobalSession
     /// Note: For pass-through usage, prelude is not pre-pended, preludes are for code generation
     /// only.
     /// </remarks>
-    public static void SetLanguagePrelude(SlangSourceLanguage sourceLanguage, string preludeText)
+    public static void SetLanguagePrelude(SourceLanguage sourceLanguage, string preludeText)
     {
         using U8Str str = U8Str.Alloc(preludeText);
 
@@ -148,7 +148,7 @@ public static unsafe class GlobalSession
     /// </summary>
     /// <param name="sourceLanguage">The language the prelude should be inserted on.</param>
     /// <returns>A string that holds the language prelude.</returns>
-    public static string GetLanguagePrelude(SlangSourceLanguage sourceLanguage)
+    public static string GetLanguagePrelude(SourceLanguage sourceLanguage)
     {
         s_session.GetLanguagePrelude(sourceLanguage, out ISlangBlob* blobPtr);
         ISlangBlob blob = NativeComProxy.Create(blobPtr);
@@ -201,7 +201,7 @@ public static unsafe class GlobalSession
     /// <param name="notImplemented">True if not implemented in this build.</param>
     /// <param name="notFound">True if other resources (such as shared libraries) required to make target work could not be found.</param>
     /// <returns>True if the target is available, false otherwise.</returns>
-    public static bool CheckCompileTargetSupport(SlangCompileTarget target, out bool notImplemented, out bool notFound)
+    public static bool CheckCompileTargetSupport(CompileTarget target, out bool notImplemented, out bool notFound)
     {
         SlangResult result = s_session.CheckCompileTargetSupport(target);
 
@@ -219,7 +219,7 @@ public static unsafe class GlobalSession
     /// <param name="notImplemented">True if not implemented in this build.</param>
     /// <param name="notFound">True if other resources(such as shared libraries) required to make target work could not be found.</param>
     /// <returns>Trie if passthroughs are supported, false otherwise.</returns>
-    public static bool CheckPassThroughSupport(SlangPassThrough passThrough, out bool notImplemented, out bool notFound)
+    public static bool CheckPassThroughSupport(PassThrough passThrough, out bool notImplemented, out bool notFound)
     {
         SlangResult result = s_session.CheckPassThroughSupport(passThrough);
 
@@ -238,11 +238,11 @@ public static unsafe class GlobalSession
     /// </summary>
     /// <param name="name">The capability name to search for.</param>
     /// <returns>The internal capability ID.</returns>
-    public static SlangCapabilityID FindCapability(string name)
+    public static CapabilityID FindCapability(string name)
     {
         using U8Str str = U8Str.Alloc(name);
 
-        SlangCapabilityID id = s_session.FindCapability(str);
+        CapabilityID id = s_session.FindCapability(str);
 
         return id;
     }
@@ -255,7 +255,7 @@ public static unsafe class GlobalSession
     /// <param name="source">The source 'code gen target'</param>
     /// <param name="target">The target 'code gen target'</param>
     /// <param name="compiler">The compiler/pass through to use for the transition from source to target.</param>
-    public static void SetDownstreamCompilerForTransition(SlangCompileTarget source, SlangCompileTarget target, SlangPassThrough compiler)
+    public static void SetDownstreamCompilerForTransition(CompileTarget source, CompileTarget target, PassThrough compiler)
     {
         s_session.SetDownstreamCompilerForTransition(source, target, compiler);
     }
@@ -267,7 +267,7 @@ public static unsafe class GlobalSession
     /// <param name="source">The source 'code gen target'</param>
     /// <param name="target">The target 'code gen target'</param>
     /// <returns>The compiler that is used for the transition. Returns 'None' if is not defined.</returns>
-    public static SlangPassThrough GetDownstreamCompilerForTransition(SlangCompileTarget source, SlangCompileTarget target)
+    public static PassThrough GetDownstreamCompilerForTransition(CompileTarget source, CompileTarget target)
     {
         return s_session.GetDownstreamCompilerForTransition(source, target);
     }

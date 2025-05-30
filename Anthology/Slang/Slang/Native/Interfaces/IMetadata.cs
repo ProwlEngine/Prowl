@@ -10,7 +10,7 @@ namespace Prowl.Slang.Native;
 internal interface IMetadata : ISlangCastable
 {
     SlangResult IsParameterLocationUsed(
-        SlangParameterCategory category,
+        ParameterCategory category,
         SlangUInt spaceIndex,
         SlangUInt registerIndex,
         out CBool outUsed);

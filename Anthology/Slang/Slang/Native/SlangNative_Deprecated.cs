@@ -53,7 +53,7 @@ internal static unsafe partial class SlangNative_Deprecated
     // Type Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangTypeKind spReflectionType_GetKind(TypeReflection* type);
+    public static unsafe partial TypeKind spReflectionType_GetKind(TypeReflection* type);
 
     [LibraryImport(LibName)]
     public static unsafe partial uint spReflectionType_GetUserAttributeCount(TypeReflection* type);
@@ -104,13 +104,13 @@ a generic parameter that has not been bound to a specific value, this function r
     public static unsafe partial uint spReflectionType_GetColumnCount(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangScalarType spReflectionType_GetScalarType(TypeReflection* type);
+    public static unsafe partial ScalarType spReflectionType_GetScalarType(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangResourceShape spReflectionType_GetResourceShape(TypeReflection* type);
+    public static unsafe partial ResourceShape spReflectionType_GetResourceShape(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangResourceAccess spReflectionType_GetResourceAccess(TypeReflection* type);
+    public static unsafe partial ResourceAccess spReflectionType_GetResourceAccess(TypeReflection* type);
 
     [LibraryImport(LibName)]
     public static unsafe partial TypeReflection* spReflectionType_GetResourceResultType(
@@ -133,22 +133,22 @@ a generic parameter that has not been bound to a specific value, this function r
     public static unsafe partial TypeReflection* spReflectionTypeLayout_GetType(TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangTypeKind spReflectionTypeLayout_getKind(TypeLayoutReflection* type);
+    public static unsafe partial TypeKind spReflectionTypeLayout_getKind(TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
     public static unsafe partial nuint spReflectionTypeLayout_GetSize(
         TypeLayoutReflection* type,
-        SlangParameterCategory category);
+        ParameterCategory category);
 
     [LibraryImport(LibName)]
     public static unsafe partial nuint spReflectionTypeLayout_GetStride(
         TypeLayoutReflection* type,
-        SlangParameterCategory category);
+        ParameterCategory category);
 
     [LibraryImport(LibName)]
     public static unsafe partial int spReflectionTypeLayout_getAlignment(
         TypeLayoutReflection* type,
-        SlangParameterCategory category);
+        ParameterCategory category);
 
     [LibraryImport(LibName)]
     public static unsafe partial uint spReflectionTypeLayout_GetFieldCount(TypeLayoutReflection* type);
@@ -171,7 +171,7 @@ a generic parameter that has not been bound to a specific value, this function r
     [LibraryImport(LibName)]
     public static unsafe partial nuint spReflectionTypeLayout_GetElementStride(
         TypeLayoutReflection* type,
-        SlangParameterCategory category);
+        ParameterCategory category);
 
     [LibraryImport(LibName)]
     public static unsafe partial TypeLayoutReflection* spReflectionTypeLayout_GetElementTypeLayout(
@@ -186,7 +186,7 @@ a generic parameter that has not been bound to a specific value, this function r
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangParameterCategory spReflectionTypeLayout_GetParameterCategory(
+    public static unsafe partial ParameterCategory spReflectionTypeLayout_GetParameterCategory(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
@@ -194,12 +194,12 @@ a generic parameter that has not been bound to a specific value, this function r
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangParameterCategory spReflectionTypeLayout_GetCategoryByIndex(
+    public static unsafe partial ParameterCategory spReflectionTypeLayout_GetCategoryByIndex(
         TypeLayoutReflection* type,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangMatrixLayoutMode spReflectionTypeLayout_GetMatrixLayoutMode(
+    public static unsafe partial MatrixLayoutMode spReflectionTypeLayout_GetMatrixLayoutMode(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
@@ -219,7 +219,7 @@ a generic parameter that has not been bound to a specific value, this function r
         TypeLayoutReflection* typeLayout);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangBindingType spReflectionTypeLayout_getBindingRangeType(
+    public static unsafe partial BindingType spReflectionTypeLayout_getBindingRangeType(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
@@ -244,7 +244,7 @@ a generic parameter that has not been bound to a specific value, this function r
         SlangInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangImageFormat spReflectionTypeLayout_getBindingRangeImageFormat(
+    public static unsafe partial ImageFormat spReflectionTypeLayout_getBindingRangeImageFormat(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
@@ -299,13 +299,13 @@ a generic parameter that has not been bound to a specific value, this function r
         SlangInt rangeIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangBindingType spReflectionTypeLayout_getDescriptorSetDescriptorRangeType(
+    public static unsafe partial BindingType spReflectionTypeLayout_getDescriptorSetDescriptorRangeType(
         TypeLayoutReflection* typeLayout,
         SlangInt setIndex,
         SlangInt rangeIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangParameterCategory spReflectionTypeLayout_getDescriptorSetDescriptorRangeCategory(
+    public static unsafe partial ParameterCategory spReflectionTypeLayout_getDescriptorSetDescriptorRangeCategory(
         TypeLayoutReflection* typeLayout,
         SlangInt setIndex,
         SlangInt rangeIndex);
@@ -378,15 +378,15 @@ a generic parameter that has not been bound to a specific value, this function r
     [LibraryImport(LibName)]
     public static unsafe partial nuint spReflectionVariableLayout_GetOffset(
         VariableLayoutReflection* var,
-        SlangParameterCategory category);
+        ParameterCategory category);
 
     [LibraryImport(LibName)]
     public static unsafe partial nuint spReflectionVariableLayout_GetSpace(
         VariableLayoutReflection* var,
-        SlangParameterCategory category);
+        ParameterCategory category);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangImageFormat spReflectionVariableLayout_GetImageFormat(
+    public static unsafe partial ImageFormat spReflectionVariableLayout_GetImageFormat(
         VariableLayoutReflection* var);
 
     [LibraryImport(LibName)]
@@ -681,7 +681,7 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
     public static unsafe partial TypeLayoutReflection* spReflection_GetTypeLayout(
         ShaderReflection* reflection,
         TypeReflection* reflectionType,
-        SlangLayoutRules rules);
+        LayoutRules rules);
 
     [LibraryImport(LibName)]
     public static unsafe partial FunctionReflection* spReflection_FindFunctionByName(
@@ -732,7 +732,7 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
         ShaderReflection* inProgramLayout,
         GenericReflection* generic,
         SlangInt argCount,
-        SlangReflectionGenericArgType* argTypes,
+        ReflectionGenericArgType* argTypes,
         GenericArgReflection* args,
         out ISlangBlob* outDiagnostics);
 

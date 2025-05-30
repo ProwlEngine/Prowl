@@ -17,7 +17,7 @@ internal unsafe struct SessionDescription()
 
     public SessionFlags Flags = SessionFlags.None;
 
-    public SlangMatrixLayoutMode DefaultMatrixLayoutMode = SlangMatrixLayoutMode.RowMajor;
+    public MatrixLayoutMode DefaultMatrixLayoutMode = MatrixLayoutMode.RowMajor;
 
     public NativeNIntArray<ConstU8Str> SearchPaths;
 

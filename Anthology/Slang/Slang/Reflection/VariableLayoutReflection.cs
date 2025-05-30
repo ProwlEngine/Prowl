@@ -48,7 +48,7 @@ public unsafe struct VariableLayoutReflection
     /// <summary>
     /// Gets the parameter category of the variable.
     /// </summary>
-    public readonly SlangParameterCategory Category =>
+    public readonly ParameterCategory Category =>
         TypeLayout.ParameterCategory;
 
     /// <summary>
@@ -62,13 +62,13 @@ public unsafe struct VariableLayoutReflection
     /// </summary>
     /// <param name="index">The index of the category to retrieve.</param>
     /// <returns>The parameter category at the specified index.</returns>
-    public readonly SlangParameterCategory GetCategoryByIndex(uint index) =>
+    public readonly ParameterCategory GetCategoryByIndex(uint index) =>
         TypeLayout.GetCategoryByIndex(index);
 
     /// <summary>
     /// Gets all parameter categories.
     /// </summary>
-    public readonly IEnumerable<SlangParameterCategory> Categories =>
+    public readonly IEnumerable<ParameterCategory> Categories =>
         Utility.For(CategoryCount, GetCategoryByIndex);
 
     /// <summary>
@@ -76,7 +76,7 @@ public unsafe struct VariableLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category.</param>
     /// <returns>The byte offset for the variable.</returns>
-    public readonly nuint GetOffset(SlangParameterCategory category) =>
+    public readonly nuint GetOffset(ParameterCategory category) =>
         spReflectionVariableLayout_GetOffset(_ptr, category);
 
     /// <summary>
@@ -102,13 +102,13 @@ public unsafe struct VariableLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category.</param>
     /// <returns>The binding space for the variable in the specified category.</returns>
-    public readonly nuint GetBindingSpace(SlangParameterCategory category) =>
+    public readonly nuint GetBindingSpace(ParameterCategory category) =>
         spReflectionVariableLayout_GetSpace(_ptr, category);
 
     /// <summary>
     /// Gets the image format for the variable.
     /// </summary>
-    public readonly SlangImageFormat ImageFormat =>
+    public readonly ImageFormat ImageFormat =>
         spReflectionVariableLayout_GetImageFormat(_ptr);
 
     /// <summary>

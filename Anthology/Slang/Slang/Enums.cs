@@ -64,7 +64,7 @@ public enum SlangBindableResourceType : int
 /// <summary>
 /// Compilation targets for a session.
 /// </summary>
-public enum SlangCompileTarget : int
+public enum CompileTarget : int
 {
 #pragma warning disable CS1591
     Unknown,
@@ -217,7 +217,7 @@ public enum SlangContainerFormat : int
 /// <summary>
 /// Downstream compiler definitions that Slang is able to use as passthrough compilers.
 /// </summary>
-public enum SlangPassThrough : int
+public enum PassThrough : int
 {
     /// <summary>
     /// No passthrough compiler.
@@ -340,7 +340,7 @@ public enum SlangCompileFlags : uint
 /// Flags to control code generation behavior of a compilation target.
 /// </summary>
 [Flags]
-public enum SlangTargetFlags : uint
+public enum TargetFlags : uint
 {
     /* When compiling for a D3D Shader Model 5.1 or higher target, allocate
        distinct register spaces for parameter blocks.
@@ -371,7 +371,7 @@ public enum SlangTargetFlags : uint
 /// <summary>
 /// Options to control floating-point precision guarantees for a target.
 /// </summary>
-public enum SlangFloatingPointMode : uint
+public enum FloatingPointMode : uint
 {
     /// <summary>
     /// Default floating-point behavior for the target platform.
@@ -393,7 +393,7 @@ public enum SlangFloatingPointMode : uint
 /// <summary>
 /// Options to control emission of `#line` directives.
 /// </summary>
-public enum SlangLineDirectiveMode : uint
+public enum LineDirectiveMode : uint
 {
     /// <summary>
     /// Default behavior: pick behavior base on target.
@@ -425,7 +425,7 @@ public enum SlangLineDirectiveMode : uint
 /// <summary>
 /// Source languages used for passthrough compilation.
 /// </summary>
-public enum SlangSourceLanguage : int
+public enum SourceLanguage : int
 {
 #pragma warning disable CS1591
     Unknown,
@@ -445,7 +445,7 @@ public enum SlangSourceLanguage : int
 /// <summary>
 /// Identifier for a shader profile. This enum cannot be used on its own, and must be queried VIA <see cref="GlobalSession.FindProfile(string)"/> .
 /// </summary>
-public enum SlangProfileID : uint
+public enum ProfileID : uint
 {
     /// <summary>
     /// Unknown profile.
@@ -457,7 +457,7 @@ public enum SlangProfileID : uint
 /// <summary>
 /// Identifier for a shader profile. This enum cannot be used on its own, and must be queried VIA <see cref="GlobalSession.FindCapability(string)"/> .
 /// </summary>
-public enum SlangCapabilityID : int
+public enum CapabilityID : int
 {
     /// <summary>
     /// Unknown capability.
@@ -469,7 +469,7 @@ public enum SlangCapabilityID : int
 /// <summary>
 /// The matrix layout mode in memory.
 /// </summary>
-public enum SlangMatrixLayoutMode : uint
+public enum MatrixLayoutMode : uint
 {
     /// <summary>
     /// Determined by compiler or runtime.
@@ -1096,7 +1096,7 @@ public enum SlangWriterMode : uint
 /// <summary>
 /// Forward declarations of types used in the reflection interface.
 /// </summary>
-public enum SlangReflectionGenericArgType : int
+public enum ReflectionGenericArgType : int
 {
     /// <summary>
     /// A type that is not a generic argument, but rather a regular type.
@@ -1118,7 +1118,7 @@ public enum SlangReflectionGenericArgType : int
 /// <summary>
 /// The type kind of a shader type.
 /// </summary>
-public enum SlangTypeKind : uint
+public enum TypeKind : uint
 {
 #pragma warning disable CS1591
     None,
@@ -1148,7 +1148,7 @@ public enum SlangTypeKind : uint
 /// <summary>
 /// Scalar value types.
 /// </summary>
-public enum SlangScalarType : uint
+public enum ScalarType : uint
 {
 #pragma warning disable CS1591
     None,
@@ -1174,7 +1174,7 @@ public enum SlangScalarType : uint
 /// <summary>
 /// The shape of a shader resource
 /// </summary>
-public enum SlangResourceShape : uint
+public enum ResourceShape : uint
 {
 #pragma warning disable CS1591
     BaseShapeMask = 0x0F,
@@ -1213,7 +1213,7 @@ public enum SlangResourceShape : uint
 /// <summary>
 /// The resource access type of a shader uniform.
 /// </summary>
-public enum SlangResourceAccess : uint
+public enum ResourceAccess : uint
 {
 #pragma warning disable CS1591
     None,
@@ -1232,7 +1232,7 @@ public enum SlangResourceAccess : uint
 /// <summary>
 /// The category of a parameter in a shader.
 /// </summary>
-public enum SlangParameterCategory : uint
+public enum ParameterCategory : uint
 {
 #pragma warning disable CS1591
     None,
@@ -1346,15 +1346,15 @@ public enum SlangParameterCategory : uint
 /// Types of API-managed bindings that a parameter might use.
 /// </para>
 /// <para>
-/// `SlangBindingType` represents the distinct types of binding ranges that might be
+/// `BindingType` represents the distinct types of binding ranges that might be
 /// understood by an underlying graphics API or cross-API abstraction layer.
 /// Several of the enumeration cases here correspond to cases of `VkDescriptorType`
 /// defined by the Vulkan API. Note however that the values of this enumeration
 /// are not the same as those of any particular API.
 /// </para>
 /// <para>
-/// The `SlangBindingType` enumeration is distinct from `SlangParameterCategory`
-/// because `SlangParameterCategory` differentiates the types of parameters for
+/// The `BindingType` enumeration is distinct from `ParameterCategory`
+/// because `ParameterCategory` differentiates the types of parameters for
 /// the purposes of layout, where the layout rules of some targets will treat
 /// parameters of different types as occupying the same binding space for layout
 /// (e.g., in SPIR-V both a `Texture2D` and `SamplerState` use the same space of
@@ -1364,14 +1364,14 @@ public enum SlangParameterCategory : uint
 /// </para>
 /// <para>
 /// When you want to answer "what register/binding did this parameter use?" you
-/// should use `SlangParameterCategory`.
+/// should use `ParameterCategory`.
 /// </para>
 /// <para>
 /// When you want to answer "what type of descriptor range should this parameter use?"
-/// you should use `SlangBindingType`.
+/// you should use `BindingType`.
 /// </para>
 /// </summary>
-public enum SlangBindingType : uint
+public enum BindingType : uint
 {
     /// <summary>
     /// Unknown binding type.
@@ -1475,7 +1475,7 @@ public enum SlangBindingType : uint
 /// <summary>
 /// The type of memory layout used by a shader for a type.
 /// </summary>
-public enum SlangLayoutRules : uint
+public enum LayoutRules : uint
 {
     /// <summary>
     /// Default layout.
@@ -1492,7 +1492,7 @@ public enum SlangLayoutRules : uint
 /// <summary>
 /// The possible image formats of a shader uniform.
 /// </summary>
-public enum SlangImageFormat : uint
+public enum ImageFormat : uint
 {
 #pragma warning disable CS1591
     Unknown,
@@ -1591,7 +1591,7 @@ public enum ContainerType : int
 /// Passed into functions to create globalSession to identify the API version client code is
 /// using.
 /// </summary>
-public enum SlangLanguageVersion : uint
+public enum LanguageVersion : uint
 {
     /// <summary>
     /// Language version 2025

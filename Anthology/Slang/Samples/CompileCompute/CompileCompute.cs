@@ -59,7 +59,7 @@ public static class Program
     {
         TargetDescription targetDesc = new()
         {
-            Format = SlangCompileTarget.Glsl,
+            Format = CompileTarget.Glsl,
             Profile = GlobalSession.FindProfile("glsl_450")
         };
 
@@ -72,7 +72,7 @@ public static class Program
 
         Session session = GlobalSession.CreateSession(sessionDesc);
 
-        Module module = session.LoadModule("compute", out string? diagnostics);
+        Module module = session.LoadModule("compute", out DiagnosticInfo diagnostics);
 
         if (diagnostics != null)
             Console.WriteLine(diagnostics);

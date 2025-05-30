@@ -143,7 +143,7 @@ public unsafe struct ShaderReflection
     /// <summary>
     /// Gets the layout information for a specific type according to the specified layout rules.
     /// </summary>
-    public readonly TypeLayoutReflection GetTypeLayout(TypeReflection type, SlangLayoutRules rules) =>
+    public readonly TypeLayoutReflection GetTypeLayout(TypeReflection type, LayoutRules rules) =>
         new(spReflection_GetTypeLayout(_ptr, type._ptr, rules), _component);
 
     /// <summary>
@@ -161,7 +161,7 @@ public unsafe struct ShaderReflection
     public readonly TypeReflection SpecializeType(
         TypeReflection type,
         TypeReflection[] specializationArgs,
-        out string? diagnostics)
+        out DiagnosticInfo diagnostics)
     {
         Native.TypeReflection** specializationArgsPtr = stackalloc Native.TypeReflection*[specializationArgs.Length];
 
@@ -185,10 +185,10 @@ public unsafe struct ShaderReflection
     /// </summary>
     public readonly GenericReflection SpecializeGeneric(
         GenericReflection generic,
-        (SlangReflectionGenericArgType, GenericArgReflection)[] specializationArgs,
-        out string? diagnostics)
+        (ReflectionGenericArgType, GenericArgReflection)[] specializationArgs,
+        out DiagnosticInfo diagnostics)
     {
-        SlangReflectionGenericArgType* specializationArgTypes = stackalloc SlangReflectionGenericArgType[specializationArgs.Length];
+        ReflectionGenericArgType* specializationArgTypes = stackalloc ReflectionGenericArgType[specializationArgs.Length];
         Native.GenericArgReflection* specializationArgVals = stackalloc Native.GenericArgReflection[specializationArgs.Length];
 
         for (int i = 0; i < specializationArgs.Length; i++)

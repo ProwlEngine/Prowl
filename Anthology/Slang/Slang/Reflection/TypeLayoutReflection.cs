@@ -40,7 +40,7 @@ public unsafe struct TypeLayoutReflection
     /// <summary>
     /// Gets the kind of the shader type (scalar, vector, matrix, struct, array, etc.).
     /// </summary>
-    public readonly SlangTypeKind Kind =>
+    public readonly TypeKind Kind =>
         spReflectionTypeLayout_getKind(_ptr);
 
     /// <summary>
@@ -48,7 +48,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category to query size for.</param>
     /// <returns>The size in bytes.</returns>
-    public readonly nuint GetSize(SlangParameterCategory category) =>
+    public readonly nuint GetSize(ParameterCategory category) =>
         spReflectionTypeLayout_GetSize(_ptr, category);
 
     /// <summary>
@@ -56,7 +56,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category to query stride for.</param>
     /// <returns>The stride in bytes.</returns>
-    public readonly nuint GetStride(SlangParameterCategory category) =>
+    public readonly nuint GetStride(ParameterCategory category) =>
         spReflectionTypeLayout_GetStride(_ptr, category);
 
     /// <summary>
@@ -64,7 +64,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category to query alignment for.</param>
     /// <returns>The alignment requirement in bytes.</returns>
-    public readonly int GetAlignment(SlangParameterCategory category) =>
+    public readonly int GetAlignment(ParameterCategory category) =>
         spReflectionTypeLayout_getAlignment(_ptr, category);
 
     /// <summary>
@@ -146,7 +146,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category to query stride for.</param>
     /// <returns>The element stride in bytes.</returns>
-    public readonly nuint GetElementStride(SlangParameterCategory category) =>
+    public readonly nuint GetElementStride(ParameterCategory category) =>
         spReflectionTypeLayout_GetElementStride(_ptr, category);
 
     /// <summary>
@@ -170,7 +170,7 @@ public unsafe struct TypeLayoutReflection
     /// <summary>
     /// Gets the parameter category that determines how this type is bound in the shader.
     /// </summary>
-    public readonly SlangParameterCategory ParameterCategory =>
+    public readonly ParameterCategory ParameterCategory =>
         spReflectionTypeLayout_GetParameterCategory(_ptr);
 
     /// <summary>
@@ -184,13 +184,13 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the category.</param>
     /// <returns>The parameter category at the specified index.</returns>
-    public readonly SlangParameterCategory GetCategoryByIndex(uint index) =>
+    public readonly ParameterCategory GetCategoryByIndex(uint index) =>
         spReflectionTypeLayout_GetCategoryByIndex(_ptr, index);
 
     /// <summary>
     /// Gets an enumerable collection of all parameter categories applicable to this type.
     /// </summary>
-    public readonly IEnumerable<SlangParameterCategory> Categories =>
+    public readonly IEnumerable<ParameterCategory> Categories =>
         Utility.For(CategoryCount, GetCategoryByIndex);
 
     /// <summary>
@@ -208,7 +208,7 @@ public unsafe struct TypeLayoutReflection
     /// <summary>
     /// Gets the scalar type (float, int, etc.) for this type.
     /// </summary>
-    public readonly SlangScalarType ScalarType =>
+    public readonly ScalarType ScalarType =>
         ReflectionType.ScalarType;
 
     /// <summary>
@@ -220,13 +220,13 @@ public unsafe struct TypeLayoutReflection
     /// <summary>
     /// For resource types, gets the shape of the resource (buffer, texture1D, texture2D, etc.).
     /// </summary>
-    public readonly SlangResourceShape ResourceShape =>
+    public readonly ResourceShape ResourceShape =>
         ReflectionType.ResourceShape;
 
     /// <summary>
     /// For resource types, gets the access permissions (read, write, read-write).
     /// </summary>
-    public readonly SlangResourceAccess ResourceAccess =>
+    public readonly ResourceAccess ResourceAccess =>
         ReflectionType.ResourceAccess;
 
     /// <summary>
@@ -238,7 +238,7 @@ public unsafe struct TypeLayoutReflection
     /// <summary>
     /// For matrix types, gets the matrix layout mode (row-major or column-major).
     /// </summary>
-    public readonly SlangMatrixLayoutMode MatrixLayoutMode =>
+    public readonly MatrixLayoutMode MatrixLayoutMode =>
         spReflectionTypeLayout_GetMatrixLayoutMode(_ptr);
 
     /// <summary>
@@ -270,7 +270,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>The binding type at the specified index.</returns>
-    public readonly SlangBindingType GetBindingRangeType(nint index) =>
+    public readonly BindingType GetBindingRangeType(nint index) =>
         spReflectionTypeLayout_getBindingRangeType(_ptr, index);
 
     /// <summary>
@@ -324,7 +324,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>The image format for the binding range.</returns>
-    public readonly SlangImageFormat GetBindingRangeImageFormat(nint index) =>
+    public readonly ImageFormat GetBindingRangeImageFormat(nint index) =>
         spReflectionTypeLayout_getBindingRangeImageFormat(_ptr, index);
 
     /// <summary>
@@ -397,7 +397,7 @@ public unsafe struct TypeLayoutReflection
     /// <param name="setIndex">The zero-based index of the descriptor set.</param>
     /// <param name="rangeIndex">The zero-based index of the range.</param>
     /// <returns>The binding type for the descriptor range.</returns>
-    public readonly SlangBindingType GetDescriptorSetDescriptorRangeType(nint setIndex, nint rangeIndex) =>
+    public readonly BindingType GetDescriptorSetDescriptorRangeType(nint setIndex, nint rangeIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeType(_ptr, setIndex, rangeIndex);
 
     /// <summary>
@@ -406,7 +406,7 @@ public unsafe struct TypeLayoutReflection
     /// <param name="setIndex">The zero-based index of the descriptor set.</param>
     /// <param name="rangeIndex">The zero-based index of the range.</param>
     /// <returns>The parameter category for the descriptor range.</returns>
-    public readonly SlangParameterCategory GetDescriptorSetDescriptorRangeCategory(nint setIndex, nint rangeIndex) =>
+    public readonly ParameterCategory GetDescriptorSetDescriptorRangeCategory(nint setIndex, nint rangeIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeCategory(_ptr, setIndex, rangeIndex);
 
     /// <summary>

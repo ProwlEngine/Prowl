@@ -35,12 +35,12 @@ public unsafe struct TypeReflection
     /// <summary>
     /// Gets the kind of shader type represented by this reflection.
     /// </summary>
-    public readonly SlangTypeKind Kind =>
+    public readonly TypeKind Kind =>
         spReflectionType_GetKind(_ptr);
 
     /// <summary>
     /// Gets the number of fields in this type.
-    /// Only meaningful when <see cref="Kind"/> is <see cref="SlangTypeKind.Struct"/>.
+    /// Only meaningful when <see cref="Kind"/> is <see cref="TypeKind.Struct"/>.
     /// </summary>
     public readonly uint FieldCount =>
         spReflectionType_GetFieldCount(_ptr);
@@ -63,7 +63,7 @@ public unsafe struct TypeReflection
     /// Gets a value indicating whether this type is an array.
     /// </summary>
     public readonly bool IsArray =>
-        Kind == SlangTypeKind.Array;
+        Kind == TypeKind.Array;
 
     /// <summary>
     /// Unwraps nested array types to get the innermost element type.
@@ -128,7 +128,7 @@ public unsafe struct TypeReflection
     /// <summary>
     /// Gets the scalar type for vector, matrix, or scalar types.
     /// </summary>
-    public readonly SlangScalarType ScalarType =>
+    public readonly ScalarType ScalarType =>
         spReflectionType_GetScalarType(_ptr);
 
     /// <summary>
@@ -140,13 +140,13 @@ public unsafe struct TypeReflection
     /// <summary>
     /// Gets the shape of this resource type.
     /// </summary>
-    public readonly SlangResourceShape ResourceShape =>
+    public readonly ResourceShape ResourceShape =>
         spReflectionType_GetResourceShape(_ptr);
 
     /// <summary>
     /// Gets the access level of this resource type.
     /// </summary>
-    public readonly SlangResourceAccess ResourceAccess =>
+    public readonly ResourceAccess ResourceAccess =>
         spReflectionType_GetResourceAccess(_ptr);
 
     /// <summary>

@@ -92,14 +92,14 @@ internal unsafe struct SlangResult(uint value = 0x00000000)
     }
 
 
-    internal readonly void ThrowOrDiagnose(ISlangBlob* diagPtr, out string? diagnostics)
+    internal readonly void ThrowOrDiagnose(ISlangBlob* diagPtr, out DiagnosticInfo diagnostics)
     {
-        diagnostics = null;
+        diagnostics = default;
 
         if (diagPtr != null)
-            diagnostics = NativeComProxy.Create(diagPtr).GetString();
+            diagnostics = new(NativeComProxy.Create(diagPtr).GetString());
 
-        Exception? ex = GetException(diagnostics);
+        Exception? ex = GetException(diagnostics.Message);
 
         if (ex != null)
             throw ex;

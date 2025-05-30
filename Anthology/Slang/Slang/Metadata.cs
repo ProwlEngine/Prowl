@@ -30,7 +30,7 @@ public unsafe class Metadata
     /// <param name="spaceIndex">`space` for D3D12, `set` for Vulkan.</param>
     /// <param name="registerIndex">`register` for D3D12, `binding` for Vulkan.</param>
     /// <returns>True if the resource is used in the shader, False otherwise.</returns>
-    public bool IsParameterLocationUsed(SlangParameterCategory category, uint spaceIndex, uint registerIndex)
+    public bool IsParameterLocationUsed(ParameterCategory category, uint spaceIndex, uint registerIndex)
     {
         _metadata.IsParameterLocationUsed(category, spaceIndex, registerIndex, out CBool outUsed).Throw();
 

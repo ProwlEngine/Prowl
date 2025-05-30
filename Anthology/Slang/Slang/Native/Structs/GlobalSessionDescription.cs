@@ -14,7 +14,7 @@ internal unsafe struct GlobalSessionDescription()
 
     public uint ApiVersion = 0;
 
-    public SlangLanguageVersion LanguageVersion = SlangLanguageVersion._2025;
+    public LanguageVersion LanguageVersion = LanguageVersion._2025;
 
     public CBool EnableGLSL = false;
 

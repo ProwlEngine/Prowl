@@ -11,25 +11,25 @@ internal unsafe interface IGlobalSession : IUnknown
 {
     SlangResult CreateSession(SessionDescription* desc, out ISession* outSession);
 
-    SlangProfileID FindProfile(ConstU8Str name);
+    ProfileID FindProfile(ConstU8Str name);
 
-    void SetDownstreamCompilerPath(SlangPassThrough passThrough, ConstU8Str path);
-
-    [Obsolete("Method is deprecated")]
-    void SetDownstreamCompilerPrelude(SlangPassThrough passThrough, ConstU8Str preludeText);
+    void SetDownstreamCompilerPath(PassThrough passThrough, ConstU8Str path);
 
     [Obsolete("Method is deprecated")]
-    void GetDownstreamCompilerPrelude(SlangPassThrough passThrough, out ISlangBlob* outPrelude);
+    void SetDownstreamCompilerPrelude(PassThrough passThrough, ConstU8Str preludeText);
+
+    [Obsolete("Method is deprecated")]
+    void GetDownstreamCompilerPrelude(PassThrough passThrough, out ISlangBlob* outPrelude);
 
     ConstU8Str GetBuildTagString();
 
-    SlangResult SetDefaultDownstreamCompiler(SlangSourceLanguage sourceLanguage, SlangPassThrough defaultCompiler);
+    SlangResult SetDefaultDownstreamCompiler(SourceLanguage sourceLanguage, PassThrough defaultCompiler);
 
-    SlangPassThrough GetDefaultDownstreamCompiler(SlangSourceLanguage sourceLanguage);
+    PassThrough GetDefaultDownstreamCompiler(SourceLanguage sourceLanguage);
 
-    void SetLanguagePrelude(SlangSourceLanguage sourceLanguage, ConstU8Str preludeText);
+    void SetLanguagePrelude(SourceLanguage sourceLanguage, ConstU8Str preludeText);
 
-    void GetLanguagePrelude(SlangSourceLanguage sourceLanguage, out ISlangBlob* outPrelude);
+    void GetLanguagePrelude(SourceLanguage sourceLanguage, out ISlangBlob* outPrelude);
 
     [Obsolete("Method is deprecated")]
     SlangResult CreateCompileRequest(out /* ICompileRequest */ void* outCompileRequest);
@@ -40,9 +40,9 @@ internal unsafe interface IGlobalSession : IUnknown
 
     ISlangSharedLibraryLoader* GetSharedLibraryLoader();
 
-    SlangResult CheckCompileTargetSupport(SlangCompileTarget target);
+    SlangResult CheckCompileTargetSupport(CompileTarget target);
 
-    SlangResult CheckPassThroughSupport(SlangPassThrough passThrough);
+    SlangResult CheckPassThroughSupport(PassThrough passThrough);
 
     SlangResult CompileCoreModule(CompileCoreModuleFlags flags);
 
@@ -50,11 +50,11 @@ internal unsafe interface IGlobalSession : IUnknown
 
     SlangResult SaveCoreModule(SlangArchiveType archiveType, out ISlangBlob* outBlob);
 
-    SlangCapabilityID FindCapability(ConstU8Str name);
+    CapabilityID FindCapability(ConstU8Str name);
 
-    void SetDownstreamCompilerForTransition(SlangCompileTarget source, SlangCompileTarget target, SlangPassThrough compiler);
+    void SetDownstreamCompilerForTransition(CompileTarget source, CompileTarget target, PassThrough compiler);
 
-    SlangPassThrough GetDownstreamCompilerForTransition(SlangCompileTarget source, SlangCompileTarget target);
+    PassThrough GetDownstreamCompilerForTransition(CompileTarget source, CompileTarget target);
 
     void GetCompilerElapsedTime(out double outTotalTime, out double outDownstreamTime);
 
