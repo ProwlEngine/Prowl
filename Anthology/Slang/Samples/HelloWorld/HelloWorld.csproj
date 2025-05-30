@@ -11,4 +11,8 @@
         <ProjectReference Include="../../Slang/Prowl.Slang.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <Compile Include="../Shared/FileProvider.cs"/>
+    </ItemGroup>
+
 </Project>
