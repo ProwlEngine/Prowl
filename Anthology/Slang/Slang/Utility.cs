@@ -19,39 +19,14 @@ internal static class Utility
     }
 
 
-    internal static unsafe string? GetDiagnostic(ISlangBlob* blob)
-    {
-        if (blob == null)
-            return null;
-
-        return NativeComProxy.Create(blob).GetString();
-    }
-
-
-    internal static unsafe T Validate<T>(T* sourcePtr, ISlangBlob* diagnosticsPtr, out DiagnosticInfo diagnostics, bool trackRefs) where T : IUnknown
+    internal static unsafe void ValidatePtr<T>(T* sourcePtr, ISlangBlob* diagnosticsPtr, out DiagnosticInfo diagnostics)
     {
         diagnostics = default;
 
         if (diagnosticsPtr != null)
-            diagnostics = new(NativeComProxy.Create(diagnosticsPtr).GetString());
+            diagnostics = new(diagnosticsPtr);
 
         if (sourcePtr == null)
-            throw new NullReferenceException($"Source pointer is null. Diagnostics: {diagnostics.Message}");
-
-        return NativeComProxy.Create(sourcePtr, trackRefs);
-    }
-
-
-    internal static unsafe T* ValidateRaw<T>(T* sourcePtr, ISlangBlob* diagnosticsPtr, out DiagnosticInfo diagnostics)
-    {
-        diagnostics = default;
-
-        if (diagnosticsPtr != null)
-            diagnostics = new(NativeComProxy.Create(diagnosticsPtr).GetString());
-
-        if (sourcePtr == null)
-            throw new NullReferenceException($"Source pointer is null. Diagnostics: {diagnostics.Message}");
-
-        return sourcePtr;
+            throw diagnostics.GetException() ?? new NullReferenceException($"Source pointer is null");
     }
 }

@@ -175,7 +175,7 @@ public unsafe struct ShaderReflection
             specializationArgsPtr,
             out ISlangBlob* diagnosticsPtr);
 
-        diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
+        Utility.ValidatePtr(reflectionPtr, diagnosticsPtr, out diagnostics);
 
         return new(reflectionPtr, _component);
     }
@@ -205,7 +205,7 @@ public unsafe struct ShaderReflection
             specializationArgVals,
             out ISlangBlob* diagnosticsPtr);
 
-        diagnostics = NativeComProxy.Create(diagnosticsPtr).GetString();
+        Utility.ValidatePtr(genericPtr, diagnosticsPtr, out diagnostics);
 
         return new(genericPtr, _component);
     }
@@ -246,7 +246,8 @@ public unsafe struct ShaderReflection
     /// <returns>A JSON string containing the reflection information.</returns>
     public readonly string ToJson()
     {
-        spReflection_ToJson(_ptr, null, out ISlangBlob* outJsonPtr).Throw();
+        spReflection_ToJson(_ptr, null, out ISlangBlob* outJsonPtr)
+            .Throw("Failure converting shader reflection to JSON");
 
         return NativeComProxy.Create(outJsonPtr).GetString();
     }

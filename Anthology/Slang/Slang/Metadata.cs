@@ -32,7 +32,8 @@ public unsafe class Metadata
     /// <returns>True if the resource is used in the shader, False otherwise.</returns>
     public bool IsParameterLocationUsed(ParameterCategory category, uint spaceIndex, uint registerIndex)
     {
-        _metadata.IsParameterLocationUsed(category, spaceIndex, registerIndex, out CBool outUsed).Throw();
+        _metadata.IsParameterLocationUsed(category, spaceIndex, registerIndex, out CBool outUsed)
+            .Throw("Failure checking parameter location usage");
 
         return outUsed;
     }

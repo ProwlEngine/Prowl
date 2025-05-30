@@ -48,7 +48,9 @@ public unsafe class Module : ComponentType
     public EntryPoint FindEntryPointByName(string name)
     {
         using U8Str str = U8Str.Alloc(name);
-        _module.FindEntryPointByName(str, out IEntryPoint* entryPointPtr).Throw();
+
+        _module.FindEntryPointByName(str, out IEntryPoint* entryPointPtr)
+            .Throw($"Failed to find matching entrypoint `{name}`");
 
         return new EntryPoint(NativeComProxy.Create(entryPointPtr), _session);
     }
@@ -74,7 +76,8 @@ public unsafe class Module : ComponentType
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, GetDefinedEntryPointCount(), nameof(index));
         ArgumentOutOfRangeException.ThrowIfLessThan(index, 0, nameof(index));
 
-        _module.GetDefinedEntryPoint(index, out IEntryPoint* entryPointPtr).Throw();
+        _module.GetDefinedEntryPoint(index, out IEntryPoint* entryPointPtr)
+            .Throw($"Failed to get entry point at index '{index}'");
 
         return new EntryPoint(NativeComProxy.Create(entryPointPtr), _session);
     }
@@ -85,7 +88,8 @@ public unsafe class Module : ComponentType
     /// </summary>
     public Memory<byte> Serialize()
     {
-        _module.Serialize(out ISlangBlob* serializedPtr).Throw();
+        _module.Serialize(out ISlangBlob* serializedPtr)
+            .Throw("Failed to serialize module");
 
         return NativeComProxy.Create(serializedPtr).ReadBytes();
     }
@@ -97,7 +101,9 @@ public unsafe class Module : ComponentType
     public void WriteToFile(string fileName)
     {
         using U8Str str = U8Str.Alloc(fileName);
-        _module.WriteToFile(str).Throw();
+
+        _module.WriteToFile(str)
+            .Throw("Failed to write module to file");
     }
 
 
@@ -137,7 +143,7 @@ public unsafe class Module : ComponentType
         using U8Str str = U8Str.Alloc(name);
 
         _module.FindAndCheckEntryPoint(str, stage, out IEntryPoint* entryPointPtr, out ISlangBlob* diagnosticsPtr)
-            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+            .Throw(diagnosticsPtr, out diagnostics);
 
         return new EntryPoint(NativeComProxy.Create(entryPointPtr), _session);
     }
@@ -178,7 +184,8 @@ public unsafe class Module : ComponentType
     /// </summary>
     public Memory<byte> Disassemble()
     {
-        _module.Disassemble(out ISlangBlob* blobPtr).Throw();
+        _module.Disassemble(out ISlangBlob* blobPtr)
+            .Throw("Failed to disassemble module");
 
         return NativeComProxy.Create(blobPtr).ReadBytes();
     }

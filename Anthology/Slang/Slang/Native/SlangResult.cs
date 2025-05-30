@@ -83,23 +83,20 @@ internal unsafe struct SlangResult(uint value = 0x00000000)
     }
 
 
-    public readonly void Throw()
+    public readonly void Throw(string? overrideMessage = null)
     {
-        Exception? ex = GetException();
+        Exception? ex = GetException(overrideMessage);
 
         if (ex != null)
             throw ex;
     }
 
 
-    internal readonly void ThrowOrDiagnose(ISlangBlob* diagPtr, out DiagnosticInfo diagnostics)
+    internal readonly void Throw(ISlangBlob* diagnosticPtr, out DiagnosticInfo diagnostics)
     {
-        diagnostics = default;
+        diagnostics = new(diagnosticPtr);
 
-        if (diagPtr != null)
-            diagnostics = new(NativeComProxy.Create(diagPtr).GetString());
-
-        Exception? ex = GetException(diagnostics.Message);
+        Exception? ex = diagnostics.GetException() ?? GetException();
 
         if (ex != null)
             throw ex;

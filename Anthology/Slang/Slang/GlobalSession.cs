@@ -114,7 +114,8 @@ public static unsafe class GlobalSession
     /// <param name="defaultCompiler">The default compiler for that language.</param>
     public static void SetDefaultDownstreamCompiler(SourceLanguage sourceLanguage, PassThrough defaultCompiler)
     {
-        s_session.SetDefaultDownstreamCompiler(sourceLanguage, defaultCompiler).Throw();
+        s_session.SetDefaultDownstreamCompiler(sourceLanguage, defaultCompiler)
+            .Throw($"Failed to set default downstream compiler '{defaultCompiler}' for source language '{sourceLanguage}'");
     }
 
     /// <summary>
@@ -292,7 +293,8 @@ public static unsafe class GlobalSession
     {
         using U8Str str = U8Str.Alloc(jsonPath);
 
-        s_session.SetSPIRVCoreGrammar(str).Throw();
+        s_session.SetSPIRVCoreGrammar(str)
+            .Throw($"Failed to set SPIR-V core grammar file at path '{jsonPath}'");
     }
 
 
@@ -315,7 +317,8 @@ public static unsafe class GlobalSession
         {
             Native.SessionDescription* outSession = null;
 
-            s_session.ParseCommandLineArguments(strs.Length, strsPtr, outSession, out IUnknown* allocationPtr).Throw();
+            s_session.ParseCommandLineArguments(strs.Length, strsPtr, outSession, out IUnknown* allocationPtr)
+                .Throw($"Failure to parse command-line arguments. (Arguments: \'{string.Join(" ", args)}\')");
 
             IUnknown allocation = NativeComProxy.Create(allocationPtr);
 

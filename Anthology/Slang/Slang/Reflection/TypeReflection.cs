@@ -162,7 +162,9 @@ public unsafe struct TypeReflection
     {
         get
         {
-            spReflectionType_GetFullName(_ptr, out ISlangBlob* namePtr).Throw();
+            spReflectionType_GetFullName(_ptr, out ISlangBlob* namePtr)
+                .Throw("Failed to get full name of type");
+
             return NativeComProxy.Create(namePtr).GetString();
         }
     }

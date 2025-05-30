@@ -94,7 +94,9 @@ public unsafe struct VariableReflection
     /// <returns>The default integer value of this variable.</returns>
     public readonly long GetDefaultValueInt()
     {
-        spReflectionVariable_GetDefaultValueInt(_ptr, out long value).Throw();
+        spReflectionVariable_GetDefaultValueInt(_ptr, out long value)
+            .Throw("Failed to get default value as integer");
+
         return value;
     }
 

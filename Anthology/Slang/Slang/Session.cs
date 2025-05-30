@@ -63,7 +63,15 @@ public unsafe class Session
 
         IModule* modulePtr = _session.LoadModule(str, out ISlangBlob* diagnosticsPtr);
 
-        return new Module(Utility.Validate(modulePtr, diagnosticsPtr, out diagnostics, false), this);
+        diagnostics = default;
+
+        if (diagnosticsPtr != null)
+            diagnostics = new(diagnosticsPtr);
+
+        if (modulePtr == null)
+            throw diagnostics.GetException() ?? new InvalidOperationException($"Failed to load module '{moduleName}'");
+
+        return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
 
 
@@ -77,7 +85,15 @@ public unsafe class Session
 
         IModule* modulePtr = _session.LoadModuleFromSource(strA, strB, ManagedBlob.FromMemory(source), out ISlangBlob* diagnosticsPtr);
 
-        return new Module(Utility.Validate(modulePtr, diagnosticsPtr, out diagnostics, false), this);
+        diagnostics = default;
+
+        if (diagnosticsPtr != null)
+            diagnostics = new(diagnosticsPtr);
+
+        if (modulePtr == null)
+            throw diagnostics.GetException() ?? new InvalidOperationException($"Failed to load module '{moduleName}'"); ;
+
+        return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
 
 
@@ -123,7 +139,7 @@ public unsafe class Session
         }
 
         _session.CreateCompositeComponentType(componentsPtr, componentTypes.Length, out IComponentType* componentPtr, out ISlangBlob* diagnosticsPtr)
-            .ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+            .Throw(diagnosticsPtr, out diagnostics);
 
         return new ComponentType(NativeComProxy.Create(componentPtr), this);
     }
@@ -144,7 +160,9 @@ public unsafe class Session
 
         Native.TypeReflection* reflectionPtr = _session.SpecializeType(type._ptr, argsPtr, specializationArgs.Length, out ISlangBlob* diagnosticsPtr);
 
-        return new TypeReflection(Utility.ValidateRaw(reflectionPtr, diagnosticsPtr, out diagnostics), type._component);
+        Utility.ValidatePtr(reflectionPtr, diagnosticsPtr, out diagnostics);
+
+        return new TypeReflection(reflectionPtr, type._component);
     }
 
     /// <summary>
@@ -158,7 +176,9 @@ public unsafe class Session
     {
         Native.TypeLayoutReflection* reflectionPtr = _session.GetTypeLayout(type._ptr, (nint)targetIndex, rules, out ISlangBlob* diagnosticsPtr);
 
-        return new TypeLayoutReflection(Utility.ValidateRaw(reflectionPtr, diagnosticsPtr, out diagnostics), type._component);
+        Utility.ValidatePtr(reflectionPtr, diagnosticsPtr, out diagnostics);
+
+        return new TypeLayoutReflection(reflectionPtr, type._component);
     }
 
 
@@ -177,7 +197,9 @@ public unsafe class Session
     {
         Native.TypeReflection* reflectionPtr = _session.GetContainerType(elementType._ptr, containerType, out ISlangBlob* diagnosticsPtr);
 
-        return new TypeReflection(Utility.ValidateRaw(reflectionPtr, diagnosticsPtr, out diagnostics), elementType._component);
+        Utility.ValidatePtr(reflectionPtr, diagnosticsPtr, out diagnostics);
+
+        return new TypeReflection(reflectionPtr, elementType._component);
     }
 
 
@@ -196,7 +218,9 @@ public unsafe class Session
     /// </summary>
     public string GetTypeRTTIMangledName(TypeReflection type)
     {
-        _session.GetTypeRTTIMangledName(type._ptr, out ISlangBlob* nameBlob).Throw();
+        _session.GetTypeRTTIMangledName(type._ptr, out ISlangBlob* nameBlob)
+            .Throw("Failed to get runtime type information mangled name");
+
         return NativeComProxy.Create(nameBlob).GetString();
     }
 
@@ -205,7 +229,9 @@ public unsafe class Session
     /// </summary>
     public string GetTypeConformanceWitnessMangledName(TypeReflection type, TypeReflection interfaceType)
     {
-        _session.GetTypeConformanceWitnessMangledName(type._ptr, interfaceType._ptr, out ISlangBlob* nameBlob).Throw();
+        _session.GetTypeConformanceWitnessMangledName(type._ptr, interfaceType._ptr, out ISlangBlob* nameBlob)
+            .Throw("Failed to get type confrmance witness mangled name");
+
         return NativeComProxy.Create(nameBlob).GetString();
     }
 
@@ -215,7 +241,9 @@ public unsafe class Session
     /// </summary>
     public nuint GetTypeConformanceWitnessSequentialID(TypeReflection type, TypeReflection interfaceType)
     {
-        _session.GetTypeConformanceWitnessSequentialID(type._ptr, interfaceType._ptr, out nuint outId).Throw();
+        _session.GetTypeConformanceWitnessSequentialID(type._ptr, interfaceType._ptr, out nuint outId)
+            .Throw("Failed to get type conformance witness sequential ID");
+
         return outId;
     }
 
@@ -253,7 +281,8 @@ public unsafe class Session
         int conformanceIdOverride,
         out DiagnosticInfo diagnostics)
     {
-        _session.CreateTypeConformanceComponentType(type._ptr, interfaceType._ptr, out ITypeConformance* outConformance, conformanceIdOverride, out ISlangBlob* diagnosticsPtr).ThrowOrDiagnose(diagnosticsPtr, out diagnostics);
+        _session.CreateTypeConformanceComponentType(type._ptr, interfaceType._ptr, out ITypeConformance* outConformance, conformanceIdOverride, out ISlangBlob* diagnosticsPtr)
+            .Throw(diagnosticsPtr, out diagnostics);
 
         return new ComponentType(NativeComProxy.Create(outConformance), this);
     }
@@ -269,7 +298,15 @@ public unsafe class Session
 
         IModule* modulePtr = _session.LoadModuleFromIRBlob(strA, strB, ManagedBlob.FromMemory(source), out ISlangBlob* diagnosticsPtr);
 
-        return new Module(Utility.Validate(modulePtr, diagnosticsPtr, out diagnostics, false), this);
+        diagnostics = default;
+
+        if (diagnosticsPtr != null)
+            diagnostics = new(diagnosticsPtr);
+
+        if (modulePtr == null)
+            throw diagnostics.GetException() ?? new InvalidOperationException($"Failed to load module '{moduleName}'"); ;
+
+        return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
 
 
@@ -318,6 +355,14 @@ public unsafe class Session
 
         IModule* modulePtr = _session.LoadModuleFromSourceString(strA, strB, strC, out ISlangBlob* diagnosticsPtr);
 
-        return new Module(Utility.Validate(modulePtr, diagnosticsPtr, out diagnostics, false), this);
+        diagnostics = default;
+
+        if (diagnosticsPtr != null)
+            diagnostics = new(diagnosticsPtr);
+
+        if (modulePtr == null)
+            throw diagnostics.GetException() ?? new InvalidOperationException($"Failed to load module '{moduleName}'"); ;
+
+        return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
 }
