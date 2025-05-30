@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 
@@ -10,28 +11,65 @@ namespace Prowl.Slang;
 
 
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
-public readonly record struct Diagnostic
-{
-    public Diagnostic(Severity severity,
-        int errorCode = -1,
-        string? message = null,
-        string? filePath = null,
-        int lineNumber = -1)
-    {
-        Severity = severity;
-        ErrorCode = errorCode;
-        Message = message ?? string.Empty;
 
-        FilePath = filePath;
-        LineNumber = lineNumber;
+/// <summary>
+/// A structure containing parsed compiler diagnostic information.
+/// </summary>
+public struct Diagnostic : IEquatable<Diagnostic>
+{
+    public Severity Severity;
+    public int ErrorCode;
+    public string Message;
+
+    public string? FilePath;
+    public int LineNumber;
+
+
+    /// <inhertidoc/>
+    public override readonly string ToString()
+    {
+        return $"{FilePath ?? "Unknown file"}({LineNumber}): {Severity} {ErrorCode}: {Message}";
     }
 
-    public readonly Severity Severity;
-    public readonly int ErrorCode;
-    public readonly string Message;
 
-    public readonly string? FilePath;
-    public readonly int LineNumber;
+    /// <inheritdoc/>
+    public override bool Equals([NotNullWhen(true)] object? obj)
+    {
+        if (obj is Diagnostic other)
+            return Equals(other);
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public readonly bool Equals(Diagnostic other)
+    {
+        return Severity == other.Severity &&
+               LineNumber == other.LineNumber &&
+               ErrorCode == other.ErrorCode &&
+               Message == other.Message &&
+               FilePath == other.FilePath;
+    }
+
+
+    public static bool operator ==(Diagnostic left, Diagnostic right)
+    {
+        return left.Equals(right);
+    }
+
+
+    public static bool operator !=(Diagnostic left, Diagnostic right)
+    {
+        return !left.Equals(right);
+    }
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode()
+    {
+        return HashCode.Combine(Severity, ErrorCode, Message, FilePath, LineNumber);
+    }
 }
 #pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
 
@@ -74,53 +112,70 @@ public struct DiagnosticInfo
         if (Message == null)
             return [];
 
-        string[] lines = Message.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
+        Queue<string> lines = new(Message.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries));
 
-        List<Diagnostic> diagnostics = new();
+        List<Diagnostic> diagnostics = [];
 
-        for (int i = 0; i < lines.Length; i++)
+        while (lines.TryDequeue(out string? line))
         {
-            string line = lines[i];
+            // Start of diagnostic message excluding filepath.
+            int diagnosticStart = line.LastIndexOf("): ");
+            int diagnosticEnd = line.IndexOf(':', diagnosticStart + 3);
 
-            int infoStart = line.IndexOf("): ");
-
-        ReadNewLine:
-
-            if (infoStart <= 0)
-                continue;
-
-            int lineNumStart = line.LastIndexOf('(', infoStart);
-
-            infoStart += 3;
-
-            int infoEnd = line.IndexOf(":", infoStart);
-
-            string subsec = line.Substring(infoStart, infoEnd - infoStart);
-            string[] parts = subsec.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            Severity severity = Enum.Parse<Severity>(parts[0], true);
-            int code = int.Parse(parts[^1]);
-            string path = line.Substring(0, lineNumStart);
-            int lineNumber = int.Parse(line.Substring(lineNumStart + 1, infoStart - lineNumStart - 4));
-
-            string message = line.Substring(infoEnd + 1);
-
-            while (++i < lines.Length)
+            if (diagnosticStart <= 0)
             {
-                string nextLine = lines[i];
-                int index = nextLine.IndexOf("): ");
-
-                if (index > 0)
+                if (diagnostics.Count > 0)
                 {
-                    infoStart = index;
-                    line = nextLine;
-                    diagnostics.Add(new Diagnostic(severity, code, message, path, lineNumber));
+                    Diagnostic prev = diagnostics[^1];
 
-                    goto ReadNewLine;
+                    prev.Message += '\n' + line;
+
+                    diagnostics[^1] = prev;
                 }
 
-                message += '\n' + nextLine;
+                continue;
             }
+
+            int lineNumStart = line.LastIndexOf('(', diagnosticStart);
+
+            int lineNumber = int.Parse(line.AsSpan(lineNumStart + 1, diagnosticStart - lineNumStart - 1));
+
+            int severityEnd = Math.Min(line.IndexOf(' ', diagnosticStart + 3), diagnosticEnd);
+
+            Severity severity = Enum.Parse<Severity>(line.AsSpan(diagnosticStart + 3, severityEnd - diagnosticStart - 3), true);
+
+            int code = -1;
+
+            int codeStart = line.LastIndexOf(' ', diagnosticEnd - 1) + 1;
+
+            if (char.IsDigit(line[codeStart]))
+                code = int.Parse(line.AsSpan(codeStart, diagnosticEnd - codeStart));
+
+            string path = "";
+
+            if (severity != Severity.Fatal)
+                path = line.Substring(0, lineNumStart);
+
+            string message = line.Substring(diagnosticEnd + 2);
+
+            Diagnostic diagnostic = new Diagnostic
+            {
+                Severity = severity,
+                ErrorCode = code,
+                Message = message,
+                FilePath = path,
+                LineNumber = lineNumber
+            };
+
+            if (diagnostics.Count > 0)
+            {
+                Diagnostic last = diagnostics[^1];
+
+                if (diagnostic.Equals(last))
+                    continue;
+            }
+
+            diagnostics.Add(diagnostic);
         }
 
         return diagnostics;
