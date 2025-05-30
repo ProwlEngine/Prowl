@@ -162,16 +162,19 @@ namespace Shared
             }
         }
 
+        public static bool isWindowAOpen = true;
+        public static bool isWindowBOpen = true;
+
         private static void TestWindows()
         {
             // Window Tests
             WindowManager.SetWindowFont(fontMedium);
-            WindowManager.Window("MyTestWindowA", "Test Window", () => {
+            WindowManager.Window("MyTestWindowA", ref isWindowAOpen, "Test Window", () => {
             // Window content rendering
             using (Paper.Column("WindowInnerContent")
                     .Enter())
                 {
-                    WindowManager.Window("MyTestWindowB", "Recursive Window", () => {
+                    WindowManager.Window("MyTestWindowB", ref isWindowBOpen, "Recursive Window", () => {
                         // Window content rendering
                         using (Paper.Column("WindowInnerContent")
                             .Enter())
@@ -1421,9 +1424,24 @@ namespace Shared
                     .Clip()
                     .Enter())
                 {
+                    // Button to open windows
+                    using (Paper.Box("OpenWindowsButton")
+                        .Height(50)
+                        .Margin(20)
+                        .Text(Text.Center("Open Windows", fontMedium, textColor))
+                        .Style("button.primary")
+                        .OnClick((rect) => OpenWindows())
+                        .Enter()) { }
+
                     TestWindows();
                 }
             }
+        }
+
+        private static void OpenWindows()
+        {
+            isWindowAOpen = true;
+            isWindowBOpen = true;
         }
 
         private static void RenderFooter()

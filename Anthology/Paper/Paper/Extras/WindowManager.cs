@@ -126,7 +126,7 @@ namespace Prowl.PaperUI.Extras
         // Window identification and properties
         public string Id { get; }
         public string Title { get; set; }
-        public bool IsOpen { get; set; } = true; // Window is open by default
+        public bool PreviousOpen { get; set; } = true;
         public bool IsResizable { get; set; } = true;
         public bool IsDraggable { get; set; } = true;
         public bool IsModal { get; set; } = false; // For future use in input handling
@@ -163,6 +163,9 @@ namespace Prowl.PaperUI.Extras
         private static Dictionary<string, WindowState> _windowStates = new Dictionary<string, WindowState>();
         private static SpriteFontBase _windowFont;
 
+        // Collection to track windows requested to close in the last event cycle
+        private static HashSet<string> _windowsPendingCloseRequest = new HashSet<string>();
+
         // "SetNextWindow" properties for IMGUI style configuration
         private static byte _setNextWindowPosition = 0; // 0 = no, 1 = every frame, 2 = first time
         private static Vector2 _position = new Vector2(0, 0);
@@ -195,43 +198,80 @@ namespace Prowl.PaperUI.Extras
         public static void SetNextWindowIsModal(bool isModal) => _nextWindowIsModal = isModal;
         public static void SetNextWindowMinSize(Vector2 minSize) => _nextWindowMinSize = minSize;
 
+        /// <summary>
+        /// Immediate mode Window function. Creates or updates a window.
+        /// The window's visibility is controlled by the 'isOpen' boolean.
+        /// The contentFunc is invoked if the window is open.
+        /// </summary>
+        public static void Window(string id, ref bool isOpen, string title, Action contentFunc) => Window(id, ref isOpen, title, null, contentFunc);
 
         /// <summary>
-        /// Immediate mode Window function. Creates or updates a window with the given ID.
-        /// Returns true if the window is open and content should be rendered.
+        /// Immediate mode Window function with style. Creates or updates a window.
+        /// The window's visibility is controlled by the 'isOpen' boolean.
+        /// The contentFunc is invoked if the window is open.
         /// </summary>
-        public static void Window(string id, string title, Action contentFunc) => Window(id, title, null, contentFunc);
-
-        /// <summary>
-        /// Immediate mode Window function with options. Creates or updates a window with the given ID.
-        /// Returns true if the window is open and content should be rendered.
-        /// </summary>
-        public static void Window(string id, string title, WindowStyle? style, Action contentFunc)
+        public static void Window(string id, ref bool isOpen, string title, WindowStyle? style, Action contentFunc)
         {
-            // Get or create window state
-            if (!_windowStates.TryGetValue(id, out WindowState state))
+            // Step 1: Process pending close requests from the previous frame's event cycle
+            // (Assuming UI events are processed on a single thread, otherwise lock _windowsPendingCloseRequest)
+            if (_windowsPendingCloseRequest.Contains(id))
             {
-                state = new WindowState(id, title, new(100, 100), new(200, 200));
-                // Update position and size if set to first time
-                if (_setNextWindowPosition == 2) state.Position = _position;
-                if (_setNextWindowSize == 2) state.Size = _size;
-                _windowStates.Add(id, state);
+                isOpen = false; // Update the user's boolean
+                _windowsPendingCloseRequest.Remove(id); // Consume the request
             }
 
-            // Update position and size if set to every frame
-            if (_setNextWindowPosition == 1) state.Position = _position;
-            if (_setNextWindowSize == 1)     state.Size = _size;
+            // Step 2: Check the user's boolean. If false, remove state and don't render.
+            if (!isOpen)
+            {
+                if (_windowStates.ContainsKey(id))
+                {
+                    _windowStates.Remove(id);
+                }
+                ResetSetNextFlags(); // "SetNext" calls were not used for this closed window
+                return;
+            }
 
-            _setNextWindowPosition = 0; // Reset to no
-            _setNextWindowSize = 0; // Reset to no
+            // Step 3: If isOpen is true, proceed with window logic
+            if (_windowFont == null)
+                throw new InvalidOperationException("Window font not set. Call SetWindowFont() before using windows.");
 
             style ??= new WindowStyle();
 
-            // Update state from parameters
+            WindowState state;
+            bool isNewWindow = false;
+            if (!_windowStates.TryGetValue(id, out state))
+            {
+                isNewWindow = true;
+                Vector2 initialPosition = _setNextWindowPosition == 2 ? _position : new Vector2(100, 100);
+                Vector2 initialSize = _setNextWindowSize == 2 ? _size : new Vector2(300, 200);
+                state = new WindowState(id, title, initialPosition, initialSize);
+
+                if (_nextWindowIsResizable.HasValue) state.IsResizable = _nextWindowIsResizable.Value;
+                if (_nextWindowIsDraggable.HasValue) state.IsDraggable = _nextWindowIsDraggable.Value;
+                if (_nextWindowIsModal.HasValue) state.IsModal = _nextWindowIsModal.Value;
+                if (_nextWindowMinSize.HasValue) state.MinSize = _nextWindowMinSize.Value;
+
+                _windowStates.Add(id, state);
+            }
+
             state.Title = title;
+
+            if (_setNextWindowPosition == 1 || (isNewWindow && _setNextWindowPosition == 2)) state.Position = _position;
+            if (_setNextWindowSize == 1 || (isNewWindow && _setNextWindowSize == 2)) state.Size = _size;
 
             RenderWindow(style, state, contentFunc);
 
+            ResetSetNextFlags();
+        }
+
+        private static void ResetSetNextFlags()
+        {
+            _setNextWindowPosition = 0;
+            _setNextWindowSize = 0;
+            _nextWindowIsResizable = null;
+            _nextWindowIsDraggable = null;
+            _nextWindowIsModal = null;
+            _nextWindowMinSize = null;
         }
 
         private static void RenderWindow(WindowStyle style, WindowState state, Action contentFunc)
@@ -376,7 +416,11 @@ namespace Prowl.PaperUI.Extras
                         .PositionType(PositionType.SelfDirected)
                         .Style(closeButtonStyle)
                         .Text(Text.Center(style.CloseButtonIcon, titleFont, style.TextColor)) // Use titleFont for close button for consistency
-                        .OnClick((_) => state.IsOpen = false) // Set window to close
+                        .OnClick((_) =>
+                        {
+                            // Request close on click
+                            _windowsPendingCloseRequest.Add(state.Id);
+                        })
                         .Hovered
                             .Style(closeButtonHoverStyle)
                             .End();
