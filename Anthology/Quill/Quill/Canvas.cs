@@ -1402,9 +1402,9 @@ namespace Prowl.Quill
 
             // Add all vertices with the transformed coordinates
             AddVertex(new Vertex(topLeft, new Vector2(0, 0), color));
-            AddVertex(new Vertex(topRight, new Vector2(1, 0), color));
+            AddVertex(new Vertex(topRight, new Vector2(0, 1), color));
             AddVertex(new Vertex(bottomRight, new Vector2(1, 1), color));
-            AddVertex(new Vertex(bottomLeft, new Vector2(0, 1), color));
+            AddVertex(new Vertex(bottomLeft, new Vector2(1, 0), color));
 
             // Add indexes for fill
             _indices.Add(startVertexIndex);
