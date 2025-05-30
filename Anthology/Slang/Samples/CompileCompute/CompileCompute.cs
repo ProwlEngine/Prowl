@@ -57,44 +57,42 @@ public static class Program
 
     private static void CompileCode()
     {
-        TargetDescription targetDesc = new()
+        try
         {
-            Format = CompileTarget.Glsl,
-            Profile = GlobalSession.FindProfile("glsl_450")
-        };
+            TargetDescription targetDesc = new()
+            {
+                Format = CompileTarget.Glsl,
+                Profile = GlobalSession.FindProfile("glsl_450")
+            };
 
-        SessionDescription sessionDesc = new()
+            SessionDescription sessionDesc = new()
+            {
+                Targets = [targetDesc],
+                SearchPaths = ["../Shaders/"],
+                FileProvider = new FileProvider()
+            };
+
+            Session session = GlobalSession.CreateSession(sessionDesc);
+
+            Module module = session.LoadModule("compute", out DiagnosticInfo diagnostics);
+
+            EntryPoint entry = module.FindEntryPointByName("computeMain");
+            ComponentType program = session.CreateCompositeComponentType([module.Link(out diagnostics), entry], out diagnostics);
+
+            Memory<byte> compiledCode = program.GetEntryPointCode(0, 0, out diagnostics);
+
+            ShaderReflection reflection = program.GetLayout(0, out diagnostics);
+
+            string json = reflection.ToJson();
+
+            Console.WriteLine(json);
+        }
+        catch (CompilationException ex)
         {
-            Targets = [targetDesc],
-            SearchPaths = ["../Shaders/"],
-            FileProvider = new FileProvider()
-        };
-
-        Session session = GlobalSession.CreateSession(sessionDesc);
-
-        Module module = session.LoadModule("compute", out DiagnosticInfo diagnostics);
-
-        if (diagnostics != null)
-            Console.WriteLine(diagnostics);
-
-        EntryPoint entry = module.FindEntryPointByName("computeMain");
-        ComponentType program = session.CreateCompositeComponentType([module, entry], out diagnostics);
-
-        if (diagnostics != null)
-            Console.WriteLine(diagnostics);
-
-        Memory<byte> compiledCode = program.GetEntryPointCode(0, 0, out diagnostics);
-
-        if (diagnostics != null)
-            Console.WriteLine(diagnostics);
-
-        ShaderReflection reflection = program.GetLayout(0, out diagnostics);
-
-        if (diagnostics != null)
-            Console.WriteLine(diagnostics);
-
-        string json = reflection.ToJson();
-
-        Console.WriteLine(json);
+            foreach (Diagnostic diagnostic in ex.Diagnostics.GetDiagnostics())
+            {
+                Console.WriteLine(diagnostic);
+            }
+        }
     }
 }
