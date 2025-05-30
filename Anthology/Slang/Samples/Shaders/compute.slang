@@ -13,7 +13,7 @@ void computeMain(
 
     ITransformer transformer = GetTransformer(sv_dispatchThreadID.x, input);
 
-    buffer[sv_dispatchThreadID.x] = transformer.transform(input);badStuff
+    buffer[sv_dispatchThreadID.x] = transformer.transform(input);
 }
 
 
