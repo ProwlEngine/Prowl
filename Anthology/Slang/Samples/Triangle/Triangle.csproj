@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../Slang/Prowl.Slang.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Include="../Shared/FileProvider.cs"/>
+    </ItemGroup>
+
+</Project>
