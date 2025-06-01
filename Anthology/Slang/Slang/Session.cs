@@ -239,12 +239,12 @@ public unsafe class Session
     /// <summary>
     /// Get the sequential ID used to identify a type witness in a dynamic object.
     /// </summary>
-    public nuint GetTypeConformanceWitnessSequentialID(TypeReflection type, TypeReflection interfaceType)
+    public uint GetTypeConformanceWitnessSequentialID(TypeReflection type, TypeReflection interfaceType)
     {
         _session.GetTypeConformanceWitnessSequentialID(type._ptr, interfaceType._ptr, out nuint outId)
             .Throw("Failed to get type conformance witness sequential ID");
 
-        return outId;
+        return (uint)outId;
     }
 
 

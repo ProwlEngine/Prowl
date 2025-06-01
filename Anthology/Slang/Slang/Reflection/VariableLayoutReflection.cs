@@ -76,8 +76,8 @@ public unsafe struct VariableLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category.</param>
     /// <returns>The byte offset for the variable.</returns>
-    public readonly nuint GetOffset(ParameterCategory category) =>
-        spReflectionVariableLayout_GetOffset(_ptr, category);
+    public readonly uint GetOffset(ParameterCategory category) =>
+        (uint)spReflectionVariableLayout_GetOffset(_ptr, category);
 
     /// <summary>
     /// Gets the type reflection information.
@@ -102,8 +102,8 @@ public unsafe struct VariableLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category.</param>
     /// <returns>The binding space for the variable in the specified category.</returns>
-    public readonly nuint GetBindingSpace(ParameterCategory category) =>
-        spReflectionVariableLayout_GetSpace(_ptr, category);
+    public readonly uint GetBindingSpace(ParameterCategory category) =>
+        (uint)spReflectionVariableLayout_GetSpace(_ptr, category);
 
     /// <summary>
     /// Gets the image format for the variable.
@@ -120,8 +120,8 @@ public unsafe struct VariableLayoutReflection
     /// <summary>
     /// Gets the semantic index for the variable.
     /// </summary>
-    public readonly nuint SemanticIndex =>
-        spReflectionVariableLayout_GetSemanticIndex(_ptr);
+    public readonly uint SemanticIndex =>
+        (uint)spReflectionVariableLayout_GetSemanticIndex(_ptr);
 
     /// <summary>
     /// Gets the shader stage associated with the variable.

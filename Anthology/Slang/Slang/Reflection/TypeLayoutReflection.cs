@@ -48,16 +48,16 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category to query size for.</param>
     /// <returns>The size in bytes.</returns>
-    public readonly nuint GetSize(ParameterCategory category) =>
-        spReflectionTypeLayout_GetSize(_ptr, category);
+    public readonly uint GetSize(ParameterCategory category) =>
+        (uint)spReflectionTypeLayout_GetSize(_ptr, category);
 
     /// <summary>
     /// Gets the stride in bytes between consecutive elements of this type for the specified parameter category.
     /// </summary>
     /// <param name="category">The parameter category to query stride for.</param>
     /// <returns>The stride in bytes.</returns>
-    public readonly nuint GetStride(ParameterCategory category) =>
-        spReflectionTypeLayout_GetStride(_ptr, category);
+    public readonly uint GetStride(ParameterCategory category) =>
+        (uint)spReflectionTypeLayout_GetStride(_ptr, category);
 
     /// <summary>
     /// Gets the alignment requirement in bytes for this type for the specified parameter category.
@@ -132,22 +132,22 @@ public unsafe struct TypeLayoutReflection
     /// Gets the number of elements in this array type.
     /// Only applicable when <see cref="IsArray"/> is true.
     /// </summary>
-    public readonly nuint ElementCount =>
-        ReflectionType.ElementCount;
+    public readonly uint ElementCount =>
+        (uint)ReflectionType.ElementCount;
 
     /// <summary>
     /// Gets the total number of elements across all dimensions for a multi-dimensional array.
     /// </summary>
-    public readonly nuint TotalArrayElementCount =>
-        ReflectionType.GetTotalArrayElementCount();
+    public readonly uint TotalArrayElementCount =>
+        (uint)ReflectionType.GetTotalArrayElementCount();
 
     /// <summary>
     /// Gets the stride between consecutive elements in this array for the specified parameter category.
     /// </summary>
     /// <param name="category">The parameter category to query stride for.</param>
     /// <returns>The element stride in bytes.</returns>
-    public readonly nuint GetElementStride(ParameterCategory category) =>
-        spReflectionTypeLayout_GetElementStride(_ptr, category);
+    public readonly uint GetElementStride(ParameterCategory category) =>
+        (uint)spReflectionTypeLayout_GetElementStride(_ptr, category);
 
     /// <summary>
     /// Gets the type layout of elements in this array type.

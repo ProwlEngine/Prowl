@@ -95,14 +95,14 @@ public unsafe struct ShaderReflection
     /// <summary>
     /// Gets the binding index for the global constant buffer, if one exists.
     /// </summary>
-    public readonly nuint GlobalConstantBufferBinding =>
-        spReflection_getGlobalConstantBufferBinding(_ptr);
+    public readonly uint GlobalConstantBufferBinding =>
+        (uint)spReflection_getGlobalConstantBufferBinding(_ptr);
 
     /// <summary>
     /// Gets the size in bytes of the global constant buffer, if one exists.
     /// </summary>
-    public readonly nuint GlobalConstantBufferSize =>
-        spReflection_getGlobalConstantBufferSize(_ptr);
+    public readonly uint GlobalConstantBufferSize =>
+        (uint)spReflection_getGlobalConstantBufferSize(_ptr);
 
     /// <summary>
     /// Finds a type by its name in the shader.
@@ -219,14 +219,18 @@ public unsafe struct ShaderReflection
     /// <summary>
     /// Gets the count of hashed strings in the shader reflection data.
     /// </summary>
-    public readonly nuint HashedStringCount =>
-        spReflection_getHashedStringCount(_ptr);
+    public readonly uint HashedStringCount =>
+        (uint)spReflection_getHashedStringCount(_ptr);
 
     /// <summary>
     /// Gets a hashed string by its index and returns additional count information.
     /// </summary>
-    public readonly string GetHashedString(nuint index, out nuint outCount) =>
-        spReflection_getHashedString(_ptr, index, out outCount).String;
+    public readonly string GetHashedString(uint index, out uint outCount)
+    {
+        string hashed = spReflection_getHashedString(_ptr, index, out nuint nOutCount).String;
+        outCount = (uint)nOutCount;
+        return hashed;
+    }
 
     /// <summary>
     /// Gets the type layout for global shader parameters.

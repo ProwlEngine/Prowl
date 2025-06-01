@@ -83,19 +83,19 @@ public unsafe struct TypeReflection
     /// Gets the number of elements in this array type.
     /// Only meaningful when <see cref="IsArray"/> is true.
     /// </summary>
-    public readonly nuint ElementCount =>
-        spReflectionType_GetElementCount(_ptr);
+    public readonly uint ElementCount =>
+        (uint)spReflectionType_GetElementCount(_ptr);
 
     /// <summary>
     /// Calculates the total number of elements across all dimensions for multi-dimensional arrays.
     /// </summary>
     /// <returns>The total element count, or 0 if this is not an array type.</returns>
-    public readonly nuint GetTotalArrayElementCount()
+    public readonly uint GetTotalArrayElementCount()
     {
         if (!IsArray)
             return 0;
 
-        nuint result = 1;
+        uint result = 1;
         TypeReflection type = this;
         for (; ; )
         {

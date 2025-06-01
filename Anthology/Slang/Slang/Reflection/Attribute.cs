@@ -83,8 +83,10 @@ public unsafe struct Attribute
     public readonly string? GetArgumentValueString(uint index)
     {
         ConstU8Str str = spReflectionUserAttribute_GetArgumentValueString(_ptr, index, out nuint outSize);
+
         if (outSize == 0)
             return null;
+
         return System.Text.Encoding.UTF8.GetString(str.Data, (int)outSize);
     }
 }
