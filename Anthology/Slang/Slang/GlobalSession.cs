@@ -298,37 +298,37 @@ public static unsafe class GlobalSession
     }
 
 
-    /// <summary>
-    /// Parse slangc command line options into a SessionDesc that can be used to create a session
-    /// with all the compiler options specified in the command line.
-    /// </summary>
-    /// <param name="args">The command line arguments.</param>
-    /// <returns>The resulting parsed session description.</returns>
-    public static SessionDescription ParseCommandLineArguments(string[] args)
-    {
-        U8Str[] strs = [.. args.Select(U8Str.Alloc)];
+    // <summary>
+    // Parse slangc command line options into a SessionDesc that can be used to create a session
+    // with all the compiler options specified in the command line.
+    // </summary>
+    // <param name="args">The command line arguments.</param>
+    // <returns>The resulting parsed session description.</returns>
+    // public static SessionDescription ParseCommandLineArguments(string[] args)
+    // {
+    //     U8Str[] strs = [.. args.Select(U8Str.Alloc)];
 
-        ConstU8Str* strsPtr = stackalloc ConstU8Str[strs.Length];
+    //     ConstU8Str* strsPtr = stackalloc ConstU8Str[strs.Length];
 
-        for (int i = 0; i < strs.Length; i++)
-            strsPtr[i] = strs[i];
+    //     for (int i = 0; i < strs.Length; i++)
+    //         strsPtr[i] = strs[i];
 
-        try
-        {
-            Native.SessionDescription* outSession = null;
+    //     try
+    //     {
+    //         Native.SessionDescription* outSession = null;
 
-            s_session.ParseCommandLineArguments(strs.Length, strsPtr, outSession, out IUnknown* allocationPtr)
-                .Throw($"Failure to parse command-line arguments. (Arguments: \'{string.Join(" ", args)}\')");
+    //         s_session.ParseCommandLineArguments(strs.Length, strsPtr, outSession, out IUnknown* allocationPtr)
+    //             .Throw($"Failure to parse command-line arguments. (Arguments: \'{string.Join(" ", args)}\')");
 
-            IUnknown allocation = NativeComProxy.Create(allocationPtr);
+    //         IUnknown allocation = NativeComProxy.Create(allocationPtr);
 
-            return outSession->Read();
-        }
-        finally
-        {
-            Array.ForEach(strs, U8Str.Free);
-        }
-    }
+    //         return outSession->Read();
+    //     }
+    //     finally
+    //     {
+    //         Array.ForEach(strs, U8Str.Free);
+    //     }
+    // }
 
     /// <summary>
     /// Computes a digest that uniquely identifies the session description.
