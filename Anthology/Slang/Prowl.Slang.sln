@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModelViewer", "Samples\Mode
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Triangle", "Samples\Triangle\Triangle.csproj", "{686F4F67-D4D5-4EE0-827E-71BF43662920}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj", "{0D81F071-F661-4CFD-AF60-71949BA42A6C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,6 +40,10 @@ Global
 		{686F4F67-D4D5-4EE0-827E-71BF43662920}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{686F4F67-D4D5-4EE0-827E-71BF43662920}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{686F4F67-D4D5-4EE0-827E-71BF43662920}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0D81F071-F661-4CFD-AF60-71949BA42A6C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D81F071-F661-4CFD-AF60-71949BA42A6C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D81F071-F661-4CFD-AF60-71949BA42A6C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D81F071-F661-4CFD-AF60-71949BA42A6C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{421ECB02-37C1-4E38-ADEE-55D868690375} = {E931F19C-0E2D-4737-B9F5-2D6535B2028A}
