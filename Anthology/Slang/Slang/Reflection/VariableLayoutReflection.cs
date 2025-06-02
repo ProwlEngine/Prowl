@@ -76,7 +76,7 @@ public unsafe struct VariableLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category.</param>
     /// <returns>The byte offset for the variable.</returns>
-    public readonly uint GetOffset(ParameterCategory category) =>
+    public readonly uint GetOffset(ParameterCategory category = ParameterCategory.Uniform) =>
         (uint)spReflectionVariableLayout_GetOffset(_ptr, category);
 
     /// <summary>
