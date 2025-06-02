@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -22,7 +23,7 @@ internal unsafe struct ProxyVTable
 
 internal static partial class ProxyEmitter
 {
-    private static Dictionary<MethodInfo, MethodInfo> s_staticProxyMethods = [];
+    private static ConcurrentDictionary<MethodInfo, MethodInfo> s_staticProxyMethods = [];
 
 
     public static MethodInfo GetProxyMethod(MethodInfo method)

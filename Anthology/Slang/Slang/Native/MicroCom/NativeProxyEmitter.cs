@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -13,7 +14,7 @@ namespace Prowl.Slang.Native;
 
 internal static partial class ProxyEmitter
 {
-    private static Dictionary<Type, Type> s_nativeProxyCache = [];
+    private static ConcurrentDictionary<Type, Type> s_nativeProxyCache = [];
 
 
     public static unsafe T CreateNativeProxy<T>(T* nativeInterfacePtr, bool releaseOnFinalizer = true) where T : IUnknown
@@ -33,7 +34,9 @@ internal static partial class ProxyEmitter
         ValidateInterface<T>();
 
         if (!s_nativeProxyCache.TryGetValue(typeof(T), out Type? proxyType))
+        {
             s_nativeProxyCache[typeof(T)] = proxyType = CreateNativeProxyType(typeof(T));
+        }
 
         return proxyType;
     }
@@ -109,7 +112,8 @@ internal static partial class ProxyEmitter
 
     private static Type CreateNativeProxyType(Type type)
     {
-        TypeBuilder builder = ModuleBuilder.DefineType(GetNativeProxyName(type), TypeAttributes.Public | TypeAttributes.Sealed, typeof(NativeComProxy), [type]);
+        string name = GetNativeProxyName(type);
+        TypeBuilder builder = ModuleBuilder.DefineType(name, TypeAttributes.Public | TypeAttributes.Sealed, typeof(NativeComProxy), [type]);
 
         FieldInfo comPtrField = typeof(NativeComProxy).GetField("_comPtr", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
