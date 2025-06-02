@@ -1,12 +1,11 @@
-
 namespace Prowl.Slang.Test;
 
 // Test metal argument buffer tier2 layout rules.
 
-public class MetalArgumentBufferTier2ReflectionTest
+public class MetalArgumentBufferTier2Reflection
 {
     [Fact]
-    public void MetalArgumentBufferTier2Reflection()
+    public void MetalArgumentBufferTier2ReflectionTest()
     {
         const string userSourceBody =
 """
@@ -32,13 +31,13 @@ void computeMain()
 }
 """;
 
-        TargetDescription targetDesc = new TargetDescription
+        TargetDescription targetDesc = new()
         {
             Format = CompileTarget.Spirv,
             Profile = GlobalSession.FindProfile("spirv_1_5")
         };
 
-        SessionDescription sessionDesc = new SessionDescription
+        SessionDescription sessionDesc = new()
         {
             Targets = [targetDesc],
         };
@@ -51,16 +50,16 @@ void computeMain()
             userSourceBody,
             out _);
 
-        ShaderReflection layout = module.GetLayout(0, out _);
+        ShaderReflection layout = module.GetLayout();
 
         TypeReflection type = layout.FindTypeByName("A");
         TypeLayoutReflection typeLayout = layout.GetTypeLayout(type, LayoutRules.MetalArgumentBufferTier2);
 
-        Assert.Equal((uint)0, typeLayout.GetFieldByIndex(0).GetOffset(ParameterCategory.None));
-        Assert.Equal((uint)16, typeLayout.GetFieldByIndex(0).TypeLayout.GetSize(ParameterCategory.));
-        Assert.Equal((uint)16, typeLayout.GetFieldByIndex(1).GetOffset(ParameterCategory.None));
-        Assert.Equal((uint)16, typeLayout.GetFieldByIndex(1).TypeLayout.GetSize(ParameterCategory.None));
-        Assert.Equal((uint)32, typeLayout.GetFieldByIndex(2).GetOffset(ParameterCategory.None));
-        Assert.Equal((uint)4, typeLayout.GetFieldByIndex(2).TypeLayout.GetSize(ParameterCategory.None));
+        Assert.Equal(0U, typeLayout.GetFieldByIndex(0).GetOffset());
+        Assert.Equal(16U, typeLayout.GetFieldByIndex(0).TypeLayout.GetSize());
+        Assert.Equal(16U, typeLayout.GetFieldByIndex(1).GetOffset());
+        Assert.Equal(16U, typeLayout.GetFieldByIndex(1).TypeLayout.GetSize());
+        Assert.Equal(32U, typeLayout.GetFieldByIndex(2).GetOffset());
+        Assert.Equal(4U, typeLayout.GetFieldByIndex(2).TypeLayout.GetSize());
     }
 }
