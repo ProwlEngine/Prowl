@@ -71,6 +71,27 @@ public enum SlangBindableResourceType : int
 
 
 /// <summary>
+/// Modifiers that can be applied to a shader variable or function.
+/// </summary>
+public enum ModifierID : uint
+{
+#pragma warning disable CS1591
+    Shared,
+    NoDiff,
+    Static,
+    Const,
+    Export,
+    Extern,
+    Differentiable,
+    Mutating,
+    In,
+    Out,
+    InOut
+#pragma warning restore CS1591
+}
+
+
+/// <summary>
 /// Compilation targets for a session.
 /// </summary>
 public enum CompileTarget : int
@@ -1105,7 +1126,7 @@ public enum SlangWriterMode : uint
 /// <summary>
 /// Forward declarations of types used in the reflection interface.
 /// </summary>
-public enum ReflectionGenericArgType : int
+public enum GenericArgType : int
 {
     /// <summary>
     /// A type that is not a generic argument, but rather a regular type.
