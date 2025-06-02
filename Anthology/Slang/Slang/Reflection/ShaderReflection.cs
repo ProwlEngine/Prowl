@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Slang.Native;
 
@@ -185,16 +186,16 @@ public unsafe struct ShaderReflection
     /// </summary>
     public readonly GenericReflection SpecializeGeneric(
         GenericReflection generic,
-        (ReflectionGenericArgType, GenericArgReflection)[] specializationArgs,
+        GenericTypeArgument[] specializationArgs,
         out DiagnosticInfo diagnostics)
     {
-        ReflectionGenericArgType* specializationArgTypes = stackalloc ReflectionGenericArgType[specializationArgs.Length];
-        Native.GenericArgReflection* specializationArgVals = stackalloc Native.GenericArgReflection[specializationArgs.Length];
+        GenericArgType* specializationArgTypes = stackalloc GenericArgType[specializationArgs.Length];
+        GenericArgReflection* specializationArgVals = stackalloc GenericArgReflection[specializationArgs.Length];
 
         for (int i = 0; i < specializationArgs.Length; i++)
         {
-            specializationArgTypes[i] = specializationArgs[i].Item1;
-            specializationArgVals[i] = specializationArgs[i].Item2.ToNative();
+            specializationArgTypes[i] = specializationArgs[i].Type;
+            specializationArgVals[i] = specializationArgs[i].ToArgReflection();
         }
 
         Native.GenericReflection* genericPtr = spReflection_specializeGeneric(
