@@ -397,6 +397,11 @@ a generic parameter that has not been bound to a specific value, this function r
     public static unsafe partial nuint spReflectionVariableLayout_GetSemanticIndex(
         VariableLayoutReflection* var);
 
+    [LibraryImport(LibName)]
+    public static unsafe partial Modifier* spReflectionVariable_FindModifier(
+        VariableReflection* var,
+        ModifierID modifierID);
+
     // Function Reflection
     [LibraryImport(LibName)]
     public static unsafe partial ConstU8Str spReflectionFunction_GetName(FunctionReflection* func);
@@ -453,6 +458,11 @@ a generic parameter that has not been bound to a specific value, this function r
     public static unsafe partial FunctionReflection* spReflectionFunction_getOverload(
         FunctionReflection* func,
         uint index);
+
+    [LibraryImport(LibName)]
+    public static unsafe partial Modifier* spReflectionFunction_FindModifier(
+        FunctionReflection* var,
+        ModifierID modifierID);
 
     // Abstract Decl Reflection
 
@@ -732,7 +742,7 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
         ShaderReflection* inProgramLayout,
         GenericReflection* generic,
         SlangInt argCount,
-        ReflectionGenericArgType* argTypes,
+        GenericArgType* argTypes,
         GenericArgReflection* args,
         out ISlangBlob* outDiagnostics);
 
