@@ -20,9 +20,7 @@ internal static partial class ProxyEmitter
         AssemblyName aName = new("COMProxy");
 
         if (_assemblyBuilder == null)
-        {
             _assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(aName, AssemblyBuilderAccess.Run);
-        }
 
         if (_moduleBuilder == null)
             _moduleBuilder = _assemblyBuilder.DefineDynamicModule(aName.Name ?? "COMProxy");
