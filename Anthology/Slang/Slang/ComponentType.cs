@@ -162,6 +162,12 @@ public unsafe class ComponentType
         return new ShaderReflection(reflectionPtr, this);
     }
 
+    /// <inheritdoc cref="GetLayout(nint, out DiagnosticInfo)"/>
+    public ShaderReflection GetLayout()
+    {
+        return GetLayout(0, out _);
+    }
+
     /// <summary>
     /// Get the number of (unspecialized) specialization parameters for the component type.
     /// </summary>
