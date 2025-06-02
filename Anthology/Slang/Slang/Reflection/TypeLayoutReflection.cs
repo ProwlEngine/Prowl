@@ -270,7 +270,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>The binding type at the specified index.</returns>
-    public readonly BindingType GetBindingRangeType(nint index) =>
+    public readonly BindingType GetBindingRangeType(int index) =>
         spReflectionTypeLayout_getBindingRangeType(_ptr, index);
 
     /// <summary>
@@ -278,7 +278,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>True if the binding range is specializable; otherwise, false.</returns>
-    public readonly bool IsBindingRangeSpecializable(nint index) =>
+    public readonly bool IsBindingRangeSpecializable(int index) =>
         spReflectionTypeLayout_isBindingRangeSpecializable(_ptr, index) == 1;
 
     /// <summary>
@@ -286,7 +286,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>The number of bindings in the range.</returns>
-    public readonly nint GetBindingRangeBindingCount(nint index) =>
+    public readonly nint GetBindingRangeBindingCount(int index) =>
         spReflectionTypeLayout_getBindingRangeBindingCount(_ptr, index);
 
     /// <summary>
@@ -294,7 +294,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="fieldIndex">The zero-based index of the field.</param>
     /// <returns>The binding range offset for the field.</returns>
-    public readonly nint GetFieldBindingRangeOffset(nint fieldIndex) =>
+    public readonly nint GetFieldBindingRangeOffset(int fieldIndex) =>
         spReflectionTypeLayout_getFieldBindingRangeOffset(_ptr, fieldIndex);
 
     /// <summary>
@@ -308,7 +308,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>The leaf type layout for the binding range.</returns>
-    public readonly TypeLayoutReflection GetBindingRangeLeafTypeLayout(nint index) =>
+    public readonly TypeLayoutReflection GetBindingRangeLeafTypeLayout(int index) =>
         new(spReflectionTypeLayout_getBindingRangeLeafTypeLayout(_ptr, index), _component);
 
     /// <summary>
@@ -316,7 +316,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>The leaf variable for the binding range.</returns>
-    public readonly VariableReflection GetBindingRangeLeafVariable(nint index) =>
+    public readonly VariableReflection GetBindingRangeLeafVariable(int index) =>
         new(spReflectionTypeLayout_getBindingRangeLeafVariable(_ptr, index), _component);
 
     /// <summary>
@@ -324,7 +324,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>The image format for the binding range.</returns>
-    public readonly ImageFormat GetBindingRangeImageFormat(nint index) =>
+    public readonly ImageFormat GetBindingRangeImageFormat(int index) =>
         spReflectionTypeLayout_getBindingRangeImageFormat(_ptr, index);
 
     /// <summary>
@@ -332,7 +332,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>The descriptor set index for the binding range.</returns>
-    public readonly nint GetBindingRangeDescriptorSetIndex(nint index) =>
+    public readonly nint GetBindingRangeDescriptorSetIndex(int index) =>
         spReflectionTypeLayout_getBindingRangeDescriptorSetIndex(_ptr, index);
 
     /// <summary>
@@ -340,7 +340,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>The first descriptor range index for the binding range.</returns>
-    public readonly nint GetBindingRangeFirstDescriptorRangeIndex(nint index) =>
+    public readonly nint GetBindingRangeFirstDescriptorRangeIndex(int index) =>
         spReflectionTypeLayout_getBindingRangeFirstDescriptorRangeIndex(_ptr, index);
 
     /// <summary>
@@ -348,7 +348,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="index">The zero-based index of the binding range.</param>
     /// <returns>The descriptor range count for the binding range.</returns>
-    public readonly nint GetBindingRangeDescriptorRangeCount(nint index) =>
+    public readonly nint GetBindingRangeDescriptorRangeCount(int index) =>
         spReflectionTypeLayout_getBindingRangeDescriptorRangeCount(_ptr, index);
 
     /// <summary>
@@ -362,7 +362,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="setIndex">The zero-based index of the descriptor set.</param>
     /// <returns>The space offset for the descriptor set.</returns>
-    public readonly nint GetDescriptorSetSpaceOffset(nint setIndex) =>
+    public readonly nint GetDescriptorSetSpaceOffset(int setIndex) =>
         spReflectionTypeLayout_getDescriptorSetSpaceOffset(_ptr, setIndex);
 
     /// <summary>
@@ -370,7 +370,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="setIndex">The zero-based index of the descriptor set.</param>
     /// <returns>The number of descriptor ranges in the descriptor set.</returns>
-    public readonly nint GetDescriptorSetDescriptorRangeCount(nint setIndex) =>
+    public readonly nint GetDescriptorSetDescriptorRangeCount(int setIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeCount(_ptr, setIndex);
 
     /// <summary>
@@ -379,7 +379,7 @@ public unsafe struct TypeLayoutReflection
     /// <param name="setIndex">The zero-based index of the descriptor set.</param>
     /// <param name="rangeIndex">The zero-based index of the range.</param>
     /// <returns>The descriptor range index offset.</returns>
-    public readonly nint GetDescriptorSetDescriptorRangeIndexOffset(nint setIndex, nint rangeIndex) =>
+    public readonly nint GetDescriptorSetDescriptorRangeIndexOffset(int setIndex, int rangeIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeIndexOffset(_ptr, setIndex, rangeIndex);
 
     /// <summary>
@@ -388,7 +388,7 @@ public unsafe struct TypeLayoutReflection
     /// <param name="setIndex">The zero-based index of the descriptor set.</param>
     /// <param name="rangeIndex">The zero-based index of the range.</param>
     /// <returns>The descriptor count in the range.</returns>
-    public readonly nint GetDescriptorSetDescriptorRangeDescriptorCount(nint setIndex, nint rangeIndex) =>
+    public readonly nint GetDescriptorSetDescriptorRangeDescriptorCount(int setIndex, int rangeIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeDescriptorCount(_ptr, setIndex, rangeIndex);
 
     /// <summary>
@@ -397,7 +397,7 @@ public unsafe struct TypeLayoutReflection
     /// <param name="setIndex">The zero-based index of the descriptor set.</param>
     /// <param name="rangeIndex">The zero-based index of the range.</param>
     /// <returns>The binding type for the descriptor range.</returns>
-    public readonly BindingType GetDescriptorSetDescriptorRangeType(nint setIndex, nint rangeIndex) =>
+    public readonly BindingType GetDescriptorSetDescriptorRangeType(int setIndex, int rangeIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeType(_ptr, setIndex, rangeIndex);
 
     /// <summary>
@@ -406,7 +406,7 @@ public unsafe struct TypeLayoutReflection
     /// <param name="setIndex">The zero-based index of the descriptor set.</param>
     /// <param name="rangeIndex">The zero-based index of the range.</param>
     /// <returns>The parameter category for the descriptor range.</returns>
-    public readonly ParameterCategory GetDescriptorSetDescriptorRangeCategory(nint setIndex, nint rangeIndex) =>
+    public readonly ParameterCategory GetDescriptorSetDescriptorRangeCategory(int setIndex, int rangeIndex) =>
         spReflectionTypeLayout_getDescriptorSetDescriptorRangeCategory(_ptr, setIndex, rangeIndex);
 
     /// <summary>
@@ -420,7 +420,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="subObjectRangeIndex">The zero-based index of the sub-object range.</param>
     /// <returns>The binding range index for the sub-object range.</returns>
-    public readonly nint GetSubObjectRangeBindingRangeIndex(nint subObjectRangeIndex) =>
+    public readonly nint GetSubObjectRangeBindingRangeIndex(int subObjectRangeIndex) =>
         spReflectionTypeLayout_getSubObjectRangeBindingRangeIndex(_ptr, subObjectRangeIndex);
 
     /// <summary>
@@ -428,7 +428,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="subObjectRangeIndex">The zero-based index of the sub-object range.</param>
     /// <returns>The space offset for the sub-object range.</returns>
-    public readonly nint GetSubObjectRangeSpaceOffset(nint subObjectRangeIndex) =>
+    public readonly nint GetSubObjectRangeSpaceOffset(int subObjectRangeIndex) =>
         spReflectionTypeLayout_getSubObjectRangeSpaceOffset(_ptr, subObjectRangeIndex);
 
     /// <summary>
@@ -436,7 +436,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="subObjectRangeIndex">The zero-based index of the sub-object range.</param>
     /// <returns>The variable layout offset for the sub-object range.</returns>
-    public readonly VariableLayoutReflection GetSubObjectRangeOffset(nint subObjectRangeIndex) =>
+    public readonly VariableLayoutReflection GetSubObjectRangeOffset(int subObjectRangeIndex) =>
         new(spReflectionTypeLayout_getSubObjectRangeOffset(_ptr, subObjectRangeIndex), _component);
 
 
