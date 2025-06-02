@@ -139,4 +139,32 @@ public unsafe struct GenericReflection
     /// <returns>A new <see cref="GenericReflection"/> with the specializations applied.</returns>
     public readonly GenericReflection ApplySpecializations(GenericReflection generic) =>
         new(spReflectionGeneric_applySpecializations(_ptr, generic._ptr), _component);
+
+
+    /// <inheritdoc/>
+    public static bool operator ==(GenericReflection a, GenericReflection b)
+    {
+        return a._ptr == b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public static bool operator !=(GenericReflection a, GenericReflection b)
+    {
+        return a._ptr != b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is GenericReflection other)
+            return other._ptr == _ptr;
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((nint)_ptr).ToInt32();
 }

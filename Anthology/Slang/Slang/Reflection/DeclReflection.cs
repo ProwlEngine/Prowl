@@ -180,4 +180,32 @@ public unsafe struct DeclReflection
     /// </returns>
     public readonly IEnumerable<DeclReflection> GetChildrenOfKind(DeclKind kind) =>
         Children.Where(x => x.Kind == kind);
+
+
+    /// <inheritdoc/>
+    public static bool operator ==(DeclReflection a, DeclReflection b)
+    {
+        return a._ptr == b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public static bool operator !=(DeclReflection a, DeclReflection b)
+    {
+        return a._ptr != b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is DeclReflection other)
+            return other._ptr == _ptr;
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((nint)_ptr).ToInt32();
 }

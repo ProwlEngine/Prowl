@@ -221,4 +221,32 @@ public unsafe struct TypeReflection
     /// </summary>
     public readonly GenericReflection GenericContainer =>
         new(spReflectionType_GetGenericContainer(_ptr), _component);
+
+
+    /// <inheritdoc/>
+    public static bool operator ==(TypeReflection a, TypeReflection b)
+    {
+        return a._ptr == b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public static bool operator !=(TypeReflection a, TypeReflection b)
+    {
+        return a._ptr != b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is TypeReflection other)
+            return other._ptr == _ptr;
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((nint)_ptr).ToInt32();
 }

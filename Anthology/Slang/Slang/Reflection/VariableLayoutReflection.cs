@@ -134,4 +134,37 @@ public unsafe struct VariableLayoutReflection
     /// </summary>
     public readonly VariableLayoutReflection PendingDataLayout =>
         new(spReflectionVariableLayout_getPendingDataLayout(_ptr), _component);
+
+
+    /// <inheritdoc cref="VariableReflection.HasModifier(ModifierID)"/>
+    public readonly bool HasModifier(ModifierID id) =>
+        Variable.HasModifier(id);
+
+
+    /// <inheritdoc/>
+    public static bool operator ==(VariableLayoutReflection a, VariableLayoutReflection b)
+    {
+        return a._ptr == b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public static bool operator !=(VariableLayoutReflection a, VariableLayoutReflection b)
+    {
+        return a._ptr != b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is VariableLayoutReflection other)
+            return other._ptr == _ptr;
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((nint)_ptr).ToInt32();
 }

@@ -438,4 +438,32 @@ public unsafe struct TypeLayoutReflection
     /// <returns>The variable layout offset for the sub-object range.</returns>
     public readonly VariableLayoutReflection GetSubObjectRangeOffset(nint subObjectRangeIndex) =>
         new(spReflectionTypeLayout_getSubObjectRangeOffset(_ptr, subObjectRangeIndex), _component);
+
+
+    /// <inheritdoc/>
+    public static bool operator ==(TypeLayoutReflection a, TypeLayoutReflection b)
+    {
+        return a._ptr == b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public static bool operator !=(TypeLayoutReflection a, TypeLayoutReflection b)
+    {
+        return a._ptr != b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is TypeLayoutReflection other)
+            return other._ptr == _ptr;
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((nint)_ptr).ToInt32();
 }

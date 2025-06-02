@@ -121,4 +121,32 @@ public unsafe struct EntryPointReflection
     /// <returns>True if the entry point has a default constant buffer; otherwise, false.</returns>
     public readonly bool HasDefaultConstantBuffer =>
         spReflectionEntryPoint_hasDefaultConstantBuffer(_ptr) != 0;
+
+
+    /// <inheritdoc/>
+    public static bool operator ==(EntryPointReflection a, EntryPointReflection b)
+    {
+        return a._ptr == b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public static bool operator !=(EntryPointReflection a, EntryPointReflection b)
+    {
+        return a._ptr != b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is EntryPointReflection other)
+            return other._ptr == _ptr;
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((nint)_ptr).ToInt32();
 }

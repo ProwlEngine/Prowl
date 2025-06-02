@@ -59,4 +59,32 @@ public unsafe struct TypeParameterReflection
     /// <returns>An enumerable collection of <see cref="TypeReflection"/> objects representing all constraints.</returns>
     public readonly IEnumerable<TypeReflection> GetConstraints() =>
         Utility.For(ConstraintCount, GetConstraintByIndex);
+
+
+    /// <inheritdoc/>
+    public static bool operator ==(TypeParameterReflection a, TypeParameterReflection b)
+    {
+        return a._ptr == b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public static bool operator !=(TypeParameterReflection a, TypeParameterReflection b)
+    {
+        return a._ptr != b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is TypeParameterReflection other)
+            return other._ptr == _ptr;
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((nint)_ptr).ToInt32();
 }

@@ -113,4 +113,38 @@ public unsafe struct VariableReflection
     /// <returns>A new variable reflection with the applied specializations.</returns>
     public readonly VariableReflection ApplySpecializations(GenericReflection generic) =>
         new(spReflectionVariable_applySpecializations(_ptr, generic._ptr), _component);
+
+    /// <summary>
+    /// Indicates whether this variable has a specific modifier.
+    /// </summary>
+    public readonly bool HasModifier(ModifierID id) =>
+        spReflectionVariable_FindModifier(_ptr, id) != null;
+
+
+    /// <inheritdoc/>
+    public static bool operator ==(VariableReflection a, VariableReflection b)
+    {
+        return a._ptr == b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public static bool operator !=(VariableReflection a, VariableReflection b)
+    {
+        return a._ptr != b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is VariableReflection other)
+            return other._ptr == _ptr;
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((nint)_ptr).ToInt32();
 }

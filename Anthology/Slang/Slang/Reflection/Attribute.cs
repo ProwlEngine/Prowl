@@ -89,4 +89,32 @@ public unsafe struct Attribute
 
         return System.Text.Encoding.UTF8.GetString(str.Data, (int)outSize);
     }
+
+
+    /// <inheritdoc/>
+    public static bool operator ==(Attribute a, Attribute b)
+    {
+        return a._ptr == b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public static bool operator !=(Attribute a, Attribute b)
+    {
+        return a._ptr != b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is Attribute attr)
+            return attr._ptr == _ptr;
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((nint)_ptr).ToInt32();
 }

@@ -255,4 +255,32 @@ public unsafe struct ShaderReflection
 
         return NativeComProxy.Create(outJsonPtr).GetString();
     }
+
+
+    /// <inheritdoc/>
+    public static bool operator ==(ShaderReflection a, ShaderReflection b)
+    {
+        return a._ptr == b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public static bool operator !=(ShaderReflection a, ShaderReflection b)
+    {
+        return a._ptr != b._ptr;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is ShaderReflection other)
+            return other._ptr == _ptr;
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((nint)_ptr).ToInt32();
 }
