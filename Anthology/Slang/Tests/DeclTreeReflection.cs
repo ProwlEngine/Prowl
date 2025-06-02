@@ -3,24 +3,6 @@ namespace Prowl.Slang.Test;
 
 public class DeclTreeReflection
 {
-    static void PrintRefl(DeclReflection refl, uint level = 0)
-    {
-        // Mapping of kind ids to names
-        string[] names = { "Unsupported", "Struct", "Function", "Module", "Generic", "Variable" };
-
-        for (uint i = 0; i < level; i++)
-        {
-            Console.Write("  ");
-        }
-
-        Console.WriteLine($"[{names[(uint)refl.Kind]}] ({refl.ChildrenCount})");
-
-        foreach (DeclReflection child in refl.Children)
-        {
-            PrintRefl(child, level + 1);
-        }
-    }
-
     // Test that the reflection API provides correct info about entry point and ordinary functions.
 
     [Fact]
