@@ -48,7 +48,7 @@ public unsafe struct TypeLayoutReflection
     /// </summary>
     /// <param name="category">The parameter category to query size for.</param>
     /// <returns>The size in bytes.</returns>
-    public readonly uint GetSize(ParameterCategory category) =>
+    public readonly uint GetSize(ParameterCategory category = ParameterCategory.Uniform) =>
         (uint)spReflectionTypeLayout_GetSize(_ptr, category);
 
     /// <summary>
