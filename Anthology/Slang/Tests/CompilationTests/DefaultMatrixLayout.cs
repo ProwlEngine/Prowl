@@ -4,6 +4,7 @@ namespace Prowl.Slang.Test;
 public class DefaultMatrixLayout
 {
     [Fact]
+    [DisplayTestMethodName]
     public void DefaultMatrixLayoutTest()
     {
         // Source for a module that contains an undecorated entrypoint.
@@ -32,11 +33,7 @@ void main(uniform float3x4 m)
 
         Session session = GlobalSession.CreateSession(sessionDesc);
 
-        Module module = session.LoadModuleFromSourceString(
-            "m",
-            "m.slang",
-            userSourceBody,
-            out _);
+        Module module = session.LoadModuleFromSourceString("m", "m.slang", userSourceBody, out _);
 
         EntryPoint entry = module.FindEntryPointByName("main");
 

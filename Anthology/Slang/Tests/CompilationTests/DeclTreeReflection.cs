@@ -6,6 +6,7 @@ public class DeclTreeReflection
     // Test that the reflection API provides correct info about entry point and ordinary functions.
 
     [Fact]
+    [DisplayTestMethodName]
     public void DeclTreeReflectionTest()
     {
         // Source for a module that contains an undecorated entrypoint.
@@ -73,20 +74,11 @@ T foo<T, U>(T t, U u) { return t; }
 
         Session session = GlobalSession.CreateSession(sessionDesc);
 
-        Module module = session.LoadModuleFromSourceString(
-            "m",
-            "m.slang",
-            userSourceBody,
-            out _);
+        Module module = session.LoadModuleFromSourceString("m", "m.slang", userSourceBody, out _);
 
-        EntryPoint entryPoint = module.FindAndCheckEntryPoint(
-            "fragMain",
-            ShaderStage.Fragment,
-            out _);
+        EntryPoint entryPoint = module.FindAndCheckEntryPoint("fragMain", ShaderStage.Fragment, out _);
 
-        ComponentType compositeProgram = session.CreateCompositeComponentType(
-            [module, entryPoint],
-            out _);
+        ComponentType compositeProgram = session.CreateCompositeComponentType([module, entryPoint], out _);
 
         DeclReflection moduleDeclReflection = module.GetModuleReflection();
 

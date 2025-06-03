@@ -9,6 +9,7 @@ public class FcpwCompile
 
 
     [Fact]
+    [DisplayTestMethodName]
     public void FcpwCompileTest()
     {
         TargetDescription targetDesc = new()
@@ -28,7 +29,7 @@ public class FcpwCompile
             }],
 
             FileProvider = new FileProvider(),
-            SearchPaths = [Path.Join(GetScriptPath(), "Shaders")]
+            SearchPaths = [Path.Join(GetScriptPath(), "../Shaders")]
         };
 
         Session session = GlobalSession.CreateSession(sessionDesc);
@@ -37,9 +38,7 @@ public class FcpwCompile
 
         EntryPoint entryPoint = module.FindEntryPointByName("rayIntersection");
 
-        ComponentType compositeProgram = session.CreateCompositeComponentType(
-            [module, entryPoint],
-            out _);
+        ComponentType compositeProgram = session.CreateCompositeComponentType([module, entryPoint], out _);
 
         ComponentType linkedProgram = compositeProgram.Link(out _);
 

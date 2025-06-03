@@ -3,6 +3,7 @@ namespace Prowl.Slang.Test;
 public class AttributeReflection
 {
     [Fact]
+    [DisplayTestMethodName]
     public void AttributeReflectionTest()
     {
         const string userSourceBody =
@@ -43,11 +44,7 @@ struct TS { };
 
         Session session = GlobalSession.CreateSession(sessionDesc);
 
-        Module module = session.LoadModuleFromSourceString(
-            "m",
-            "m.slang",
-            userSource,
-            out _);
+        Module module = session.LoadModuleFromSourceString("m", "m.slang", userSource, out _);
 
         ShaderReflection reflection = module.GetLayout();
 

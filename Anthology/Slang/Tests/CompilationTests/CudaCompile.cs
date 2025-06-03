@@ -5,6 +5,7 @@ namespace Prowl.Slang.Test;
 public class CudaCompile
 {
     [Fact]
+    [DisplayTestMethodName]
     public void CudaCompileTest()
     {
         // Source for a module that contains an undecorated entrypoint.
@@ -29,11 +30,7 @@ float testExportedFunc(float3 particleRayOrigin)
 
         Session session = GlobalSession.CreateSession(sessionDesc);
 
-        Module module = session.LoadModuleFromSourceString(
-            "m",
-            "m.slang",
-            userSourceBody,
-            out _);
+        Module module = session.LoadModuleFromSourceString("m", "m.slang", userSourceBody, out _);
 
         ComponentType linkedProgram = module.Link(out _);
 

@@ -5,6 +5,7 @@ namespace Prowl.Slang.Test;
 public class MetalArgumentBufferTier2Reflection
 {
     [Fact]
+    [DisplayTestMethodName]
     public void MetalArgumentBufferTier2ReflectionTest()
     {
         const string userSourceBody =
@@ -44,11 +45,7 @@ void computeMain()
 
         Session session = GlobalSession.CreateSession(sessionDesc);
 
-        Module module = session.LoadModuleFromSourceString(
-            "m",
-            "m.slang",
-            userSourceBody,
-            out _);
+        Module module = session.LoadModuleFromSourceString("m", "m.slang", userSourceBody, out _);
 
         ShaderReflection layout = module.GetLayout();
 
