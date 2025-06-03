@@ -304,7 +304,8 @@ class SourceGenerator
             source.AppendLine("using System.Numerics;");
 
         source.AppendLine();
-        source.AppendLine("namespace Prowl.Vector;");
+        source.AppendLine("namespace Prowl.Vector");
+        source.AppendLine("{");
         source.AppendLine();
         source.AppendLine($"/// <summary>");
         source.AppendLine($"/// Represents a {config.Dimensions}-component vector using {config.PrimitiveType} precision.");
@@ -341,6 +342,7 @@ class SourceGenerator
         // Methods
         GenerateMethods(source, config, isFloatingPoint, mathClass);
 
+        source.AppendLine("}");
         source.AppendLine("}");
 
         return source.ToString();
@@ -1302,10 +1304,11 @@ class SourceGenerator
 
         sb.AppendLine("using System.Runtime.CompilerServices;");
         sb.AppendLine();
-        sb.AppendLine($"namespace Prowl.Vector;");
+        sb.AppendLine($"namespace Prowl.Vector");
+        sb.AppendLine("{");
         sb.AppendLine();
         sb.AppendLine($"public partial struct {config.StructName}"); // Generate as partial
-        sb.AppendLine($"{{");
+        sb.AppendLine("{");
 
         int sourceDimension = config.Components.Length;
 
@@ -1321,7 +1324,8 @@ class SourceGenerator
                 GeneratePermutationsRecursive(sb, config, currentSwizzleChars, sourceDimension, outputDim, new int[outputDim], 0);
             }
         }
-        sb.AppendLine($"}}"); // end struct
+        sb.AppendLine("}"); // end struct
+        sb.AppendLine("}"); // end namespace
 
         return sb.ToString();
     }
@@ -1478,7 +1482,8 @@ class SourceGenerator
         source.AppendLine("using System; ");
         source.AppendLine("using System.Runtime.CompilerServices;");
         source.AppendLine();
-        source.AppendLine("namespace Prowl.Vector;");
+        source.AppendLine("namespace Prowl.Vector");
+        source.AppendLine("{");
         source.AppendLine("/// <summary>");
         source.AppendLine("/// A static class containing mathematical functions for vectors and scalars.");
         source.AppendLine("/// </summary>");
@@ -1520,6 +1525,7 @@ class SourceGenerator
         }
 
         source.AppendLine("}");
+        source.AppendLine("}");
 
         return source.ToString();
     }
@@ -1546,7 +1552,8 @@ class SourceGenerator
         sb.AppendLine("using System.Text;");
         sb.AppendLine("using Prowl.Vector;");
         sb.AppendLine();
-        sb.AppendLine($"namespace Prowl.Vector;");
+        sb.AppendLine($"namespace Prowl.Vector");
+        sb.AppendLine("{");
         sb.AppendLine();
         sb.AppendLine($"/// <summary>A {rows}x{cols} matrix of {componentType}s.</summary>");
         sb.AppendLine($"[System.Serializable]");
@@ -1580,6 +1587,7 @@ class SourceGenerator
         GenerateMatrixStandardMethods(sb, config);
 
         sb.AppendLine("}"); // end struct
+        sb.AppendLine("}"); // end namespace
 
         return sb.ToString();
     }
