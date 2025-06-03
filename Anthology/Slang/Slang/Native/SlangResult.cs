@@ -96,6 +96,9 @@ internal unsafe struct SlangResult(uint value = 0x00000000)
     {
         diagnostics = new(diagnosticPtr);
 
+        if (IsOk())
+            return;
+
         Exception? ex = diagnostics.GetException() ?? GetException();
 
         if (ex != null)
