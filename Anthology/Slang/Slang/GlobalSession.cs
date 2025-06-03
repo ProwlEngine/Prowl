@@ -339,7 +339,7 @@ public static unsafe class GlobalSession
     /// <summary>
     /// Computes a digest that uniquely identifies the session description.
     /// </summary>
-    public static string GetSessionDescDigest(in SessionDescription sessionDesc)
+    public static Memory<byte> GetSessionDescDigest(in SessionDescription sessionDesc)
     {
         Native.SessionDescription nativeDesc = new();
 
@@ -349,6 +349,6 @@ public static unsafe class GlobalSession
 
         nativeDesc.Free(fsAllocation);
 
-        return NativeComProxy.Create(outBlobPtr).GetString();
+        return NativeComProxy.Create(outBlobPtr).ReadBytes();
     }
 }
