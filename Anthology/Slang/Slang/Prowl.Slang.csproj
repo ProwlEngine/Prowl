@@ -17,7 +17,7 @@
         <Owners>Prowl Group</Owners>
         <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
 
-        <Description>A cross-platform managed wrapper for the Slang shader compiler</Description>
+        <Description>A cross-platform managed wrapper for the Slang shader compiler. Can be used to cross-compile Slang shaders to many Graphics API shader formats.</Description>
         <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Slang</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
 
