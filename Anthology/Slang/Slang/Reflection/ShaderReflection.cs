@@ -144,7 +144,7 @@ public unsafe struct ShaderReflection
     /// <summary>
     /// Gets the layout information for a specific type according to the specified layout rules.
     /// </summary>
-    public readonly TypeLayoutReflection GetTypeLayout(TypeReflection type, LayoutRules rules) =>
+    public readonly TypeLayoutReflection GetTypeLayout(TypeReflection type, LayoutRules rules = LayoutRules.Default) =>
         new(spReflection_GetTypeLayout(_ptr, type._ptr, rules), _component);
 
     /// <summary>
