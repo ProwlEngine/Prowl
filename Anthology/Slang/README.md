@@ -2,6 +2,8 @@
 
 A .NET wrapper over the [Slang](https://github.com/shader-slang/slang) shader compiler. Supports nearly all of Slang's native COM API and all of the shader reflection and type API.
 
+[![NuGet](https://img.shields.io/nuget/v/Prowl.Slang.svg)](https://www.nuget.org/packages/Prowl.Slang)
+
 ## Features
 
 - **Near-Complete Slang Support**
