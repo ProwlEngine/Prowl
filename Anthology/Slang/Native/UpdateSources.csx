@@ -8,6 +8,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Collections.Generic;
 
 using Octokit;
 using System.IO.Compression;
@@ -26,6 +27,8 @@ const string ReleaseTag = "v2025.6.4";
     ("macos-x86_64.zip", "macos-x64"),
     ("macos-aarch64.zip", "macos-arm64"),
 ];
+
+string[] binariesToKeep = ["slang-glsl-module", "slang-glslang", "slang"];
 
 string GetScriptPath([CallerFilePath] string filePath = null) => Directory.GetParent(filePath).FullName;
 
@@ -95,10 +98,39 @@ async Task DownloadRelease(ReleaseAsset asset, string targetPathName, int ID)
         }
 
         ZipFile.ExtractToDirectory(fileStream, outputPath, true);
+
+        CleanupUnusedBinaries(outputPath);
     }
 
     File.Delete(tempPath);
 
     string text = $"\rFile saved to {outputPath}";
     Console.WriteLine(text + new string(' ', Console.WindowWidth - text.Length));
+}
+
+
+void CleanupUnusedBinaries(string path)
+{
+    string[] extensions = [".dll", ".so", ".dylib"]; // Change to your desired extension
+
+    var matchingFiles = new List<string>();
+
+    foreach (var ext in extensions)
+    {
+        var files = Directory.GetFiles(path, "*" + ext, SearchOption.AllDirectories);
+        matchingFiles.AddRange(files);
+    }
+
+    foreach (string file in matchingFiles)
+    {
+        Console.WriteLine("Checking file: " + file);
+
+        string filename = Path.GetFileNameWithoutExtension(file);
+
+        if (filename.StartsWith("lib"))
+            filename = filename.Substring(3);
+
+        if (!binariesToKeep.Any(x => filename.Equals(x)))
+            File.Delete(file);
+    }
 }
