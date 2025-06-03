@@ -10,18 +10,34 @@ using Prowl.Slang.Native;
 namespace Prowl.Slang;
 
 
-#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
-
 /// <summary>
 /// A structure containing parsed compiler diagnostic information.
 /// </summary>
 public struct Diagnostic : IEquatable<Diagnostic>
 {
+    /// <summary>
+    /// The severity of this diagnostic.
+    /// </summary>
     public Severity Severity;
+
+    /// <summary>
+    /// The compiler error code of this diagnostic, or -1 if not an error or exception.
+    /// </summary>
     public int ErrorCode;
+
+    /// <summary>
+    /// The inner message of this diagnostic.
+    /// </summary>
     public string Message;
 
+    /// <summary>
+    /// The source file this diagnostic originates from, or null if this diagnostic does not come from a file.
+    /// </summary>
     public string? FilePath;
+
+    /// <summary>
+    /// The line number in the source file this diagnostic originates from, or 0 if this diagnostic does not come from a file.
+    /// </summary>
     public int LineNumber;
 
 
@@ -53,12 +69,14 @@ public struct Diagnostic : IEquatable<Diagnostic>
     }
 
 
+    ///
     public static bool operator ==(Diagnostic left, Diagnostic right)
     {
         return left.Equals(right);
     }
 
 
+    ///
     public static bool operator !=(Diagnostic left, Diagnostic right)
     {
         return !left.Equals(right);
@@ -71,8 +89,6 @@ public struct Diagnostic : IEquatable<Diagnostic>
         return HashCode.Combine(Severity, ErrorCode, Message, FilePath, LineNumber);
     }
 }
-#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
-
 
 /// <summary>
 /// Slang diagnostic information.
