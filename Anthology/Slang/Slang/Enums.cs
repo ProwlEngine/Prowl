@@ -850,20 +850,20 @@ public enum CompilerOptionName : int
     /// </summary>
     EnableEffectAnnotations,
 
-    /// <summary>
-    /// bool (will be deprecated)
-    /// </summary>
-    EmitSpirvViaGLSL,
+    // <summary>
+    // bool (will be deprecated)
+    // </summary>
+    // EmitSpirvViaGLSL, // This fella causes random memory corruption, so we commented it out.
 
-    /// <summary>
-    /// bool (will be deprecated)
-    /// </summary>
-    EmitSpirvDirectly,
+    // <summary>
+    // bool (will be deprecated)
+    // </summary>
+    // EmitSpirvDirectly, // This fella probably does the same thing since they're both deprecated, so we commented out it too.
 
     /// <summary>
     /// StringValue0: json path
     /// </summary>
-    SPIRVCoreGrammarJSON,
+    SPIRVCoreGrammarJSON = 59,
 
     /// <summary>
     /// bool, when set, will not issue an error when the linked program has unresolved extern function symbols.
