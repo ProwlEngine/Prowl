@@ -29,9 +29,15 @@ public static unsafe class GlobalSession
 {
     internal static readonly IGlobalSession s_session = CreateSession();
 
-    private static IGlobalSession CreateSession()
+    private static unsafe IGlobalSession CreateSession()
     {
-        SlangResult result = SlangNative.slang_createGlobalSession(0, out IGlobalSession* globalSessionPtr);
+        GlobalSessionDescription description;
+
+#if SLANG_CONSUME_GLSL
+        description.EnableGLSL = true;
+#endif
+
+        SlangResult result = SlangNative.slang_createGlobalSession2(&description, out IGlobalSession* globalSessionPtr);
 
         if (!result.IsOk())
             throw new InitializationException("Failed to initialize Global Session", result.GetException()!);
