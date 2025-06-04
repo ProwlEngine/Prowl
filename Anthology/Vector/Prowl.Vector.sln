@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SourceGenerator", "SourceGenerator\SourceGenerator.csproj", "{B67812E2-BF35-4BCF-B1E0-27E6486B9BCE}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SoftwareRasterizer", "Samples\SoftwareRasterizer\SoftwareRasterizer.csproj", "{1B1204BA-A171-4EA8-B588-6D3CE99B5C02}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,9 +31,16 @@ Global
 		{B67812E2-BF35-4BCF-B1E0-27E6486B9BCE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B67812E2-BF35-4BCF-B1E0-27E6486B9BCE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B67812E2-BF35-4BCF-B1E0-27E6486B9BCE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1B1204BA-A171-4EA8-B588-6D3CE99B5C02}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1B1204BA-A171-4EA8-B588-6D3CE99B5C02}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1B1204BA-A171-4EA8-B588-6D3CE99B5C02}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1B1204BA-A171-4EA8-B588-6D3CE99B5C02}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{1B1204BA-A171-4EA8-B588-6D3CE99B5C02} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {31C1BFF6-E392-4AAB-83B4-8CCEBA7B472B}
