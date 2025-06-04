@@ -11,19 +11,21 @@ namespace Prowl.Slang.Native;
 
 internal static partial class ProxyEmitter
 {
+    public const string COMAssemblyName = "Slang_COMProxy";
+
     private static AssemblyBuilder? _assemblyBuilder;
     private static ModuleBuilder? _moduleBuilder;
 
 
     private static void ValidateBuilders()
     {
-        AssemblyName aName = new("COMProxy");
+        AssemblyName aName = new(COMAssemblyName);
 
         if (_assemblyBuilder == null)
             _assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(aName, AssemblyBuilderAccess.Run);
 
         if (_moduleBuilder == null)
-            _moduleBuilder = _assemblyBuilder.DefineDynamicModule(aName.Name ?? "COMProxy");
+            _moduleBuilder = _assemblyBuilder.DefineDynamicModule(aName.Name ?? COMAssemblyName);
     }
 
 
