@@ -199,23 +199,15 @@ namespace Prowl.Vector
         /// <summary>Creates a 3x3 view rotation matrix with safety checks.</summary>
         public static Float3x3 CreateLookRotationSafe(Float3 forward, Float3 up)
         {
-            if (Maths.LengthSquared(forward) < Maths.Epsilon * Maths.Epsilon || Maths.LengthSquared(up) < Maths.Epsilon * Maths.Epsilon)
+            if (Maths.LengthSquared(forward) < Maths.EpsilonF || Maths.LengthSquared(up) < Maths.EpsilonF)
                 return Float3x3.Identity;
 
             Float3 zaxis = Maths.Normalize(forward);
             Float3 xaxis = Maths.Cross(up, zaxis);
 
-            if (Maths.LengthSquared(xaxis) < Maths.Epsilon * Maths.Epsilon) // Collinear (degenerate)
+            if (Maths.LengthSquared(xaxis) < Maths.EpsilonF) // Collinear (degenerate)
             {
-                // If forward is (0,1,0) or (0,-1,0), an alternative right vector is needed.
-                // This case needs careful handling, e.g., if forward aligns with initial up.
-                // A common fallback: if z-axis is (0,1,0), use (1,0,0) as right. If (0,-1,0), use (-1,0,0).
-                // For simplicity here, let's try to pick a non-collinear "right" based on z-axis.
-                Float3 alternativeRight = (Maths.Abs(zaxis.X) > 0.9f) ? Float3.UnitY : Float3.UnitX;
-                xaxis = Maths.Normalize(Maths.Cross(alternativeRight, zaxis));
-                // If still an issue (forward aligns perfectly with alternativeRight), then it's very degenerate.
-                // For now, this improves robustness slightly.
-                if (Maths.LengthSquared(xaxis) < Maths.Epsilon * Maths.Epsilon) return Float3x3.Identity;
+                return Float3x3.Identity;
             }
             else
             {

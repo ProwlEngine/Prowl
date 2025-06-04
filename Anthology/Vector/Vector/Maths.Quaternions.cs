@@ -216,13 +216,13 @@ namespace Prowl.Vector
         /// <summary>Safe version of LookRotation. Returns identity if inputs are invalid.</summary>
         public static Quaternion LookRotationSafe(Float3 forward, Float3 up)
         {
-            if (LengthSquared(forward) < Epsilon * Epsilon || LengthSquared(up) < Epsilon * Epsilon)
+            if (LengthSquared(forward) < EpsilonF || LengthSquared(up) < EpsilonF)
                 return Quaternion.Identity;
 
             forward = Normalize(forward);
             Float3 right = Cross(up, forward);
 
-            if (LengthSquared(right) < Epsilon * Epsilon) // Collinear case
+            if (LengthSquared(right) < EpsilonF) // Collinear case
                 return forward.Z > 0.99999f ? Quaternion.Identity : (forward.Z < -0.99999f ? RotateY((float)Maths.PI) : AxisAngle(Float3.UnitX, (float)Maths.PI * 0.5f * (forward.Y > 0 ? 1 : -1)));
 
 

@@ -134,12 +134,6 @@ namespace Prowl.Vector
         /// <summary>Machine epsilon for float</summary>
         public const float EpsilonF = float.Epsilon;
 
-        /// <summary>Smallest positive normal double value.</summary>
-        public const double MinNormal = MinNormalF; // TODO
-
-        /// <summary>Smallest positive normal float value.</summary>
-        public const float MinNormalF = 1.175494351e-38f;
-
         /// <summary>Smallest positive double value</summary>
         public const double MinValue = double.MinValue;
 
