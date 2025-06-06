@@ -252,38 +252,6 @@ namespace Prowl.Vector.Geometry
         }
 
         /// <summary>
-        /// Gets the 8 corner points of the frustum.
-        /// </summary>
-        /// <returns>Array of 8 corner points.</returns>
-        public Double3[] GetCorners()
-        {
-            var corners = new Double3[8];
-            
-            // Find intersections of 3 planes to get corners
-            // This is a simplified approach - a full implementation would solve
-            // the system of linear equations for each corner
-            
-            // For now, we'll use a approximate method based on typical frustum geometry
-            // In a full implementation, you'd solve plane intersection equations
-            
-            // Near plane corners (assuming standard camera setup)
-            // This is a placeholder - real implementation needs plane intersection solving
-            Double3 center = Double3.Zero;
-            double size = 1.0;
-            
-            corners[0] = new Double3(-size, -size, -size); // Near bottom left
-            corners[1] = new Double3(size, -size, -size);  // Near bottom right
-            corners[2] = new Double3(-size, size, -size);  // Near top left
-            corners[3] = new Double3(size, size, -size);   // Near top right
-            corners[4] = new Double3(-size * 2.0, -size * 2.0, size);  // Far bottom left
-            corners[5] = new Double3(size * 2.0, -size * 2.0, size);   // Far bottom right
-            corners[6] = new Double3(-size * 2.0, size * 2.0, size);   // Far top left
-            corners[7] = new Double3(size * 2.0, size * 2.0, size);    // Far top right
-            
-            return corners;
-        }
-
-        /// <summary>
         /// Transforms the frustum by a matrix.
         /// </summary>
         /// <param name="matrix">The transformation matrix.</param>
@@ -389,24 +357,6 @@ namespace Prowl.Vector.Geometry
                 }
             }
             return planesOutside;
-        }
-        
-        /// <summary>
-        /// Gets the volume of the frustum (approximate).
-        /// </summary>
-        public double Volume
-        {
-            get
-            {
-                // This is a simplified calculation
-                // For an accurate volume, you'd need to compute the convex hull volume
-                // of the 8 corner points, which is more complex
-                var corners = GetCorners();
-                
-                // Approximate as a truncated pyramid
-                // This is a placeholder - real implementation would be more sophisticated
-                return 1.0; // Placeholder
-            }
         }
         
         /// <summary>
