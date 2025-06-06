@@ -1,0 +1,440 @@
+// TEMPLATE_TYPES: float, double
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+
+namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
+{
+    /// <summary>
+    /// Represents a 3D triangle defined by three vertices.
+    /// </summary>
+    public struct {{CLASS_NAME}} : IEquatable<{{CLASS_NAME}}>, IFormattable
+    {
+        /// <summary>The first vertex of the triangle.</summary>
+        public {{TYPE_PREFIX}}3 V0;
+
+        /// <summary>The second vertex of the triangle.</summary>
+        public {{TYPE_PREFIX}}3 V1;
+
+        /// <summary>The third vertex of the triangle.</summary>
+        public {{TYPE_PREFIX}}3 V2;
+
+        /// <summary>
+        /// Initializes a new triangle from three vertices.
+        /// </summary>
+        /// <param name="v0">First vertex.</param>
+        /// <param name="v1">Second vertex.</param>
+        /// <param name="v2">Third vertex.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}}({{TYPE_PREFIX}}3 v0, {{TYPE_PREFIX}}3 v1, {{TYPE_PREFIX}}3 v2)
+        {
+            V0 = v0;
+            V1 = v1;
+            V2 = v2;
+        }
+
+        /// <summary>
+        /// Gets the normal vector of the triangle (not normalized).
+        /// Direction follows right-hand rule based on vertex order.
+        /// </summary>
+        public {{TYPE_PREFIX}}3 Normal
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Maths.Cross(V1 - V0, V2 - V0);
+        }
+
+        /// <summary>
+        /// Gets the normalized normal vector of the triangle.
+        /// </summary>
+        public {{TYPE_PREFIX}}3 NormalizedNormal
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Maths.Normalize(Normal);
+        }
+
+        /// <summary>
+        /// Gets the area of the triangle.
+        /// </summary>
+        public {{TYPE}} Area
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Maths.Length(Normal) / {{TWO}};
+        }
+
+        /// <summary>
+        /// Gets the centroid (center point) of the triangle.
+        /// </summary>
+        public {{TYPE_PREFIX}}3 Centroid
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (V0 + V1 + V2) / new {{TYPE_PREFIX}}3(3, 3, 3);
+        }
+
+        /// <summary>
+        /// Gets the perimeter of the triangle.
+        /// </summary>
+        public {{TYPE}} Perimeter
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Maths.Length(V1 - V0) + Maths.Length(V2 - V1) + Maths.Length(V0 - V2);
+        }
+
+        /// <summary>
+        /// Gets a vertex by index (0, 1, or 2).
+        /// </summary>
+        public {{TYPE_PREFIX}}3 this[int index]
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                switch (index)
+                {
+                    case 0: return V0;
+                    case 1: return V1;
+                    case 2: return V2;
+                    default: throw new IndexOutOfRangeException("Triangle vertex index must be 0, 1, or 2.");
+                }
+            }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set
+            {
+                switch (index)
+                {
+                    case 0: V0 = value; break;
+                    case 1: V1 = value; break;
+                    case 2: V2 = value; break;
+                    default: throw new IndexOutOfRangeException("Triangle vertex index must be 0, 1, or 2.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Calculates the barycentric coordinates of a point with respect to this triangle.
+        /// </summary>
+        /// <param name="point">The point to calculate coordinates for.</param>
+        /// <param name="u">Barycentric coordinate u (weight for V1).</param>
+        /// <param name="v">Barycentric coordinate v (weight for V2).</param>
+        /// <remarks>w (weight for V0) = 1 - u - v.</remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void GetBarycentricCoordinates({{TYPE_PREFIX}}3 point, out {{TYPE}} u, out {{TYPE}} v)
+        {
+            {{TYPE_PREFIX}}3 v0v1 = V1 - V0;
+            {{TYPE_PREFIX}}3 v0v2 = V2 - V0;
+            {{TYPE_PREFIX}}3 v0p = point - V0;
+
+            {{TYPE}} dot00 = Maths.Dot(v0v2, v0v2);
+            {{TYPE}} dot01 = Maths.Dot(v0v2, v0v1);
+            {{TYPE}} dot02 = Maths.Dot(v0v2, v0p);
+            {{TYPE}} dot11 = Maths.Dot(v0v1, v0v1);
+            {{TYPE}} dot12 = Maths.Dot(v0v1, v0p);
+
+            {{TYPE}} invDenom = {{ONE}} / (dot00 * dot11 - dot01 * dot01);
+            u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+            v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+        }
+
+        /// <summary>
+        /// Checks if a point (defined by barycentric coordinates) is inside this triangle.
+        /// </summary>
+        /// <param name="u">Barycentric coordinate u.</param>
+        /// <param name="v">Barycentric coordinate v.</param>
+        /// <returns>True if the point is inside or on the edge of the triangle.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsPointInTriangle({{TYPE}} u, {{TYPE}} v)
+        {
+            return u >= {{ZERO}} && v >= {{ZERO}} && (u + v) <= {{ONE}};
+        }
+
+        /// <summary>
+        /// Gets a point on the triangle using barycentric coordinates.
+        /// </summary>
+        /// <param name="u">Barycentric coordinate u (weight for V1).</param>
+        /// <param name="v">Barycentric coordinate v (weight for V2).</param>
+        /// <returns>The interpolated point on the triangle.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 GetPointFromBarycentric({{TYPE}} u, {{TYPE}} v)
+        {
+            {{TYPE}} w = {{ONE}} - u - v;
+            return V0 * w + V1 * u + V2 * v;
+        }
+
+        /// <summary>
+        /// Finds the closest point on this triangle to a given point.
+        /// </summary>
+        /// <param name="point">The point to find the closest point to.</param>
+        /// <returns>The closest point on the triangle.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 ClosestPointTo({{TYPE_PREFIX}}3 point)
+        {
+            GetBarycentricCoordinates(point, out {{TYPE}} u, out {{TYPE}} v);
+            
+            // Clamp barycentric coordinates to triangle bounds
+            if (u < {{ZERO}}) u = {{ZERO}};
+            if (v < {{ZERO}}) v = {{ZERO}};
+            if (u + v > {{ONE}})
+            {
+                {{TYPE}} sum = u + v;
+                u /= sum;
+                v /= sum;
+            }
+            
+            return GetPointFromBarycentric(u, v);
+        }
+
+        /// <summary>
+        /// Gets the plane containing this triangle.
+        /// </summary>
+        /// <returns>The plane containing the triangle.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Plane{{TYPE_PREFIX}} GetPlane()
+        {
+            return Plane{{TYPE_PREFIX}}.FromNormalAndPoint(NormalizedNormal, V0);
+        }
+
+        /// <summary>
+        /// Checks if this triangle is degenerate (has zero area).
+        /// </summary>
+        /// <returns>True if the triangle is degenerate.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsDegenerate()
+        {
+            return Maths.LengthSquared(Normal) < {{EPSILON}} * {{EPSILON}};
+        }
+
+        /// <summary>
+        /// Transforms this triangle by a 4x4 matrix.
+        /// </summary>
+        /// <param name="matrix">The transformation matrix.</param>
+        /// <returns>The transformed triangle.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}} Transform({{TYPE_PREFIX}}4x4 matrix)
+        {
+            return new {{CLASS_NAME}}(
+                Maths.TransformPoint(V0, matrix),
+                Maths.TransformPoint(V1, matrix),
+                Maths.TransformPoint(V2, matrix)
+            );
+        }
+
+        /// <summary>
+        /// Calculates the signed volume between this triangle and a point.
+        /// Used for determining orientation in 3D space.
+        /// </summary>
+        /// <param name="point">The point to test against.</param>
+        /// <returns>The signed volume (positive if point is on normal side).</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE}} SignedVolumeToPoint({{TYPE_PREFIX}}3 point)
+        {
+            return Maths.Dot(Normal, point - V0) / 6;
+        }
+
+        /// <summary>
+        /// Gets the edge vector for the specified edge index.
+        /// </summary>
+        /// <param name="edgeIndex">Edge index (0 = V0->V1, 1 = V1->V2, 2 = V2->V0).</param>
+        /// <returns>The edge vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 GetEdge(int edgeIndex)
+        {
+            switch (edgeIndex)
+            {
+                case 0: return V1 - V0;
+                case 1: return V2 - V1;
+                case 2: return V0 - V2;
+                default: throw new IndexOutOfRangeException("Edge index must be 0, 1, or 2.");
+            }
+        }
+
+        /// <summary>
+        /// Gets the length of the specified edge.
+        /// </summary>
+        /// <param name="edgeIndex">Edge index (0 = V0->V1, 1 = V1->V2, 2 = V2->V0).</param>
+        /// <returns>The edge length.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE}} GetEdgeLength(int edgeIndex)
+        {
+            return Maths.Length(GetEdge(edgeIndex));
+        }
+
+        /// <summary>
+        /// Checks if a point is coplanar with this triangle within a tolerance.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <param name="tolerance">The tolerance for the test.</param>
+        /// <returns>True if the point is coplanar.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsCoplanar({{TYPE_PREFIX}}3 point, {{TYPE}} tolerance = {{EPSILON}})
+        {
+            {{TYPE_PREFIX}}3 normal = NormalizedNormal;
+            {{TYPE}} distance = Maths.Abs(Maths.Dot(normal, point - V0));
+            return distance <= tolerance;
+        }
+
+        /// <summary>
+        /// Reverses the winding order of the triangle (flips the normal).
+        /// </summary>
+        /// <returns>A triangle with reversed winding order.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}} Reversed()
+        {
+            return new {{CLASS_NAME}}(V0, V2, V1);
+        }
+
+        /// <summary>
+        /// Calculates the circumcenter of the triangle.
+        /// </summary>
+        /// <returns>The circumcenter point.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 GetCircumcenter()
+        {
+            {{TYPE_PREFIX}}3 a = V1 - V0;
+            {{TYPE_PREFIX}}3 b = V2 - V0;
+            {{TYPE_PREFIX}}3 cross = Maths.Cross(a, b);
+            {{TYPE}} denom = {{TWO}} * Maths.Dot(cross, cross);
+            
+            if (Maths.Abs(denom) < {{EPSILON}})
+                return Centroid; // Fallback for degenerate triangle
+                
+            {{TYPE_PREFIX}}3 result = Maths.Cross(Maths.Cross(cross, a) * Maths.LengthSquared(b) + 
+                                                 Maths.Cross(b, cross) * Maths.LengthSquared(a), cross) / denom;
+            return V0 + result;
+        }
+
+        /// <summary>
+        /// Calculates the circumradius of the triangle.
+        /// </summary>
+        /// <returns>The circumradius.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE}} GetCircumradius()
+        {
+            {{TYPE}} a = Maths.Length(V1 - V2);
+            {{TYPE}} b = Maths.Length(V2 - V0);
+            {{TYPE}} c = Maths.Length(V0 - V1);
+            {{TYPE}} area = Area;
+            
+            if (area < {{EPSILON}})
+                return {{ZERO}}; // Degenerate triangle
+                
+            return (a * b * c) / (4 * area);
+        }
+
+        /// <summary>
+        /// Calculates the incenter of the triangle.
+        /// </summary>
+        /// <returns>The incenter point.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 GetIncenter()
+        {
+            {{TYPE}} a = Maths.Length(V1 - V2);
+            {{TYPE}} b = Maths.Length(V2 - V0);
+            {{TYPE}} c = Maths.Length(V0 - V1);
+            {{TYPE}} perimeter = a + b + c;
+            
+            if (perimeter < {{EPSILON}})
+                return Centroid; // Fallback for degenerate triangle
+                
+            return (a * V0 + b * V1 + c * V2) / perimeter;
+        }
+
+        /// <summary>
+        /// Calculates the inradius of the triangle.
+        /// </summary>
+        /// <returns>The inradius.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE}} GetInradius()
+        {
+            {{TYPE}} area = Area;
+            {{TYPE}} semiperimeter = Perimeter / {{TWO}};
+            
+            if (semiperimeter < {{EPSILON}})
+                return {{ZERO}}; // Degenerate triangle
+                
+            return area / semiperimeter;
+        }
+
+        /// <summary>
+        /// Interpolates between triangle vertices using barycentric coordinates.
+        /// </summary>
+        /// <param name="u">Barycentric coordinate u.</param>
+        /// <param name="v">Barycentric coordinate v.</param>
+        /// <param name="attribute0">Attribute value at V0.</param>
+        /// <param name="attribute1">Attribute value at V1.</param>
+        /// <param name="attribute2">Attribute value at V2.</param>
+        /// <returns>The interpolated attribute value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{TYPE}} InterpolateAttribute({{TYPE}} u, {{TYPE}} v, {{TYPE}} attribute0, {{TYPE}} attribute1, {{TYPE}} attribute2)
+        {
+            {{TYPE}} w = {{ONE}} - u - v;
+            return w * attribute0 + u * attribute1 + v * attribute2;
+        }
+
+        /// <summary>
+        /// Interpolates between triangle vertices using barycentric coordinates.
+        /// </summary>
+        /// <param name="u">Barycentric coordinate u.</param>
+        /// <param name="v">Barycentric coordinate v.</param>
+        /// <param name="attribute0">Attribute value at V0.</param>
+        /// <param name="attribute1">Attribute value at V1.</param>
+        /// <param name="attribute2">Attribute value at V2.</param>
+        /// <returns>The interpolated attribute value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{TYPE_PREFIX}}3 InterpolateAttribute({{TYPE}} u, {{TYPE}} v, {{TYPE_PREFIX}}3 attribute0, {{TYPE_PREFIX}}3 attribute1, {{TYPE_PREFIX}}3 attribute2)
+        {
+            {{TYPE}} w = {{ONE}} - u - v;
+            return w * attribute0 + u * attribute1 + v * attribute2;
+        }
+
+        /// <summary>
+        /// Determines if this triangle intersects with another triangle.
+        /// </summary>
+        /// <param name="other">The other triangle.</param>
+        /// <returns>True if the triangles intersect.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IntersectsWith({{CLASS_NAME}} other)
+        {
+            return Intersection{{TYPE_PREFIX}}.TriangleTriangle(this, other);
+        }
+
+        /// <summary>
+        /// Samples a random point uniformly distributed on the triangle surface.
+        /// </summary>
+        /// <param name="u">Random value between 0 and 1.</param>
+        /// <param name="v">Random value between 0 and 1.</param>
+        /// <returns>A uniformly distributed point on the triangle.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 SampleUniform({{TYPE}} u, {{TYPE}} v)
+        {
+            // Transform uniform random variables to barycentric coordinates
+            {{TYPE}} sqrtU = Maths.Sqrt(u);
+            {{TYPE}} baryU = {{ONE}} - sqrtU;
+            {{TYPE}} baryV = v * sqrtU;
+            return GetPointFromBarycentric(baryU, baryV);
+        }
+
+        // --- IEquatable & IFormattable Implementation ---
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals({{CLASS_NAME}} other) => V0.Equals(other.V0) && V1.Equals(other.V1) && V2.Equals(other.V2);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object? obj) => obj is {{CLASS_NAME}} other && Equals(other);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override int GetHashCode() => HashCode.Combine(V0, V1, V2);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public string ToString(string? format, IFormatProvider? formatProvider = null)
+        {
+            return string.Format(formatProvider, "{{CLASS_NAME}}(V0: {0}, V1: {1}, V2: {2})", 
+                V0.ToString(format, formatProvider), V1.ToString(format, formatProvider), V2.ToString(format, formatProvider));
+        }
+
+        public static bool operator ==({{CLASS_NAME}} left, {{CLASS_NAME}} right) => left.Equals(right);
+        public static bool operator !=({{CLASS_NAME}} left, {{CLASS_NAME}} right) => !left.Equals(right);
+    }
+}
