@@ -1,0 +1,169 @@
+// TEMPLATE_TYPES: float, double
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+
+namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
+{
+    /// <summary>
+    /// Represents a 3D ray with an origin and a direction.
+    /// </summary>
+    public struct {{CLASS_NAME}} : IEquatable<{{CLASS_NAME}}>, IFormattable
+    {
+        /// <summary>The origin point of the ray.</summary>
+        public {{TYPE_PREFIX}}3 Origin;
+
+        /// <summary>The normalized direction vector of the ray.</summary>
+        public {{TYPE_PREFIX}}3 Direction;
+
+        /// <summary>
+        /// Initializes a new instance of the {{CLASS_NAME}} struct.
+        /// The direction vector will be normalized.
+        /// </summary>
+        /// <param name="origin">The origin point of the ray.</param>
+        /// <param name="direction">The direction vector of the ray (will be normalized).</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}}({{TYPE_PREFIX}}3 origin, {{TYPE_PREFIX}}3 direction)
+        {
+            Origin = origin;
+            Direction = Maths.Normalize(direction);
+        }
+
+        /// <summary>
+        /// Gets a point along the ray at the specified distance from the origin.
+        /// </summary>
+        /// <param name="distance">The distance along the ray.</param>
+        /// <returns>A point on the ray.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 GetPoint({{TYPE}} distance)
+        {
+            return Origin + Direction * distance;
+        }
+
+        #region --- Utility Methods ---
+
+        /// <summary>
+        /// Creates a ray from a 2D screen position, camera matrices, and viewport dimensions.
+        /// This ray can be used for picking objects in the 3D world.
+        /// Assumes DirectX-style projection (depth 0-1).
+        /// </summary>
+        /// <param name="screenPosition">The 2D screen coordinates (e.g., mouse position). Y is typically 0 at top.</param>
+        /// <param name="viewMatrix">The camera's view matrix.</param>
+        /// <param name="projectionMatrix">The camera's projection matrix (DirectX-style, depth 0-1).</param>
+        /// <param name="viewportWidth">The width of the viewport in pixels.</param>
+        /// <param name="viewportHeight">The height of the viewport in pixels.</param>
+        /// <returns>A Ray originating from the near plane and pointing into the scene.</returns>
+        public static {{CLASS_NAME}} ScreenPointToRay({{TYPE_PREFIX}}2 screenPosition, {{TYPE_PREFIX}}4x4 viewMatrix, {{TYPE_PREFIX}}4x4 projectionMatrix, {{TYPE}} viewportWidth, {{TYPE}} viewportHeight)
+        {
+            // 1. Convert screen coordinates to Normalized Device Coordinates (NDC)
+            {{TYPE}} ndcX = ({{TWO}} * screenPosition.X) / viewportWidth - {{ONE}};
+            {{TYPE}} ndcY = {{ONE}} - ({{TWO}} * screenPosition.Y) / viewportHeight; // Y is often flipped screen -> NDC
+
+            // 2. Define points in NDC space on the near and far clip planes (DirectX-style Z)
+            {{TYPE_PREFIX}}4 nearPointNDC = new {{TYPE_PREFIX}}4(ndcX, ndcY, {{ZERO}}, {{ONE}}); // Point on the near plane (Z=0 for DX)
+            {{TYPE_PREFIX}}4 farPointNDC = new {{TYPE_PREFIX}}4(ndcX, ndcY, {{ONE}}, {{ONE}}); // Point on the far plane (Z=1 for DX)
+
+            // 3. Calculate the inverse of the combined view-projection matrix
+            {{TYPE_PREFIX}}4x4 viewProjectionMatrix = Maths.Mul(projectionMatrix, viewMatrix);
+            {{TYPE_PREFIX}}4x4 inverseViewProjectionMatrix;
+            try
+            {
+                inverseViewProjectionMatrix = Maths.Inverse(viewProjectionMatrix);
+            }
+            catch (ArgumentException ex)
+            {
+                System.Diagnostics.Debug.WriteLine("ScreenPointToRay Error: View-Projection matrix is singular. " + ex.Message);
+                return new {{CLASS_NAME}}({{TYPE_PREFIX}}3.Zero, new {{TYPE_PREFIX}}3({{ZERO}}, {{ZERO}}, -{{ONE}})); // Fallback ray
+            }
+
+            // 4. Transform NDC points to world space
+            {{TYPE_PREFIX}}4 nearPointWorld = Maths.Mul(inverseViewProjectionMatrix, nearPointNDC);
+            {{TYPE_PREFIX}}4 farPointWorld = Maths.Mul(inverseViewProjectionMatrix, farPointNDC);
+
+            // 5. Perform perspective division (divide by W component)
+            const {{TYPE}} wEpsilon = {{EPSILON}} * 1000; // Local epsilon for W component check
+            if (Maths.Abs(nearPointWorld.W) > wEpsilon) nearPointWorld /= nearPointWorld.W; else nearPointWorld.W = {{ONE}}; // Avoid division by zero/small W
+            if (Maths.Abs(farPointWorld.W) > wEpsilon) farPointWorld /= farPointWorld.W; else farPointWorld.W = {{ONE}}; // Avoid division by zero/small W
+
+            // 6. Create the ray
+            {{TYPE_PREFIX}}3 rayOrigin = new {{TYPE_PREFIX}}3(nearPointWorld.X, nearPointWorld.Y, nearPointWorld.Z);
+            {{TYPE_PREFIX}}3 rayDirectionTarget = new {{TYPE_PREFIX}}3(farPointWorld.X, farPointWorld.Y, farPointWorld.Z);
+            {{TYPE_PREFIX}}3 rayDirection = rayDirectionTarget - rayOrigin;
+
+            // Direction should be normalized by the Ray constructor
+            return new {{CLASS_NAME}}(rayOrigin, rayDirection);
+        }
+
+        /// <summary>
+        /// Creates a ray from a 2D screen position using camera properties.
+        /// The ray originates from the camera's world position.
+        /// Assumes DirectX-style projection (depth 0-1).
+        /// </summary>
+        /// <param name="screenPosition">The 2D screen coordinates (Y typically 0 at top).</param>
+        /// <param name="cameraWorldPosition">The world position of the camera.</param>
+        /// <param name="viewMatrix">The camera's view matrix.</param>
+        /// <param name="projectionMatrix">The camera's projection matrix (DirectX-style, depth 0-1).</param>
+        /// <param name="viewportWidth">The width of the viewport.</param>
+        /// <param name="viewportHeight">The height of the viewport.</param>
+        /// <returns>A Ray starting from the camera's world position.</returns>
+        public static {{CLASS_NAME}} ScreenPointToRayFromCamera({{TYPE_PREFIX}}2 screenPosition, {{TYPE_PREFIX}}3 cameraWorldPosition, {{TYPE_PREFIX}}4x4 viewMatrix, {{TYPE_PREFIX}}4x4 projectionMatrix, {{TYPE}} viewportWidth, {{TYPE}} viewportHeight)
+        {
+            {{TYPE}} ndcX = ({{TWO}} * screenPosition.X) / viewportWidth - {{ONE}};
+            {{TYPE}} ndcY = {{ONE}} - ({{TWO}} * screenPosition.Y) / viewportHeight; // Y is often flipped
+
+            // For direction, unprojecting a point on the far plane is standard.
+            // Using Z=1 for far plane in DirectX-style NDC.
+            {{TYPE_PREFIX}}4 farPointNDC = new {{TYPE_PREFIX}}4(ndcX, ndcY, {{ONE}}, {{ONE}});
+
+            {{TYPE_PREFIX}}4x4 viewProjectionMatrix = Maths.Mul(projectionMatrix, viewMatrix);
+            {{TYPE_PREFIX}}4x4 inverseViewProjectionMatrix;
+            try
+            {
+                inverseViewProjectionMatrix = Maths.Inverse(viewProjectionMatrix);
+            }
+            catch (ArgumentException ex)
+            {
+                System.Diagnostics.Debug.WriteLine("ScreenPointToRayFromCamera Error: View-Projection matrix is singular. " + ex.Message);
+                return new {{CLASS_NAME}}(cameraWorldPosition, new {{TYPE_PREFIX}}3({{ZERO}}, {{ZERO}}, -{{ONE}})); // Fallback ray
+            }
+
+            {{TYPE_PREFIX}}4 farPointWorldH = Maths.Mul(inverseViewProjectionMatrix, farPointNDC);
+
+            const {{TYPE}} wEpsilon = {{EPSILON}} * 1000;
+            if (Maths.Abs(farPointWorldH.W) > wEpsilon) farPointWorldH /= farPointWorldH.W; else farPointWorldH.W = {{ONE}};
+
+            {{TYPE_PREFIX}}3 worldPointOnFarPlane = new {{TYPE_PREFIX}}3(farPointWorldH.X, farPointWorldH.Y, farPointWorldH.Z);
+            {{TYPE_PREFIX}}3 direction = worldPointOnFarPlane - cameraWorldPosition;
+
+            // Direction will be normalized by the Ray constructor
+            return new {{CLASS_NAME}}(cameraWorldPosition, direction);
+        }
+
+        #endregion
+
+        // --- IEquatable & IFormattable Implementation ---
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals({{CLASS_NAME}} other) => Origin.Equals(other.Origin) && Direction.Equals(other.Direction);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object? obj) => obj is {{CLASS_NAME}} other && Equals(other);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override int GetHashCode() => HashCode.Combine(Origin, Direction);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public string ToString(string? format, IFormatProvider? formatProvider = null)
+        {
+            return string.Format(formatProvider, "{{CLASS_NAME}}(Origin: {0}, Direction: {1})", Origin.ToString(format, formatProvider), Direction.ToString(format, formatProvider));
+        }
+
+        public static bool operator ==({{CLASS_NAME}} left, {{CLASS_NAME}} right) => left.Equals(right);
+        public static bool operator !=({{CLASS_NAME}} left, {{CLASS_NAME}} right) => !left.Equals(right);
+    }
+}
