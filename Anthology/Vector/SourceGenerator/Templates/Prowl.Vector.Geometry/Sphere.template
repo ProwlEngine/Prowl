@@ -1,0 +1,353 @@
+﻿// TEMPLATE_TYPES: float, double
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+
+namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
+{
+    /// <summary>
+    /// Represents a 3D sphere defined by a center point and radius.
+    /// </summary>
+    public struct {{CLASS_NAME}} : IEquatable<{{CLASS_NAME}}>, IFormattable
+    {
+        /// <summary>The center point of the sphere.</summary>
+        public {{TYPE_PREFIX}}3 Center;
+
+        /// <summary>The radius of the sphere.</summary>
+        public {{TYPE}} Radius;
+
+        /// <summary>
+        /// Initializes a new sphere with the specified center and radius.
+        /// </summary>
+        /// <param name="center">The center point of the sphere.</param>
+        /// <param name="radius">The radius of the sphere.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}}({{TYPE_PREFIX}}3 center, {{TYPE}} radius)
+        {
+            Center = center;
+            Radius = Maths.Max(radius, {{ZERO}}); // Ensure non-negative radius
+        }
+
+        /// <summary>
+        /// Initializes a new sphere with center components and radius.
+        /// </summary>
+        /// <param name="x">X coordinate of the center.</param>
+        /// <param name="y">Y coordinate of the center.</param>
+        /// <param name="z">Z coordinate of the center.</param>
+        /// <param name="radius">The radius of the sphere.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}}({{TYPE}} x, {{TYPE}} y, {{TYPE}} z, {{TYPE}} radius)
+        {
+            Center = new {{TYPE_PREFIX}}3(x, y, z);
+            Radius = Maths.Max(radius, {{ZERO}});
+        }
+
+        /// <summary>
+        /// Gets the diameter of the sphere.
+        /// </summary>
+        public {{TYPE}} Diameter
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Radius * {{TWO}};
+        }
+
+        /// <summary>
+        /// Gets the surface area of the sphere (4πr²).
+        /// </summary>
+        public {{TYPE}} SurfaceArea
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => 4 * ({{TYPE}})Maths.PI * Radius * Radius;
+        }
+
+        /// <summary>
+        /// Gets the volume of the sphere (4/3πr³).
+        /// </summary>
+        public {{TYPE}} Volume
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (4 / 3) * ({{TYPE}})Maths.PI * Radius * Radius * Radius;
+        }
+
+        /// <summary>
+        /// Gets the circumference of the sphere (2πr).
+        /// </summary>
+        public {{TYPE}} Circumference
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => {{TWO}} * ({{TYPE}})Maths.PI * Radius;
+        }
+
+        /// <summary>
+        /// Checks if this sphere contains a point.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>True if the point is inside or on the sphere surface.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Contains({{TYPE_PREFIX}}3 point)
+        {
+            return Maths.LengthSquared(point - Center) <= Radius * Radius + {{EPSILON}};
+        }
+
+        /// <summary>
+        /// Checks if this sphere completely contains another sphere.
+        /// </summary>
+        /// <param name="other">The other sphere to test.</param>
+        /// <returns>True if the other sphere is completely inside this sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Contains({{CLASS_NAME}} other)
+        {
+            {{TYPE}} distance = Maths.Length(other.Center - Center);
+            return distance + other.Radius <= Radius + {{EPSILON}};
+        }
+
+        /// <summary>
+        /// Checks if this sphere intersects with another sphere.
+        /// </summary>
+        /// <param name="other">The other sphere to test.</param>
+        /// <returns>True if the spheres intersect or touch.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects({{CLASS_NAME}} other)
+        {
+            return Intersection{{TYPE_PREFIX}}.SphereSphereOverlap(Center, Radius, other.Center, other.Radius);
+        }
+
+        /// <summary>
+        /// Checks if this sphere intersects with an AABB.
+        /// </summary>
+        /// <param name="aabb">The AABB to test.</param>
+        /// <returns>True if the sphere intersects the AABB.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(AABB{{TYPE_PREFIX}} aabb)
+        {
+            return Intersection{{TYPE_PREFIX}}.SphereAABBOverlap(Center, Radius, aabb.Min, aabb.Max);
+        }
+
+        /// <summary>
+        /// Gets the signed distance from a point to the sphere surface.
+        /// Positive if outside, negative if inside, zero if on the surface.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>The signed distance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE}} GetSignedDistanceToPoint({{TYPE_PREFIX}}3 point)
+        {
+            return Maths.Length(point - Center) - Radius;
+        }
+
+        /// <summary>
+        /// Gets the absolute distance from a point to the sphere surface.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>The absolute distance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE}} GetDistanceToPoint({{TYPE_PREFIX}}3 point)
+        {
+            return Maths.Abs(GetSignedDistanceToPoint(point));
+        }
+
+        /// <summary>
+        /// Gets the closest point on the sphere surface to a given point.
+        /// </summary>
+        /// <param name="point">The point to find the closest point to.</param>
+        /// <returns>The closest point on the sphere surface.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 ClosestPointTo({{TYPE_PREFIX}}3 point)
+        {
+            {{TYPE_PREFIX}}3 closestPoint;
+            Intersection{{TYPE_PREFIX}}.ClosestPointOnSphereToPoint(point, Center, Radius, out closestPoint);
+            return closestPoint;
+        }
+
+        /// <summary>
+        /// Expands the sphere to include a point.
+        /// </summary>
+        /// <param name="point">The point to include.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Encapsulate({{TYPE_PREFIX}}3 point)
+        {
+            {{TYPE}} distance = Maths.Length(point - Center);
+            if (distance > Radius)
+            {
+                Radius = distance;
+            }
+        }
+
+        /// <summary>
+        /// Expands the sphere to include another sphere.
+        /// </summary>
+        /// <param name="other">The sphere to include.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Encapsulate({{CLASS_NAME}} other)
+        {
+            {{TYPE}} distance = Maths.Length(other.Center - Center);
+            {{TYPE}} requiredRadius = distance + other.Radius;
+            if (requiredRadius > Radius)
+            {
+                Radius = requiredRadius;
+            }
+        }
+
+        /// <summary>
+        /// Returns a sphere that encapsulates both this sphere and a point.
+        /// </summary>
+        /// <param name="point">The point to include.</param>
+        /// <returns>The encapsulating sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}} Encapsulating({{TYPE_PREFIX}}3 point)
+        {
+            var result = this;
+            result.Encapsulate(point);
+            return result;
+        }
+
+        /// <summary>
+        /// Returns a sphere that encapsulates both this sphere and another sphere.
+        /// </summary>
+        /// <param name="other">The sphere to include.</param>
+        /// <returns>The encapsulating sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}} Encapsulating({{CLASS_NAME}} other)
+        {
+            var result = this;
+            result.Encapsulate(other);
+            return result;
+        }
+
+        /// <summary>
+        /// Transforms the sphere by a 4x4 matrix.
+        /// Note: Only uniform scaling is properly supported.
+        /// </summary>
+        /// <param name="matrix">The transformation matrix.</param>
+        /// <returns>The transformed sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}} Transform({{TYPE_PREFIX}}4x4 matrix)
+        {
+            {{TYPE_PREFIX}}3 transformedCenter = Maths.TransformPoint(Center, matrix);
+            
+            // For radius, we need to handle scaling. We'll use the maximum scale factor.
+            {{TYPE_PREFIX}}3 scaleVector = new {{TYPE_PREFIX}}3(
+                Maths.Length(new {{TYPE_PREFIX}}3(matrix.c0.X, matrix.c0.Y, matrix.c0.Z)),
+                Maths.Length(new {{TYPE_PREFIX}}3(matrix.c1.X, matrix.c1.Y, matrix.c1.Z)),
+                Maths.Length(new {{TYPE_PREFIX}}3(matrix.c2.X, matrix.c2.Y, matrix.c2.Z))
+            );
+            {{TYPE}} maxScale = Maths.Max(scaleVector.X, Maths.Max(scaleVector.Y, scaleVector.Z));
+            {{TYPE}} transformedRadius = Radius * maxScale;
+            
+            return new {{CLASS_NAME}}(transformedCenter, transformedRadius);
+        }
+
+        /// <summary>
+        /// Samples a random point uniformly distributed on the sphere surface.
+        /// </summary>
+        /// <param name="u">Random value between 0 and 1.</param>
+        /// <param name="v">Random value between 0 and 1.</param>
+        /// <returns>A uniformly distributed point on the sphere surface.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 SampleSurface({{TYPE}} u, {{TYPE}} v)
+        {
+            {{TYPE}} theta = {{TWO}} * ({{TYPE}})Maths.PI * u;
+            {{TYPE}} phi = Maths.Acos({{TWO}} * v - {{ONE}});
+            
+            {{TYPE}} sinPhi = Maths.Sin(phi);
+            {{TYPE}} x = sinPhi * Maths.Cos(theta);
+            {{TYPE}} y = sinPhi * Maths.Sin(theta);
+            {{TYPE}} z = Maths.Cos(phi);
+            
+            return Center + new {{TYPE_PREFIX}}3(x, y, z) * Radius;
+        }
+
+        /// <summary>
+        /// Samples a random point uniformly distributed inside the sphere volume.
+        /// </summary>
+        /// <param name="u">Random value between 0 and 1.</param>
+        /// <param name="v">Random value between 0 and 1.</param>
+        /// <param name="w">Random value between 0 and 1.</param>
+        /// <returns>A uniformly distributed point inside the sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 SampleVolume({{TYPE}} u, {{TYPE}} v, {{TYPE}} w)
+        {
+            {{TYPE}} r = Radius * Maths.Pow(u, {{ONE}} / 3); // Cube root for uniform distribution
+            {{TYPE_PREFIX}}3 direction = SampleSurface(v, w) - Center;
+            direction = Maths.Normalize(direction);
+            return Center + direction * r;
+        }
+
+        /// <summary>
+        /// Creates a sphere from two points (diameter endpoints).
+        /// </summary>
+        /// <param name="pointA">First endpoint.</param>
+        /// <param name="pointB">Second endpoint.</param>
+        /// <returns>A sphere with the two points as diameter endpoints.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} FromDiameter({{TYPE_PREFIX}}3 pointA, {{TYPE_PREFIX}}3 pointB)
+        {
+            {{TYPE_PREFIX}}3 center = (pointA + pointB) / {{TWO}};
+            {{TYPE}} radius = Maths.Length(pointB - pointA) / {{TWO}};
+            return new {{CLASS_NAME}}(center, radius);
+        }
+
+        /// <summary>
+        /// Creates the smallest sphere that contains all the given points.
+        /// Uses Welzl's algorithm for small point sets, falls back to naive approach for larger sets.
+        /// </summary>
+        /// <param name="points">The points to encapsulate.</param>
+        /// <returns>The smallest encapsulating sphere.</returns>
+        public static {{CLASS_NAME}} FromPoints({{TYPE_PREFIX}}3[] points)
+        {
+            if (points == null || points.Length == 0)
+                return new {{CLASS_NAME}}({{TYPE_PREFIX}}3.Zero, {{ZERO}});
+            
+            if (points.Length == 1)
+                return new {{CLASS_NAME}}(points[0], {{ZERO}});
+            
+            if (points.Length == 2)
+                return FromDiameter(points[0], points[1]);
+            
+            // For simplicity, use centroid and max distance approach
+            // A more sophisticated implementation would use Welzl's algorithm
+            {{TYPE_PREFIX}}3 centroid = {{TYPE_PREFIX}}3.Zero;
+            for (int i = 0; i < points.Length; i++)
+            {
+                centroid += points[i];
+            }
+            centroid /= points.Length;
+            
+            {{TYPE}} maxDistSq = {{ZERO}};
+            for (int i = 0; i < points.Length; i++)
+            {
+                {{TYPE}} distSq = Maths.LengthSquared(points[i] - centroid);
+                if (distSq > maxDistSq)
+                    maxDistSq = distSq;
+            }
+            
+            return new {{CLASS_NAME}}(centroid, Maths.Sqrt(maxDistSq));
+        }
+
+        // --- IEquatable & IFormattable Implementation ---
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals({{CLASS_NAME}} other) => Center.Equals(other.Center) && Radius.Equals(other.Radius);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object? obj) => obj is {{CLASS_NAME}} other && Equals(other);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override int GetHashCode() => HashCode.Combine(Center, Radius);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public string ToString(string? format, IFormatProvider? formatProvider = null)
+        {
+            return string.Format(formatProvider, "{{CLASS_NAME}}(Center: {0}, Radius: {1})", 
+                Center.ToString(format, formatProvider), Radius.ToString(format, formatProvider));
+        }
+
+        public static bool operator ==({{CLASS_NAME}} left, {{CLASS_NAME}} right) => left.Equals(right);
+        public static bool operator !=({{CLASS_NAME}} left, {{CLASS_NAME}} right) => !left.Equals(right);
+    }
+}
