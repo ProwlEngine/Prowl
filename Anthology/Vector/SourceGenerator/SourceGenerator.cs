@@ -81,17 +81,15 @@ class SourceGenerator
     {
         public string TypeName { get; }
         public string TypePrefix { get; }
-        public string MathClass { get; }
         public string ZeroValue { get; }
         public string OneValue { get; }
         public string TwoValue { get; }
         public string EpsilonValue { get; }
 
-        public TemplateTypeMapping(string typeName, string typePrefix, string mathClass, string zeroValue, string oneValue, string twoValue, string epsilonValue)
+        public TemplateTypeMapping(string typeName, string typePrefix, string zeroValue, string oneValue, string twoValue, string epsilonValue)
         {
             TypeName = typeName;
             TypePrefix = typePrefix;
-            MathClass = mathClass;
             ZeroValue = zeroValue;
             OneValue = oneValue;
             TwoValue = twoValue;
@@ -212,12 +210,12 @@ class SourceGenerator
 
     private static readonly Dictionary<string, TemplateTypeMapping> s_typeMappings = new()
     {
-        ["float"] = new TemplateTypeMapping("float", "Float", "MathF", "0f", "1f", "2f", "float.Epsilon"),
-        ["double"] = new TemplateTypeMapping("double", "Double", "Math", "0.0", "1.0", "2.0", "double.Epsilon"),
-        ["int"] = new TemplateTypeMapping("int", "Int", "Math", "0", "1", "2", "1"),
-        ["byte"] = new TemplateTypeMapping("byte", "Byte", "Math", "(byte)0", "(byte)1", "(byte)2", "(byte)1"),
-        ["uint"] = new TemplateTypeMapping("uint", "UInt", "Math", "0u", "1u", "2u", "1u"),
-        ["ulong"] = new TemplateTypeMapping("ulong", "ULong", "Math", "0ul", "1ul", "2ul", "1ul")
+        ["float"] = new TemplateTypeMapping("float", "Float", "0f", "1f", "2f", "float.Epsilon"),
+        ["double"] = new TemplateTypeMapping("double", "Double", "0.0", "1.0", "2.0", "double.Epsilon"),
+        ["int"] = new TemplateTypeMapping("int", "Int", "0", "1", "2", "1"),
+        ["byte"] = new TemplateTypeMapping("byte", "Byte", "(byte)0", "(byte)1", "(byte)2", "(byte)1"),
+        ["uint"] = new TemplateTypeMapping("uint", "UInt", "0u", "1u", "2u", "1u"),
+        ["ulong"] = new TemplateTypeMapping("ulong", "ULong", "0ul", "1ul", "2ul", "1ul")
     };
 
     private const int MAX_OUTPUT_SWIZZLE_DIMENSION = 4;
@@ -2083,7 +2081,6 @@ class SourceGenerator
         result = result.Replace("{{TYPE}}", typeMapping.TypeName);
         result = result.Replace("{{TYPE_PREFIX}}", typeMapping.TypePrefix);
         result = result.Replace("{{CLASS_NAME}}", $"{templateName}{typeMapping.TypePrefix}");
-        result = result.Replace("{{MATH_CLASS}}", typeMapping.MathClass);
         result = result.Replace("{{ZERO}}", typeMapping.ZeroValue);
         result = result.Replace("{{ONE}}", typeMapping.OneValue);
         result = result.Replace("{{TWO}}", typeMapping.TwoValue);

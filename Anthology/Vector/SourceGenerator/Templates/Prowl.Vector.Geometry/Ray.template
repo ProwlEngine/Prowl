@@ -43,6 +43,62 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             return Origin + Direction * distance;
         }
 
+        #region --- Intersection Methods ---
+
+        /// <summary>
+        /// Tests intersection with a plane.
+        /// </summary>
+        /// <param name="plane">The plane to test against.</param>
+        /// <param name="distance">The distance along the ray to the intersection point.</param>
+        /// <returns>True if the ray intersects the plane in the forward direction.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(Plane{{TYPE_PREFIX}} plane, out {{TYPE}} distance)
+        {
+            return Intersection{{TYPE_PREFIX}}.RayPlane(Origin, Direction, plane.Normal, plane.D, out distance);
+        }
+
+        /// <summary>
+        /// Tests intersection with a triangle.
+        /// </summary>
+        /// <param name="triangle">The triangle to test against.</param>
+        /// <param name="distance">The distance along the ray to the intersection point.</param>
+        /// <param name="u">Barycentric coordinate u.</param>
+        /// <param name="v">Barycentric coordinate v.</param>
+        /// <returns>True if the ray intersects the triangle.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(Triangle{{TYPE_PREFIX}} triangle, out {{TYPE}} distance, out {{TYPE}} u, out {{TYPE}} v)
+        {
+            return Intersection{{TYPE_PREFIX}}.RayTriangle(Origin, Direction, triangle.V0, triangle.V1, triangle.V2, out distance, out u, out v);
+        }
+
+        /// <summary>
+        /// Tests intersection with an axis-aligned bounding box.
+        /// </summary>
+        /// <param name="aabb">The AABB to test against.</param>
+        /// <param name="tMin">The entry distance.</param>
+        /// <param name="tMax">The exit distance.</param>
+        /// <returns>True if the ray intersects the AABB.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(AABB{{TYPE_PREFIX}} aabb, out {{TYPE}} tMin, out {{TYPE}} tMax)
+        {
+            return Intersection{{TYPE_PREFIX}}.RayAABB(Origin, Direction, aabb.Min, aabb.Max, out tMin, out tMax);
+        }
+
+        /// <summary>
+        /// Tests intersection with a sphere.
+        /// </summary>
+        /// <param name="sphere">The sphere to test against.</param>
+        /// <param name="t0">The first intersection distance.</param>
+        /// <param name="t1">The second intersection distance.</param>
+        /// <returns>True if the ray intersects the sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(Sphere{{TYPE_PREFIX}} sphere, out {{TYPE}} t0, out {{TYPE}} t1)
+        {
+            return Intersection{{TYPE_PREFIX}}.RaySphere(Origin, Direction, sphere.Center, sphere.Radius, out t0, out t1);
+        }
+
+        #endregion
+
         #region --- Utility Methods ---
 
         /// <summary>

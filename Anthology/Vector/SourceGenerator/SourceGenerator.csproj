@@ -8,10 +8,27 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Templates\Prowl.Vector.Geometry\" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <None Update="Templates\Prowl.Vector.Geometry\Frustrum.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Templates\Prowl.Vector.Geometry\LineSegment.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Templates\Prowl.Vector.Geometry\Intersection.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Templates\Prowl.Vector.Geometry\Sphere.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Templates\Prowl.Vector.Geometry\AABB.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Templates\Prowl.Vector.Geometry\Plane.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Templates\Prowl.Vector.Geometry\Triangle.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="Templates\Prowl.Vector.Geometry\Ray.template">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
