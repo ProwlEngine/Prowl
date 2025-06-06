@@ -7,4 +7,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Folder Include="Templates\Prowl.Vector.Geometry\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Templates\Prowl.Vector.Geometry\Ray.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

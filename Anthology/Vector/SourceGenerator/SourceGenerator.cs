@@ -61,6 +61,44 @@ class SourceGenerator
         }
     }
 
+    internal class TemplateConfig
+    {
+        public string TemplateName { get; }
+        public string[] SupportedTypes { get; }
+        public string Namespace { get; }
+        public string OutputFolder { get; }
+
+        public TemplateConfig(string templateName, string[] supportedTypes, string namespaceName, string outputFolder)
+        {
+            TemplateName = templateName;
+            SupportedTypes = supportedTypes;
+            Namespace = namespaceName;
+            OutputFolder = outputFolder;
+        }
+    }
+
+    internal class TemplateTypeMapping
+    {
+        public string TypeName { get; }
+        public string TypePrefix { get; }
+        public string MathClass { get; }
+        public string ZeroValue { get; }
+        public string OneValue { get; }
+        public string TwoValue { get; }
+        public string EpsilonValue { get; }
+
+        public TemplateTypeMapping(string typeName, string typePrefix, string mathClass, string zeroValue, string oneValue, string twoValue, string epsilonValue)
+        {
+            TypeName = typeName;
+            TypePrefix = typePrefix;
+            MathClass = mathClass;
+            ZeroValue = zeroValue;
+            OneValue = oneValue;
+            TwoValue = twoValue;
+            EpsilonValue = epsilonValue;
+        }
+    }
+
     // Swizzle configuration
     private static readonly VectorConfig[] s_vectorConfigs =
     [
@@ -172,6 +210,16 @@ class SourceGenerator
         new SwizzleCharSetDefinition(['R', 'G', 'B', 'A']), // Color accessors
     ];
 
+    private static readonly Dictionary<string, TemplateTypeMapping> s_typeMappings = new()
+    {
+        ["float"] = new TemplateTypeMapping("float", "Float", "MathF", "0f", "1f", "2f", "float.Epsilon"),
+        ["double"] = new TemplateTypeMapping("double", "Double", "Math", "0.0", "1.0", "2.0", "double.Epsilon"),
+        ["int"] = new TemplateTypeMapping("int", "Int", "Math", "0", "1", "2", "1"),
+        ["byte"] = new TemplateTypeMapping("byte", "Byte", "Math", "(byte)0", "(byte)1", "(byte)2", "(byte)1"),
+        ["uint"] = new TemplateTypeMapping("uint", "UInt", "Math", "0u", "1u", "2u", "1u"),
+        ["ulong"] = new TemplateTypeMapping("ulong", "ULong", "Math", "0ul", "1ul", "2ul", "1ul")
+    };
+
     private const int MAX_OUTPUT_SWIZZLE_DIMENSION = 4;
 
     static void Main(string[] args)
@@ -236,6 +284,9 @@ class SourceGenerator
             Console.WriteLine($"Generated: {fileName}");
         }
 
+
+        // Generate templates
+        GenerateTemplates(outputDirectory);
 
         int totalFiles = s_vectorConfigs.Length + (generateSwizzles ? s_vectorConfigs.Length : 0);
         Console.WriteLine($"\nGeneration complete! {totalFiles} files created.");
@@ -1943,6 +1994,115 @@ class SourceGenerator
         sb.AppendLine($"\t\treturn sb.ToString();");
         sb.AppendLine($"\t}}");
         sb.AppendLine();
+    }
+
+    #endregion
+
+    #region Template Files
+
+    private static void GenerateTemplates(string outputDirectory)
+    {
+        string templatesDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Templates");
+
+        if (!Directory.Exists(templatesDirectory))
+        {
+            Console.WriteLine($"Templates directory not found: {templatesDirectory}");
+            return;
+        }
+
+        Console.WriteLine("\nGenerating templates...");
+
+        // Discover all template directories
+        var templateDirs = Directory.GetDirectories(templatesDirectory, "Prowl.Vector.*", SearchOption.TopDirectoryOnly);
+
+        foreach (var templateDir in templateDirs)
+        {
+            string namespaceSuffix = Path.GetFileName(templateDir).Substring("Prowl.Vector.".Length);
+            string outputSubDir = Path.Combine(outputDirectory, namespaceSuffix);
+
+            ProcessTemplateDirectory(templateDir, namespaceSuffix, outputSubDir);
+        }
+    }
+
+    private static void ProcessTemplateDirectory(string templateDir, string namespaceSuffix, string outputDir)
+    {
+        var templateFiles = Directory.GetFiles(templateDir, "*.template", SearchOption.TopDirectoryOnly);
+
+        foreach (var templateFile in templateFiles)
+        {
+            string templateName = Path.GetFileNameWithoutExtension(templateFile);
+            string templateContent = File.ReadAllText(templateFile);
+
+            // Parse template header to determine supported types
+            var supportedTypes = ParseTemplateHeader(templateContent);
+
+            foreach (var typeName in supportedTypes)
+            {
+                if (s_typeMappings.TryGetValue(typeName, out var typeMapping))
+                {
+                    string generatedContent = ProcessTemplate(templateContent, typeMapping, namespaceSuffix, templateName);
+                    string outputFileName = $"{templateName}{typeMapping.TypePrefix}.cs";
+                    string outputPath = Path.Combine(outputDir, outputFileName);
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+                    File.WriteAllText(outputPath, generatedContent, Encoding.UTF8);
+
+                    Console.WriteLine($"Generated: {outputFileName}");
+                }
+            }
+        }
+    }
+
+    private static string[] ParseTemplateHeader(string templateContent)
+    {
+        // Look for a header comment like: // TEMPLATE_TYPES: float, double
+        var lines = templateContent.Split('\n');
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("// TEMPLATE_TYPES:"))
+            {
+                var typesString = trimmed.Substring("// TEMPLATE_TYPES:".Length).Trim();
+                return typesString.Split(',').Select(t => t.Trim()).ToArray();
+            }
+        }
+
+        // Default to float and double if no header found
+        return new[] { "float", "double" };
+    }
+
+    private static string ProcessTemplate(string templateContent, TemplateTypeMapping typeMapping, string namespaceSuffix, string templateName)
+    {
+        var result = templateContent;
+
+        // Add auto-generated header
+        var header = new StringBuilder();
+        AddHeader(header);
+
+        // Replace template placeholders
+        result = result.Replace("{{TYPE}}", typeMapping.TypeName);
+        result = result.Replace("{{TYPE_PREFIX}}", typeMapping.TypePrefix);
+        result = result.Replace("{{CLASS_NAME}}", $"{templateName}{typeMapping.TypePrefix}");
+        result = result.Replace("{{MATH_CLASS}}", typeMapping.MathClass);
+        result = result.Replace("{{ZERO}}", typeMapping.ZeroValue);
+        result = result.Replace("{{ONE}}", typeMapping.OneValue);
+        result = result.Replace("{{TWO}}", typeMapping.TwoValue);
+        result = result.Replace("{{EPSILON}}", typeMapping.EpsilonValue);
+        result = result.Replace("{{NAMESPACE_SUFFIX}}", namespaceSuffix);
+
+        // Replace vector type references
+        result = result.Replace("{{TYPE_PREFIX}}2", $"{typeMapping.TypePrefix}2");
+        result = result.Replace("{{TYPE_PREFIX}}3", $"{typeMapping.TypePrefix}3");
+        result = result.Replace("{{TYPE_PREFIX}}4", $"{typeMapping.TypePrefix}4");
+        result = result.Replace("{{TYPE_PREFIX}}4x4", $"{typeMapping.TypePrefix}4x4");
+
+        // Remove template header line
+        var lines = result.Split('\n');
+        var filteredLines = lines.Where(line => !line.Trim().StartsWith("// TEMPLATE_TYPES:")).ToArray();
+        result = string.Join('\n', filteredLines);
+
+        // Prepend auto-generated header
+        return header.ToString() + result;
     }
 
     #endregion
