@@ -243,12 +243,12 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <summary>
         /// Samples a random point uniformly distributed on the sphere surface.
         /// </summary>
-        /// <param name="u">Random value between 0 and 1.</param>
-        /// <param name="v">Random value between 0 and 1.</param>
         /// <returns>A uniformly distributed point on the sphere surface.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public {{TYPE_PREFIX}}3 SampleSurface({{TYPE}} u, {{TYPE}} v)
+        public {{TYPE_PREFIX}}3 SampleSurface()
         {
+            {{TYPE}} u = RNG.Shared.Next{{TYPE_PREFIX}}();
+            {{TYPE}} v = RNG.Shared.Next{{TYPE_PREFIX}}();
             {{TYPE}} theta = {{TWO}} * ({{TYPE}})Maths.PI * u;
             {{TYPE}} phi = Maths.Acos({{TWO}} * v - {{ONE}});
             
@@ -263,15 +263,13 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <summary>
         /// Samples a random point uniformly distributed inside the sphere volume.
         /// </summary>
-        /// <param name="u">Random value between 0 and 1.</param>
-        /// <param name="v">Random value between 0 and 1.</param>
-        /// <param name="w">Random value between 0 and 1.</param>
         /// <returns>A uniformly distributed point inside the sphere.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public {{TYPE_PREFIX}}3 SampleVolume({{TYPE}} u, {{TYPE}} v, {{TYPE}} w)
+        public {{TYPE_PREFIX}}3 SampleVolume()
         {
+            {{TYPE}} u = RNG.Shared.Next{{TYPE_PREFIX}}();
             {{TYPE}} r = Radius * Maths.Pow(u, {{ONE}} / 3); // Cube root for uniform distribution
-            {{TYPE_PREFIX}}3 direction = SampleSurface(v, w) - Center;
+            {{TYPE_PREFIX}}3 direction = SampleSurface() - Center;
             direction = Maths.Normalize(direction);
             return Center + direction * r;
         }

@@ -440,13 +440,13 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
        /// <summary>
        /// Samples a random point uniformly distributed inside the AABB.
        /// </summary>
-       /// <param name="u">Random value between 0 and 1.</param>
-       /// <param name="v">Random value between 0 and 1.</param>
-       /// <param name="w">Random value between 0 and 1.</param>
        /// <returns>A uniformly distributed point inside the AABB.</returns>
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-       public {{TYPE_PREFIX}}3 SampleVolume({{TYPE}} u, {{TYPE}} v, {{TYPE}} w)
+       public {{TYPE_PREFIX}}3 SampleVolume()
        {
+            {{TYPE}} u = RNG.Shared.Next{{TYPE_PREFIX}}();
+            {{TYPE}} v = RNG.Shared.Next{{TYPE_PREFIX}}();
+            {{TYPE}} w = RNG.Shared.Next{{TYPE_PREFIX}}();
            return new {{TYPE_PREFIX}}3(
                Maths.Lerp(Min.X, Max.X, u),
                Maths.Lerp(Min.Y, Max.Y, v),
