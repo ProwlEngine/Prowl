@@ -454,12 +454,12 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             {{TYPE_PREFIX}}3 topNormal = Maths.Normalize(Maths.Cross(right, forward + actualUp * tanHalfFovY));
             {{TYPE_PREFIX}}3 bottomNormal = Maths.Normalize(Maths.Cross(forward - actualUp * tanHalfFovY, right));
             
-            Plane{{TYPE_PREFIX}} left = new Plane{{TYPE_PREFIX}}(leftNormal, Maths.Dot(leftNormal, position));
-            Plane{{TYPE_PREFIX}} right = new Plane{{TYPE_PREFIX}}(rightNormal, Maths.Dot(rightNormal, position));
-            Plane{{TYPE_PREFIX}} top = new Plane{{TYPE_PREFIX}}(topNormal, Maths.Dot(topNormal, position));
-            Plane{{TYPE_PREFIX}} bottom = new Plane{{TYPE_PREFIX}}(bottomNormal, Maths.Dot(bottomNormal, position));
+            Plane{{TYPE_PREFIX}} p_left = new Plane{{TYPE_PREFIX}}(leftNormal, Maths.Dot(leftNormal, position));
+            Plane{{TYPE_PREFIX}} p_right = new Plane{{TYPE_PREFIX}}(rightNormal, Maths.Dot(rightNormal, position));
+            Plane{{TYPE_PREFIX}} p_top = new Plane{{TYPE_PREFIX}}(topNormal, Maths.Dot(topNormal, position));
+            Plane{{TYPE_PREFIX}} p_bottom = new Plane{{TYPE_PREFIX}}(bottomNormal, Maths.Dot(bottomNormal, position));
             
-            return new {{CLASS_NAME}}(near, far, left, right, top, bottom);
+            return new {{CLASS_NAME}}(near, far, p_left, p_right, p_top, p_bottom);
         }
         
         /// <summary>

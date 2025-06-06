@@ -395,7 +395,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IntersectsWith({{CLASS_NAME}} other)
         {
-            return Intersection{{TYPE_PREFIX}}.TriangleTriangle(this, other);
+            return Intersection{{TYPE_PREFIX}}.TriangleTriangle(V0, V1, V2, other.V0, other.V1, other.V2);
         }
 
         /// <summary>
