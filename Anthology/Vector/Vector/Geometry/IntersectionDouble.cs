@@ -851,7 +851,6 @@ namespace Prowl.Vector.Geometry
                 }
             }
             // If not completely behind any plane, it must be intersecting or inside.
-            // A more precise test for full containment would check if sphere center + radius is inside all planes.
             return true;
         }
         

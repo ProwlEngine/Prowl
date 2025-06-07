@@ -1,0 +1,1559 @@
+// TEMPLATE_TYPES: float, double
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Linq;
+
+namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
+{
+
+    /// <summary>
+    /// Represents a parametric spline curve in 3D space.
+    /// </summary>
+    public struct {{CLASS_NAME}} : IEquatable<{{CLASS_NAME}}>, IFormattable
+    {
+        /// <summary>
+        /// Represents a coordinate frame along the spline.
+        /// </summary>
+        public struct SplineFrame
+        {
+            /// <summary>The position on the spline.</summary>
+            public {{TYPE_PREFIX}}3 Position;
+            
+            /// <summary>The forward direction (tangent to the spline).</summary>
+            public {{TYPE_PREFIX}}3 Forward;
+            
+            /// <summary>The up direction (binormal or twist-controlled up vector).</summary>
+            public {{TYPE_PREFIX}}3 Up;
+            
+            /// <summary>The right direction (cross product of forward and up).</summary>
+            public {{TYPE_PREFIX}}3 Right;
+            
+            /// <summary>The curvature at this point.</summary>
+            public {{TYPE}} Curvature;
+            
+            /// <summary>The torsion (twist) at this point.</summary>
+            public {{TYPE}} Torsion;
+
+            public SplineFrame({{TYPE_PREFIX}}3 position, {{TYPE_PREFIX}}3 forward, {{TYPE_PREFIX}}3 up, {{TYPE_PREFIX}}3 right, {{TYPE}} curvature = {{ZERO}}, {{TYPE}} torsion = {{ZERO}})
+            {
+                Position = position;
+                Forward = forward;
+                Up = up;
+                Right = right;
+                Curvature = curvature;
+                Torsion = torsion;
+            }
+        }
+
+        /// <summary>
+        /// Represents different types of spline interpolation.
+        /// </summary>
+        public enum SplineType
+        {
+            /// <summary>Linear interpolation between points.</summary>
+            Linear,
+            /// <summary>Catmull-Rom spline (cardinal spline with tension 0).</summary>
+            CatmullRom,
+            /// <summary>Cubic Bezier spline.</summary>
+            Bezier,
+            /// <summary>B-spline (uniform cubic B-spline).</summary>
+            BSpline,
+            /// <summary>Hermite spline with tangent control.</summary>
+            Hermite
+        }
+
+        /// <summary>
+        /// Method for calculating the up vector along the spline.
+        /// </summary>
+        public enum UpVectorMethod
+        {
+            /// <summary>Use a fixed world-space up vector (e.g., Y-up).</summary>
+            FixedWorldUp,
+            /// <summary>Use Frenet frame (normal from curvature).</summary>
+            FrenetFrame,
+            /// <summary>Minimize twist using parallel transport.</summary>
+            MinimumTwist,
+            /// <summary>Use custom up vectors provided per control point.</summary>
+            Custom
+        }
+
+        /// <summary>The control points of the spline.</summary>
+        public {{TYPE_PREFIX}}3[] ControlPoints;
+
+        /// <summary>The tangent vectors for Hermite splines.</summary>
+        public {{TYPE_PREFIX}}3[]? Tangents;
+
+        /// <summary>The type of spline interpolation.</summary>
+        public SplineType Type;
+
+        /// <summary>Whether the spline is closed (forms a loop).</summary>
+        public bool IsClosed;
+
+        /// <summary>Tension parameter for cardinal splines (0 = Catmull-Rom).</summary>
+        public {{TYPE}} Tension;
+
+        /// <summary>Custom up vectors for UpVectorMethod.Custom.</summary>
+        public {{TYPE_PREFIX}}3[]? CustomUpVectors;
+
+        /// <summary>Fixed world up vector for UpVectorMethod.FixedWorldUp.</summary>
+        public {{TYPE_PREFIX}}3 WorldUpVector;
+
+        /// <summary>
+        /// Initializes a new spline with the specified control points and type.
+        /// </summary>
+        /// <param name="controlPoints">The control points defining the spline.</param>
+        /// <param name="type">The type of spline interpolation.</param>
+        /// <param name="closed">Whether the spline should be closed.</param>
+        /// <param name="tension">Tension parameter for cardinal splines.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}}({{TYPE_PREFIX}}3[] controlPoints, SplineType type = SplineType.CatmullRom, bool closed = false, {{TYPE}} tension = {{ZERO}})
+        {
+            ControlPoints = controlPoints ?? throw new ArgumentNullException(nameof(controlPoints));
+            Tangents = null;
+            Type = type;
+            IsClosed = closed;
+            Tension = tension;
+            CustomUpVectors = null;
+            WorldUpVector = Double3.UnitY;
+
+            if (type == SplineType.Hermite)
+            {
+                // Initialize default tangents for Hermite splines
+                GenerateDefaultTangents();
+            }
+        }
+
+        /// <summary>
+        /// Initializes a new Hermite spline with control points and tangents.
+        /// </summary>
+        /// <param name="controlPoints">The control points defining the spline.</param>
+        /// <param name="tangents">The tangent vectors at each control point.</param>
+        /// <param name="closed">Whether the spline should be closed.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}}({{TYPE_PREFIX}}3[] controlPoints, {{TYPE_PREFIX}}3[] tangents, bool closed = false)
+        {
+            ControlPoints = controlPoints ?? throw new ArgumentNullException(nameof(controlPoints));
+            Tangents = tangents ?? throw new ArgumentNullException(nameof(tangents));
+            Type = SplineType.Hermite;
+            IsClosed = closed;
+            Tension = {{ZERO}};
+            CustomUpVectors = null;
+            WorldUpVector = Double3.UnitY;
+
+            if (controlPoints.Length != tangents.Length)
+                throw new ArgumentException("Control points and tangents arrays must have the same length.");
+        }
+
+        /// <summary>
+        /// Gets the number of control points in the spline.
+        /// </summary>
+        public int ControlPointCount
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => ControlPoints?.Length ?? 0;
+        }
+
+        /// <summary>
+        /// Gets the number of segments in the spline.
+        /// </summary>
+        public int SegmentCount
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                if (ControlPoints == null || ControlPoints.Length < 2) return 0;
+                
+                return Type switch
+                {
+                    SplineType.Bezier => (ControlPoints.Length - 1) / 3,
+                    _ => IsClosed ? ControlPoints.Length : ControlPoints.Length - 1
+                };
+            }
+        }
+
+        /// <summary>
+        /// Evaluates the spline at the given parameter t.
+        /// </summary>
+        /// <param name="t">Parameter value (0 to 1 for the entire spline).</param>
+        /// <returns>The position on the spline at parameter t.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 Evaluate({{TYPE}} t)
+        {
+            if (ControlPoints == null || ControlPoints.Length == 0)
+                return {{TYPE_PREFIX}}3.Zero;
+
+            if (ControlPoints.Length == 1)
+                return ControlPoints[0];
+
+            // Clamp t to [0, 1]
+            t = Maths.Clamp(t, {{ZERO}}, {{ONE}});
+
+            return Type switch
+            {
+                SplineType.Linear => EvaluateLinear(t),
+                SplineType.CatmullRom => EvaluateCatmullRom(t),
+                SplineType.Bezier => EvaluateBezier(t),
+                SplineType.BSpline => EvaluateBSpline(t),
+                SplineType.Hermite => EvaluateHermite(t),
+                _ => EvaluateLinear(t)
+            };
+        }
+
+        /// <summary>
+        /// Evaluates the first derivative (tangent) of the spline at parameter t.
+        /// </summary>
+        /// <param name="t">Parameter value (0 to 1).</param>
+        /// <returns>The tangent vector at parameter t.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 EvaluateDerivative({{TYPE}} t)
+        {
+            if (ControlPoints == null || ControlPoints.Length < 2)
+                return {{TYPE_PREFIX}}3.Zero;
+
+            t = Maths.Clamp(t, {{ZERO}}, {{ONE}});
+
+            return Type switch
+            {
+                SplineType.Linear => EvaluateLinearDerivative(t),
+                SplineType.CatmullRom => EvaluateCatmullRomDerivative(t),
+                SplineType.Bezier => EvaluateBezierDerivative(t),
+                SplineType.BSpline => EvaluateBSplineDerivative(t),
+                SplineType.Hermite => EvaluateHermiteDerivative(t),
+                _ => EvaluateLinearDerivative(t)
+            };
+        }
+
+        /// <summary>
+        /// Evaluates a complete coordinate frame (position, forward, up, right) at parameter t.
+        /// </summary>
+        /// <param name="t">Parameter value (0 to 1).</param>
+        /// <param name="upMethod">Method for calculating the up vector.</param>
+        /// <returns>A complete coordinate frame at parameter t.</returns>
+        public SplineFrame EvaluateFrame({{TYPE}} t, UpVectorMethod upMethod = UpVectorMethod.FixedWorldUp)
+        {
+            if (ControlPoints == null || ControlPoints.Length < 2)
+                return new SplineFrame({{TYPE_PREFIX}}3.Zero, {{TYPE_PREFIX}}3.UnitZ, {{TYPE_PREFIX}}3.UnitY, {{TYPE_PREFIX}}3.UnitX);
+
+            t = Maths.Clamp(t, {{ZERO}}, {{ONE}});
+
+            // Get position and first derivative (tangent)
+            {{TYPE_PREFIX}}3 position = Evaluate(t);
+            {{TYPE_PREFIX}}3 firstDerivative = EvaluateDerivative(t);
+            
+            // Normalize the forward direction
+            {{TYPE_PREFIX}}3 forward = Maths.Normalize(firstDerivative);
+            
+            // Handle degenerate case
+            if (Maths.LengthSquared(forward) < {{EPSILON}} * {{EPSILON}})
+            {
+                forward = {{TYPE_PREFIX}}3.UnitZ;
+            }
+
+            {{TYPE_PREFIX}}3 up, right;
+            {{TYPE}} curvature = {{ZERO}};
+            {{TYPE}} torsion = {{ZERO}};
+
+            switch (upMethod)
+            {
+                case UpVectorMethod.FixedWorldUp:
+                    {
+                        {{TYPE_PREFIX}}3 worldUp = WorldUpVector.Equals({{TYPE_PREFIX}}3.Zero) ? {{TYPE_PREFIX}}3.UnitY : Maths.Normalize(WorldUpVector);
+                        right = Maths.Normalize(Maths.Cross(forward, worldUp));
+                        
+                        // Handle case where forward is parallel to world up
+                        if (Maths.LengthSquared(right) < {{EPSILON}} * {{EPSILON}})
+                        {
+                            // Choose an arbitrary perpendicular vector
+                            {{TYPE_PREFIX}}3 arbitrary = Maths.Abs(forward.X) < ({{TYPE}})0.9 ? {{TYPE_PREFIX}}3.UnitX : {{TYPE_PREFIX}}3.UnitZ;
+                            right = Maths.Normalize(Maths.Cross(forward, arbitrary));
+                        }
+                        
+                        up = Maths.Cross(right, forward);
+                    }
+                    break;
+
+                case UpVectorMethod.FrenetFrame:
+                    {
+                        // Calculate second derivative for curvature
+                        {{TYPE_PREFIX}}3 secondDerivative = EvaluateSecondDerivative(t);
+                        {{TYPE_PREFIX}}3 normal = secondDerivative - Maths.Dot(secondDerivative, forward) * forward;
+                        
+                        {{TYPE}} normalLength = Maths.Length(normal);
+                        if (normalLength > {{EPSILON}})
+                        {
+                            up = normal / normalLength;
+                            curvature = normalLength / Maths.Max(Maths.LengthSquared(firstDerivative), {{EPSILON}});
+                        }
+                        else
+                        {
+                            // Fallback to world up when curvature is zero
+                            {{TYPE_PREFIX}}3 worldUp = {{TYPE_PREFIX}}3.UnitY;
+                            up = worldUp - Maths.Dot(worldUp, forward) * forward;
+                            if (Maths.LengthSquared(up) < {{EPSILON}} * {{EPSILON}})
+                            {
+                                {{TYPE_PREFIX}}3 arbitrary = Maths.Abs(forward.X) < ({{TYPE}})0.9 ? {{TYPE_PREFIX}}3.UnitX : {{TYPE_PREFIX}}3.UnitZ;
+                                up = Maths.Normalize(Maths.Cross(Maths.Cross(forward, arbitrary), forward));
+                            }
+                            else
+                            {
+                                up = Maths.Normalize(up);
+                            }
+                        }
+                        
+                        right = Maths.Cross(forward, up);
+                        
+                        // Calculate torsion if we have enough derivatives
+                        {{TYPE_PREFIX}}3 thirdDerivative = EvaluateThirdDerivative(t);
+                        {{TYPE_PREFIX}}3 crossFirstSecond = Maths.Cross(firstDerivative, secondDerivative);
+                        {{TYPE}} crossLength = Maths.Length(crossFirstSecond);
+                        if (crossLength > {{EPSILON}})
+                        {
+                            torsion = Maths.Dot(crossFirstSecond, thirdDerivative) / (crossLength * crossLength);
+                        }
+                    }
+                    break;
+
+                case UpVectorMethod.MinimumTwist:
+                    {
+                        // Use parallel transport to minimize twist
+                        up = ParallelTransportUp(t);
+                        right = Maths.Cross(forward, up);
+                    }
+                    break;
+
+                case UpVectorMethod.Custom:
+                    {
+                        if (CustomUpVectors != null && CustomUpVectors.Length > 0)
+                        {
+                            {{TYPE_PREFIX}}3 customUp = InterpolateCustomUpVector(t);
+                            // Project custom up vector onto plane perpendicular to forward
+                            up = customUp - Maths.Dot(customUp, forward) * forward;
+                            if (Maths.LengthSquared(up) < {{EPSILON}} * {{EPSILON}})
+                            {
+                                // Fallback if custom up is parallel to forward
+                                {{TYPE_PREFIX}}3 arbitrary = Maths.Abs(forward.X) < ({{TYPE}})0.9 ? {{TYPE_PREFIX}}3.UnitX : {{TYPE_PREFIX}}3.UnitZ;
+                                up = Maths.Normalize(Maths.Cross(Maths.Cross(forward, arbitrary), forward));
+                            }
+                            else
+                            {
+                                up = Maths.Normalize(up);
+                            }
+                            right = Maths.Cross(forward, up);
+                        }
+                        else
+                        {
+                            // Fallback to fixed world up
+                            {{TYPE_PREFIX}}3 worldUp = {{TYPE_PREFIX}}3.UnitY;
+                            right = Maths.Normalize(Maths.Cross(forward, worldUp));
+                            if (Maths.LengthSquared(right) < {{EPSILON}} * {{EPSILON}})
+                            {
+                                {{TYPE_PREFIX}}3 arbitrary = Maths.Abs(forward.X) < ({{TYPE}})0.9 ? {{TYPE_PREFIX}}3.UnitX : {{TYPE_PREFIX}}3.UnitZ;
+                                right = Maths.Normalize(Maths.Cross(forward, arbitrary));
+                            }
+                            up = Maths.Cross(right, forward);
+                        }
+                    }
+                    break;
+
+                default:
+                    up = {{TYPE_PREFIX}}3.UnitY;
+                    right = {{TYPE_PREFIX}}3.UnitX;
+                    break;
+            }
+
+            return new SplineFrame(position, forward, up, right, curvature, torsion);
+        }
+
+        /// <summary>
+        /// Evaluates multiple frames along the spline.
+        /// </summary>
+        /// <param name="sampleCount">Number of frames to generate.</param>
+        /// <param name="upMethod">Method for calculating up vectors.</param>
+        /// <returns>Array of coordinate frames along the spline.</returns>
+        public SplineFrame[] EvaluateFrames(int sampleCount, UpVectorMethod upMethod = UpVectorMethod.FixedWorldUp)
+        {
+            if (sampleCount < 2)
+                throw new ArgumentException("Sample count must be at least 2", nameof(sampleCount));
+
+            var frames = new SplineFrame[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
+            {
+                {{TYPE}} t = i / ({{TYPE}})(sampleCount - 1);
+                frames[i] = EvaluateFrame(t, upMethod);
+            }
+
+            return frames;
+        }
+
+        /// <summary>
+        /// Sets custom up vectors for UpVectorMethod.Custom.
+        /// </summary>
+        /// <param name="upVectors">Up vectors corresponding to control points.</param>
+        public void SetCustomUpVectors({{TYPE_PREFIX}}3[] upVectors)
+        {
+            if (upVectors == null)
+            {
+                CustomUpVectors = null;
+                return;
+            }
+
+            CustomUpVectors = new {{TYPE_PREFIX}}3[upVectors.Length];
+            Array.Copy(upVectors, CustomUpVectors, upVectors.Length);
+        }
+
+        /// <summary>
+        /// Sets the world up vector for UpVectorMethod.FixedWorldUp.
+        /// </summary>
+        /// <param name="worldUp">The world up vector.</param>
+        public void SetWorldUpVector({{TYPE_PREFIX}}3 worldUp)
+        {
+            WorldUpVector = worldUp;
+        }
+
+        #region Private Frame Calculation Methods
+
+        private {{TYPE_PREFIX}}3 EvaluateSecondDerivative({{TYPE}} t)
+        {
+            // Numerical approximation of second derivative
+            const {{TYPE}} h = {{EPSILON}} * 1000; // Small step
+            {{TYPE}} t1 = Maths.Max(t - h, {{ZERO}});
+            {{TYPE}} t2 = Maths.Min(t + h, {{ONE}});
+            
+            {{TYPE_PREFIX}}3 d1 = EvaluateDerivative(t1);
+            {{TYPE_PREFIX}}3 d2 = EvaluateDerivative(t2);
+            
+            return (d2 - d1) / (t2 - t1);
+        }
+
+        private {{TYPE_PREFIX}}3 EvaluateThirdDerivative({{TYPE}} t)
+        {
+            // Numerical approximation of third derivative
+            const {{TYPE}} h = {{EPSILON}} * 1000;
+            {{TYPE}} t1 = Maths.Max(t - h, {{ZERO}});
+            {{TYPE}} t2 = Maths.Min(t + h, {{ONE}});
+            
+            {{TYPE_PREFIX}}3 d1 = EvaluateSecondDerivative(t1);
+            {{TYPE_PREFIX}}3 d2 = EvaluateSecondDerivative(t2);
+            
+            return (d2 - d1) / (t2 - t1);
+        }
+
+        private {{TYPE_PREFIX}}3 ParallelTransportUp({{TYPE}} t)
+        {
+            // Simplified parallel transport - maintains previous up vector projected onto current normal plane
+            // In a full implementation, this would integrate along the curve
+            
+            if (t <= {{EPSILON}})
+            {
+                // Initialize with world up
+                {{TYPE_PREFIX}}3 forward = Maths.Normalize(EvaluateDerivative({{ZERO}}));
+                {{TYPE_PREFIX}}3 worldUp = WorldUpVector.Equals({{TYPE_PREFIX}}3.Zero) ? {{TYPE_PREFIX}}3.UnitY : Maths.Normalize(WorldUpVector);
+                {{TYPE_PREFIX}}3 up = worldUp - Maths.Dot(worldUp, forward) * forward;
+                return Maths.LengthSquared(up) > {{EPSILON}} * {{EPSILON}} ? Maths.Normalize(up) : {{TYPE_PREFIX}}3.UnitY;
+            }
+
+            // Get previous frame
+            const {{TYPE}} step = ({{TYPE}})0.01;
+            {{TYPE}} prevT = Maths.Max(t - step, {{ZERO}});
+            SplineFrame prevFrame = EvaluateFrame(prevT, UpVectorMethod.FixedWorldUp);
+            
+            {{TYPE_PREFIX}}3 currentForward = Maths.Normalize(EvaluateDerivative(t));
+            
+            // Project previous up onto current normal plane
+            {{TYPE_PREFIX}}3 projectedUp = prevFrame.Up - Maths.Dot(prevFrame.Up, currentForward) * currentForward;
+            
+            return Maths.LengthSquared(projectedUp) > {{EPSILON}} * {{EPSILON}} ? 
+                Maths.Normalize(projectedUp) : 
+                {{TYPE_PREFIX}}3.UnitY;
+        }
+
+        private {{TYPE_PREFIX}}3 InterpolateCustomUpVector({{TYPE}} t)
+        {
+            if (CustomUpVectors == null || CustomUpVectors.Length == 0)
+                return {{TYPE_PREFIX}}3.UnitY;
+
+            if (CustomUpVectors.Length == 1)
+                return CustomUpVectors[0];
+
+            // Interpolate between custom up vectors based on control point positions
+            {{TYPE}} scaledT = t * (CustomUpVectors.Length - 1);
+            int index = (int)Maths.Floor(scaledT);
+            {{TYPE}} localT = scaledT - index;
+
+            if (index >= CustomUpVectors.Length - 1)
+                return CustomUpVectors[CustomUpVectors.Length - 1];
+
+            // Use spherical linear interpolation for smooth rotation
+            return Slerp(CustomUpVectors[index], CustomUpVectors[index + 1], localT);
+        }
+
+        private {{TYPE_PREFIX}}3 Slerp({{TYPE_PREFIX}}3 a, {{TYPE_PREFIX}}3 b, {{TYPE}} t)
+        {
+            // Spherical linear interpolation
+            {{TYPE}} dot = Maths.Clamp(Maths.Dot(a, b), -{{ONE}}, {{ONE}});
+            
+            if (Maths.Abs(dot) > ({{TYPE}})0.9995)
+            {
+                // Vectors are nearly parallel, use linear interpolation
+                return Maths.Normalize(Maths.Lerp(a, b, t));
+            }
+            
+            {{TYPE}} theta = Maths.Acos(Maths.Abs(dot));
+            {{TYPE}} sinTheta = Maths.Sin(theta);
+            
+            {{TYPE}} wa = Maths.Sin(({{ONE}} - t) * theta) / sinTheta;
+            {{TYPE}} wb = Maths.Sin(t * theta) / sinTheta;
+            
+            if (dot < {{ZERO}})
+                wb = -wb;
+                
+            return Maths.Normalize(a * wa + b * wb);
+        }
+
+        #endregion
+
+        /// <summary>
+        /// Creates a transformation matrix from a spline frame.
+        /// </summary>
+        /// <param name="frame">The spline frame.</param>
+        /// <returns>A 4x4 transformation matrix.</returns>
+        public static {{TYPE_PREFIX}}4x4 FrameToMatrix(SplineFrame frame)
+        {
+            return new {{TYPE_PREFIX}}4x4(
+                frame.Right.X, frame.Up.X, frame.Forward.X, frame.Position.X,
+                frame.Right.Y, frame.Up.Y, frame.Forward.Y, frame.Position.Y,
+                frame.Right.Z, frame.Up.Z, frame.Forward.Z, frame.Position.Z,
+                {{ZERO}}, {{ZERO}}, {{ZERO}}, {{ONE}}
+            );
+        }
+
+        /// <summary>
+        /// Transforms a local offset by a spline frame.
+        /// </summary>
+        /// <param name="frame">The spline frame.</param>
+        /// <param name="localOffset">Local offset (X=right, Y=up, Z=forward).</param>
+        /// <returns>World space position.</returns>
+        public static {{TYPE_PREFIX}}3 TransformByFrame(SplineFrame frame, {{TYPE_PREFIX}}3 localOffset)
+        {
+            return frame.Position + 
+                   frame.Right * localOffset.X + 
+                   frame.Up * localOffset.Y + 
+                   frame.Forward * localOffset.Z;
+        }
+
+        /// <summary>
+        /// Gets the approximate length of the spline using adaptive sampling.
+        /// </summary>
+        /// <param name="subdivisions">Number of subdivisions for length calculation.</param>
+        /// <returns>The approximate length of the spline.</returns>
+        public {{TYPE}} GetLength(int subdivisions = 100)
+        {
+            if (ControlPoints == null || ControlPoints.Length < 2)
+                return {{ZERO}};
+
+            {{TYPE}} length = {{ZERO}};
+            {{TYPE_PREFIX}}3 previousPoint = Evaluate({{ZERO}});
+
+            for (int i = 1; i <= subdivisions; i++)
+            {
+                {{TYPE}} t = i / ({{TYPE}})subdivisions;
+                {{TYPE_PREFIX}}3 currentPoint = Evaluate(t);
+                length += Maths.Length(currentPoint - previousPoint);
+                previousPoint = currentPoint;
+            }
+
+            return length;
+        }
+
+        /// <summary>
+        /// Finds the parameter t that corresponds to the given arc length.
+        /// </summary>
+        /// <param name="targetLength">The target arc length.</param>
+        /// <param name="tolerance">Tolerance for the binary search.</param>
+        /// <returns>The parameter t corresponding to the target length.</returns>
+        public {{TYPE}} GetParameterAtLength({{TYPE}} targetLength, {{TYPE}} tolerance = {{EPSILON}} * 1000)
+        {
+            if (targetLength <= {{ZERO}}) return {{ZERO}};
+
+            {{TYPE}} totalLength = GetLength();
+            if (targetLength >= totalLength) return {{ONE}};
+
+            // Binary search for the parameter
+            {{TYPE}} tMin = {{ZERO}};
+            {{TYPE}} tMax = {{ONE}};
+            {{TYPE}} t = targetLength / totalLength; // Initial guess
+
+            for (int iteration = 0; iteration < 50; iteration++) // Max iterations
+            {
+                {{TYPE}} currentLength = GetLengthUpToParameter(t);
+                {{TYPE}} error = currentLength - targetLength;
+
+                if (Maths.Abs(error) < tolerance)
+                    break;
+
+                if (error > {{ZERO}})
+                    tMax = t;
+                else
+                    tMin = t;
+
+                t = (tMin + tMax) / {{TWO}};
+            }
+
+            return t;
+        }
+
+        /// <summary>
+        /// Gets the length of the spline from t=0 to the given parameter.
+        /// </summary>
+        /// <param name="t">The parameter to measure length to.</param>
+        /// <param name="subdivisions">Number of subdivisions for calculation.</param>
+        /// <returns>The length from start to parameter t.</returns>
+        public {{TYPE}} GetLengthUpToParameter({{TYPE}} t, int subdivisions = 100)
+        {
+            if (t <= {{ZERO}}) return {{ZERO}};
+            if (t >= {{ONE}}) return GetLength(subdivisions);
+
+            {{TYPE}} length = {{ZERO}};
+            {{TYPE_PREFIX}}3 previousPoint = Evaluate({{ZERO}});
+            int steps = (int)(subdivisions * t);
+
+            for (int i = 1; i <= steps; i++)
+            {
+                {{TYPE}} currentT = (i / ({{TYPE}})subdivisions);
+                {{TYPE_PREFIX}}3 currentPoint = Evaluate(currentT);
+                length += Maths.Length(currentPoint - previousPoint);
+                previousPoint = currentPoint;
+            }
+
+            return length;
+        }
+
+        /// <summary>
+        /// Samples points along the spline at uniform parameter intervals.
+        /// </summary>
+        /// <param name="sampleCount">Number of samples to generate.</param>
+        /// <returns>Array of sampled points.</returns>
+        public {{TYPE_PREFIX}}3[] SampleUniform(int sampleCount)
+        {
+            if (sampleCount < 2)
+                throw new ArgumentException("Sample count must be at least 2", nameof(sampleCount));
+
+            var samples = new {{TYPE_PREFIX}}3[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
+            {
+                {{TYPE}} t = i / ({{TYPE}})(sampleCount - 1);
+                samples[i] = Evaluate(t);
+            }
+
+            return samples;
+        }
+
+        /// <summary>
+        /// Samples points along the spline at uniform arc length intervals.
+        /// </summary>
+        /// <param name="sampleCount">Number of samples to generate.</param>
+        /// <returns>Array of sampled points with uniform spacing.</returns>
+        public {{TYPE_PREFIX}}3[] SampleUniformLength(int sampleCount)
+        {
+            if (sampleCount < 2)
+                throw new ArgumentException("Sample count must be at least 2", nameof(sampleCount));
+
+            var samples = new {{TYPE_PREFIX}}3[sampleCount];
+            {{TYPE}} totalLength = GetLength();
+
+            for (int i = 0; i < sampleCount; i++)
+            {
+                {{TYPE}} targetLength = (i / ({{TYPE}})(sampleCount - 1)) * totalLength;
+                {{TYPE}} t = GetParameterAtLength(targetLength);
+                samples[i] = Evaluate(t);
+            }
+
+            return samples;
+        }
+
+        /// <summary>
+        /// Finds the closest point on the spline to a given point.
+        /// </summary>
+        /// <param name="point">The point to find the closest point to.</param>
+        /// <param name="subdivisions">Number of subdivisions for the search.</param>
+        /// <returns>The closest point on the spline and its parameter.</returns>
+        public ({{TYPE_PREFIX}}3 Point, {{TYPE}} Parameter) GetClosestPoint({{TYPE_PREFIX}}3 point, int subdivisions = 100)
+        {
+            {{TYPE}} minDistance = {{TYPE}}.MaxValue;
+            {{TYPE}} closestT = {{ZERO}};
+            {{TYPE_PREFIX}}3 closestPoint = {{TYPE_PREFIX}}3.Zero;
+
+            // Coarse search
+            for (int i = 0; i <= subdivisions; i++)
+            {
+                {{TYPE}} t = i / ({{TYPE}})subdivisions;
+                {{TYPE_PREFIX}}3 splinePoint = Evaluate(t);
+                {{TYPE}} distance = Maths.LengthSquared(point - splinePoint);
+
+                if (distance < minDistance)
+                {
+                    minDistance = distance;
+                    closestT = t;
+                    closestPoint = splinePoint;
+                }
+            }
+
+            // Refine with Newton-Raphson if we have derivatives
+            if (Type != SplineType.Linear)
+            {
+                for (int iteration = 0; iteration < 10; iteration++)
+                {
+                    {{TYPE_PREFIX}}3 splinePoint = Evaluate(closestT);
+                    {{TYPE_PREFIX}}3 derivative = EvaluateDerivative(closestT);
+                    
+                    {{TYPE_PREFIX}}3 diff = splinePoint - point;
+                    {{TYPE}} numerator = Maths.Dot(diff, derivative);
+                    {{TYPE}} denominator = Maths.Dot(derivative, derivative);
+
+                    if (Maths.Abs(denominator) < {{EPSILON}})
+                        break;
+
+                    {{TYPE}} newT = closestT - numerator / denominator;
+                    newT = Maths.Clamp(newT, {{ZERO}}, {{ONE}});
+
+                    if (Maths.Abs(newT - closestT) < {{EPSILON}})
+                        break;
+
+                    closestT = newT;
+                    closestPoint = Evaluate(closestT);
+                }
+            }
+
+            return (closestPoint, closestT);
+        }
+
+        #region Private Evaluation Methods
+
+        private {{TYPE_PREFIX}}3 EvaluateLinear({{TYPE}} t)
+        {
+            if (ControlPoints.Length == 1) return ControlPoints[0];
+
+            {{TYPE}} scaledT = t * (ControlPoints.Length - 1);
+            int index = (int)Maths.Floor(scaledT);
+            {{TYPE}} localT = scaledT - index;
+
+            if (index >= ControlPoints.Length - 1)
+            {
+                return IsClosed ? 
+                    Maths.Lerp(ControlPoints[ControlPoints.Length - 1], ControlPoints[0], localT) :
+                    ControlPoints[ControlPoints.Length - 1];
+            }
+
+            {{TYPE_PREFIX}}3 p0 = ControlPoints[index];
+            {{TYPE_PREFIX}}3 p1 = ControlPoints[index + 1];
+            return Maths.Lerp(p0, p1, localT);
+        }
+
+        private {{TYPE_PREFIX}}3 EvaluateCatmullRom({{TYPE}} t)
+        {
+            int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 1;
+            {{TYPE}} scaledT = t * segmentCount;
+            int segment = (int)Maths.Floor(scaledT);
+            {{TYPE}} localT = scaledT - segment;
+
+            if (segment >= segmentCount)
+            {
+                segment = segmentCount - 1;
+                localT = {{ONE}};
+            }
+
+            // Get the four control points for Catmull-Rom
+            {{TYPE_PREFIX}}3 p0, p1, p2, p3;
+            GetCatmullRomPoints(segment, out p0, out p1, out p2, out p3);
+
+            // Catmull-Rom interpolation
+            {{TYPE}} t2 = localT * localT;
+            {{TYPE}} t3 = t2 * localT;
+
+            {{TYPE}} b0 = -Tension * t3 + {{TWO}} * Tension * t2 - Tension * localT;
+            {{TYPE}} b1 = ({{TWO}} - Tension) * t3 + (Tension - 3) * t2 + {{ONE}};
+            {{TYPE}} b2 = (Tension - {{TWO}}) * t3 + (3 - {{TWO}} * Tension) * t2 + Tension * localT;
+            {{TYPE}} b3 = Tension * t3 - Tension * t2;
+
+            return p0 * b0 + p1 * b1 + p2 * b2 + p3 * b3;
+        }
+
+        private {{TYPE_PREFIX}}3 EvaluateBezier({{TYPE}} t)
+        {
+            int segmentCount = (ControlPoints.Length - 1) / 3;
+            if (segmentCount == 0) return ControlPoints[0];
+
+            {{TYPE}} scaledT = t * segmentCount;
+            int segment = (int)Maths.Floor(scaledT);
+            {{TYPE}} localT = scaledT - segment;
+
+            if (segment >= segmentCount)
+            {
+                segment = segmentCount - 1;
+                localT = {{ONE}};
+            }
+
+            int baseIndex = segment * 3;
+            {{TYPE_PREFIX}}3 p0 = ControlPoints[baseIndex];
+            {{TYPE_PREFIX}}3 p1 = ControlPoints[baseIndex + 1];
+            {{TYPE_PREFIX}}3 p2 = ControlPoints[baseIndex + 2];
+            {{TYPE_PREFIX}}3 p3 = ControlPoints[baseIndex + 3];
+
+            // Cubic Bezier evaluation
+            {{TYPE}} invT = {{ONE}} - localT;
+            {{TYPE}} invT2 = invT * invT;
+            {{TYPE}} invT3 = invT2 * invT;
+            {{TYPE}} t2 = localT * localT;
+            {{TYPE}} t3 = t2 * localT;
+
+            return p0 * invT3 + p1 * (3 * invT2 * localT) + p2 * (3 * invT * t2) + p3 * t3;
+        }
+
+        private {{TYPE_PREFIX}}3 EvaluateBSpline({{TYPE}} t)
+        {
+            if (ControlPoints.Length < 4) return EvaluateLinear(t);
+
+            int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 3;
+            {{TYPE}} scaledT = t * segmentCount;
+            int segment = (int)Maths.Floor(scaledT);
+            {{TYPE}} localT = scaledT - segment;
+
+            if (segment >= segmentCount)
+            {
+                segment = segmentCount - 1;
+                localT = {{ONE}};
+            }
+
+            // Get four control points for B-spline
+            {{TYPE_PREFIX}}3 p0, p1, p2, p3;
+            GetBSplinePoints(segment, out p0, out p1, out p2, out p3);
+
+            // Uniform cubic B-spline basis functions
+            {{TYPE}} t2 = localT * localT;
+            {{TYPE}} t3 = t2 * localT;
+            {{TYPE}} invT = {{ONE}} - localT;
+            {{TYPE}} invT2 = invT * invT;
+            {{TYPE}} invT3 = invT2 * invT;
+
+            {{TYPE}} b0 = invT3 / 6;
+            {{TYPE}} b1 = (3 * t3 - 6 * t2 + 4) / 6;
+            {{TYPE}} b2 = (-3 * t3 + 3 * t2 + 3 * localT + {{ONE}}) / 6;
+            {{TYPE}} b3 = t3 / 6;
+
+            return p0 * b0 + p1 * b1 + p2 * b2 + p3 * b3;
+        }
+
+        private {{TYPE_PREFIX}}3 EvaluateHermite({{TYPE}} t)
+        {
+            if (Tangents == null) return EvaluateLinear(t);
+
+            int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 1;
+            {{TYPE}} scaledT = t * segmentCount;
+            int segment = (int)Maths.Floor(scaledT);
+            {{TYPE}} localT = scaledT - segment;
+
+            if (segment >= segmentCount)
+            {
+                segment = segmentCount - 1;
+                localT = {{ONE}};
+            }
+
+            {{TYPE_PREFIX}}3 p0 = ControlPoints[segment];
+            {{TYPE_PREFIX}}3 p1 = ControlPoints[(segment + 1) % ControlPoints.Length];
+            {{TYPE_PREFIX}}3 t0 = Tangents[segment];
+            {{TYPE_PREFIX}}3 t1 = Tangents[(segment + 1) % Tangents.Length];
+
+            // Hermite basis functions
+            {{TYPE}} t2 = localT * localT;
+            {{TYPE}} t3 = t2 * localT;
+
+            {{TYPE}} h00 = {{TWO}} * t3 - 3 * t2 + {{ONE}};
+            {{TYPE}} h10 = t3 - {{TWO}} * t2 + localT;
+            {{TYPE}} h01 = -{{TWO}} * t3 + 3 * t2;
+            {{TYPE}} h11 = t3 - t2;
+
+            return p0 * h00 + t0 * h10 + p1 * h01 + t1 * h11;
+        }
+
+        private {{TYPE_PREFIX}}3 EvaluateLinearDerivative({{TYPE}} t)
+        {
+            if (ControlPoints.Length < 2) return {{TYPE_PREFIX}}3.Zero;
+
+            {{TYPE}} scaledT = t * (ControlPoints.Length - 1);
+            int index = (int)Maths.Floor(scaledT);
+
+            if (index >= ControlPoints.Length - 1)
+            {
+                return IsClosed ?
+                    (ControlPoints[0] - ControlPoints[ControlPoints.Length - 1]) * (ControlPoints.Length - 1) :
+                    {{TYPE_PREFIX}}3.Zero;
+            }
+
+            return (ControlPoints[index + 1] - ControlPoints[index]) * (ControlPoints.Length - 1);
+        }
+
+        private {{TYPE_PREFIX}}3 EvaluateCatmullRomDerivative({{TYPE}} t)
+        {
+            int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 1;
+            {{TYPE}} scaledT = t * segmentCount;
+            int segment = (int)Maths.Floor(scaledT);
+            {{TYPE}} localT = scaledT - segment;
+
+            if (segment >= segmentCount)
+            {
+                segment = segmentCount - 1;
+                localT = {{ONE}};
+            }
+
+            {{TYPE_PREFIX}}3 p0, p1, p2, p3;
+            GetCatmullRomPoints(segment, out p0, out p1, out p2, out p3);
+
+            {{TYPE}} t2 = localT * localT;
+
+            {{TYPE}} db0 = -3 * Tension * t2 + 4 * Tension * localT - Tension;
+            {{TYPE}} db1 = 3 * ({{TWO}} - Tension) * t2 + {{TWO}} * (Tension - 3) * localT;
+            {{TYPE}} db2 = 3 * (Tension - {{TWO}}) * t2 + {{TWO}} * (3 - {{TWO}} * Tension) * localT + Tension;
+            {{TYPE}} db3 = 3 * Tension * t2 - {{TWO}} * Tension * localT;
+
+            return (p0 * db0 + p1 * db1 + p2 * db2 + p3 * db3) * segmentCount;
+        }
+
+        private {{TYPE_PREFIX}}3 EvaluateBezierDerivative({{TYPE}} t)
+        {
+            int segmentCount = (ControlPoints.Length - 1) / 3;
+            if (segmentCount == 0) return {{TYPE_PREFIX}}3.Zero;
+
+            {{TYPE}} scaledT = t * segmentCount;
+            int segment = (int)Maths.Floor(scaledT);
+            {{TYPE}} localT = scaledT - segment;
+
+            if (segment >= segmentCount)
+            {
+                segment = segmentCount - 1;
+                localT = {{ONE}};
+            }
+
+            int baseIndex = segment * 3;
+            {{TYPE_PREFIX}}3 p0 = ControlPoints[baseIndex];
+            {{TYPE_PREFIX}}3 p1 = ControlPoints[baseIndex + 1];
+            {{TYPE_PREFIX}}3 p2 = ControlPoints[baseIndex + 2];
+            {{TYPE_PREFIX}}3 p3 = ControlPoints[baseIndex + 3];
+
+            {{TYPE}} invT = {{ONE}} - localT;
+            {{TYPE}} invT2 = invT * invT;
+            {{TYPE}} t2 = localT * localT;
+
+            {{TYPE_PREFIX}}3 derivative = 
+                p0 * (-3 * invT2) +
+                p1 * (3 * invT2 - 6 * invT * localT) +
+                p2 * (6 * invT * localT - 3 * t2) +
+                p3 * (3 * t2);
+
+            return derivative * segmentCount;
+        }
+
+        private {{TYPE_PREFIX}}3 EvaluateBSplineDerivative({{TYPE}} t)
+        {
+            if (ControlPoints.Length < 4) return EvaluateLinearDerivative(t);
+
+            int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 3;
+            {{TYPE}} scaledT = t * segmentCount;
+            int segment = (int)Maths.Floor(scaledT);
+            {{TYPE}} localT = scaledT - segment;
+
+            if (segment >= segmentCount)
+            {
+                segment = segmentCount - 1;
+                localT = {{ONE}};
+            }
+
+            {{TYPE_PREFIX}}3 p0, p1, p2, p3;
+            GetBSplinePoints(segment, out p0, out p1, out p2, out p3);
+
+            {{TYPE}} t2 = localT * localT;
+
+            {{TYPE}} db0 = -t2 / {{TWO}};
+            {{TYPE}} db1 = (3 * t2 - 4 * localT) / {{TWO}};
+            {{TYPE}} db2 = (-3 * t2 + {{TWO}} * localT + {{ONE}}) / {{TWO}};
+            {{TYPE}} db3 = t2 / {{TWO}};
+
+            return (p0 * db0 + p1 * db1 + p2 * db2 + p3 * db3) * segmentCount;
+        }
+
+        private {{TYPE_PREFIX}}3 EvaluateHermiteDerivative({{TYPE}} t)
+        {
+            if (Tangents == null) return EvaluateLinearDerivative(t);
+
+            int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 1;
+            {{TYPE}} scaledT = t * segmentCount;
+            int segment = (int)Maths.Floor(scaledT);
+            {{TYPE}} localT = scaledT - segment;
+
+            if (segment >= segmentCount)
+            {
+                segment = segmentCount - 1;
+                localT = {{ONE}};
+            }
+
+            {{TYPE_PREFIX}}3 p0 = ControlPoints[segment];
+            {{TYPE_PREFIX}}3 p1 = ControlPoints[(segment + 1) % ControlPoints.Length];
+            {{TYPE_PREFIX}}3 t0 = Tangents[segment];
+            {{TYPE_PREFIX}}3 t1 = Tangents[(segment + 1) % Tangents.Length];
+
+            {{TYPE}} t2 = localT * localT;
+
+            {{TYPE}} dh00 = 6 * t2 - 6 * localT;
+            {{TYPE}} dh10 = 3 * t2 - 4 * localT + {{ONE}};
+            {{TYPE}} dh01 = -6 * t2 + 6 * localT;
+            {{TYPE}} dh11 = 3 * t2 - {{TWO}} * localT;
+
+            return (p0 * dh00 + t0 * dh10 + p1 * dh01 + t1 * dh11) * segmentCount;
+        }
+
+        private void GetCatmullRomPoints(int segment, out {{TYPE_PREFIX}}3 p0, out {{TYPE_PREFIX}}3 p1, out {{TYPE_PREFIX}}3 p2, out {{TYPE_PREFIX}}3 p3)
+        {
+            int count = ControlPoints.Length;
+            
+            p1 = ControlPoints[segment];
+            p2 = ControlPoints[(segment + 1) % count];
+
+            if (IsClosed)
+            {
+                p0 = ControlPoints[(segment - 1 + count) % count];
+                p3 = ControlPoints[(segment + 2) % count];
+            }
+            else
+            {
+                p0 = segment > 0 ? ControlPoints[segment - 1] : ControlPoints[0] * {{TWO}} - ControlPoints[1];
+                p3 = segment < count - 2 ? ControlPoints[segment + 2] : ControlPoints[count - 1] * {{TWO}} - ControlPoints[count - 2];
+            }
+        }
+
+        private void GetBSplinePoints(int segment, out {{TYPE_PREFIX}}3 p0, out {{TYPE_PREFIX}}3 p1, out {{TYPE_PREFIX}}3 p2, out {{TYPE_PREFIX}}3 p3)
+        {
+            int count = ControlPoints.Length;
+
+            if (IsClosed)
+            {
+                p0 = ControlPoints[segment % count];
+                p1 = ControlPoints[(segment + 1) % count];
+                p2 = ControlPoints[(segment + 2) % count];
+                p3 = ControlPoints[(segment + 3) % count];
+            }
+            else
+            {
+                p0 = ControlPoints[segment];
+                p1 = ControlPoints[segment + 1];
+                p2 = ControlPoints[segment + 2];
+                p3 = ControlPoints[segment + 3];
+            }
+        }
+
+        private void GenerateDefaultTangents()
+        {
+            int count = ControlPoints.Length;
+            Tangents = new {{TYPE_PREFIX}}3[count];
+
+            for (int i = 0; i < count; i++)
+            {
+                {{TYPE_PREFIX}}3 prev, next;
+
+                if (IsClosed)
+                {
+                    prev = ControlPoints[(i - 1 + count) % count];
+                    next = ControlPoints[(i + 1) % count];
+                }
+                else
+                {
+                    prev = i > 0 ? ControlPoints[i - 1] : ControlPoints[i];
+                    next = i < count - 1 ? ControlPoints[i + 1] : ControlPoints[i];
+               }
+
+               // Generate tangent as the difference between next and previous points
+               Tangents[i] = (next - prev) / {{TWO}};
+           }
+       }
+
+       #endregion
+
+       #region Utility Methods
+
+       /// <summary>
+       /// Adds a control point to the spline.
+       /// </summary>
+       /// <param name="point">The control point to add.</param>
+       public void AddControlPoint({{TYPE_PREFIX}}3 point)
+       {
+           if (ControlPoints == null)
+           {
+               ControlPoints = new {{TYPE_PREFIX}}3[] { point };
+           }
+           else
+           {
+               var newArray = new {{TYPE_PREFIX}}3[ControlPoints.Length + 1];
+               Array.Copy(ControlPoints, newArray, ControlPoints.Length);
+               newArray[ControlPoints.Length] = point;
+               ControlPoints = newArray;
+           }
+
+           if (Type == SplineType.Hermite)
+           {
+               GenerateDefaultTangents();
+           }
+       }
+
+       /// <summary>
+       /// Inserts a control point at the specified index.
+       /// </summary>
+       /// <param name="index">The index to insert at.</param>
+       /// <param name="point">The control point to insert.</param>
+       public void InsertControlPoint(int index, {{TYPE_PREFIX}}3 point)
+       {
+           if (ControlPoints == null)
+           {
+               ControlPoints = new {{TYPE_PREFIX}}3[] { point };
+               return;
+           }
+
+           if (index < 0 || index > ControlPoints.Length)
+               throw new ArgumentOutOfRangeException(nameof(index));
+
+           var newArray = new {{TYPE_PREFIX}}3[ControlPoints.Length + 1];
+           Array.Copy(ControlPoints, 0, newArray, 0, index);
+           newArray[index] = point;
+           Array.Copy(ControlPoints, index, newArray, index + 1, ControlPoints.Length - index);
+           ControlPoints = newArray;
+
+           if (Type == SplineType.Hermite)
+           {
+               GenerateDefaultTangents();
+           }
+       }
+
+       /// <summary>
+       /// Removes the control point at the specified index.
+       /// </summary>
+       /// <param name="index">The index of the control point to remove.</param>
+       public void RemoveControlPoint(int index)
+       {
+           if (ControlPoints == null || index < 0 || index >= ControlPoints.Length)
+               throw new ArgumentOutOfRangeException(nameof(index));
+
+           if (ControlPoints.Length == 1)
+           {
+               ControlPoints = null;
+               Tangents = null;
+               return;
+           }
+
+           var newArray = new {{TYPE_PREFIX}}3[ControlPoints.Length - 1];
+           Array.Copy(ControlPoints, 0, newArray, 0, index);
+           Array.Copy(ControlPoints, index + 1, newArray, index, ControlPoints.Length - index - 1);
+           ControlPoints = newArray;
+
+           if (Type == SplineType.Hermite)
+           {
+               GenerateDefaultTangents();
+           }
+       }
+
+       /// <summary>
+       /// Sets the tangent at the specified control point index (for Hermite splines).
+       /// </summary>
+       /// <param name="index">The control point index.</param>
+       /// <param name="tangent">The tangent vector.</param>
+       public void SetTangent(int index, {{TYPE_PREFIX}}3 tangent)
+       {
+           if (Type != SplineType.Hermite)
+               throw new InvalidOperationException("Tangents can only be set for Hermite splines");
+
+           if (Tangents == null || index < 0 || index >= Tangents.Length)
+               throw new ArgumentOutOfRangeException(nameof(index));
+
+           Tangents[index] = tangent;
+       }
+
+       /// <summary>
+       /// Gets the tangent at the specified control point index.
+       /// </summary>
+       /// <param name="index">The control point index.</param>
+       /// <returns>The tangent vector at the specified index.</returns>
+       public {{TYPE_PREFIX}}3 GetTangent(int index)
+       {
+           if (Type != SplineType.Hermite || Tangents == null)
+               return EvaluateDerivative(index / ({{TYPE}})(ControlPointCount - 1));
+
+           if (index < 0 || index >= Tangents.Length)
+               throw new ArgumentOutOfRangeException(nameof(index));
+
+           return Tangents[index];
+       }
+
+       /// <summary>
+       /// Reverses the direction of the spline.
+       /// </summary>
+       public void Reverse()
+       {
+           if (ControlPoints == null) return;
+
+           Array.Reverse(ControlPoints);
+
+           if (Tangents != null)
+           {
+               Array.Reverse(Tangents);
+               // Negate tangents since we're reversing direction
+               for (int i = 0; i < Tangents.Length; i++)
+               {
+                   Tangents[i] = -Tangents[i];
+               }
+           }
+       }
+
+       /// <summary>
+       /// Creates a reversed copy of this spline.
+       /// </summary>
+       /// <returns>A new spline with reversed direction.</returns>
+       public {{CLASS_NAME}} Reversed()
+       {
+           var copy = this;
+           copy.Reverse();
+           return copy;
+       }
+
+       /// <summary>
+       /// Subdivides the spline by inserting new control points.
+       /// </summary>
+       /// <param name="subdivisionsPerSegment">Number of subdivisions per segment.</param>
+       public void Subdivide(int subdivisionsPerSegment = 1)
+       {
+           if (ControlPoints == null || subdivisionsPerSegment < 1) return;
+
+           var newPoints = new List<{{TYPE_PREFIX}}3>();
+           int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 1;
+
+           for (int segment = 0; segment < segmentCount; segment++)
+           {
+               {{TYPE}} segmentStart = segment / ({{TYPE}})segmentCount;
+               {{TYPE}} segmentEnd = (segment + 1) / ({{TYPE}})segmentCount;
+
+               newPoints.Add(ControlPoints[segment]);
+
+               for (int sub = 1; sub <= subdivisionsPerSegment; sub++)
+               {
+                   {{TYPE}} t = segmentStart + (segmentEnd - segmentStart) * (sub / ({{TYPE}})(subdivisionsPerSegment + 1));
+                   newPoints.Add(Evaluate(t));
+               }
+           }
+
+           if (!IsClosed)
+           {
+               newPoints.Add(ControlPoints[ControlPoints.Length - 1]);
+           }
+
+           ControlPoints = newPoints.ToArray();
+
+           if (Type == SplineType.Hermite)
+           {
+               GenerateDefaultTangents();
+           }
+       }
+
+       /// <summary>
+       /// Smooths the spline by averaging control point positions.
+       /// </summary>
+       /// <param name="iterations">Number of smoothing iterations.</param>
+       /// <param name="strength">Smoothing strength (0 = no smoothing, 1 = full averaging).</param>
+       public void Smooth(int iterations = 1, {{TYPE}} strength = ({{TYPE}})0.5)
+       {
+           if (ControlPoints == null || ControlPoints.Length < 3) return;
+
+           strength = Maths.Clamp(strength, {{ZERO}}, {{ONE}});
+
+           for (int iter = 0; iter < iterations; iter++)
+           {
+               var smoothedPoints = new {{TYPE_PREFIX}}3[ControlPoints.Length];
+
+               for (int i = 0; i < ControlPoints.Length; i++)
+               {
+                   {{TYPE_PREFIX}}3 prev, next;
+
+                   if (IsClosed)
+                   {
+                       prev = ControlPoints[(i - 1 + ControlPoints.Length) % ControlPoints.Length];
+                       next = ControlPoints[(i + 1) % ControlPoints.Length];
+                   }
+                   else
+                   {
+                       prev = i > 0 ? ControlPoints[i - 1] : ControlPoints[i];
+                       next = i < ControlPoints.Length - 1 ? ControlPoints[i + 1] : ControlPoints[i];
+                   }
+
+                   {{TYPE_PREFIX}}3 averaged = (prev + ControlPoints[i] + next) / 3;
+                   smoothedPoints[i] = Maths.Lerp(ControlPoints[i], averaged, strength);
+               }
+
+               ControlPoints = smoothedPoints;
+           }
+
+           if (Type == SplineType.Hermite)
+           {
+               GenerateDefaultTangents();
+           }
+       }
+
+       /// <summary>
+       /// Calculates the bounding box of the spline.
+       /// </summary>
+       /// <param name="subdivisions">Number of subdivisions for accurate bounds calculation.</param>
+       /// <returns>The axis-aligned bounding box containing the spline.</returns>
+       public AABB{{TYPE_PREFIX}} GetBounds(int subdivisions = 100)
+       {
+           if (ControlPoints == null || ControlPoints.Length == 0)
+               return new AABB{{TYPE_PREFIX}}({{TYPE_PREFIX}}3.Zero, {{TYPE_PREFIX}}3.Zero);
+
+           {{TYPE_PREFIX}}3 min = ControlPoints[0];
+           {{TYPE_PREFIX}}3 max = ControlPoints[0];
+
+           // Include all control points
+           foreach (var point in ControlPoints)
+           {
+               min = new {{TYPE_PREFIX}}3(
+                   Maths.Min(min.X, point.X),
+                   Maths.Min(min.Y, point.Y),
+                   Maths.Min(min.Z, point.Z)
+               );
+               max = new {{TYPE_PREFIX}}3(
+                   Maths.Max(max.X, point.X),
+                   Maths.Max(max.Y, point.Y),
+                   Maths.Max(max.Z, point.Z)
+               );
+           }
+
+           // Sample the spline for curves that might extend beyond control points
+           for (int i = 0; i <= subdivisions; i++)
+           {
+               {{TYPE}} t = i / ({{TYPE}})subdivisions;
+               {{TYPE_PREFIX}}3 point = Evaluate(t);
+
+               min = new {{TYPE_PREFIX}}3(
+                   Maths.Min(min.X, point.X),
+                   Maths.Min(min.Y, point.Y),
+                   Maths.Min(min.Z, point.Z)
+               );
+               max = new {{TYPE_PREFIX}}3(
+                   Maths.Max(max.X, point.X),
+                   Maths.Max(max.Y, point.Y),
+                   Maths.Max(max.Z, point.Z)
+               );
+           }
+
+           return new AABB{{TYPE_PREFIX}}(min, max);
+       }
+
+       #endregion
+
+       #region Static Factory Methods
+
+       /// <summary>
+       /// Creates a linear spline from the given points.
+       /// </summary>
+       /// <param name="points">The control points.</param>
+       /// <param name="closed">Whether the spline should be closed.</param>
+       /// <returns>A linear spline.</returns>
+       public static {{CLASS_NAME}} CreateLinear({{TYPE_PREFIX}}3[] points, bool closed = false)
+       {
+           return new {{CLASS_NAME}}(points, SplineType.Linear, closed);
+       }
+
+       /// <summary>
+       /// Creates a Catmull-Rom spline from the given points.
+       /// </summary>
+       /// <param name="points">The control points.</param>
+       /// <param name="closed">Whether the spline should be closed.</param>
+       /// <param name="tension">Tension parameter (0 = standard Catmull-Rom).</param>
+       /// <returns>A Catmull-Rom spline.</returns>
+       public static {{CLASS_NAME}} CreateCatmullRom({{TYPE_PREFIX}}3[] points, bool closed = false, {{TYPE}} tension = {{ZERO}})
+       {
+           return new {{CLASS_NAME}}(points, SplineType.CatmullRom, closed, tension);
+       }
+
+       /// <summary>
+       /// Creates a cubic Bezier spline from control points.
+       /// The number of control points should be 3n+1 for n Bezier segments.
+       /// </summary>
+       /// <param name="points">The control points (must be 3n+1 points).</param>
+       /// <returns>A Bezier spline.</returns>
+       public static {{CLASS_NAME}} CreateBezier({{TYPE_PREFIX}}3[] points)
+       {
+           if ((points.Length - 1) % 3 != 0)
+               throw new ArgumentException("Bezier splines require 3n+1 control points for n segments");
+
+           return new {{CLASS_NAME}}(points, SplineType.Bezier, false);
+       }
+
+       /// <summary>
+       /// Creates a uniform cubic B-spline from the given points.
+       /// </summary>
+       /// <param name="points">The control points.</param>
+       /// <param name="closed">Whether the spline should be closed.</param>
+       /// <returns>A B-spline.</returns>
+       public static {{CLASS_NAME}} CreateBSpline({{TYPE_PREFIX}}3[] points, bool closed = false)
+       {
+           return new {{CLASS_NAME}}(points, SplineType.BSpline, closed);
+       }
+
+       /// <summary>
+       /// Creates a Hermite spline with automatic tangent generation.
+       /// </summary>
+       /// <param name="points">The control points.</param>
+       /// <param name="closed">Whether the spline should be closed.</param>
+       /// <returns>A Hermite spline with auto-generated tangents.</returns>
+       public static {{CLASS_NAME}} CreateHermite({{TYPE_PREFIX}}3[] points, bool closed = false)
+       {
+           return new {{CLASS_NAME}}(points, SplineType.Hermite, closed);
+       }
+
+       /// <summary>
+       /// Creates a Hermite spline with explicit tangents.
+       /// </summary>
+       /// <param name="points">The control points.</param>
+       /// <param name="tangents">The tangent vectors at each control point.</param>
+       /// <param name="closed">Whether the spline should be closed.</param>
+       /// <returns>A Hermite spline with specified tangents.</returns>
+       public static {{CLASS_NAME}} CreateHermiteWithTangents({{TYPE_PREFIX}}3[] points, {{TYPE_PREFIX}}3[] tangents, bool closed = false)
+       {
+           return new {{CLASS_NAME}}(points, tangents, closed);
+       }
+
+       /// <summary>
+       /// Creates a circular arc as a spline.
+       /// </summary>
+       /// <param name="center">Center of the circle.</param>
+       /// <param name="radius">Radius of the circle.</param>
+       /// <param name="startAngle">Start angle in radians.</param>
+       /// <param name="endAngle">End angle in radians.</param>
+       /// <param name="segments">Number of segments to approximate the arc.</param>
+       /// <returns>A spline approximating the circular arc.</returns>
+       public static {{CLASS_NAME}} CreateCircularArc({{TYPE_PREFIX}}3 center, {{TYPE}} radius, {{TYPE}} startAngle, {{TYPE}} endAngle, int segments = 16)
+       {
+           var points = new {{TYPE_PREFIX}}3[segments + 1];
+           {{TYPE}} angleStep = (endAngle - startAngle) / segments;
+
+           for (int i = 0; i <= segments; i++)
+           {
+               {{TYPE}} angle = startAngle + i * angleStep;
+               points[i] = center + new {{TYPE_PREFIX}}3(
+                   radius * Maths.Cos(angle),
+                   radius * Maths.Sin(angle),
+                   {{ZERO}}
+               );
+           }
+
+           return CreateCatmullRom(points);
+       }
+
+       /// <summary>
+       /// Creates a helix spline.
+       /// </summary>
+       /// <param name="center">Center axis of the helix.</param>
+       /// <param name="radius">Radius of the helix.</param>
+       /// <param name="pitch">Vertical distance per revolution.</param>
+       /// <param name="turns">Number of turns.</param>
+       /// <param name="segments">Number of segments per turn.</param>
+       /// <returns>A spline representing a helix.</returns>
+       public static {{CLASS_NAME}} CreateHelix({{TYPE_PREFIX}}3 center, {{TYPE}} radius, {{TYPE}} pitch, {{TYPE}} turns, int segments = 16)
+       {
+           int totalPoints = (int)(segments * turns) + 1;
+           var points = new {{TYPE_PREFIX}}3[totalPoints];
+           {{TYPE}} angleStep = {{TWO}} * ({{TYPE}})Maths.PI / segments;
+           {{TYPE}} heightStep = pitch / segments;
+
+           for (int i = 0; i < totalPoints; i++)
+           {
+               {{TYPE}} angle = i * angleStep;
+               {{TYPE}} height = i * heightStep;
+               points[i] = center + new {{TYPE_PREFIX}}3(
+                   radius * Maths.Cos(angle),
+                   radius * Maths.Sin(angle),
+                   height
+               );
+           }
+
+           return CreateCatmullRom(points);
+       }
+
+       #endregion
+
+       // --- IEquatable & IFormattable Implementation ---
+       [MethodImpl(MethodImplOptions.AggressiveInlining)]
+       public bool Equals({{CLASS_NAME}} other)
+       {
+           if (Type != other.Type || IsClosed != other.IsClosed || !Tension.Equals(other.Tension))
+               return false;
+
+           if (ControlPoints?.Length != other.ControlPoints?.Length)
+               return false;
+
+           if (ControlPoints != null)
+           {
+               for (int i = 0; i < ControlPoints.Length; i++)
+               {
+                   if (!ControlPoints[i].Equals(other.ControlPoints[i]))
+                       return false;
+               }
+           }
+
+           if (Tangents?.Length != other.Tangents?.Length)
+               return false;
+
+           if (Tangents != null)
+           {
+               for (int i = 0; i < Tangents.Length; i++)
+               {
+                   if (!Tangents[i].Equals(other.Tangents[i]))
+                       return false;
+               }
+           }
+
+           return true;
+       }
+
+       [MethodImpl(MethodImplOptions.AggressiveInlining)]
+       public override bool Equals(object? obj) => obj is {{CLASS_NAME}} other && Equals(other);
+
+       [MethodImpl(MethodImplOptions.AggressiveInlining)]
+       public override int GetHashCode()
+       {
+           var hash = new HashCode();
+           hash.Add(Type);
+           hash.Add(IsClosed);
+           hash.Add(Tension);
+           
+           if (ControlPoints != null)
+           {
+               foreach (var point in ControlPoints)
+                   hash.Add(point);
+           }
+           
+           return hash.ToHashCode();
+       }
+
+       [MethodImpl(MethodImplOptions.AggressiveInlining)]
+       public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
+
+       [MethodImpl(MethodImplOptions.AggressiveInlining)]
+       public string ToString(string? format, IFormatProvider? formatProvider = null)
+       {
+           return string.Format(formatProvider, "{{CLASS_NAME}}(Type: {0}, Points: {1}, Closed: {2})", 
+               Type, ControlPointCount, IsClosed);
+       }
+
+       public static bool operator ==({{CLASS_NAME}} left, {{CLASS_NAME}} right) => left.Equals(right);
+       public static bool operator !=({{CLASS_NAME}} left, {{CLASS_NAME}} right) => !left.Equals(right);
+   }
+}
