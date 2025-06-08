@@ -34,6 +34,8 @@ Built for the Prowl Game Engine.</Description>
   <ItemGroup>
     <Folder Include="Matrices\" />
     <Folder Include="Vectors\" />
+    <Folder Include="Noise\" />
+    <Folder Include="Geometry\" />
   </ItemGroup>
 
 </Project>

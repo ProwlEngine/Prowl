@@ -76,8 +76,6 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             FixedWorldUp,
             /// <summary>Use Frenet frame (normal from curvature).</summary>
             FrenetFrame,
-            /// <summary>Minimize twist using parallel transport.</summary>
-            MinimumTwist,
             /// <summary>Use custom up vectors provided per control point.</summary>
             Custom
         }
@@ -119,7 +117,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             IsClosed = closed;
             Tension = tension;
             CustomUpVectors = null;
-            WorldUpVector = Double3.UnitY;
+            WorldUpVector = {{TYPE_PREFIX}}3.UnitY;
 
             if (type == SplineType.Hermite)
             {
@@ -318,14 +316,6 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                     }
                     break;
 
-                case UpVectorMethod.MinimumTwist:
-                    {
-                        // Use parallel transport to minimize twist
-                        up = ParallelTransportUp(t);
-                        right = Maths.Cross(forward, up);
-                    }
-                    break;
-
                 case UpVectorMethod.Custom:
                     {
                         if (CustomUpVectors != null && CustomUpVectors.Length > 0)
@@ -441,35 +431,6 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             {{TYPE_PREFIX}}3 d2 = EvaluateSecondDerivative(t2);
             
             return (d2 - d1) / (t2 - t1);
-        }
-
-        private {{TYPE_PREFIX}}3 ParallelTransportUp({{TYPE}} t)
-        {
-            // Simplified parallel transport - maintains previous up vector projected onto current normal plane
-            // In a full implementation, this would integrate along the curve
-            
-            if (t <= {{EPSILON}})
-            {
-                // Initialize with world up
-                {{TYPE_PREFIX}}3 forward = Maths.Normalize(EvaluateDerivative({{ZERO}}));
-                {{TYPE_PREFIX}}3 worldUp = WorldUpVector.Equals({{TYPE_PREFIX}}3.Zero) ? {{TYPE_PREFIX}}3.UnitY : Maths.Normalize(WorldUpVector);
-                {{TYPE_PREFIX}}3 up = worldUp - Maths.Dot(worldUp, forward) * forward;
-                return Maths.LengthSquared(up) > {{EPSILON}} * {{EPSILON}} ? Maths.Normalize(up) : {{TYPE_PREFIX}}3.UnitY;
-            }
-
-            // Get previous frame
-            const {{TYPE}} step = ({{TYPE}})0.01;
-            {{TYPE}} prevT = Maths.Max(t - step, {{ZERO}});
-            SplineFrame prevFrame = EvaluateFrame(prevT, UpVectorMethod.FixedWorldUp);
-            
-            {{TYPE_PREFIX}}3 currentForward = Maths.Normalize(EvaluateDerivative(t));
-            
-            // Project previous up onto current normal plane
-            {{TYPE_PREFIX}}3 projectedUp = prevFrame.Up - Maths.Dot(prevFrame.Up, currentForward) * currentForward;
-            
-            return Maths.LengthSquared(projectedUp) > {{EPSILON}} * {{EPSILON}} ? 
-                Maths.Normalize(projectedUp) : 
-                {{TYPE_PREFIX}}3.UnitY;
         }
 
         private {{TYPE_PREFIX}}3 InterpolateCustomUpVector({{TYPE}} t)
