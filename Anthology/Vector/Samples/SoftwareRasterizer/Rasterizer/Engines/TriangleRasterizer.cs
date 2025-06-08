@@ -9,7 +9,7 @@ namespace SoftwareRasterizer.Rasterizer.Engines;
 internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device)
 {
     private const int QUAD_SIZE = 2;
-    private static readonly Float4[] s_varyingCache = new Float4[32];
+    private static readonly ThreadLocal<Float4[]> s_varyingCache = new(() => new Float4[32]);
 
     public override void Rasterize(RasterTriangle triangle)
     {
@@ -33,28 +33,39 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
         int minY = (int)Maths.Max(Maths.Floor(Maths.Min(v0.Y, Maths.Min(v1.Y, v2.Y))), 0);
         int maxY = (int)Maths.Min(Maths.Ceiling(Maths.Max(v0.Y, Maths.Max(v1.Y, v2.Y))), Device.CurrentFramebuffer.Height - 1);
 
+        // Early exit if triangle is completely outside screen
+        if (minX > maxX || minY > maxY) return;
+
         // Align to quad boundaries
         minX &= ~(QUAD_SIZE - 1);
         minY &= ~(QUAD_SIZE - 1);
         maxX = (maxX + QUAD_SIZE - 1) & ~(QUAD_SIZE - 1);
         maxY = (maxY + QUAD_SIZE - 1) & ~(QUAD_SIZE - 1);
 
-        int count = Maths.CeilToInt((double)(maxY - minY) / QUAD_SIZE);
-        if (count > 0)
-        {
-            // Pre-calculate edge equation coefficients
-            float invArea = 1.0f / area;
-            var e0 = new EdgeCoefficients(v1, v2);  // edge v1->v2
-            var e1 = new EdgeCoefficients(v2, v0);  // edge v2->v0
-            var e2 = new EdgeCoefficients(v0, v1);  // edge v0->v1
-            EdgeData edgeData = new(e0, e1, e2, invArea);
+        // Pre-calculate edge equation coefficients
+        float invArea = 1.0f / area;
+        var e0 = new EdgeCoefficients(v1, v2);  // edge v1->v2
+        var e1 = new EdgeCoefficients(v2, v0);  // edge v2->v0
+        var e2 = new EdgeCoefficients(v0, v1);  // edge v0->v1
+        EdgeData edgeData = new(e0, e1, e2, invArea);
 
-            for (int i = 0; i < count; i++) {
-                int quadY = minY + (i * QUAD_SIZE);
-                for (int quadX = minX; quadX < maxX; quadX += QUAD_SIZE)
-                {
-                    ProcessQuadOptimized(quadX, quadY, triangle, edgeData);
-                }
+        //int count = Maths.CeilToInt((double)(maxY - minY) / QUAD_SIZE);
+        //if (count > 0)
+        //{
+        //    for (int i = 0; i < count; i++) {
+        //        int quadY = minY + (i * QUAD_SIZE);
+        //        for (int quadX = minX; quadX < maxX; quadX += QUAD_SIZE)
+        //        {
+        //            ProcessQuadOptimized(quadX, quadY, triangle, edgeData);
+        //        }
+        //    }
+        //}
+
+        for (int quadY = minY; quadY < maxY; quadY += QUAD_SIZE)
+        {
+            for (int quadX = minX; quadX < maxX; quadX += QUAD_SIZE)
+            {
+                ProcessQuadOptimized(quadX, quadY, triangle, edgeData);
             }
         }
     }
@@ -101,6 +112,7 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
     {
         var quadFragments = new QuadFragment?[QUAD_SIZE, QUAD_SIZE];
         bool hasValidFragments = false;
+        var varyingCache = s_varyingCache.Value;
 
         // First pass barycentric calculation
         for (int dy = 0; dy < QUAD_SIZE; dy++)
@@ -122,13 +134,13 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
                         triangle.Vertices[2].ScreenPosition.Z,
                         ref barycentric);
 
-                    InterpolateVaryings(ref triangle, ref barycentric);
+                    InterpolateVaryings(ref triangle, ref barycentric, varyingCache);
 
                     quadFragments[dy, dx] = new QuadFragment
                     {
                         Depth = depth,
                         Barycentric = barycentric,
-                        Varyings = s_varyingCache
+                        Varyings = varyingCache
                     };
                     hasValidFragments = true;
                 }
@@ -180,38 +192,35 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
         }
     }
 
-    private void InterpolateVaryings(ref RasterTriangle triangle, ref Float3 barycentric)
+    private void InterpolateVaryings(ref RasterTriangle triangle, ref Float3 barycentric, Float4[] varyingCache)
     {
-        RasterVertex v0 = triangle.Vertices[0];
-        RasterVertex v1 = triangle.Vertices[1];
-        RasterVertex v2 = triangle.Vertices[2];
+        var v0Varyings = triangle.Vertices[0].Varyings;
+        var v1Varyings = triangle.Vertices[1].Varyings;
+        var v2Varyings = triangle.Vertices[2].Varyings;
 
-        int numVaryings = v0.Varyings.Length;
+        int numVaryings = v0Varyings.Length;
         for (int i = 0; i < numVaryings; i++)
         {
-            s_varyingCache[i] = InterpolateVector3(ref v0.Varyings[i], ref v1.Varyings[i], ref v2.Varyings[i], ref barycentric);
+            ref var v0 = ref v0Varyings[i];
+            ref var v1 = ref v1Varyings[i];
+            ref var v2 = ref v2Varyings[i];
+
+            varyingCache[i] = new Float4(
+                v0.X * barycentric.X + v1.X * barycentric.Y + v2.X * barycentric.Z,
+                v0.Y * barycentric.X + v1.Y * barycentric.Y + v2.Y * barycentric.Z,
+                v0.Z * barycentric.X + v1.Z * barycentric.Y + v2.Z * barycentric.Z,
+                v0.W * barycentric.X + v1.W * barycentric.Y + v2.W * barycentric.Z);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsBackFace(Float3 v0, Float3 v1, Float3 v2)
     {
-        float signedArea = v0.X * v1.Y - v0.Y * v1.X +
-                           v1.X * v2.Y - v1.Y * v2.X +
-                           v2.X * v0.Y - v2.Y * v0.X;
-
+        float signedArea = (v1.X - v0.X) * (v2.Y - v0.Y) - (v1.Y - v0.Y) * (v2.X - v0.X);
+        //float signedArea = v0.X * v1.Y - v0.Y * v1.X +
+        //                   v1.X * v2.Y - v1.Y * v2.X +
+        //                   v2.X * v0.Y - v2.Y * v0.X;
         return Device.CullMode == CullMode.Back ? signedArea >= 0 : signedArea <= 0;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Float4 InterpolateVector3(ref Float4 a, ref Float4 b, ref Float4 c, ref Float3 barycentric)
-    {
-        return new Float4(
-            InterpolateFloat(a.X, b.X, c.X, ref barycentric),
-            InterpolateFloat(a.Y, b.Y, c.Y, ref barycentric),
-            InterpolateFloat(a.Z, b.Z, c.Z, ref barycentric),
-            InterpolateFloat(a.W, b.W, c.W, ref barycentric)
-        );
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
