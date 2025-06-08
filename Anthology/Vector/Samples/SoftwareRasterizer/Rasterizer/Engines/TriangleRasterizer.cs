@@ -9,6 +9,7 @@ namespace SoftwareRasterizer.Rasterizer.Engines;
 internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device)
 {
     private const int QUAD_SIZE = 2;
+    private static readonly Float4[] s_varyingCache = new Float4[32];
 
     public override void Rasterize(RasterTriangle triangle)
     {
@@ -121,11 +122,13 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
                         triangle.Vertices[2].ScreenPosition.Z,
                         ref barycentric);
 
+                    InterpolateVaryings(ref triangle, ref barycentric);
+
                     quadFragments[dy, dx] = new QuadFragment
                     {
                         Depth = depth,
                         Barycentric = barycentric,
-                        Varyings = InterpolateVaryings(ref triangle, ref barycentric)
+                        Varyings = s_varyingCache
                     };
                     hasValidFragments = true;
                 }
@@ -177,20 +180,17 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
         }
     }
 
-    private Float4[] InterpolateVaryings(ref RasterTriangle triangle, ref Float3 barycentric)
+    private void InterpolateVaryings(ref RasterTriangle triangle, ref Float3 barycentric)
     {
         RasterVertex v0 = triangle.Vertices[0];
         RasterVertex v1 = triangle.Vertices[1];
         RasterVertex v2 = triangle.Vertices[2];
 
         int numVaryings = v0.Varyings.Length;
-        Float4[] interpolatedVaryings = new Float4[numVaryings];
-
         for (int i = 0; i < numVaryings; i++)
         {
-            interpolatedVaryings[i] = InterpolateVector3(ref v0.Varyings[i], ref v1.Varyings[i], ref v2.Varyings[i], ref barycentric);
+            s_varyingCache[i] = InterpolateVector3(ref v0.Varyings[i], ref v1.Varyings[i], ref v2.Varyings[i], ref barycentric);
         }
-        return interpolatedVaryings;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

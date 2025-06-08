@@ -78,8 +78,12 @@ public static class MeshGenerator
                     indices.AddRange(new int[] { second, (second + 1), (first + 1) });
                 }
             }
+            int triangleCount = indices.Count / 3;
+        Console.WriteLine($"Sphere Mesh: {positions.Count / 3} vertices, {triangleCount} triangles");
+        // Create and return the mesh data
 
-            return new MeshData
+
+        return new MeshData
             {
                 Positions = positions.ToArray(),
                 Normals = normals.ToArray(),

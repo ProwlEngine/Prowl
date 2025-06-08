@@ -22,6 +22,9 @@ public partial class GraphicsDevice
 
     internal FrameBuffer backBuffer;
 
+    private float s_halfWidth;
+    private float s_halfHeight;
+
     private PointRasterizer pointRasterizer;
     private LineRasterizer lineRasterizer;
     private TriangleRasterizer triangleRasterizer;
@@ -31,6 +34,8 @@ public partial class GraphicsDevice
         backBuffer = new FrameBuffer(this, width, height);
 
         CurrentFramebuffer = backBuffer;
+        s_halfWidth = CurrentFramebuffer.Width * 0.5f;
+        s_halfHeight = CurrentFramebuffer.Height * 0.5f;
 
         pointRasterizer = new(this);
         lineRasterizer = new(this);
@@ -90,6 +95,8 @@ public partial class GraphicsDevice
         backBuffer = new FrameBuffer(this, width, height);
 
         CurrentFramebuffer = backBuffer;
+        s_halfWidth = CurrentFramebuffer.Width * 0.5f;
+        s_halfHeight = CurrentFramebuffer.Height * 0.5f;
     }
 
     public void DrawVertexBuffer(VertexBuffer buffer)
@@ -98,6 +105,8 @@ public partial class GraphicsDevice
             throw new Exception("No shader bound");
 
         CurrentShader.BindVertexAttributes(buffer.VertexAttributes);
+
+        CurrentShader.Prepare();
 
         for (var i = 0; i < buffer.Indices.Length; i += 3)
         {
@@ -109,28 +118,51 @@ public partial class GraphicsDevice
 
     // a temporary triangle used for processing
     private readonly RasterTriangle tempTriangle = new RasterTriangle() { Vertices = new RasterVertex[3] };
+    private readonly RasterTriangle _screenSpaceTriangle = new RasterTriangle { Vertices = new RasterVertex[3] };
+
+    private bool QuickTriangleReject(RasterTriangle triangle)
+    {
+        // Check if all vertices are on the wrong side of near/far planes
+        const float nearPlane = -0.1f;
+        const float farPlane = 100f;
+
+        bool allBehindNear = true;
+        bool allBehindFar = true;
+
+        for (int i = 0; i < 3; i++)
+        {
+            float z = triangle.Vertices[i].Position.Z;
+            if (z >= nearPlane) allBehindNear = false;
+            if (z <= farPlane) allBehindFar = false;
+        }
+
+        return allBehindNear || allBehindFar;
+    }
 
     private void ProcessTriangle(int a, int b, int c)
     {
         // Apply the Vertex shader and construct the triangle
-        CurrentShader.SetVertexAttributes(a);
-        var output = CurrentShader.VertexShader();
+        //CurrentShader.SetCurrentVertex(a);
+        var output = CurrentShader.VertexShader(a);
         if(output.Varyings == null) throw new Exception("Vertex shader did not output varyingsa, Cannot be null, Needs to atleast be an empty array.");
         int varyingCount = output.Varyings.Length;
         tempTriangle.Vertices[0] = new() { Position = output.GlPosition, Varyings = output.Varyings };
 
-        CurrentShader.SetVertexAttributes(b);
-        output = CurrentShader.VertexShader();
+        //CurrentShader.SetCurrentVertex(b);
+        output = CurrentShader.VertexShader(b);
         if (output.Varyings == null) throw new Exception("Vertex shader did not output varyingsa, Cannot be null, Needs to atleast be an empty array.");
         if (output.Varyings.Length != varyingCount) throw new Exception("Vertex shader did not output the same number of varyings as the first vertex.");
         tempTriangle.Vertices[1] = new() { Position = output.GlPosition, Varyings = output.Varyings };
 
-        CurrentShader.SetVertexAttributes(c);
-        output = CurrentShader.VertexShader();
+        //CurrentShader.SetCurrentVertex(c);
+        output = CurrentShader.VertexShader(c);
         if (output.Varyings == null) throw new Exception("Vertex shader did not output varyingsa, Cannot be null, Needs to atleast be an empty array.");
         if (output.Varyings.Length != varyingCount) throw new Exception("Vertex shader did not output the same number of varyings as the first vertex.");
         tempTriangle.Vertices[2] = new() { Position = output.GlPosition, Varyings = output.Varyings };
 
+        // Quick rejection test
+        if (QuickTriangleReject(tempTriangle))
+            return;
 
         RasterizerBase rasterizer = PolygonMode switch
         {
@@ -140,139 +172,149 @@ public partial class GraphicsDevice
             _ => throw new Exception("Invalid polygon mode")
         };
 
-        var nearPlane = new Plane { Normal = new Float3(0, 0, 1), Distance = -0.1f };
-        var farPlane = new Plane { Normal = new Float3(0, 0, -1), Distance = 100f };
+        var nearPlane = new PlaneFloat { Normal = new Float3(0, 0, 1), D = -0.1f };
+        var farPlane = new PlaneFloat { Normal = new Float3(0, 0, -1), D = 100f };
 
-        var clippedTriangles = ClipTriangleAgainstPlane(tempTriangle, nearPlane, true)
-                               .SelectMany(tri => ClipTriangleAgainstPlane(tri, farPlane, false));
+        var clippedTriangles = ClipTriangleAgainstPlanes(tempTriangle);
+
         foreach (var tri in clippedTriangles)
         {
-            var processedTri = new RasterTriangle
+            for (int i = 0; i < 3; i++)
             {
-                Vertices = tri.Vertices.Select(v =>
-                {
-                    float w = v.Position.W;
-                    return new RasterVertex
-                    {
-                        ScreenPosition = new Float3(
-                            (v.Position.X / w + 1) * CurrentFramebuffer.Width / 2,
-                            (-v.Position.Y / w + 1) * CurrentFramebuffer.Height / 2,
-                            v.Position.Z / w
-                        ),
-                        Varyings = v.Varyings
-                    };
-                }).ToArray()
-            };
+                ref var vertex = ref tri.Vertices[i];
+                float w = vertex.Position.W;
+                if (Math.Abs(w) < 0.00001f) w = 0.00001f;
 
-            rasterizer.Rasterize(processedTri);
+                float invW = 1.0f / w;
+
+                _screenSpaceTriangle.Vertices[i] = new RasterVertex
+                {
+                    ScreenPosition = new Float3(
+                        (vertex.Position.X * invW + 1.0f) * s_halfWidth,
+                        (-vertex.Position.Y * invW + 1.0f) * s_halfHeight,
+                        vertex.Position.Z * invW
+                    ),
+                    Varyings = vertex.Varyings
+                };
+            }
+
+            rasterizer.Rasterize(_screenSpaceTriangle);
         }
     }
 
-    private List<RasterTriangle> ClipTriangleAgainstPlane(RasterTriangle triangle, Plane plane, bool isNearPlane)
+    #region CLipping Algorithm
+
+    // Reusable arrays for clipping - prevents allocations
+    private RasterVertex[] _clipInputVertices = new RasterVertex[16];
+    private RasterVertex[] _clipOutputVertices = new RasterVertex[16];
+    private readonly List<RasterTriangle> _clippedTriangles = new List<RasterTriangle>(8);
+
+    // Define clipping planes (near and far)
+    private readonly PlaneFloat[] s_planes = new PlaneFloat[]
     {
-        var insideVertices = new List<RasterVertex>(3);
-        var outsideVertices = new List<RasterVertex>(3);
-        var insideIndices = new List<int>(3);
+            new PlaneFloat { Normal = new Float3(0, 0, 1), D = -0.1f },   // Near plane
+            new PlaneFloat { Normal = new Float3(0, 0, -1), D = 100f }    // Far plane
+    };
 
-        for (int i = 0; i < 3; i++)
+    private List<RasterTriangle> ClipTriangleAgainstPlanes(RasterTriangle triangle)
+    {
+        _clippedTriangles.Clear();
+
+        // Start with the original triangle vertices
+        _clipInputVertices[0] = triangle.Vertices[0];
+        _clipInputVertices[1] = triangle.Vertices[1];
+        _clipInputVertices[2] = triangle.Vertices[2];
+        int vertexCount = 3;
+
+        // Clip against each plane sequentially (Sutherland-Hodgman)
+        foreach (var plane in s_planes)
         {
-            float distance = Maths.Dot(plane.Normal, new Float3(triangle.Vertices[i].Position.X, triangle.Vertices[i].Position.Y, triangle.Vertices[i].Position.Z)) + plane.Distance;
-            if (distance >= 0)
-            {
-                insideVertices.Add(triangle.Vertices[i]);
-                insideIndices.Add(i);
-            }
-            else
-            {
-                outsideVertices.Add(triangle.Vertices[i]);
-            }
+            if (vertexCount == 0) break;
+
+            vertexCount = ClipPolygonAgainstPlane(_clipInputVertices, vertexCount, _clipOutputVertices, plane);
+
+            // Swap input/output arrays for next iteration
+            var temp = _clipInputVertices;
+            _clipInputVertices = _clipOutputVertices;
+            _clipOutputVertices = temp;
         }
 
-        if (insideVertices.Count == 0)
-            return [];
-        if (insideVertices.Count == 3)
-            return [triangle];
-
-        var newTriangles = new List<RasterTriangle>();
-
-        if (insideVertices.Count == 1)
+        // Convert the clipped polygon back to triangles using fan triangulation
+        if (vertexCount >= 3)
         {
-            var v0 = insideVertices[0];
-            var v1 = outsideVertices[0];
-            var v2 = outsideVertices[1];
-            float t1 = IntersectLinePlane(v0.Position, v1.Position, plane);
-            float t2 = IntersectLinePlane(v0.Position, v2.Position, plane);
-            var newVertex1 = InterpolateVertex(v0, v1, t1);
-            var newVertex2 = InterpolateVertex(v0, v2, t2);
-
-            if (insideIndices[0] == 0)
-            {
-                newTriangles.Add(new RasterTriangle { Vertices = new[] { v0, newVertex1, newVertex2 } });
-            }
-            else if (insideIndices[0] == 1)
-            {
-                newTriangles.Add(new RasterTriangle { Vertices = new[] { newVertex2, newVertex1, v0 } });
-            }
-            else
-            {
-                newTriangles.Add(new RasterTriangle { Vertices = new[] { newVertex1, newVertex2, v0 } });
-            }
-        }
-        else
-        {
-            var v0 = insideVertices[0];
-            var v1 = insideVertices[1];
-            var v2 = outsideVertices[0];
-            float t1 = IntersectLinePlane(v0.Position, v2.Position, plane);
-            float t2 = IntersectLinePlane(v1.Position, v2.Position, plane);
-            var newVertex1 = InterpolateVertex(v0, v2, t1);
-            var newVertex2 = InterpolateVertex(v1, v2, t2);
-
-            if (insideIndices[0] == 0 && insideIndices[1] == 1)
-            {
-                newTriangles.Add(new RasterTriangle { Vertices = new[] { v0, v1, newVertex2 } });
-                newTriangles.Add(new RasterTriangle { Vertices = new[] { v0, newVertex2, newVertex1 } });
-            }
-            else if (insideIndices[0] == 1 && insideIndices[1] == 2)
-            {
-                newTriangles.Add(new RasterTriangle { Vertices = new[] { newVertex1, v0, v1 } });
-                newTriangles.Add(new RasterTriangle { Vertices = new[] { newVertex1, v1, newVertex2 } });
-            }
-            else
-            {
-                newTriangles.Add(new RasterTriangle { Vertices = new[] { v1, v0, newVertex1 } });
-                newTriangles.Add(new RasterTriangle { Vertices = new[] { v1, newVertex1, newVertex2 } });
-            }
+            TriangulatePolygon(_clipInputVertices, vertexCount, _clippedTriangles);
         }
 
-        if (isNearPlane)
+        return _clippedTriangles;
+    }
+
+    private int ClipPolygonAgainstPlane(RasterVertex[] inputVertices, int inputCount,
+                                       RasterVertex[] outputVertices, PlaneFloat plane)
+    {
+        if (inputCount == 0) return 0;
+
+        int outputCount = 0;
+        var previousVertex = inputVertices[inputCount - 1];
+        float previousDistance = GetPlaneDistance(previousVertex.Position, plane);
+
+        for (int i = 0; i < inputCount; i++)
         {
-            foreach (var tri in newTriangles)
+            var currentVertex = inputVertices[i];
+            float currentDistance = GetPlaneDistance(currentVertex.Position, plane);
+
+            // Current vertex is inside
+            if (currentDistance >= 0)
             {
-                for (int i = 0; i < tri.Vertices.Length; i++)
+                // Previous vertex was outside, so we need intersection
+                if (previousDistance < 0)
                 {
-                    if (tri.Vertices[i].Position.W < 0)
-                    {
-                        tri.Vertices[i].Position = new Float4(
-                            tri.Vertices[i].Position.X,
-                            tri.Vertices[i].Position.Y,
-                            tri.Vertices[i].Position.Z,
-                            0.00001f
-                        );
-                    }
+                    float t = previousDistance / (previousDistance - currentDistance);
+                    outputVertices[outputCount++] = InterpolateVertex(previousVertex, currentVertex, t);
                 }
+
+                // Add current vertex
+                outputVertices[outputCount++] = currentVertex;
             }
+            // Current vertex is outside, previous was inside
+            else if (previousDistance >= 0)
+            {
+                float t = previousDistance / (previousDistance - currentDistance);
+                outputVertices[outputCount++] = InterpolateVertex(previousVertex, currentVertex, t);
+            }
+
+            previousVertex = currentVertex;
+            previousDistance = currentDistance;
         }
 
-        return newTriangles;
+        return outputCount;
     }
 
-    private float IntersectLinePlane(Float4 p0, Float4 p1, Plane plane)
+    private float GetPlaneDistance(Float4 position, PlaneFloat plane)
     {
-        float d0 = Maths.Dot(plane.Normal, new Float3(p0.X, p0.Y, p0.Z)) + plane.Distance;
-        float d1 = Maths.Dot(plane.Normal, new Float3(p1.X, p1.Y, p1.Z)) + plane.Distance;
-        return d0 / (d0 - d1);
+        return plane.Normal.X * position.X +
+               plane.Normal.Y * position.Y +
+               plane.Normal.Z * position.Z + plane.D;
     }
+
+    private void TriangulatePolygon(RasterVertex[] vertices, int vertexCount, List<RasterTriangle> triangles)
+    {
+        // Fan triangulation: connect vertex 0 to all other adjacent pairs
+        for (int i = 1; i < vertexCount - 1; i++)
+        {
+            var triangle = new RasterTriangle
+            {
+                Vertices = new RasterVertex[3]
+                {
+                    vertices[0],     // Fan center
+                    vertices[i],     // Current vertex
+                    vertices[i + 1]  // Next vertex
+                }
+            };
+            triangles.Add(triangle);
+        }
+    }
+
+    #endregion
 
     private RasterVertex InterpolateVertex(RasterVertex v0, RasterVertex v1, float t)
     {
