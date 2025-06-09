@@ -9,6 +9,7 @@ namespace SoftwareRasterizer.Rasterizer.Engines;
 internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device)
 {
     private const int QUAD_SIZE = 2;
+    private static readonly FragmentContext s_emptyContext = new FragmentContext();
     private static readonly ThreadLocal<Float4[]> s_varyingCache = new(() => new Float4[32]);
 
     public override void Rasterize(RasterTriangle triangle)
@@ -22,7 +23,7 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
             return;
         }
 
-        // Pre-calculate edge equation constants only once
+        // Pre-calculate edge equation constants
         float area = EdgeFunction(ref v0, ref v1, ref v2);
         if (area < 1e-6 && area > -1e-6)
             return;
@@ -36,12 +37,6 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
         // Early exit if triangle is completely outside screen
         if (minX > maxX || minY > maxY) return;
 
-        // Align to quad boundaries
-        minX &= ~(QUAD_SIZE - 1);
-        minY &= ~(QUAD_SIZE - 1);
-        maxX = (maxX + QUAD_SIZE - 1) & ~(QUAD_SIZE - 1);
-        maxY = (maxY + QUAD_SIZE - 1) & ~(QUAD_SIZE - 1);
-
         // Pre-calculate edge equation coefficients
         float invArea = 1.0f / area;
         var e0 = new EdgeCoefficients(v1, v2);  // edge v1->v2
@@ -49,25 +44,35 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
         var e2 = new EdgeCoefficients(v0, v1);  // edge v0->v1
         EdgeData edgeData = new(e0, e1, e2, invArea);
 
-        //int count = Maths.CeilToInt((double)(maxY - minY) / QUAD_SIZE);
-        //if (count > 0)
-        //{
-        //    for (int i = 0; i < count; i++) {
-        //        int quadY = minY + (i * QUAD_SIZE);
-        //        for (int quadX = minX; quadX < maxX; quadX += QUAD_SIZE)
-        //        {
-        //            ProcessQuadOptimized(quadX, quadY, triangle, edgeData);
-        //        }
-        //    }
-        //}
-
-        for (int quadY = minY; quadY < maxY; quadY += QUAD_SIZE)
+        if (Device.EnableDerivatives)
         {
-            for (int quadX = minX; quadX < maxX; quadX += QUAD_SIZE)
+            // Align to quad boundaries
+            minX &= ~(QUAD_SIZE - 1);
+            minY &= ~(QUAD_SIZE - 1);
+            maxX = (maxX + QUAD_SIZE - 1) & ~(QUAD_SIZE - 1);
+            maxY = (maxY + QUAD_SIZE - 1) & ~(QUAD_SIZE - 1);
+            
+            for (int quadY = minY; quadY < maxY; quadY += QUAD_SIZE)
             {
-                ProcessQuadOptimized(quadX, quadY, triangle, edgeData);
+                for (int quadX = minX; quadX < maxX; quadX += QUAD_SIZE)
+                {
+                    ProcessQuad(quadX, quadY, triangle, edgeData);
+                }
             }
         }
+        else
+        {
+            var varyingCache = s_varyingCache.Value;
+
+            for (int y = minY; y <= maxY; y++)
+            {
+                for (int x = minX; x <= maxX; x++)
+                {
+                    ProcessPixel(x, y, ref triangle, ref e0, ref e1, ref e2, invArea, varyingCache);
+                }
+            }
+        }
+
     }
 
     public readonly struct EdgeCoefficients
@@ -100,46 +105,106 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Float3 CalculateBarycentric(float x, float y, ref EdgeData edges)
+    private void ProcessPixel(int x, int y, ref RasterTriangle triangle,
+        ref EdgeCoefficients e0, ref EdgeCoefficients e1, ref EdgeCoefficients e2,
+        float invArea, Float4[] varyingCache)
     {
-        float w0 = edges.E0.Evaluate(x, y) * edges.InvArea;
-        float w1 = edges.E1.Evaluate(x, y) * edges.InvArea;
-        float w2 = edges.E2.Evaluate(x, y) * edges.InvArea;
-        return new Float3(w0, w1, w2);
+        // Use pixel center
+        float px = x + 0.5f;
+        float py = y + 0.5f;
+
+        // Calculate edge values
+        float w0 = e0.Evaluate(px, py) * invArea;
+        float w1 = e1.Evaluate(px, py) * invArea;
+        float w2 = e2.Evaluate(px, py) * invArea;
+
+        // Check if pixel is inside triangle
+        if (w0 < 0 || w1 < 0 || w2 < 0)
+            return;
+
+        float depth = InterpolateFloat(
+            triangle.Vertices[0].ScreenPosition.Z,
+            triangle.Vertices[1].ScreenPosition.Z,
+            triangle.Vertices[2].ScreenPosition.Z,
+            w0, w1, w2);
+
+        lock (Device.CurrentFramebuffer.GetPixelLockUnsafe(x, y))
+        {
+            // Skip if failed depth test (unless shader can write depth)
+            if (Device.DoDepthTest && !Device.CurrentShader.CanWriteDepth)
+            {
+                if (depth >= Device.CurrentFramebuffer.GetDepth(x, y))
+                    return;
+            }
+
+            InterpolateVaryings(ref triangle, w0, w1, w2, varyingCache);
+
+            // Execute fragment shader - no quad context needed
+            Shader.FragmentOutput fragmentOutput = Device.CurrentShader.FragmentShader(varyingCache, s_emptyContext);
+
+            // Write output
+            Device.CurrentFramebuffer.SetPixelUnsafe(x, y, fragmentOutput.GlFragColor);
+            Device.CurrentFramebuffer.SetDepthUnsafe(x, y, fragmentOutput.GlFragDepth ?? depth);
+        }
     }
 
-    private void ProcessQuadOptimized(int quadX, int quadY, RasterTriangle triangle, EdgeData edgeData)
+    private void ProcessQuad(int quadX, int quadY, RasterTriangle triangle, EdgeData edgeData)
     {
         var quadFragments = new QuadFragment?[QUAD_SIZE, QUAD_SIZE];
         bool hasValidFragments = false;
         var varyingCache = s_varyingCache.Value;
 
-        // First pass barycentric calculation
+        // Calculate edge values at quad corner (pixel center)
+        float baseX = quadX + 0.5f;
+        float baseY = quadY + 0.5f;
+
+        float e0_base = edgeData.E0.Evaluate(baseX, baseY);
+        float e1_base = edgeData.E1.Evaluate(baseX, baseY);
+        float e2_base = edgeData.E2.Evaluate(baseX, baseY);
+
+        // Pre-calculate step increments (these are the A and B coefficients)
+        float e0_stepX = edgeData.E0.A;
+        float e0_stepY = edgeData.E0.B;
+        float e1_stepX = edgeData.E1.A;
+        float e1_stepY = edgeData.E1.B;
+        float e2_stepX = edgeData.E2.A;
+        float e2_stepY = edgeData.E2.B;
+
+        // First pass: barycentric calculation using incremental updates
         for (int dy = 0; dy < QUAD_SIZE; dy++)
         {
+            // Calculate edge values for start of this row
+            float e0_row = e0_base + dy * e0_stepY;
+            float e1_row = e1_base + dy * e1_stepY;
+            float e2_row = e2_base + dy * e2_stepY;
+
             for (int dx = 0; dx < QUAD_SIZE; dx++)
             {
-                int x = quadX + dx;
-                int y = quadY + dy;
+                // Incrementally calculate edge values for this pixel
+                float e0 = e0_row + dx * e0_stepX;
+                float e1 = e1_row + dx * e1_stepX;
+                float e2 = e2_row + dx * e2_stepX;
 
-                Float3 barycentric = CalculateBarycentric(
-                    x + 0.5f, y + 0.5f,  // Center of pixel
-                    ref edgeData);
+                // Convert to barycentric coordinates
+                float w0 = e0 * edgeData.InvArea;
+                float w1 = e1 * edgeData.InvArea;
+                float w2 = e2 * edgeData.InvArea;
 
-                if (barycentric.X >= 0 && barycentric.Y >= 0 && barycentric.Z >= 0)
+                // Check if pixel is inside triangle
+                if (w0 >= 0 && w1 >= 0 && w2 >= 0)
                 {
                     float depth = InterpolateFloat(
                         triangle.Vertices[0].ScreenPosition.Z,
                         triangle.Vertices[1].ScreenPosition.Z,
                         triangle.Vertices[2].ScreenPosition.Z,
-                        ref barycentric);
+                        w0, w1, w2);
 
-                    InterpolateVaryings(ref triangle, ref barycentric, varyingCache);
+                    InterpolateVaryings(ref triangle, w0, w1, w2, varyingCache);
 
                     quadFragments[dy, dx] = new QuadFragment
                     {
                         Depth = depth,
-                        Barycentric = barycentric,
+                        Barycentric = new Float3(w0, w1, w2),
                         Varyings = varyingCache
                     };
                     hasValidFragments = true;
@@ -195,7 +260,7 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
         }
     }
 
-    private void InterpolateVaryings(ref RasterTriangle triangle, ref Float3 barycentric, Float4[] varyingCache)
+    private void InterpolateVaryings(ref RasterTriangle triangle, float barycentricX, float barycentricY, float barycentricZ, Float4[] varyingCache)
     {
         var v0Varyings = triangle.Vertices[0].Varyings;
         var v1Varyings = triangle.Vertices[1].Varyings;
@@ -209,10 +274,10 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
             ref var v2 = ref v2Varyings[i];
 
             varyingCache[i] = new Float4(
-                v0.X * barycentric.X + v1.X * barycentric.Y + v2.X * barycentric.Z,
-                v0.Y * barycentric.X + v1.Y * barycentric.Y + v2.Y * barycentric.Z,
-                v0.Z * barycentric.X + v1.Z * barycentric.Y + v2.Z * barycentric.Z,
-                v0.W * barycentric.X + v1.W * barycentric.Y + v2.W * barycentric.Z);
+                v0.X * barycentricX + v1.X * barycentricY + v2.X * barycentricZ,
+                v0.Y * barycentricX + v1.Y * barycentricY + v2.Y * barycentricZ,
+                v0.Z * barycentricX + v1.Z * barycentricY + v2.Z * barycentricZ,
+                v0.W * barycentricX + v1.W * barycentricY + v2.W * barycentricZ);
         }
     }
 
@@ -227,9 +292,9 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static float InterpolateFloat(float a, float b, float c, ref Float3 barycentric)
+    private static float InterpolateFloat(float a, float b, float c, float barycentricX, float barycentricY, float barycentricZ)
     {
-        return a * barycentric.X + b * barycentric.Y + c * barycentric.Z;
+        return a * barycentricX + b * barycentricY + c * barycentricZ;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
