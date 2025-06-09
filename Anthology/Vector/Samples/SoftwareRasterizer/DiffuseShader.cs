@@ -62,9 +62,9 @@ public class DiffuseShader : Rasterizer.Shader
         return new FragmentOutput
         {
             GlFragColor = new Float4(
-                (normal.X + diffuse) * 0.5f,
-                (normal.Y + diffuse) * 0.5f,
-                (normal.Z + diffuse) * 0.5f,
+                (((normal.X * 0.5f) + 0.5f) + diffuse) * 0.5f,
+                (((normal.Y * 0.5f) + 0.5f) + diffuse) * 0.5f,
+                (((normal.Z * 0.5f) + 0.5f) + diffuse) * 0.5f,
                 alpha
             )
         };
