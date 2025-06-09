@@ -75,6 +75,7 @@ public class RaylibDemo
     private RenderTexture2D renderTexture;
     private MeshGenerator.MeshData sphereModel;
     private MeshGenerator.MeshData cubeModel;
+    private MeshGenerator.MeshData corridorModel;
     private float cubeRotation;
 
     private int width;
@@ -99,10 +100,15 @@ public class RaylibDemo
         presenter = new RaylibPresenter(width / DownscaleFactor, height / DownscaleFactor);
         diffuseShader = new DiffuseShader();
         renderTexture = Raylib.LoadRenderTexture(100, 100);
+
         sphereModel = MeshGenerator.GenerateSphereMesh(1, 8, 8);
         sphereModel.CreateVAttributes();
+
         cubeModel = MeshGenerator.GenerateCubeMesh(1);
         cubeModel.CreateVAttributes();
+
+        corridorModel = MeshGenerator.GenerateCorridorMesh(2f, 3f);
+        corridorModel.CreateVAttributes();
 
         // Initialize FreelookCamera
         camera = new FreelookCamera(
@@ -208,7 +214,7 @@ public class RaylibDemo
 
         renderer.SetCullMode(CullMode.Back);
         renderer.ClearFramebuffer(0, 0, 0, 1);
-        renderer.SetPolygonMode(PolygonMode.Fill);
+        renderer.SetPolygonMode(PolygonMode.Triangles);
 
         // Get view and projection matrices from our camera
         var viewMatrix = camera.GetViewMatrix();
@@ -223,6 +229,8 @@ public class RaylibDemo
         diffuseShader.projectionMatrix = projectionMatrix;
         diffuseShader.lightDir = Maths.Normalize(new Float3(0.5f, -0.85f, 0.4f));
         renderer.BindShader(diffuseShader);
+
+        DrawMesh(corridorModel, Float4x4.Identity);
 
         // Draw opaque sphere
         DrawMesh(sphereModel, Float4x4.CreateTranslation(new Float3(0, 0, 0)));
