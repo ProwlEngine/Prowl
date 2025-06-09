@@ -14,8 +14,9 @@ public partial class GraphicsDevice
 {
     internal bool DoDepthWrite = true;
     internal bool DoDepthTest = true;
+    internal bool EnableDerivatives = false;
     internal CullMode CullMode = CullMode.Back;
-    internal PolygonMode PolygonMode = PolygonMode.Fill;
+    internal PolygonMode PolygonMode = PolygonMode.Triangles;
 
     internal FrameBuffer CurrentFramebuffer;
     internal Shader CurrentShader;
@@ -31,8 +32,6 @@ public partial class GraphicsDevice
     private LineRasterizer lineRasterizer;
     private TriangleRasterizer triangleRasterizer;
 
-    private RasterizerBase curRasterizer;
-
     public GraphicsDevice(int width, int height)
     {
         backBuffer = new FrameBuffer(this, width, height);
@@ -44,8 +43,6 @@ public partial class GraphicsDevice
         pointRasterizer = new(this);
         lineRasterizer = new(this);
         triangleRasterizer = new(this);
-
-        curRasterizer = triangleRasterizer; // Default rasterizer
     }
 
     public FrameBuffer BackBuffer => backBuffer;
@@ -53,18 +50,11 @@ public partial class GraphicsDevice
     public void SetPolygonMode(PolygonMode polygonMode)
     {
         PolygonMode = polygonMode;
-
-        curRasterizer = polygonMode switch
-        {
-            PolygonMode.Point => pointRasterizer,
-            PolygonMode.Line => lineRasterizer,
-            PolygonMode.Fill => triangleRasterizer,
-            _ => throw new Exception("Invalid polygon mode")
-        };
     }
     public void SetCullMode(CullMode cullMode) => CullMode = cullMode;
     public void SetDoDepthWrite(bool doDepthWrite) => DoDepthWrite = doDepthWrite;
     public void SetDoDepthTest(bool doDepthTest) => DoDepthTest = doDepthTest;
+    public void SetEnableDerivative(bool enableDerivative) => EnableDerivatives = enableDerivative;
 
     public void BindFramebuffer(FrameBuffer framebuffer) => CurrentFramebuffer = framebuffer;
     public void BindShader(Shader shader) => CurrentShader = shader;
@@ -125,16 +115,202 @@ public partial class GraphicsDevice
 
         CurrentShader.Prepare();
 
-        Parallel.For(0, buffer.Indices.Length / 3, triangleIndex =>
+
+        switch (PolygonMode)
         {
-            int baseIndex = triangleIndex * 3;
-            ProcessTriangle(buffer.Indices[baseIndex], buffer.Indices[baseIndex + 1], buffer.Indices[baseIndex + 2]);
-        });
-        //for (var i = 0; i < buffer.Indices.Length; i += 3)
-        //{
-        //    ProcessTriangle(buffer.Indices[i], buffer.Indices[i + 1], buffer.Indices[i + 2]);
-        //}
+            // ===== Point primitive =====
+            case PolygonMode.Points: 
+                Parallel.For(0, buffer.VertexCount, ProcessPoint);
+                break;
+
+            // ===== Line primitive =====
+            case PolygonMode.Lines: 
+                if (buffer.Indices.Length % 2 != 0)
+                    throw new Exception("Line primitive requires an even number of indices");
+
+                Parallel.For(0, buffer.Indices.Length / 2, lineIndex =>
+                {
+                    int baseIndex = lineIndex * 2;
+                    ProcessLine(buffer.Indices[baseIndex], buffer.Indices[baseIndex + 1]);
+                });
+                break;
+
+            // ===== Line strip primitive =====
+            case PolygonMode.LineStrip: 
+                if (buffer.VertexCount < 2)
+                    throw new Exception("Line strip requires at least 2 indices");
+
+                Parallel.For(0, buffer.VertexCount - 1, lineIndex =>
+                {
+                    ProcessLine(lineIndex, lineIndex + 1);
+                });
+                break;
+
+            // ===== Triangle primitive =====
+            case PolygonMode.Triangles: 
+                Parallel.For(0, buffer.Indices.Length / 3, triangleIndex =>
+                {
+                    int baseIndex = triangleIndex * 3;
+                    ProcessTriangle(buffer.Indices[baseIndex], buffer.Indices[baseIndex + 1], buffer.Indices[baseIndex + 2]);
+                });
+                break;
+
+            // ===== Triangle strip primitive =====
+            case PolygonMode.TriangleStrip: 
+                if (buffer.VertexCount < 3)
+                    throw new Exception("Triangle strip requires at least 3 indices");
+
+                Parallel.For(0, buffer.VertexCount / 3, vertexIndex =>
+                {
+                    int baseIndex = vertexIndex * 3;
+                    ProcessTriangle(baseIndex, baseIndex + 1, baseIndex + 2);
+                });
+                break;
+
+            default:
+                throw new Exception($"Unsupported primitive type: {PolygonMode}");
+        }
     }
+
+    #region Point and Line Rasterization
+
+    // Pre-allocated thread-local storage for line clipping
+    private readonly ThreadLocal<Float4[]> lineVaryingCache1 = new(() => new Float4[32]);
+    private readonly ThreadLocal<Float4[]> lineVaryingCache2 = new(() => new Float4[32]);
+
+    private void ProcessPoint(int vertexIndex)
+    {
+        var output = CurrentShader.VertexShader(vertexIndex);
+        if (output.Varyings == null) return;
+
+        var vertex = new RasterVertex
+        {
+            Position = output.GlPosition,
+            Varyings = output.Varyings
+        };
+
+        const float nearPlane = -0.1f;
+        const float farPlane = 100f;
+
+        // Check if point is inside frustum
+        float w = Math.Abs(vertex.Position.W) < 0.00001f ? 0.00001f : vertex.Position.W;
+
+        if (vertex.Position.Z < nearPlane || vertex.Position.Z > farPlane ||
+            vertex.Position.X < -w || vertex.Position.X > w ||
+            vertex.Position.Y < -w || vertex.Position.Y > w)
+            return; // Point is outside frustum
+
+        // Transform to screen space
+        float invW = 1.0f / w;
+
+        vertex.ScreenPosition = new Float3(
+            (vertex.Position.X * invW + 1.0f) * s_halfWidth,
+            (-vertex.Position.Y * invW + 1.0f) * s_halfHeight,
+            vertex.Position.Z * invW
+        );
+
+        pointRasterizer.RasterizePoint(vertex);
+    }
+
+    private void ProcessLine(int vertexIndex1, int vertexIndex2)
+    {
+        var output1 = CurrentShader.VertexShader(vertexIndex1);
+        if (output1.Varyings == null) return;
+
+        var output2 = CurrentShader.VertexShader(vertexIndex2);
+        if (output2.Varyings?.Length != output1.Varyings.Length) return;
+
+        var vertex1 = new RasterVertex
+        {
+            Position = output1.GlPosition,
+            Varyings = output1.Varyings
+        };
+
+        var vertex2 = new RasterVertex
+        {
+            Position = output2.GlPosition,
+            Varyings = output2.Varyings
+        };
+
+        // Fast line clipping using Cohen-Sutherland-style approach
+        if (!ClipLineFast(ref vertex1, ref vertex2))
+            return; // Line completely clipped
+
+        // Transform to screen space
+        TransformVertexToScreenSpace(ref vertex1);
+        TransformVertexToScreenSpace(ref vertex2);
+
+        lineRasterizer.RasterizeLine(vertex1, vertex2);
+    }
+
+    private void TransformVertexToScreenSpace(ref RasterVertex vertex)
+    {
+        float w = Math.Abs(vertex.Position.W) < 0.00001f ? 0.00001f : vertex.Position.W;
+        float invW = 1.0f / w;
+
+        vertex.ScreenPosition = new Float3(
+            (vertex.Position.X * invW + 1.0f) * s_halfWidth,
+            (-vertex.Position.Y * invW + 1.0f) * s_halfHeight,
+            vertex.Position.Z * invW
+        );
+    }
+
+    private bool ClipLineFast(ref RasterVertex v1, ref RasterVertex v2)
+    {
+        const float nearPlane = -0.1f;
+        const float farPlane = 100f;
+
+        float t0 = 0.0f;
+        float t1 = 1.0f;
+
+        // Z clipping (near/far planes)
+        float deltaZ = v2.Position.Z - v1.Position.Z;
+        if (Math.Abs(deltaZ) > 1e-6f)
+        {
+            float tNear = (nearPlane - v1.Position.Z) / deltaZ;
+            float tFar = (farPlane - v1.Position.Z) / deltaZ;
+
+            if (deltaZ < 0) // Line goes from far to near
+            {
+                t0 = Math.Max(t0, tFar);
+                t1 = Math.Min(t1, tNear);
+            }
+            else // Line goes from near to far
+            {
+                t0 = Math.Max(t0, tNear);
+                t1 = Math.Min(t1, tFar);
+            }
+        }
+        else
+        {
+            // Line is parallel to Z planes
+            if (v1.Position.Z < nearPlane || v1.Position.Z > farPlane)
+                return false;
+        }
+
+        if (t0 >= t1) return false; // Line completely clipped
+
+        // Only interpolate if we actually need to clip - use existing method
+        if (t0 > 0.0f || t1 < 1.0f)
+        {
+            var originalV1 = v1;
+            var originalV2 = v2;
+
+            if (t0 > 0.0f)
+            {
+                v1 = InterpolateVertex(ref originalV1, ref originalV2, t0);
+            }
+
+            if (t1 < 1.0f)
+            {
+                v2 = InterpolateVertex(ref originalV1, ref originalV2, t1);
+            }
+        }
+
+        return true;
+    }
+
+    #endregion
 
     #region Triangle Rasterization
 
@@ -180,7 +356,7 @@ public partial class GraphicsDevice
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void TransformToScreenSpaceFast(RasterTriangle clipSpaceTriangle, RasterTriangle screenSpaceTriangle)
+    private void TransformTriangleToScreenSpace(RasterTriangle clipSpaceTriangle, RasterTriangle screenSpaceTriangle)
     {
         for (int i = 0; i < 3; i++)
         {
@@ -236,13 +412,13 @@ public partial class GraphicsDevice
 
             foreach (var tri in clippedTriangles)
             {
-                TransformToScreenSpaceFast(tri, ssTriangle);
-                curRasterizer.Rasterize(ssTriangle);
+                TransformTriangleToScreenSpace(tri, ssTriangle);
+            triangleRasterizer.Rasterize(ssTriangle);
             }
         //}
     }
 
-    #region CLipping Algorithm
+    #region Clipping Algorithm
 
     // Reusable arrays for clipping - prevents allocations
     private readonly ThreadLocal<RasterVertex[]> clipInputVertices = new(() => new RasterVertex[16]);
@@ -330,7 +506,7 @@ public partial class GraphicsDevice
                 if (previousDistance < 0)
                 {
                     float t = previousDistance / (previousDistance - currentDistance);
-                    outputVertices[outputCount++] = InterpolateVertex(previousVertex, currentVertex, t);
+                    outputVertices[outputCount++] = InterpolateVertex(ref previousVertex, ref currentVertex, t);
                 }
 
                 outputVertices[outputCount++] = currentVertex;
@@ -338,7 +514,7 @@ public partial class GraphicsDevice
             else if (previousDistance >= 0)
             {
                 float t = previousDistance / (previousDistance - currentDistance);
-                outputVertices[outputCount++] = InterpolateVertex(previousVertex, currentVertex, t);
+                outputVertices[outputCount++] = InterpolateVertex(ref previousVertex, ref currentVertex, t);
             }
 
             previousVertex = currentVertex;
@@ -372,7 +548,11 @@ public partial class GraphicsDevice
         }
     }
 
-    private RasterVertex InterpolateVertex(RasterVertex v0, RasterVertex v1, float t)
+    #endregion
+
+    #endregion
+
+    private RasterVertex InterpolateVertex(ref RasterVertex v0, ref RasterVertex v1, float t)
     {
         var newPosition = Maths.Lerp(v0.Position, v1.Position, t);
         Float4[] newVaryings = new Float4[v0.Varyings.Length];
@@ -385,8 +565,4 @@ public partial class GraphicsDevice
             Varyings = newVaryings
         };
     }
-
-    #endregion
-
-    #endregion
 }

@@ -8,4 +8,9 @@ internal class LineRasterizer(GraphicsDevice device) : RasterizerBase(device)
         DrawLine(triangle.Vertices[1], triangle.Vertices[2]);
         DrawLine(triangle.Vertices[2], triangle.Vertices[0]);
     }
+
+    public void RasterizeLine(RasterVertex v1, RasterVertex v2)
+    {
+        DrawLine(v1, v2);
+    }
 }

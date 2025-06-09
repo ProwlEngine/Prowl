@@ -3,4 +3,4 @@
 
 namespace SoftwareRasterizer.Rasterizer;
 
-public enum PolygonMode { Fill, Line, Point }
+public enum PolygonMode { Triangles, TriangleStrip, Lines, LineStrip, Points }
