@@ -14,6 +14,7 @@ public class FrameBuffer
     public Texture2D ColorTexture { get; }
     public float[] DepthBuffer { get; }
 
+    private readonly object[] _pixelLocks;
     private GraphicsDevice _device;
 
     public FrameBuffer(GraphicsDevice device, int width, int height)
@@ -23,6 +24,13 @@ public class FrameBuffer
         Height = height;
         ColorTexture = new Texture2D(width, height);
         DepthBuffer = new float[width * height];
+
+        // Initialize per-pixel locks
+        _pixelLocks = new object[width * height];
+        for (int i = 0; i < _pixelLocks.Length; i++)
+        {
+            _pixelLocks[i] = new object();
+        }
     }
 
     public void Clear(float r, float g, float b, float a)
@@ -32,8 +40,7 @@ public class FrameBuffer
         byte bByte = (byte)Math.Clamp(b * 255, 0, 255);
         byte aByte = (byte)Math.Clamp(a * 255, 0, 255);
 
-        //for (int i = 0; i < Width * Height; i++)
-        Parallel.For(0, Width * Height, i =>
+        for (int i = 0; i < Width * Height; i++)
         {
             int index = i * 4;
             ColorTexture.Data[index] = rByte;
@@ -42,7 +49,11 @@ public class FrameBuffer
             ColorTexture.Data[index + 3] = aByte;
             DepthBuffer[i] = 1.0f;
         }
-        );
+    }
+
+    public object GetPixelLockUnsafe(int x, int y)
+    {
+        return _pixelLocks[y * Width + x];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

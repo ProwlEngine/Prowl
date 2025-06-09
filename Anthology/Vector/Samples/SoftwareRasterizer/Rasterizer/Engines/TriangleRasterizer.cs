@@ -163,31 +163,34 @@ internal class TriangleRasterizer(GraphicsDevice device) : RasterizerBase(device
                 int x = quadX + dx;
                 int y = quadY + dy;
 
-                // Skip if failed depth test (unless shader can write depth)
-                if (Device.DoDepthTest && !Device.CurrentShader.CanWriteDepth)
+                lock (Device.CurrentFramebuffer.GetPixelLockUnsafe(x, y))
                 {
-                    if (fragment.Value.Depth >= Device.CurrentFramebuffer.GetDepth(x, y))
-                        continue;
+                    // Skip if failed depth test (unless shader can write depth)
+                    if (Device.DoDepthTest && !Device.CurrentShader.CanWriteDepth)
+                    {
+                        if (fragment.Value.Depth >= Device.CurrentFramebuffer.GetDepth(x, y))
+                            continue;
+                    }
+
+                    // Create fragment context with neighbor access
+                    FragmentContext fragmentContext = new FragmentContext
+                    {
+                        CurrentFragment = fragment.Value,
+                        QuadFragments = quadFragments,
+                        QuadX = dx,
+                        QuadY = dy,
+                    };
+
+                    // Execute fragment shader with quad context
+                    Shader.FragmentOutput fragmentOutput = Device.CurrentShader.FragmentShader(fragment.Value.Varyings, fragmentContext);
+
+                    // Write output
+                    Device.CurrentFramebuffer.SetPixelUnsafe(
+                        x, y,
+                        fragmentOutput.GlFragColor);
+
+                    Device.CurrentFramebuffer.SetDepthUnsafe(x, y, fragmentOutput.GlFragDepth ?? fragment.Value.Depth);
                 }
-
-                // Create fragment context with neighbor access
-                FragmentContext fragmentContext = new FragmentContext
-                {
-                    CurrentFragment = fragment.Value,
-                    QuadFragments = quadFragments,
-                    QuadX = dx,
-                    QuadY = dy,
-                };
-
-                // Execute fragment shader with quad context
-                Shader.FragmentOutput fragmentOutput = Device.CurrentShader.FragmentShader(fragment.Value.Varyings, fragmentContext);
-
-                // Write output
-                Device.CurrentFramebuffer.SetPixelUnsafe(
-                    x, y,
-                    fragmentOutput.GlFragColor);
-
-                Device.CurrentFramebuffer.SetDepthUnsafe(x, y, fragmentOutput.GlFragDepth ?? fragment.Value.Depth);
             }
         }
     }
