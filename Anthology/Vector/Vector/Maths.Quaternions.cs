@@ -255,6 +255,15 @@ namespace Prowl.Vector
             return v + q.W * t + Cross(qVec, t);
         }
 
+        /// <summary>Rotates a 3D vector by a quaternion.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Double3 Mul(Quaternion q, Double3 v)
+        {
+            Double3 qVec = new Double3(q.X, q.Y, q.Z);
+            Double3 t = 2.0 * Cross(qVec, v);
+            return v + q.W * t + Cross(qVec, t);
+        }
+
         /// <summary>Alias for Mul(Quaternion, Float3) for clarity when rotating vectors.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Float3 Rotate(Quaternion q, Float3 v) => Mul(q, v);
