@@ -1,0 +1,277 @@
+// TEMPLATE_TYPES: float, double
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+
+namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
+{
+    /// <summary>
+    /// Represents a 3D transformation matrix. Provides a rich API for manipulating
+    /// position, rotation, and scale, suitable for 3D object transformations.
+    /// </summary>
+    public struct {{CLASS_NAME}} : IEquatable<{{CLASS_NAME}}>
+    {
+        /// <summary>The position of the transform in 3D space.</summary>
+        public {{TYPE_PREFIX}}3 position;
+
+        /// <summary>The rotation of the transform as a quaternion.</summary>
+        public Quaternion{{TYPE_PREFIX}} rotation;
+
+        /// <summary>The scale of the transform.</summary>
+        public {{TYPE_PREFIX}}3 scale;
+
+        /// <summary>A transform with default values (position 0, no rotation, scale 1).</summary>
+        public static readonly {{CLASS_NAME}} Identity = new({{TYPE_PREFIX}}3.Zero, Quaternion{{TYPE_PREFIX}}.Identity, {{TYPE_PREFIX}}3.One);
+
+        /// <summary>
+        /// Initializes a new transform with specified position, rotation, and scale.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}}({{TYPE_PREFIX}}3 position, Quaternion{{TYPE_PREFIX}} rotation, {{TYPE_PREFIX}}3 scale)
+        {
+            this.position = position;
+            this.rotation = rotation;
+            this.scale = scale;
+        }
+
+        #region High-Level Properties
+
+        /// <summary>
+        /// The rotation as Euler angles in degrees (order ZYXr).
+        /// This is useful for inspector UIs and simple rotational adjustments.
+        /// </summary>
+        public {{TYPE_PREFIX}}3 eulerAngles
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => rotation.ToEulerDegrees(EulerOrder.ZYXr);
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set => rotation = Quaternion{{TYPE_PREFIX}}.FromEulerDegrees(value, EulerOrder.ZYXr);
+        }
+
+        /// <summary>The forward direction of this transform (+Z axis in local space).</summary>
+        public {{TYPE_PREFIX}}3 forward => rotation * {{TYPE_PREFIX}}3.UnitZ;
+
+        /// <summary>The up direction of this transform (+Y axis in local space).</summary>
+        public {{TYPE_PREFIX}}3 up => rotation * {{TYPE_PREFIX}}3.UnitY;
+
+        /// <summary>The right direction of this transform (+X axis in local space).</summary>
+        public {{TYPE_PREFIX}}3 right => rotation * {{TYPE_PREFIX}}3.UnitX;
+
+        #endregion
+
+        #region Matrix Conversions
+
+        /// <summary>
+        /// Gets the 4x4 matrix representing this transform (local to world).
+        /// </summary>
+        public {{TYPE_PREFIX}}4x4 ToMatrix()
+        {
+            return {{TYPE_PREFIX}}4x4.CreateTRS(position, rotation, scale);
+        }
+
+        /// <summary>
+        /// Gets the inverse 4x4 matrix representing this transform (world to local).
+        /// </summary>
+        public {{TYPE_PREFIX}}4x4 ToInverseMatrix()
+        {
+            // Inverse TRS is inv(T) * inv(R) * inv(S)
+            var invScale = new {{TYPE_PREFIX}}3({{ONE}} / scale.X, {{ONE}} / scale.Y, {{ONE}} / scale.Z);
+            var invRot = rotation.Inverse();
+            var invPos = -(invRot * position);
+
+            return {{TYPE_PREFIX}}4x4.CreateTRS(invPos, invRot, invScale);
+        }
+
+        /// <summary>
+        /// Creates a transform from a 4x4 matrix.
+        /// Note: This decomposition assumes the matrix is a valid TRS matrix and does not support shear.
+        /// </summary>
+        public static {{CLASS_NAME}} FromMatrix({{TYPE_PREFIX}}4x4 m)
+        {
+            {{TYPE_PREFIX}}3 scale = new {{TYPE_PREFIX}}3(
+                new {{TYPE_PREFIX}}3(m.c0.X, m.c0.Y, m.c0.Z).Length,
+                new {{TYPE_PREFIX}}3(m.c1.X, m.c1.Y, m.c1.Z).Length,
+                new {{TYPE_PREFIX}}3(m.c2.X, m.c2.Y, m.c2.Z).Length
+            );
+
+            // Handle negative scale by flipping and adjusting rotation
+            if (m.Determinant() < {{ZERO}})
+            {
+                scale.X = -scale.X;
+            }
+
+            var invScale = new {{TYPE_PREFIX}}3({{ONE}} / scale.X, {{ONE}} / scale.Y, {{ONE}} / scale.Z);
+            var rotMatrix = new {{TYPE_PREFIX}}3x3(
+                m.c0.XYZ * invScale.X,
+                m.c1.XYZ * invScale.Y,
+                m.c2.XYZ * invScale.Z
+            );
+            
+            return new {{CLASS_NAME}}(m.c3.XYZ, Maths.FromMatrix(rotMatrix), scale);
+        }
+
+        #endregion
+
+        #region Space Transformations
+
+        /// <summary>Transforms a point from local space to world space.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 TransformPoint({{TYPE_PREFIX}}3 point)
+        {
+            return position + rotation * (scale * point);
+        }
+
+        /// <summary>Transforms a point from world space to local space.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 InverseTransformPoint({{TYPE_PREFIX}}3 point)
+        {
+            var invRot = rotation.Inverse();
+            var invScale = new {{TYPE_PREFIX}}3({{ONE}} / scale.X, {{ONE}} / scale.Y, {{ONE}} / scale.Z);
+            return invScale * (invRot * (point - position));
+        }
+
+        /// <summary>Transforms a direction from local space to world space (unaffected by scale or position).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 TransformDirection({{TYPE_PREFIX}}3 direction)
+        {
+            return rotation * direction;
+        }
+
+        /// <summary>Transforms a direction from world space to local space (unaffected by scale or position).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 InverseTransformDirection({{TYPE_PREFIX}}3 direction)
+        {
+            return rotation.Inverse() * direction;
+        }
+
+        /// <summary>Transforms a vector from local space to world space (affected by rotation and scale, but not position).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 TransformVector({{TYPE_PREFIX}}3 vector)
+        {
+            return rotation * (scale * vector);
+        }
+        
+        /// <summary>Transforms a vector from world space to local space (affected by rotation and scale, but not position).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}3 InverseTransformVector({{TYPE_PREFIX}}3 vector)
+        {
+            var invRot = rotation.Inverse();
+            var invScale = new {{TYPE_PREFIX}}3({{ONE}} / scale.X, {{ONE}} / scale.Y, {{ONE}} / scale.Z);
+            return invScale * (invRot * vector);
+        }
+        
+        #endregion
+
+        #region Imperative Transformations
+
+        /// <summary>Moves the transform in the direction and distance of translation.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Translate({{TYPE_PREFIX}}3 translation, bool relativeToSelf = true)
+        {
+            if (relativeToSelf)
+                position += rotation * translation;
+            else
+                position += translation;
+        }
+
+        /// <summary>Applies a rotation of eulerAngles (in degrees) around the z, x and y axes, in that order.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Rotate({{TYPE_PREFIX}}3 eulerAngles, bool relativeToSelf = true)
+        {
+            Rotate(Quaternion{{TYPE_PREFIX}}.FromEulerDegrees(eulerAngles, EulerOrder.ZYXr), relativeToSelf);
+        }
+
+        /// <summary>Applies a rotation of angle (in degrees) around an axis.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Rotate(Quaternion{{TYPE_PREFIX}} rot, bool relativeToSelf = true)
+        {
+            if (relativeToSelf)
+                rotation = rotation * rot;
+            else
+                rotation = rot * rotation;
+        }
+
+        /// <summary>Rotates the transform around a point in world space.</summary>
+        /// <param name="point">The world-space point to rotate around.</param>
+        /// <param name="axis">The axis to rotate around.</param>
+        /// <param name="angleDegrees">The angle in degrees.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void RotateAround({{TYPE_PREFIX}}3 point, {{TYPE_PREFIX}}3 axis, {{TYPE}} angleDegrees)
+        {
+            var rot = Quaternion{{TYPE_PREFIX}}.AxisAngle(axis.Normalized, angleDegrees * ({{TYPE}})Maths.Deg2Rad);
+            var vector = position - point;
+            vector = rot * vector;
+            position = point + vector;
+            rotation = rot * rotation;
+        }
+        
+        /// <summary>
+        /// Rotates the transform so the forward vector points at the target's current position.
+        /// </summary>
+        /// <param name="target">The target position to look at.</param>
+        /// <param name="worldUp">The vector that defines "up" in world space.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void LookAt({{TYPE_PREFIX}}3 target, {{TYPE_PREFIX}}3 worldUp)
+        {
+            rotation = Quaternion{{TYPE_PREFIX}}.LookRotationSafe(target - position, worldUp);
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        /// <summary>Linearly interpolates between two transforms.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} Lerp({{CLASS_NAME}} a, {{CLASS_NAME}} b, {{TYPE}} t)
+        {
+            t = Maths.Clamp(t, {{ZERO}}, {{ONE}});
+            return new {{CLASS_NAME}}(
+                Maths.Lerp(a.position, b.position, t),
+                Quaternion{{TYPE_PREFIX}}.Nlerp(a.rotation, b.rotation, t),
+                Maths.Lerp(a.scale, b.scale, t)
+            );
+        }
+
+        #endregion
+        
+        #region Overrides
+
+        /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals({{CLASS_NAME}} other)
+        {
+            return position.Equals(other.position) &&
+                   rotation.Equals(other.rotation) &&
+                   scale.Equals(other.scale);
+        }
+
+        /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object? obj)
+        {
+            return obj is {{CLASS_NAME}} other && Equals(other);
+        }
+
+        /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(position, rotation, scale);
+        }
+        
+        /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override string ToString()
+        {
+            return $"{{CLASS_NAME}}(Position: {position}, Rotation: {rotation}, Scale: {scale})";
+        }
+
+        public static bool operator ==({{CLASS_NAME}} left, {{CLASS_NAME}} right) => left.Equals(right);
+        public static bool operator !=({{CLASS_NAME}} left, {{CLASS_NAME}} right) => !left.Equals(right);
+        
+        #endregion
+    }
+}

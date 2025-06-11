@@ -1,0 +1,387 @@
+// TEMPLATE_TYPES: float, double
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+
+namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
+{
+    /// <summary>
+    /// Represents a 2D affine transformation matrix. Provides a rich API for manipulating
+    /// position, rotation, and scale, suitable for 2D object transformations.
+    /// The matrix is in the form:
+    /// | A C E |
+    /// | B D F |
+    /// | 0 0 1 |
+    /// </summary>
+    public struct {{CLASS_NAME}} : IEquatable<{{CLASS_NAME}}>, IFormattable
+    {
+        public {{TYPE}} A, B, C, D, E, F;
+
+        /// <summary>A transform with default values, representing no transformation.</summary>
+        public static readonly {{CLASS_NAME}} Identity = new {{CLASS_NAME}}({{ONE}}, {{ZERO}}, {{ZERO}}, {{ONE}}, {{ZERO}}, {{ZERO}});
+
+        /// <summary>Initializes a new transform with the specified coefficients.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}}({{TYPE}} a, {{TYPE}} b, {{TYPE}} c, {{TYPE}} d, {{TYPE}} e, {{TYPE}} f)
+        {
+            A = a; B = b; C = c; D = d; E = e; F = f;
+        }
+
+        #region High-Level Properties
+
+        /// <summary>
+        /// Gets or sets the position (translation) of the transform.
+        /// </summary>
+        public {{TYPE_PREFIX}}2 Position
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => new {{TYPE_PREFIX}}2(E, F);
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set { E = value.X; F = value.Y; }
+        }
+
+        /// <summary>
+        /// Gets or sets the rotation of the transform in degrees.
+        /// When setting, this preserves the existing scale and translation.
+        /// </summary>
+        public {{TYPE}} Rotation
+        {
+            get => Maths.Atan2(B, A) * ({{TYPE}})Maths.Rad2Deg;
+            set
+            {
+                // Preserve scale and translation
+                var scale = this.Scale;
+                var position = this.Position;
+                var rad = value * ({{TYPE}})Maths.Deg2Rad;
+                var cs = Maths.Cos(rad);
+                var sn = Maths.Sin(rad);
+
+                A = cs * scale.X;
+                B = sn * scale.X;
+                C = -sn * scale.Y;
+                D = cs * scale.Y;
+                E = position.X;
+                F = position.Y;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the scale of the transform.
+        /// When setting, this preserves the existing rotation and translation.
+        /// </summary>
+        public {{TYPE_PREFIX}}2 Scale
+        {
+            get => new {{TYPE_PREFIX}}2(Maths.Sqrt(A * A + B * B), Maths.Sqrt(C * C + D * D));
+            set
+            {
+                // Preserve rotation and translation
+                var rotation = this.Rotation;
+                var position = this.Position;
+                var rad = rotation * ({{TYPE}})Maths.Deg2Rad;
+                var cs = Maths.Cos(rad);
+                var sn = Maths.Sin(rad);
+
+                A = cs * value.X;
+                B = sn * value.X;
+                C = -sn * value.Y;
+                D = cs * value.Y;
+                E = position.X;
+                F = position.Y;
+            }
+        }
+
+        /// <summary>
+        /// Gets the normalized right-facing direction vector of the transform's local space (+X axis).
+        /// </summary>
+        public {{TYPE_PREFIX}}2 Right => new {{TYPE_PREFIX}}2(A, B).Normalized;
+
+        /// <summary>
+        /// Gets the normalized up-facing direction vector of the transform's local space (+Y axis).
+        /// </summary>
+        public {{TYPE_PREFIX}}2 Up => new {{TYPE_PREFIX}}2(C, D).Normalized;
+
+        #endregion
+
+        #region Imperative Transformations
+
+        /// <summary>Applies a translation to the current transform.</summary>
+        /// <param name="translation">The vector to translate by.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Translate({{TYPE_PREFIX}}2 translation)
+        {
+            this = this * CreateTranslation(translation.X, translation.Y);
+        }
+
+        /// <summary>Applies a rotation (in degrees) to the current transform, relative to its own origin.</summary>
+        /// <param name="degrees">The angle to rotate by, in degrees.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Rotate({{TYPE}} degrees)
+        {
+            this = this * CreateRotation(degrees);
+        }
+
+        /// <summary>Applies a rotation (in degrees) to the current transform around a world-space pivot point.</summary>
+        /// <param name="pivot">The world-space point to rotate around.</param>
+        /// <param name="degrees">The angle to rotate by, in degrees.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void RotateAround({{TYPE_PREFIX}}2 pivot, {{TYPE}} degrees)
+        {
+            this = CreateTranslation(pivot) * CreateRotation(degrees) * CreateTranslation(-pivot) * this;
+        }
+        
+        /// <summary>Applies a scale to the current transform, relative to its own origin.</summary>
+        /// <param name="scale">The vector to scale by.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void AddScale({{TYPE_PREFIX}}2 scale)
+        {
+            this = this * CreateScale(scale.X, scale.Y);
+        }
+
+        /// <summary>Applies a scale to the current transform around a world-space pivot point.</summary>
+        /// <param name="pivot">The world-space point to scale around.</param>
+        /// <param name="scale">The vector to scale by.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ScaleAround({{TYPE_PREFIX}}2 pivot, {{TYPE_PREFIX}}2 scale)
+        {
+            this = CreateTranslation(pivot) * CreateScale(scale.X, scale.Y) * CreateTranslation(-pivot) * this;
+        }
+
+        #endregion
+        
+        #region Game Logic & Space Transformations
+
+        /// <summary>
+        /// Rotates the transform to face a target point in world space.
+        /// The local right-facing axis (+X) will point towards the target.
+        /// </summary>
+        /// <param name="worldTarget">The world-space position to look at.</param>
+        public void LookAt({{TYPE_PREFIX}}2 worldTarget)
+        {
+            var direction = (worldTarget - this.Position).Normalized;
+            this.Rotation = Maths.Atan2(direction.Y, direction.X) * ({{TYPE}})Maths.Rad2Deg;
+        }
+
+        /// <summary>
+        /// Gets the angle in degrees from this transform's position to a world target.
+        /// </summary>
+        /// <param name="worldTarget">The world-space position.</param>
+        /// <returns>The angle in degrees.</returns>
+        public {{TYPE}} GetAngleTo({{TYPE_PREFIX}}2 worldTarget)
+        {
+            var direction = (worldTarget - this.Position).Normalized;
+            return Maths.Atan2(direction.Y, direction.X) * ({{TYPE}})Maths.Rad2Deg;
+        }
+        
+        /// <summary>Transforms a point from local space to world space.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}2 TransformPoint({{TYPE_PREFIX}}2 localPoint) => new {{TYPE_PREFIX}}2(localPoint.X * A + localPoint.Y * C + E, localPoint.X * B + localPoint.Y * D + F);
+        
+        /// <summary>Transforms a point from world space to local space.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}2 InverseTransformPoint({{TYPE_PREFIX}}2 worldPoint) => this.Inverse() * worldPoint;
+
+        /// <summary>Transforms a direction from local space to world space (ignoring translation).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}2 TransformDirection({{TYPE_PREFIX}}2 localDirection) => new {{TYPE_PREFIX}}2(localDirection.X * A + localDirection.Y * C, localDirection.X * B + localDirection.Y * D);
+
+        /// <summary>Transforms a direction from world space to local space (ignoring translation).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}2 InverseTransformDirection({{TYPE_PREFIX}}2 worldDirection)
+        {
+            var inv = this.Inverse();
+            return new {{TYPE_PREFIX}}2(worldDirection.X * inv.A + worldDirection.Y * inv.C, worldDirection.X * inv.B + worldDirection.Y * inv.D);
+        }
+
+        #endregion
+
+        #region Core Matrix Operations
+
+        /// <summary>Checks if this transform is the identity matrix.</summary>
+        public bool IsIdentity => A == {{ONE}} && B == {{ZERO}} && C == {{ZERO}} && D == {{ONE}} && E == {{ZERO}} && F == {{ZERO}};
+
+        /// <summary>Checks if this transform only contains translation.</summary>
+        public bool IsIdentityOrTranslation => A == {{ONE}} && B == {{ZERO}} && C == {{ZERO}} && D == {{ONE}};
+
+        /// <summary>Checks if this transform can be inverted.</summary>
+        public bool IsInvertible => Maths.Abs(A * D - C * B) > {{EPSILON}};
+
+        /// <summary>Returns the inverse of this transform.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{CLASS_NAME}} Inverse()
+        {
+            if (IsIdentityOrTranslation)
+                return CreateTranslation(-E, -F);
+
+            var det = A * D - C * B;
+            if (Maths.Abs(det) <= {{EPSILON}})
+                return Identity;
+
+            var invDet = {{ONE}} / det;
+            return new {{CLASS_NAME}}(
+                D * invDet, -B * invDet,
+                -C * invDet, A * invDet,
+                (C * F - D * E) * invDet,
+                (B * E - A * F) * invDet
+            );
+        }
+
+        /// <summary>Converts this 2D transform to a 4x4 matrix, suitable for 3D rendering pipelines.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public {{TYPE_PREFIX}}4x4 ToMatrix4x4()
+        {
+            return new {{TYPE_PREFIX}}4x4(
+                new {{TYPE_PREFIX}}4(A, B, {{ZERO}}, {{ZERO}}),
+                new {{TYPE_PREFIX}}4(C, D, {{ZERO}}, {{ZERO}}),
+                new {{TYPE_PREFIX}}4({{ZERO}}, {{ZERO}}, {{ONE}}, {{ZERO}}),
+                new {{TYPE_PREFIX}}4(E, F, {{ZERO}}, {{ONE}})
+            );
+        }
+
+        /// <summary>Linearly interpolates between two transforms. Note: this can cause shearing on intermediate steps if there are large rotational differences.</summary>
+        public static {{CLASS_NAME}} Lerp({{CLASS_NAME}} start, {{CLASS_NAME}} end, {{TYPE}} amount)
+        {
+            amount = Maths.Clamp(amount, {{ZERO}}, {{ONE}});
+            return new {{CLASS_NAME}}(
+                start.A + (end.A - start.A) * amount,
+                start.B + (end.B - start.B) * amount,
+                start.C + (end.C - start.C) * amount,
+                start.D + (end.D - start.D) * amount,
+                start.E + (end.E - start.E) * amount,
+                start.F + (end.F - start.F) * amount
+            );
+        }
+
+        #endregion
+
+        #region Static Factory Methods
+
+        /// <summary>Creates a translation transform.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} CreateTranslation({{TYPE_PREFIX}}2 translation) => new {{CLASS_NAME}}({{ONE}}, {{ZERO}}, {{ZERO}}, {{ONE}}, translation.X, translation.Y);
+
+        /// <summary>Creates a translation transform.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} CreateTranslation({{TYPE}} tx, {{TYPE}} ty) => new {{CLASS_NAME}}({{ONE}}, {{ZERO}}, {{ZERO}}, {{ONE}}, tx, ty);
+
+        /// <summary>Creates a rotation transform with the angle specified in degrees.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} CreateRotation({{TYPE}} angleInDegrees) => CreateRotationRadians(angleInDegrees * ({{TYPE}})Maths.Deg2Rad);
+
+        /// <summary>Creates a rotation transform with the angle specified in radians.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} CreateRotationRadians({{TYPE}} angleInRadians)
+        {
+            var cs = Maths.Cos(angleInRadians);
+            var sn = Maths.Sin(angleInRadians);
+            return new {{CLASS_NAME}}(cs, sn, -sn, cs, {{ZERO}}, {{ZERO}});
+        }
+        
+        /// <summary>Creates a uniform scale transform.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} CreateScale({{TYPE}} s) => new {{CLASS_NAME}}(s, {{ZERO}}, {{ZERO}}, s, {{ZERO}}, {{ZERO}});
+        
+        /// <summary>Creates a non-uniform scale transform.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} CreateScale({{TYPE}} sx, {{TYPE}} sy) => new {{CLASS_NAME}}(sx, {{ZERO}}, {{ZERO}}, sy, {{ZERO}}, {{ZERO}});
+
+        /// <summary>Creates a skew transform along the X-axis.</summary>
+        /// <param name="angleInDegrees">The angle in degrees to skew by.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} CreateSkewX({{TYPE}} angleInDegrees)
+        {
+            return new {{CLASS_NAME}}({{ONE}}, {{ZERO}}, Maths.Tan(angleInDegrees * ({{TYPE}})Maths.Deg2Rad), {{ONE}}, {{ZERO}}, {{ZERO}});
+        }
+
+        /// <summary>Creates a skew transform along the Y-axis.</summary>
+        /// <param name="angleInDegrees">The angle in degrees to skew by.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} CreateSkewY({{TYPE}} angleInDegrees)
+        {
+            return new {{CLASS_NAME}}({{ONE}}, Maths.Tan(angleInDegrees * ({{TYPE}})Maths.Deg2Rad), {{ZERO}}, {{ONE}}, {{ZERO}}, {{ZERO}});
+        }
+
+        /// <summary>Creates a skew transform along the X-axis around a pivot point.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} CreateSkewX({{TYPE}} angleInDegrees, {{TYPE_PREFIX}}2 origin)
+        {
+            return CreateTranslation(origin) * CreateSkewX(angleInDegrees) * CreateTranslation(-origin);
+        }
+
+        /// <summary>Creates a skew transform along the Y-axis around a pivot point.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} CreateSkewY({{TYPE}} angleInDegrees, {{TYPE_PREFIX}}2 origin)
+        {
+            return CreateTranslation(origin) * CreateSkewY(angleInDegrees) * CreateTranslation(-origin);
+        }
+
+        #endregion
+
+        #region Operators
+
+        /// <summary>Multiplies two transforms together (concatenates them).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{CLASS_NAME}} operator *({{CLASS_NAME}} left, {{CLASS_NAME}} right)
+        {
+            // Note: This is the standard affine matrix multiplication order.
+            // It's equivalent to:
+            // | A' C' E' |   | A C E |   | a c e |
+            // | B' D' F' | = | B D F | * | b d f |
+            // | 0  0  1  |   | 0 0 1 |   | 0 0 1 |
+            return new {{CLASS_NAME}}(
+                left.A * right.A + left.C * right.B,
+                left.B * right.A + left.D * right.B,
+                left.A * right.C + left.C * right.D,
+                left.B * right.C + left.D * right.D,
+                left.A * right.E + left.C * right.F + left.E,
+                left.B * right.E + left.D * right.F + left.F
+            );
+        }
+
+        /// <summary>Transforms a 2D vector by a transform.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static {{TYPE_PREFIX}}2 operator *({{CLASS_NAME}} transform, {{TYPE_PREFIX}}2 point) => transform.TransformPoint(point);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator ==({{CLASS_NAME}} left, {{CLASS_NAME}} right) => left.Equals(right);
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator !=({{CLASS_NAME}} left, {{CLASS_NAME}} right) => !left.Equals(right);
+
+        #endregion
+
+        #region Overrides & Implementations
+
+        /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals({{CLASS_NAME}} other)
+        {
+            return A == other.A && B == other.B && C == other.C &&
+                   D == other.D && E == other.E && F == other.F;
+        }
+
+        /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object? obj) => obj is {{CLASS_NAME}} other && Equals(other);
+
+        /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override int GetHashCode() => HashCode.Combine(A, B, C, D, E, F);
+
+        /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
+        
+        /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public string ToString(string? format, IFormatProvider? formatProvider)
+        {
+            return string.Format(formatProvider, "{{CLASS_NAME}}(Position: {0}, Rotation: {1}, Scale: {2})", 
+                Position.ToString(format, formatProvider), Rotation.ToString(format, formatProvider), Scale.ToString(format, formatProvider));
+        }
+
+        #endregion
+    }
+}

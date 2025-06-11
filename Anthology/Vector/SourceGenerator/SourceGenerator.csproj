@@ -35,6 +35,12 @@
     <None Update="Templates\Prowl.Vector.Geometry\Ray.template">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="Templates\Prowl.Vector.Spatial\Transform3D.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Templates\Prowl.Vector.Spatial\Transform2D.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
