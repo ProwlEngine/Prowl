@@ -1623,6 +1623,9 @@ class SourceGenerator
         // --- Constructors ---
         GenerateMatrixConstructors(sb, config);
 
+        // --- System.Numerics Conversions ---
+        GenerateMatrixNumericsConversions(sb, config);
+
         // --- Component-wise Operators ---
         GenerateMatrixComponentWiseOperators(sb, config);
 
@@ -1639,6 +1642,15 @@ class SourceGenerator
         sb.AppendLine("}"); // end namespace
 
         return sb.ToString();
+    }
+
+    private static bool IsSystemNumericsMatrixCompatible(MatrixConfig config)
+    {
+        // System.Numerics has Matrix3x2 and Matrix4x4, both are float-only.
+        if (config.PrimitiveType != "float") return false;
+        if (config.Rows == 3 && config.Columns == 2) return true;
+        if (config.Rows == 4 && config.Columns == 4) return true;
+        return false;
     }
 
     private static void GenerateMatrixStaticFields(StringBuilder sb, MatrixConfig config)
@@ -1990,6 +2002,69 @@ class SourceGenerator
         }
         sb.AppendLine($"\t\tsb.Append(\")\");");
         sb.AppendLine($"\t\treturn sb.ToString();");
+        sb.AppendLine($"\t}}");
+        sb.AppendLine();
+    }
+
+    private static void GenerateMatrixNumericsConversions(StringBuilder sb, MatrixConfig config)
+    {
+        if (!IsSystemNumericsMatrixCompatible(config))
+            return;
+
+        string numericsType = "";
+        if (config.Rows == 4 && config.Columns == 4)
+            numericsType = "System.Numerics.Matrix4x4";
+        else if (config.Rows == 3 && config.Columns == 2)
+            numericsType = "System.Numerics.Matrix3x2";
+        else
+            return; // Should not happen due to the check above
+
+        sb.AppendLine($"\t// --- System.Numerics Conversions ---");
+
+        // To System.Numerics
+        sb.AppendLine($"\t/// <summary>Implicitly converts this {config.StructName} to a {numericsType}.</summary>");
+        sb.AppendLine($"\t{Inline}");
+        sb.AppendLine($"\tpublic static implicit operator {numericsType}({config.StructName} m)");
+        sb.AppendLine($"\t{{");
+        if (numericsType.EndsWith("Matrix4x4"))
+        {
+            sb.AppendLine($"\t\treturn new {numericsType}(");
+            sb.AppendLine($"\t\t\tm.c0.X, m.c1.X, m.c2.X, m.c3.X,");
+            sb.AppendLine($"\t\t\tm.c0.Y, m.c1.Y, m.c2.Y, m.c3.Y,");
+            sb.AppendLine($"\t\t\tm.c0.Z, m.c1.Z, m.c2.Z, m.c3.Z,");
+            sb.AppendLine($"\t\t\tm.c0.W, m.c1.W, m.c2.W, m.c3.W);");
+        }
+        else // Matrix3x2
+        {
+            sb.AppendLine($"\t\treturn new {numericsType}(");
+            sb.AppendLine($"\t\t\tm.c0.X, m.c1.X,");
+            sb.AppendLine($"\t\t\tm.c0.Y, m.c1.Y,");
+            sb.AppendLine($"\t\t\tm.c0.Z, m.c1.Z);");
+        }
+        sb.AppendLine($"\t}}");
+        sb.AppendLine();
+
+        // From System.Numerics
+        sb.AppendLine($"\t/// <summary>Implicitly converts a {numericsType} to this {config.StructName}.</summary>");
+        sb.AppendLine($"\t{Inline}");
+        sb.AppendLine($"\tpublic static implicit operator {config.StructName}({numericsType} m)");
+        sb.AppendLine($"\t{{");
+        if (numericsType.EndsWith("Matrix4x4"))
+        {
+            sb.AppendLine($"\t\treturn new {config.StructName}(");
+            sb.AppendLine($"\t\t\tm.M11, m.M12, m.M13, m.M14,");
+            sb.AppendLine($"\t\t\tm.M21, m.M22, m.M23, m.M24,");
+            sb.AppendLine($"\t\t\tm.M31, m.M32, m.M33, m.M34,");
+            sb.AppendLine($"\t\t\tm.M41, m.M42, m.M43, m.M44);");
+        }
+        else // Matrix3x2
+        {
+            // Our constructor takes row-major components, so this mapping is direct.
+            sb.AppendLine($"\t\treturn new {config.StructName}(");
+            sb.AppendLine($"\t\t\tm.M11, m.M12,");
+            sb.AppendLine($"\t\t\tm.M21, m.M22,");
+            sb.AppendLine($"\t\t\tm.M31, m.M32);");
+        }
         sb.AppendLine($"\t}}");
         sb.AppendLine();
     }
