@@ -9,7 +9,6 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
     public override int[] SupportedDimensions => new[] { 2, 3, 4 };
     public override bool SupportsScalars => true;
 
-    // Track generated functions to prevent duplicates
     private readonly HashSet<string> _generatedFunctions = new HashSet<string>();
 
     public override bool SupportsType(string type, int dimension)
@@ -24,7 +23,6 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
 
         // Generate all multiplication operations
         GenerateScalarOperations(sb, type, typeName);
-        // Changed from GenerateVectorDotProducts to GenerateVectorComponentWiseMul
         GenerateVectorComponentWiseMul(sb, type, typeName);
         GenerateMatrixVectorOperations(sb, type, typeName);
         GenerateMatrixMatrixOperations(sb, type, typeName);
@@ -50,15 +48,13 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
     }
 
     /// <summary>
-    /// This method now generates component-wise multiplication for vectors.
-    /// The original dot product logic has been replaced.
+    /// This method generates component-wise multiplication for vectors.
     /// </summary>
     private void GenerateVectorComponentWiseMul(StringBuilder sb, string type, string typeName)
     {
         for (int dim = 2; dim <= 4; dim++)
         {
             var vectorType = $"{typeName}{dim}";
-            // The function key is updated to reflect component-wise multiplication.
             var functionKey = $"Mul_{vectorType}_{vectorType}";
             if (!_generatedFunctions.Add(functionKey)) continue;
 
@@ -69,7 +65,6 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
             sb.AppendLine($"        /// <param name=\"b\">Second vector.</param>");
             sb.AppendLine($"        /// <returns>A new {vectorType} where each component is the product of the corresponding components in a and b.</returns>");
             sb.AppendLine($"        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-            // The return type is now the vector type itself.
             sb.AppendLine($"        public static {vectorType} Mul({vectorType} a, {vectorType} b)");
             sb.AppendLine("        {");
 
@@ -79,7 +74,6 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
                 mulTerms.Add($"a.{components[i]} * b.{components[i]}");
             }
 
-            // The implementation now returns a new vector.
             sb.AppendLine($"            return new {vectorType}({string.Join(", ", mulTerms)});");
             sb.AppendLine("        }");
             sb.AppendLine();
@@ -95,10 +89,10 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
             var vectorType = $"{typeName}{dim}";
             var components = GetComponents(dim);
 
-            // Matrix * Column Vector (existing)
+            // Matrix * Column Vector
             GenerateMatrixColumnVectorMul(sb, type, typeName, dim, matrixType, vectorType, components);
 
-            // Row Vector * Matrix (new)
+            // Row Vector * Matrix
             GenerateRowVectorMatrixMul(sb, type, typeName, dim, matrixType, vectorType, components);
         }
 
@@ -120,7 +114,6 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
         sb.AppendLine($"        public static {vectorType} Mul({matrixType} m, {vectorType} v)");
         sb.AppendLine("        {");
 
-        // Use vector operations if available (assuming vectors support scalar multiplication and addition)
         sb.AppendLine("            return");
         var vectorOps = new List<string>();
         for (int col = 0; col < dim; col++)
@@ -164,13 +157,13 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
 
     private void GenerateMatrixMatrixOperations(StringBuilder sb, string type, string typeName)
     {
-        // Generate square matrix multiplication (existing - but optimized)
+        // Generate square matrix multiplication
         for (int dim = 2; dim <= 4; dim++)
         {
             GenerateSquareMatrixMul(sb, type, typeName, dim);
         }
 
-        // Generate non-square matrix multiplication (new)
+        // Generate non-square matrix multiplication
         GenerateNonSquareMatrixMul(sb, type, typeName);
     }
 
@@ -190,7 +183,6 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
         sb.AppendLine($"        public static {matrixType} Mul({matrixType} a, {matrixType} b)");
         sb.AppendLine("        {");
 
-        // Optimized using vector operations
         sb.AppendLine($"            return new {matrixType}(");
         var columnConstructors = new List<string>();
         for (int col = 0; col < dim; col++)
