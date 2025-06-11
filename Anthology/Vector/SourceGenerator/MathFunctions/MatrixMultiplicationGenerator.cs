@@ -24,7 +24,8 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
 
         // Generate all multiplication operations
         GenerateScalarOperations(sb, type, typeName);
-        GenerateVectorDotProducts(sb, type, typeName);
+        // Changed from GenerateVectorDotProducts to GenerateVectorComponentWiseMul
+        GenerateVectorComponentWiseMul(sb, type, typeName);
         GenerateMatrixVectorOperations(sb, type, typeName);
         GenerateMatrixMatrixOperations(sb, type, typeName);
 
@@ -48,30 +49,38 @@ public class MatrixMultiplicationGenerator : MathFunctionGenerator
         sb.AppendLine();
     }
 
-    private void GenerateVectorDotProducts(StringBuilder sb, string type, string typeName)
+    /// <summary>
+    /// This method now generates component-wise multiplication for vectors.
+    /// The original dot product logic has been replaced.
+    /// </summary>
+    private void GenerateVectorComponentWiseMul(StringBuilder sb, string type, string typeName)
     {
         for (int dim = 2; dim <= 4; dim++)
         {
             var vectorType = $"{typeName}{dim}";
-            var functionKey = $"Mul_{vectorType}_{vectorType}_dot";
-            if (!_generatedFunctions.Add(functionKey)) return;
+            // The function key is updated to reflect component-wise multiplication.
+            var functionKey = $"Mul_{vectorType}_{vectorType}";
+            if (!_generatedFunctions.Add(functionKey)) continue;
 
             var components = GetComponents(dim);
 
-            sb.AppendLine($"        /// <summary>Returns the dot product of two {vectorType} vectors.</summary>");
+            sb.AppendLine($"        /// <summary>Returns the component-wise multiplication of two {vectorType} vectors.</summary>");
             sb.AppendLine($"        /// <param name=\"a\">First vector.</param>");
             sb.AppendLine($"        /// <param name=\"b\">Second vector.</param>");
-            sb.AppendLine($"        /// <returns>The dot product a · b.</returns>");
+            sb.AppendLine($"        /// <returns>A new {vectorType} where each component is the product of the corresponding components in a and b.</returns>");
             sb.AppendLine($"        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-            sb.AppendLine($"        public static {type} Mul({vectorType} a, {vectorType} b)");
+            // The return type is now the vector type itself.
+            sb.AppendLine($"        public static {vectorType} Mul({vectorType} a, {vectorType} b)");
             sb.AppendLine("        {");
 
-            var dotProductTerms = new List<string>();
+            var mulTerms = new List<string>();
             for (int i = 0; i < dim; i++)
             {
-                dotProductTerms.Add($"a.{components[i]} * b.{components[i]}");
+                mulTerms.Add($"a.{components[i]} * b.{components[i]}");
             }
-            sb.AppendLine($"            return {string.Join(" + ", dotProductTerms)};");
+
+            // The implementation now returns a new vector.
+            sb.AppendLine($"            return new {vectorType}({string.Join(", ", mulTerms)});");
             sb.AppendLine("        }");
             sb.AppendLine();
         }
