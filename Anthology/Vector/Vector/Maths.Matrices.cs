@@ -414,5 +414,96 @@ namespace Prowl.Vector
 
     public static partial class Maths
     {
+        #region Matrix To Euler
+
+        // These lookup tables and the GetEulerOrderInfo method are a direct port of Ken Shoemake's "Euler Angle Conversion"
+        // from the "Graphics Gems IV" book. They are used to decode the EulerOrder enum into the parameters
+        // needed for the conversion algorithms.
+        private static readonly int[] _eulerNext = { 1, 2, 0, 1 };
+        private static readonly int[] _eulerParity = { 0, 1, 0, 1 }; // EulParOdd = 1, EulParEven = 0
+
+        /// <summary>
+        /// Decodes the Euler order into its constituent properties for conversion algorithms.
+        /// </summary>
+        private static void GetEulerOrderInfo(EulerOrder order, out int i, out int j, out int k, out int h, out int parity, out int repeated, out int frame)
+        {
+            int o = (int)order;
+            frame = o & 1;              // 0 for static, 1 for rotating
+            repeated = (o >> 1) & 1;    // 0 for false, 1 for true
+            parity = (o >> 2) & 1;      // 0 for even, 1 for odd
+            o >>= 3;
+            i = o & 3;
+            j = _eulerNext[i + parity];
+            k = _eulerNext[i + 1 - parity];
+            h = parity ^ 1; // Unused in this C# port but part of the original algorithm
+        }
+
+        /// <summary>
+        /// Converts a 3x3 rotation matrix to a set of Euler angles (in radians).
+        /// </summary>
+        /// <param name="m">The rotation matrix to convert.</param>
+        /// <param name="order">The desired order of Euler angles.</param>
+        /// <returns>A Float3 vector containing the Euler angles (x, y, z) in radians.</returns>
+        public static Float3 ToEuler(Float3x3 m, EulerOrder order)
+        {
+            GetEulerOrderInfo(order, out int i, out int j, out int k, out int h, out int n, out int s, out int f);
+
+            Float3 ea = Float3.Zero;
+            if (s == 1) // Repeated axis order (e.g., XYX)
+            {
+                float sy = Sqrt(m[i, j] * m[i, j] + m[i, k] * m[i, k]);
+                if (sy > 16f * EpsilonF)
+                {
+                    ea.X = Atan2(m[i, j], m[i, k]);
+                    ea.Y = Atan2(sy, m[i, i]);
+                    ea.Z = Atan2(m[j, i], -m[k, i]);
+                }
+                else
+                {
+                    ea.X = Atan2(-m[j, k], m[j, j]);
+                    ea.Y = Atan2(sy, m[i, i]);
+                    ea.Z = 0;
+                }
+            }
+            else // Non-repeated axis order (e.g., XYZ)
+            {
+                float cy = Sqrt(m[i, i] * m[i, i] + m[j, i] * m[j, i]);
+                if (cy > 16f * EpsilonF)
+                {
+                    ea.X = Atan2(m[k, j], m[k, k]);
+                    ea.Y = Atan2(-m[k, i], cy);
+                    ea.Z = Atan2(m[j, i], m[i, i]);
+                }
+                else
+                {
+                    ea.X = Atan2(-m[j, k], m[j, j]);
+                    ea.Y = Atan2(-m[k, i], cy);
+
+                    ea.Z = 0;
+                }
+            }
+
+            if (n == 1) ea = -ea; // Odd parity
+            if (f == 1) { float t = ea.X; ea.X = ea.Z; ea.Z = t; } // Rotating frame
+
+            return ea;
+        }
+
+        /// <summary>
+        /// Converts a 4x4 matrix to a set of Euler angles (in radians).
+        /// </summary>
+        public static Float3 ToEuler(Float4x4 m, EulerOrder order) => ToEuler(new Float3x3(m), order);
+
+        /// <summary>
+        /// Converts a 3x3 rotation matrix to a set of Euler angles (in degrees).
+        /// </summary>
+        public static Float3 ToEulerDegrees(Float3x3 m, EulerOrder order) => ToDegrees(ToEuler(m, order));
+
+        /// <summary>
+        /// Converts a 4x4 matrix to a set of Euler angles (in degrees).
+        /// </summary>
+        public static Float3 ToEulerDegrees(Float4x4 m, EulerOrder order) => ToDegrees(ToEuler(m, order));
+
+        #endregion
     }
 }

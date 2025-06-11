@@ -7,12 +7,13 @@ using System.Runtime.CompilerServices;
 
 namespace Prowl.Vector
 {
+
     /// <summary>
     /// Represents a quaternion used for 3D rotations.
     /// Components are ordered X, Y, Z, W.
     /// </summary>
     [System.Serializable]
-    public partial struct Quaternion : IEquatable<Quaternion>, IFormattable
+    public struct Quaternion : IEquatable<Quaternion>, IFormattable
     {
         /// <summary>The X component of the quaternion.</summary>
         public float X;
@@ -22,6 +23,16 @@ namespace Prowl.Vector
         public float Z;
         /// <summary>The W component of the quaternion (scalar part).</summary>
         public float W;
+
+        /// <summary>
+        /// Gets or sets the rotation as Euler angles in degrees, using the ZXYr order.
+        /// This is useful for editor inspectors and simple rotation control.
+        /// </summary>
+        public Float3 eulerAngles
+        {
+            get => ToEulerDegrees(EulerOrder.ZXYr);
+            set => this = Maths.FromEulerDegrees(value, EulerOrder.ZXYr);
+        }
 
         /// <summary>A quaternion representing the identity transform (no rotation).</summary>
         public static readonly Quaternion Identity = new Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
@@ -91,6 +102,22 @@ namespace Prowl.Vector
                 }
             }
         }
+
+        /// <summary>
+        /// Returns the Euler angle representation of the quaternion in radians.
+        /// </summary>
+        /// <param name="order">The desired order of Euler angles.</param>
+        /// <returns>A Float3 vector of Euler angles in radians.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Float3 ToEuler(EulerOrder order) => Maths.ToEuler(this, order);
+
+        /// <summary>
+        /// Returns the Euler angle representation of the quaternion in degrees.
+        /// </summary>
+        /// <param name="order">The desired order of Euler angles.</param>
+        /// <returns>A Float3 vector of Euler angles in degrees.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Float3 ToEulerDegrees(EulerOrder order) => Maths.ToEulerDegrees(this, order);
 
         /// <summary>Implicitly converts a Float4 vector to a Quaternion.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

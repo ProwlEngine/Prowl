@@ -4,6 +4,102 @@ namespace Prowl.Vector
 {
     public static partial class Maths
     {
+        #region Euler To Quaternion
+
+        /// <summary>
+        /// Creates a quaternion from a set of Euler angles (in radians).
+        /// </summary>
+        /// <param name="eulerAngles">The Euler angles (x, y, z) in radians.</param>
+        /// <param name="order">The order of rotation to apply.</param>
+        /// <returns>A quaternion representing the rotation.</returns>
+        public static Quaternion FromEuler(Float3 eulerAngles, EulerOrder order)
+        {
+            GetEulerOrderInfo(order, out int i, out int j, out int k, out int h, out int n, out int s, out int f);
+
+            if (f == 1)
+            { // Frame is rotating
+                float temp = eulerAngles.X;
+                eulerAngles.X = eulerAngles.Z;
+                eulerAngles.Z = temp;
+            }
+            if (n == 1) // Parity is odd
+                eulerAngles.Y = -eulerAngles.Y;
+
+            float ti = eulerAngles.X * 0.5f;
+            float tj = eulerAngles.Y * 0.5f;
+            float th = eulerAngles.Z * 0.5f;
+
+            Sincos(ti, out float si, out float ci);
+            Sincos(tj, out float sj, out float cj);
+            Sincos(th, out float sh, out float ch);
+
+            float cc = ci * ch;
+            float cs = ci * sh;
+            float sc = si * ch;
+            float ss = si * sh;
+
+            float w, x, y, z;
+            if (s == 1) // Order has repetition (e.g., XYX)
+            {
+                x = cj * (cs + sc);
+                y = sj * (cc + ss);
+                z = sj * (cs - sc);
+                w = cj * (cc - ss);
+            }
+            else // Order has no repetition (e.g., XYZ)
+            {
+                x = cj * sc - sj * cs;
+                y = cj * ss + sj * cc;
+                z = cj * cs - sj * sc;
+                w = cj * cc + sj * ss;
+            }
+
+            if (n == 1) y = -y; // Odd parity adjustment
+
+            // Reorder components based on axis order
+            float[] a = { x, y, z };
+            return new Quaternion(a[i], a[j], a[k], w);
+        }
+
+        /// <summary>
+        /// Creates a quaternion from a set of Euler angles (in degrees).
+        /// </summary>
+        /// <param name="eulerAnglesDegrees">The Euler angles (x, y, z) in degrees.</param>
+        /// <param name="order">The order of rotation to apply.</param>
+        /// <returns>A quaternion representing the rotation.</returns>
+        public static Quaternion FromEulerDegrees(Float3 eulerAnglesDegrees, EulerOrder order)
+        {
+            return FromEuler(ToRadians(eulerAnglesDegrees), order);
+        }
+
+        #endregion
+
+        #region Quaternion To Euler
+
+        /// <summary>
+        /// Converts a quaternion to a set of Euler angles (in radians).
+        /// </summary>
+        /// <param name="q">The quaternion to convert.</param>
+        /// <param name="order">The desired order of Euler angles.</param>
+        /// <returns>A Float3 vector containing the Euler angles (x, y, z) in radians.</returns>
+        public static Float3 ToEuler(Quaternion q, EulerOrder order)
+        {
+            return ToEuler(new Float3x3(q), order);
+        }
+
+        /// <summary>
+        /// Converts a quaternion to a set of Euler angles (in degrees).
+        /// </summary>
+        /// <param name="q">The quaternion to convert.</param>
+        /// <param name="order">The desired order of Euler angles.</param>
+        /// <returns>A Float3 vector containing the Euler angles (x, y, z) in degrees.</returns>
+        public static Float3 ToEulerDegrees(Quaternion q, EulerOrder order)
+        {
+            return ToDegrees(ToEuler(q, order));
+        }
+
+        #endregion
+
         /// <summary>
         /// Creates a quaternion from a 3x3 rotation matrix.
         /// The matrix must be orthonormal (a pure rotation matrix).
