@@ -7,6 +7,19 @@ class SourceGenerator
 {
     public static string[] numericTypes = ["float", "double", "int", "byte", "ushort", "uint", "ulong"];
 
+    private static readonly HashSet<(string from, string to)> s_wideningConversions = new()
+    {
+        // Based on C# implicit numeric conversions
+        ("byte", "ushort"), ("byte", "short"), ("byte", "int"), ("byte", "uint"), ("byte", "long"), ("byte", "ulong"), ("byte", "float"), ("byte", "double"),
+        ("short", "int"), ("short", "long"), ("short", "float"), ("short", "double"),
+        ("ushort", "int"), ("ushort", "uint"), ("ushort", "long"), ("ushort", "ulong"), ("ushort", "float"), ("ushort", "double"),
+        ("int", "long"), ("int", "float"), ("int", "double"),
+        ("uint", "long"), ("uint", "ulong"), ("uint", "float"), ("uint", "double"),
+        ("long", "float"), ("long", "double"),
+        ("ulong", "float"), ("ulong", "double"),
+        ("float", "double"),
+    };
+
     const string Inline = "[MethodImpl(MethodImplOptions.AggressiveInlining)]";
 
     internal class MatrixConfig
@@ -989,7 +1002,7 @@ class SourceGenerator
 
     private static void GenerateConversions(StringBuilder source, VectorConfig config)
     {
-        source.AppendLine($"\t// --- Implicit Conversions ---");
+        source.AppendLine($"\t// --- Casting ---");
 
         // Add implicit conversions to System.Numerics types
         if (IsSystemNumericsCompatible(config.PrimitiveType, config.Dimensions))
@@ -1011,16 +1024,16 @@ class SourceGenerator
             source.AppendLine();
         }
 
-        // Add implicit conversions between same-type different dimensions
+        // Add conversions between same-type different dimensions
         GenerateVectorDimensionConversions(source, config);
 
-        // Add explicit conversions between different types same dimension
+        // Add conversions between different types same dimension
         GenerateCrossTypeConversions(source, config);
     }
 
     private static void GenerateVectorDimensionConversions(StringBuilder source, VectorConfig config)
     {
-        // Implicit conversions between different dimensions of same type
+        source.AppendLine("\t// --- Cross-Dimensions Casting Operators ---");
 
         // Convert from lower dimensions (implicit)
         if (config.Dimensions > 2)
@@ -1073,23 +1086,25 @@ class SourceGenerator
 
     private static void GenerateCrossTypeConversions(StringBuilder source, VectorConfig config)
     {
-        // Explicit conversions between different types of same dimension
+        if (!IsNumericType(config.PrimitiveType)) return;
+
+        source.AppendLine("\t// --- Cross-Type Casting Operators ---");
+
         var compatibleTypes = s_vectorConfigs.Where(t =>
             t.PrimitiveType != config.PrimitiveType &&
             IsNumericType(t.PrimitiveType) &&
-            t.Dimensions == config.Dimensions).ToArray();
+            t.Dimensions == config.Dimensions);
 
         foreach (var otherType in compatibleTypes)
         {
-            // Check if conversion is narrowing or widening
-            bool isNarrowing = IsNarrowingConversion(config.PrimitiveType, otherType.PrimitiveType);
-            string conversionType = isNarrowing ? "explicit" : "implicit";
-            string comment = isNarrowing ? "Explicitly" : "Implicitly";
+            // Operator to convert FROM otherType TO this config's type
+            bool isWidening = IsWideningConversion(otherType.PrimitiveType, config.PrimitiveType);
+            string castKeyword = isWidening ? "implicit" : "explicit";
 
-            source.AppendLine($"\t/// <summary>{comment} converts PHANG {config.StructName} to {otherType.StructName}.</summary>");
+            source.AppendLine($"\t/// <summary>{(isWidening ? "Implicitly" : "Explicitly")} converts a {otherType.StructName} to a {config.StructName}.</summary>");
             source.AppendLine($"\t{Inline}");
-            var castComponents = string.Join(", ", config.Components.Select(c => $"({otherType.PrimitiveType})value.{c}"));
-            source.AppendLine($"\tpublic static {conversionType} operator {otherType.StructName}({config.StructName} value) => new {otherType.StructName}({castComponents});");
+            // Use the component-casting constructor we already generate
+            source.AppendLine($"\tpublic static {castKeyword} operator {config.StructName}({otherType.StructName} v) => new {config.StructName}(v);");
             source.AppendLine();
         }
     }
@@ -1318,25 +1333,10 @@ class SourceGenerator
         }
     }
 
-    private static bool IsNarrowingConversion(string fromType, string toType)
+    private static bool IsWideningConversion(string fromType, string toType)
     {
-        // Define type hierarchies for implicit conversion
-        var typeHierarchy = new Dictionary<string, int>
-        {
-            ["byte"] = 1,
-            ["ushort"] = 2,
-            ["uint"] = 3,
-            ["ulong"] = 4,
-            ["int"] = 5,
-            ["float"] = 6,
-            ["double"] = 7
-        };
-
-        if (!typeHierarchy.ContainsKey(fromType) || !typeHierarchy.ContainsKey(toType))
-            return true; // Unknown types default to explicit
-
-        // Conversion is narrowing if going to a lower-ranked type
-        return typeHierarchy[fromType] > typeHierarchy[toType];
+        if (fromType == toType) return true;
+        return s_wideningConversions.Contains((fromType, toType));
     }
 
     #endregion
