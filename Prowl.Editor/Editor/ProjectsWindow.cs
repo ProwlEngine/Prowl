@@ -10,6 +10,8 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 
+using Vortice.Direct3D11;
+
 namespace Prowl.Editor;
 
 public class ProjectsWindow : EditorWindow
@@ -81,6 +83,7 @@ public class ProjectsWindow : EditorWindow
         }
     }
 
+    Rect footer = Rect.Empty;
     private void DrawProjectsTab()
     {
         Rect rect = gui.CurrentNode.LayoutData.Rect;
@@ -91,7 +94,7 @@ public class ProjectsWindow : EditorWindow
 
         gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
 
-        Rect footer = new(shadowB.x, shadowB.y, rect.width, 60);
+        footer = new(shadowB.x, shadowB.y, rect.width, 60);
         gui.Draw2D.DrawRectFilled(footer, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
 
         shadowA = shadowB;
@@ -223,23 +226,9 @@ public class ProjectsWindow : EditorWindow
                     }
                     else if (SelectedProject != null)
                     {
-                        // Display load info (and possibly load bar). Placed in empty space of footer
-
-                        // Opening project info
-                        // Text pos + offset/padding
-                        Vector2 openInfoTextPos = footer.Position + new Vector2(8f, 8f);
-                        gui.Draw2D.DrawText($"Opening '{SelectedProject.Name}'...", openInfoTextPos);
-                        // Add more information about progress here (even console output)
-
                         // Change 'open/create' button text
                         text = "Opening...";
-
-                        // Cover controls (fill EditorWindow)
-                        gui.Draw2D.DrawRectFilled(this.Rect, GrayAlpha);
-
-                        bool projectOpened = Project.Open(SelectedProject);
-                        if (projectOpened)
-                            isOpened = false;
+                        OpenSelectedProject();
                     }
                 }
             }
@@ -252,6 +241,44 @@ public class ProjectsWindow : EditorWindow
         }
     }
 
+    void OpenSelectedProject()
+    {
+        if (SelectedProject == null || footer == Rect.Empty)
+            return;
+
+        // Display load info (and possibly load bar). Placed in empty space of footer
+
+        // Opening project info
+
+        // Projects list clips overlay. Ignore clipping
+        gui.Draw2D.PushClip(gui.ScreenRect, true);
+
+        // Text pos + offset/padding
+        Vector2 openInfoTextPos = footer.Position + new Vector2(8f, 8f);
+        gui.Draw2D.DrawText($"Opening '{SelectedProject.Name}'...", openInfoTextPos);
+
+        // Add more information about progress here (even console output)
+
+        // Cover controls (fill EditorWindow)
+        gui.Draw2D.DrawRectFilled(gui.ScreenRect, GrayAlpha);
+
+        gui.Draw2D.PopClip();
+
+        // Redirect output of logs to window
+        //Debug.OnLog += OpeningProjectLog;
+
+        // Should probably occur on a new thread/async to stop blocking UI
+        bool projectOpened = Project.Open(SelectedProject);
+
+       // Debug.OnLog -= OpeningProjectLog;
+        if (projectOpened)
+            isOpened = false;
+    }
+
+    void OpeningProjectLog(string message, DebugStackTrace? trace, LogSeverity severity)
+    {
+        gui.Draw2D.DrawText($"{message}", footer.Position + new Vector2(8f, 24f));
+    }
 
     private void OpenDialog(string title, Action<string> onComplete)
     {
@@ -371,6 +398,7 @@ public class ProjectsWindow : EditorWindow
     }
 
     Project contextMenuProject = null;
+    bool contextMenuIsHovered = false;
     private void DisplayProject(Project project)
     {
         Rect rootRect = gui.CurrentNode.LayoutData.Rect;
@@ -388,8 +416,7 @@ public class ProjectsWindow : EditorWindow
             {
                 if (gui.IsPointerDoubleClick(MouseButton.Left))
                 {
-                    Project.Open(project);
-                    isOpened = false;
+                    OpenSelectedProject();
                 }
 
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new(0.1f, 0.1f, 0.1f, 0.4f), 2);
@@ -444,6 +471,7 @@ public class ProjectsWindow : EditorWindow
                 {
                     gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
                     contextMenuProject = project;
+                    contextMenuIsHovered = false;
                     gui.OpenPopup("ProjectOptionsContextMenu", null, gui.CurrentNode.Parent);
                 }
                 else if (optionsInteract.IsHovered())
@@ -469,8 +497,21 @@ public class ProjectsWindow : EditorWindow
         {
             using (popupHolder.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
             {
+                // Getting Interactable (IsHovered) removes interaction from styled buttons?
+                if (popupHolder.LayoutData.Rect.Contains(gui.PointerPos))
+                {
+                    if (!contextMenuIsHovered)
+                        contextMenuIsHovered = true;
+                }
+                else
+                {
+                    if (contextMenuIsHovered)
+                        closePopup = true;
+                }
+
                 // Add options
                 // - Delete project (with popup confirmation)
+
                 if (EditorGUI.StyledButton("Show In Explorer"))
                 {
                     AssetDatabase.OpenPath(project.ProjectDirectory, type: FileOpenType.FileExplorer);
@@ -481,6 +522,8 @@ public class ProjectsWindow : EditorWindow
                     ProjectCache.Instance.RemoveProject(project);
                     closePopup = true;
                 }
+
+
             }
         }
         if (closePopup)
