@@ -1623,17 +1623,15 @@ class SourceGenerator
         // --- Constructors ---
         GenerateMatrixConstructors(sb, config);
 
-        // --- System.Numerics Conversions ---
-        GenerateMatrixNumericsConversions(sb, config);
+        // --- Indexer ---
+        GenerateMatrixIndexer(sb, config);
 
         // --- Component-wise Operators ---
         GenerateMatrixComponentWiseOperators(sb, config);
 
-        // --- Multiplication Operators ---
-        GenerateMatrixMultiplication(sb, config);
-
-        // --- Indexer ---
-        GenerateMatrixIndexer(sb, config);
+        // --- Casting Operators ---
+        GenerateMatrixCrossTypeCasting(sb, config);
+        GenerateMatrixNumericsConversions(sb, config);
 
         // --- Standard Methods (Equals, GetHashCode, ToString) ---
         GenerateMatrixStandardMethods(sb, config);
@@ -1755,6 +1753,32 @@ class SourceGenerator
             sb.AppendLine($"\t}}");
             sb.AppendLine();
         }
+
+        // Type conversion constructor
+        if (IsNumericType(componentType))
+        {
+            var otherTypes = s_matrixConfigs.Where(m =>
+                m.PrimitiveType != componentType &&
+                IsNumericType(m.PrimitiveType) &&
+                m.Rows == rows &&
+                m.Columns == cols);
+
+            foreach (var otherType in otherTypes)
+            {
+                sb.AppendLine($"\t/// <summary>Constructs a {structName} from a {otherType.StructName} with type conversion.</summary>");
+                sb.AppendLine($"\t{Inline}");
+                sb.AppendLine($"\tpublic {structName}({otherType.StructName} m)");
+                sb.AppendLine($"\t{{");
+
+                for (int c = 0; c < cols; c++)
+                {
+                    sb.AppendLine($"\t\tthis.c{c} = new {columnVectorType}(m.c{c});");
+                }
+
+                sb.AppendLine($"\t}}");
+                sb.AppendLine();
+            }
+        }
     }
 
     private static void GenerateMatrixComponentWiseOperators(StringBuilder sb, MatrixConfig config)
@@ -1764,109 +1788,186 @@ class SourceGenerator
         var cols = config.Columns;
         var columnVectorType = config.GetColumnVectorType();
 
+        sb.AppendLine($"\t// --- Component-wise Operators ---");
+
         // Arithmetic operators (for non-bool types)
         if (componentType != "bool")
         {
-            string[] ops = ["+", "-", "/", "%"];
+            string[] ops = ["+", "-", "*", "/", "%"];
             foreach (var op in ops)
             {
                 // Matrix op Matrix
+                sb.AppendLine($"\t/// <summary>Returns the component-wise {op} of two matrices.</summary>");
                 sb.AppendLine($"\t{Inline}");
                 var opParamsM = new List<string>();
                 for (int c = 0; c < cols; c++) opParamsM.Add($"lhs.c{c} {op} rhs.c{c}");
-                sb.AppendLine($"\tpublic static {structName} operator {op}({structName} lhs, {structName} rhs) {{ return new {structName}({string.Join(", ", opParamsM)}); }}");
+                sb.AppendLine($"\tpublic static {structName} operator {op}({structName} lhs, {structName} rhs) => new {structName}({string.Join(", ", opParamsM)});");
+                sb.AppendLine();
 
                 // Matrix op Scalar
+                sb.AppendLine($"\t/// <summary>Returns the component-wise {op} of matrix and scalar.</summary>");
                 sb.AppendLine($"\t{Inline}");
                 var opParamsS1 = new List<string>();
                 for (int c = 0; c < cols; c++) opParamsS1.Add($"lhs.c{c} {op} rhs");
-                sb.AppendLine($"\tpublic static {structName} operator {op}({structName} lhs, {componentType} rhs) {{ return new {structName}({string.Join(", ", opParamsS1)}); }}");
+                sb.AppendLine($"\tpublic static {structName} operator {op}({structName} lhs, {componentType} rhs) => new {structName}({string.Join(", ", opParamsS1)});");
+                sb.AppendLine();
 
                 // Scalar op Matrix
+                sb.AppendLine($"\t/// <summary>Returns the component-wise {op} of scalar and matrix.</summary>");
                 sb.AppendLine($"\t{Inline}");
                 var opParamsS2 = new List<string>();
                 for (int c = 0; c < cols; c++) opParamsS2.Add($"lhs {op} rhs.c{c}");
-                sb.AppendLine($"\tpublic static {structName} operator {op}({componentType} lhs, {structName} rhs) {{ return new {structName}({string.Join(", ", opParamsS2)}); }}");
+                sb.AppendLine($"\tpublic static {structName} operator {op}({componentType} lhs, {structName} rhs) => new {structName}({string.Join(", ", opParamsS2)});");
                 sb.AppendLine();
             }
 
-            // Negation
+            // Bitwise operators for integer types
+            if (componentType == "int" || componentType == "uint" || componentType == "byte" || componentType == "ushort" || componentType == "ulong")
+            {
+                string[] bitwiseOps = ["&", "|", "^", "<<", ">>"];
+                foreach (var op in bitwiseOps)
+                {
+                    if (op == "<<" || op == ">>")
+                    {
+                        // Shift operators only work with int as second operand
+                        sb.AppendLine($"\t/// <summary>Returns the component-wise {op} of matrix by scalar.</summary>");
+                        sb.AppendLine($"\t{Inline}");
+                        var shiftParams = new List<string>();
+                        for (int c = 0; c < cols; c++) shiftParams.Add($"lhs.c{c} {op} rhs");
+                        sb.AppendLine($"\tpublic static {structName} operator {op}({structName} lhs, int rhs) => new {structName}({string.Join(", ", shiftParams)});");
+                        sb.AppendLine();
+                    }
+                    else
+                    {
+                        // Regular bitwise operators
+                        sb.AppendLine($"\t/// <summary>Returns the component-wise {op} of two matrices.</summary>");
+                        sb.AppendLine($"\t{Inline}");
+                        var bitwiseParamsM = new List<string>();
+                        for (int c = 0; c < cols; c++) bitwiseParamsM.Add($"lhs.c{c} {op} rhs.c{c}");
+                        sb.AppendLine($"\tpublic static {structName} operator {op}({structName} lhs, {structName} rhs) => new {structName}({string.Join(", ", bitwiseParamsM)});");
+                        sb.AppendLine();
+                    }
+                }
+
+                // Bitwise NOT
+                sb.AppendLine($"\t/// <summary>Returns the component-wise bitwise NOT of the matrix.</summary>");
+                sb.AppendLine($"\t{Inline}");
+                var notParams = new List<string>();
+                for (int c = 0; c < cols; c++) notParams.Add($"~val.c{c}");
+                sb.AppendLine($"\tpublic static {structName} operator ~({structName} val) => new {structName}({string.Join(", ", notParams)});");
+                sb.AppendLine();
+            }
+
+            // Unary operators
             if (IsSignedType(componentType))
             {
+                // Negation
+                sb.AppendLine($"\t/// <summary>Returns the component-wise negation of the matrix.</summary>");
                 sb.AppendLine($"\t{Inline}");
                 var opParamsNeg = new List<string>();
                 for (int c = 0; c < cols; c++) opParamsNeg.Add($"-val.c{c}");
-                sb.AppendLine($"\tpublic static {structName} operator -({structName} val) {{ return new {structName}({string.Join(", ", opParamsNeg)}); }}");
+                sb.AppendLine($"\tpublic static {structName} operator -({structName} val) => new {structName}({string.Join(", ", opParamsNeg)});");
+                sb.AppendLine();
             }
-
 
             // Comparison operators (return BoolNxM matrix)
             string[] compOps = ["<", "<=", ">", ">=", "==", "!="];
-            string boolResultMatrixType = config.GetFullBoolMatrixType(); // e.g., Bool4x4
-            string boolColumnVectorType = config.GetFullBoolColumnVectorType(); // e.g., Bool4
+            string boolResultMatrixType = config.GetFullBoolMatrixType();
 
             foreach (var op in compOps)
             {
                 // Matrix op Matrix
+                sb.AppendLine($"\t/// <summary>Returns a {boolResultMatrixType} indicating component-wise {op} comparison.</summary>");
                 sb.AppendLine($"\t{Inline}");
                 var opParamsM = new List<string>();
-                for (int c = 0; c < cols; c++) opParamsM.Add($"lhs.c{c} {op} rhs.c{c}"); // Assumes vector comparison returns bool vector
-                sb.AppendLine($"\tpublic static {boolResultMatrixType} operator {op}({structName} lhs, {structName} rhs) {{ return new {boolResultMatrixType}({string.Join(", ", opParamsM)}); }}");
+                for (int c = 0; c < cols; c++) opParamsM.Add($"lhs.c{c} {op} rhs.c{c}");
+                sb.AppendLine($"\tpublic static {boolResultMatrixType} operator {op}({structName} lhs, {structName} rhs) => new {boolResultMatrixType}({string.Join(", ", opParamsM)});");
+                sb.AppendLine();
 
-                if (componentType != "bool") // Scalar comparisons don't make sense for bool matrix vs bool scalar in this way
-                {
-                    // Matrix op Scalar
-                    sb.AppendLine($"\t{Inline}");
-                    var opParamsS1 = new List<string>();
-                    for (int c = 0; c < cols; c++) opParamsS1.Add($"lhs.c{c} {op} rhs");
-                    sb.AppendLine($"\tpublic static {boolResultMatrixType} operator {op}({structName} lhs, {componentType} rhs) {{ return new {boolResultMatrixType}({string.Join(", ", opParamsS1)}); }}");
+                // Matrix op Scalar
+                sb.AppendLine($"\t/// <summary>Returns a {boolResultMatrixType} indicating component-wise {op} comparison with scalar.</summary>");
+                sb.AppendLine($"\t{Inline}");
+                var opParamsS1 = new List<string>();
+                for (int c = 0; c < cols; c++) opParamsS1.Add($"lhs.c{c} {op} rhs");
+                sb.AppendLine($"\tpublic static {boolResultMatrixType} operator {op}({structName} lhs, {componentType} rhs) => new {boolResultMatrixType}({string.Join(", ", opParamsS1)});");
+                sb.AppendLine();
 
-                    // Scalar op Matrix
-                    sb.AppendLine($"\t{Inline}");
-                    var opParamsS2 = new List<string>();
-                    for (int c = 0; c < cols; c++) opParamsS2.Add($"lhs {op} rhs.c{c}");
-                    sb.AppendLine($"\tpublic static {boolResultMatrixType} operator {op}({componentType} lhs, {structName} rhs) {{ return new {boolResultMatrixType}({string.Join(", ", opParamsS2)}); }}");
-                }
+                // Scalar op Matrix
+                sb.AppendLine($"\t/// <summary>Returns a {boolResultMatrixType} indicating component-wise {op} comparison with scalar.</summary>");
+                sb.AppendLine($"\t{Inline}");
+                var opParamsS2 = new List<string>();
+                for (int c = 0; c < cols; c++) opParamsS2.Add($"lhs {op} rhs.c{c}");
+                sb.AppendLine($"\tpublic static {boolResultMatrixType} operator {op}({componentType} lhs, {structName} rhs) => new {boolResultMatrixType}({string.Join(", ", opParamsS2)});");
                 sb.AppendLine();
             }
         }
-    }
-
-    private static void GenerateMatrixMultiplication(StringBuilder sb, MatrixConfig config)
-    {
-        var structName = config.StructName;
-        var componentType = config.PrimitiveType;
-        var rows = config.Rows;
-        var cols = config.Columns;
-
-        // Only generate multiplication for numeric types
-        if (componentType == "bool") return;
-
-        // Matrix * Matrix multiplication (for square matrices)
-        if (rows == cols)
+        else // Bool matrices
         {
-            sb.AppendLine($"\t/// <summary>Returns the product of two {structName} matrices.</summary>");
-            sb.AppendLine($"\t{Inline}");
-            sb.AppendLine($"\tpublic static {structName} operator *({structName} lhs, {structName} rhs)");
-            sb.AppendLine($"\t{{");
-            sb.AppendLine($"\t\treturn new " + structName + "(");
-
-            for (int col = 0; col < cols; col++)
+            // Logical operators for bool matrices
+            string[] logicalOps = ["&", "|", "^"];
+            foreach (var op in logicalOps)
             {
-                var components = new List<string>();
-                for (int row = 0; row < rows; row++)
-                {
-                    var dotProduct = new List<string>();
-                    for (int k = 0; k < rows; k++)
-                    {
-                        dotProduct.Add($"lhs.c{k}.{GetComponents(rows)[row]} * rhs.c{col}.{GetComponents(rows)[k]}");
-                    }
-                    components.Add($"({string.Join(" + ", dotProduct)})");
-                }
-                sb.AppendLine($"\t\t\tnew {config.GetColumnVectorType()}({string.Join(", ", components)}){(col < cols - 1 ? "," : "")}");
+                sb.AppendLine($"\t/// <summary>Returns the component-wise logical {op} of two matrices.</summary>");
+                sb.AppendLine($"\t{Inline}");
+                var opParams = new List<string>();
+                for (int c = 0; c < cols; c++) opParams.Add($"lhs.c{c} {op} rhs.c{c}");
+                sb.AppendLine($"\tpublic static {structName} operator {op}({structName} lhs, {structName} rhs) => new {structName}({string.Join(", ", opParams)});");
+                sb.AppendLine();
             }
 
-            sb.AppendLine($"\t\t);");
+            // Logical NOT
+            sb.AppendLine($"\t/// <summary>Returns the component-wise logical NOT of the matrix.</summary>");
+            sb.AppendLine($"\t{Inline}");
+            var notParams = new List<string>();
+            for (int c = 0; c < cols; c++) notParams.Add($"!val.c{c}");
+            sb.AppendLine($"\tpublic static {structName} operator !({structName} val) => new {structName}({string.Join(", ", notParams)});");
+            sb.AppendLine();
+
+            // Equality operators
+            sb.AppendLine($"\t/// <summary>Returns true if all components are equal.</summary>");
+            sb.AppendLine($"\t{Inline}");
+            var equalClauses = new List<string>();
+            for (int c = 0; c < cols; c++) equalClauses.Add($"lhs.c{c} == rhs.c{c}");
+            sb.AppendLine($"\tpublic static bool operator ==({structName} lhs, {structName} rhs) => {string.Join(" && ", equalClauses)};");
+            sb.AppendLine();
+
+            sb.AppendLine($"\t/// <summary>Returns true if any component is not equal.</summary>");
+            sb.AppendLine($"\t{Inline}");
+            sb.AppendLine($"\tpublic static bool operator !=({structName} lhs, {structName} rhs) => !(lhs == rhs);");
+            sb.AppendLine();
+        }
+    }
+
+    private static void GenerateMatrixCrossTypeCasting(StringBuilder sb, MatrixConfig config)
+    {
+        if (!IsNumericType(config.PrimitiveType)) return;
+
+        sb.AppendLine("\t// --- Cross-Type Casting Operators ---");
+
+        var compatibleMatrices = s_matrixConfigs.Where(m =>
+            m.PrimitiveType != config.PrimitiveType &&
+            IsNumericType(m.PrimitiveType) &&
+            m.Rows == config.Rows &&
+            m.Columns == config.Columns);
+
+        foreach (var otherMatrix in compatibleMatrices)
+        {
+            bool isWidening = IsWideningConversion(otherMatrix.PrimitiveType, config.PrimitiveType);
+            string castKeyword = isWidening ? "implicit" : "explicit";
+
+            sb.AppendLine($"\t/// <summary>{(isWidening ? "Implicitly" : "Explicitly")} converts a {otherMatrix.StructName} to a {config.StructName}.</summary>");
+            sb.AppendLine($"\t{Inline}");
+            sb.AppendLine($"\tpublic static {castKeyword} operator {config.StructName}({otherMatrix.StructName} m)");
+            sb.AppendLine($"\t{{");
+
+            // Generate column conversions
+            var columnConversions = new List<string>();
+            for (int c = 0; c < config.Columns; c++)
+            {
+                columnConversions.Add($"({config.GetColumnVectorType()})m.c{c}");
+            }
+
+            sb.AppendLine($"\t\treturn new {config.StructName}({string.Join(", ", columnConversions)});");
             sb.AppendLine($"\t}}");
             sb.AppendLine();
         }
@@ -1926,6 +2027,109 @@ class SourceGenerator
         var componentType = config.PrimitiveType;
         var rows = config.Rows;
         var cols = config.Columns;
+
+        sb.AppendLine($"\t// --- Matrix Methods ---");
+
+        // Transpose property
+        sb.AppendLine($"\t/// <summary>Gets the transpose of this matrix.</summary>");
+        sb.AppendLine($"\tpublic {GetTransposeType(config)} Transpose");
+        sb.AppendLine($"\t{{");
+        sb.AppendLine($"\t\t{Inline}");
+        sb.AppendLine($"\t\tget => Maths.Transpose(this);");
+        sb.AppendLine($"\t}}");
+        sb.AppendLine();
+
+        // Determinant (for square matrices)
+        if (rows == cols && componentType != "bool")
+        {
+            sb.AppendLine($"\t/// <summary>Gets the determinant of this matrix.</summary>");
+            sb.AppendLine($"\tpublic {componentType} Determinant");
+            sb.AppendLine($"\t{{");
+            sb.AppendLine($"\t\t{Inline}");
+            sb.AppendLine($"\t\tget => Maths.Determinant(this);");
+            sb.AppendLine($"\t}}");
+            sb.AppendLine();
+
+            // Inverse property (for floating-point square matrices)
+            if (IsFloatingPoint(componentType))
+            {
+                sb.AppendLine($"\t/// <summary>Gets the inverse of this matrix.</summary>");
+                sb.AppendLine($"\tpublic {structName} Inverse");
+                sb.AppendLine($"\t{{");
+                sb.AppendLine($"\t\t{Inline}");
+                sb.AppendLine($"\t\tget => Maths.Inverse(this);");
+                sb.AppendLine($"\t}}");
+                sb.AppendLine();
+
+                sb.AppendLine($"\t/// <summary>Checks if this matrix is invertible.</summary>");
+                sb.AppendLine($"\tpublic bool IsInvertible");
+                sb.AppendLine($"\t{{");
+                sb.AppendLine($"\t\t{Inline}");
+                sb.AppendLine($"\t\tget => Maths.Abs(Determinant) > {GetEpsilonValue(componentType)};");
+                sb.AppendLine($"\t}}");
+                sb.AppendLine();
+            }
+        }
+
+        // Get/Set row methods
+        for (int r = 0; r < rows; r++)
+        {
+            var rowVectorType = $"{config.Prefix}{cols}";
+
+            sb.AppendLine($"\t/// <summary>Gets row {r} of the matrix.</summary>");
+            sb.AppendLine($"\t{Inline}");
+            sb.AppendLine($"\tpublic {rowVectorType} GetRow{r}()");
+            sb.AppendLine($"\t{{");
+            var rowComponents = new List<string>();
+            for (int c = 0; c < cols; c++)
+            {
+                rowComponents.Add($"c{c}.{GetComponents(rows)[r]}");
+            }
+            sb.AppendLine($"\t\treturn new {rowVectorType}({string.Join(", ", rowComponents)});");
+            sb.AppendLine($"\t}}");
+            sb.AppendLine();
+
+            sb.AppendLine($"\t/// <summary>Sets row {r} of the matrix.</summary>");
+            sb.AppendLine($"\t{Inline}");
+            sb.AppendLine($"\tpublic void SetRow{r}({rowVectorType} value)");
+            sb.AppendLine($"\t{{");
+            for (int c = 0; c < cols; c++)
+            {
+                sb.AppendLine($"\t\tc{c}.{GetComponents(rows)[r]} = value.{GetComponents(cols)[c]};");
+            }
+            sb.AppendLine($"\t}}");
+            sb.AppendLine();
+        }
+
+        // Bool matrix specific methods
+        if (componentType == "bool")
+        {
+            sb.AppendLine($"\t/// <summary>Returns true if any component is true.</summary>");
+            sb.AppendLine($"\t{Inline}");
+            sb.AppendLine($"\tpublic bool Any()");
+            sb.AppendLine($"\t{{");
+            var anyComponents = new List<string>();
+            for (int c = 0; c < cols; c++)
+            {
+                anyComponents.Add($"c{c}.Any()");
+            }
+            sb.AppendLine($"\t\treturn {string.Join(" || ", anyComponents)};");
+            sb.AppendLine($"\t}}");
+            sb.AppendLine();
+
+            sb.AppendLine($"\t/// <summary>Returns true if all components are true.</summary>");
+            sb.AppendLine($"\t{Inline}");
+            sb.AppendLine($"\tpublic bool All()");
+            sb.AppendLine($"\t{{");
+            var allComponents = new List<string>();
+            for (int c = 0; c < cols; c++)
+            {
+                allComponents.Add($"c{c}.All()");
+            }
+            sb.AppendLine($"\t\treturn {string.Join(" && ", allComponents)};");
+            sb.AppendLine($"\t}}");
+            sb.AppendLine();
+        }
 
         // ToArray
         sb.AppendLine($"\t/// <summary>Returns an array of components.</summary>");
@@ -2067,6 +2271,23 @@ class SourceGenerator
         }
         sb.AppendLine($"\t}}");
         sb.AppendLine();
+    }
+
+
+    private static string GetTransposeType(MatrixConfig config)
+    {
+        // For MxN matrix, transpose is NxM
+        return $"{config.Prefix}{config.Columns}x{config.Rows}";
+    }
+
+    private static string GetEpsilonValue(string type)
+    {
+        return type switch
+        {
+            "float" => "1e-6f",
+            "double" => "1e-14",
+            _ => "0"
+        };
     }
 
     #endregion
