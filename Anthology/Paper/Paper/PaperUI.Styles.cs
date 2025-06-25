@@ -814,12 +814,155 @@ namespace Prowl.PaperUI
             return template;
         }
 
+        public static void RegisterStyle(string name, StyleTemplate template)
+        {
+            _styleTemplates[name] = template;
+        }
+
         /// <summary>
         /// Creates a new style template.
         /// </summary>
         public static bool TryGetStyle(string name, out StyleTemplate? template)
         {
             return _styleTemplates.TryGetValue(name, out template);
+        }
+
+        /// <summary>
+        /// Applies a named style and its pseudo-states to an element
+        /// </summary>
+        /// <param name="element">The element to apply styles to</param>
+        /// <param name="baseName">The base style name (e.g., "button")</param>
+        public static void ApplyStyleWithStates(Element element, string baseName) => ApplyStyleWithStates(element.ID, baseName);
+
+        /// <summary>
+        /// Applies a named style and its pseudo-states to an element
+        /// </summary>
+        /// <param name="elementId">The element to apply styles to</param>
+        /// <param name="baseName">The base style name (e.g., "button")</param>
+        public static void ApplyStyleWithStates(ulong elementId, string baseName)
+        {
+            // Apply base style first
+            if (TryGetStyle(baseName, out var baseStyle))
+            {
+                baseStyle.ApplyTo(elementId);
+            }
+
+            // Apply pseudo-states in order
+            var pseudoStates = new[]
+            {
+                ("hovered", IsElementHovered(elementId)),
+                ("focused", IsElementFocused(elementId)),
+                ("active", IsElementActive(elementId))
+            };
+
+            foreach (var (state, isActive) in pseudoStates)
+            {
+                if (isActive)
+                {
+                    string pseudoStyleName = $"{baseName}:{state}";
+                    if (TryGetStyle(pseudoStyleName, out var pseudoStyle))
+                    {
+                        pseudoStyle.ApplyTo(elementId);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Registers a complete style family (base + pseudo-states)
+        /// </summary>
+        /// <param name="baseName">The base style name</param>
+        /// <param name="baseStyle">The base style</param>
+        /// <param name="normalStyle">Optional normal state style</param>
+        /// <param name="hoveredStyle">Optional hovered state style</param>
+        /// <param name="focusedStyle">Optional focused state style</param>
+        /// <param name="activeStyle">Optional active state style</param>
+        public static void RegisterStyleFamily(
+            string baseName,
+            StyleTemplate baseStyle,
+            StyleTemplate normalStyle = null,
+            StyleTemplate hoveredStyle = null,
+            StyleTemplate focusedStyle = null,
+            StyleTemplate activeStyle = null)
+        {
+            // Register base style
+            RegisterStyle(baseName, baseStyle);
+
+            // Register pseudo-states if provided
+            if (normalStyle != null)
+                RegisterStyle($"{baseName}:normal", normalStyle);
+
+            if (hoveredStyle != null)
+                RegisterStyle($"{baseName}:hovered", hoveredStyle);
+
+            if (focusedStyle != null)
+                RegisterStyle($"{baseName}:focused", focusedStyle);
+
+            if (activeStyle != null)
+                RegisterStyle($"{baseName}:active", activeStyle);
+        }
+
+        /// <summary>
+        /// Creates a style builder for easier style family creation
+        /// </summary>
+        /// <param name="baseName">The base style name</param>
+        /// <returns>A style family builder</returns>
+        public static StyleFamilyBuilder CreateStyleFamily(string baseName)
+        {
+            return new StyleFamilyBuilder(baseName);
+        }
+
+        /// <summary>
+        /// Helper class for building complete style families
+        /// </summary>
+        public class StyleFamilyBuilder
+        {
+            private readonly string _baseName;
+            private StyleTemplate _baseStyle;
+            private StyleTemplate _normalStyle;
+            private StyleTemplate _hoveredStyle;
+            private StyleTemplate _focusedStyle;
+            private StyleTemplate _activeStyle;
+
+            internal StyleFamilyBuilder(string baseName)
+            {
+                _baseName = baseName;
+            }
+
+            public StyleFamilyBuilder Base(StyleTemplate style)
+            {
+                _baseStyle = style;
+                return this;
+            }
+
+            public StyleFamilyBuilder Normal(StyleTemplate style)
+            {
+                _normalStyle = style;
+                return this;
+            }
+
+            public StyleFamilyBuilder Hovered(StyleTemplate style)
+            {
+                _hoveredStyle = style;
+                return this;
+            }
+
+            public StyleFamilyBuilder Focused(StyleTemplate style)
+            {
+                _focusedStyle = style;
+                return this;
+            }
+
+            public StyleFamilyBuilder Active(StyleTemplate style)
+            {
+                _activeStyle = style;
+                return this;
+            }
+
+            public void Register()
+            {
+                Paper.RegisterStyleFamily(_baseName, _baseStyle, _normalStyle, _hoveredStyle, _focusedStyle, _activeStyle);
+            }
         }
 
         #endregion

@@ -347,8 +347,7 @@ namespace Prowl.PaperUI
         {
             if (_isActive)
                 foreach (var styleName in names)
-                    if (Paper.TryGetStyle(styleName, out var style))
-                        style.ApplyTo(_element.ID);
+                    Paper.ApplyStyleWithStates(_element.ID, styleName);
 
             return this;
         }
@@ -358,7 +357,7 @@ namespace Prowl.PaperUI
             if (condition)
             {
                 foreach(var styleName in names)
-                    Style(styleName);
+                    Paper.ApplyStyleWithStates(_element.ID, styleName);
             }
             return this;
         }
@@ -557,13 +556,8 @@ namespace Prowl.PaperUI
 
         public ElementBuilder Style(params string[] names)
         {
-            bool hovered = Paper.IsElementHovered(_element.ID);
-            bool active = Paper.IsElementActive(_element.ID);
-            bool focused = Paper.IsElementFocused(_element.ID);
-
             foreach (var name in names)
-                if (Paper.TryGetStyle(name, out var style))
-                    style.ApplyTo(_element.ID);
+                Paper.ApplyStyleWithStates(_element.ID, name);
 
             return this;
         }
@@ -572,7 +566,7 @@ namespace Prowl.PaperUI
         {
             if(condition)
                 foreach (var name in names)
-                    Style(name);
+                    Paper.ApplyStyleWithStates(_element.ID, name);
             return this;
         }
 
