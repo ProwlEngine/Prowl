@@ -266,6 +266,26 @@ namespace Prowl.PaperUI
         public T Transform(Transform2D transform) => SetStyleProperty(GuiProp.Transform, transform);
 
         #endregion
+
+        #region Transition Properties
+
+        /// <summary>
+        /// Configures a property transition with the specified duration and easing function.
+        /// </summary>
+        /// <param name="property">The property to animate</param>
+        /// <param name="duration">Animation duration in seconds</param>
+        /// <param name="easing">Optional easing function</param>
+        public T Transition(GuiProp property, double duration, Func<double, double> easing = null)
+        {
+            return SetTransition(property, duration, easing);
+        }
+
+        /// <summary>
+        /// Abstract method to handle transition setting - implemented by derived classes
+        /// </summary>
+        protected abstract T SetTransition(GuiProp property, double duration, Func<double, double> easing);
+
+        #endregion
     }
 
     /// <summary>
@@ -351,6 +371,19 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
+        /// Configures a property transition with the specified duration and easing function.
+        /// </summary>
+        /// <param name="property">The property to animate</param>
+        /// <param name="duration">Animation duration in seconds</param>
+        /// <param name="easing">Optional easing function</param>
+        protected override StateDrivenStyle SetTransition(GuiProp property, double duration, Func<double, double> easing)
+        {
+            if (_isActive)
+                Paper.SetTransitionConfig(_element.ID, property, duration, easing);
+            return this;
+        }
+
+        /// <summary>
         /// Returns to the element builder to continue the building chain and
         /// returns this object to the pool
         /// </summary>
@@ -368,6 +401,7 @@ namespace Prowl.PaperUI
     public class StyleTemplate : StyleSetterBase<StyleTemplate>
     {
         private readonly Dictionary<GuiProp, object> _styleProperties = new Dictionary<GuiProp, object>();
+        private readonly Dictionary<GuiProp, (double duration, Func<double, double> easing)> _transitions = new Dictionary<GuiProp, (double, Func<double, double>)>();
 
         /// <summary>
         /// Creates a new style template
@@ -384,6 +418,18 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
+        /// Configures a property transition with the specified duration and easing function.
+        /// </summary>
+        /// <param name="property">The property to animate</param>
+        /// <param name="duration">Animation duration in seconds</param>
+        /// <param name="easing">Optional easing function</param>
+        protected override StyleTemplate SetTransition(GuiProp property, double duration, Func<double, double> easing)
+        {
+            _transitions[property] = (duration, easing);
+            return this;
+        }
+
+        /// <summary>
         /// Applies all style properties in this template to an element
         /// </summary>
         /// <param name="elementId">The ID of the element to apply styles to</param>
@@ -392,6 +438,12 @@ namespace Prowl.PaperUI
             foreach (var kvp in _styleProperties)
             {
                 Paper.SetStyleProperty(elementId, kvp.Key, kvp.Value);
+            }
+
+            // Apply transitions
+            foreach (var kvp in _transitions)
+            {
+                Paper.SetTransitionConfig(elementId, kvp.Key, kvp.Value.duration, kvp.Value.easing);
             }
         }
 
@@ -403,6 +455,12 @@ namespace Prowl.PaperUI
             foreach (var kvp in _styleProperties)
             {
                 other.SetStyleProperty(kvp.Key, kvp.Value);
+            }
+
+            // Apply transitions
+            foreach (var kvp in _transitions)
+            {
+                other.SetTransition(kvp.Key, kvp.Value.duration, kvp.Value.easing);
             }
             return other;
         }
@@ -416,6 +474,12 @@ namespace Prowl.PaperUI
             foreach (var kvp in _styleProperties)
             {
                 clone._styleProperties[kvp.Key] = kvp.Value;
+            }
+
+            // Clone transitions
+            foreach (var kvp in _transitions)
+            {
+                clone._transitions[kvp.Key] = kvp.Value;
             }
             return clone;
         }
@@ -456,7 +520,7 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        public ElementBuilder Transition(GuiProp property, double duration, Func<double, double> easing = null)
+        protected override ElementBuilder SetTransition(GuiProp property, double duration, Func<double, double> easing)
         {
             Paper.SetTransitionConfig(_element.ID, property, duration, easing);
             return this;
@@ -493,6 +557,10 @@ namespace Prowl.PaperUI
 
         public ElementBuilder Style(params string[] names)
         {
+            bool hovered = Paper.IsElementHovered(_element.ID);
+            bool active = Paper.IsElementActive(_element.ID);
+            bool focused = Paper.IsElementFocused(_element.ID);
+
             foreach (var name in names)
                 if (Paper.TryGetStyle(name, out var style))
                     style.ApplyTo(_element.ID);
