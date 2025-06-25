@@ -8,7 +8,7 @@ using System.Reflection;
 
 namespace Shared
 {
-    public static class PaperDemo
+    public static partial class PaperDemo
     {
         static FontSystem fontSystem;
         static SpriteFontBase fontSmall;
@@ -71,57 +71,6 @@ namespace Shared
             fontTitle = fontSystem.GetFont(40);
 
             DefineStyles();
-        }
-
-        private static void DefineStyles()
-        {
-            // Sidebar styles
-            Paper.DefineStyle("sidebar")
-                .BackgroundColor(cardBackground)
-                .Rounded(8)
-                .Width(75);
-
-            // Expanded sidebar
-            Paper.DefineStyle("sidebar.expanded")
-                .Width(240)
-                .BorderColor(primaryColor)
-                .BorderWidth(3)
-                .Rounded(16);
-
-            // Button
-            Paper.DefineStyle("button")
-                .Height(40)
-                .Rounded(8);
-
-            // Primary button
-            Paper.DefineStyle("button.primary")
-                .BackgroundColor(primaryColor);
-
-            // Toggle switch
-            Paper.DefineStyle("toggle")
-                .Width(60)
-                .Height(30)
-                .Rounded(20);
-
-            // Toggle on
-            Paper.DefineStyle("toggle.on", "toggle")
-                .BackgroundColor(secondaryColor);
-
-            // Toggle off
-            Paper.DefineStyle("toggle.off", "toggle")
-                .BackgroundColor(Color.FromArgb(100, lightTextColor));
-
-            // Toggle dot
-            Paper.DefineStyle("toggle.dot")
-                .Width(24)
-                .Height(24)
-                .Rounded(20)
-                .BackgroundColor(Color.White);
-
-            Paper.DefineStyle("separator")
-                .Height(1)
-                .Margin(15, 15, 0, 0)
-                .BackgroundColor(Color.FromArgb(30, 0, 0, 0));
         }
 
         public static void RenderUI()
@@ -274,8 +223,7 @@ namespace Shared
         {
             using (Paper.Row("TopNavBar")
                 .Height(70)
-                .Rounded(8)
-                .BackgroundColor(cardBackground)
+                .Style("container")
                 .Margin(15, 15, 15, 0)
                 .Enter())
             {
@@ -296,68 +244,52 @@ namespace Shared
                 }
 
                 // Spacer
-                using (Paper.Box("Spacer")
-                    .Enter()) { }
+                using (Paper.Box("Spacer").Enter()) { }
 
-                // Search bar
+                // Search bar - now using text-field style
                 Paper.Box("SearchTextField")
                     .TextField(searchText, fontMedium, newValue => searchText = newValue, "Search...")
+                    .Style("text-field")
                     .SetScroll(Scroll.ScrollX)
-                    .Width(300)
-                    .Height(40)
-                    .Rounded(8)
-                    //.Rotate(2)
-                    .BackgroundColor(Color.FromArgb(50, 0, 0, 0))
                     .Margin(0, 15, 15, 0);
 
-                // Theme Switch
-                using (Paper.Box("LightIcon")
-                    .Width(40)
-                    .Height(40)
-                    //.Style(BoxStyle.SolidRounded(Color.FromArgb(50, 0, 0, 0), 20f))
+                // Theme Switch - using icon-button style
+                Paper.Box("LightIcon")
+                    .Style("icon-button")
                     .Margin(0, 10, 15, 0)
                     .Text(Text.Center(Icons.Lightbulb, fontMedium, lightTextColor))
-                    .OnClick((rect) => ToggleTheme())
-                    .Enter()) { }
+                    .OnClick((rect) => ToggleTheme());
 
                 // Notification icon
-                using (Paper.Box("NotificationIcon")
-                    .Width(40)
-                    .Height(40)
-                    //.Style(BoxStyle.SolidRounded(Color.FromArgb(50, 0, 0, 0), 20f))
+                Paper.Box("NotificationIcon")
+                    .Style("icon-button")
                     .Margin(0, 10, 15, 0)
                     .Text(Text.Center(Icons.CircleExclamation, fontMedium, lightTextColor))
-                    .OnClick((rect) => Console.WriteLine("Notifications clicked"))
-                    .Enter()) { }
+                    .OnClick((rect) => Console.WriteLine("Notifications clicked"));
 
                 // User Profile
-                using (Paper.Box("UserProfile")
+                Paper.Box("UserProfile")
                     .Width(40)
                     .Height(40)
                     .Rounded(40)
                     .BackgroundColor(secondaryColor)
-                    //.Style(BoxStyle.SolidRounded(secondaryColor, 20f))
                     .Margin(0, 15, 15, 0)
                     .Text(Text.Center("M", fontMedium, Color.White))
-                    .OnClick((rect) => Console.WriteLine("Profile clicked"))
-                    .Enter()) { }
+                    .OnClick((rect) => Console.WriteLine("Profile clicked"));
             }
         }
 
         private static void RenderSidebar()
         {
             using (Paper.Column("Sidebar")
-                .Style("sidebar")
-                .Hovered.Style("sidebar.expanded").End()
-                .Transition(GuiProp.Width, 0.25f, Paper.Easing.EaseIn)
-                .Transition(GuiProp.BorderColor, 0.75f)
-                .Transition(GuiProp.BorderWidth, 0.75f)
-                .Transition(GuiProp.Rounded, 0.25f)
+                .Style("sidebar")  // Automatic hover expansion with transitions
                 .Margin(15)
                 .Enter())
             {
                 // Menu header
-                Paper.Box("MenuHeader").Height(60).Text(Text.Center("Menu", fontMedium, textColor));
+                Paper.Box("MenuHeader")
+                    .Height(60)
+                    .Text(Text.Center("Menu", fontMedium, textColor));
 
                 string[] menuIcons = { Icons.House, Icons.ChartBar, Icons.User, Icons.Gear, Icons.WindowMaximize };
                 string[] menuItems = { "Dashboard", "Analytics", "Users", "Settings", "Windows" };
@@ -365,30 +297,21 @@ namespace Shared
                 for (int i = 0; i < menuItems.Length; i++)
                 {
                     int index = i;
+                    bool isSelected = selectedTabIndex == index;
 
                     using (Paper.Box($"MenuItemContainer_{i}")
-                        .Height(50)
-                        .Margin(10, 10, 5, 5)
-                        .Rounded(8)
-                        .BorderColor(primaryColor)
-                        .BorderWidth(selectedTabIndex == index ? 2 : 0)
+                        .Style("menu-item")
+                        .StyleIf(isSelected, "menu-item-selected")
                         .OnClick((rect) => selectedTabIndex = index)
-                        .Hovered
-                            .BackgroundColor(Color.FromArgb(20, primaryColor))
-                            .BorderWidth(2)
-                            .End()
-                        //.Transition(GuiProp.BackgroundColor, 0.05f)
-                        .Transition(GuiProp.BorderWidth, 0.1f)
                         .Clip()
-                        .Enter()
-                        )
+                        .Enter())
                     {
-                        var icon = Paper.Box($"MenuItemIcon_{i}")
+                        Paper.Box($"MenuItemIcon_{i}")
                             .Width(55)
                             .Height(50)
                             .Text(Text.Center(menuIcons[i], fontSmall, textColor));
-                        
-                        var but = Paper.Box($"MenuItem_{i}")
+
+                        Paper.Box($"MenuItem_{i}")
                             .Width(100)
                             .PositionType(PositionType.SelfDirected)
                             .Left(50 + 15)
@@ -397,13 +320,12 @@ namespace Shared
                 }
 
                 // Spacer
-                using (Paper.Box("SidebarSpacer")
-                    .Enter()) { }
+                using (Paper.Box("SidebarSpacer").Enter()) { }
 
                 // Upgrade box
                 using (Paper.Box("UpgradeBox")
                     .Margin(15)
-                    .Height(Paper.Auto) // Auto height allows the aspect ratio to control it, width will stretch to fit the parent
+                    .Height(Paper.Auto)
                     .Rounded(8)
                     .BackgroundColor(primaryColor)
                     .AspectRatio(0.5f)
@@ -414,17 +336,15 @@ namespace Shared
                         .Clip()
                         .Enter())
                     {
-                        using (Paper.Box("UpgradeText")
-                            .Text(Text.Center("Upgrade to Pro", fontMedium, Color.White))
-                            .Enter()) { }
+                        Paper.Box("UpgradeText")
+                            .Text(Text.Center("Upgrade to Pro", fontMedium, Color.White));
 
-                        using (Paper.Box("UpgradeButton")
+                        Paper.Box("UpgradeButton")
+                            .Style("button")
                             .Height(30)
                             .BackgroundColor(Color.White)
-                            //.Style(BoxStyle.SolidRounded(Color.White, 15f))
                             .Text(Text.Center("Upgrade", fontSmall, primaryColor))
-                            .OnClick((rect) => Console.WriteLine("Upgrade clicked"))
-                            .Enter()) { }
+                            .OnClick((rect) => Console.WriteLine("Upgrade clicked"));
                     }
                 }
             }
@@ -456,9 +376,7 @@ namespace Shared
         {
             using (Paper.Row("TabsNav")
                 .Height(60)
-                .Rounded(8)
-                .BackgroundColor(cardBackground)
-                //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
+                .Style("container")
                 .Enter())
             {
                 for (int i = 0; i < tabNames.Length; i++)
@@ -466,12 +384,11 @@ namespace Shared
                     int index = i;
                     bool isSelected = i == selectedTabIndex;
                     Color tabColor = isSelected ? primaryColor : lightTextColor;
-
-                    // Calculate tab width (dividing space equally)
                     double tabWidth = 1.0f / tabNames.Length;
 
                     using (Paper.Box($"Tab_{i}")
                         .Width(Paper.Stretch(tabWidth))
+                        .Style("tab")
                         .Text(Text.Center(tabNames[i], fontMedium, tabColor))
                         .OnClick((rect) => selectedTabIndex = index)
                         .Enter())
@@ -479,11 +396,10 @@ namespace Shared
                         // Show indicator line for selected tab
                         if (isSelected)
                         {
-                            using (Paper.Box($"TabIndicator_{i}")
+                            Paper.Box($"TabIndicator_{i}")
                                 .Height(4)
                                 .BackgroundColor(primaryColor)
-                                //.Style(BoxStyle.SolidRounded(primaryColor, 1.5f))
-                                .Enter()) { }
+                                .Rounded(2);
                         }
                     }
                 }
@@ -493,11 +409,10 @@ namespace Shared
         private static void RenderDashboardTab()
         {
             using (Paper.Row("DashboardCards")
-                .Height(120)
-                .Margin(0, 0, 15, 0)
-                .Enter())
+        .Height(120)
+        .Margin(0, 0, 15, 0)
+        .Enter())
             {
-                // Stat cards
                 string[] statNames = { "Total Users", "Revenue", "Projects", "Conversion" };
                 string[] statValues = { "3,456", "$12,345", "24", "8.5%" };
 
@@ -505,31 +420,22 @@ namespace Shared
                 {
                     using (Paper.Box($"StatCard_{i}")
                         .Width(Paper.Stretch(0.25f))
-                        .BackgroundColor(cardBackground)
-                        .Rounded(8)
+                        .Style("stat-card")
                         .Hovered
-                            .Rounded(12)
-                            .BorderColor(colorPalette[i % colorPalette.Length])
-                            .BorderWidth(2)
-                            .Scale(1.05f)
+                            .BorderColor(colorPalette[i % colorPalette.Length])  // Dynamic border color
                             .End()
-                        .Transition(GuiProp.Rounded, 0.2f)
-                        .Transition(GuiProp.BorderColor, 0.3f)
-                        .Transition(GuiProp.BorderWidth, 0.2f)
-                        .Transition(GuiProp.ScaleX, 0.2f)
-                        .Transition(GuiProp.ScaleY, 0.2f)
                         .Margin(i == 0 ? 0 : (15 / 2f), i == 3 ? 0 : (15 / 2f), 0, 0)
                         .Enter())
                     {
-                        // Card icon
+                        // Card icon with conditional styling based on parent hover
                         Paper.Box($"StatIcon_{i}")
-                             .Size(40)
-                             .BackgroundColor(Color.FromArgb(150, colorPalette[i % colorPalette.Length]))
-                             .Rounded(8)
-                             .If(Paper.IsParentHovered)
-                                 .Rounded(20)
-                                 .End()
-                            .Transition(GuiProp.Rounded, 0.3f, Paper.Easing.QuartOut)
+                            .Size(40)
+                            .BackgroundColor(Color.FromArgb(150, colorPalette[i % colorPalette.Length]))
+                            .Rounded(8)
+                            .If(Paper.IsParentHovered)
+                                .Rounded(20)
+                                .End()
+                            .Transition(GuiProp.Rounded, 0.3, Paper.Easing.QuartOut)
                             .Margin(15, 0, 15, 0)
                             .IsNotInteractable();
 
@@ -537,14 +443,12 @@ namespace Shared
                             .Margin(10, 15, 15, 15)
                             .Enter())
                         {
-                            using (Paper.Box($"StatLabel_{i}")
+                            Paper.Box($"StatLabel_{i}")
                                 .Height(Paper.Pixels(25))
-                                .Text(Text.Left(statNames[i], fontSmall, lightTextColor))
-                                .Enter()) { }
+                                .Text(Text.Left(statNames[i], fontSmall, lightTextColor));
 
-                            using (Paper.Box($"StatValue_{i}")
-                                .Text(Text.Left(statValues[i], fontLarge, textColor))
-                                .Enter()) { }
+                            Paper.Box($"StatValue_{i}")
+                                .Text(Text.Left(statValues[i], fontLarge, textColor));
                         }
                     }
                 }
@@ -1301,55 +1205,47 @@ namespace Shared
                 // Settings categories sidebar
                 using (Paper.Column("SettingsCategories")
                     .Width(200)
-                    .BackgroundColor(cardBackground)
-                    //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
+                    .Style("container")
                     .Enter())
                 {
                     string[] categories = {
-                       "General", "Account", "Appearance",
-                       "Notifications", "Privacy", "Security"
-                   };
+               "General", "Account", "Appearance",
+               "Notifications", "Privacy", "Security"
+           };
 
                     for (int i = 0; i < categories.Length; i++)
                     {
                         bool isSelected = i == 0;
-                        Color itemBgColor = isSelected ? Color.FromArgb(20, primaryColor) : Color.Transparent;
                         Color itemTextColor = isSelected ? primaryColor : textColor;
                         var index = i;
 
-                        using (Paper.Box($"SettingsCat_{i}")
+                        Paper.Box($"SettingsCat_{i}")
                             .Height(50)
                             .Margin(10, 10, 5, 5)
-                            .BackgroundColor(itemBgColor)
-                            //.Style(BoxStyle.SolidRounded(itemBgColor, 8f))
+                            .Style("button")
+                            .StyleIf(isSelected, "period-button-selected")
                             .Text(Text.Left($"  {categories[i]}", fontSmall, itemTextColor))
-                            .OnClick((rect) => { Console.WriteLine($"Category {categories[index]} clicked"); })
-                            .Enter()) { }
+                            .OnClick((rect) => { Console.WriteLine($"Category {categories[index]} clicked"); });
                     }
                 }
 
                 // Settings content
                 using (Paper.Column("SettingsOptions")
-                    .BackgroundColor(cardBackground)
-                    //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
+                    .Style("container")
                     .Margin(15, 0, 0, 0)
                     .Enter())
                 {
                     // Settings header
-                    using (Paper.Box("SettingsHeader")
+                    Paper.Box("SettingsHeader")
                         .Height(80)
                         .Margin(20)
-                        .Text(Text.Left("General Settings", fontLarge, textColor))
-                        .Enter()) { }
+                        .Text(Text.Left("General Settings", fontLarge, textColor));
 
-                    // Toggle options
+                    // Toggle options - much cleaner now!
                     string[] options = {
-                       "Enable notifications",
-                       "Dark mode",
-                       "Auto-save changes",
-                       "Show analytics data",
-                       "Email notifications"
-                   };
+               "Enable notifications", "Dark mode", "Auto-save changes",
+               "Show analytics data", "Email notifications"
+           };
 
                     for (int i = 0; i < options.Length; i++)
                     {
@@ -1359,54 +1255,42 @@ namespace Shared
                             .Enter())
                         {
                             // Option label
-                            using (Paper.Box($"SettingLabel_{i}")
-                                .Text(Text.Left(options[i], fontMedium, textColor))
-                                .Enter()) { }
+                            Paper.Box($"SettingLabel_{i}")
+                                .Text(Text.Left(options[i], fontMedium, textColor));
 
-                            // Toggle switch
+                            // Toggle switch - much simpler with styles!
                             bool isOn = toggleState[i];
-
                             int index = i;
+
                             using (Paper.Box($"ToggleSwitch_{i}")
-                                .StyleIf(!isOn, "toggle.off")
-                                .StyleIf(isOn, "toggle.on")
-                                .Transition(GuiProp.BackgroundColor, 0.25f, Paper.Easing.CubicInOut)
+                                .Style("toggle")
+                                .StyleIf(isOn, "toggle-on")
+                                .StyleIf(!isOn, "toggle-off")
                                 .OnClick((rect) => {
                                     toggleState[index] = !toggleState[index];
                                     Console.WriteLine($"Toggle {options[index]}: {!isOn}");
                                 })
                                 .Enter())
                             {
-                                // Toggle dot
-                                using (Paper.Box($"ToggleDot_{i}")
-                                    .Width(24)
-                                    .Height(24)
-                                    .Rounded(20)
-                                    .BackgroundColor(Color.White)
-                                    .Transition(GuiProp.Left, 0.25f, Paper.Easing.CubicInOut)
-                                    //.Style(BoxStyle.SolidRounded(Color.White, 12f))
-                                    .PositionType(PositionType.SelfDirected)
-                                    .Left(Paper.Pixels(isOn ? 32 : 4))
-                                    .Top(Paper.Pixels(3))
-                                    .Enter()) { }
+                                Paper.Box($"ToggleDot_{i}")
+                                    .Style("toggle-dot")
+                                    .Left(Paper.Pixels(isOn ? 32 : 4));
                             }
                         }
 
                         // Add separator except for the last item
                         if (i < options.Length - 1)
                         {
-                            Paper.Box($"Separator_{i}").Style("seperator");
+                            Paper.Box($"Separator_{i}").Style("separator");
                         }
                     }
 
                     // Save button
-                    using (Paper.Box("SaveSettings")
-                        .Height(50)
-                        .Style("button.primary")
+                    Paper.Box("SaveSettings")
+                        .Style("button-primary")
                         .Text(Text.Center("Save Changes", fontMedium, Color.White))
                         .Margin(20, 0, 20, 20)
-                        .OnClick((rect) => Console.WriteLine("Save settings clicked"))
-                        .Enter()) { }
+                        .OnClick((rect) => Console.WriteLine("Save settings clicked"));
                 }
             }
         }
