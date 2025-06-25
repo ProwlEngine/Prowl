@@ -828,7 +828,7 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        /// <summary>Sets the element's Z-order (depth) for rendering.</summary>
+        /// <summary>Sets the element's Z-order (depth) for rendering. (This is relative to other Children, a Element cannot render outside its Parent!)</summary>
         /// <param name="depth">Z-order value (higher values appear on top)</param>
         public ElementBuilder Depth(double depth)
         {

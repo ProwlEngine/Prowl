@@ -397,6 +397,23 @@ namespace Prowl.PaperUI
             => Box(stringID, intID).LayoutType(LayoutType.Column);
 
         /// <summary>
+        /// Moves the current parent element to the root of the hierarchy.
+        /// Useful for things like popups or modals that need to be rendered at the top level.
+        /// You can combine this with Depth to ensure something always renders ontop!
+        /// </summary>
+        /// <exception cref="Exception"></exception>
+        public static void MoveToRoot()
+        {
+            if (CurrentParent == null)
+                throw new Exception("Not currently inside an Element.");
+
+            if(CurrentParent.Parent != null)
+                CurrentParent.Parent.Children.Remove(CurrentParent);
+
+            RootElement.Children.Add(CurrentParent);
+        }
+
+        /// <summary>
         /// Adds a child element to the current parent.
         /// </summary>
         internal static void AddChild(LayoutEngine.Element element)
