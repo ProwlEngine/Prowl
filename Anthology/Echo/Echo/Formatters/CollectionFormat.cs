@@ -41,17 +41,6 @@ internal sealed class ArrayFormat : ISerializationFormat
             arrCompound["elements"] = new EchoObject(elements);
         }
 
-        // Handle type information based on TypeMode
-        bool shouldIncludeType = context.TypeMode switch {
-            TypeMode.Aggressive => true, // Always include type information
-            TypeMode.None => false, // Never include type information
-            TypeMode.Auto => targetType == typeof(object) || targetType != actualType, // Include type information if target is object or actual type is different
-            _ => true // Default to aggressive for safety
-        };
-
-        if (shouldIncludeType)
-            arrCompound["$type"] = new(EchoType.String, actualType.FullName);
-
         return arrCompound;
     }
 

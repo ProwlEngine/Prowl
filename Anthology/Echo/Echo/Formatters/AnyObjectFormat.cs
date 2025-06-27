@@ -16,6 +16,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         Type actualType = value.GetType();
         int? id = null;
 
+        // Handle reference tracking for non-value types
         if (!actualType.IsValueType)
         {
             if (context.objectToId.TryGetValue(value, out int existingId))
@@ -34,6 +35,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         if (value is ISerializationCallbackReceiver callback)
             callback.OnBeforeSerialize();
 
+        // Serialize the object's data
         if (value is ISerializable serializable)
         {
             serializable.Serialize(ref compound, context);
@@ -53,6 +55,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
                     }
                     else
                     {
+                        // Serialize with field type as target to enable polymorphism detection
                         EchoObject tag = Serializer.Serialize(field.FieldType, propValue, context);
                         compound.Add(field.Name, tag);
                     }
@@ -65,19 +68,12 @@ public sealed class AnyObjectFormat : ISerializationFormat
             }
         }
 
+        // Add reference ID if needed
         if (id.HasValue)
             compound["$id"] = new(EchoType.Int, id.Value);
 
-        // Handle type information based on TypeMode
-        bool shouldIncludeType = context.TypeMode switch {
-            TypeMode.Aggressive => true, // Always include type information
-            TypeMode.None => false, // Never include type information
-            TypeMode.Auto => targetType == typeof(object) || targetType != actualType, // Include type information if target is object or actual type is different
-            _ => true // Default to aggressive for safety
-        };
-
-        if (shouldIncludeType)
-            compound["$type"] = new(EchoType.String, actualType.FullName);
+        // NOTE: Type information is now handled by the centralized Serializer class
+        // We don't add $type here - the Serializer will wrap this with type info if needed
 
         context.EndDependencies();
 
@@ -86,48 +82,13 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        // Sometimes compounds can be direct values
-        // For example if you serialize object[] { 1, 2, 3 } you get a ListTag with 3 IntTags
-        // So deserialize needs to support returning the direct value
+        // Handle primitive values that might come through (for backward compatibility)
         if (value.TagType != EchoType.Compound)
         {
-            if (value.TagType == EchoType.Null)
-                return null;
-            else if (value.TagType == EchoType.Byte)
-                return value.ByteValue;
-            else if (value.TagType == EchoType.sByte)
-                return value.sByteValue;
-            else if (value.TagType == EchoType.Short)
-                return value.ShortValue;
-            else if (value.TagType == EchoType.UShort)
-                return value.UShortValue;
-            else if (value.TagType == EchoType.Int)
-                return value.IntValue;
-            else if (value.TagType == EchoType.UInt)
-                return value.UIntValue;
-            else if (value.TagType == EchoType.Long)
-                return value.LongValue;
-            else if (value.TagType == EchoType.ULong)
-                return value.ULongValue;
-            else if (value.TagType == EchoType.Float)
-                return value.FloatValue;
-            else if (value.TagType == EchoType.Double)
-                return value.DoubleValue;
-            else if (value.TagType == EchoType.Decimal)
-                return value.DecimalValue;
-            else if (value.TagType == EchoType.Bool)
-                return value.BoolValue;
-            else if (value.TagType == EchoType.String)
-                return value.StringValue;
-            else if (value.TagType == EchoType.ByteArray)
-                return value.ByteArrayValue;
-            else
-            {
-                Serializer.Logger.Error($"Failed to deserialize value of type {value.TagType}, EchoObject is not a compound and not a known value type.");
-                return null;
-            }
+            return DeserializePrimitiveValue(value, targetType);
         }
 
+        // Handle reference resolution for non-value types
         EchoObject? id = null;
         if (!targetType.IsValueType &&
             value.TryGet("$id", out id) &&
@@ -136,23 +97,9 @@ public sealed class AnyObjectFormat : ISerializationFormat
             return existingObj;
         }
 
-        // Determine the actual type to instantiate
-        Type objectType;
-        if (value.TryGet("$type", out EchoObject? typeProperty))
-        {
-            Type? resolvedType = ReflectionUtils.FindTypeByName(typeProperty.StringValue);
-            if (resolvedType == null)
-            {
-                Serializer.Logger.Error($"Couldn't find Type: {typeProperty.StringValue}");
-                return null;
-            }
-            objectType = resolvedType;
-        }
-        else
-        {
-            // If no type information is present, use the target type
-            objectType = targetType;
-        }
+        // The target type is now passed in correctly by the centralized system
+        // We don't need to extract $type here - it's already been handled
+        Type objectType = targetType;
 
         if (objectType.IsInterface || objectType.IsAbstract)
         {
@@ -160,12 +107,11 @@ public sealed class AnyObjectFormat : ISerializationFormat
             return null;
         }
 
+        // Create the object instance
         object result;
         try
         {
-            result = Activator.CreateInstance(objectType, nonPublic: true);
-            if (result == null)
-                throw new Exception(); // Throw, it will get caught
+            result = Activator.CreateInstance(objectType, nonPublic: true)!;
         }
         catch (MissingMethodException ex)
         {
@@ -178,9 +124,11 @@ public sealed class AnyObjectFormat : ISerializationFormat
             return null;
         }
 
+        // Register the object for reference resolution
         if (!objectType.IsValueType && id != null)
             context.idToObject[id.IntValue] = result;
 
+        // Deserialize the object's data
         if (result is ISerializable serializable)
         {
             serializable.Deserialize(value, context);
@@ -189,11 +137,12 @@ public sealed class AnyObjectFormat : ISerializationFormat
         {
             foreach (System.Reflection.FieldInfo field in result.GetSerializableFields())
             {
-                if (!AnyObjectFormat.TryGetFieldValue(value, field, out EchoObject? fieldValue))
+                if (!TryGetFieldValue(value, field, out EchoObject? fieldValue))
                     continue;
 
                 try
                 {
+                    // Let the centralized deserializer handle type resolution for fields
                     object? deserializedValue = Serializer.Deserialize(fieldValue, field.FieldType, context);
 
                     if (field.IsInitOnly)
@@ -213,6 +162,39 @@ public sealed class AnyObjectFormat : ISerializationFormat
             callback.OnAfterDeserialize();
 
         return result;
+    }
+
+    private static object? DeserializePrimitiveValue(EchoObject value, Type targetType)
+    {
+        // Handle primitive values that might be passed directly
+        // This provides backward compatibility and handles edge cases
+        try
+        {
+            return value.TagType switch {
+                EchoType.Null => null,
+                EchoType.Byte => Convert.ChangeType(value.ByteValue, targetType),
+                EchoType.sByte => Convert.ChangeType(value.sByteValue, targetType),
+                EchoType.Short => Convert.ChangeType(value.ShortValue, targetType),
+                EchoType.UShort => Convert.ChangeType(value.UShortValue, targetType),
+                EchoType.Int => Convert.ChangeType(value.IntValue, targetType),
+                EchoType.UInt => Convert.ChangeType(value.UIntValue, targetType),
+                EchoType.Long => Convert.ChangeType(value.LongValue, targetType),
+                EchoType.ULong => Convert.ChangeType(value.ULongValue, targetType),
+                EchoType.Float => Convert.ChangeType(value.FloatValue, targetType),
+                EchoType.Double => Convert.ChangeType(value.DoubleValue, targetType),
+                EchoType.Decimal => Convert.ChangeType(value.DecimalValue, targetType),
+                EchoType.Bool => Convert.ChangeType(value.BoolValue, targetType),
+                EchoType.String => Convert.ChangeType(value.StringValue, targetType),
+                EchoType.ByteArray => targetType == typeof(byte[]) ? value.ByteArrayValue :
+                                     throw new InvalidCastException($"Cannot convert byte array to {targetType}"),
+                _ => throw new NotSupportedException($"Cannot deserialize {value.TagType} as {targetType}")
+            };
+        }
+        catch (Exception ex)
+        {
+            Serializer.Logger.Error($"Failed to deserialize primitive value of type {value.TagType} to {targetType}", ex);
+            return null;
+        }
     }
 
     private static bool TryGetFieldValue(EchoObject compound, System.Reflection.FieldInfo field, out EchoObject? value)

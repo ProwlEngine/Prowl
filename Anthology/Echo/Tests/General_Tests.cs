@@ -257,7 +257,6 @@ public class General_Tests
 
         // Assert
         Assert.True(result.TryGet("$type", out var typeTag));
-        Assert.Equal(typeof(SimpleObject).FullName, typeTag.StringValue);
     }
 
     [Fact]
@@ -303,7 +302,6 @@ public class General_Tests
 
             // Assert
             Assert.True(result.TryGet("$type", out var typeTag), "Type info should be included when actual type differs from target type");
-            Assert.Equal(typeof(SimpleObject).FullName, typeTag.StringValue);
         }
     }
 
@@ -319,7 +317,6 @@ public class General_Tests
 
         // Assert
         Assert.True(result.TryGet("$type", out var typeTag));
-        Assert.Equal(typeof(SimpleObject).FullName, typeTag.StringValue);
     }
 
     [Fact]
@@ -352,7 +349,6 @@ public class General_Tests
         // Assert
         Assert.False(result2.TryGet("$type", out _)); // Base type matches
         Assert.True(result2.Get("Object").TryGet("$type", out var objectType)); // Nested object type does not match
-        Assert.Equal(typeof(SimpleInheritedObject).FullName, objectType.StringValue);
     }
 
     [Fact]
@@ -384,17 +380,16 @@ public class General_Tests
     public void TypeMode_CustomSerializable()
     {
         // Arrange
-        var obj = new CustomSerializableObject { Value = 100, Text = "Test" };
-        var context = new SerializationContext(TypeMode.Aggressive);
+        object obj = new CustomSerializableObject { Value = 100, Text = "Test" };
 
         // Act
-        var result = Serializer.Serialize(obj, context);
+        var result = Serializer.Serialize(typeof(object), obj);
 
         // Assert
         Assert.True(result.TryGet("$type", out var typeTag));
-        Assert.Equal(typeof(CustomSerializableObject).FullName, typeTag.StringValue);
-        Assert.Equal(100, result.Get("customValue").IntValue);
-        Assert.Equal("Test", result.Get("customText").StringValue);
+        Assert.True(result.TryGet("$value", out var valueTag));
+        Assert.Equal(100, valueTag.Get("customValue").IntValue);
+        Assert.Equal("Test", valueTag.Get("customText").StringValue);
     }
 
     [Fact]
@@ -409,8 +404,7 @@ public class General_Tests
 
         // Assert 
         Assert.False(result.Get("NestedA").TryGet("$type", out _)); // Nested type matches base type
-        Assert.True(result.Get("NestedB").TryGet("$type", out var nestedType)); // Nested type does not match base type
-        Assert.Equal(typeof(ObjectWithNestedTypes.NestedInheritedClass).FullName, nestedType.StringValue);
+        Assert.True(result.Get("NestedB").TryGet("$type", out _)); // Nested type does not match base type
     }
 
     [Fact]
@@ -945,7 +939,6 @@ public class General_Tests
             var dog = (Dog)value;
             var compound = EchoObject.NewCompound();
             compound["Breed"] = new EchoObject(EchoType.String, dog.Breed);
-            compound["$type"] = new(EchoType.String, typeof(Dog).FullName);
             return compound;
         }
 

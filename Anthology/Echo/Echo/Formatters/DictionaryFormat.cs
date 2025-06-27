@@ -40,17 +40,6 @@ internal sealed class DictionaryFormat : ISerializationFormat
                 entries.Add(entryCompound);
             }
 
-            // Handle type information based on TypeMode
-            bool shouldIncludeType = context.TypeMode switch {
-                TypeMode.Aggressive => true, // Always include type information
-                TypeMode.None => false, // Never include type information
-                TypeMode.Auto => targetType == typeof(object) || targetType != type, // Include type information if target is object or actual type is different
-                _ => true // Default to aggressive for safety
-            };
-
-            if (shouldIncludeType)
-                compound["$type"] = new(EchoType.String, type.FullName);
-
             compound.Add("entries", new EchoObject(entries));
             return compound;
         }

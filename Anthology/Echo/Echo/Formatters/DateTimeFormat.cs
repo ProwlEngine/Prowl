@@ -12,16 +12,6 @@ internal sealed class DateTimeFormat : ISerializationFormat
         {
             var compound = EchoObject.NewCompound();
 
-            // Handle type information based on TypeMode
-            bool shouldIncludeType = context.TypeMode switch {
-                TypeMode.Aggressive => true, // Always include type information
-                TypeMode.None => false, // Never include type information
-                TypeMode.Auto => targetType == typeof(object) || targetType != typeof(DateTime), // Include type information if target is object or actual type is different
-                _ => true // Default to aggressive for safety
-            };
-            if (shouldIncludeType)
-                compound["$type"] = new(EchoType.String, typeof(DateTime).FullName);
-
             // Serialize the DateTime properties
             compound["date"] = new EchoObject(EchoType.Long, date.ToBinary());
 

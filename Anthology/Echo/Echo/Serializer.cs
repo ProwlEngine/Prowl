@@ -7,6 +7,14 @@ using System.Collections.Concurrent;
 
 namespace Prowl.Echo;
 
+// Core type envelope that wraps all serialized data
+public class TypeEnvelope
+{
+    public string? TypeInfo { get; set; }
+    public EchoObject Data { get; set; }
+    public bool IsTypePreserved => TypeInfo != null;
+}
+
 public static class Serializer
 {
     /// <summary>
@@ -41,7 +49,6 @@ public static class Serializer
     public static IEchoLogger Logger { get; set; } = new NullEchoLogger();
 
     private static readonly ConcurrentDictionary<Type, ISerializationFormat> _formatCache = new();
-
     private static IReadOnlyList<ISerializationFormat> _formats;
 
     static Serializer()
@@ -54,6 +61,7 @@ public static class Serializer
             new DateTimeFormat(),
             new GuidFormat(),
             new EnumFormat(),
+            new AnonymousTypeFormat(),
             new HashSetFormat(),
             new ArrayFormat(),
             new ListFormat(),
@@ -74,6 +82,7 @@ public static class Serializer
     {
         _formatCache.Clear();
         ReflectionUtils.ClearCache();
+        TypeNameRegistry.ClearCache();
     }
 
     public static void RegisterFormat(ISerializationFormat format)
@@ -88,17 +97,24 @@ public static class Serializer
         _formats = newFormats.AsReadOnly();
     }
 
-    public static EchoObject Serialize(object? value, TypeMode typeMode = TypeMode.Auto) => Serialize(value, new SerializationContext(typeMode));
+    #region Public API
 
-    public static EchoObject Serialize(object? value, SerializationContext context) => Serialize(value?.GetType(), value, context);
+    public static EchoObject Serialize(object? value, TypeMode typeMode = TypeMode.Auto)
+        => Serialize(value, new SerializationContext(typeMode));
+
+    public static EchoObject Serialize(Type? targetType, object? value, TypeMode typeMode = TypeMode.Auto)
+        => Serialize(targetType, value, new SerializationContext(typeMode));
+
+    public static EchoObject Serialize(object? value, SerializationContext context)
+        => Serialize(value?.GetType(), value, context);
 
     public static EchoObject Serialize(Type? targetType, object? value, SerializationContext context)
     {
         if (value == null) return new EchoObject(EchoType.Null, null);
 
-        if (value is EchoObject property)
+        if (value is EchoObject echoObject)
         {
-            EchoObject clone = property.Clone();
+            EchoObject clone = echoObject.Clone();
             HashSet<Guid> deps = new();
             GetAllDependencyRefsInEcho?.Invoke(clone, deps);
             foreach (Guid dep in deps)
@@ -106,32 +122,190 @@ public static class Serializer
             return clone;
         }
 
-        var valueType = value.GetType();
-        var format = _formatCache.GetOrAdd(valueType, type =>
-            _formats.FirstOrDefault(f => f.CanHandle(type))
-            ?? throw new NotSupportedException($"No format handler found for type {type}"));
+        var actualType = value.GetType();
 
-        return format.Serialize(targetType, value, context);
+        // STEP 1: Determine if we need type preservation (centralized logic)
+        bool needsTypeInfo = ShouldPreserveType(targetType, actualType, context);
+
+        // STEP 2: Serialize the actual data (formatters don't worry about types)
+        var format = GetFormatForType(actualType);
+        var serializedData = format.Serialize(actualType, value, context);
+
+        // STEP 3: Wrap with type envelope if needed (centralized)
+        return WrapWithTypeEnvelope(serializedData, needsTypeInfo ? actualType : null, context);
     }
 
     public static T? Deserialize<T>(EchoObject? value) => (T?)Deserialize(value, typeof(T));
     public static object? Deserialize(EchoObject? value, Type targetType) => Deserialize(value, targetType, new SerializationContext());
     public static T? Deserialize<T>(EchoObject? value, SerializationContext context) => (T?)Deserialize(value, typeof(T), context);
+
     public static object? Deserialize(EchoObject? value, Type targetType, SerializationContext context)
     {
-        if (object.Equals(value, null) || value.TagType == EchoType.Null) return null;
+        if (value?.TagType == EchoType.Null || value == null) return null;
 
         if (value.GetType() == targetType) return value;
 
-        // Resolve actual type from $type if present
-        Type actualType = targetType;
-        if (value.TagType == EchoType.Compound && value.TryGet("$type", out var typeTag))
-            actualType = ReflectionUtils.FindTypeByName(typeTag.StringValue) ?? targetType;
+        // STEP 1: Extract type information and data (centralized)
+        var envelope = ExtractTypeEnvelope(value, targetType);
 
-        var format = _formatCache.GetOrAdd(actualType, type =>
-            _formats.FirstOrDefault(f => f.CanHandle(type))
-            ?? throw new NotSupportedException($"No format handler found for type {type}"));
+        // STEP 2: Determine actual type to deserialize to
+        var actualType = envelope.ActualType ?? targetType;
 
-        return format.Deserialize(value, targetType, context);
+        // STEP 3: Get formatter and deserialize data (no type logic in formatter)
+        var format = GetFormatForType(actualType);
+        return format.Deserialize(envelope.Data, actualType, context);
     }
+
+    #endregion
+
+    #region Type Preservation Logic
+
+    private static bool ShouldPreserveType(Type? targetType, Type actualType, SerializationContext context)
+    {
+        return context.TypeMode switch {
+            TypeMode.Aggressive => true,
+            TypeMode.None => false,
+            TypeMode.Auto => IsTypePreservationNeeded(targetType, actualType, context),
+            _ => true
+        };
+    }
+
+    private static bool IsTypePreservationNeeded(Type? targetType, Type actualType, SerializationContext context)
+    {
+        // Never preserve type for exact matches
+        if (targetType == actualType) return false;
+
+        return true;
+
+        //// Always preserve for these cases:
+        //if (targetType == null ||                           // Unknown target
+        //    targetType == typeof(object) ||                 // Boxed objects
+        //    targetType.IsInterface ||                       // Interface implementations
+        //    targetType.IsAbstract)                          // Abstract class implementations
+        //    return true;
+        //
+        //// Check if actual type is assignable to target (polymorphism)
+        //if (!targetType.IsAssignableFrom(actualType))
+        //    return true;
+        //
+        //// Preserve type for derived classes
+        //if (targetType != actualType)
+        //    return true;
+        //
+        //return false;
+    }
+
+    private static EchoObject WrapWithTypeEnvelope(EchoObject data, Type? typeToPreserve, SerializationContext context)
+    {
+        if (typeToPreserve == null)
+            return data; // No wrapping needed
+
+        // For primitives and simple types, use compact representation
+        if (IsSimpleType(typeToPreserve))
+            return CreateCompactTypeWrapper(data, typeToPreserve);
+
+        // For complex types, use full representation
+        return CreateFullTypeWrapper(data, typeToPreserve);
+    }
+
+    private static bool IsSimpleType(Type type)
+    {
+        return type.IsPrimitive ||
+               type == typeof(string) ||
+               type == typeof(decimal) ||
+               type == typeof(DateTime) ||
+               type == typeof(Guid) ||
+               type.IsEnum;
+    }
+
+    private static EchoObject CreateCompactTypeWrapper(EchoObject data, Type type)
+    {
+        // For primitives, embed type in the tag itself using a special format
+        var compound = EchoObject.NewCompound();
+        compound["$t"] = new EchoObject(TypeNameRegistry.GetCompactTypeName(type)); // Compact type name
+        compound["$v"] = data; // Value
+        return compound;
+    }
+
+    private static EchoObject CreateFullTypeWrapper(EchoObject data, Type type)
+    {
+        // Only add type wrapper if the data isn't already a compound with type info
+        if (data.TagType == EchoType.Compound && data.Contains("$type"))
+            return data; // Already has type info
+
+        var compound = EchoObject.NewCompound();
+        compound["$type"] = new EchoObject(TypeNameRegistry.GetFullTypeName(type));
+
+        // Merge the data directly into the compound if possible (Cloning is slow, Need to find a cleaner way to pull this off)
+        //if (data.TagType == EchoType.Compound)
+        //{
+        //    foreach (var kvp in data.Tags)
+        //    {
+        //        // Don't overwrite reserved keys
+        //        if (!kvp.Key.StartsWith("$"))
+        //            compound[kvp.Key] = kvp.Value.Clone();
+        //    }
+        //}
+        //else
+        {
+            compound["$value"] = data;
+        }
+
+        return compound;
+    }
+
+    #endregion
+
+    #region Type Extraction Logic
+
+    private static TypeEnvelope ExtractTypeEnvelope(EchoObject value, Type targetType)
+    {
+        // Handle compact type wrapper (for primitives)
+        if (value.TagType == EchoType.Compound &&
+            value.TryGet("$t", out var compactType) &&
+            value.TryGet("$v", out var compactValue))
+        {
+            var type = TypeNameRegistry.ResolveCompactTypeName(compactType.StringValue);
+            return new TypeEnvelope { ActualType = type, Data = compactValue };
+        }
+
+        // Handle full type wrapper
+        if (value.TagType == EchoType.Compound && value.TryGet("$type", out var typeTag))
+        {
+            var type = TypeNameRegistry.ResolveFullTypeName(typeTag.StringValue) ?? targetType;
+
+            // If there's a $value, use that as data
+            if (value.TryGet("$value", out var dataValue))
+                return new TypeEnvelope { ActualType = type, Data = dataValue };
+
+            // Otherwise, the compound itself is the data (minus type info)
+            var dataCompound = EchoObject.NewCompound();
+            foreach (var kvp in value.Tags.Where(k => !k.Key.StartsWith("$")))
+                dataCompound[kvp.Key] = kvp.Value;
+
+            return new TypeEnvelope { ActualType = type, Data = dataCompound };
+        }
+
+        // No type wrapper - use as-is
+        return new TypeEnvelope { ActualType = null, Data = value };
+    }
+
+    private class TypeEnvelope
+    {
+        public Type? ActualType { get; set; }
+        public EchoObject Data { get; set; } = null!;
+    }
+
+    #endregion
+
+    #region Format Management
+
+    private static ISerializationFormat GetFormatForType(Type type)
+    {
+        return _formatCache.GetOrAdd(type, t =>
+            _formats.FirstOrDefault(f => f.CanHandle(t))
+            ?? throw new NotSupportedException($"No format handler found for type {t}"));
+    }
+
+    #endregion
 }

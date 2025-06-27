@@ -15,16 +15,17 @@ public enum TypeMode
 
 public class SerializationContext
 {
-    internal TypeMode TypeMode = TypeMode.Auto;
-
     private class NullKey { }
+
+    internal TypeMode TypeMode = TypeMode.Auto;
 
     public Dictionary<object, int> objectToId = new(ReferenceEqualityComparer.Instance);
     public Dictionary<int, object> idToObject = new();
     public int nextId = 1;
+    public HashSet<Guid> dependencies = new();
 
     private int dependencyCounter = 0;
-    public HashSet<Guid> dependencies = new();
+    private readonly Stack<bool> _polymorphicContextStack = new();
 
     public SerializationContext(TypeMode typeMode = TypeMode.Auto)
     {

@@ -15,6 +15,7 @@ public class ObjectArrayTests
         public object[] ComplexObjectArray = new object[] {
             new SimpleObject(),
             new Vector3 { X = 1, Y = 2, Z = 3 },
+            DateTime.UtcNow,
             "mixed"
         };
 
@@ -77,11 +78,12 @@ public class ObjectArrayTests
     public void TestComplexObjectArray()
     {
         var original = new ClassWithObjectArrays();
+        var datetime = original.ComplexObjectArray[2];
         var serialized = Serializer.Serialize(original);
         var deserialized = Serializer.Deserialize<ClassWithObjectArrays>(serialized);
 
         Assert.NotNull(deserialized.ComplexObjectArray);
-        Assert.Equal(3, deserialized.ComplexObjectArray.Length);
+        Assert.Equal(4, deserialized.ComplexObjectArray.Length);
 
         Assert.IsType<SimpleObject>(deserialized.ComplexObjectArray[0]);
         Assert.Equal("Hello", ((SimpleObject)deserialized.ComplexObjectArray[0]).StringField);
@@ -91,7 +93,9 @@ public class ObjectArrayTests
         Assert.Equal(2, ((Vector3)deserialized.ComplexObjectArray[1]).Y);
         Assert.Equal(3, ((Vector3)deserialized.ComplexObjectArray[1]).Z);
 
-        Assert.Equal("mixed", deserialized.ComplexObjectArray[2]);
+        Assert.Equal(datetime, deserialized.ComplexObjectArray[2]);
+
+        Assert.Equal("mixed", deserialized.ComplexObjectArray[3]);
     }
 
     [Fact]
