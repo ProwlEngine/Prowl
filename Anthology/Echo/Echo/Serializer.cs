@@ -229,28 +229,22 @@ public static class Serializer
 
     private static EchoObject CreateFullTypeWrapper(EchoObject data, Type type)
     {
-        // Only add type wrapper if the data isn't already a compound with type info
-        if (data.TagType == EchoType.Compound && data.Contains("$type"))
-            return data; // Already has type info
+        if (data.TagType == EchoType.Compound)
+        {
+            // Only add type wrapper if the data isn't already a compound with type info
+            if (data.Contains("$type"))
+                return data; // Already has type info
+            else
+            {
+                // Merge with existing compound
+                data["$type"] = new EchoObject(TypeNameRegistry.GetFullTypeName(type));
+                return data; // Already has type info
+            }
+        }
 
         var compound = EchoObject.NewCompound();
         compound["$type"] = new EchoObject(TypeNameRegistry.GetFullTypeName(type));
-
-        // Merge the data directly into the compound if possible (Cloning is slow, Need to find a cleaner way to pull this off)
-        //if (data.TagType == EchoType.Compound)
-        //{
-        //    foreach (var kvp in data.Tags)
-        //    {
-        //        // Don't overwrite reserved keys
-        //        if (!kvp.Key.StartsWith("$"))
-        //            compound[kvp.Key] = kvp.Value.Clone();
-        //    }
-        //}
-        //else
-        {
-            compound["$value"] = data;
-        }
-
+        compound["$value"] = data;
         return compound;
     }
 
@@ -278,12 +272,13 @@ public static class Serializer
             if (value.TryGet("$value", out var dataValue))
                 return new TypeEnvelope { ActualType = type, Data = dataValue };
 
-            // Otherwise, the compound itself is the data (minus type info)
-            var dataCompound = EchoObject.NewCompound();
-            foreach (var kvp in value.Tags.Where(k => !k.Key.StartsWith("$")))
-                dataCompound[kvp.Key] = kvp.Value;
+            //// Otherwise, the compound itself is the data (minus type info)
+            //var dataCompound = EchoObject.NewCompound();
+            //foreach (var kvp in value.Tags.Where(k => !k.Key.StartsWith("$")))
+            //    dataCompound[kvp.Key] = kvp.Value;
+            // We dont actually have to minus the type info, since it is prefixed with $, formatters should ignore it.
 
-            return new TypeEnvelope { ActualType = type, Data = dataCompound };
+            return new TypeEnvelope { ActualType = type, Data = value };
         }
 
         // No type wrapper - use as-is

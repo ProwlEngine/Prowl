@@ -387,9 +387,8 @@ public class General_Tests
 
         // Assert
         Assert.True(result.TryGet("$type", out var typeTag));
-        Assert.True(result.TryGet("$value", out var valueTag));
-        Assert.Equal(100, valueTag.Get("customValue").IntValue);
-        Assert.Equal("Test", valueTag.Get("customText").StringValue);
+        Assert.Equal(100, result.Get("customValue").IntValue);
+        Assert.Equal("Test", result.Get("customText").StringValue);
     }
 
     [Fact]

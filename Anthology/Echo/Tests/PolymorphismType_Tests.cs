@@ -588,8 +588,7 @@ namespace Prowl.Echo.Test
             var serialized = Serializer.Serialize(obj, TypeMode.Aggressive);
 
             // Assert
-            var dataField = serialized.Get("$value");
-            var valueField = dataField.Get("Value");
+            var valueField = serialized.Get("Value");
             Assert.True(HasTypeInfo(valueField), "Aggressive mode should always preserve type");
         }
 
