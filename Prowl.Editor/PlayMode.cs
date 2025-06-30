@@ -55,5 +55,10 @@ public static class PlayMode
 
         SceneManager.RestoreScene();
         SceneManager.ClearStoredScene();
+
+        // Focus SceneViewWindow
+        var sceneView = EditorGuiManager.Windows.FirstOrDefault(w => w is SceneViewWindow);
+        if (sceneView != null && GeneralPreferences.Instance.AutoFocusGameView)
+            EditorGuiManager.FocusWindow(sceneView);
     }
 }
