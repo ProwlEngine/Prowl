@@ -3,7 +3,7 @@
 A lightweight, flexible serialization system (Built for the Prowl Game Engine). The serializer supports complex object graphs, circular references, and custom serialization behaviors.
 
 Echo does what the name suggests, and create an "Echo" an intermediate representation of the target object.
-This allows for fast inspection and modification before converting to Binary or Text.
+This allows for fast inspection and modification before converting to and from Binary or Text.
 
 ## Features
 
@@ -16,6 +16,7 @@ This allows for fast inspection and modification before converting to Binary or 
   - DateTime and Guid
   - Nullable types
   - Circular references
+  - Anonymous types
   - Multi-dimensional and jagged arrays
   - Support for custom serializable objects
   - 230+ tests to ensure the library remains stable and reliable!
@@ -30,7 +31,7 @@ This allows for fast inspection and modification before converting to Binary or 
   - Battle Tested in the Prowl Game Engine
   - Supports both String & Binary formats
   - Mimics Unity's Serializer
-  - GUID-based Resource Dependency Tracking built right in, No overhead when unused.
+  - GUID-based Resource Dependency Tracking built right in, No overhead when unused. (Byproduct of Prowl, Will be removed as its pointless to have here)
 
 
 ## Usage
@@ -153,7 +154,6 @@ However, If you're using Echo and need better performance:
 If size is a concern:
   1. Try to use the FixedEchoStructure attribute wherever possible.
   2. Use binary and set its encoding to Size mode.
-  3. 
 This should help
 
 Heres is a quick Benchmark I did with BenchmarkDotNet, These were done on a simple Vector3 class.
