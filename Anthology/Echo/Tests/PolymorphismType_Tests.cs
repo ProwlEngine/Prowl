@@ -301,6 +301,23 @@ namespace Prowl.Echo.Test
         }
 
         [Fact]
+        public void CollectionPolymorphism_ListOfObjects_WithNull()
+        {
+            // Arrange
+            List<IShape> items = new() { new Rectangle(), null, new Circle() };
+
+            // Act
+            var serialized = Serializer.Serialize(items, TypeMode.Auto);
+            var deserialized = Serializer.Deserialize<List<IShape>>(serialized);
+
+            // Assert
+            Assert.Equal(items.Count, deserialized.Count);
+            Assert.IsType<Rectangle>(deserialized[0]);
+            Assert.Equal(deserialized[1], null);
+            Assert.IsType<Circle>(deserialized[2]);
+        }
+
+        [Fact]
         public void CollectionPolymorphism_DictionaryWithObjectValues_PreservesTypes()
         {
             // Arrange
