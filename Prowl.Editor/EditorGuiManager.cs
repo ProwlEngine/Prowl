@@ -497,6 +497,28 @@ public static class EditorGuiManager
         AssetDatabase.Ping(file);
     }
 
+    [MenuItem("Assets/Create/Prefab")]
+    public static void CreatePrefab()
+    {
+        Directory ??= Project.Active.AssetDirectory;
+
+        FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Prefab.prefab"));
+        AssetDatabase.GenerateUniqueAssetPath(ref file);
+
+        GameObject go = new GameObject("New Prefab");
+        Prefab prefab = new(go);
+        prefab.Name = "New Prefab";
+        Serializer.Serialize(prefab).WriteToString(file);
+
+        if (fromAssetBrowser)
+            AssetsBrowserWindow.StartRename(file.FullName);
+        else
+            AssetsTreeWindow.StartRename(file.FullName);
+
+        AssetDatabase.Update();
+        AssetDatabase.Ping(file);
+    }
+
     [MenuItem("Assets/Refresh Cache")]
     public static void RefreshCache() => AssetDatabase.Update(true, true);
     [MenuItem("Assets/Reimport All")]
