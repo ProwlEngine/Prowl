@@ -90,8 +90,8 @@ public abstract class SingletonEditorWindow : EditorWindow
             else if (gui.IsNodeHovered())
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
-            // remove 'Preferences'
-            string name = settingType.Name.Replace("Preferences", "");
+            // Remove 'Preferences' and prettify
+            string name = RuntimeUtils.Prettify(settingType.Name.Replace("Preferences", ""));
             gui.Draw2D.DrawText(name, gui.CurrentNode.LayoutData.Rect, false);
 
             if (gui.IsNodePressed() || currentType == settingType)
