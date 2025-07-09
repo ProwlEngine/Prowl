@@ -234,17 +234,23 @@ public class EditorWindow
                     else
                         gui.Draw2D.DrawRectFilled(tabRect, EditorStylePrefs.Instance.Borders, (float)EditorStylePrefs.Instance.TabRoundness, CornerRounding.Top);
                 }
+            }
+
+            // Add close button to the tab if hovered or if this is the currently selected tab
+            if (isHovered || window == this)
+            {
+                gui.CurrentNode.Width(textSize.x + 35);
 
                 using (gui.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -23)).Top(3).Enter())
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.InnerRect, new Color(1, 1, 1, 150), 5);
                     if (gui.IsPointerHovering() && gui.IsPointerClick())
                     {
                         if (window.IsDocked)
                             EditorGuiManager.Container.DetachWindow(window);
                         EditorGuiManager.Remove(window);
                     }
-                    gui.Draw2D.DrawText(FontAwesome6.Xmark, gui.CurrentNode.LayoutData.InnerRect, gui.IsPointerHovering() ? EditorStylePrefs.Instance.Hovering : Color.white);
+
+                    gui.Draw2D.DrawText(FontAwesome6.Xmark, 18, gui.CurrentNode.LayoutData.InnerRect, gui.IsPointerHovering() ? Color.white : new Color(0.6f, 0.6f, 0.6f));
                 }
             }
 
