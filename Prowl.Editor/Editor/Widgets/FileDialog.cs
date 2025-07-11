@@ -102,7 +102,7 @@ public class FileDialog : EditorWindow
         {
             using (gui.Node("Sidebar").Layout(LayoutType.Column).ExpandHeight().MaxWidth(125).PaddingRight(10).Padding(10).Enter())
             {
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, (float)EditorStylePrefs.Instance.WindowRoundness);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders * 0.85f, (float)EditorStylePrefs.Instance.WindowRoundness);
 
                 string userProf = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
@@ -112,6 +112,13 @@ public class FileDialog : EditorWindow
                 ShortcutOption("Pictures", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures, Environment.SpecialFolderOption.Create));
                 ShortcutOption("Music", Environment.GetFolderPath(Environment.SpecialFolder.MyMusic, Environment.SpecialFolderOption.Create));
                 ShortcutOption("Videos", Environment.GetFolderPath(Environment.SpecialFolder.MyVideos, Environment.SpecialFolderOption.Create));
+
+                EditorGUI.Separator();
+
+                // Add all available drives
+                foreach (DriveInfo drive in DriveInfo.GetDrives())
+                    if (drive.IsReady)
+                        ShortcutOption(drive.Name.TrimEnd(Path.DirectorySeparatorChar), drive.Name);
             }
 
             using (gui.Node("Window").ExpandHeight().Enter())
