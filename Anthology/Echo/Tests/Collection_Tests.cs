@@ -449,4 +449,22 @@ public class Collection_Tests
         var deserialized = Serializer.Deserialize<System.Collections.ObjectModel.ObservableCollection<int>>(serialized);
         Assert.Equal(original, deserialized);
     }
+
+    [Fact]
+    public void TestSortedSet()
+    {
+        var original = new SortedSet<int> { 3, 1, 2 };
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<SortedSet<int>>(serialized);
+        Assert.Equal(original, deserialized);
+    }
+
+    [Fact]
+    public void TestCollection()
+    {
+        var original = new System.Collections.ObjectModel.Collection<int> { 1, 2, 3 };
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<System.Collections.ObjectModel.Collection<int>>(serialized);
+        Assert.Equal(original, deserialized);
+    }
 }
