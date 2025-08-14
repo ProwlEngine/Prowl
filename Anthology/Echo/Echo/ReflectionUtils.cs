@@ -35,8 +35,18 @@ public static class ReflectionUtils
                 t = asm.GetType(typeName);
                 if (t != null)
                     return t;
-                // Try name-only lookup (case insensitive)
-                t = asm.GetTypes().FirstOrDefault(type => type.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase));
+                // Try name-only lookup (case insensitive) while ignoring load failures
+                Type[] types;
+                try
+                {
+                    types = asm.GetTypes();
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    types = ex.Types.Where(type => type != null).Cast<Type>().ToArray();
+                }
+
+                t = types.FirstOrDefault(type => type.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase));
                 if (t != null)
                     return t;
             }
