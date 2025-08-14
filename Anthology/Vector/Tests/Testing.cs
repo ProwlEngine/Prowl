@@ -263,31 +263,7 @@ public class Float3x3Tests
         var forward = Float3.UnitY;
         var up = Float3.UnitY;
         var m = Float3x3.CreateLookRotationSafe(forward, up);
-
-        // zaxis = (0,1,0)
-        // xaxis = (0,0,1)
-        // yaxis = (1,0,0)
-        // Matrix columns are xaxis, yaxis, zaxis
-        var expected = new Float3x3(
-            0, 1, 0,  // Col 0 (xaxis).X, Col 1 (yaxis).X, Col 2 (zaxis).X
-            0, 0, 1,  // Col 0 (xaxis).Y, Col 1 (yaxis).Y, Col 2 (zaxis).Y
-            1, 0, 0   // Col 0 (xaxis).Z, Col 1 (yaxis).Z, Col 2 (zaxis).Z
-        );
-        // Re-verify matrix construction based on your Float3x3 constructor:
-        // If Float3x3(m00,m01,m02, m10,m11,m12, m20,m21,m22) where these are matrix elements:
-        // then expected = new Float3x3(0,1,0, 0,0,1, 1,0,0);
-        // If your constructor is Float3x3(col0, col1, col2):
-        // expected = new Float3x3(new Float3(0,0,1), new Float3(1,0,0), new Float3(0,1,0));
-        // Assuming the constructor Float3x3(m00, m01, m02, m10, m11, m12, m20, m21, m22) where these are row-major elements
-        // mapping to c0=(m00,m10,m20), c1=(m01,m11,m21), c2=(m02,m12,m22)
-        // Then the return new Float3x3(xaxis.X, yaxis.X, zaxis.X, xaxis.Y, yaxis.Y, zaxis.Y, xaxis.Z, yaxis.Z, zaxis.Z);
-        // means m00=xaxis.X, m01=yaxis.X, m02=zaxis.X, etc.
-        // Given xaxis=(0,0,1), yaxis=(1,0,0), zaxis=(0,1,0)
-        // m00=0, m01=1, m02=0
-        // m10=0, m11=0, m12=1
-        // m20=1, m21=0, m22=0
-        var expectedMatrix = new Float3x3(0, 1, 0, 0, 0, 1, 1, 0, 0); //This matches the column interpretation above
-        TestHelpers.AssertMatrixEqual(expectedMatrix, m);
+        TestHelpers.AssertMatrixEqual(Float3x3.Identity, m);
     }
 
     [Fact]

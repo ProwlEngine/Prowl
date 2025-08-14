@@ -113,14 +113,14 @@ namespace Prowl.Vector
             {
                 float s = Maths.Sqrt(trace + 1.0f) * 2.0f;
                 w = 0.25f * s;
-                x = (m.c2.Y - m.c1.Z) / s;
-                y = (m.c0.Z - m.c2.X) / s;
-                z = (m.c1.X - m.c0.Y) / s;
+                x = (m.c1.Z - m.c2.Y) / s;
+                y = (m.c2.X - m.c0.Z) / s;
+                z = (m.c0.Y - m.c1.X) / s;
             }
             else if ((m.c0.X > m.c1.Y) && (m.c0.X > m.c2.Z))
             {
                 float s = Maths.Sqrt(1.0f + m.c0.X - m.c1.Y - m.c2.Z) * 2.0f;
-                w = (m.c2.Y - m.c1.Z) / s;
+                w = (m.c1.Z - m.c2.Y) / s;
                 x = 0.25f * s;
                 y = (m.c0.Y + m.c1.X) / s;
                 z = (m.c0.Z + m.c2.X) / s;
@@ -128,17 +128,17 @@ namespace Prowl.Vector
             else if (m.c1.Y > m.c2.Z)
             {
                 float s = Maths.Sqrt(1.0f + m.c1.Y - m.c0.X - m.c2.Z) * 2.0f;
-                w = (m.c0.Z - m.c2.X) / s;
+                w = (m.c2.X - m.c0.Z) / s;
                 x = (m.c0.Y + m.c1.X) / s;
                 y = 0.25f * s;
-                z = (m.c1.Z + m.c2.Y) / s;
+                z = (m.c2.Y + m.c1.Z) / s;
             }
             else
             {
                 float s = Maths.Sqrt(1.0f + m.c2.Z - m.c0.X - m.c1.Y) * 2.0f;
-                w = (m.c1.X - m.c0.Y) / s;
-                x = (m.c0.Z + m.c2.X) / s;
-                y = (m.c1.Z + m.c2.Y) / s;
+                w = (m.c0.Y - m.c1.X) / s;
+                x = (m.c2.X + m.c0.Z) / s;
+                y = (m.c2.Y + m.c1.Z) / s;
                 z = 0.25f * s;
             }
             return new Quaternion(x, y, z, w);
