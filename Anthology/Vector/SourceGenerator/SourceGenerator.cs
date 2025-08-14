@@ -237,6 +237,7 @@ class SourceGenerator
     {
         string outputDirectory = args.Length > 0 ? args[0] : "Generated";
         bool generateSwizzles = args.Length > 1 ? bool.Parse(args[1]) : true;
+        bool generateTests = args.Length > 2 ? bool.Parse(args[2]) : true;
 
         // Create output directory if it doesn't exist
         if (!Directory.Exists(outputDirectory))
@@ -295,9 +296,15 @@ class SourceGenerator
             Console.WriteLine($"Generated: {fileName}");
         }
 
-
         // Generate templates
         GenerateTemplates(outputDirectory);
+
+        // Generate tests if enabled
+        if (generateTests)
+        {
+            Console.WriteLine("\nGenerating math function tests...");
+            GenerateMathTests(outputDirectory);
+        }
 
         int totalFiles = s_vectorConfigs.Length + (generateSwizzles ? s_vectorConfigs.Length : 0);
         Console.WriteLine($"\nGeneration complete! {totalFiles} files created.");
@@ -753,6 +760,21 @@ class SourceGenerator
             var notComponents = string.Join(", ", config.Components.Select(c => $"!v.{c}").ToArray());
             source.AppendLine($"\tpublic static {config.StructName} operator !({config.StructName} v) {{ return new {config.StructName}({notComponents}); }}");
             source.AppendLine();
+
+            source.AppendLine($"\t// --- Equality Operators (Return Single Bool) ---");
+
+            // Equality operator
+            source.AppendLine($"\t/// <summary>Returns true if all components of both vectors are equal.</summary>");
+            source.AppendLine($"\t{Inline}");
+            var equalityComponents = string.Join(" && ", config.Components.Select(c => $"lhs.{c} == rhs.{c}").ToArray());
+            source.AppendLine($"\tpublic static bool operator ==({config.StructName} lhs, {config.StructName} rhs) {{ return {equalityComponents}; }}");
+            source.AppendLine();
+
+            // Inequality operator  
+            source.AppendLine($"\t/// <summary>Returns true if any component of the vectors are not equal.</summary>");
+            source.AppendLine($"\t{Inline}");
+            source.AppendLine($"\tpublic static bool operator !=({config.StructName} lhs, {config.StructName} rhs) {{ return !(lhs == rhs); }}");
+            source.AppendLine();
         }
         else
         {
@@ -846,6 +868,94 @@ class SourceGenerator
                 source.AppendLine();
             }
 
+            // --- Bitwise Operators for Integer Types ---
+            if (config.PrimitiveType == "int" || config.PrimitiveType == "byte" || config.PrimitiveType == "ushort" || config.PrimitiveType == "uint" || config.PrimitiveType == "ulong")
+            {
+                // Bitwise AND
+                source.AppendLine($"\t{Inline}");
+                string bitwiseAndComponents;
+                if (config.PrimitiveType == "byte" || config.PrimitiveType == "ushort")
+                {
+                    bitwiseAndComponents = string.Join(", ", config.Components.Select(c => $"({config.PrimitiveType})(a.{c} & b.{c})").ToArray());
+                }
+                else
+                {
+                    bitwiseAndComponents = string.Join(", ", config.Components.Select(c => $"a.{c} & b.{c}").ToArray());
+                }
+                source.AppendLine($"\tpublic static {config.StructName} operator &({config.StructName} a, {config.StructName} b) {{ return new {config.StructName}({bitwiseAndComponents}); }}");
+                source.AppendLine();
+
+                // Bitwise OR
+                source.AppendLine($"\t{Inline}");
+                string bitwiseOrComponents;
+                if (config.PrimitiveType == "byte" || config.PrimitiveType == "ushort")
+                {
+                    bitwiseOrComponents = string.Join(", ", config.Components.Select(c => $"({config.PrimitiveType})(a.{c} | b.{c})").ToArray());
+                }
+                else
+                {
+                    bitwiseOrComponents = string.Join(", ", config.Components.Select(c => $"a.{c} | b.{c}").ToArray());
+                }
+                source.AppendLine($"\tpublic static {config.StructName} operator |({config.StructName} a, {config.StructName} b) {{ return new {config.StructName}({bitwiseOrComponents}); }}");
+                source.AppendLine();
+
+                // Bitwise XOR
+                source.AppendLine($"\t{Inline}");
+                string bitwiseXorComponents;
+                if (config.PrimitiveType == "byte" || config.PrimitiveType == "ushort")
+                {
+                    bitwiseXorComponents = string.Join(", ", config.Components.Select(c => $"({config.PrimitiveType})(a.{c} ^ b.{c})").ToArray());
+                }
+                else
+                {
+                    bitwiseXorComponents = string.Join(", ", config.Components.Select(c => $"a.{c} ^ b.{c}").ToArray());
+                }
+                source.AppendLine($"\tpublic static {config.StructName} operator ^({config.StructName} a, {config.StructName} b) {{ return new {config.StructName}({bitwiseXorComponents}); }}");
+                source.AppendLine();
+
+                // Bitwise NOT (unary)
+                source.AppendLine($"\t{Inline}");
+                string bitwiseNotComponents;
+                if (config.PrimitiveType == "byte" || config.PrimitiveType == "ushort")
+                {
+                    bitwiseNotComponents = string.Join(", ", config.Components.Select(c => $"({config.PrimitiveType})(~v.{c})").ToArray());
+                }
+                else
+                {
+                    bitwiseNotComponents = string.Join(", ", config.Components.Select(c => $"~v.{c}").ToArray());
+                }
+                source.AppendLine($"\tpublic static {config.StructName} operator ~({config.StructName} v) {{ return new {config.StructName}({bitwiseNotComponents}); }}");
+                source.AppendLine();
+
+                // Left Shift (vector by scalar int)
+                source.AppendLine($"\t{Inline}");
+                string leftShiftComponents;
+                if (config.PrimitiveType == "byte" || config.PrimitiveType == "ushort")
+                {
+                    leftShiftComponents = string.Join(", ", config.Components.Select(c => $"({config.PrimitiveType})(v.{c} << amount)").ToArray());
+                }
+                else
+                {
+                    leftShiftComponents = string.Join(", ", config.Components.Select(c => $"v.{c} << amount").ToArray());
+                }
+                source.AppendLine($"\tpublic static {config.StructName} operator <<({config.StructName} v, int amount) {{ return new {config.StructName}({leftShiftComponents}); }}");
+                source.AppendLine();
+
+                // Right Shift (vector by scalar int)
+                source.AppendLine($"\t{Inline}");
+                string rightShiftComponents;
+                if (config.PrimitiveType == "byte" || config.PrimitiveType == "ushort")
+                {
+                    rightShiftComponents = string.Join(", ", config.Components.Select(c => $"({config.PrimitiveType})(v.{c} >> amount)").ToArray());
+                }
+                else
+                {
+                    rightShiftComponents = string.Join(", ", config.Components.Select(c => $"v.{c} >> amount").ToArray());
+                }
+                source.AppendLine($"\tpublic static {config.StructName} operator >>({config.StructName} v, int amount) {{ return new {config.StructName}({rightShiftComponents}); }}");
+                source.AppendLine();
+            }
+
             source.AppendLine($"\t// --- Scalar-Vector Operators ---");
 
             // Generate operators for all types (including same type)
@@ -914,7 +1024,7 @@ class SourceGenerator
             source.AppendLine($"\t// --- Component-wise Comparison Operators (Return Boolean Vector) ---");
             string boolVectorName = $"Bool{config.Dimensions}"; // e.g., Bool2, Bool3, Bool4
 
-            string[] comparisonOperators = ["<", "<=", ">", ">=", "==", "!="];
+            string[] comparisonOperators = new string[] { "<", "<=", ">", ">=", "==", "!=" };
 
             foreach (string op in comparisonOperators)
             {
@@ -1579,6 +1689,74 @@ class SourceGenerator
         return source.ToString();
     }
 
+    private static void GenerateMathTests(string outputDirectory)
+    {
+        var testOutputDirectory = Path.Combine(outputDirectory, "Tests", "Generated");
+        Directory.CreateDirectory(testOutputDirectory);
+
+        var generators = DiscoverMathFunctions();
+        var testMethods = new StringBuilder();
+
+        foreach (var generatorEntry in generators.OrderBy(kvp => kvp.Key))
+        {
+            var functionGenerator = generatorEntry.Value;
+            var functionName = generatorEntry.Key;
+
+            // Generate scalar tests if supported
+            if (functionGenerator.SupportsScalars)
+            {
+                foreach (var type in functionGenerator.SupportedTypes)
+                {
+                    if (functionGenerator.SupportsType(type, 1))
+                    {
+                        foreach (var method in functionGenerator.GenerateTestMethods(type, 1, null))
+                        {
+                            testMethods.AppendLine(method);
+                            testMethods.AppendLine(); // Add a blank line for readability
+                        }
+                    }
+                }
+            }
+
+            // Generate vector tests
+            foreach (var type in functionGenerator.SupportedTypes)
+            {
+                foreach (var dimension in functionGenerator.SupportedDimensions)
+                {
+                    if (functionGenerator.SupportsType(type, dimension))
+                    {
+                        var components = GetComponents(dimension);
+                        foreach (var method in functionGenerator.GenerateTestMethods(type, dimension, components))
+                        {
+                            testMethods.AppendLine(method);
+                            testMethods.AppendLine(); // Add a blank line for readability
+                        }
+                    }
+                }
+            }
+        }
+
+        var testSource = new StringBuilder();
+        AddHeader(testSource);
+
+        testSource.AppendLine("using Xunit;");
+        testSource.AppendLine("using Prowl.Vector;");
+        testSource.AppendLine("using System;");
+        testSource.AppendLine();
+        testSource.AppendLine("namespace Prowl.Vector.Tests");
+        testSource.AppendLine("{");
+        testSource.AppendLine("    public class GeneratedMathTests");
+        testSource.AppendLine("    {");
+        testSource.Append(testMethods.ToString()); // Append all generated test methods
+        testSource.AppendLine("    }");
+        testSource.AppendLine("}");
+
+        var fileName = "GeneratedMathTests.cs";
+        var filePath = Path.Combine(testOutputDirectory, fileName);
+        File.WriteAllText(filePath, testSource.ToString(), Encoding.UTF8);
+        Console.WriteLine($"Generated: {fileName}");
+    }
+
     #endregion
 
     #region Matrix Generation Methods
@@ -2030,17 +2208,20 @@ class SourceGenerator
 
         sb.AppendLine($"\t// --- Matrix Methods ---");
 
-        // Transpose property
-        sb.AppendLine($"\t/// <summary>Gets the transpose of this matrix.</summary>");
-        sb.AppendLine($"\tpublic {GetTransposeType(config)} Transpose");
-        sb.AppendLine($"\t{{");
-        sb.AppendLine($"\t\t{Inline}");
-        sb.AppendLine($"\t\tget => Maths.Transpose(this);");
-        sb.AppendLine($"\t}}");
-        sb.AppendLine();
+        if (componentType != "bool")
+        {
+            // Transpose property
+            sb.AppendLine($"\t/// <summary>Gets the transpose of this matrix.</summary>");
+            sb.AppendLine($"\tpublic {GetTransposeType(config)} Transpose");
+            sb.AppendLine($"\t{{");
+            sb.AppendLine($"\t\t{Inline}");
+            sb.AppendLine($"\t\tget => Maths.Transpose(this);");
+            sb.AppendLine($"\t}}");
+            sb.AppendLine();
+        }
 
         // Determinant (for square matrices)
-        if (rows == cols && componentType != "bool")
+        if (rows == cols && componentType != "bool" && componentType != "int" && componentType != "uint" && componentType != "byte" && componentType != "ushort" && componentType != "ulong")
         {
             sb.AppendLine($"\t/// <summary>Gets the determinant of this matrix.</summary>");
             sb.AppendLine($"\tpublic {componentType} Determinant");

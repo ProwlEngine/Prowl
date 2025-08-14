@@ -207,4 +207,313 @@ public class MatrixInverseGenerator : MathFunctionGenerator
     {
         return primitiveType == "float" ? "0f" : "0.0";
     }
+
+    #region Tests
+
+    private static readonly HashSet<string> _generatedTestMethods = new HashSet<string>();
+
+    public override List<string> GenerateTestMethods(string type, int dimension, string[] components)
+    {
+        var tests = new List<string>();
+        var typeName = GetTypeName(type);
+        var assertEqualMethod = GetXUnitAssertEqual(type);
+
+        // Only generate tests once per type (not per dimension)
+        var typeKey = $"Inverse_{type}";
+        if (!_generatedTestMethods.Add(typeKey))
+        {
+            return tests; // Already generated for this type
+        }
+
+        // Generate inverse tests for all supported matrix sizes
+        foreach (int size in SupportedDimensions)
+        {
+            GenerateInverseTests(tests, type, typeName, size, assertEqualMethod);
+        }
+
+        return tests;
+    }
+
+    private void GenerateInverseTests(List<string> tests, string type, string typeName, int size, string assertEqualMethod)
+    {
+        var matrixType = $"{typeName}{size}x{size}";
+        var vectorType = $"{typeName}{size}";
+        var suffix = type == "float" ? "f" : "";
+        var components = GetComponents(size);
+
+        // Test identity matrix inverse
+        GenerateIdentityInverseTest(tests, type, typeName, size, matrixType, vectorType, components, assertEqualMethod, suffix);
+
+        // Test simple diagonal matrix inverse
+        GenerateDiagonalInverseTest(tests, type, typeName, size, matrixType, vectorType, components, assertEqualMethod, suffix);
+
+        // Test specific known matrix inverse
+        GenerateKnownMatrixInverseTest(tests, type, typeName, size, matrixType, vectorType, components, assertEqualMethod, suffix);
+
+        // Test inverse * original = identity
+        GenerateInverseIdentityTest(tests, type, typeName, size, matrixType, vectorType, components, assertEqualMethod, suffix);
+
+        // Test singular matrix throws exception
+        GenerateSingularMatrixTest(tests, type, typeName, size, matrixType, vectorType, components, suffix);
+    }
+
+    private void GenerateIdentityInverseTest(List<string> tests, string type, string typeName, int size,
+        string matrixType, string vectorType, string[] components, string assertEqualMethod, string suffix)
+    {
+        var identityColumns = new List<string>();
+        for (int col = 0; col < size; col++)
+        {
+            var columnParams = new List<string>();
+            for (int row = 0; row < size; row++)
+            {
+                columnParams.Add(col == row ? $"1.0{suffix}" : $"0.0{suffix}");
+            }
+            identityColumns.Add($"new {vectorType}({string.Join(", ", columnParams)})");
+        }
+
+        tests.Add($@"        [Fact]
+        public void Inverse_{typeName}{size}x{size}_Identity_Test()
+        {{
+            // Test inverse of identity matrix - should return identity
+            {matrixType} identity = new {matrixType}({string.Join(", ", identityColumns)});
+            
+            {matrixType} inverse = Maths.Inverse(identity);
+            
+            // Inverse of identity should be identity
+            {string.Join("\n            ", identityColumns.SelectMany((col, colIndex) =>
+                    components.Select((c, rowIndex) =>
+                    {
+                        var expectedValue = colIndex == rowIndex ? $"1.0{suffix}" : $"0.0{suffix}";
+                        return assertEqualMethod.Replace("{expected}", expectedValue).Replace("{actual}", $"inverse.c{colIndex}.{c}");
+                    })
+                ))}
+        }}");
+    }
+
+    private void GenerateDiagonalInverseTest(List<string> tests, string type, string typeName, int size,
+        string matrixType, string vectorType, string[] components, string assertEqualMethod, string suffix)
+    {
+        var diagonalValues = new List<string>();
+        var expectedInverseValues = new List<string>();
+        for (int i = 0; i < size; i++)
+        {
+            var value = $"{i + 2}.0{suffix}"; // Use 2, 3, 4, 5 to avoid division issues
+            diagonalValues.Add(value);
+            expectedInverseValues.Add($"1.0{suffix} / {value}"); // 1/value
+        }
+
+        var diagonalColumns = new List<string>();
+        for (int col = 0; col < size; col++)
+        {
+            var columnParams = new List<string>();
+            for (int row = 0; row < size; row++)
+            {
+                columnParams.Add(col == row ? diagonalValues[col] : $"0.0{suffix}");
+            }
+            diagonalColumns.Add($"new {vectorType}({string.Join(", ", columnParams)})");
+        }
+
+        tests.Add($@"        [Fact]
+        public void Inverse_{typeName}{size}x{size}_Diagonal_Test()
+        {{
+            // Test inverse of diagonal matrix
+            {matrixType} diagonal = new {matrixType}({string.Join(", ", diagonalColumns)});
+            
+            {matrixType} inverse = Maths.Inverse(diagonal);
+            
+            // Inverse of diagonal matrix should have reciprocal diagonal elements
+            {string.Join("\n            ", diagonalColumns.SelectMany((col, colIndex) =>
+                    components.Select((c, rowIndex) =>
+                    {
+                        var expectedValue = colIndex == rowIndex ? expectedInverseValues[colIndex] : $"0.0{suffix}";
+                        return assertEqualMethod.Replace("{expected}", expectedValue).Replace("{actual}", $"inverse.c{colIndex}.{c}");
+                    })
+                ))}
+        }}");
+    }
+
+    private void GenerateKnownMatrixInverseTest(List<string> tests, string type, string typeName, int size,
+        string matrixType, string vectorType, string[] components, string assertEqualMethod, string suffix)
+    {
+        switch (size)
+        {
+            case 2:
+                Generate2x2KnownInverseTest(tests, type, typeName, matrixType, vectorType, components, assertEqualMethod, suffix);
+                break;
+            case 3:
+                Generate3x3KnownInverseTest(tests, type, typeName, matrixType, vectorType, components, assertEqualMethod, suffix);
+                break;
+            case 4:
+                Generate4x4KnownInverseTest(tests, type, typeName, matrixType, vectorType, components, assertEqualMethod, suffix);
+                break;
+        }
+    }
+
+    private void Generate2x2KnownInverseTest(List<string> tests, string type, string typeName,
+        string matrixType, string vectorType, string[] components, string assertEqualMethod, string suffix)
+    {
+        tests.Add($@"        [Fact]
+        public void Inverse_{typeName}2x2_Known_Test()
+        {{
+            // Test known 2x2 matrix: [[1, 2], [3, 4]]
+            // Determinant = 1*4 - 2*3 = -2
+            // Inverse = (1/det) * [[4, -2], [-3, 1]] = [[-2, 1], [1.5, -0.5]]
+            {matrixType} matrix = new {matrixType}(
+                new {vectorType}(1.0{suffix}, 3.0{suffix}),
+                new {vectorType}(2.0{suffix}, 4.0{suffix})
+            );
+            
+            {matrixType} inverse = Maths.Inverse(matrix);
+            
+            // Check expected inverse values
+            {assertEqualMethod.Replace("{expected}", $"-2.0{suffix}").Replace("{actual}", "inverse.c0.X")}
+            {assertEqualMethod.Replace("{expected}", $"1.5{suffix}").Replace("{actual}", "inverse.c0.Y")}
+            {assertEqualMethod.Replace("{expected}", $"1.0{suffix}").Replace("{actual}", "inverse.c1.X")}
+            {assertEqualMethod.Replace("{expected}", $"-0.5{suffix}").Replace("{actual}", "inverse.c1.Y")}
+        }}");
+    }
+
+    private void Generate3x3KnownInverseTest(List<string> tests, string type, string typeName,
+        string matrixType, string vectorType, string[] components, string assertEqualMethod, string suffix)
+    {
+        tests.Add($@"        [Fact]
+        public void Inverse_{typeName}3x3_Known_Test()
+        {{
+            // Test known 3x3 matrix with simple values
+            {matrixType} matrix = new {matrixType}(
+                new {vectorType}(2.0{suffix}, 0.0{suffix}, 0.0{suffix}),
+                new {vectorType}(0.0{suffix}, 3.0{suffix}, 0.0{suffix}),
+                new {vectorType}(0.0{suffix}, 0.0{suffix}, 4.0{suffix})
+            );
+            
+            {matrixType} inverse = Maths.Inverse(matrix);
+            
+            // This is a diagonal matrix, so inverse should be reciprocals
+            {assertEqualMethod.Replace("{expected}", $"0.5{suffix}").Replace("{actual}", "inverse.c0.X")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c0.Y")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c0.Z")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c1.X")}
+            {assertEqualMethod.Replace("{expected}", $"1.0{suffix} / 3.0{suffix}").Replace("{actual}", "inverse.c1.Y")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c1.Z")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c2.X")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c2.Y")}
+            {assertEqualMethod.Replace("{expected}", $"0.25{suffix}").Replace("{actual}", "inverse.c2.Z")}
+        }}");
+    }
+
+    private void Generate4x4KnownInverseTest(List<string> tests, string type, string typeName,
+        string matrixType, string vectorType, string[] components, string assertEqualMethod, string suffix)
+    {
+        tests.Add($@"        [Fact]
+        public void Inverse_{typeName}4x4_Known_Test()
+        {{
+            // Test known 4x4 diagonal matrix
+            {matrixType} matrix = new {matrixType}(
+                new {vectorType}(2.0{suffix}, 0.0{suffix}, 0.0{suffix}, 0.0{suffix}),
+                new {vectorType}(0.0{suffix}, 4.0{suffix}, 0.0{suffix}, 0.0{suffix}),
+                new {vectorType}(0.0{suffix}, 0.0{suffix}, 8.0{suffix}, 0.0{suffix}),
+                new {vectorType}(0.0{suffix}, 0.0{suffix}, 0.0{suffix}, 0.5{suffix})
+            );
+            
+            {matrixType} inverse = Maths.Inverse(matrix);
+            
+            // Diagonal matrix inverse should be reciprocals
+            {assertEqualMethod.Replace("{expected}", $"0.5{suffix}").Replace("{actual}", "inverse.c0.X")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c0.Y")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c0.Z")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c0.W")}
+            
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c1.X")}
+            {assertEqualMethod.Replace("{expected}", $"0.25{suffix}").Replace("{actual}", "inverse.c1.Y")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c1.Z")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c1.W")}
+            
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c2.X")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c2.Y")}
+            {assertEqualMethod.Replace("{expected}", $"0.125{suffix}").Replace("{actual}", "inverse.c2.Z")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c2.W")}
+            
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c3.X")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c3.Y")}
+            {assertEqualMethod.Replace("{expected}", $"0.0{suffix}").Replace("{actual}", "inverse.c3.Z")}
+            {assertEqualMethod.Replace("{expected}", $"2.0{suffix}").Replace("{actual}", "inverse.c3.W")}
+        }}");
+    }
+
+    private void GenerateInverseIdentityTest(List<string> tests, string type, string typeName, int size,
+        string matrixType, string vectorType, string[] components, string assertEqualMethod, string suffix)
+    {
+        // Create a test matrix with known values
+        var testMatrixColumns = new List<string>();
+        for (int col = 0; col < size; col++)
+        {
+            var columnParams = new List<string>();
+            for (int row = 0; row < size; row++)
+            {
+                // Create a matrix that's likely to be invertible
+                var value = col == row ? $"{col + 2}.0{suffix}" : $"{(col + row) % 3 * 0.1}{suffix}";
+                columnParams.Add(value);
+            }
+            testMatrixColumns.Add($"new {vectorType}({string.Join(", ", columnParams)})");
+        }
+
+        tests.Add($@"        [Fact]
+        public void Inverse_{typeName}{size}x{size}_InverseTimesOriginal_Test()
+        {{
+            // Test that Inverse(M) * M = Identity
+            {matrixType} original = new {matrixType}({string.Join(", ", testMatrixColumns)});
+            
+            {matrixType} inverse = Maths.Inverse(original);
+            {matrixType} product = Maths.Mul(inverse, original);
+            
+            // Product should be approximately identity matrix
+            {string.Join("\n            ", Enumerable.Range(0, size).SelectMany(col =>
+                    components.Select((c, row) =>
+                    {
+                        var expectedValue = col == row ? $"1.0{suffix}" : $"0.0{suffix}";
+                        return assertEqualMethod.Replace("{expected}", expectedValue).Replace("{actual}", $"product.c{col}.{c}");
+                    })
+                ))}
+        }}");
+    }
+
+    private void GenerateSingularMatrixTest(List<string> tests, string type, string typeName, int size,
+        string matrixType, string vectorType, string[] components, string suffix)
+    {
+        // Create a singular matrix (determinant = 0)
+        var singularColumns = new List<string>();
+
+        switch (size)
+        {
+            case 2:
+                // Create a 2x2 matrix where second row is multiple of first
+                singularColumns.Add($"new {vectorType}(1.0{suffix}, 2.0{suffix})");
+                singularColumns.Add($"new {vectorType}(2.0{suffix}, 4.0{suffix})"); // Second column is 2x first
+                break;
+            case 3:
+                // Create a 3x3 matrix where third row is sum of first two
+                singularColumns.Add($"new {vectorType}(1.0{suffix}, 2.0{suffix}, 3.0{suffix})");
+                singularColumns.Add($"new {vectorType}(4.0{suffix}, 5.0{suffix}, 6.0{suffix})");
+                singularColumns.Add($"new {vectorType}(5.0{suffix}, 7.0{suffix}, 9.0{suffix})"); // Sum of first two columns
+                break;
+            case 4:
+                // Create a 4x4 matrix with one row of zeros
+                singularColumns.Add($"new {vectorType}(1.0{suffix}, 0.0{suffix}, 0.0{suffix}, 0.0{suffix})");
+                singularColumns.Add($"new {vectorType}(0.0{suffix}, 1.0{suffix}, 0.0{suffix}, 0.0{suffix})");
+                singularColumns.Add($"new {vectorType}(0.0{suffix}, 0.0{suffix}, 1.0{suffix}, 0.0{suffix})");
+                singularColumns.Add($"new {vectorType}(0.0{suffix}, 0.0{suffix}, 0.0{suffix}, 0.0{suffix})"); // Zero column
+                break;
+        }
+
+        tests.Add($@"        [Fact]
+        public void Inverse_{typeName}{size}x{size}_SingularMatrix_ThrowsException()
+        {{
+            // Test that singular (non-invertible) matrix throws ArgumentException
+            {matrixType} singular = new {matrixType}({string.Join(", ", singularColumns)});
+            
+            Assert.Throws<ArgumentException>(() => Maths.Inverse(singular));
+        }}");
+    }
+
+    #endregion
 }
