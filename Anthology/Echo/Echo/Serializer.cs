@@ -68,6 +68,7 @@ public static class Serializer
             new QueueFormat(),
             new StackFormat(),
             new LinkedListFormat(),
+            new CollectionFormat(),
             new DictionaryFormat(),
             new FixedStructureFormat(),
             new AnyObjectFormat() // Fallback format - must be last
