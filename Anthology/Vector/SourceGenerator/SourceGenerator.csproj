@@ -17,6 +17,9 @@
     <None Update="Templates\Prowl.Vector.Geometry\Intersection.template">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="Templates\Prowl.Vector.Geometry\Rect.template">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="Templates\Prowl.Vector.Geometry\Spline.template">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
