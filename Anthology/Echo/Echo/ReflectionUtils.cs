@@ -60,7 +60,8 @@ public static class ReflectionUtils
         return SerializableFieldsCache.GetOrAdd(targetType.TypeHandle, _ => {
             const BindingFlags flags = BindingFlags.Public |
                                      BindingFlags.NonPublic |
-                                     BindingFlags.Instance;
+                                     BindingFlags.Instance |
+                                     BindingFlags.DeclaredOnly;
 
             // Start with the current type
             List<FieldInfo> fields = new List<FieldInfo>();
