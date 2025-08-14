@@ -440,4 +440,13 @@ public class Collection_Tests
 
         Assert.Equal(original, deserialized);
     }
+
+    [Fact]
+    public void TestObservableCollection()
+    {
+        var original = new System.Collections.ObjectModel.ObservableCollection<int> { 1, 2, 3 };
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<System.Collections.ObjectModel.ObservableCollection<int>>(serialized);
+        Assert.Equal(original, deserialized);
+    }
 }
