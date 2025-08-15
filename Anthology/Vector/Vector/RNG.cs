@@ -17,10 +17,12 @@ namespace Prowl.Vector
 
         private ulong _s0, _s1, _s2, _s3;
 
+        #endregion
+
         /// <summary>Shared static instance for convenient access.</summary>
         public static RNG Shared { get; } = new RNG();
+        private float _nextGaussian = float.NaN;
 
-        #endregion
 
         #region --- Constructors ---
 
@@ -495,7 +497,7 @@ namespace Prowl.Vector
         /// </summary>
         public void Shuffle<T>(T[] array)
         {
-            if (array == null) return;
+            if (array == null) throw new ArgumentNullException(nameof(array));
 
             for (int i = array.Length - 1; i > 0; i--)
             {
@@ -530,24 +532,22 @@ namespace Prowl.Vector
         public float NextGaussian(float mean = 0.0f, float standardDeviation = 1.0f)
         {
             // Box-Muller transform
-            (float, float) boxMuller = (float.NaN, float.NaN);
-
-            if (!float.IsNaN(boxMuller.Item2))
+            if (!float.IsNaN(_nextGaussian))
             {
-                float result = boxMuller.Item2;
-                boxMuller.Item2 = float.NaN;
-                return mean + result * standardDeviation;
+                float value = _nextGaussian;
+                _nextGaussian = float.NaN;
+                return mean + value * standardDeviation;
             }
 
             float u1 = NextFloat();
             float u2 = NextFloat();
 
-            float mag = standardDeviation * Maths.Sqrt(-2.0f * Maths.Log(u1));
+            float mag = Maths.Sqrt(-2.0f * Maths.Log(u1));
             float z0 = mag * Maths.Cos(2.0f * (float)Maths.PI * u2);
             float z1 = mag * Maths.Sin(2.0f * (float)Maths.PI * u2);
 
-            boxMuller.Item2 = z1;
-            return mean + z0;
+            _nextGaussian = z1;
+            return mean + z0 * standardDeviation;
         }
 
         /// <summary>
