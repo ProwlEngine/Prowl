@@ -1,6 +1,69 @@
 using System.Drawing;
 using Prowl.PaperUI;
 
+/*
+SHADCN discord theme colors
+discovered through https://ui.jln.dev/
+
+@layer base {
+    :root {
+      --background: 0 0% 97.69%;
+      --foreground: 334 55% 1%;
+      --muted: 0 0% 93.85%;
+      --muted-foreground: 0 0% 10.2%;
+      --popover: 0 0% 100%;
+      --popover-foreground: 0 0% 10.2%;
+      --card: 0 0% 100%;
+      --card-foreground: 0 0% 13.73%;
+      --border: 0 0% 80.78%;
+      --input: 0 0% 80.78%;
+      --primary: 211.29 100% 50%;
+      --primary-foreground: 0 0% 100%;
+      --secondary: 0 0% 85.49%;
+      --secondary-foreground: 334 0% 10%;
+      --accent: 211.29 100% 50%;
+      --accent-foreground: 334 0% 100%;
+      --destructive: 3.19 100% 59.41%;
+      --destructive-foreground: 18 0% 100%;
+      --ring: 0 0% 60%;
+      --chart-1: 211.29 100% 50%;
+      --chart-2: 0 0% 85.49%;
+      --chart-3: 211.29 100% 50%;
+      --chart-4: 0 0% 88.49%;
+      --chart-5: 211.29 103% 50%;
+      --radius: 0.5rem;
+    }
+  
+    .dark {
+      --background: 217.5 9.09% 17.25%;
+      --foreground: 334 34% 98%;
+      --muted: 210 9.09% 12.94%;
+      --muted-foreground: 334 0% 60.77%;
+      --popover: 210 9.09% 12.94%;
+      --popover-foreground: 334 34% 98%;
+      --card: 210 9.09% 12.94%;
+      --card-foreground: 334 34% 98%;
+      --border: 334 0% 18.46%;
+      --input: 214.29 5.04% 27.25%;
+      --primary: 226.73 58.43% 65.1%;
+      --primary-foreground: 0 0% 100%;
+      --secondary: 214.29 5.04% 27.25%;
+      --secondary-foreground: 334 0% 100%;
+      --accent: 217.5 9.09% 17.25%;
+      --accent-foreground: 226.73 58.43% 65.1%;
+      --destructive: 358.16 68.78% 53.53%;
+      --destructive-foreground: 0 0% 100%;
+      --ring: 217.5 9.09% 17.25%;
+      --chart-1: 226.73 58.43% 65.1%;
+      --chart-2: 214.29 5.04% 27.25%;
+      --chart-3: 217.5 9.09% 17.25%;
+      --chart-4: 214.29 5.04% 30.25%;
+      --chart-5: 226.73 61.43% 65.1%;
+    }
+  }
+
+*/
+
 namespace Shared
 {
     public static class Themes
@@ -63,8 +126,9 @@ namespace Shared
 
             // Redefine styles with new theme colors
             DefineStyles();
+            Components.DefineStyles();
         }
-        
+
         public static void DefineStyles()
         {
             // Card styles with hover effects
