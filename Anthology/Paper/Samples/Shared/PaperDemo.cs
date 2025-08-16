@@ -2,8 +2,6 @@
 using Prowl.PaperUI.Extras;
 using Prowl.Vector;
 
-using Shared.Components;
-
 using System.Drawing;
 using System.Reflection;
 
@@ -183,31 +181,40 @@ namespace Shared
                     .Margin(0, 15, 15, 0);
 
                 // Theme Switch - using icon-button style
-                P.Box("LightIcon")
-                    .Style("icon-button")
+                // Paper.Box("LightIcon")
+                //     .Style("icon-button")
+                //     .Margin(0, 10, 15, 0)
+                //     .Text(Text.Center(Icons.Lightbulb, Fonts.fontMedium, Themes.lightTextColor))
+                //     .OnClick((rect) => Themes.ToggleTheme());
+                Button.IconPrimary("LightIcon", Icons.Lightbulb)
                     .Margin(0, 10, 15, 0)
-                    .Text(Text.Center(Icons.Lightbulb, Fonts.fontMedium, Themes.lightTextColor))
                     .OnClick((rect) => Themes.ToggleTheme());
 
-                Button.Primary("test-button", "Test Button")
-                    .Margin(0, 10, 15, 0)
-                    .OnClick((rect) => Console.WriteLine("Test Button clicked"));
-
                 // Notification icon
-                P.Box("NotificationIcon")
-                    .Style("icon-button")
+                // Paper.Box("NotificationIcon")
+                //     .Style("icon-button")
+                //     .Margin(0, 10, 15, 0)
+                //     .Text(Text.Center(Icons.CircleExclamation, Fonts.fontMedium, Themes.lightTextColor))
+                //     .OnClick((rect) => Console.WriteLine("Notifications clicked"));
+                Button.IconPrimary("NotificationIcon", Icons.CircleExclamation)
                     .Margin(0, 10, 15, 0)
-                    .Text(Text.Center(Icons.CircleExclamation, Fonts.fontMedium, Themes.lightTextColor))
                     .OnClick((rect) => Console.WriteLine("Notifications clicked"));
 
                 // User Profile
-                P.Box("UserProfile")
-                    .Width(40)
-                    .Height(40)
-                    .Rounded(40)
-                    .BackgroundColor(Themes.secondaryColor)
+                // Paper.Box("UserProfile")
+                //     .Width(40)
+                //     .Height(40)
+                //     .Rounded(40)
+                //     .BackgroundColor(Themes.secondaryColor)
+                //     .Margin(0, 15, 15, 0)
+                //     .Text(Text.Center("M", Fonts.fontMedium, Color.White))
+                //     .OnClick((rect) => Console.WriteLine("Profile clicked"));
+                Button.IconPrimary("UserProfile", "M")
+                    // .Width(40)
+                    // .Height(40)
+                    // .Rounded(40)
+                    // .BackgroundColor(Themes.secondaryColor)
                     .Margin(0, 15, 15, 0)
-                    .Text(Text.Center("M", Fonts.fontMedium, Color.White))
                     .OnClick((rect) => Console.WriteLine("Profile clicked"));
             }
         }

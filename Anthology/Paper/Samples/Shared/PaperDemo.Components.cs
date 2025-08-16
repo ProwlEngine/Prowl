@@ -23,7 +23,7 @@ namespace Shared
         public static void DefineStyles()
         {
             // Primary button variant
-            Paper.CreateStyleFamily("shadcs-button-primary")
+            PaperDemo.P.CreateStyleFamily("shadcs-button-primary")
                 .Base(new StyleTemplate()
                     .Height(50)
                     .Rounded(8)
@@ -39,7 +39,7 @@ namespace Shared
                 .Register();
 
             // Icon button styles
-            Paper.CreateStyleFamily("shadcs-icon-button-primary")
+            PaperDemo.P.CreateStyleFamily("shadcs-icon-button-primary")
                 .Base(new StyleTemplate()
                     .Width(40)
                     .Height(40)
@@ -62,7 +62,7 @@ namespace Shared
 
         public static ElementBuilder IconPrimary(string id, string text = "")
         {
-            return Paper.Box("shadcs-button-" + id)
+            return PaperDemo.P.Box("shadcs-button-" + id)
                 .Text(Text.Center(text, Fonts.fontMedium, Themes.lightTextColor))
                 .Style("shadcs-icon-button-primary");
         }
@@ -73,7 +73,7 @@ namespace Shared
         public static void DefineStyles()
         {
             // Text field styles
-            Paper.CreateStyleFamily("text-field")
+            PaperDemo.P.CreateStyleFamily("text-field")
                 .Base(new StyleTemplate()
                     .Width(300)
                     .Height(40)
