@@ -161,7 +161,7 @@ namespace Prowl.Vector
 
         /// <summary>Component-wise equality comparison with a tolerance.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ApproximatelyEquals(Quaternion other, float tolerance = float.Epsilon)
+        public bool ApproximatelyEquals(Quaternion other, float tolerance = 1e-6f)
         {
             return Maths.Abs(X - other.X) <= tolerance &&
                    Maths.Abs(Y - other.Y) <= tolerance &&
