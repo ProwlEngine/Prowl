@@ -507,21 +507,25 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Checks if a mouse button is currently down.
         /// </summary>
+        /// <param name="btn">The mouse button to query.</param>
         public bool IsPointerDown(PaperMouseBtn btn) => _pointerCurState[(int)btn];
 
         /// <summary>
         /// Checks if a mouse button is currently up.
         /// </summary>
+        /// <param name="btn">The mouse button to query.</param>
         public bool IsPointerUp(PaperMouseBtn btn) => !_pointerCurState[(int)btn];
 
         /// <summary>
         /// Checks if a mouse button was just pressed this frame.
         /// </summary>
+        /// <param name="btn">The mouse button to query.</param>
         public bool IsPointerPressed(PaperMouseBtn btn) => !_pointerPrevState[(int)btn] && _pointerCurState[(int)btn];
 
         /// <summary>
         /// Checks if a mouse button was just released this frame.
         /// </summary>
+        /// <param name="btn">The mouse button to query.</param>
         public bool IsPointerReleased(PaperMouseBtn btn) => _pointerPrevState[(int)btn] && !_pointerCurState[(int)btn];
 
         /// <summary>
@@ -535,6 +539,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Checks if a mouse button was double-clicked.
         /// </summary>
+        /// <param name="btn">The mouse button to query.</param>
         public bool IsPointerDoubleClick(PaperMouseBtn btn) =>
             IsPointerPressed(btn) && _time < _pointerLastClickTime[(int)btn] &&
             (PointerPos - _pointerLastClickPos[(int)btn]).sqrMagnitude < 2; // 5^2 = 25
@@ -542,11 +547,13 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Gets the position where a mouse button was clicked.
         /// </summary>
+        /// <param name="btn">The mouse button to query.</param>
         public Vector2 GetPointerClickPos(PaperMouseBtn btn) => _pointerClickPos[(int)btn];
 
         /// <summary>
         /// Checks if the pointer is over a specified rectangle.
         /// </summary>
+        /// <param name="btn">The mouse button to query.</param>
         public bool IsPointerOverRect(double x, double y, double width, double height)
         {
             return _pointerPos.x >= x && _pointerPos.x <= x + width &&

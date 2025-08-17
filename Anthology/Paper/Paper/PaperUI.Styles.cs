@@ -70,6 +70,10 @@ namespace Prowl.PaperUI
         SkewY,
         Transform,
         #endregion
+
+        #region Text Properties
+        Text,
+        #endregion
     }
 
     /// <summary>
@@ -587,6 +591,14 @@ namespace Prowl.PaperUI
             {
                 return Transform2D.Lerp(transformStart, transformEnd, t);
             }
+            else if (start is string startString && end is string endString)
+            {
+                return t > 0.5 ? endString : startString;
+            }
+            else if (start is TextStyle textStart && end is TextStyle textEnd)
+            {
+                return TextStyle.Lerp(textStart, textEnd, t);
+            }
 
             // Default to just returning the end value
             return end;
@@ -663,6 +675,9 @@ namespace Prowl.PaperUI
                 GuiProp.OriginX => (double)0.5, // Default is center
                 GuiProp.OriginY => (double)0.5, // Default is center
                 GuiProp.Transform => Transform2D.Identity,
+
+                // Text Properties
+                GuiProp.Text => TextStyle.Empty,
 
                 _ => throw new ArgumentOutOfRangeException(nameof(property), property, null)
             };

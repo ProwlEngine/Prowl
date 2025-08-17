@@ -227,27 +227,32 @@ namespace Prowl.PaperUI
                 _canvas.IntersectScissor(rect.x, rect.y, rect.width, rect.height);
             }
 
-            // Process render commands
+            // Draw text style
+            var text = (TextStyle)element._elementStyle.GetValue(GuiProp.Text);
+            if (!string.IsNullOrEmpty(text.Value) && text.Font != null)
+            {
+                _canvas.SaveState();
+                text.Draw(_canvas, rect);
+                _canvas.RestoreState();
+            }
+
+
+            // Process custom render actions
             if (element._renderCommands != null)
             {
                 foreach (var cmd in element._renderCommands)
                 {
                     _canvas.SaveState();
-                    if (cmd.Type == ElementRenderCommand.ElementType.Text)
-                        cmd.Text?.Draw(_canvas, rect);
-                    else if (cmd.Type == ElementRenderCommand.ElementType.RenderAction)
+                    _elementStack.Push(element);
+                    try
                     {
-                        _elementStack.Push(element);
-                        try
-                        {
-                            cmd.RenderAction?.Invoke(_canvas, rect);
-                        }
-                        finally
-                        {
-                            _elementStack.Pop();
-                        }
+                        cmd.RenderAction?.Invoke(_canvas, rect);
                     }
-                    _canvas.RestoreState();
+                    finally
+                    {
+                        _elementStack.Pop();
+                        _canvas.RestoreState();
+                    }
                 }
             }
 
@@ -437,7 +442,6 @@ namespace Prowl.PaperUI
 
             element._renderCommands ??= new();
             element._renderCommands.Add(new ElementRenderCommand {
-                Type = ElementRenderCommand.ElementType.RenderAction,
                 Element = element,
                 RenderAction = renderAction,
             });

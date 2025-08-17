@@ -208,6 +208,13 @@ namespace Prowl.PaperUI
 
         #endregion
 
+        #region Text Properties
+
+        /// <summary>Sets styled text for the element.</summary>
+        public T Text(TextStyle text) => SetStyleProperty(GuiProp.Text, text);
+
+        #endregion
+
         #region Transform Properties
 
         /// <summary>Sets horizontal translation.</summary>
@@ -808,19 +815,6 @@ namespace Prowl.PaperUI
         public ElementBuilder Visible(bool visible)
         {
             _element.Visible = visible;
-            return this;
-        }
-
-        /// <summary>Adds text content to the element.</summary>
-        /// <param name="text">The text to display</param>
-        public ElementBuilder Text(Text text)
-        {
-            _element._renderCommands ??= new();
-            _element._renderCommands.Add(new ElementRenderCommand {
-                Type = ElementRenderCommand.ElementType.Text,
-                Element = _element,
-                Text = text,
-            });
             return this;
         }
 

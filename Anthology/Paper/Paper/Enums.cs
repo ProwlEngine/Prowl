@@ -159,9 +159,6 @@
     //    Nearest = 1 << 5,
     //}
 
-    public enum TextHorizontalAlignment { Left, Center, Right }
-    public enum TextVerticalAlignment { Top, Center, Bottom }
-
 
     /// <summary>
     /// Defines scroll options for elements.
