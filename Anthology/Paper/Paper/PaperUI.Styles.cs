@@ -691,12 +691,10 @@ namespace Prowl.PaperUI
     {
         #region Style Management
 
-        private static PaperContext.StyleState SS => Current.Styles;
-
         /// <summary>
         /// A dictionary to keep track of active styles for each element.
         /// </summary>
-        static Dictionary<ulong, ElementStyle> _activeStyles => SS.ActiveStyles;
+        static Dictionary<ulong, ElementStyle> _activeStyles = new();
 
         /// <summary>
         /// Update the styles for all active elements.
@@ -780,7 +778,7 @@ namespace Prowl.PaperUI
 
         #region Style Templates
 
-        private static Dictionary<string, StyleTemplate> _styleTemplates => SS.StyleTemplates;
+        private static Dictionary<string, StyleTemplate> _styleTemplates = new Dictionary<string, StyleTemplate>();
 
         /// <summary>
         /// Creates a new style template.

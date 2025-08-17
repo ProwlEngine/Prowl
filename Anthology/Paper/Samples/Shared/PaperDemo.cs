@@ -109,8 +109,6 @@ namespace Shared
                     Paper.PopID();
                 }
             }
-
-            //ContextExample(); // Demonstrates using multiple GUI contexts
         }
 
         public static bool isWindowAOpen = true;
@@ -702,31 +700,6 @@ namespace Shared
                     }
                 }
             }
-        }
-
-        private static void ContextExample()
-        {
-            var dt = Paper.DeltaTime;
-
-            // Create a secondary context using the same renderer and viewport size
-            var ctx = Paper.PushContext(Paper.CurrentContext.Renderer,
-                                        Paper.ScreenRect.width,
-                                        Paper.ScreenRect.height);
-
-            // Store custom data on the context
-            ctx.Data["message"] = "Hello from another context";
-
-            Paper.BeginFrame(dt);
-            using (Paper.Box("ContextDemo")
-                .Width(220)
-                .Height(60)
-                .BackgroundColor(cardBackground)
-                .Text(Text.Center((string)ctx.Data["message"], fontSmall, textColor))
-                .Enter())
-            { }
-            Paper.EndFrame();
-
-            Paper.PopContext();
         }
 
         private static void RenderAnalyticsTab()

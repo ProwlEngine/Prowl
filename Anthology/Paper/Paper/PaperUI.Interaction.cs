@@ -6,30 +6,28 @@ namespace Prowl.PaperUI
 {
     public static partial class Paper
     {
-        private static PaperContext.InteractionState IS => Current.Interaction;
-
         #region State Query Methods
 
         /// <summary>
         /// Checks if an element is currently hovered.
         /// </summary>
-        public static bool IsElementHovered(ulong id) => IS.ElementsInBubblePath.Contains(id);
+        public static bool IsElementHovered(ulong id) => _elementsInBubblePath.Contains(id);
 
         /// <summary>
         /// Checks if an element is currently active (pressed).
         /// </summary>
-        public static bool IsElementActive(ulong id) => IS.ActiveElementId == id;
+        public static bool IsElementActive(ulong id) => _activeElementId == id;
 
         /// <summary>
         /// Checks if an element has input focus.
         /// </summary>
-        public static bool IsElementFocused(ulong id) => IS.FocusedElementId == id;
+        public static bool IsElementFocused(ulong id) => _focusedElementId == id;
 
         /// <summary>
         /// Checks if an element is currently being dragged.
         /// </summary>
         public static bool IsElementDragging(ulong id) =>
-            IS.IsDragging.TryGetValue(id, out bool isDragging) && isDragging;
+            _isDragging.TryGetValue(id, out bool isDragging) && isDragging;
 
         /// <summary>
         /// Checks if the current parent element is hovered.
@@ -39,12 +37,12 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Checks if the current parent element is active.
         /// </summary>
-        public static bool IsParentActive => IS.ActiveElementId == CurrentParent.ID;
+        public static bool IsParentActive => _activeElementId == CurrentParent.ID;
 
         /// <summary>
         /// Checks if the current parent element has input focus.
         /// </summary>
-        public static bool IsParentFocused => IS.FocusedElementId == CurrentParent.ID;
+        public static bool IsParentFocused => _focusedElementId == CurrentParent.ID;
 
         /// <summary>
         /// Checks if the current parent element is being dragged.
@@ -56,15 +54,15 @@ namespace Prowl.PaperUI
         #region Interaction State
 
         // Element interaction state tracking
-        private static ulong _theHoveredElementId { get => IS.TheHoveredElementId; set => IS.TheHoveredElementId = value; }     // The ID of the element directly hovered by the pointer
-        private static ulong _activeElementId { get => IS.ActiveElementId; set => IS.ActiveElementId = value; }                 // Currently active (pressed) element
-        private static ulong _focusedElementId { get => IS.FocusedElementId; set => IS.FocusedElementId = value; }              // Element with input focus
+        private static ulong _theHoveredElementId = 0;  // The ID of the element directly hovered by the pointer
+        private static ulong _activeElementId = 0;      // Currently active (pressed) element
+        private static ulong _focusedElementId = 0;     // Element with input focus
 
         // State tracking collections
-        private static Dictionary<ulong, bool> _wasHoveredState => IS.WasHoveredState;
-        private static Dictionary<ulong, Vector2> _dragStartPos => IS.DragStartPos;
-        private static HashSet<ulong> _elementsInBubblePath => IS.ElementsInBubblePath;
-        private static Dictionary<ulong, bool> _isDragging => IS.IsDragging;
+        private static Dictionary<ulong, bool> _wasHoveredState = new Dictionary<ulong, bool>();
+        private static Dictionary<ulong, Vector2> _dragStartPos = new Dictionary<ulong, Vector2>();
+        private static HashSet<ulong> _elementsInBubblePath = new HashSet<ulong>();
+        private static Dictionary<ulong, bool> _isDragging = new Dictionary<ulong, bool>();
 
         // Public access to interaction state
         public static ulong HoveredElementId => _theHoveredElementId;
