@@ -10,7 +10,7 @@ namespace Prowl.PaperUI
     /// <summary>
     /// Represents a text element with various positioning and styling options.
     /// </summary>
-    public struct TextStyle
+    public struct Text
     {
         #region Properties
         public string Value { get; set; }
@@ -25,7 +25,7 @@ namespace Prowl.PaperUI
         public double LineSpacing { get; set; }
         #endregion
 
-        public static readonly TextStyle Empty = new TextStyle
+        public static readonly Text Empty = new Text
         {
             Value = string.Empty,
             Color = Color.White,
@@ -40,7 +40,7 @@ namespace Prowl.PaperUI
         };
 
         #region Factory Methods
-        public static TextStyle Create(
+        public static Text Create(
             string value,
             SpriteFontBase font,
             Color? color = null,
@@ -52,7 +52,7 @@ namespace Prowl.PaperUI
             double characterSpacing = 0,
             double lineSpacing = 0)
         {
-            return new TextStyle
+            return new Text
             {
                 Value = value,
                 Font = font,
@@ -67,30 +67,30 @@ namespace Prowl.PaperUI
             };
         }
 
-        public static TextStyle Left(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text Left(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 0.0, 0.5);
-        public static TextStyle Center(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text Center(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 0.5, 0.5);
-        public static TextStyle Right(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text Right(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 1.0, 0.5);
 
-        public static TextStyle TopLeft(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text TopLeft(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 0.0, 0.0);
-        public static TextStyle TopCenter(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text TopCenter(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 0.5, 0.0);
-        public static TextStyle TopRight(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text TopRight(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 1.0, 0.0);
-        public static TextStyle MiddleLeft(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text MiddleLeft(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 0.0, 0.5);
-        public static TextStyle MiddleCenter(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text MiddleCenter(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 0.5, 0.5);
-        public static TextStyle MiddleRight(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text MiddleRight(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 1.0, 0.5);
-        public static TextStyle BottomLeft(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text BottomLeft(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 0.0, 1.0);
-        public static TextStyle BottomCenter(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text BottomCenter(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 0.5, 1.0);
-        public static TextStyle BottomRight(string value, SpriteFontBase font, Color? color = null) =>
+        public static Text BottomRight(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 1.0, 1.0);
         #endregion
 
@@ -114,9 +114,9 @@ namespace Prowl.PaperUI
         #endregion
 
         #region Interpolation
-        public static TextStyle Lerp(TextStyle a, TextStyle b, double t)
+        public static Text Lerp(Text a, Text b, double t)
         {
-            return new TextStyle
+            return new Text
             {
                 Value = t > 0.5 ? b.Value : a.Value,
                 Font = t > 0.5 ? b.Font : a.Font,

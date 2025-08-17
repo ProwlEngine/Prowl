@@ -1,4 +1,6 @@
-﻿namespace Prowl.PaperUI
+﻿using System.Drawing;
+
+namespace Prowl.PaperUI
 {
     /// <summary>
     /// Defines the direction in which elements are arranged in a layout container.
@@ -183,5 +185,13 @@
 
         /// <summary>Completely hides scrollbars but still allows scrolling.</summary>
         Hidden = 1 << 3
+    }
+
+    public enum GradientType
+    {
+        None = 0,
+        Linear = 1,
+        Radial = 2,
+        Box = 3
     }
 }

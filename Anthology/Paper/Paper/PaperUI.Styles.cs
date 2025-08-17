@@ -12,9 +12,11 @@ namespace Prowl.PaperUI
     {
         #region Visual Properties
         BackgroundColor,
+        BackgroundGradient,
         BorderColor,
         BorderWidth,
         Rounded,
+        BoxShadow,
         #endregion
 
         #region Layout Properties
@@ -595,9 +597,17 @@ namespace Prowl.PaperUI
             {
                 return t > 0.5 ? endString : startString;
             }
-            else if (start is TextStyle textStart && end is TextStyle textEnd)
+            else if (start is Text textStart && end is Text textEnd)
             {
-                return TextStyle.Lerp(textStart, textEnd, t);
+                return Text.Lerp(textStart, textEnd, t);
+            }
+            else if (start is Gradient gradientStart && end is Gradient gradientEnd)
+            {
+                return Gradient.Lerp(gradientStart, gradientEnd, t);
+            }
+            else if (start is BoxShadow shadowStart && end is BoxShadow shadowEnd)
+            {
+                return BoxShadow.Lerp(shadowStart, shadowEnd, t);
             }
 
             // Default to just returning the end value
@@ -625,9 +635,11 @@ namespace Prowl.PaperUI
             return property switch {
                 // Visual Properties
                 GuiProp.BackgroundColor => Color.Transparent,
+                GuiProp.BackgroundGradient => Gradient.None,
                 GuiProp.BorderColor => Color.Transparent,
                 GuiProp.BorderWidth => (double)0.0,
                 GuiProp.Rounded => new Vector4(0, 0, 0, 0),
+                GuiProp.BoxShadow => BoxShadow.None,
 
                 // Core Layout Properties
                 GuiProp.AspectRatio => (double)-1.0,
@@ -677,7 +689,7 @@ namespace Prowl.PaperUI
                 GuiProp.Transform => Transform2D.Identity,
 
                 // Text Properties
-                GuiProp.Text => TextStyle.Empty,
+                GuiProp.Text => Text.Empty,
 
                 _ => throw new ArgumentOutOfRangeException(nameof(property), property, null)
             };

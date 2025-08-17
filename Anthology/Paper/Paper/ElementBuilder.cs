@@ -33,11 +33,33 @@ namespace Prowl.PaperUI
         /// <summary>Sets the background color of the element.</summary>
         public T BackgroundColor(Color color) => SetStyleProperty(GuiProp.BackgroundColor, color);
 
+        /// <summary>Sets a linear gradient background gradient.</summary>
+        public T BackgroundLinearGradient(double x1, double y1, double x2, double y2, Color color1, Color color2) =>
+            SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Linear(x1, y1, x2, y2, color1, color2));
+
+        /// <summary>Sets a radial gradient background gradient.</summary>
+        public T BackgroundRadialGradient(double centerX, double centerY, double innerRadius, double outerRadius, Color innerColor, Color outerColor) =>
+            SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Radial(centerX, centerY, innerRadius, outerRadius, innerColor, outerColor));
+
+        /// <summary>Sets a box gradient background gradient.</summary>
+        public T BackgroundBoxGradient(double centerX, double centerY, double width, double height, float radius, float feather, Color innerColor, Color outerColor) =>
+            SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Box(centerX, centerY, width, height, radius, feather, innerColor, outerColor));
+
+        /// <summary>Clears any background gradient on the element.</summary>
+        public T ClearBackgroundGradient() => SetStyleProperty(GuiProp.BackgroundGradient, Gradient.None);
+
         /// <summary>Sets the border color of the element.</summary>
         public T BorderColor(Color color) => SetStyleProperty(GuiProp.BorderColor, color);
 
         /// <summary>Sets the border width of the element.</summary>
         public T BorderWidth(double width) => SetStyleProperty(GuiProp.BorderWidth, width);
+
+        /// <summary>Sets a box shadow on the element.</summary>
+        public T BoxShadow(double offsetX, double offsetY, double blur, double spread, Color color) =>
+            SetStyleProperty(GuiProp.BoxShadow, new BoxShadow(offsetX, offsetY, blur, spread, color));
+
+        /// <summary>Sets a box shadow on the element.</summary>
+        public T BoxShadow(BoxShadow shadow) => SetStyleProperty(GuiProp.BoxShadow, shadow);
 
         #endregion
 
@@ -211,7 +233,7 @@ namespace Prowl.PaperUI
         #region Text Properties
 
         /// <summary>Sets styled text for the element.</summary>
-        public T Text(TextStyle text) => SetStyleProperty(GuiProp.Text, text);
+        public T Text(Text text) => SetStyleProperty(GuiProp.Text, text);
 
         #endregion
 

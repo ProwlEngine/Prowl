@@ -397,9 +397,9 @@ namespace Prowl.PaperUI.Extras
                 }
 
                 // Title Text
-                var paperTextAligner = TextStyle.Left;
-                if (style.TitleAlignment == HorizontalAlignment.Center) paperTextAligner = TextStyle.Center;
-                else if (style.TitleAlignment == HorizontalAlignment.Right) paperTextAligner = TextStyle.Right;
+                var paperTextAligner = Text.Left;
+                if (style.TitleAlignment == HorizontalAlignment.Center) paperTextAligner = Text.Center;
+                else if (style.TitleAlignment == HorizontalAlignment.Right) paperTextAligner = Text.Right;
 
                 using (_paper.Box($"WindowTitle_{state.Id}")
                     // Adjust margin for alignment: only left margin for left-align, only right for right-align
@@ -422,7 +422,7 @@ namespace Prowl.PaperUI.Extras
                     _paper.Box($"CloseButton_{state.Id}")
                         .PositionType(PositionType.SelfDirected)
                         .Style(closeButtonStyle)
-                        .Text(TextStyle.Center(style.CloseButtonIcon, titleFont, style.TextColor)) // Use titleFont for close button for consistency
+                        .Text(Text.Center(style.CloseButtonIcon, titleFont, style.TextColor)) // Use titleFont for close button for consistency
                         .OnClick((_) =>
                         {
                             // Request close on click

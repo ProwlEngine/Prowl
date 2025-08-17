@@ -13,6 +13,8 @@ namespace Shared
                 .Base(new StyleTemplate()
                     .BackgroundColor(cardBackground)
                     .Rounded(8)
+                    .BoxShadow(0, 2, 6, 0, Color.FromArgb(100, 0, 0, 0))
+                    .Transition(GuiProp.BoxShadow, 0.2)
                     .Transition(GuiProp.Rounded, 0.2)
                     .Transition(GuiProp.BorderColor, 0.3)
                     .Transition(GuiProp.BorderWidth, 0.2)
@@ -22,6 +24,7 @@ namespace Shared
                     .Rounded(12)
                     .BorderColor(primaryColor)
                     .BorderWidth(2)
+                    .BoxShadow(0, 4, 12, 0, Color.FromArgb(160, 0, 0, 0))
                     .Scale(1.05))
                 .Register();
 
@@ -49,14 +52,18 @@ namespace Shared
                     .Height(50)
                     .Rounded(8)
                     .BackgroundColor(primaryColor)
+                    .BackgroundLinearGradient(0, 0, 0, 1, primaryColor, secondaryColor)
+                    .Transition(GuiProp.BackgroundGradient, 0.2)
                     .Transition(GuiProp.BackgroundColor, 0.2)
                     .Transition(GuiProp.ScaleX, 0.1)
                     .Transition(GuiProp.ScaleY, 0.1))
                 .Hovered(new StyleTemplate()
-                    .BackgroundColor(secondaryColor))
+                    .BackgroundColor(secondaryColor)
+                    .BackgroundLinearGradient(0, 0, 0, 1, secondaryColor, primaryColor))
                 .Active(new StyleTemplate()
                     .Scale(0.95)
-                    .BackgroundColor(Color.FromArgb(200, primaryColor)))
+                    .BackgroundColor(Color.FromArgb(200, primaryColor))
+                    .BackgroundLinearGradient(0, 0, 0, 1, Color.FromArgb(200, primaryColor), Color.FromArgb(200, secondaryColor)))
                 .Register();
 
             // Icon button styles
@@ -168,6 +175,8 @@ namespace Shared
                 .Base(new StyleTemplate()
                     .BackgroundColor(cardBackground)
                     .Rounded(8)
+                    .BoxShadow(4, 4, 5, 0, Color.FromArgb(100, 0, 0, 0))
+                    .Transition(GuiProp.BoxShadow, 0.2)
                     .Transition(GuiProp.Rounded, 0.2)
                     .Transition(GuiProp.BorderColor, 0.3)
                     .Transition(GuiProp.BorderWidth, 0.2)
@@ -176,6 +185,7 @@ namespace Shared
                 .Hovered(new StyleTemplate()
                     .Rounded(12)
                     .BorderWidth(2)
+                    .BoxShadow(0, 0, 4, 0, Color.FromArgb(0, 0, 0, 0))
                     .Scale(1.05))
                 .Register();
 

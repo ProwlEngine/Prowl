@@ -203,11 +203,80 @@ namespace Prowl.PaperUI
             Transform2D styleTransform = element._elementStyle.GetTransformForElement(rect);
             _canvas.TransformBy(styleTransform);
 
-            // Draw background
+            // Draw box shadow before background
             var rounded = (Vector4)element._elementStyle.GetValue(GuiProp.Rounded);
-            var backgroundColor = (Color)element._elementStyle.GetValue(GuiProp.BackgroundColor);
-            if (backgroundColor.A > 0)
-                _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, backgroundColor);
+            var boxShadow = (BoxShadow)element._elementStyle.GetValue(GuiProp.BoxShadow);
+            if (boxShadow.IsVisible)
+            {
+                _canvas.SaveState();
+                double buffer = boxShadow.Blur * 0.5;
+                double sx = rect.x + boxShadow.OffsetX - buffer - boxShadow.Spread;
+                double sy = rect.y + boxShadow.OffsetY - buffer - boxShadow.Spread;
+                double sw = rect.width + (buffer * 2) + (boxShadow.Spread * 2);
+                double sh = rect.height + (buffer * 2) + (boxShadow.Spread * 2);
+                float radi = (float)(Math.Max(Math.Max(rounded.x, rounded.y), Math.Max(rounded.z, rounded.w)));
+                _canvas.SetBoxBrush(
+                    sx + sw / 2,
+                    sy + sh / 2,
+                    sw,
+                    sh,
+                    radi,
+                    (float)boxShadow.Blur,
+                    boxShadow.Color,
+                    Color.FromArgb(0, boxShadow.Color));
+
+                buffer = (boxShadow.Blur) * 1.0;
+                sx = rect.x + boxShadow.OffsetX - buffer - boxShadow.Spread;
+                sy = rect.y + boxShadow.OffsetY - buffer - boxShadow.Spread;
+                sw = rect.width + (buffer * 2) + (boxShadow.Spread * 2);
+                sh = rect.height + (buffer * 2) + (boxShadow.Spread * 2);
+
+                _canvas.RoundedRectFilled(sx, sy, sw, sh,
+                    rounded.x, rounded.y,
+                    rounded.z, rounded.w,
+                    Color.White);
+                _canvas.RestoreState();
+            }
+
+            // Draw background (gradient overrides background color)
+            var gradient = (Gradient)element._elementStyle.GetValue(GuiProp.BackgroundGradient);
+            if (gradient.Type != GradientType.None)
+            {
+                switch (gradient.Type)
+                {
+                    case GradientType.Linear:
+                        double lx1 = rect.x + gradient.X1 * rect.width;
+                        double ly1 = rect.y + gradient.Y1 * rect.height;
+                        double lx2 = rect.x + gradient.X2 * rect.width;
+                        double ly2 = rect.y + gradient.Y2 * rect.height;
+                        _canvas.SetLinearBrush(lx1, ly1, lx2, ly2, gradient.Color1, gradient.Color2);
+                        break;
+                    case GradientType.Radial:
+                        double rcx = rect.x + gradient.X1 * rect.width;
+                        double rcy = rect.y + gradient.Y1 * rect.height;
+                        double ir = gradient.InnerRadius * Math.Min(rect.width, rect.height);
+                        double or = gradient.OuterRadius * Math.Min(rect.width, rect.height);
+                        _canvas.SetRadialBrush(rcx, rcy, ir, or, gradient.Color1, gradient.Color2);
+                        break;
+                    case GradientType.Box:
+                        double bcx = rect.x + gradient.X1 * rect.width;
+                        double bcy = rect.y + gradient.Y1 * rect.height;
+                        double bw = gradient.Width * rect.width;
+                        double bh = gradient.Height * rect.height;
+                        float brad = gradient.Radius * (float)Math.Min(rect.width, rect.height);
+                        float bfeather = gradient.Feather * (float)Math.Min(rect.width, rect.height);
+                        _canvas.SetBoxBrush(bcx, bcy, bw, bh, brad, bfeather, gradient.Color1, gradient.Color2);
+                        break;
+                }
+                _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, Color.White);
+                _canvas.ClearGradient();
+            }
+            else
+            {
+                var backgroundColor = (Color)element._elementStyle.GetValue(GuiProp.BackgroundColor);
+                if (backgroundColor.A > 0)
+                    _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, backgroundColor);
+            }
 
             // Draw border if needed
             var borderColor = (Color)element._elementStyle.GetValue(GuiProp.BorderColor);
@@ -228,7 +297,7 @@ namespace Prowl.PaperUI
             }
 
             // Draw text style
-            var text = (TextStyle)element._elementStyle.GetValue(GuiProp.Text);
+            var text = (Text)element._elementStyle.GetValue(GuiProp.Text);
             if (!string.IsNullOrEmpty(text.Value) && text.Font != null)
             {
                 _canvas.SaveState();

@@ -136,11 +136,11 @@ namespace Shared
                         {
                             using (P.Box("Title")
                                 .Height(40)
-                                .Text(TextStyle.Center("Hello from Window System", fontLarge, textColor))
+                                .Text(Text.Center("Hello from Window System", fontLarge, textColor))
                                 .Enter()) { }
 
                             using (P.Box("Content")
-                                .Text(TextStyle.Left("This is content inside the window. You can close, resize, and drag this window.", fontMedium, textColor))
+                                .Text(Text.Left("This is content inside the window. You can close, resize, and drag this window.", fontMedium, textColor))
                                 .Enter()) { }
 
                             using (P.Box("Button")
@@ -153,7 +153,7 @@ namespace Shared
                                 //.HoverStyle(BoxStyle.SolidRounded(secondaryColor, 12f))
                                 //.ActiveStyle(BoxStyle.SolidRounded(primaryColor, 16f))
                                 //.FocusedStyle(BoxStyle.SolidRoundedWithBorder(backgroundColor, textColor, 20f, 1f))
-                                .Text(TextStyle.Center("Click Me", fontMedium, Color.White))
+                                .Text(Text.Center("Click Me", fontMedium, Color.White))
                                 .OnClick((rect) => Console.WriteLine("Button in window clicked!"))
                                 .Enter()) { }
                         }
@@ -221,6 +221,17 @@ namespace Shared
                 ];
             }
 
+            // Create darkened versions (emulating alpha 150/255 ≈ 59% opacity)
+            for (int i = 0; i < colorPalette.Length; i++)
+            {
+                Color original = colorPalette[i];
+                colorPalette[i] = Color.FromArgb(255,
+                    (int)(original.R * 0.59),
+                    (int)(original.G * 0.59),
+                    (int)(original.B * 0.59)
+                );
+            }
+
             // Redefine styles with new theme colors
             DefineStyles(P);
         }
@@ -241,12 +252,12 @@ namespace Shared
                     P.Box("LogoInner")
                         .Size(50)
                         .Margin(10)
-                        .Text(TextStyle.Center(Icons.Newspaper, fontLarge, lightTextColor));
+                        .Text(Text.Center(Icons.Newspaper, fontLarge, lightTextColor));
 
                     P.Box("LogoText")
                         .PositionType(PositionType.SelfDirected)
                         .Left(50 + 15)
-                        .Text(TextStyle.Left("PaperUI Demo", fontTitle, textColor));
+                        .Text(Text.Left("PaperUI Demo", fontTitle, textColor));
                 }
 
                 // Spacer
@@ -263,14 +274,14 @@ namespace Shared
                 P.Box("LightIcon")
                     .Style("icon-button")
                     .Margin(0, 10, 15, 0)
-                    .Text(TextStyle.Center(Icons.Lightbulb, fontMedium, lightTextColor))
+                    .Text(Text.Center(Icons.Lightbulb, fontMedium, lightTextColor))
                     .OnClick((rect) => ToggleTheme());
 
                 // Notification icon
                 P.Box("NotificationIcon")
                     .Style("icon-button")
                     .Margin(0, 10, 15, 0)
-                    .Text(TextStyle.Center(Icons.CircleExclamation, fontMedium, lightTextColor))
+                    .Text(Text.Center(Icons.CircleExclamation, fontMedium, lightTextColor))
                     .OnClick((rect) => Console.WriteLine("Notifications clicked"));
 
                 // User Profile
@@ -280,7 +291,7 @@ namespace Shared
                     .Rounded(40)
                     .BackgroundColor(secondaryColor)
                     .Margin(0, 15, 15, 0)
-                    .Text(TextStyle.Center("M", fontMedium, Color.White))
+                    .Text(Text.Center("M", fontMedium, Color.White))
                     .OnClick((rect) => Console.WriteLine("Profile clicked"));
             }
         }
@@ -295,7 +306,7 @@ namespace Shared
                 // Menu header
                 P.Box("MenuHeader")
                     .Height(60)
-                    .Text(TextStyle.Center("Menu", fontMedium, textColor));
+                    .Text(Text.Center("Menu", fontMedium, textColor));
 
                 string[] menuIcons = { Icons.House, Icons.ChartBar, Icons.User, Icons.Gear, Icons.WindowMaximize };
                 string[] menuItems = { "Dashboard", "Analytics", "Users", "Settings", "Windows" };
@@ -315,13 +326,13 @@ namespace Shared
                         P.Box($"MenuItemIcon_{i}")
                             .Width(55)
                             .Height(50)
-                            .Text(TextStyle.Center(menuIcons[i], fontSmall, textColor));
+                            .Text(Text.Center(menuIcons[i], fontSmall, textColor));
 
                         P.Box($"MenuItem_{i}")
                             .Width(100)
                             .PositionType(PositionType.SelfDirected)
                             .Left(50 + 15)
-                            .Text(TextStyle.Center($"{menuItems[i]}", fontSmall, textColor));
+                            .Text(Text.Center($"{menuItems[i]}", fontSmall, textColor));
                     }
                 }
 
@@ -343,13 +354,13 @@ namespace Shared
                         .Enter())
                     {
                         P.Box("UpgradeText")
-                            .Text(TextStyle.Center("Upgrade to Pro", fontMedium, Color.White));
+                            .Text(Text.Center("Upgrade to Pro", fontMedium, Color.White));
 
                         P.Box("UpgradeButton")
                             .Style("button")
                             .Height(30)
                             .BackgroundColor(Color.White)
-                            .Text(TextStyle.Center("Upgrade", fontSmall, primaryColor))
+                            .Text(Text.Center("Upgrade", fontSmall, primaryColor))
                             .OnClick((rect) => Console.WriteLine("Upgrade clicked"));
                     }
                 }
@@ -395,7 +406,7 @@ namespace Shared
                     using (P.Box($"Tab_{i}")
                         .Width(P.Stretch(tabWidth))
                         .Style("tab")
-                        .Text(TextStyle.Center(tabNames[i], fontMedium, tabColor))
+                        .Text(Text.Center(tabNames[i], fontMedium, tabColor))
                         .OnClick((rect) => selectedTabIndex = index)
                         .Enter())
                     {
@@ -436,7 +447,8 @@ namespace Shared
                         // Card icon with conditional styling based on parent hover
                         P.Box($"StatIcon_{i}")
                             .Size(40)
-                            .BackgroundColor(Color.FromArgb(150, colorPalette[i % colorPalette.Length]))
+                            .BackgroundColor(Color.FromArgb(255, colorPalette[i % colorPalette.Length]))
+                            .BoxShadow(4, 4, 24, -18, Color.FromArgb(255, 0, 0, 0))
                             .Rounded(8)
                             .If(P.IsParentHovered)
                                 .Rounded(20)
@@ -451,10 +463,10 @@ namespace Shared
                         {
                             P.Box($"StatLabel_{i}")
                                 .Height(P.Pixels(25))
-                                .Text(TextStyle.Left(statNames[i], fontSmall, lightTextColor));
+                                .Text(Text.Left(statNames[i], fontSmall, lightTextColor));
 
                             P.Box($"StatValue_{i}")
-                                .Text(TextStyle.Left(statValues[i], fontLarge, textColor));
+                                .Text(Text.Left(statValues[i], fontLarge, textColor));
                         }
                     }
                 }
@@ -480,7 +492,7 @@ namespace Shared
                         .Enter())
                     {
                         using (P.Box("ChartTitle")
-                            .Text(TextStyle.Left("Performance Overview", fontMedium, textColor))
+                            .Text(Text.Left("Performance Overview", fontMedium, textColor))
                             .Enter()) { }
 
                         using (P.Row("ChartControls")
@@ -500,7 +512,7 @@ namespace Shared
                                         .BackgroundColor(Color.FromArgb(50, primaryColor))
                                         .End()
                                     .Transition(GuiProp.BackgroundColor, 0.2f)
-                                    .Text(TextStyle.Center(period, fontSmall, period == "Week" ? Color.White : lightTextColor))
+                                    .Text(Text.Center(period, fontSmall, period == "Week" ? Color.White : lightTextColor))
                                     .OnClick((rect) => Console.WriteLine($"Period {period} clicked"))
                                     .Enter()) { }
                             }
@@ -646,7 +658,7 @@ namespace Shared
                         using (P.Box("PanelHeader")
                             .Height(60)
                             .Margin(20, 20, 20, 0)
-                            .Text(TextStyle.Left("Recent Activity", fontMedium, textColor))
+                            .Text(Text.Left("Recent Activity", fontMedium, textColor))
                             .Enter()) { }
 
                         // Activity items
@@ -675,7 +687,8 @@ namespace Shared
                                     .Height(40)
                                     .Rounded(8)
                                     .Margin(0, 0, 15, 0)
-                                    .BackgroundColor(Color.FromArgb(150, colorPalette[i % colorPalette.Length]))
+                                    .BackgroundColor(Color.FromArgb(255, colorPalette[i % colorPalette.Length]))
+                                    .BoxShadow(4, 4, 24, -18, Color.FromArgb(255, 0, 0, 0))
                                     //.Style(BoxStyle.SolidRounded(Color.FromArgb(150, colorPalette[i % colorPalette.Length]), 20f))
                                     .Enter()) { }
 
@@ -687,12 +700,12 @@ namespace Shared
                                     using (P.Box($"ActivityText_{i}")
                                         .Height(P.Pixels(20))
                                         .Margin(0, 0, 15, 0)
-                                        .Text(TextStyle.Left(activities[i], fontSmall, textColor))
+                                        .Text(Text.Left(activities[i], fontSmall, textColor))
                                         .Enter()) { }
 
                                     using (P.Box($"ActivityTime_{i}")
                                         .Height(P.Pixels(20))
-                                        .Text(TextStyle.Left(timestamps[i], fontSmall, lightTextColor))
+                                        .Text(Text.Left(timestamps[i], fontSmall, lightTextColor))
                                         .Enter()) { }
                                 }
                             }
@@ -723,7 +736,7 @@ namespace Shared
                     using (P.Box("AnalyticsHeader")
                         .Height(80)
                         .Margin(20)
-                        .Text(TextStyle.Left("Analytics Dashboard", fontLarge, textColor))
+                        .Text(Text.Left("Analytics Dashboard", fontLarge, textColor))
                         .Enter()) { }
 
                     // Interactive slider as a demo control
@@ -734,7 +747,7 @@ namespace Shared
                     {
                         using (P.Box("SliderLabel")
                             .Height(30)
-                            .Text(TextStyle.Left($"Green Amount: {sliderValue:F2}", fontMedium, textColor))
+                            .Text(Text.Left($"Green Amount: {sliderValue:F2}", fontMedium, textColor))
                             .Enter()) { }
 
                         using (P.Box("SliderTrack")
@@ -924,7 +937,7 @@ namespace Shared
                                             .Height(50)
                                             .Rounded(25)
                                             .BackgroundColor(Color.FromArgb(60, 255, 255, 255))
-                                            .Text(TextStyle.Center(icon, fontMedium, textColor))
+                                            .Text(Text.Center(icon, fontMedium, textColor))
                                             .Enter()) { }
 
                                         // Content
@@ -934,11 +947,11 @@ namespace Shared
                                         {
                                             using (P.Box($"CardTitle_{i}")
                                                 .Height(25)
-                                                .Text(TextStyle.Left($"Item {i}", fontMedium, textColor))
+                                                .Text(Text.Left($"Item {i}", fontMedium, textColor))
                                                 .Enter()) { }
 
                                             using (P.Box($"CardDescription_{i}")
-                                                .Text(TextStyle.Left($"Interactive card with animations", fontSmall,
+                                                .Text(Text.Left($"Interactive card with animations", fontSmall,
                                                     Color.FromArgb(200, textColor)))
                                                 .Enter()) { }
                                         }
@@ -985,7 +998,7 @@ namespace Shared
                                 .Height(120)
                                 .BackgroundColor(secondaryColor)
                                 //.Style(BoxStyle.SolidRounded(secondaryColor, 60f))
-                                .Text(TextStyle.Center("J", fontTitle, Color.White))
+                                .Text(Text.Center("J", fontTitle, Color.White))
                                 .Enter()) { }
 
                             // Spacer to Center Avatar
@@ -996,13 +1009,13 @@ namespace Shared
                         // User name
                         using (P.Box("UserName")
                             .Height(40)
-                            .Text(TextStyle.Center("John Doe", fontLarge, textColor))
+                            .Text(Text.Center("John Doe", fontLarge, textColor))
                             .Enter()) { }
 
                         // User title
                         using (P.Box("UserTitle")
                             .Height(30)
-                            .Text(TextStyle.Center("Senior Developer", fontMedium, lightTextColor))
+                            .Text(Text.Center("Senior Developer", fontMedium, lightTextColor))
                             .Enter()) { }
                     }
 
@@ -1023,12 +1036,12 @@ namespace Shared
                             {
                                 using (P.Box($"StatValue_{i}")
                                     .Height(40)
-                                    .Text(TextStyle.Center(statValues[i], fontLarge, primaryColor))
+                                    .Text(Text.Center(statValues[i], fontLarge, primaryColor))
                                     .Enter()) { }
 
                                 using (P.Box($"StatLabel_{i}")
                                     .Height(30)
-                                    .Text(TextStyle.Center(statLabels[i], fontSmall, lightTextColor))
+                                    .Text(Text.Center(statLabels[i], fontSmall, lightTextColor))
                                     .Enter()) { }
                             }
                         }
@@ -1050,11 +1063,11 @@ namespace Shared
                             {
                                 using (P.Box($"ContactLabel_{i}")
                                     .Width(100)
-                                    .Text(TextStyle.Left(contactLabels[i] + ":", fontSmall, lightTextColor))
+                                    .Text(Text.Left(contactLabels[i] + ":", fontSmall, lightTextColor))
                                     .Enter()) { }
 
                                 using (P.Box($"ContactValue_{i}")
-                                    .Text(TextStyle.Left(contactValues[i], fontSmall, textColor))
+                                    .Text(Text.Left(contactValues[i], fontSmall, textColor))
                                     .Enter()) { }
                             }
                         }
@@ -1078,7 +1091,7 @@ namespace Shared
                         using (P.Box("ActivityHeader")
                             .Height(60)
                             .Margin(20, 20, 0, 0)
-                            .Text(TextStyle.Left("Activity Tracker", fontMedium, textColor))
+                            .Text(Text.Left("Activity Tracker", fontMedium, textColor))
                             .Enter()) { }
 
                         // Week days
@@ -1091,7 +1104,7 @@ namespace Shared
                             foreach (var day in days)
                             {
                                 using (P.Box($"Day_{day}")
-                                    .Text(TextStyle.Center(day, fontSmall, lightTextColor))
+                                    .Text(Text.Center(day, fontSmall, lightTextColor))
                                     .Enter()) { }
                             }
                         }
@@ -1148,7 +1161,7 @@ namespace Shared
                         using (P.Box("SkillsHeader")
                             .Height(20)
                             .Margin(20, 20, 20, 0)
-                            .Text(TextStyle.MiddleLeft("Skills", fontMedium, textColor))
+                            .Text(Text.MiddleLeft("Skills", fontMedium, textColor))
                             .Enter()) { }
 
                         // Skill bars
@@ -1169,7 +1182,7 @@ namespace Shared
                                     // Skill label
                                     using (P.Box($"SkillLabel_{i}")
                                         .Height(25)
-                                        .Text(TextStyle.Left(skills[i], fontSmall, textColor))
+                                        .Text(Text.Left(skills[i], fontSmall, textColor))
                                         .Enter()) { }
 
                                     // Skill bar
@@ -1191,7 +1204,7 @@ namespace Shared
                                         // Percentage label
                                         using (P.Box($"SkillPercent_{i}")
                                             .Width(40)
-                                            .Text(TextStyle.Right($"{animatedLevel * 100:F0}%", fontSmall, lightTextColor))
+                                            .Text(Text.Right($"{animatedLevel * 100:F0}%", fontSmall, lightTextColor))
                                             .Enter()) { }
                                     }
                                 }
@@ -1230,7 +1243,7 @@ namespace Shared
                             .Margin(10, 10, 5, 5)
                             .Style("button")
                             .StyleIf(isSelected, "period-button-selected")
-                            .Text(TextStyle.Left($"  {categories[i]}", fontSmall, itemTextColor))
+                            .Text(Text.Left($"  {categories[i]}", fontSmall, itemTextColor))
                             .OnClick((rect) => { Console.WriteLine($"Category {categories[index]} clicked"); });
                     }
                 }
@@ -1245,7 +1258,7 @@ namespace Shared
                     P.Box("SettingsHeader")
                         .Height(80)
                         .Margin(20)
-                        .Text(TextStyle.Left("General Settings", fontLarge, textColor));
+                        .Text(Text.Left("General Settings", fontLarge, textColor));
 
                     // Toggle options - much cleaner now!
                     string[] options = {
@@ -1262,7 +1275,7 @@ namespace Shared
                         {
                             // Option label
                             P.Box($"SettingLabel_{i}")
-                                .Text(TextStyle.Left(options[i], fontMedium, textColor));
+                                .Text(Text.Left(options[i], fontMedium, textColor));
 
                             // Toggle switch - much simpler with styles!
                             bool isOn = toggleState[i];
@@ -1294,7 +1307,7 @@ namespace Shared
                     // Save button
                     P.Box("SaveSettings")
                         .Style("button-primary")
-                        .Text(TextStyle.Center("Save Changes", fontMedium, Color.White))
+                        .Text(Text.Center("Save Changes", fontMedium, Color.White))
                         .Margin(20, 0, 20, 20)
                         .OnClick((rect) => Console.WriteLine("Save settings clicked"));
                 }
@@ -1318,7 +1331,7 @@ namespace Shared
                     using (P.Box("OpenWindowsButton")
                         .Height(50)
                         .Margin(20)
-                        .Text(TextStyle.Center("Open Windows", fontMedium, textColor))
+                        .Text(Text.Center("Open Windows", fontMedium, textColor))
                         .Style("button.primary")
                         .OnClick((rect) => OpenWindows())
                         .Enter()) { }
@@ -1347,13 +1360,13 @@ namespace Shared
                 // Copyright
                 using (P.Box("Copyright")
                     .Margin(15, 0, 0, 0)
-                    .Text(TextStyle.Left("© 2025 PaperUI Demo.", fontSmall, lightTextColor))
+                    .Text(Text.Left("© 2025 PaperUI Demo.", fontSmall, lightTextColor))
                     .Enter()) { }
 
                 // FPS Counter
-                P.Box("FPS").Text(TextStyle.Left($"FPS: {1f / P.DeltaTime:F1}", fontSmall, lightTextColor));
-                P.Box("NodeCounter").Text(TextStyle.Left($"Nodes: {P.CountOfAllElements}", fontSmall, lightTextColor));
-                P.Box("MS").Text(TextStyle.Left($"Frame ms: {P.MillisecondsSpent}", fontSmall, lightTextColor));
+                P.Box("FPS").Text(Text.Left($"FPS: {1f / P.DeltaTime:F1}", fontSmall, lightTextColor));
+                P.Box("NodeCounter").Text(Text.Left($"Nodes: {P.CountOfAllElements}", fontSmall, lightTextColor));
+                P.Box("MS").Text(Text.Left($"Frame ms: {P.MillisecondsSpent}", fontSmall, lightTextColor));
 
                 // Footer links
                 string[] links = { "Terms", "Privacy", "Contact", "Help" };
@@ -1364,7 +1377,7 @@ namespace Shared
                     {
                         using (P.Box($"Link_{link}")
                             .Width(P.Stretch(1f / links.Length))
-                            .Text(TextStyle.Center(link, fontSmall, primaryColor))
+                            .Text(Text.Center(link, fontSmall, primaryColor))
                             .OnClick((rect) => Console.WriteLine($"Link {link} clicked"))
                             .Enter()) { }
                     }
