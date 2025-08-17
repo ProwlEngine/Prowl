@@ -135,6 +135,8 @@ namespace Prowl.PaperUI.Extras
         public Vector2 MinSize { get; set; } = new Vector2(150, 80); // Adjusted min size
         public int ZOrder { get; set; } = 0;
 
+        public Dictionary<string, object> Data { get; } = new();
+
         internal Vector2 StartDraggingPosition;
 
         // For tracking internal state
@@ -160,21 +162,23 @@ namespace Prowl.PaperUI.Extras
     // Window Manager to handle window state
     public static class WindowManager
     {
-        private static Dictionary<string, WindowState> _windowStates = new Dictionary<string, WindowState>();
-        private static SpriteFontBase _windowFont;
+        private static Paper.PaperContext.WindowingState WS => Paper.CurrentContext.Windows;
+
+        private static Dictionary<string, WindowState> _windowStates => WS.WindowStates;
+        private static SpriteFontBase _windowFont { get => WS.WindowFont; set => WS.WindowFont = value; }
 
         // Collection to track windows requested to close in the last event cycle
-        private static HashSet<string> _windowsPendingCloseRequest = new HashSet<string>();
+        private static HashSet<string> _windowsPendingCloseRequest => WS.WindowsPendingCloseRequest;
 
         // "SetNextWindow" properties for IMGUI style configuration
-        private static byte _setNextWindowPosition = 0; // 0 = no, 1 = every frame, 2 = first time
-        private static Vector2 _position = new Vector2(0, 0);
-        private static byte _setNextWindowSize = 0; // 0 = no, 1 = every frame, 2 = first time
-        private static Vector2 _size = new Vector2(0, 0);
-        private static bool? _nextWindowIsResizable = null;
-        private static bool? _nextWindowIsDraggable = null;
-        private static bool? _nextWindowIsModal = null;
-        private static Vector2? _nextWindowMinSize = null;
+        private static byte _setNextWindowPosition { get => WS.SetNextWindowPosition; set => WS.SetNextWindowPosition = value; }
+        private static Vector2 _position { get => WS.NextPosition; set => WS.NextPosition = value; }
+        private static byte _setNextWindowSize { get => WS.SetNextWindowSize; set => WS.SetNextWindowSize = value; }
+        private static Vector2 _size { get => WS.NextSize; set => WS.NextSize = value; }
+        private static bool? _nextWindowIsResizable { get => WS.NextWindowIsResizable; set => WS.NextWindowIsResizable = value; }
+        private static bool? _nextWindowIsDraggable { get => WS.NextWindowIsDraggable; set => WS.NextWindowIsDraggable = value; }
+        private static bool? _nextWindowIsModal { get => WS.NextWindowIsModal; set => WS.NextWindowIsModal = value; }
+        private static Vector2? _nextWindowMinSize { get => WS.NextWindowMinSize; set => WS.NextWindowMinSize = value; }
 
         public static void SetWindowFont(SpriteFontBase font)
         {

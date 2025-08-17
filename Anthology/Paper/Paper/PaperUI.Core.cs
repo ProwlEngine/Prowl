@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.CompilerServices;
 
+using FontStashSharp;
+
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Vector;
@@ -12,29 +14,173 @@ namespace Prowl.PaperUI
     public static partial class Paper
     {
         #region Fields & Properties
+        // Context handling
+        public class PaperContext
+        {
+            internal int ThreadId { get; set; } = Environment.CurrentManagedThreadId;
+            public LayoutEngine.Element RootElement;
+            public Stack<LayoutEngine.Element> ElementStack = new();
+            public Stack<ulong> IDStack = new();
+            public Dictionary<ulong, Element> CreatedElements = new();
+            public Dictionary<ulong, Hashtable> Storage = new();
+            public Canvas Canvas;
+            public ICanvasRenderer Renderer;
+            public double Width;
+            public double Height;
+            public Stopwatch Timer = new();
+            public double MillisecondsSpent;
+            public uint CountOfAllElements;
+
+            // Subsystem state
+            public InputState Input = new();
+            public InteractionState Interaction = new();
+            public StyleState Styles = new();
+            public WindowingState Windows = new();
+
+            // Custom data bag for user specific information
+            public Dictionary<string, object> Data = new();
+
+            // Input state container
+            public class InputState
+            {
+                public bool CapturedKeyboard = false;
+                public bool WantsCaptureKeyboard;
+
+                public bool[] KeyCurState;
+                public bool[] KeyPrevState;
+                public double[] KeyPressedTime;
+                public double[] KeyRepeatTimer;
+                public bool[] KeyRepeating;
+                public PaperKey LastKeyPressed = PaperKey.Unknown;
+
+                public bool KeyAutoRepeatEnabled = true;
+                public double AutoRepeatDelay = 0.8f;
+                public double AutoRepeatRate = 0.05f;
+
+                public bool[] PointerCurState;
+                public bool[] PointerPrevState;
+                public double[] PointerPressedTime;
+                public Vector2[] PointerClickPos;
+                public PaperMouseBtn LastButtonPressed = PaperMouseBtn.Unknown;
+                public Vector2 PreviousPointerPos = Vector2.zero;
+                public Vector2 PointerPos = Vector2.zero;
+                public double PointerWheel = 0;
+                public double[] PointerLastClickTime;
+                public Vector2[] PointerLastClickPos;
+
+                public Queue<char> InputString = new();
+
+                public double DeltaTime = 0.016f;
+                public double Time = 0f;
+                public Vector2 FrameBufferScale = Vector2.one;
+
+                public IClipboardHandler ClipboardHandler;
+
+                public event Action<Vector2> OnPointerPosSet;
+                public event Action<bool> OnCursorVisibilitySet;
+
+                public void InvokePointerPos(Vector2 pos) => OnPointerPosSet?.Invoke(pos);
+                public void InvokeCursorVisibility(bool v) => OnCursorVisibilitySet?.Invoke(v);
+            }
+
+            // Interaction state container
+            public class InteractionState
+            {
+                public ulong TheHoveredElementId = 0;
+                public ulong ActiveElementId = 0;
+                public ulong FocusedElementId = 0;
+                public Dictionary<ulong, bool> WasHoveredState = new();
+                public Dictionary<ulong, Vector2> DragStartPos = new();
+                public HashSet<ulong> ElementsInBubblePath = new();
+                public Dictionary<ulong, bool> IsDragging = new();
+            }
+
+            // Style state container
+            public class StyleState
+            {
+                internal Dictionary<ulong, ElementStyle> ActiveStyles = new();
+                internal Dictionary<string, StyleTemplate> StyleTemplates = new();
+            }
+
+            // Window manager state container
+            public class WindowingState
+            {
+                public Dictionary<string, Prowl.PaperUI.Extras.WindowState> WindowStates = new();
+                public SpriteFontBase WindowFont;
+                public HashSet<string> WindowsPendingCloseRequest = new();
+                public byte SetNextWindowPosition = 0;
+                public Vector2 NextPosition = new Vector2(0, 0);
+                public byte SetNextWindowSize = 0;
+                public Vector2 NextSize = new Vector2(0, 0);
+                public bool? NextWindowIsResizable = null;
+                public bool? NextWindowIsDraggable = null;
+                public bool? NextWindowIsModal = null;
+                public Vector2? NextWindowMinSize = null;
+            }
+        }
+
+        private static readonly ThreadLocal<Stack<PaperContext>> _contextStack = new(() => new Stack<PaperContext>());
+        private static Stack<PaperContext> ContextStack => _contextStack.Value!;
+
+        private static PaperContext Current => ContextStack.Peek();
+
+        /// <summary>
+        /// Gets the currently active PaperUI context.
+        /// </summary>
+        public static PaperContext CurrentContext => Current;
 
         // Layout and hierarchy management
-        private static LayoutEngine.Element _rootElement;
-        internal static Stack<LayoutEngine.Element> _elementStack = new Stack<LayoutEngine.Element>();
-        private static readonly Stack<ulong> _IDStack = new();
-        private static readonly Dictionary<ulong, Element> _createdElements = [];
+        private static LayoutEngine.Element _rootElement
+        {
+            get => Current.RootElement;
+            set => Current.RootElement = value;
+        }
 
-        private static readonly Dictionary<ulong, Hashtable> _storage = [];
+        internal static Stack<LayoutEngine.Element> _elementStack => Current.ElementStack;
+        private static Stack<ulong> _IDStack => Current.IDStack;
+        private static Dictionary<ulong, Element> _createdElements => Current.CreatedElements;
+
+        private static Dictionary<ulong, Hashtable> _storage => Current.Storage;
 
         // Rendering context
-        private static Canvas _canvas;
-        private static ICanvasRenderer _renderer;
-        private static double _width;
-        private static double _height;
-        private static Stopwatch _timer = new();
+        private static Canvas _canvas
+        {
+            get => Current.Canvas;
+            set => Current.Canvas = value;
+        }
 
-        // Events
-        public static Action? OnEndOfFramePreLayout = null;
-        public static Action? OnEndOfFramePostLayout = null;
+        private static ICanvasRenderer _renderer
+        {
+            get => Current.Renderer;
+            set => Current.Renderer = value;
+        }
+
+        private static double _width
+        {
+            get => Current.Width;
+            set => Current.Width = value;
+        }
+
+        private static double _height
+        {
+            get => Current.Height;
+            set => Current.Height = value;
+        }
+
+        private static Stopwatch _timer => Current.Timer;
 
         // Performance metrics
-        public static double MillisecondsSpent { get; private set; }
-        public static uint CountOfAllElements { get; private set; }
+        public static double MillisecondsSpent
+        {
+            get => Current.MillisecondsSpent;
+            private set => Current.MillisecondsSpent = value;
+        }
+
+        public static uint CountOfAllElements
+        {
+            get => Current.CountOfAllElements;
+            private set => Current.CountOfAllElements = value;
+        }
 
         // Public properties
         public static Rect ScreenRect => new Rect(0, 0, _width, _height);
@@ -57,13 +203,23 @@ namespace Prowl.PaperUI
         /// <param name="width">Viewport width</param>
         /// <param name="height">Viewport height</param>
         public static void Initialize(ICanvasRenderer renderer, double width, double height)
+            => PushContext(renderer, width, height);
+
+        /// <summary>
+        /// Creates and pushes a new PaperUI context onto the stack.
+        /// </summary>
+        public static PaperContext PushContext(ICanvasRenderer renderer, double width, double height)
         {
+            var ctx = new PaperContext { ThreadId = Environment.CurrentManagedThreadId };
+            ContextStack.Push(ctx);
+
             _width = width;
             _height = height;
             _renderer = renderer;
 
             // Create root element
-            _rootElement = new LayoutEngine.Element {
+            _rootElement = new LayoutEngine.Element
+            {
                 ID = 0
             };
             _rootElement._elementStyle.SetDirectValue(GuiProp.Width, UnitValue.Pixels(_width));
@@ -80,7 +236,30 @@ namespace Prowl.PaperUI
             // Create canvas
             _canvas = new Canvas(renderer);
 
+            // Initialize input
             InitializeInput();
+
+            return ctx;
+        }
+
+        /// <summary>
+        /// Pushes an existing PaperUI context onto the stack.
+        /// </summary>
+        public static void PushContext(PaperContext ctx)
+        {
+            if (ctx == null) throw new ArgumentNullException(nameof(ctx));
+            if (ctx.ThreadId != Environment.CurrentManagedThreadId)
+                throw new InvalidOperationException("Context can only be used on the thread it was created on.");
+            ContextStack.Push(ctx);
+        }
+
+        /// <summary>
+        /// Pops the current PaperUI context from the stack.
+        /// </summary>
+        public static void PopContext()
+        {
+            if (ContextStack.Count > 0)
+                ContextStack.Pop();
         }
 
         /// <summary>
@@ -132,9 +311,7 @@ namespace Prowl.PaperUI
             UpdateStyles(DeltaTime, _rootElement);
 
             // Layout phase
-            OnEndOfFramePreLayout?.Invoke();
             _rootElement.Layout();
-            OnEndOfFramePostLayout?.Invoke();
 
             // Post-layout callbacks
             CallPostLayoutRecursive(_rootElement);

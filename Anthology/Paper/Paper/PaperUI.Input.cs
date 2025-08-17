@@ -6,53 +6,63 @@ namespace Prowl.PaperUI
     {
         #region Fields & Properties
 
-        private static bool _capturedKeyboard = false; // Whether keyboard input is captured by an element
-        public static bool WantsCaptureKeyboard { get; private set; }
+        private static PaperContext.InputState I => Current.Input;
+
+        private static bool _capturedKeyboard { get => I.CapturedKeyboard; set => I.CapturedKeyboard = value; } // Whether keyboard input is captured by an element
+        public static bool WantsCaptureKeyboard { get => I.WantsCaptureKeyboard; private set => I.WantsCaptureKeyboard = value; }
 
         // Enums
         public static readonly PaperKey[] KeyValues = Enum.GetValues<PaperKey>();
         public static readonly PaperMouseBtn[] MouseValues = Enum.GetValues<PaperMouseBtn>();
 
         // Events
-        public static event Action<Vector2> OnPointerPosSet;
-        public static event Action<bool> OnCursorVisibilitySet;
+        public static event Action<Vector2> OnPointerPosSet
+        {
+            add => I.OnPointerPosSet += value;
+            remove => I.OnPointerPosSet -= value;
+        }
+        public static event Action<bool> OnCursorVisibilitySet
+        {
+            add => I.OnCursorVisibilitySet += value;
+            remove => I.OnCursorVisibilitySet -= value;
+        }
 
         #region Keyboard State
 
         // Keyboard state tracking
-        private static bool[] _keyCurState;
-        private static bool[] _keyPrevState;
-        private static double[] _keyPressedTime;
-        public static PaperKey LastKeyPressed { get; private set; } = PaperKey.Unknown;
+        private static bool[] _keyCurState => I.KeyCurState;
+        private static bool[] _keyPrevState => I.KeyPrevState;
+        private static double[] _keyPressedTime => I.KeyPressedTime;
+        public static PaperKey LastKeyPressed { get => I.LastKeyPressed; private set => I.LastKeyPressed = value; }
 
         #region Auto-Repeat Settings
 
         // Auto-repeat configuration
-        private static bool _keyAutoRepeatEnabled = true;
-        private static double _autoRepeatDelay = 0.8; // Initial delay in seconds before repeating starts
-        private static double _autoRepeatRate = 0.05; // Time between repeats once started (20 repeats per second)
+        private static bool _keyAutoRepeatEnabled { get => I.KeyAutoRepeatEnabled; set => I.KeyAutoRepeatEnabled = value; }
+        private static double _autoRepeatDelay { get => I.AutoRepeatDelay; set => I.AutoRepeatDelay = value; }
+        private static double _autoRepeatRate { get => I.AutoRepeatRate; set => I.AutoRepeatRate = value; }
 
         // Auto-repeat state tracking
-        private static double[] _keyRepeatTimer;
-        private static bool[] _keyRepeating;
+        private static double[] _keyRepeatTimer => I.KeyRepeatTimer;
+        private static bool[] _keyRepeating => I.KeyRepeating;
 
         // Public properties for configuration
         public static bool KeyAutoRepeatEnabled
         {
-            get => _keyAutoRepeatEnabled;
-            set => _keyAutoRepeatEnabled = value;
+            get => I.KeyAutoRepeatEnabled;
+            set => I.KeyAutoRepeatEnabled = value;
         }
 
         public static double AutoRepeatDelay
         {
-            get => _autoRepeatDelay;
-            set => _autoRepeatDelay = Math.Max(0.1, value); // Minimum safe delay
+            get => I.AutoRepeatDelay;
+            set => I.AutoRepeatDelay = Math.Max(0.1, value); // Minimum safe delay
         }
 
         public static double AutoRepeatRate
         {
-            get => _autoRepeatRate;
-            set => _autoRepeatRate = Math.Max(0.01, value); // Maximum rate of 100 per second
+            get => I.AutoRepeatRate;
+            set => I.AutoRepeatRate = Math.Max(0.01, value); // Maximum rate of 100 per second
         }
 
         #endregion
@@ -62,33 +72,39 @@ namespace Prowl.PaperUI
         #region Mouse State
 
         // Mouse state tracking
-        private static bool[] _pointerCurState;
-        private static bool[] _pointerPrevState;
-        private static double[] _pointerPressedTime;
-        private static Vector2[] _pointerClickPos;
-        public static PaperMouseBtn LastButtonPressed { get; private set; } = PaperMouseBtn.Unknown;
-        public static Vector2 PreviousPointerPos { get; private set; } = Vector2.zero;
+        private static bool[] _pointerCurState => I.PointerCurState;
+        private static bool[] _pointerPrevState => I.PointerPrevState;
+        private static double[] _pointerPressedTime => I.PointerPressedTime;
+        private static Vector2[] _pointerClickPos => I.PointerClickPos;
+        public static PaperMouseBtn LastButtonPressed { get => I.LastButtonPressed; private set => I.LastButtonPressed = value; }
+        public static Vector2 PreviousPointerPos { get => I.PreviousPointerPos; private set => I.PreviousPointerPos = value; }
 
         // Current pointer position
-        private static Vector2 _pointerPos;
-        public static Vector2 PointerPos {
-            get => _pointerPos;
-            set {
-                _pointerPos = value;
-                OnPointerPosSet?.Invoke(_pointerPos / _frameBufferScale);
+        private static Vector2 _pointerPos
+        {
+            get => I.PointerPos;
+            set
+            {
+                I.PointerPos = value;
+                I.InvokePointerPos(I.PointerPos / I.FrameBufferScale);
             }
+        }
+        public static Vector2 PointerPos
+        {
+            get => _pointerPos;
+            set => _pointerPos = value;
         }
 
         // Mouse wheel
-        public static double PointerWheel { get; private set; } = 0;
+        public static double PointerWheel { get => I.PointerWheel; private set => I.PointerWheel = value; }
 
         // Derived properties
         public static Vector2 PointerDelta => PointerPos - PreviousPointerPos;
         public static bool IsPointerMoving => PointerDelta.sqrMagnitude > 0;
 
         // Double-click tracking
-        private static double[] _pointerLastClickTime;
-        private static Vector2[] _pointerLastClickPos;
+        private static double[] _pointerLastClickTime => I.PointerLastClickTime;
+        private static Vector2[] _pointerLastClickPos => I.PointerLastClickPos;
         private const double MaxDoubleClickTime = 0.25f;
 
         #endregion
@@ -96,25 +112,25 @@ namespace Prowl.PaperUI
         #region Text Input
 
         // Text input
-        public static readonly Queue<char> InputString = new Queue<char>();
+        public static Queue<char> InputString => I.InputString;
 
         #endregion
 
         #region Timing & Scaling
 
         // Frame timing
-        private static double _deltaTime = 0.016f; // Default to 60 FPS
-        private static double _time = 0f;
-        public static double DeltaTime => _deltaTime;
-        public static double Time => _time;
+        private static double _deltaTime { get => I.DeltaTime; set => I.DeltaTime = value; }
+        private static double _time { get => I.Time; set => I.Time = value; }
+        public static double DeltaTime => I.DeltaTime;
+        public static double Time => I.Time;
 
         // Scaling
-        private static Vector2 _frameBufferScale = Vector2.one;
+        private static Vector2 _frameBufferScale { get => I.FrameBufferScale; set => I.FrameBufferScale = value; }
 
         #endregion
 
         // Clipboard handling
-        private static IClipboardHandler _clipboardHandler;
+        private static IClipboardHandler _clipboardHandler { get => I.ClipboardHandler; set => I.ClipboardHandler = value; }
 
         #endregion
 
@@ -126,29 +142,24 @@ namespace Prowl.PaperUI
         private static void InitializeInput()
         {
             // Initialize keyboard arrays
-            _keyCurState = new bool[KeyValues.Length];
-            _keyPrevState = new bool[KeyValues.Length];
-            _keyPressedTime = new double[KeyValues.Length];
-            _keyRepeatTimer = new double[KeyValues.Length];
-            _keyRepeating = new bool[KeyValues.Length];
-            
-            // Initialize keyboard arrays
-            _keyCurState = new bool[KeyValues.Length];
-            _keyPrevState = new bool[KeyValues.Length];
-            _keyPressedTime = new double[KeyValues.Length];
+            I.KeyCurState = new bool[KeyValues.Length];
+            I.KeyPrevState = new bool[KeyValues.Length];
+            I.KeyPressedTime = new double[KeyValues.Length];
+            I.KeyRepeatTimer = new double[KeyValues.Length];
+            I.KeyRepeating = new bool[KeyValues.Length];
 
             // Initialize mouse arrays
-            _pointerCurState = new bool[MouseValues.Length];
-            _pointerPrevState = new bool[MouseValues.Length];
-            _pointerPressedTime = new double[MouseValues.Length];
-            _pointerClickPos = new Vector2[MouseValues.Length];
-            _pointerLastClickTime = new double[MouseValues.Length];
-            _pointerLastClickPos = new Vector2[MouseValues.Length];
+            I.PointerCurState = new bool[MouseValues.Length];
+            I.PointerPrevState = new bool[MouseValues.Length];
+            I.PointerPressedTime = new double[MouseValues.Length];
+            I.PointerClickPos = new Vector2[MouseValues.Length];
+            I.PointerLastClickTime = new double[MouseValues.Length];
+            I.PointerLastClickPos = new Vector2[MouseValues.Length];
 
             // Initialize clipboard handler
-            _clipboardHandler = null;
+            I.ClipboardHandler = null;
 
-            _time = 0;
+            I.Time = 0;
         }
 
         #endregion
@@ -551,7 +562,7 @@ namespace Prowl.PaperUI
         /// Sets the visibility of the cursor.
         /// </summary>
         /// <param name="visible">Whether the cursor should be visible</param>
-        public static void SetCursorVisibility(bool visible) => OnCursorVisibilitySet?.Invoke(visible);
+        public static void SetCursorVisibility(bool visible) => I.InvokeCursorVisibility(visible);
 
         #endregion
     }
