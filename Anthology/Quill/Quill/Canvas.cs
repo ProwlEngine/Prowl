@@ -366,7 +366,7 @@ namespace Prowl.Quill
 
             _state.brush.Transform = _state.transform;
         }
-        public void ClearGradient()
+        public void ClearBrush()
         {
             _state.brush.Type = BrushType.None;
         }
