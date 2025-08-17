@@ -6,6 +6,7 @@ namespace Prowl.PaperUI.LayoutEngine
 {
     public partial class Element
     {
+        public Paper? Owner { get; internal set; } = null;
         public ulong ID { get; internal set; } = 0;
 
         // Events

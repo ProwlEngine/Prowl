@@ -608,7 +608,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Gets the default value for a property.
         /// </summary>
-        private static object GetDefaultValue(GuiProp property)
+        private object GetDefaultValue(GuiProp property)
         {
             return property switch {
                 // Visual Properties
@@ -687,21 +687,21 @@ namespace Prowl.PaperUI
         #endregion
     }
 
-    public static partial class Paper
+    public partial class Paper
     {
         #region Style Management
 
         /// <summary>
         /// A dictionary to keep track of active styles for each element.
         /// </summary>
-        static Dictionary<ulong, ElementStyle> _activeStyles = new();
+        Dictionary<ulong, ElementStyle> _activeStyles = new();
 
         /// <summary>
         /// Update the styles for all active elements.
         /// </summary>
         /// <param name="deltaTime">The time since the last frame.</param>
         /// <param name="element">The root element to start updating from.</param>
-        private static void UpdateStyles(double deltaTime, Element element)
+        private void UpdateStyles(double deltaTime, Element element)
         {
             ulong id = element.ID;
             if (_activeStyles.TryGetValue(id, out var style))
@@ -726,7 +726,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Set a style property value (no transition).
         /// </summary>
-        internal static void SetStyleProperty(ulong elementID, GuiProp property, object value)
+        internal void SetStyleProperty(ulong elementID, GuiProp property, object value)
         {
             if (!_activeStyles.TryGetValue(elementID, out var style))
             {
@@ -742,7 +742,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Configure a transition for a property.
         /// </summary>
-        internal static void SetTransitionConfig(ulong elementID, GuiProp property, double duration, Func<double, double>? easing = null)
+        internal void SetTransitionConfig(ulong elementID, GuiProp property, double duration, Func<double, double>? easing = null)
         {
             if (!_activeStyles.TryGetValue(elementID, out var style))
             {
@@ -758,7 +758,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Clean up styles at the end of a frame.
         /// </summary>
-        private static void OfOfFrameCleanupStyles(Dictionary<ulong, Element> createdElements)
+        private void OfOfFrameCleanupStyles(Dictionary<ulong, Element> createdElements)
         {
             // Clean up any elements that haven't been accessed this frame
             List<ulong> elementsToRemove = new List<ulong>();
@@ -778,12 +778,12 @@ namespace Prowl.PaperUI
 
         #region Style Templates
 
-        private static Dictionary<string, StyleTemplate> _styleTemplates = new Dictionary<string, StyleTemplate>();
+        private Dictionary<string, StyleTemplate> _styleTemplates = new Dictionary<string, StyleTemplate>();
 
         /// <summary>
         /// Creates a new style template.
         /// </summary>
-        public static StyleTemplate DefineStyle(string name)
+        public StyleTemplate DefineStyle(string name)
         {
             // Create a new style template
             var template = new StyleTemplate();
@@ -794,7 +794,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a new style template. With one or more parent styles to inherit from.
         /// </summary>
-        public static StyleTemplate DefineStyle(string name, params string[] inheritFrom)
+        public StyleTemplate DefineStyle(string name, params string[] inheritFrom)
         {
             // Create a new style template
             var template = new StyleTemplate();
@@ -814,7 +814,7 @@ namespace Prowl.PaperUI
             return template;
         }
 
-        public static void RegisterStyle(string name, StyleTemplate template)
+        public void RegisterStyle(string name, StyleTemplate template)
         {
             _styleTemplates[name] = template;
         }
@@ -822,7 +822,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a new style template.
         /// </summary>
-        public static bool TryGetStyle(string name, out StyleTemplate? template)
+        public bool TryGetStyle(string name, out StyleTemplate? template)
         {
             return _styleTemplates.TryGetValue(name, out template);
         }
@@ -832,27 +832,20 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="element">The element to apply styles to</param>
         /// <param name="baseName">The base style name (e.g., "button")</param>
-        public static void ApplyStyleWithStates(Element element, string baseName) => ApplyStyleWithStates(element.ID, baseName);
-
-        /// <summary>
-        /// Applies a named style and its pseudo-states to an element
-        /// </summary>
-        /// <param name="elementId">The element to apply styles to</param>
-        /// <param name="baseName">The base style name (e.g., "button")</param>
-        public static void ApplyStyleWithStates(ulong elementId, string baseName)
+        public void ApplyStyleWithStates(Element element, string baseName)
         {
             // Apply base style first
             if (TryGetStyle(baseName, out var baseStyle))
             {
-                baseStyle.ApplyTo(elementId);
+                baseStyle.ApplyTo(element);
             }
 
             // Apply pseudo-states in order
             var pseudoStates = new[]
             {
-                ("hovered", IsElementHovered(elementId)),
-                ("focused", IsElementFocused(elementId)),
-                ("active", IsElementActive(elementId))
+                ("hovered", IsElementHovered(element.ID)),
+                ("focused", IsElementFocused(element.ID)),
+                ("active", IsElementActive(element.ID))
             };
 
             foreach (var (state, isActive) in pseudoStates)
@@ -862,7 +855,7 @@ namespace Prowl.PaperUI
                     string pseudoStyleName = $"{baseName}:{state}";
                     if (TryGetStyle(pseudoStyleName, out var pseudoStyle))
                     {
-                        pseudoStyle.ApplyTo(elementId);
+                        pseudoStyle.ApplyTo(element);
                     }
                 }
             }
@@ -877,7 +870,7 @@ namespace Prowl.PaperUI
         /// <param name="hoveredStyle">Optional hovered state style</param>
         /// <param name="focusedStyle">Optional focused state style</param>
         /// <param name="activeStyle">Optional active state style</param>
-        public static void RegisterStyleFamily(
+        public void RegisterStyleFamily(
             string baseName,
             StyleTemplate baseStyle,
             StyleTemplate normalStyle = null,
@@ -907,9 +900,9 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="baseName">The base style name</param>
         /// <returns>A style family builder</returns>
-        public static StyleFamilyBuilder CreateStyleFamily(string baseName)
+        public StyleFamilyBuilder CreateStyleFamily(string baseName)
         {
-            return new StyleFamilyBuilder(baseName);
+            return new StyleFamilyBuilder(this, baseName);
         }
 
         /// <summary>
@@ -917,6 +910,7 @@ namespace Prowl.PaperUI
         /// </summary>
         public class StyleFamilyBuilder
         {
+            private readonly Paper _paper;
             private readonly string _baseName;
             private StyleTemplate _baseStyle;
             private StyleTemplate _normalStyle;
@@ -924,8 +918,9 @@ namespace Prowl.PaperUI
             private StyleTemplate _focusedStyle;
             private StyleTemplate _activeStyle;
 
-            internal StyleFamilyBuilder(string baseName)
+            internal StyleFamilyBuilder(Paper paper, string baseName)
             {
+                _paper = paper;
                 _baseName = baseName;
             }
 
@@ -961,7 +956,7 @@ namespace Prowl.PaperUI
 
             public void Register()
             {
-                Paper.RegisterStyleFamily(_baseName, _baseStyle, _normalStyle, _hoveredStyle, _focusedStyle, _activeStyle);
+                _paper.RegisterStyleFamily(_baseName, _baseStyle, _normalStyle, _hoveredStyle, _focusedStyle, _activeStyle);
             }
         }
 

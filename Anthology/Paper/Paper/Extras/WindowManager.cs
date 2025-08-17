@@ -1,4 +1,5 @@
 ﻿using FontStashSharp;
+
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
 
@@ -89,13 +90,13 @@ namespace Prowl.PaperUI.Extras
 
         internal StyleTemplate GetTitlebarHoveredTemplate() => TitlebarHoveredStyle ?? new();
 
-        internal StyleTemplate GetCloseButtonTemplate()
+        internal StyleTemplate GetCloseButtonTemplate(Paper paper)
         {
             var baseStyle = new StyleTemplate();
             baseStyle.BackgroundColor(Color.FromArgb(80, 255, 100, 100));
             baseStyle.Rounded(4.0f);
             baseStyle.Size(24f);
-            baseStyle.Margin(Paper.Stretch(), 8, Paper.Stretch(), Paper.Stretch());
+            baseStyle.Margin(paper.Stretch(), 8, paper.Stretch(), paper.Stretch());
             if (CloseButtonStyle != null)
                 CloseButtonStyle.ApplyTo(baseStyle);
             return baseStyle;
@@ -158,59 +159,65 @@ namespace Prowl.PaperUI.Extras
     }
 
     // Window Manager to handle window state
-    public static class WindowManager
+    public class WindowManager
     {
-        private static Dictionary<string, WindowState> _windowStates = new Dictionary<string, WindowState>();
-        private static SpriteFontBase _windowFont;
+        private Dictionary<string, WindowState> _windowStates = new Dictionary<string, WindowState>();
+        private SpriteFontBase _windowFont;
+        private Paper _paper;
 
         // Collection to track windows requested to close in the last event cycle
-        private static HashSet<string> _windowsPendingCloseRequest = new HashSet<string>();
+        private HashSet<string> _windowsPendingCloseRequest = new HashSet<string>();
 
         // "SetNextWindow" properties for IMGUI style configuration
-        private static byte _setNextWindowPosition = 0; // 0 = no, 1 = every frame, 2 = first time
-        private static Vector2 _position = new Vector2(0, 0);
-        private static byte _setNextWindowSize = 0; // 0 = no, 1 = every frame, 2 = first time
-        private static Vector2 _size = new Vector2(0, 0);
-        private static bool? _nextWindowIsResizable = null;
-        private static bool? _nextWindowIsDraggable = null;
-        private static bool? _nextWindowIsModal = null;
-        private static Vector2? _nextWindowMinSize = null;
+        private byte _setNextWindowPosition = 0; // 0 = no, 1 = every frame, 2 = first time
+        private Vector2 _position = new Vector2(0, 0);
+        private byte _setNextWindowSize = 0; // 0 = no, 1 = every frame, 2 = first time
+        private Vector2 _size = new Vector2(0, 0);
+        private bool? _nextWindowIsResizable = null;
+        private bool? _nextWindowIsDraggable = null;
+        private bool? _nextWindowIsModal = null;
+        private Vector2? _nextWindowMinSize = null;
 
-        public static void SetWindowFont(SpriteFontBase font)
+        public WindowManager(Paper paper)
+        {
+            _paper = paper ?? throw new ArgumentNullException(nameof(paper));
+        }
+
+        public void SetWindowFont(SpriteFontBase font)
         {
             _windowFont = font;
         }
 
-        public static void SetNextWindowPosition(Vector2 position, bool everyFrame = false)
+        public void SetNextWindowPosition(Vector2 position, bool everyFrame = false)
         {
             _setNextWindowPosition = (byte)(everyFrame ? 1 : 2);
             _position = position;
         }
 
-        public static void SetNextWindowSize(Vector2 size, bool everyFrame = false)
+        public void SetNextWindowSize(Vector2 size, bool everyFrame = false)
         {
             _setNextWindowSize = (byte)(everyFrame ? 1 : 2);
             _size = size;
         }
 
-        public static void SetNextWindowIsResizable(bool isResizable) => _nextWindowIsResizable = isResizable;
-        public static void SetNextWindowIsDraggable(bool isDraggable) => _nextWindowIsDraggable = isDraggable;
-        public static void SetNextWindowIsModal(bool isModal) => _nextWindowIsModal = isModal;
-        public static void SetNextWindowMinSize(Vector2 minSize) => _nextWindowMinSize = minSize;
+        public void SetNextWindowIsResizable(bool isResizable) => _nextWindowIsResizable = isResizable;
+        public void SetNextWindowIsDraggable(bool isDraggable) => _nextWindowIsDraggable = isDraggable;
+        public void SetNextWindowIsModal(bool isModal) => _nextWindowIsModal = isModal;
+        public void SetNextWindowMinSize(Vector2 minSize) => _nextWindowMinSize = minSize;
 
         /// <summary>
         /// Immediate mode Window function. Creates or updates a window.
         /// The window's visibility is controlled by the 'isOpen' boolean.
         /// The contentFunc is invoked if the window is open.
         /// </summary>
-        public static void Window(string id, ref bool isOpen, string title, Action contentFunc) => Window(id, ref isOpen, title, null, contentFunc);
+        public void Window(string id, ref bool isOpen, string title, Action contentFunc) => Window(id, ref isOpen, title, null, contentFunc);
 
         /// <summary>
         /// Immediate mode Window function with style. Creates or updates a window.
         /// The window's visibility is controlled by the 'isOpen' boolean.
         /// The contentFunc is invoked if the window is open.
         /// </summary>
-        public static void Window(string id, ref bool isOpen, string title, WindowStyle? style, Action contentFunc)
+        public void Window(string id, ref bool isOpen, string title, WindowStyle? style, Action contentFunc)
         {
             // Step 1: Process pending close requests from the previous frame's event cycle
             // (Assuming UI events are processed on a single thread, otherwise lock _windowsPendingCloseRequest)
@@ -264,7 +271,7 @@ namespace Prowl.PaperUI.Extras
             ResetSetNextFlags();
         }
 
-        private static void ResetSetNextFlags()
+        private void ResetSetNextFlags()
         {
             _setNextWindowPosition = 0;
             _setNextWindowSize = 0;
@@ -274,7 +281,7 @@ namespace Prowl.PaperUI.Extras
             _nextWindowMinSize = null;
         }
 
-        private static void RenderWindow(WindowStyle style, WindowState state, Action contentFunc)
+        private void RenderWindow(WindowStyle style, WindowState state, Action contentFunc)
         {
             if (_windowFont == null)
             {
@@ -283,14 +290,14 @@ namespace Prowl.PaperUI.Extras
 
             // Main window container
             var bgStyle = style.GetBackgroundTemplate();
-            using (Paper.Box($"Window_{state.Id}")
+            using (_paper.Box($"Window_{state.Id}")
                 .Depth(100_000 + state.ZOrder)
                 .PositionType(PositionType.SelfDirected)
                 .Position(state.Position.x, state.Position.y)
 
                 .Size(state.Size.x, state.Size.y)
-                .MaxLeft(Paper.Percent(100, -state.Size.x))
-                .MaxTop(Paper.Percent(100, -state.Size.y))
+                .MaxLeft(_paper.Percent(100, -state.Size.x))
+                .MaxTop(_paper.Percent(100, -state.Size.y))
                 .MinWidth(state.MinSize.x)
                 .MinHeight(state.MinSize.y)
                 .Style(bgStyle)
@@ -299,50 +306,50 @@ namespace Prowl.PaperUI.Extras
                     // Set the window position to the new position layouting calculated
                     state.Position = new Vector2(node.RelativeX, node.RelativeY);
                     state.Size = new Vector2(node.LayoutWidth, node.LayoutHeight);
-                    
+
                     // Get parent bounds (viewport)
                     var viewport = new Rect(0, 0, node.Parent.LayoutWidth, node.Parent.LayoutHeight);
-                    
+
                     // If window is larger than viewport, scale it down to fit
                     double windowWidth = Math.Min(state.Size.x, viewport.width);
                     double windowHeight = Math.Min(state.Size.y, viewport.height);
-                    
+
                     // Calculate window position to keep it in bounds
                     double x = state.Position.x;
                     double y = state.Position.y;
-                    
+
                     // Adjust horizontal position to keep window inside viewport
                     if (x < viewport.x)
                         x = viewport.x; // Window extends beyond left edge
                     else if (x + windowWidth > viewport.x + viewport.width)
                         x = viewport.x + viewport.width - windowWidth; // Window extends beyond right edge
-                    
+
                     // Adjust vertical position to keep window inside viewport
                     if (y < viewport.y)
                         y = viewport.y; // Window extends beyond top edge
-                    else if(y + windowHeight > viewport.y + viewport.height)
+                    else if (y + windowHeight > viewport.y + viewport.height)
                         y = viewport.y + viewport.height - windowHeight; // Window extends beyond bottom edge
-                    
-                    
+
+
                     // Update window position and size
                     state.Position = new Vector2(x, y);
                     state.Size = new Vector2(windowWidth, windowHeight);
                 })
                 .Enter())
             {
-                state.WindowNode = Paper.CurrentParent;
+                state.WindowNode = _paper.CurrentParent;
 
                 if (style.HasTitleBar)
                     RenderTitleBar(style, state);
 
                 // Content area
                 var contentStyle = style.GetContentTemplate();
-                using (Paper.Box($"WindowContent_{state.Id}")
+                using (_paper.Box($"WindowContent_{state.Id}")
                     .Style(contentStyle)
                     .Clip() // Ensures content doesn't draw outside this box
                     .Enter())
                 {
-                    state.ContentNode = Paper.CurrentParent;
+                    state.ContentNode = _paper.CurrentParent;
                     contentFunc?.Invoke();
                 }
 
@@ -354,11 +361,11 @@ namespace Prowl.PaperUI.Extras
             state.CurrentResizeDirection = WindowState.ResizeDirection.None; // Reset Hovered State
         }
 
-        private static void RenderTitleBar(WindowStyle style, WindowState state)
+        private void RenderTitleBar(WindowStyle style, WindowState state)
         {
             var titleBarStyle = style.GetTitlebarTemplate();
             var titleBarHoverStyle = style.GetTitlebarHoveredTemplate();
-            using (Paper.Row($"WindowTitleBar_{state.Id}")
+            using (_paper.Row($"WindowTitleBar_{state.Id}")
                 .Style(titleBarStyle)
                 .Hovered
                     .Style(titleBarHoverStyle)
@@ -375,7 +382,7 @@ namespace Prowl.PaperUI.Extras
                     if (state.IsDraggable)
                     {
                         // Update window position based on drag
-                        var totalDelta = Paper.PointerPos - e.StartPosition;
+                        var totalDelta = _paper.PointerPos - e.StartPosition;
                         state.Position = new Vector2(state.StartDraggingPosition.x + totalDelta.x, state.StartDraggingPosition.y + totalDelta.y);
                     }
                 })
@@ -386,7 +393,7 @@ namespace Prowl.PaperUI.Extras
                 // Handle Title Alignment
                 if (style.TitleAlignment == HorizontalAlignment.Right || style.TitleAlignment == HorizontalAlignment.Center)
                 {
-                    using (Paper.Box($"TitleBarLeadingSpacer_{state.Id}").Enter()) { } // Flexible spacer
+                    using (_paper.Box($"TitleBarLeadingSpacer_{state.Id}").Enter()) { } // Flexible spacer
                 }
 
                 // Title Text
@@ -394,7 +401,7 @@ namespace Prowl.PaperUI.Extras
                 if (style.TitleAlignment == HorizontalAlignment.Center) paperTextAligner = Text.Center;
                 else if (style.TitleAlignment == HorizontalAlignment.Right) paperTextAligner = Text.Right;
 
-                using (Paper.Box($"WindowTitle_{state.Id}")
+                using (_paper.Box($"WindowTitle_{state.Id}")
                     // Adjust margin for alignment: only left margin for left-align, only right for right-align
                     .Margin(style.TitleAlignment == HorizontalAlignment.Left ? style.TitleMargin : 0,
                             style.TitleAlignment == HorizontalAlignment.Right ? style.TitleMargin : 0,
@@ -404,15 +411,15 @@ namespace Prowl.PaperUI.Extras
 
                 if (style.TitleAlignment == HorizontalAlignment.Left || style.TitleAlignment == HorizontalAlignment.Center)
                 {
-                    using (Paper.Box($"TitleBarTrailingSpacer_{state.Id}").Enter()) { } // Flexible spacer
+                    using (_paper.Box($"TitleBarTrailingSpacer_{state.Id}").Enter()) { } // Flexible spacer
                 }
 
                 // Close Button
                 if (style.ShowCloseButton)
                 {
-                    var closeButtonStyle = style.GetCloseButtonTemplate();
+                    var closeButtonStyle = style.GetCloseButtonTemplate(_paper);
                     var closeButtonHoverStyle = style.GetCloseButtonHoveredTemplate();
-                    Paper.Box($"CloseButton_{state.Id}")
+                    _paper.Box($"CloseButton_{state.Id}")
                         .PositionType(PositionType.SelfDirected)
                         .Style(closeButtonStyle)
                         .Text(Text.Center(style.CloseButtonIcon, titleFont, style.TextColor)) // Use titleFont for close button for consistency
@@ -428,7 +435,7 @@ namespace Prowl.PaperUI.Extras
             }
         }
 
-        private static void AddResizeHandles(WindowStyle style, WindowState state)
+        private void AddResizeHandles(WindowStyle style, WindowState state)
         {
             const int handleSize = 8;
 
@@ -446,10 +453,10 @@ namespace Prowl.PaperUI.Extras
 
             foreach (var handle in handles)
             {
-                using (Paper.Box($"ResizeHandle_{handle.dir}_{state.Id}")
+                using (_paper.Box($"ResizeHandle_{handle.dir}_{state.Id}")
                     .PositionType(PositionType.SelfDirected)
                     .Left(handle.l).Top(handle.t).Width(handle.w).Height(handle.h)
-                    .OnDragging((e) => ResizeWindow(state, Paper.PointerDelta, handle.dir))
+                    .OnDragging((e) => ResizeWindow(state, _paper.PointerDelta, handle.dir))
                     .OnHover((pos) => state.CurrentResizeDirection = handle.dir) // Set which handle is currently hovered
                     .Enter()) { }
             }
@@ -462,7 +469,7 @@ namespace Prowl.PaperUI.Extras
             }
         }
 
-        private static void ResizeWindow(WindowState state, Vector2 delta, WindowState.ResizeDirection direction)
+        private void ResizeWindow(WindowState state, Vector2 delta, WindowState.ResizeDirection direction)
         {
             BringWindowToFront(state.Id); // Bring to front when resize interaction starts
 
@@ -507,16 +514,16 @@ namespace Prowl.PaperUI.Extras
             state.Size = newSize;
         }
 
-        private static void UpdateCursor(WindowState.ResizeDirection direction)
+        private void UpdateCursor(WindowState.ResizeDirection direction)
         {
         }
 
-        private static void DrawResizeHandleIndicators(WindowStyle style, WindowState state)
+        private void DrawResizeHandleIndicators(WindowStyle style, WindowState state)
         {
             // Add visual indicators for active resize handle
             if (state.WindowNode != null)
             {
-                Paper.AddActionElement(state.WindowNode, (vg, rect) => {
+                _paper.AddActionElement(state.WindowNode, (vg, rect) => {
                     const double lineThickness = 4.0f;
                     const double linePadding = 10.0f;
                     vg.SetStrokeColor(style.ResizeHandleIndicatorColor);
@@ -573,7 +580,7 @@ namespace Prowl.PaperUI.Extras
         /// <summary>
         /// Brings a window to the front based on its ID
         /// </summary>
-        public static void BringWindowToFront(string id)
+        public void BringWindowToFront(string id)
         {
             if (_windowStates.TryGetValue(id, out WindowState state))
             {
@@ -590,7 +597,7 @@ namespace Prowl.PaperUI.Extras
         /// <summary>
         /// Closes all windows
         /// </summary>
-        public static void CloseAllWindows()
+        public void CloseAllWindows()
         {
             _windowStates.Clear();
         }

@@ -4,72 +4,72 @@ using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {
-    public static partial class Paper
+    public partial class Paper
     {
         #region State Query Methods
 
         /// <summary>
         /// Checks if an element is currently hovered.
         /// </summary>
-        public static bool IsElementHovered(ulong id) => _elementsInBubblePath.Contains(id);
+        public bool IsElementHovered(ulong id) => _elementsInBubblePath.Contains(id);
 
         /// <summary>
         /// Checks if an element is currently active (pressed).
         /// </summary>
-        public static bool IsElementActive(ulong id) => _activeElementId == id;
+        public bool IsElementActive(ulong id) => _activeElementId == id;
 
         /// <summary>
         /// Checks if an element has input focus.
         /// </summary>
-        public static bool IsElementFocused(ulong id) => _focusedElementId == id;
+        public bool IsElementFocused(ulong id) => _focusedElementId == id;
 
         /// <summary>
         /// Checks if an element is currently being dragged.
         /// </summary>
-        public static bool IsElementDragging(ulong id) =>
+        public bool IsElementDragging(ulong id) =>
             _isDragging.TryGetValue(id, out bool isDragging) && isDragging;
 
         /// <summary>
         /// Checks if the current parent element is hovered.
         /// </summary>
-        public static bool IsParentHovered => IsElementHovered(CurrentParent.ID);
+        public bool IsParentHovered => IsElementHovered(CurrentParent.ID);
 
         /// <summary>
         /// Checks if the current parent element is active.
         /// </summary>
-        public static bool IsParentActive => _activeElementId == CurrentParent.ID;
+        public bool IsParentActive => _activeElementId == CurrentParent.ID;
 
         /// <summary>
         /// Checks if the current parent element has input focus.
         /// </summary>
-        public static bool IsParentFocused => _focusedElementId == CurrentParent.ID;
+        public bool IsParentFocused => _focusedElementId == CurrentParent.ID;
 
         /// <summary>
         /// Checks if the current parent element is being dragged.
         /// </summary>
-        public static bool IsParentDragging => IsElementDragging(CurrentParent.ID);
+        public bool IsParentDragging => IsElementDragging(CurrentParent.ID);
 
         #endregion
 
         #region Interaction State
 
         // Element interaction state tracking
-        private static ulong _theHoveredElementId = 0;  // The ID of the element directly hovered by the pointer
-        private static ulong _activeElementId = 0;      // Currently active (pressed) element
-        private static ulong _focusedElementId = 0;     // Element with input focus
+        private ulong _theHoveredElementId = 0;  // The ID of the element directly hovered by the pointer
+        private ulong _activeElementId = 0;      // Currently active (pressed) element
+        private ulong _focusedElementId = 0;     // Element with input focus
 
         // State tracking collections
-        private static Dictionary<ulong, bool> _wasHoveredState = new Dictionary<ulong, bool>();
-        private static Dictionary<ulong, Vector2> _dragStartPos = new Dictionary<ulong, Vector2>();
-        private static HashSet<ulong> _elementsInBubblePath = new HashSet<ulong>();
-        private static Dictionary<ulong, bool> _isDragging = new Dictionary<ulong, bool>();
+        private Dictionary<ulong, bool> _wasHoveredState = new Dictionary<ulong, bool>();
+        private Dictionary<ulong, Vector2> _dragStartPos = new Dictionary<ulong, Vector2>();
+        private HashSet<ulong> _elementsInBubblePath = new HashSet<ulong>();
+        private Dictionary<ulong, bool> _isDragging = new Dictionary<ulong, bool>();
 
         // Public access to interaction state
-        public static ulong HoveredElementId => _theHoveredElementId;
-        public static ulong ActiveElementId => _activeElementId;
-        public static ulong FocusedElementId => _focusedElementId;
+        public ulong HoveredElementId => _theHoveredElementId;
+        public ulong ActiveElementId => _activeElementId;
+        public ulong FocusedElementId => _focusedElementId;
 
-        public static bool WantsCapturePointer => _theHoveredElementId != 0 || _activeElementId != 0;
+        public bool WantsCapturePointer => _theHoveredElementId != 0 || _activeElementId != 0;
 
         #endregion
 
@@ -78,7 +78,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Main interaction handling method called each frame.
         /// </summary>
-        private static void HandleInteractions()
+        private void HandleInteractions()
         {
             // Reset hover state
             _elementsInBubblePath.Clear();
@@ -126,7 +126,7 @@ namespace Prowl.PaperUI
         /// <param name="element">Current element to check</param>
         /// <param name="parentTransform">Accumulated transform from parent elements</param>
         /// <returns>The topmost interactable element or null if none found</returns>
-        private static Element? FindTopmostInteractableElement(Element element, Transform2D parentTransform)
+        private Element? FindTopmostInteractableElement(Element element, Transform2D parentTransform)
         {
             if (element == null)
                 return null;
@@ -148,11 +148,11 @@ namespace Prowl.PaperUI
             if (element._scissorEnabled == false || isPointerOverElement)
             {
                 // Scrollbars offset the position of children
-                bool hasScrollState = Paper.HasElementStorage(element, "ScrollState");
+                bool hasScrollState = this.HasElementStorage(element, "ScrollState");
                 Transform2D childTransform = combinedTransform;
                 if (hasScrollState)
                 {
-                    ScrollState scrollState = Paper.GetElementStorage<ScrollState>(element, "ScrollState");
+                    ScrollState scrollState = this.GetElementStorage<ScrollState>(element, "ScrollState");
                     var transform = Transform2D.CreateTranslation(-scrollState.Position);
                     childTransform.Premultiply(ref transform);
                 }
@@ -182,7 +182,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Tests if a point in local coordinates is within an element.
         /// </summary>
-        private static bool IsPointOverElement(Element element, double localX, double localY) =>
+        private bool IsPointOverElement(Element element, double localX, double localY) =>
             localX >= element.X &&
             localX <= element.X + element.LayoutWidth &&
             localY >= element.Y &&
@@ -195,7 +195,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Builds the bubble path from an element to the root.
         /// </summary>
-        private static void BuildBubblePath(Element element)
+        private void BuildBubblePath(Element element)
         {
             if (element.StopPropagation)
                 return;
@@ -213,7 +213,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Propagates an event up the element hierarchy.
         /// </summary>
-        private static void BubbleEventToParents(Element element, Action<Element> eventHandler)
+        private void BubbleEventToParents(Element element, Action<Element> eventHandler)
         {
             if (element.StopPropagation)
                 return;
@@ -235,7 +235,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Handles hover, enter, and leave events.
         /// </summary>
-        private static void HandleHoverEvents(ulong previousHoveredElementId)
+        private void HandleHoverEvents(ulong previousHoveredElementId)
         {
             // Find elements that were previously hovered but are no longer in bubble path
             var leftElements = new HashSet<ulong>(_wasHoveredState.Keys);
@@ -275,7 +275,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Handles mouse button events including clicks, drags, and releases.
         /// </summary>
-        private static void HandleMouseEvents()
+        private void HandleMouseEvents()
         {
             // Handle double-click
             if (IsPointerDoubleClick(PaperMouseBtn.Left))
@@ -436,7 +436,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Process keyboard events for the focused element
         /// </summary>
-        private static void HandleKeyboardEvents()
+        private void HandleKeyboardEvents()
         {
             // If no element has focus, there's nothing to do
             if (_focusedElementId == 0)

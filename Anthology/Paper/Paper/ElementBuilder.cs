@@ -338,7 +338,7 @@ namespace Prowl.PaperUI
         public StateDrivenStyle Style(StyleTemplate style)
         {
             if (_isActive)
-                style.ApplyTo(_element.ID);
+                style.ApplyTo(_element);
 
             return this;
         }
@@ -347,7 +347,7 @@ namespace Prowl.PaperUI
         {
             if (_isActive)
                 foreach (var styleName in names)
-                    Paper.ApplyStyleWithStates(_element.ID, styleName);
+                    _owner._paper.ApplyStyleWithStates(_element, styleName);
 
             return this;
         }
@@ -357,7 +357,7 @@ namespace Prowl.PaperUI
             if (condition)
             {
                 foreach(var styleName in names)
-                    Paper.ApplyStyleWithStates(_element.ID, styleName);
+                    _owner._paper.ApplyStyleWithStates(_element, styleName);
             }
             return this;
         }
@@ -365,7 +365,7 @@ namespace Prowl.PaperUI
         public override StateDrivenStyle SetStyleProperty(GuiProp property, object value)
         {
             if (_isActive)
-                Paper.SetStyleProperty(_element.ID, property, value);
+                _owner._paper.SetStyleProperty(_element.ID, property, value);
             return this;
         }
 
@@ -378,7 +378,7 @@ namespace Prowl.PaperUI
         protected override StateDrivenStyle SetTransition(GuiProp property, double duration, Func<double, double> easing)
         {
             if (_isActive)
-                Paper.SetTransitionConfig(_element.ID, property, duration, easing);
+                _owner._paper.SetTransitionConfig(_element.ID, property, duration, easing);
             return this;
         }
 
@@ -431,18 +431,19 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Applies all style properties in this template to an element
         /// </summary>
-        /// <param name="elementId">The ID of the element to apply styles to</param>
-        public void ApplyTo(ulong elementId)
+        /// <param name="element">The element to apply styles to</param>
+        public void ApplyTo(Element element)
         {
+            if (element.Owner == null) throw new ArgumentNullException(nameof(element));
             foreach (var kvp in _styleProperties)
             {
-                Paper.SetStyleProperty(elementId, kvp.Key, kvp.Value);
+                element.Owner!.SetStyleProperty(element.ID, kvp.Key, kvp.Value);
             }
 
             // Apply transitions
             foreach (var kvp in _transitions)
             {
-                Paper.SetTransitionConfig(elementId, kvp.Key, kvp.Value.duration, kvp.Value.easing);
+                element.Owner!.SetTransitionConfig(element.ID, kvp.Key, kvp.Value.duration, kvp.Value.easing);
             }
         }
 
@@ -490,26 +491,28 @@ namespace Prowl.PaperUI
     /// </summary>
     public class ElementBuilder : StyleSetterBase<ElementBuilder>, IDisposable
     {
+        internal Paper _paper;
 
         /// <summary>Style properties that are always applied.</summary>
         public StateDrivenStyle Normal => StateDrivenStyle.Get(this, true);
 
         /// <summary>Style properties applied when the element is hovered.</summary>
-        public StateDrivenStyle Hovered => StateDrivenStyle.Get(this, Paper.IsElementHovered(_element.ID));
+        public StateDrivenStyle Hovered => StateDrivenStyle.Get(this, _paper.IsElementHovered(_element.ID));
 
         /// <summary>Style properties applied when the element is active (pressed).</summary>
-        public StateDrivenStyle Active => StateDrivenStyle.Get(this, Paper.IsElementActive(_element.ID));
+        public StateDrivenStyle Active => StateDrivenStyle.Get(this, _paper.IsElementActive(_element.ID));
 
         /// <summary>Style properties applied when the element has focus.</summary>
-        public StateDrivenStyle Focused => StateDrivenStyle.Get(this, Paper.IsElementFocused(_element.ID));
+        public StateDrivenStyle Focused => StateDrivenStyle.Get(this, _paper.IsElementFocused(_element.ID));
 
-        public ElementBuilder(ulong storageHash) : base(new Element { ID = storageHash })
+        public ElementBuilder(Paper paper, ulong storageHash) : base(new Element { Owner = paper, ID = storageHash })
         {
+            _paper = paper;
         }
 
         public override ElementBuilder SetStyleProperty(GuiProp property, object value)
         {
-            Paper.SetStyleProperty(_element.ID, property, value);
+            _paper.SetStyleProperty(_element.ID, property, value);
             return this;
         }
 
@@ -521,7 +524,7 @@ namespace Prowl.PaperUI
         /// <param name="easing">Optional easing function</param>
         protected override ElementBuilder SetTransition(GuiProp property, double duration, Func<double, double> easing)
         {
-            Paper.SetTransitionConfig(_element.ID, property, duration, easing);
+            _paper.SetTransitionConfig(_element.ID, property, duration, easing);
             return this;
         }
 
@@ -550,14 +553,14 @@ namespace Prowl.PaperUI
 
         public ElementBuilder Style(StyleTemplate style)
         {
-            style.ApplyTo(_element.ID);
+            style.ApplyTo(_element);
             return this;
         }
 
         public ElementBuilder Style(params string[] names)
         {
             foreach (var name in names)
-                Paper.ApplyStyleWithStates(_element.ID, name);
+                _paper.ApplyStyleWithStates(_element, name);
 
             return this;
         }
@@ -566,7 +569,7 @@ namespace Prowl.PaperUI
         {
             if(condition)
                 foreach (var name in names)
-                    Paper.ApplyStyleWithStates(_element.ID, name);
+                    _paper.ApplyStyleWithStates(_element, name);
             return this;
         }
 
@@ -851,9 +854,9 @@ namespace Prowl.PaperUI
                 _element._scissorEnabled = true;
 
                 // Initialize scroll state if not already present
-                if (!Paper.HasElementStorage(_element, "ScrollState"))
+                if (!_paper.HasElementStorage(_element, "ScrollState"))
                 {
-                    Paper.SetElementStorage(_element, "ScrollState", new ScrollState());
+                    _paper.SetElementStorage(_element, "ScrollState", new ScrollState());
                 }
 
                 // Set up scrolling event handlers
@@ -868,9 +871,9 @@ namespace Prowl.PaperUI
         /// </summary>
         public ElementBuilder SetScrollPosition(Vector2 position)
         {
-            var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+            var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
             state.Position = position;
-            Paper.SetElementStorage(_element, "ScrollState", state);
+            _paper.SetElementStorage(_element, "ScrollState", state);
             return this;
         }
 
@@ -891,7 +894,7 @@ namespace Prowl.PaperUI
         {
             // Update content and viewport sizes after layout
             OnPostLayout((element, rect) => {
-                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
                 // Set viewport size to current element size
                 state.ViewportSize = new Vector2(rect.width, rect.height);
@@ -910,32 +913,32 @@ namespace Prowl.PaperUI
                 state.ContentSize = new Vector2(maxX, maxY);
                 state.ClampScrollPosition();
 
-                Paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_element, "ScrollState", state);
             });
 
             // Handle hover events to detect when cursor is over scrollbars
             OnHover((e) => {
-                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
-                Vector2 mousePos = Paper.PointerPos;
+                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                Vector2 mousePos = _paper.PointerPos;
 
                 // Check if pointer is over scrollbars
                 state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
                 state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
 
-                Paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_element, "ScrollState", state);
             });
 
             // Handle mouse leaving the element
             OnLeave((rect) => {
-                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
                 state.IsVerticalScrollbarHovered = false;
                 state.IsHorizontalScrollbarHovered = false;
-                Paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_element, "ScrollState", state);
             });
 
             // Handle scrolling with mouse wheel
             OnScroll((e) => {
-                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
                 // Don't handle wheel scrolling if actively dragging scrollbars
                 if (state.IsDraggingVertical || state.IsDraggingHorizontal)
@@ -957,16 +960,16 @@ namespace Prowl.PaperUI
                 }
 
                 state.ClampScrollPosition();
-                Paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_element, "ScrollState", state);
             });
 
             // Handle start scrollbar drag
             OnDragStart((e) => {
-                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
                 if (state.AreScrollbarsHidden(_element.ScrollFlags)) return;
 
-                Vector2 mousePos = Paper.PointerPos;
+                Vector2 mousePos = _paper.PointerPos;
 
                 // Check if click is on a scrollbar
                 bool onVertical = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
@@ -986,16 +989,16 @@ namespace Prowl.PaperUI
                     state.ScrollStartPosition = state.Position;
                 }
 
-                Paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_element, "ScrollState", state);
             });
 
             // Handle dragging scrollbars
             OnDragging((e) => {
-                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
                 if (state.AreScrollbarsHidden(_element.ScrollFlags)) return;
 
-                Vector2 mousePos = Paper.PointerPos;
+                Vector2 mousePos = _paper.PointerPos;
 
                 // Handle scrollbar dragging
                 if (state.IsDraggingVertical)
@@ -1007,12 +1010,12 @@ namespace Prowl.PaperUI
                     state.HandleHorizontalScrollbarDrag(mousePos, e.ElementRect, _element.ScrollFlags);
                 }
 
-                Paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_element, "ScrollState", state);
             });
 
             // Handle after dragging
             OnDragEnd((e) => {
-                var state = Paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
 
                 if (state.AreScrollbarsHidden(_element.ScrollFlags)) return;
 
@@ -1020,11 +1023,11 @@ namespace Prowl.PaperUI
                 state.IsDraggingHorizontal = false;
 
                 // Update hover state on release
-                Vector2 mousePos = Paper.PointerPos;
+                Vector2 mousePos = _paper.PointerPos;
                 state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
                 state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
 
-                Paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_element, "ScrollState", state);
             });
         }
 
@@ -1055,7 +1058,7 @@ namespace Prowl.PaperUI
             Clip();
 
             // Store the current value in element storage
-            Paper.SetElementStorage(_element, "Value", value);
+            _paper.SetElementStorage(_element, "Value", value);
 
             // Get the text to display (value or placeholder)
             bool isEmpty = string.IsNullOrEmpty(value);
@@ -1063,27 +1066,27 @@ namespace Prowl.PaperUI
             Color textColor = isEmpty ? Color.FromArgb(160, 200, 200, 200) : Color.FromArgb(255, 250, 250, 250);
 
             // Store focus state
-            bool isFocused = Paper.IsElementFocused(_element.ID);
-            Paper.SetElementStorage(_element, "IsFocused", isFocused);
+            bool isFocused = _paper.IsElementFocused(_element.ID);
+            _paper.SetElementStorage(_element, "IsFocused", isFocused);
 
             // Create a blinking cursor position tracker
-            int cursorPosition = Paper.GetElementStorage(_element, "CursorPosition", value.Length);
+            int cursorPosition = _paper.GetElementStorage(_element, "CursorPosition", value.Length);
             // Clamp cursor position to valid range
             cursorPosition = Math.Clamp(cursorPosition, 0, value.Length);
-            Paper.SetElementStorage(_element, "CursorPosition", cursorPosition);
+            _paper.SetElementStorage(_element, "CursorPosition", cursorPosition);
 
             // Selection range (if text is selected)
-            int selectionStart = Paper.GetElementStorage(_element, "SelectionStart", -1);
-            int selectionEnd = Paper.GetElementStorage(_element, "SelectionEnd", -1);
+            int selectionStart = _paper.GetElementStorage(_element, "SelectionStart", -1);
+            int selectionEnd = _paper.GetElementStorage(_element, "SelectionEnd", -1);
             // Clamp selection range to valid range
             selectionStart = Math.Clamp(selectionStart, 0, value.Length);
             selectionEnd = Math.Clamp(selectionEnd, 0, value.Length);
-            Paper.SetElementStorage(_element, "SelectionStart", selectionStart);
-            Paper.SetElementStorage(_element, "SelectionEnd", selectionEnd);
+            _paper.SetElementStorage(_element, "SelectionStart", selectionStart);
+            _paper.SetElementStorage(_element, "SelectionEnd", selectionEnd);
 
             // Text scroll offset (for horizontal scrolling)
-            double scrollOffset = Paper.GetElementStorage(_element, "ScrollOffset", 0.0);
-            Paper.SetElementStorage(_element, "ScrollOffset", scrollOffset);
+            double scrollOffset = _paper.GetElementStorage(_element, "ScrollOffset", 0.0);
+            _paper.SetElementStorage(_element, "ScrollOffset", scrollOffset);
 
             // Set the text content
             //Text(PaperUI.Text.Left($"  {displayText}", font, textColor));
@@ -1091,16 +1094,16 @@ namespace Prowl.PaperUI
             // Handle focus changes
             OnFocusChange((FocusEvent e) =>
             {
-                Paper.SetElementStorage(_element, "IsFocused", e.IsFocused);
+                _paper.SetElementStorage(_element, "IsFocused", e.IsFocused);
 
                 // When gaining focus, place cursor at the end of text
                 if (e.IsFocused)
                 {
-                    string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
+                    string currentValue = _paper.GetElementStorage<string>(_element, "Value", "");
                     int pos = currentValue.Length;
-                    Paper.SetElementStorage(_element, "CursorPosition", pos);
-                    Paper.SetElementStorage(_element, "SelectionStart", -1);
-                    Paper.SetElementStorage(_element, "SelectionEnd", -1);
+                    _paper.SetElementStorage(_element, "CursorPosition", pos);
+                    _paper.SetElementStorage(_element, "SelectionStart", -1);
+                    _paper.SetElementStorage(_element, "SelectionEnd", -1);
 
                     // Ensure cursor is visible
                     EnsureCursorVisible(currentValue, font, pos);
@@ -1110,19 +1113,19 @@ namespace Prowl.PaperUI
             // Handle mouse clicks for cursor positioning
             OnClick((ClickEvent e) =>
             {
-                string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
-                double scrollOffsetValue = Paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
+                string currentValue = _paper.GetElementStorage<string>(_element, "Value", "");
+                double scrollOffsetValue = _paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
 
                 // Calculate cursor position based on click position
                 var clickPos = e.RelativePosition.x - TextXPadding + scrollOffsetValue; // Adjust for padding
                 int newPosition = CalculateTextPosition(currentValue, font, clickPos);
                 newPosition = Math.Clamp(newPosition, 0, currentValue.Length);
 
-                Paper.SetElementStorage(_element, "CursorPosition", newPosition);
+                _paper.SetElementStorage(_element, "CursorPosition", newPosition);
 
                 // Clear selection on click
-                Paper.SetElementStorage(_element, "SelectionStart", -1);
-                Paper.SetElementStorage(_element, "SelectionEnd", -1);
+                _paper.SetElementStorage(_element, "SelectionStart", -1);
+                _paper.SetElementStorage(_element, "SelectionEnd", -1);
 
                 // Ensure cursor is visible
                 EnsureCursorVisible(currentValue, font, newPosition);
@@ -1131,16 +1134,16 @@ namespace Prowl.PaperUI
             // Handle dragging for text selection
             OnDragStart((DragEvent e) =>
             {
-                string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
-                double scrollOffsetValue = Paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
+                string currentValue = _paper.GetElementStorage<string>(_element, "Value", "");
+                double scrollOffsetValue = _paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
 
                 // Start selection at cursor position
                 int pos = CalculateTextPosition(currentValue, font, e.RelativePosition.x - TextXPadding + scrollOffsetValue);
                 pos = Math.Clamp(pos, 0, currentValue.Length);
 
-                Paper.SetElementStorage(_element, "CursorPosition", pos);
-                Paper.SetElementStorage(_element, "SelectionStart", pos);
-                Paper.SetElementStorage(_element, "SelectionEnd", pos);
+                _paper.SetElementStorage(_element, "CursorPosition", pos);
+                _paper.SetElementStorage(_element, "SelectionStart", pos);
+                _paper.SetElementStorage(_element, "SelectionEnd", pos);
 
                 // Ensure cursor is visible
                 EnsureCursorVisible(currentValue, font, pos);
@@ -1148,11 +1151,11 @@ namespace Prowl.PaperUI
 
             OnDragging((DragEvent e) =>
             {
-                string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
-                double scrollOffsetValue = Paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
+                string currentValue = _paper.GetElementStorage<string>(_element, "Value", "");
+                double scrollOffsetValue = _paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
 
                 // Update selection end while dragging
-                int start = Paper.GetElementStorage<int>(_element, "SelectionStart", -1);
+                int start = _paper.GetElementStorage<int>(_element, "SelectionStart", -1);
                 if (start >= 0)
                 {
                     // Auto-scroll when dragging near edges
@@ -1163,20 +1166,20 @@ namespace Prowl.PaperUI
                     {
                         // Scroll left
                         scrollOffsetValue = Math.Max(0, scrollOffsetValue - scrollSpeed);
-                        Paper.SetElementStorage(_element, "ScrollOffset", scrollOffsetValue);
+                        _paper.SetElementStorage(_element, "ScrollOffset", scrollOffsetValue);
                     }
                     else if (e.RelativePosition.x > e.ElementRect.width - edgeScrollSensitivity)
                     {
                         // Scroll right
                         scrollOffsetValue += scrollSpeed;
-                        Paper.SetElementStorage(_element, "ScrollOffset", scrollOffsetValue);
+                        _paper.SetElementStorage(_element, "ScrollOffset", scrollOffsetValue);
                     }
 
                     int pos = CalculateTextPosition(currentValue, font, e.RelativePosition.x - TextXPadding + scrollOffsetValue);
                     pos = Math.Clamp(pos, 0, currentValue.Length);
 
-                    Paper.SetElementStorage(_element, "CursorPosition", pos);
-                    Paper.SetElementStorage(_element, "SelectionEnd", pos);
+                    _paper.SetElementStorage(_element, "CursorPosition", pos);
+                    _paper.SetElementStorage(_element, "SelectionEnd", pos);
 
                     // Ensure cursor is visible with updated scroll position
                     EnsureCursorVisible(currentValue, font, pos);
@@ -1188,10 +1191,10 @@ namespace Prowl.PaperUI
             {
                 if (!isFocused) return;
 
-                string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
-                int curPos = Paper.GetElementStorage<int>(_element, "CursorPosition", 0);
-                int selStart = Paper.GetElementStorage<int>(_element, "SelectionStart", -1);
-                int selEnd = Paper.GetElementStorage<int>(_element, "SelectionEnd", -1);
+                string currentValue = _paper.GetElementStorage<string>(_element, "Value", "");
+                int curPos = _paper.GetElementStorage<int>(_element, "CursorPosition", 0);
+                int selStart = _paper.GetElementStorage<int>(_element, "SelectionStart", -1);
+                int selEnd = _paper.GetElementStorage<int>(_element, "SelectionEnd", -1);
 
                 bool valueChanged = false;
 
@@ -1226,7 +1229,7 @@ namespace Prowl.PaperUI
                         break;
 
                     case PaperKey.Left:
-                        if (Paper.IsKeyDown(PaperKey.LeftShift) || Paper.IsKeyDown(PaperKey.RightShift))
+                        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift))
                         {
                             // Shift+Left: extend selection
                             if (selStart < 0) selStart = curPos;
@@ -1250,7 +1253,7 @@ namespace Prowl.PaperUI
                         break;
 
                     case PaperKey.Right:
-                        if (Paper.IsKeyDown(PaperKey.LeftShift) || Paper.IsKeyDown(PaperKey.RightShift))
+                        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift))
                         {
                             // Shift+Right: extend selection
                             if (selStart < 0) selStart = curPos;
@@ -1274,7 +1277,7 @@ namespace Prowl.PaperUI
                         break;
 
                     case PaperKey.Home:
-                        if (Paper.IsKeyDown(PaperKey.LeftShift) || Paper.IsKeyDown(PaperKey.RightShift))
+                        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift))
                         {
                             if (selStart < 0) selStart = curPos;
                             curPos = 0;
@@ -1288,7 +1291,7 @@ namespace Prowl.PaperUI
                         break;
 
                     case PaperKey.End:
-                        if (Paper.IsKeyDown(PaperKey.LeftShift) || Paper.IsKeyDown(PaperKey.RightShift))
+                        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift))
                         {
                             if (selStart < 0) selStart = curPos;
                             curPos = currentValue.Length;
@@ -1302,7 +1305,7 @@ namespace Prowl.PaperUI
                         break;
 
                     case PaperKey.A:
-                        if (Paper.IsKeyDown(PaperKey.LeftControl) || Paper.IsKeyDown(PaperKey.RightControl))
+                        if (_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl))
                         {
                             // Select all
                             selStart = 0;
@@ -1312,34 +1315,34 @@ namespace Prowl.PaperUI
                         break;
 
                     case PaperKey.C:
-                        if ((Paper.IsKeyDown(PaperKey.LeftControl) || Paper.IsKeyDown(PaperKey.RightControl)) && HasSelection())
+                        if ((_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl)) && HasSelection())
                         {
                             // Copy selection
                             int start = Math.Min(selStart, selEnd);
                             int end = Math.Max(selStart, selEnd);
                             string selectedText = currentValue.Substring(start, end - start);
-                            Paper.SetClipboard(selectedText);
+                            _paper.SetClipboard(selectedText);
                         }
                         break;
 
                     case PaperKey.X:
-                        if ((Paper.IsKeyDown(PaperKey.LeftControl) || Paper.IsKeyDown(PaperKey.RightControl)) && HasSelection())
+                        if ((_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl)) && HasSelection())
                         {
                             // Cut selection
                             int start = Math.Min(selStart, selEnd);
                             int end = Math.Max(selStart, selEnd);
                             string selectedText = currentValue.Substring(start, end - start);
-                            Paper.SetClipboard(selectedText);
+                            _paper.SetClipboard(selectedText);
                             DeleteSelection(ref currentValue, ref curPos, ref selStart, ref selEnd);
                             valueChanged = true;
                         }
                         break;
 
                     case PaperKey.V:
-                        if (Paper.IsKeyDown(PaperKey.LeftControl) || Paper.IsKeyDown(PaperKey.RightControl))
+                        if (_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl))
                         {
                             // Paste from clipboard
-                            string clipText = Paper.GetClipboard();
+                            string clipText = _paper.GetClipboard();
                             if (!string.IsNullOrEmpty(clipText))
                             {
                                 if (HasSelection())
@@ -1356,10 +1359,10 @@ namespace Prowl.PaperUI
                 }
 
                 // Update stored values
-                Paper.SetElementStorage(_element, "Value", currentValue);
-                Paper.SetElementStorage(_element, "CursorPosition", curPos);
-                Paper.SetElementStorage(_element, "SelectionStart", selStart);
-                Paper.SetElementStorage(_element, "SelectionEnd", selEnd);
+                _paper.SetElementStorage(_element, "Value", currentValue);
+                _paper.SetElementStorage(_element, "CursorPosition", curPos);
+                _paper.SetElementStorage(_element, "SelectionStart", selStart);
+                _paper.SetElementStorage(_element, "SelectionEnd", selEnd);
 
                 // Ensure cursor is visible
                 EnsureCursorVisible(currentValue, font, curPos);
@@ -1382,10 +1385,10 @@ namespace Prowl.PaperUI
             {
                 if (!isFocused) return;
 
-                string currentValue = Paper.GetElementStorage<string>(_element, "Value", "");
-                int curPos = Paper.GetElementStorage<int>(_element, "CursorPosition", 0);
-                int selStart = Paper.GetElementStorage<int>(_element, "SelectionStart", -1);
-                int selEnd = Paper.GetElementStorage<int>(_element, "SelectionEnd", -1);
+                string currentValue = _paper.GetElementStorage<string>(_element, "Value", "");
+                int curPos = _paper.GetElementStorage<int>(_element, "CursorPosition", 0);
+                int selStart = _paper.GetElementStorage<int>(_element, "SelectionStart", -1);
+                int selEnd = _paper.GetElementStorage<int>(_element, "SelectionEnd", -1);
 
                 // If we have a selection, delete it first
                 if (selStart >= 0 && selEnd >= 0 && selStart != selEnd)
@@ -1400,10 +1403,10 @@ namespace Prowl.PaperUI
                     curPos++;
 
                     // Update the value
-                    Paper.SetElementStorage(_element, "Value", currentValue);
-                    Paper.SetElementStorage(_element, "CursorPosition", curPos);
-                    Paper.SetElementStorage(_element, "SelectionStart", selStart);
-                    Paper.SetElementStorage(_element, "SelectionEnd", selEnd);
+                    _paper.SetElementStorage(_element, "Value", currentValue);
+                    _paper.SetElementStorage(_element, "CursorPosition", curPos);
+                    _paper.SetElementStorage(_element, "SelectionStart", selStart);
+                    _paper.SetElementStorage(_element, "SelectionEnd", selEnd);
 
                     // Ensure cursor is visible
                     EnsureCursorVisible(currentValue, font, curPos);
@@ -1416,10 +1419,10 @@ namespace Prowl.PaperUI
             // Render cursor and selection
             OnPostLayout((Element el, Rect rect) =>
             {
-                Paper.AddActionElement(el, (canvas, r) =>
+                _paper.AddActionElement(el, (canvas, r) =>
                 {
-                    string currentValue = Paper.GetElementStorage<string>(el, "Value", "");
-                    double scrollOffsetValue = Paper.GetElementStorage<double>(el, "ScrollOffset", 0.0);
+                    string currentValue = _paper.GetElementStorage<string>(el, "Value", "");
+                    double scrollOffsetValue = _paper.GetElementStorage<double>(el, "ScrollOffset", 0.0);
 
                     // Apply scroll transform to content
                     canvas.TransformBy(Transform2D.CreateTranslation(-scrollOffsetValue, 0));
@@ -1439,11 +1442,11 @@ namespace Prowl.PaperUI
 
                     if (isFocused)
                     {
-                        Paper.CaptureKeyboard();
+                        _paper.CaptureKeyboard();
 
                         // Draw text selection if applicable
-                        int selStart = Paper.GetElementStorage<int>(el, "SelectionStart", -1);
-                        int selEnd = Paper.GetElementStorage<int>(el, "SelectionEnd", -1);
+                        int selStart = _paper.GetElementStorage<int>(el, "SelectionStart", -1);
+                        int selEnd = _paper.GetElementStorage<int>(el, "SelectionEnd", -1);
 
                         if (selStart >= 0 && selEnd >= 0 && selStart != selEnd)
                         {
@@ -1472,10 +1475,10 @@ namespace Prowl.PaperUI
                         }
 
                         // Draw cursor if we have focus
-                        int cursorPos = Paper.GetElementStorage<int>(el, "CursorPosition", 0);
+                        int cursorPos = _paper.GetElementStorage<int>(el, "CursorPosition", 0);
 
                         // Only draw cursor during visible part of blink cycle
-                        if ((int)(Paper.Time * 2) % 2 == 0)
+                        if ((int)(_paper.Time * 2) % 2 == 0)
                         {
                             double cursorX = r.x + TextXPadding + CalculateTextWidth(currentValue.Substring(0, cursorPos), font);
                             double cursorHeight = font.LineHeight;
@@ -1501,7 +1504,7 @@ namespace Prowl.PaperUI
         /// </summary>
         private void EnsureCursorVisible(string text, SpriteFontBase font, int cursorPosition)
         {
-            double scrollOffset = Paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
+            double scrollOffset = _paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
 
             // Calculate current cursor position
             double cursorX = CalculateTextWidth(text.Substring(0, cursorPosition), font);
@@ -1525,7 +1528,7 @@ namespace Prowl.PaperUI
             }
 
             // Update scroll position
-            Paper.SetElementStorage(_element, "ScrollOffset", scrollOffset);
+            _paper.SetElementStorage(_element, "ScrollOffset", scrollOffset);
         }
 
         /// <summary>
@@ -1598,12 +1601,12 @@ namespace Prowl.PaperUI
         /// <returns>This builder as an IDisposable to be used with 'using' statements</returns>
         public IDisposable Enter()
         {
-            var currentParent = Paper.CurrentParent;
+            var currentParent = _paper.CurrentParent;
             if (currentParent == _element)
                 throw new InvalidOperationException("Cannot enter the same element twice.");
 
             // Push this element onto the stack
-            Paper._elementStack.Push(_element);
+            _paper._elementStack.Push(_element);
 
             return this;
         }
@@ -1615,8 +1618,8 @@ namespace Prowl.PaperUI
         void IDisposable.Dispose()
         {
             // Pop this element from the stack when the using block ends
-            if (Paper._elementStack.Count > 1) // Don't pop the root
-                Paper._elementStack.Pop();
+            if (_paper._elementStack.Count > 1) // Don't pop the root
+                _paper._elementStack.Pop();
         }
     }
 }

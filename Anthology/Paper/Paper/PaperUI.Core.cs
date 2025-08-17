@@ -9,54 +9,54 @@ using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {
-    public static partial class Paper
+    public partial class Paper
     {
         #region Fields & Properties
 
         // Layout and hierarchy management
-        private static LayoutEngine.Element _rootElement;
-        internal static Stack<LayoutEngine.Element> _elementStack = new Stack<LayoutEngine.Element>();
-        private static readonly Stack<ulong> _IDStack = new();
-        private static readonly Dictionary<ulong, Element> _createdElements = [];
+        private LayoutEngine.Element _rootElement;
+        internal Stack<LayoutEngine.Element> _elementStack = new Stack<LayoutEngine.Element>();
+        private readonly Stack<ulong> _IDStack = new();
+        private readonly Dictionary<ulong, Element> _createdElements = [];
 
-        private static readonly Dictionary<ulong, Hashtable> _storage = [];
+        private readonly Dictionary<ulong, Hashtable> _storage = [];
 
         // Rendering context
-        private static Canvas _canvas;
-        private static ICanvasRenderer _renderer;
-        private static double _width;
-        private static double _height;
-        private static Stopwatch _timer = new();
+        private Canvas _canvas;
+        private ICanvasRenderer _renderer;
+        private double _width;
+        private double _height;
+        private Stopwatch _timer = new();
 
         // Events
-        public static Action? OnEndOfFramePreLayout = null;
-        public static Action? OnEndOfFramePostLayout = null;
+        public Action? OnEndOfFramePreLayout = null;
+        public Action? OnEndOfFramePostLayout = null;
 
         // Performance metrics
-        public static double MillisecondsSpent { get; private set; }
-        public static uint CountOfAllElements { get; private set; }
+        public double MillisecondsSpent { get; private set; }
+        public uint CountOfAllElements { get; private set; }
 
         // Public properties
-        public static Rect ScreenRect => new Rect(0, 0, _width, _height);
-        public static Element RootElement => _rootElement;
-        public static Canvas Canvas => _canvas;
+        public Rect ScreenRect => new Rect(0, 0, _width, _height);
+        public Element RootElement => _rootElement;
+        public Canvas Canvas => _canvas;
 
         /// <summary>
         /// Gets the current parent element in the element hierarchy.
         /// </summary>
-        public static LayoutEngine.Element CurrentParent => _elementStack.Peek();
+        public LayoutEngine.Element CurrentParent => _elementStack.Peek();
 
         #endregion
 
         #region Initialization and Frame Management
 
         /// <summary>
-        /// Initializes the ImGui system with a renderer and dimensions.
+        /// Initializes Paper with a renderer and dimensions.
         /// </summary>
         /// <param name="renderer">The canvas renderer implementation</param>
         /// <param name="width">Viewport width</param>
         /// <param name="height">Viewport height</param>
-        public static void Initialize(ICanvasRenderer renderer, double width, double height)
+        public Paper(ICanvasRenderer renderer, double width, double height)
         {
             _width = width;
             _height = height;
@@ -86,7 +86,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Updates the viewport resolution.
         /// </summary>
-        public static void SetResolution(double width, double height)
+        public void SetResolution(double width, double height)
         {
             _width = width;
             _height = height;
@@ -97,7 +97,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="deltaTime">Time elapsed since the last frame</param>
         /// <param name="frameBufferScale">Optional framebuffer scaling factor</param>
-        public static void BeginFrame(double deltaTime, Vector2? frameBufferScale = null)
+        public void BeginFrame(double deltaTime, Vector2? frameBufferScale = null)
         {
             _timer.Restart();
             SetTime(deltaTime);
@@ -126,7 +126,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Ends the current UI frame, performing layout calculations and rendering.
         /// </summary>
-        public static void EndFrame()
+        public void EndFrame()
         {
             // Update element styles
             UpdateStyles(DeltaTime, _rootElement);
@@ -166,7 +166,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Calls post-layout callbacks for an element and its children.
         /// </summary>
-        private static void CallPostLayoutRecursive(LayoutEngine.Element element)
+        private void CallPostLayoutRecursive(LayoutEngine.Element element)
         {
             _elementStack.Push(element);
             try
@@ -191,7 +191,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Renders an element and its children recursively.
         /// </summary>
-        private static void RenderElement(Element element)
+        private void RenderElement(Element element)
         {
             if (element.Visible == false)
                 return;
@@ -252,12 +252,12 @@ namespace Prowl.PaperUI
             }
 
             // Scrollbars offset the position of children
-            bool hasScrollState = Paper.HasElementStorage(element, "ScrollState");
+            bool hasScrollState = this.HasElementStorage(element, "ScrollState");
             ScrollState scrollState = new();
             if (hasScrollState)
             {
                 _canvas.SaveState();
-                scrollState = Paper.GetElementStorage<ScrollState>(element, "ScrollState");
+                scrollState = this.GetElementStorage<ScrollState>(element, "ScrollState");
                 var transform = Transform2D.CreateTranslation(-scrollState.Position);
                 _canvas.TransformBy(transform);
             }
@@ -303,7 +303,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Draws the default scrollbars for a scrollable element.
         /// </summary>
-        private static void DrawDefaultScrollbars(Canvas canvas, Rect rect, ScrollState state, Scroll flags)
+        private void DrawDefaultScrollbars(Canvas canvas, Rect rect, ScrollState state, Scroll flags)
         {
             // Calculate scrollbar positions and sizes
             bool hasHorizontal = state.ContentSize.x > state.ViewportSize.x && (flags & Scroll.ScrollX) != 0;
@@ -350,7 +350,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="id">The ID to search for</param>
         /// <returns>The found element or null if not found</returns>
-        public static Element? FindElementByID(ulong id)
+        public Element? FindElementByID(ulong id)
         {
             if (_createdElements.TryGetValue(id, out var element))
                 return element;
@@ -363,7 +363,7 @@ namespace Prowl.PaperUI
         /// <param name="stringID">String identifier for the element</param>
         /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
         /// <returns>A builder for configuring the element</returns>
-        public static ElementBuilder Box(string stringID, [CallerLineNumber] int intID = 0)
+        public ElementBuilder Box(string stringID, [CallerLineNumber] int intID = 0)
         {
             ArgumentNullException.ThrowIfNull(stringID);
 
@@ -376,7 +376,7 @@ namespace Prowl.PaperUI
             if (_createdElements.ContainsKey(storageHash))
                 throw new Exception("Element already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + " Parent: " + CurrentParent.ID + "\nPlease use a different ID.");
 
-            var builder = new ElementBuilder(storageHash);
+            var builder = new ElementBuilder(this, storageHash);
             _createdElements.Add(storageHash, builder._element);
 
             AddChild(builder._element);
@@ -387,13 +387,13 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a row layout container (horizontal layout).
         /// </summary>
-        public static ElementBuilder Row(string stringID, [CallerLineNumber] int intID = 0)
+        public ElementBuilder Row(string stringID, [CallerLineNumber] int intID = 0)
             => Box(stringID, intID).LayoutType(LayoutType.Row);
 
         /// <summary>
         /// Creates a column layout container (vertical layout).
         /// </summary>
-        public static ElementBuilder Column(string stringID, [CallerLineNumber] int intID = 0)
+        public ElementBuilder Column(string stringID, [CallerLineNumber] int intID = 0)
             => Box(stringID, intID).LayoutType(LayoutType.Column);
 
         /// <summary>
@@ -402,7 +402,7 @@ namespace Prowl.PaperUI
         /// You can combine this with Depth to ensure something always renders ontop!
         /// </summary>
         /// <exception cref="Exception"></exception>
-        public static void MoveToRoot()
+        public void MoveToRoot()
         {
             if (CurrentParent == null)
                 throw new Exception("Not currently inside an Element.");
@@ -416,7 +416,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Adds a child element to the current parent.
         /// </summary>
-        internal static void AddChild(LayoutEngine.Element element)
+        internal void AddChild(LayoutEngine.Element element)
         {
             if (element.Parent != null)
                 throw new Exception("Element already has a parent.");
@@ -425,12 +425,12 @@ namespace Prowl.PaperUI
             CurrentParent.Children.Add(element);
         }
 
-        public static void AddActionElement(Action<Canvas, Rect> renderAction) => AddActionElement(CurrentParent, renderAction);
+        public void AddActionElement(Action<Canvas, Rect> renderAction) => AddActionElement(CurrentParent, renderAction);
 
         /// <summary>
         /// Adds a custom render action to an element.
         /// </summary>
-        public static void AddActionElement(Element element, Action<Canvas, Rect> renderAction)
+        public void AddActionElement(Element element, Action<Canvas, Rect> renderAction)
         {
             ArgumentNullException.ThrowIfNull(element);
             ArgumentNullException.ThrowIfNull(renderAction);
@@ -450,7 +450,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Pushes an ID onto the ID stack to create a new scope.
         /// </summary>
-        public static void PushID(ulong id)
+        public void PushID(ulong id)
         {
             _IDStack.Push(id);
         }
@@ -458,7 +458,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Pops the current ID from the stack, returning to the parent scope.
         /// </summary>
-        public static void PopID()
+        public void PopID()
         {
             if (_IDStack.Count > 1)
                 _IDStack.Pop();
@@ -471,15 +471,15 @@ namespace Prowl.PaperUI
         #region Element Storage
 
         /// <summary> Get a value from the global GUI storage this persists across all Frames and Elements </summary>
-        public static T GetRootStorage<T>(string key) => GetElementStorage<T>(_rootElement, key, default);
+        public T GetRootStorage<T>(string key) => GetElementStorage<T>(_rootElement, key, default);
         /// <summary> Set a value in the root element </summary>
-        public static void SetRootStorage<T>(string key, T value) => SetElementStorage(_rootElement, key, value);
+        public void SetRootStorage<T>(string key, T value) => SetElementStorage(_rootElement, key, value);
 
         /// <summary> Get a value from the current element's storage </summary>
-        public static T GetElementStorage<T>(string key, T defaultValue = default) => GetElementStorage(CurrentParent, key, defaultValue);
+        public T GetElementStorage<T>(string key, T defaultValue = default) => GetElementStorage(CurrentParent, key, defaultValue);
 
         /// <summary> Get a value from the current element's storage </summary>
-        public static T GetElementStorage<T>(Element el, string key, T defaultValue = default)
+        public T GetElementStorage<T>(Element el, string key, T defaultValue = default)
         {
             if (!_storage.TryGetValue(el.ID, out var storage))
                 return defaultValue;
@@ -491,12 +491,12 @@ namespace Prowl.PaperUI
         }
 
         /// <summary> Check if a key exists in the current element's storage </summary>
-        public static bool HasElementStorage(Element el, string key) => _storage.TryGetValue(el.ID, out var storage) && storage.ContainsKey(key);
+        public bool HasElementStorage(Element el, string key) => _storage.TryGetValue(el.ID, out var storage) && storage.ContainsKey(key);
 
         /// <summary> Set a value in the current element's storage </summary>
-        public static void SetElementStorage<T>(string key, T value) => SetElementStorage(CurrentParent, key, value);
+        public void SetElementStorage<T>(string key, T value) => SetElementStorage(CurrentParent, key, value);
         /// <summary> Set a value in the current element's storage </summary>
-        public static void SetElementStorage<T>(Element el, string key, T value)
+        public void SetElementStorage<T>(Element el, string key, T value)
         {
             if (!_storage.TryGetValue(el.ID, out var storage))
                 _storage[el.ID] = storage = [];
@@ -509,20 +509,20 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Gets the current value of a text field.
         /// </summary>
-        public static string GetTextFieldValue(Element element)
+        public string GetTextFieldValue(Element element)
         {
-            return Paper.GetElementStorage<string>(element, "Value", "");
+            return this.GetElementStorage<string>(element, "Value", "");
         }
 
         /// <summary>
         /// Sets the value of a text field.
         /// </summary>
-        public static void SetTextFieldValue(Element element, string value)
+        public void SetTextFieldValue(Element element, string value)
         {
-            Paper.SetElementStorage(element, "Value", value);
-            Paper.SetElementStorage(element, "CursorPosition", value.Length);
-            Paper.SetElementStorage(element, "SelectionStart", -1);
-            Paper.SetElementStorage(element, "SelectionEnd", -1);
+            this.SetElementStorage(element, "Value", value);
+            this.SetElementStorage(element, "CursorPosition", value.Length);
+            this.SetElementStorage(element, "SelectionStart", -1);
+            this.SetElementStorage(element, "SelectionEnd", -1);
         }
 
         #endregion
@@ -534,22 +534,22 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a stretch unit value with the specified factor.
         /// </summary>
-        public static UnitValue Stretch(double factor = 1f) => UnitValue.Stretch(factor);
+        public UnitValue Stretch(double factor = 1f) => UnitValue.Stretch(factor);
 
         /// <summary>
         /// Creates a pixel-based unit value.
         /// </summary>
-        public static UnitValue Pixels(double value) => UnitValue.Pixels(value);
+        public UnitValue Pixels(double value) => UnitValue.Pixels(value);
 
         /// <summary>
         /// Creates a percentage-based unit value with optional pixel offset.
         /// </summary>
-        public static UnitValue Percent(double value, double pixelOffset = 0f) => UnitValue.Percentage(value, pixelOffset);
+        public UnitValue Percent(double value, double pixelOffset = 0f) => UnitValue.Percentage(value, pixelOffset);
 
         /// <summary>
         /// Creates an auto-sized unit value.
         /// </summary>
-        public static UnitValue Auto => UnitValue.Auto;
+        public UnitValue Auto => UnitValue.Auto;
 
         #endregion
     }

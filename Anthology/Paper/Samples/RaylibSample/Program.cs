@@ -13,6 +13,8 @@ internal class Program
 {
     static RaylibCanvasRenderer _renderer;
 
+    static Paper P;
+
     static void Main(string[] args)
     {
         Console.WriteLine("Hello, World!");
@@ -26,11 +28,11 @@ internal class Program
         SetTargetFPS(60);
 
         _renderer = new RaylibCanvasRenderer();
-        Paper.Initialize(_renderer, width, height);
-        Paper.SetClipboardHandler(new RaylibClipboardHandler());
+        P = new Paper(_renderer, width, height);
+        P.SetClipboardHandler(new RaylibClipboardHandler());
 
         // Initialize the Demo, this loads the Demo fonts and other resources
-        PaperDemo.Initialize();
+        PaperDemo.Initialize(P);
 
         // Main game loop
         while (!WindowShouldClose())
@@ -39,7 +41,7 @@ internal class Program
             {
                 width = GetScreenWidth();
                 height = GetScreenHeight();
-                Paper.SetResolution(width, height);
+                P.SetResolution(width, height);
             }
 
             UpdateInput();
@@ -47,11 +49,11 @@ internal class Program
             BeginDrawing();
             ClearBackground(Color.RayWhite);
 
-            Paper.BeginFrame(GetFrameTime());
+            P.BeginFrame(GetFrameTime());
 
             PaperDemo.RenderUI();
 
-            Paper.EndFrame();
+            P.EndFrame();
 
             EndDrawing();
         }
@@ -66,34 +68,34 @@ internal class Program
     {
         // Handle mouse position and movement
         Vector2 mousePos = GetMousePosition();
-        Paper.SetPointerState(PaperMouseBtn.Unknown, (int)mousePos.X, (int)mousePos.Y, false, true);
+        P.SetPointerState(PaperMouseBtn.Unknown, (int)mousePos.X, (int)mousePos.Y, false, true);
 
         // Handle mouse buttons
         if (IsMouseButtonPressed(MouseButton.Left))
-            Paper.SetPointerState(PaperMouseBtn.Left, (int)mousePos.X, (int)mousePos.Y, true, false);
+            P.SetPointerState(PaperMouseBtn.Left, (int)mousePos.X, (int)mousePos.Y, true, false);
         if (IsMouseButtonReleased(MouseButton.Left))
-            Paper.SetPointerState(PaperMouseBtn.Left, (int)mousePos.X, (int)mousePos.Y, false, false);
+            P.SetPointerState(PaperMouseBtn.Left, (int)mousePos.X, (int)mousePos.Y, false, false);
 
         if (IsMouseButtonPressed(MouseButton.Right))
-            Paper.SetPointerState(PaperMouseBtn.Right, (int)mousePos.X, (int)mousePos.Y, true, false);
+            P.SetPointerState(PaperMouseBtn.Right, (int)mousePos.X, (int)mousePos.Y, true, false);
         if (IsMouseButtonReleased(MouseButton.Right))
-            Paper.SetPointerState(PaperMouseBtn.Right, (int)mousePos.X, (int)mousePos.Y, false, false);
+            P.SetPointerState(PaperMouseBtn.Right, (int)mousePos.X, (int)mousePos.Y, false, false);
 
         if (IsMouseButtonPressed(MouseButton.Middle))
-            Paper.SetPointerState(PaperMouseBtn.Middle, (int)mousePos.X, (int)mousePos.Y, true, false);
+            P.SetPointerState(PaperMouseBtn.Middle, (int)mousePos.X, (int)mousePos.Y, true, false);
         if (IsMouseButtonReleased(MouseButton.Middle))
-            Paper.SetPointerState(PaperMouseBtn.Middle, (int)mousePos.X, (int)mousePos.Y, false, false);
+            P.SetPointerState(PaperMouseBtn.Middle, (int)mousePos.X, (int)mousePos.Y, false, false);
 
         // Handle mouse wheel
         float wheelDelta = GetMouseWheelMove();
         if (wheelDelta != 0)
-            Paper.SetPointerWheel(wheelDelta);
+            P.SetPointerWheel(wheelDelta);
 
         // Handle keyboard input
         int key = GetCharPressed();
         while (key > 0)
         {
-            Paper.AddInputCharacter(((char)key).ToString());
+            P.AddInputCharacter(((char)key).ToString());
             key = GetCharPressed();
         }
 
@@ -144,8 +146,8 @@ internal class Program
     static void HandleKey(KeyboardKey rayKey, PaperKey paperKey)
     {
         if (IsKeyPressed(rayKey))
-            Paper.SetKeyState(paperKey, true);
+            P.SetKeyState(paperKey, true);
         else if (IsKeyReleased(rayKey))
-            Paper.SetKeyState(paperKey, false);
+            P.SetKeyState(paperKey, false);
     }
 }

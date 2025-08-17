@@ -42,8 +42,12 @@ namespace Shared
         static string searchText = "";
         static bool searchFocused = false;
 
-        public static void Initialize()
+        static Paper P;
+
+        public static void Initialize(Paper paper)
         {
+            P = paper;
+
             ToggleTheme();
             fontSystem = new FontSystem();
 
@@ -70,7 +74,7 @@ namespace Shared
             fontLarge = fontSystem.GetFont(32);
             fontTitle = fontSystem.GetFont(40);
 
-            DefineStyles();
+            DefineStyles(P);
         }
 
         public static void RenderUI()
@@ -81,7 +85,7 @@ namespace Shared
             //TestWindows();
 
             // Main container with light gray background
-            using (Paper.Column("MainContainer")
+            using (P.Column("MainContainer")
                 .BackgroundColor(backgroundColor)
                 //.Style(BoxStyle.Solid(backgroundColor))
                 .Enter())
@@ -89,12 +93,12 @@ namespace Shared
                 // A stupid simple way to benchmark the performance of the UI (Adds the entire ui multiple times)
                 for (int i = 0; i < 1; i++)
                 {
-                    Paper.PushID((ulong)i);
+                    P.PushID((ulong)i);
                     // Top navigation bar
                     RenderTopNavBar();
 
                     // Main content area
-                    using (Paper.Row("ContentArea")
+                    using (P.Row("ContentArea")
                         .Enter())
                     {
                         // Left sidebar
@@ -106,42 +110,45 @@ namespace Shared
 
                     // Footer
                     RenderFooter();
-                    Paper.PopID();
+                    P.PopID();
                 }
             }
         }
 
         public static bool isWindowAOpen = true;
         public static bool isWindowBOpen = true;
+        public static WindowManager windowManager;
 
         private static void TestWindows()
         {
+            windowManager ??= new WindowManager(P);
+
             // Window Tests
-            WindowManager.SetWindowFont(fontMedium);
-            WindowManager.Window("MyTestWindowA", ref isWindowAOpen, "Test Window", () => {
+            windowManager.SetWindowFont(fontMedium);
+            windowManager.Window("MyTestWindowA", ref isWindowAOpen, "Test Window", () => {
             // Window content rendering
-            using (Paper.Column("WindowInnerContent")
+            using (P.Column("WindowInnerContent")
                     .Enter())
                 {
-                    WindowManager.Window("MyTestWindowB", ref isWindowBOpen, "Recursive Window", () => {
+                    windowManager.Window("MyTestWindowB", ref isWindowBOpen, "Recursive Window", () => {
                         // Window content rendering
-                        using (Paper.Column("WindowInnerContent")
+                        using (P.Column("WindowInnerContent")
                             .Enter())
                         {
-                            using (Paper.Box("Title")
+                            using (P.Box("Title")
                                 .Height(40)
                                 .Text(Text.Center("Hello from Window System", fontLarge, textColor))
                                 .Enter()) { }
 
-                            using (Paper.Box("Content")
+                            using (P.Box("Content")
                                 .Text(Text.Left("This is content inside the window. You can close, resize, and drag this window.", fontMedium, textColor))
                                 .Enter()) { }
 
-                            using (Paper.Box("Button")
+                            using (P.Box("Button")
                                 .PositionType(PositionType.SelfDirected)
                                 .Width(200)
                                 .Height(200)
-                                .Margin(Paper.Stretch(), 0, Paper.Stretch(), 0)
+                                .Margin(P.Stretch(), 0, P.Stretch(), 0)
                                 .BackgroundColor(primaryColor)
                                 //.Style(BoxStyle.SolidRounded(primaryColor, 8f))
                                 //.HoverStyle(BoxStyle.SolidRounded(secondaryColor, 12f))
@@ -216,59 +223,59 @@ namespace Shared
             }
 
             // Redefine styles with new theme colors
-            DefineStyles();
+            DefineStyles(P);
         }
 
         private static void RenderTopNavBar()
         {
-            using (Paper.Row("TopNavBar")
+            using (P.Row("TopNavBar")
                 .Height(70)
                 .Style("container")
                 .Margin(15, 15, 15, 0)
                 .Enter())
             {
                 // Logo
-                using (Paper.Box("Logo")
+                using (P.Box("Logo")
                     .Width(180)
                     .Enter())
                 {
-                    Paper.Box("LogoInner")
+                    P.Box("LogoInner")
                         .Size(50)
                         .Margin(10)
                         .Text(Text.Center(Icons.Newspaper, fontLarge, lightTextColor));
 
-                    Paper.Box("LogoText")
+                    P.Box("LogoText")
                         .PositionType(PositionType.SelfDirected)
                         .Left(50 + 15)
                         .Text(Text.Left("PaperUI Demo", fontTitle, textColor));
                 }
 
                 // Spacer
-                using (Paper.Box("Spacer").Enter()) { }
+                using (P.Box("Spacer").Enter()) { }
 
                 // Search bar - now using text-field style
-                Paper.Box("SearchTextField")
+                P.Box("SearchTextField")
                     .TextField(searchText, fontMedium, newValue => searchText = newValue, "Search...")
                     .Style("text-field")
                     .SetScroll(Scroll.ScrollX)
                     .Margin(0, 15, 15, 0);
 
                 // Theme Switch - using icon-button style
-                Paper.Box("LightIcon")
+                P.Box("LightIcon")
                     .Style("icon-button")
                     .Margin(0, 10, 15, 0)
                     .Text(Text.Center(Icons.Lightbulb, fontMedium, lightTextColor))
                     .OnClick((rect) => ToggleTheme());
 
                 // Notification icon
-                Paper.Box("NotificationIcon")
+                P.Box("NotificationIcon")
                     .Style("icon-button")
                     .Margin(0, 10, 15, 0)
                     .Text(Text.Center(Icons.CircleExclamation, fontMedium, lightTextColor))
                     .OnClick((rect) => Console.WriteLine("Notifications clicked"));
 
                 // User Profile
-                Paper.Box("UserProfile")
+                P.Box("UserProfile")
                     .Width(40)
                     .Height(40)
                     .Rounded(40)
@@ -281,13 +288,13 @@ namespace Shared
 
         private static void RenderSidebar()
         {
-            using (Paper.Column("Sidebar")
+            using (P.Column("Sidebar")
                 .Style("sidebar")  // Automatic hover expansion with transitions
                 .Margin(15)
                 .Enter())
             {
                 // Menu header
-                Paper.Box("MenuHeader")
+                P.Box("MenuHeader")
                     .Height(60)
                     .Text(Text.Center("Menu", fontMedium, textColor));
 
@@ -299,19 +306,19 @@ namespace Shared
                     int index = i;
                     bool isSelected = selectedTabIndex == index;
 
-                    using (Paper.Box($"MenuItemContainer_{i}")
+                    using (P.Box($"MenuItemContainer_{i}")
                         .Style("menu-item")
                         .StyleIf(isSelected, "menu-item-selected")
                         .OnClick((rect) => selectedTabIndex = index)
                         .Clip()
                         .Enter())
                     {
-                        Paper.Box($"MenuItemIcon_{i}")
+                        P.Box($"MenuItemIcon_{i}")
                             .Width(55)
                             .Height(50)
                             .Text(Text.Center(menuIcons[i], fontSmall, textColor));
 
-                        Paper.Box($"MenuItem_{i}")
+                        P.Box($"MenuItem_{i}")
                             .Width(100)
                             .PositionType(PositionType.SelfDirected)
                             .Left(50 + 15)
@@ -320,26 +327,26 @@ namespace Shared
                 }
 
                 // Spacer
-                using (Paper.Box("SidebarSpacer").Enter()) { }
+                using (P.Box("SidebarSpacer").Enter()) { }
 
                 // Upgrade box
-                using (Paper.Box("UpgradeBox")
+                using (P.Box("UpgradeBox")
                     .Margin(15)
-                    .Height(Paper.Auto)
+                    .Height(P.Auto)
                     .Rounded(8)
                     .BackgroundColor(primaryColor)
                     .AspectRatio(0.5f)
                     .Enter())
                 {
-                    using (Paper.Column("UpgradeContent")
+                    using (P.Column("UpgradeContent")
                         .Margin(15)
                         .Clip()
                         .Enter())
                     {
-                        Paper.Box("UpgradeText")
+                        P.Box("UpgradeText")
                             .Text(Text.Center("Upgrade to Pro", fontMedium, Color.White));
 
-                        Paper.Box("UpgradeButton")
+                        P.Box("UpgradeButton")
                             .Style("button")
                             .Height(30)
                             .BackgroundColor(Color.White)
@@ -352,7 +359,7 @@ namespace Shared
 
         private static void RenderMainContent()
         {
-            using (Paper.Column("MainContent")
+            using (P.Column("MainContent")
                 .Margin(0, 15, 15, 15)
                 .Enter())
             {
@@ -374,7 +381,7 @@ namespace Shared
 
         private static void RenderTabsNavigation()
         {
-            using (Paper.Row("TabsNav")
+            using (P.Row("TabsNav")
                 .Height(60)
                 .Style("container")
                 .Enter())
@@ -386,8 +393,8 @@ namespace Shared
                     Color tabColor = isSelected ? primaryColor : lightTextColor;
                     double tabWidth = 1.0f / tabNames.Length;
 
-                    using (Paper.Box($"Tab_{i}")
-                        .Width(Paper.Stretch(tabWidth))
+                    using (P.Box($"Tab_{i}")
+                        .Width(P.Stretch(tabWidth))
                         .Style("tab")
                         .Text(Text.Center(tabNames[i], fontMedium, tabColor))
                         .OnClick((rect) => selectedTabIndex = index)
@@ -396,7 +403,7 @@ namespace Shared
                         // Show indicator line for selected tab
                         if (isSelected)
                         {
-                            Paper.Box($"TabIndicator_{i}")
+                            P.Box($"TabIndicator_{i}")
                                 .Height(4)
                                 .BackgroundColor(primaryColor)
                                 .Rounded(2);
@@ -408,7 +415,7 @@ namespace Shared
 
         private static void RenderDashboardTab()
         {
-            using (Paper.Row("DashboardCards")
+            using (P.Row("DashboardCards")
         .Height(120)
         .Margin(0, 0, 15, 0)
         .Enter())
@@ -418,8 +425,8 @@ namespace Shared
 
                 for (int i = 0; i < 4; i++)
                 {
-                    using (Paper.Box($"StatCard_{i}")
-                        .Width(Paper.Stretch(0.25f))
+                    using (P.Box($"StatCard_{i}")
+                        .Width(P.Stretch(0.25f))
                         .Style("stat-card")
                         .Hovered
                             .BorderColor(colorPalette[i % colorPalette.Length])  // Dynamic border color
@@ -428,26 +435,26 @@ namespace Shared
                         .Enter())
                     {
                         // Card icon with conditional styling based on parent hover
-                        Paper.Box($"StatIcon_{i}")
+                        P.Box($"StatIcon_{i}")
                             .Size(40)
                             .BackgroundColor(Color.FromArgb(150, colorPalette[i % colorPalette.Length]))
                             .Rounded(8)
-                            .If(Paper.IsParentHovered)
+                            .If(P.IsParentHovered)
                                 .Rounded(20)
                                 .End()
-                            .Transition(GuiProp.Rounded, 0.3, Paper.Easing.QuartOut)
+                            .Transition(GuiProp.Rounded, 0.3, Easing.QuartOut)
                             .Margin(15, 0, 15, 0)
                             .IsNotInteractable();
 
-                        using (Paper.Column($"StatContent_{i}")
+                        using (P.Column($"StatContent_{i}")
                             .Margin(10, 15, 15, 15)
                             .Enter())
                         {
-                            Paper.Box($"StatLabel_{i}")
-                                .Height(Paper.Pixels(25))
+                            P.Box($"StatLabel_{i}")
+                                .Height(P.Pixels(25))
                                 .Text(Text.Left(statNames[i], fontSmall, lightTextColor));
 
-                            Paper.Box($"StatValue_{i}")
+                            P.Box($"StatValue_{i}")
                                 .Text(Text.Left(statValues[i], fontLarge, textColor));
                         }
                     }
@@ -455,36 +462,36 @@ namespace Shared
             }
 
             // Charts and graphs row
-            using (Paper.Row("ChartRow")
+            using (P.Row("ChartRow")
                 .Margin(0, 0, 15, 0)
                 .Enter())
             {
                 // Chart area
-                using (Paper.Box("ChartArea")
-                    .Width(Paper.Stretch(0.7f))
+                using (P.Box("ChartArea")
+                    .Width(P.Stretch(0.7f))
                     .Rounded(8)
                     .BackgroundColor(cardBackground)
                     //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
                     .Enter())
                 {
                     // Chart header
-                    using (Paper.Row("ChartHeader")
+                    using (P.Row("ChartHeader")
                         .Height(60)
                         .Margin(20, 20, 20, 0)
                         .Enter())
                     {
-                        using (Paper.Box("ChartTitle")
+                        using (P.Box("ChartTitle")
                             .Text(Text.Left("Performance Overview", fontMedium, textColor))
                             .Enter()) { }
 
-                        using (Paper.Row("ChartControls")
+                        using (P.Row("ChartControls")
                             .Width(280)
                             .Enter())
                         {
                             string[] periods = { "Day", "Week", "Month", "Year" };
                             foreach (var period in periods)
                             {
-                                using (Paper.Box($"Period_{period}")
+                                using (P.Box($"Period_{period}")
                                     .Width(60)
                                     .Height(30)
                                     .Rounded(8)
@@ -502,14 +509,14 @@ namespace Shared
                     }
 
                     // Chart content
-                    using (Paper.Box("Chart")
+                    using (P.Box("Chart")
                         .Margin(20)
                         .OnDragging((e) => chartPosition += e.Delta)
                         .OnScroll((e) => zoomLevel = Math.Clamp(zoomLevel + e.Delta * 0.1f, 0.5f, 2.0f))
                         .Clip()
                         .Enter())
                     {
-                        using (Paper.Box("ChartCanvas")
+                        using (P.Box("ChartCanvas")
                             .Translate(chartPosition.x, chartPosition.y)
                             .Scale(zoomLevel)
                             //.TransformSelf((rect) => {
@@ -520,7 +527,7 @@ namespace Shared
                             .Enter())
                         {
                             // Draw a simple chart with animated data
-                            Paper.AddActionElement((vg, rect) => {
+                            P.AddActionElement((vg, rect) => {
 
                                 // Draw grid lines
                                 for (int i = 0; i <= 5; i++)
@@ -624,20 +631,20 @@ namespace Shared
                 }
 
                 // Side panel
-                using (Paper.Column("SidePanel")
-                    .Width(Paper.Stretch(0.3f))
+                using (P.Column("SidePanel")
+                    .Width(P.Stretch(0.3f))
                     .Margin(15, 0, 0, 0)
                     .Enter())
                 {
                     // Activity panel
-                    using (Paper.Box("ActivityPanel")
+                    using (P.Box("ActivityPanel")
                         .BackgroundColor(cardBackground)
                         //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
                         .Rounded(8)
                         .Enter())
                     {
                         // Panel header
-                        using (Paper.Box("PanelHeader")
+                        using (P.Box("PanelHeader")
                             .Height(60)
                             .Margin(20, 20, 20, 0)
                             .Text(Text.Left("Recent Activity", fontMedium, textColor))
@@ -658,13 +665,13 @@ namespace Shared
 
                         for (int i = 0; i < activities.Length; i++)
                         {
-                            using (Paper.Row($"Activity_{i}")
+                            using (P.Row($"Activity_{i}")
                                 .Height(70)
                                 .Margin(15, 15, i == 0 ? 5 : 0, 5)
                                 .Enter())
                             {
                                 // Activity icon
-                                using (Paper.Box($"ActivityIcon_{i}")
+                                using (P.Box($"ActivityIcon_{i}")
                                     .Width(40)
                                     .Height(40)
                                     .Rounded(8)
@@ -674,18 +681,18 @@ namespace Shared
                                     .Enter()) { }
 
                                 // Activity content
-                                using (Paper.Column($"ActivityContent_{i}")
+                                using (P.Column($"ActivityContent_{i}")
                                     .Margin(10, 0, 0, 0)
                                     .Enter())
                                 {
-                                    using (Paper.Box($"ActivityText_{i}")
-                                        .Height(Paper.Pixels(20))
+                                    using (P.Box($"ActivityText_{i}")
+                                        .Height(P.Pixels(20))
                                         .Margin(0, 0, 15, 0)
                                         .Text(Text.Left(activities[i], fontSmall, textColor))
                                         .Enter()) { }
 
-                                    using (Paper.Box($"ActivityTime_{i}")
-                                        .Height(Paper.Pixels(20))
+                                    using (P.Box($"ActivityTime_{i}")
+                                        .Height(P.Pixels(20))
                                         .Text(Text.Left(timestamps[i], fontSmall, lightTextColor))
                                         .Enter()) { }
                                 }
@@ -694,7 +701,7 @@ namespace Shared
                             // Add separator except for the last item
                             if (i < activities.Length - 1)
                             {
-                                Paper.Box($"Separator_{i}").Style("seperator");
+                                P.Box($"Separator_{i}").Style("seperator");
                             }
                         }
                     }
@@ -704,34 +711,34 @@ namespace Shared
 
         private static void RenderAnalyticsTab()
         {
-            using (Paper.Row("AnalyticsContent")
+            using (P.Row("AnalyticsContent")
                 .Enter())
             {
-                using (Paper.Box("AnalyticsContent")
+                using (P.Box("AnalyticsContent")
                     .BackgroundColor(cardBackground)
                     //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
                     .Margin(0, 15 / 2, 15, 0)
                     .Enter())
                 {
                     // Analytics header
-                    using (Paper.Box("AnalyticsHeader")
+                    using (P.Box("AnalyticsHeader")
                         .Height(80)
                         .Margin(20)
                         .Text(Text.Left("Analytics Dashboard", fontLarge, textColor))
                         .Enter()) { }
 
                     // Interactive slider as a demo control
-                    using (Paper.Column("SliderSection")
+                    using (P.Column("SliderSection")
                         .Height(100)
                         .Margin(20, 20, 0, 0)
                         .Enter())
                     {
-                        using (Paper.Box("SliderLabel")
+                        using (P.Box("SliderLabel")
                             .Height(30)
                             .Text(Text.Left($"Green Amount: {sliderValue:F2}", fontMedium, textColor))
                             .Enter()) { }
 
-                        using (Paper.Box("SliderTrack")
+                        using (P.Box("SliderTrack")
                             .Height(20)
                             .BackgroundColor(Color.FromArgb(30, 0, 0, 0))
                             //.Style(BoxStyle.SolidRounded(Color.FromArgb(30, 0, 0, 0), 10f))
@@ -746,15 +753,15 @@ namespace Shared
                             .Enter())
                         {
                             // Filled part of slider
-                            using (Paper.Box("SliderFill")
-                                .Width(Paper.Percent(sliderValue * 100))
+                            using (P.Box("SliderFill")
+                                .Width(P.Percent(sliderValue * 100))
                                 .BackgroundColor(primaryColor)
                                 //.Style(BoxStyle.SolidRounded(primaryColor, 10f))
                                 .Enter())
                             {
                                 // Slider handle
-                                using (Paper.Box("SliderHandle")
-                                    .Left(Paper.Percent(100, -10))
+                                using (P.Box("SliderHandle")
+                                    .Left(P.Percent(100, -10))
                                     .Width(20)
                                     .Height(20)
                                     .BackgroundColor(textColor)
@@ -766,12 +773,12 @@ namespace Shared
                     }
 
                     // "Analysis" mock content
-                    using (Paper.Box("AnalyticsVisual")
+                    using (P.Box("AnalyticsVisual")
                         .Margin(20)
                         .Enter())
                     {
                         // Add a simple pie chart visualization
-                        Paper.AddActionElement((vg, rect) => {
+                        P.AddActionElement((vg, rect) => {
                             double centerX = rect.x + rect.width / 2;
                             double centerY = rect.y + rect.height / 2;
                             double radius = Math.Min(rect.width, rect.height) * 0.4f;
@@ -842,7 +849,7 @@ namespace Shared
                     }
                 }
 
-                using (Paper.Box("ScrollTest")
+                using (P.Box("ScrollTest")
                     .BackgroundColor(cardBackground)
                     //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
                     .Margin(15 / 2, 0, 15, 0)
@@ -852,16 +859,16 @@ namespace Shared
                     int amount = (int)(Math.Abs(Math.Sin(time * 0.25)) * 25) + 10;
 
                     // Create a grid layout for items
-                    using (Paper.Row("GridContainer")
+                    using (P.Row("GridContainer")
                         .Enter())
                     {
                         // Left column - cards
-                        using (Paper.Column("LeftColumn")
-                            .Width(Paper.Stretch(0.6))
+                        using (P.Column("LeftColumn")
+                            .Width(P.Stretch(0.6))
                             .SetScroll(Scroll.ScrollY)
                             .Enter())
                         {
-                            double scrollState = Paper.GetElementStorage<ScrollState>(Paper.CurrentParent, "ScrollState", new ScrollState()).Position.y;
+                            double scrollState = P.GetElementStorage<ScrollState>(P.CurrentParent, "ScrollState", new ScrollState()).Position.y;
 
                             for (int i = 0; i < 10; i++)
                             {
@@ -899,7 +906,7 @@ namespace Shared
                                 // Custom icon for each card
                                 string icon = Icons.GetRandomIcon(i);
 
-                                using (Paper.Box($"Card_{i}")
+                                using (P.Box($"Card_{i}")
                                     .Height(70)
                                     .Margin(10, 10, 5, 5)
                                     .BackgroundColor(Color.FromArgb(230, itemColor))
@@ -908,12 +915,12 @@ namespace Shared
                                     .Rounded(12)
                                     .Enter())
                                 {
-                                    using (Paper.Row("CardContent")
+                                    using (P.Row("CardContent")
                                         .Margin(10)
                                         .Enter())
                                     {
                                         // Icon
-                                        using (Paper.Box($"CardIcon_{i}")
+                                        using (P.Box($"CardIcon_{i}")
                                             .Width(50)
                                             .Height(50)
                                             .Rounded(25)
@@ -922,16 +929,16 @@ namespace Shared
                                             .Enter()) { }
 
                                         // Content
-                                        using (Paper.Column($"CardTextColumn_{i}")
+                                        using (P.Column($"CardTextColumn_{i}")
                                             .Margin(10, 0, 0, 0)
                                             .Enter())
                                         {
-                                            using (Paper.Box($"CardTitle_{i}")
+                                            using (P.Box($"CardTitle_{i}")
                                                 .Height(25)
                                                 .Text(Text.Left($"Item {i}", fontMedium, textColor))
                                                 .Enter()) { }
 
-                                            using (Paper.Box($"CardDescription_{i}")
+                                            using (P.Box($"CardDescription_{i}")
                                                 .Text(Text.Left($"Interactive card with animations", fontSmall,
                                                     Color.FromArgb(200, textColor)))
                                                 .Enter()) { }
@@ -948,33 +955,33 @@ namespace Shared
 
         private static void RenderProfileTab()
         {
-            using (Paper.Row("ProfileContent")
+            using (P.Row("ProfileContent")
                 .Margin(0, 0, 15, 0)
                 .Enter())
             {
                 // Left panel - profile info
-                using (Paper.Column("ProfileDetails")
-                    .Width(Paper.Stretch(0.4f))
+                using (P.Column("ProfileDetails")
+                    .Width(P.Stretch(0.4f))
                     .BackgroundColor(cardBackground)
                     //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
                     .Enter())
                 {
                     // Profile header with avatar
-                    using (Paper.Column("ProfileHeader")
+                    using (P.Column("ProfileHeader")
                         .Height(250)
                         .Enter())
                     {
                         // Avatar
-                        using (Paper.Row("AvatarSpot")
+                        using (P.Row("AvatarSpot")
                             .Height(120)
                             .Margin(0, 0, 40, 20)
                             .Enter())
                         {
                             // Spacer to Center Avatar
-                            using (Paper.Box("Spacer0").Enter()) { }
+                            using (P.Box("Spacer0").Enter()) { }
 
                             // Avatar
-                            using (Paper.Box("Avatar")
+                            using (P.Box("Avatar")
                                 .Width(120)
                                 .Height(120)
                                 .BackgroundColor(secondaryColor)
@@ -983,25 +990,25 @@ namespace Shared
                                 .Enter()) { }
 
                             // Spacer to Center Avatar
-                            using (Paper.Box("Spacer1").Enter()) { }
+                            using (P.Box("Spacer1").Enter()) { }
                         }
 
 
                         // User name
-                        using (Paper.Box("UserName")
+                        using (P.Box("UserName")
                             .Height(40)
                             .Text(Text.Center("John Doe", fontLarge, textColor))
                             .Enter()) { }
 
                         // User title
-                        using (Paper.Box("UserTitle")
+                        using (P.Box("UserTitle")
                             .Height(30)
                             .Text(Text.Center("Senior Developer", fontMedium, lightTextColor))
                             .Enter()) { }
                     }
 
                     // User stats
-                    using (Paper.Row("UserStats")
+                    using (P.Row("UserStats")
                         .Height(80)
                         .Margin(20, 20, 0, 0)
                         .Enter())
@@ -1011,16 +1018,16 @@ namespace Shared
 
                         for (int i = 0; i < statLabels.Length; i++)
                         {
-                            using (Paper.Column($"Stat_{i}")
-                                .Width(Paper.Stretch(1.0f / statLabels.Length))
+                            using (P.Column($"Stat_{i}")
+                                .Width(P.Stretch(1.0f / statLabels.Length))
                                 .Enter())
                             {
-                                using (Paper.Box($"StatValue_{i}")
+                                using (P.Box($"StatValue_{i}")
                                     .Height(40)
                                     .Text(Text.Center(statValues[i], fontLarge, primaryColor))
                                     .Enter()) { }
 
-                                using (Paper.Box($"StatLabel_{i}")
+                                using (P.Box($"StatLabel_{i}")
                                     .Height(30)
                                     .Text(Text.Center(statLabels[i], fontSmall, lightTextColor))
                                     .Enter()) { }
@@ -1029,7 +1036,7 @@ namespace Shared
                     }
 
                     // Contact info
-                    using (Paper.Column("ContactInfo")
+                    using (P.Column("ContactInfo")
                         .Margin(20)
                         .Enter())
                     {
@@ -1038,16 +1045,16 @@ namespace Shared
 
                         for (int i = 0; i < contactLabels.Length; i++)
                         {
-                            using (Paper.Row($"ContactRow_{i}")
+                            using (P.Row($"ContactRow_{i}")
                                 .Height(50)
                                 .Enter())
                             {
-                                using (Paper.Box($"ContactLabel_{i}")
+                                using (P.Box($"ContactLabel_{i}")
                                     .Width(100)
                                     .Text(Text.Left(contactLabels[i] + ":", fontSmall, lightTextColor))
                                     .Enter()) { }
 
-                                using (Paper.Box($"ContactValue_{i}")
+                                using (P.Box($"ContactValue_{i}")
                                     .Text(Text.Left(contactValues[i], fontSmall, textColor))
                                     .Enter()) { }
                             }
@@ -1056,27 +1063,27 @@ namespace Shared
                 }
 
                 // Right panel - profile activity
-                using (Paper.Column("ProfileActivity")
-                    .Width(Paper.Stretch(0.6f))
+                using (P.Column("ProfileActivity")
+                    .Width(P.Stretch(0.6f))
                     .Margin(15, 0, 0, 0)
                     .Enter())
                 {
                     // Activity tracker
-                    using (Paper.Box("ActivityTracker")
-                        .Height(Paper.Stretch(0.6f))
+                    using (P.Box("ActivityTracker")
+                        .Height(P.Stretch(0.6f))
                         .BackgroundColor(cardBackground)
                         //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
                         .Enter())
                     {
                         // Header
-                        using (Paper.Box("ActivityHeader")
+                        using (P.Box("ActivityHeader")
                             .Height(60)
                             .Margin(20, 20, 0, 0)
                             .Text(Text.Left("Activity Tracker", fontMedium, textColor))
                             .Enter()) { }
 
                         // Week days
-                        using (Paper.Row("WeekDays")
+                        using (P.Row("WeekDays")
                             .Height(30)
                             .Margin(20, 20, 0, 0)
                             .Enter())
@@ -1084,19 +1091,19 @@ namespace Shared
                             string[] days = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
                             foreach (var day in days)
                             {
-                                using (Paper.Box($"Day_{day}")
+                                using (P.Box($"Day_{day}")
                                     .Text(Text.Center(day, fontSmall, lightTextColor))
                                     .Enter()) { }
                             }
                         }
 
                         // Activity grid - contribution calendar
-                        using (Paper.Box("ActivityGrid")
+                        using (P.Box("ActivityGrid")
                             .Margin(20, 20, 0, 20)
                             .Enter())
                         {
                             // Render contribution graph
-                            Paper.AddActionElement((vg, rect) => {
+                            P.AddActionElement((vg, rect) => {
                                 int days = 7;
                                 int weeks = 4;
                                 double cellWidth = rect.width / days;
@@ -1131,15 +1138,15 @@ namespace Shared
                     }
 
                     // Skills section
-                    using (Paper.Box("SkillsSection")
-                        .Height(Paper.Stretch(0.4f))
+                    using (P.Box("SkillsSection")
+                        .Height(P.Stretch(0.4f))
                         .BackgroundColor(cardBackground)
                         //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
                         .Margin(0, 0, 15, 0)
                         .Enter())
                     {
                         // Header
-                        using (Paper.Box("SkillsHeader")
+                        using (P.Box("SkillsHeader")
                             .Height(20)
                             .Margin(20, 20, 20, 0)
                             .Text(Text.MiddleLeft("Skills", fontMedium, textColor))
@@ -1149,25 +1156,25 @@ namespace Shared
                         string[] skills = { "Programming", "Design", "Communication", "Leadership", "Problem Solving" };
                         double[] skillLevels = { 0.9f, 0.75f, 0.8f, 0.6f, 0.85f };
 
-                        using (Paper.Column("SkillBars")
+                        using (P.Column("SkillBars")
                             .Margin(20)
                             .Enter())
                         {
                             for (int i = 0; i < skills.Length; i++)
                             {
-                                using (Paper.Column($"Skill_{i}")
-                                    .Height(Paper.Stretch(1.0f / skills.Length))
+                                using (P.Column($"Skill_{i}")
+                                    .Height(P.Stretch(1.0f / skills.Length))
                                     .Margin(0, 0, i == 0 ? 0 : 10, 0)
                                     .Enter())
                                 {
                                     // Skill label
-                                    using (Paper.Box($"SkillLabel_{i}")
+                                    using (P.Box($"SkillLabel_{i}")
                                         .Height(25)
                                         .Text(Text.Left(skills[i], fontSmall, textColor))
                                         .Enter()) { }
 
                                     // Skill bar
-                                    using (Paper.Row($"SkillBarBg_{i}")
+                                    using (P.Row($"SkillBarBg_{i}")
                                         .Height(15)
                                         .BackgroundColor(Color.FromArgb(30, 0, 0, 0))
                                         //.Style(BoxStyle.SolidRounded(Color.FromArgb(30, 0, 0, 0), 7.5f))
@@ -1176,14 +1183,14 @@ namespace Shared
                                         // Animate the skill level with time
                                         double animatedLevel = skillLevels[i];
 
-                                        using (Paper.Box($"SkillBarFg_{i}")
-                                            .Width(Paper.Percent(animatedLevel * 100f))
+                                        using (P.Box($"SkillBarFg_{i}")
+                                            .Width(P.Percent(animatedLevel * 100f))
                                             .BackgroundColor(colorPalette[i % colorPalette.Length])
                                             //.Style(BoxStyle.SolidRoundedWithBorder(colorPalette[i % colorPalette.Length], primaryColor, 7.5f, 2))
                                             .Enter()) { }
 
                                         // Percentage label
-                                        using (Paper.Box($"SkillPercent_{i}")
+                                        using (P.Box($"SkillPercent_{i}")
                                             .Width(40)
                                             .Text(Text.Right($"{animatedLevel * 100:F0}%", fontSmall, lightTextColor))
                                             .Enter()) { }
@@ -1198,12 +1205,12 @@ namespace Shared
 
         private static void RenderSettingsTab()
         {
-            using (Paper.Row("SettingsContent")
+            using (P.Row("SettingsContent")
                 .Margin(0, 0, 15, 0)
                 .Enter())
             {
                 // Settings categories sidebar
-                using (Paper.Column("SettingsCategories")
+                using (P.Column("SettingsCategories")
                     .Width(200)
                     .Style("container")
                     .Enter())
@@ -1219,7 +1226,7 @@ namespace Shared
                         Color itemTextColor = isSelected ? primaryColor : textColor;
                         var index = i;
 
-                        Paper.Box($"SettingsCat_{i}")
+                        P.Box($"SettingsCat_{i}")
                             .Height(50)
                             .Margin(10, 10, 5, 5)
                             .Style("button")
@@ -1230,13 +1237,13 @@ namespace Shared
                 }
 
                 // Settings content
-                using (Paper.Column("SettingsOptions")
+                using (P.Column("SettingsOptions")
                     .Style("container")
                     .Margin(15, 0, 0, 0)
                     .Enter())
                 {
                     // Settings header
-                    Paper.Box("SettingsHeader")
+                    P.Box("SettingsHeader")
                         .Height(80)
                         .Margin(20)
                         .Text(Text.Left("General Settings", fontLarge, textColor));
@@ -1249,20 +1256,20 @@ namespace Shared
 
                     for (int i = 0; i < options.Length; i++)
                     {
-                        using (Paper.Row($"Setting_{i}")
+                        using (P.Row($"Setting_{i}")
                             .Height(60)
                             .Margin(20, 20, i == 0 ? 0 : 5, 5)
                             .Enter())
                         {
                             // Option label
-                            Paper.Box($"SettingLabel_{i}")
+                            P.Box($"SettingLabel_{i}")
                                 .Text(Text.Left(options[i], fontMedium, textColor));
 
                             // Toggle switch - much simpler with styles!
                             bool isOn = toggleState[i];
                             int index = i;
 
-                            using (Paper.Box($"ToggleSwitch_{i}")
+                            using (P.Box($"ToggleSwitch_{i}")
                                 .Style("toggle")
                                 .StyleIf(isOn, "toggle-on")
                                 .StyleIf(!isOn, "toggle-off")
@@ -1272,21 +1279,21 @@ namespace Shared
                                 })
                                 .Enter())
                             {
-                                Paper.Box($"ToggleDot_{i}")
+                                P.Box($"ToggleDot_{i}")
                                     .Style("toggle-dot")
-                                    .Left(Paper.Pixels(isOn ? 32 : 4));
+                                    .Left(P.Pixels(isOn ? 32 : 4));
                             }
                         }
 
                         // Add separator except for the last item
                         if (i < options.Length - 1)
                         {
-                            Paper.Box($"Separator_{i}").Style("separator");
+                            P.Box($"Separator_{i}").Style("separator");
                         }
                     }
 
                     // Save button
-                    Paper.Box("SaveSettings")
+                    P.Box("SaveSettings")
                         .Style("button-primary")
                         .Text(Text.Center("Save Changes", fontMedium, Color.White))
                         .Margin(20, 0, 20, 20)
@@ -1296,12 +1303,12 @@ namespace Shared
         }
         private static void RenderWindowsTab()
         {
-            using (Paper.Row("WindowsContent")
+            using (P.Row("WindowsContent")
                 .Margin(0, 0, 15, 0)
                 .Enter())
             {
                 // Settings content
-                using (Paper.Column("SettingsOptions")
+                using (P.Column("SettingsOptions")
                     .BackgroundColor(cardBackground)
                     //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
                     .Margin(15/2, 0, 0, 0)
@@ -1309,7 +1316,7 @@ namespace Shared
                     .Enter())
                 {
                     // Button to open windows
-                    using (Paper.Box("OpenWindowsButton")
+                    using (P.Box("OpenWindowsButton")
                         .Height(50)
                         .Margin(20)
                         .Text(Text.Center("Open Windows", fontMedium, textColor))
@@ -1330,7 +1337,7 @@ namespace Shared
 
         private static void RenderFooter()
         {
-            using (Paper.Row("Footer")
+            using (P.Row("Footer")
                 .Height(50)
                 .Rounded(8)
                 .BackgroundColor(cardBackground)
@@ -1339,25 +1346,25 @@ namespace Shared
                 .Enter())
             {
                 // Copyright
-                using (Paper.Box("Copyright")
+                using (P.Box("Copyright")
                     .Margin(15, 0, 0, 0)
                     .Text(Text.Left("© 2025 PaperUI Demo.", fontSmall, lightTextColor))
                     .Enter()) { }
 
                 // FPS Counter
-                Paper.Box("FPS").Text(Text.Left($"FPS: {1f / Paper.DeltaTime:F1}", fontSmall, lightTextColor));
-                Paper.Box("NodeCounter").Text(Text.Left($"Nodes: {Paper.CountOfAllElements}", fontSmall, lightTextColor));
-                Paper.Box("MS").Text(Text.Left($"Frame ms: {Paper.MillisecondsSpent}", fontSmall, lightTextColor));
+                P.Box("FPS").Text(Text.Left($"FPS: {1f / P.DeltaTime:F1}", fontSmall, lightTextColor));
+                P.Box("NodeCounter").Text(Text.Left($"Nodes: {P.CountOfAllElements}", fontSmall, lightTextColor));
+                P.Box("MS").Text(Text.Left($"Frame ms: {P.MillisecondsSpent}", fontSmall, lightTextColor));
 
                 // Footer links
                 string[] links = { "Terms", "Privacy", "Contact", "Help" };
-                using (Paper.Row("FooterLinks")
+                using (P.Row("FooterLinks")
                     .Enter())
                 {
                     foreach (var link in links)
                     {
-                        using (Paper.Box($"Link_{link}")
-                            .Width(Paper.Stretch(1f / links.Length))
+                        using (P.Box($"Link_{link}")
+                            .Width(P.Stretch(1f / links.Length))
                             .Text(Text.Center(link, fontSmall, primaryColor))
                             .OnClick((rect) => Console.WriteLine($"Link {link} clicked"))
                             .Enter()) { }

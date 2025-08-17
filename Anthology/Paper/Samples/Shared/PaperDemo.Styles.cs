@@ -1,19 +1,15 @@
-﻿using FontStashSharp;
-using Prowl.PaperUI;
-using Prowl.PaperUI.Extras;
-using Prowl.Vector;
+﻿using System.Drawing;
 
-using System.Drawing;
-using System.Reflection;
+using Prowl.PaperUI;
 
 namespace Shared
 {
     public static partial class PaperDemo
     {
-        private static void DefineStyles()
+        private static void DefineStyles(Paper paper)
         {
             // Card styles with hover effects
-            Paper.CreateStyleFamily("card")
+            paper.CreateStyleFamily("card")
                 .Base(new StyleTemplate()
                     .BackgroundColor(cardBackground)
                     .Rounded(8)
@@ -30,7 +26,7 @@ namespace Shared
                 .Register();
 
             // Button styles
-            Paper.CreateStyleFamily("button")
+            paper.CreateStyleFamily("button")
                 .Base(new StyleTemplate()
                     .Height(40)
                     .Rounded(8)
@@ -48,7 +44,7 @@ namespace Shared
                 .Register();
 
             // Primary button variant
-            Paper.CreateStyleFamily("button-primary")
+            paper.CreateStyleFamily("button-primary")
                 .Base(new StyleTemplate()
                     .Height(50)
                     .Rounded(8)
@@ -64,7 +60,7 @@ namespace Shared
                 .Register();
 
             // Icon button styles
-            Paper.CreateStyleFamily("icon-button")
+            paper.CreateStyleFamily("icon-button")
                 .Base(new StyleTemplate()
                     .Width(40)
                     .Height(40)
@@ -78,12 +74,12 @@ namespace Shared
                 .Register();
 
             // Sidebar styles
-            Paper.CreateStyleFamily("sidebar")
+            paper.CreateStyleFamily("sidebar")
                 .Base(new StyleTemplate()
                     .BackgroundColor(cardBackground)
                     .Rounded(8)
                     .Width(75)
-                    .Transition(GuiProp.Width, 0.25, Paper.Easing.EaseIn)
+                    .Transition(GuiProp.Width, 0.25, Easing.EaseIn)
                     .Transition(GuiProp.BorderColor, 0.75)
                     .Transition(GuiProp.BorderWidth, 0.75)
                     .Transition(GuiProp.Rounded, 0.25))
@@ -95,7 +91,7 @@ namespace Shared
                 .Register();
 
             // Menu item styles
-            Paper.CreateStyleFamily("menu-item")
+            paper.CreateStyleFamily("menu-item")
                 .Base(new StyleTemplate()
                     .Height(50)
                     .Margin(10, 10, 5, 5)
@@ -112,37 +108,37 @@ namespace Shared
                 .Register();
 
             // Menu item selected state
-            Paper.RegisterStyle("menu-item-selected", new StyleTemplate()
+            paper.RegisterStyle("menu-item-selected", new StyleTemplate()
                 .BorderColor(primaryColor)
                 .BorderWidth(2)
                 .BackgroundColor(Color.FromArgb(30, primaryColor)));
 
             // Toggle switch styles
-            Paper.CreateStyleFamily("toggle")
+            paper.CreateStyleFamily("toggle")
                 .Base(new StyleTemplate()
                     .Width(60)
                     .Height(30)
                     .Rounded(20)
-                    .Transition(GuiProp.BackgroundColor, 0.25, Paper.Easing.CubicInOut))
+                    .Transition(GuiProp.BackgroundColor, 0.25, Easing.CubicInOut))
                 .Register();
 
-            Paper.RegisterStyle("toggle-on", new StyleTemplate()
+            paper.RegisterStyle("toggle-on", new StyleTemplate()
                 .BackgroundColor(secondaryColor));
 
-            Paper.RegisterStyle("toggle-off", new StyleTemplate()
+            paper.RegisterStyle("toggle-off", new StyleTemplate()
                 .BackgroundColor(Color.FromArgb(100, lightTextColor)));
 
-            Paper.RegisterStyle("toggle-dot", new StyleTemplate()
+            paper.RegisterStyle("toggle-dot", new StyleTemplate()
                 .Width(24)
                 .Height(24)
                 .Rounded(20)
                 .BackgroundColor(Color.White)
                 //.PositionType(PositionType.SelfDirected)
-                .Top(Paper.Pixels(3))
-                .Transition(GuiProp.Left, 0.25, Paper.Easing.CubicInOut));
+                .Top(paper.Pixels(3))
+                .Transition(GuiProp.Left, 0.25, Easing.CubicInOut));
 
             // Tab styles
-            Paper.CreateStyleFamily("tab")
+            paper.CreateStyleFamily("tab")
                 .Base(new StyleTemplate()
                     .Transition(GuiProp.BackgroundColor, 0.2))
                 .Hovered(new StyleTemplate()
@@ -150,7 +146,7 @@ namespace Shared
                 .Register();
 
             // Text field styles
-            Paper.CreateStyleFamily("text-field")
+            paper.CreateStyleFamily("text-field")
                 .Base(new StyleTemplate()
                     .Width(300)
                     .Height(40)
@@ -168,7 +164,7 @@ namespace Shared
                 .Register();
 
             // Stat card styles
-            Paper.CreateStyleFamily("stat-card")
+            paper.CreateStyleFamily("stat-card")
                 .Base(new StyleTemplate()
                     .BackgroundColor(cardBackground)
                     .Rounded(8)
@@ -184,7 +180,7 @@ namespace Shared
                 .Register();
 
             // Period button styles
-            Paper.CreateStyleFamily("period-button")
+            paper.CreateStyleFamily("period-button")
                 .Base(new StyleTemplate()
                     .Width(60)
                     .Height(30)
@@ -196,33 +192,33 @@ namespace Shared
                     .BackgroundColor(Color.FromArgb(50, primaryColor)))
                 .Register();
 
-            Paper.RegisterStyle("period-button-selected", new StyleTemplate()
+            paper.RegisterStyle("period-button-selected", new StyleTemplate()
                 .BackgroundColor(primaryColor));
 
             // Activity icon styles
-            Paper.RegisterStyle("activity-icon", new StyleTemplate()
+            paper.RegisterStyle("activity-icon", new StyleTemplate()
                 .Width(40)
                 .Height(40)
                 .Rounded(20));
 
             // Separator style
-            Paper.RegisterStyle("separator", new StyleTemplate()
+            paper.RegisterStyle("separator", new StyleTemplate()
                 .Height(1)
                 .Margin(15, 15, 0, 0)
                 .BackgroundColor(Color.FromArgb(30, 0, 0, 0)));
 
             // Container styles
-            Paper.RegisterStyle("container", new StyleTemplate()
+            paper.RegisterStyle("container", new StyleTemplate()
                 .BackgroundColor(cardBackground)
                 .Rounded(8));
 
             // Skill bar styles
-            Paper.RegisterStyle("skill-bar-bg", new StyleTemplate()
+            paper.RegisterStyle("skill-bar-bg", new StyleTemplate()
                 .Height(15)
                 .Rounded(7.5)
                 .BackgroundColor(Color.FromArgb(30, 0, 0, 0)));
 
-            Paper.RegisterStyle("skill-bar-fg", new StyleTemplate()
+            paper.RegisterStyle("skill-bar-fg", new StyleTemplate()
                 .Rounded(7.5));
         }
     }
