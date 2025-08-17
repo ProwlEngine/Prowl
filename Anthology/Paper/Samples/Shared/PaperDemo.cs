@@ -254,7 +254,7 @@ namespace Shared
 
                 // Search bar - now using text-field style
                 P.Box("SearchTextField")
-                    .TextField(searchText, fontMedium, newValue => searchText = newValue, "Search...")
+                    .TextField(searchText, fontMedium, newValue => searchText = newValue, null, "Search...")
                     .Style("text-field")
                     .SetScroll(Scroll.ScrollX)
                     .Margin(0, 15, 15, 0);

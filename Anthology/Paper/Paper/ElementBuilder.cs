@@ -1042,7 +1042,9 @@ namespace Prowl.PaperUI
             string value,
             SpriteFontBase font,
             Action<string> onChange = null,
+            Color? textColor = null,
             string placeholder = "",
+            Color? placeholderColor = null,
             [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
         {
             const double TextXPadding = 4;
@@ -1057,7 +1059,9 @@ namespace Prowl.PaperUI
             // Get the text to display (value or placeholder)
             bool isEmpty = string.IsNullOrEmpty(value);
             string displayText = isEmpty ? placeholder : value;
-            Color textColor = isEmpty ? Color.FromArgb(160, 200, 200, 200) : Color.FromArgb(255, 250, 250, 250);
+            textColor ??= Color.FromArgb(255, 250, 250, 250);
+            placeholderColor ??= Color.FromArgb(160, 200, 200, 200);
+            Color tColor = isEmpty ? placeholderColor.Value : textColor.Value;
 
             // Store focus state
             bool isFocused = _paper.IsElementFocused(_element.ID);
@@ -1426,12 +1430,12 @@ namespace Prowl.PaperUI
                     if(string.IsNullOrEmpty(currentValue))
                     {
                         // Draw placeholder text
-                        canvas.DrawText(font, placeholder, r.x + TextXPadding, y - font.LineHeight / 2, textColor);
+                        canvas.DrawText(font, placeholder, r.x + TextXPadding, y - font.LineHeight / 2, tColor);
                     }
                     else
                     {
                         // Draw actual text
-                        canvas.DrawText(font, currentValue, r.x + TextXPadding, y - font.LineHeight / 2, textColor);
+                        canvas.DrawText(font, currentValue, r.x + TextXPadding, y - font.LineHeight / 2, tColor);
                     }
 
                     if (isFocused)
