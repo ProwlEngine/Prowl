@@ -457,37 +457,46 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Checks if a key is currently down.
         /// </summary>
+        /// <param name="key">The key to query.</param>
         public bool IsKeyDown(PaperKey key) => _keyCurState[(int)key];
 
         /// <summary>
         /// Checks if a key is currently up.
         /// </summary>
+        /// <param name="key">The key to query.</param>
         public bool IsKeyUp(PaperKey key) => !_keyCurState[(int)key];
 
         /// <summary>
         /// Checks if a key was just pressed this frame.
         /// </summary>
+        /// <param name="key">The key to query.</param>
         public bool IsKeyPressed(PaperKey key) => !_keyPrevState[(int)key] && _keyCurState[(int)key];
 
         /// <summary>
         /// Checks if a key was just released this frame.
         /// </summary>
+        /// <param name="key">The key to query.</param>
         public bool IsKeyReleased(PaperKey key) => _keyPrevState[(int)key] && !_keyCurState[(int)key];
 
         /// <summary>
-        /// Checks if a key has been held down for a while.
+        /// Checks if a key has been held down for the specified duration.
         /// </summary>
-        public bool IsKeyHeld(PaperKey key) => IsKeyDown(key) && _keyPressedTime[(int)key] >= 0.5f;
+        /// <param name="key">The key to query.</param>
+        /// <param name="holdDuration">Minimum time in seconds the key must be held.</param>
+        /// <returns><c>true</c> if the key has been held for at least <paramref name="holdDuration"/> seconds.</returns>
+        public bool IsKeyHeld(PaperKey key, double holdDuration = 0.5f) => IsKeyDown(key) && _keyPressedTime[(int)key] >= holdDuration;
 
         /// <summary>
         /// Checks if a key is auto-repeating this frame.
         /// </summary>
+        /// <param name="key">The key to query.</param>
         public bool IsKeyRepeating(PaperKey key) =>
             _keyAutoRepeatEnabled && _keyCurState[(int)key] && _keyRepeating[(int)key];
 
         /// <summary>
         /// Checks if a key was just pressed or is auto-repeating this frame.
         /// </summary>
+        /// <param name="key">The key to query.</param>
         public bool IsKeyPressedOrRepeating(PaperKey key) =>
             IsKeyPressed(key) || (_keyAutoRepeatEnabled && _keyRepeating[(int)key] && _keyRepeatTimer[(int)key] < _autoRepeatRate * 0.5);
 
@@ -516,9 +525,12 @@ namespace Prowl.PaperUI
         public bool IsPointerReleased(PaperMouseBtn btn) => _pointerPrevState[(int)btn] && !_pointerCurState[(int)btn];
 
         /// <summary>
-        /// Checks if a mouse button has been held down for a while.
+        /// Checks if a mouse button has been held down for the specified duration.
         /// </summary>
-        public bool IsPointerHeld(PaperMouseBtn btn) => IsPointerDown(btn) && _pointerPressedTime[(int)btn] >= 0.5f;
+        /// <param name="btn">The mouse button to query.</param>
+        /// <param name="holdDuration">Minimum time in seconds the button must be held.</param>
+        /// <returns><c>true</c> if the button has been held for at least <paramref name="holdDuration"/> seconds.</returns>
+        public bool IsPointerHeld(PaperMouseBtn btn, double holdDuration = 0.5f) => IsPointerDown(btn) && _pointerPressedTime[(int)btn] >= holdDuration;
 
         /// <summary>
         /// Checks if a mouse button was double-clicked.
