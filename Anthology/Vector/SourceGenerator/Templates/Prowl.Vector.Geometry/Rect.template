@@ -1,4 +1,4 @@
-// TEMPLATE_TYPES: float, double
+// TEMPLATE_TYPES: float, double, int
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
@@ -191,12 +191,22 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <param name="point">The point to test.</param>
         /// <returns>The squared distance (0 if point is inside).</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        ##IF Int
+        public float GetSqrDistanceToPoint(Int2 point)
+        {
+            Int2 closest = ClosestPointTo(point);
+            float dx = point.X - closest.X;
+            float dy = point.Y - closest.Y;
+            return dx * dx + dy * dy;
+        }
+        ##ELSE
         public {{TYPE}} GetSqrDistanceToPoint({{TYPE_PREFIX}}2 point)
         {
             {{TYPE_PREFIX}}2 closest = ClosestPointTo(point);
             {{TYPE_PREFIX}}2 diff = point - closest;
             return diff.X * diff.X + diff.Y * diff.Y;
         }
+        ##ENDIF
 
         /// <summary>
         /// Gets the distance from a point to the rectangle.
@@ -204,10 +214,17 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <param name="point">The point to test.</param>
         /// <returns>The distance (0 if point is inside).</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        ##IF Int
+        public float GetDistanceToPoint(Int2 point)
+        {
+            return Maths.Sqrt(GetSqrDistanceToPoint(point));
+        }
+        ##ELSE
         public {{TYPE}} GetDistanceToPoint({{TYPE_PREFIX}}2 point)
         {
             return Maths.Sqrt(GetSqrDistanceToPoint(point));
         }
+        ##ENDIF
 
         /// <summary>
         /// Expands the rectangle to include a point.
@@ -327,7 +344,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         {
             return Min.X <= Max.X && Min.Y <= Max.Y;
         }
-
+        
         /// <summary>
         /// Checks if this rectangle has zero area.
         /// </summary>
@@ -335,7 +352,11 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsEmpty()
         {
+            ##IF Int
+            return Area == 0;
+            ##ELSE
             return Maths.Abs(Area) < {{EPSILON}};
+            ##ENDIF
         }
 
         // --- IEquatable & IFormattable Implementation ---

@@ -2546,9 +2546,51 @@ class SourceGenerator
         return new[] { "float", "double" };
     }
 
+    private static string ApplyTypePreprocessor(string templateContent, TemplateTypeMapping typeMapping)
+    {
+        var lines = templateContent.Split('\n');
+        var output = new List<string>();
+        bool include = true;
+        var stack = new Stack<bool>();
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("##IF "))
+            {
+                var condition = trimmed.Substring("##IF ".Length).Trim();
+                bool matches = string.Equals(condition, typeMapping.TypePrefix, StringComparison.OrdinalIgnoreCase) ||
+                               string.Equals(condition, typeMapping.TypeName, StringComparison.OrdinalIgnoreCase);
+                stack.Push(include);
+                include = include && matches;
+            }
+            else if (trimmed == "##ELSE")
+            {
+                if (stack.Count > 0)
+                {
+                    bool parent = stack.Peek();
+                    include = parent && !include;
+                }
+            }
+            else if (trimmed == "##ENDIF")
+            {
+                if (stack.Count > 0)
+                {
+                    include = stack.Pop();
+                }
+            }
+            else if (include)
+            {
+                output.Add(line);
+            }
+        }
+
+        return string.Join('\n', output);
+    }
+
     private static string ProcessTemplate(string templateContent, TemplateTypeMapping typeMapping, string namespaceSuffix, string templateName)
     {
-        var result = templateContent;
+        var result = ApplyTypePreprocessor(templateContent, typeMapping);
 
         // Add auto-generated header
         var header = new StringBuilder();
