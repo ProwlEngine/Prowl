@@ -221,20 +221,16 @@ namespace Prowl.PaperUI.LayoutEngine
                                            Value == other.Value &&
                                            PercentPixelOffset == other.PercentPixelOffset;
 
-                // If not in interpolation state, just return basic comparison
-                if (_lerpData == null && other._lerpData == null)
-                    return basicPropertiesEqual;
+                // If either value isn't interpolating, they're equal only if both aren't
+                if (_lerpData is null || other._lerpData is null)
+                    return basicPropertiesEqual && _lerpData is null && other._lerpData is null;
 
-                // If one is interpolating and the other isn't, they're not equal
-                if (_lerpData != null && other._lerpData == null)
-                    return false;
-                if (_lerpData == null && other._lerpData != null)
-                    return false;
-
-                // If both are interpolating, compare the interpolation data
-                bool lerpPropsEqual = _lerpData.Start.Equals(other._lerpData.Start) &&
-                                      _lerpData.End.Equals(other._lerpData.End) &&
-                                      _lerpData.Progress == other._lerpData.Progress;
+                // Both values are interpolating – compare their interpolation data safely
+                var thisLerp = _lerpData;
+                var otherLerp = other._lerpData;
+                bool lerpPropsEqual = thisLerp.Start.Equals(otherLerp.Start) &&
+                                      thisLerp.End.Equals(otherLerp.End) &&
+                                      thisLerp.Progress == otherLerp.Progress;
 
                 return basicPropertiesEqual && lerpPropsEqual;
             }
