@@ -27,6 +27,14 @@ namespace Prowl.Quill
                     DrawCircle(canvas, position, circleElement);
                 else if (element is SvgRectElement rectElement)
                     DrawRect(canvas, position, rectElement);
+                else if (element is SvgLineElement lineElement)
+                    DrawLine(canvas, position, lineElement);
+                else if (element is SvgEllipseElement ellipseElement)
+                    DrawEllipse(canvas, position, ellipseElement);
+                else if (element is SvgPolylineElement polylineElement)
+                    DrawPolyline(canvas, position, polylineElement);
+                else if (element is SvgPolygonElement polygonElement)
+                    DrawPolygon(canvas, position, polygonElement);
             }
             debug = false;
         }
@@ -179,6 +187,75 @@ namespace Prowl.Quill
                     canvas.RoundedRectFilled(pos.x, pos.y, size.x, size.y, element.radius.x, element.fill);
                     canvas.Stroke();
                 }
+            }
+        }
+
+        static void DrawLine(Canvas canvas, Vector2 position, SvgLineElement element)
+        {
+            if (element.strokeType == SvgElement.ColorType.none)
+                return;
+
+            canvas.BeginPath();
+            canvas.MoveTo(position.x + element.x1, position.y + element.y1);
+            canvas.LineTo(position.x + element.x2, position.y + element.y2);
+            canvas.Stroke();
+        }
+
+        static void DrawEllipse(Canvas canvas, Vector2 position, SvgEllipseElement element)
+        {
+            var cx = position.x + element.cx;
+            var cy = position.y + element.cy;
+
+            if (element.fillType != SvgElement.ColorType.none)
+            {
+                canvas.BeginPath();
+                canvas.Ellipse(cx, cy, element.rx, element.ry);
+                canvas.FillComplexAA();
+            }
+
+            if (element.strokeType != SvgElement.ColorType.none)
+            {
+                canvas.BeginPath();
+                canvas.Ellipse(cx, cy, element.rx, element.ry);
+                canvas.Stroke();
+            }
+        }
+
+        static void DrawPolyline(Canvas canvas, Vector2 position, SvgPolylineElement element)
+        {
+            DrawPoly(canvas, position, element.points, element, false);
+        }
+
+        static void DrawPolygon(Canvas canvas, Vector2 position, SvgPolygonElement element)
+        {
+            DrawPoly(canvas, position, element.points, element, true);
+        }
+
+        static void DrawPoly(Canvas canvas, Vector2 position, Vector2[] points, SvgElement element, bool closed)
+        {
+            if (points == null || points.Length == 0)
+                return;
+
+            if (element.fillType != SvgElement.ColorType.none)
+            {
+                canvas.BeginPath();
+                canvas.MoveTo(position.x + points[0].x, position.y + points[0].y);
+                for (int i = 1; i < points.Length; i++)
+                    canvas.LineTo(position.x + points[i].x, position.y + points[i].y);
+                if (closed)
+                    canvas.ClosePath();
+                canvas.FillComplexAA();
+            }
+
+            if (element.strokeType != SvgElement.ColorType.none)
+            {
+                canvas.BeginPath();
+                canvas.MoveTo(position.x + points[0].x, position.y + points[0].y);
+                for (int i = 1; i < points.Length; i++)
+                    canvas.LineTo(position.x + points[i].x, position.y + points[i].y);
+                if (closed)
+                    canvas.ClosePath();
+                canvas.Stroke();
             }
         }
     }

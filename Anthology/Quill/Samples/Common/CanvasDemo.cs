@@ -866,7 +866,7 @@ namespace Common
 
 
             // Clear gradient
-            _canvas.ClearGradient();
+            _canvas.ClearBrush();
 
             _canvas.RestoreState();
         }

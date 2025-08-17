@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Text;
 using System.Drawing;
 using Prowl.Vector;
+using System.Globalization;
 
 namespace Prowl.Quill
 {
@@ -44,8 +45,8 @@ namespace Prowl.Quill
         void AddChildren(SvgElement element, List<SvgElement> list)
         {
             list.Add(element);
-            foreach (var child in Children)
-                child.AddChildren(child, list);
+            foreach (var child in element.Children)
+                AddChildren(child, list);
         }
 
         public virtual void Parse()
@@ -59,7 +60,7 @@ namespace Prowl.Quill
             if (fillType == ColorType.specific)
                 fill = ParseColor("fill");
 
-            strokeWidth = ParseDouble("stroke-width");
+            strokeWidth = Attributes.ContainsKey("stroke-width") ? ParseDouble("stroke-width") : 1.0;
         }
 
         string? ParseString(string key)
@@ -83,8 +84,8 @@ namespace Prowl.Quill
 
         protected double ParseDouble(string key)
         {
-            if (Attributes.ContainsKey(key))
-                return double.Parse(Attributes[key]);
+            if (Attributes.TryGetValue(key, out var value) && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
+                return result;
             return 0;
         }
 
@@ -111,6 +112,10 @@ namespace Prowl.Quill
             path,
             circle,
             rect,
+            line,
+            polyline,
+            polygon,
+            ellipse,
             g,
         }
 
@@ -155,33 +160,66 @@ namespace Prowl.Quill
 
     public class SvgEllipseElement : SvgElement
     {
+        public double cx, cy, rx, ry;
+
         public override void Parse()
         {
             base.Parse();
+            cx = ParseDouble("cx");
+            cy = ParseDouble("cy");
+            rx = ParseDouble("rx");
+            ry = ParseDouble("ry");
         }
     }
 
     public class SvgLineElement : SvgElement
     {
+        public double x1, y1, x2, y2;
+
         public override void Parse()
         {
             base.Parse();
+            x1 = ParseDouble("x1");
+            y1 = ParseDouble("y1");
+            x2 = ParseDouble("x2");
+            y2 = ParseDouble("y2");
         }
     }
 
     public class SvgPolylineElement : SvgElement
     {
+        public Vector2[] points = Array.Empty<Vector2>();
+
         public override void Parse()
         {
             base.Parse();
+            if (Attributes.TryGetValue("points", out var pts))
+                points = ParsePoints(pts);
+        }
+
+        internal static Vector2[] ParsePoints(string pts)
+        {
+            var matches = Regex.Matches(pts, @"-?\d*\.?\d+");
+            var list = new List<Vector2>();
+            for (int i = 0; i + 1 < matches.Count; i += 2)
+            {
+                var x = double.Parse(matches[i].Value, CultureInfo.InvariantCulture);
+                var y = double.Parse(matches[i + 1].Value, CultureInfo.InvariantCulture);
+                list.Add(new Vector2(x, y));
+            }
+            return list.ToArray();
         }
     }
 
     public class SvgPolygonElement : SvgElement
     {
+        public Vector2[] points = Array.Empty<Vector2>();
+
         public override void Parse()
         {
             base.Parse();
+            if (Attributes.TryGetValue("points", out var pts))
+                points = SvgPolylineElement.ParsePoints(pts);
         }
     }
 
@@ -232,7 +270,7 @@ namespace Prowl.Quill
                     var matches2 = Regex.Matches(parametersString, @"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?");
                     for (int j = 0; j < matches2.Count; j++)
                         for (int k = 0; k < matches2[j].Groups.Count; k++)
-                            param.Add(double.Parse(matches2[j].Groups[k].ToString()));
+                            param.Add(double.Parse(matches2[j].Groups[k].ToString(), CultureInfo.InvariantCulture));
 
                     drawCommand.param = param.ToArray();
                 }
@@ -343,6 +381,18 @@ namespace Prowl.Quill
                     break;
                 case SvgElement.TagType.rect:
                     svgElement = new SvgRectElement();
+                    break;
+                case SvgElement.TagType.line:
+                    svgElement = new SvgLineElement();
+                    break;
+                case SvgElement.TagType.polyline:
+                    svgElement = new SvgPolylineElement();
+                    break;
+                case SvgElement.TagType.polygon:
+                    svgElement = new SvgPolygonElement();
+                    break;
+                case SvgElement.TagType.ellipse:
+                    svgElement = new SvgEllipseElement();
                     break;
                 default:
                     svgElement = new SvgElement();
