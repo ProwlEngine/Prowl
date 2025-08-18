@@ -38,6 +38,22 @@ namespace Shared
                     .BackgroundColor(Color.FromArgb(200, Themes.primaryColor)))
                 .Register();
 
+            // Primary button variant
+            Paper.CreateStyleFamily("shadcs-button-secondary")
+                .Base(new StyleTemplate()
+                    .Height(50)
+                    .Rounded(8)
+                    .BackgroundColor(Themes.primaryColor)
+                    .Transition(GuiProp.BackgroundColor, 0.2)
+                    .Transition(GuiProp.ScaleX, 0.1)
+                    .Transition(GuiProp.ScaleY, 0.1))
+                .Hovered(new StyleTemplate()
+                    .BackgroundColor(Themes.secondaryColor))
+                .Active(new StyleTemplate()
+                    .Scale(0.95)
+                    .BackgroundColor(Color.FromArgb(200, Themes.primaryColor)))
+                .Register();
+
             // Icon button styles
             PaperDemo.P.CreateStyleFamily("shadcs-icon-button-primary")
                 .Base(new StyleTemplate()
@@ -58,6 +74,13 @@ namespace Shared
             return PaperDemo.P.Box("shadcs-button-" + id)
                 .Text(Text.Center(text, Fonts.fontMedium, Themes.lightTextColor))
                 .Style("shadcs-button-primary");
+        }
+
+        public static ElementBuilder Secondary(string id, string text = "")
+        {
+            return Paper.Box("shadcs-button-" + id)
+                .Text(Text.Center(text, Fonts.fontMedium, Themes.lightTextColor))
+                .Style("shadcs-button-secondary");
         }
 
         public static ElementBuilder IconPrimary(string id, string text = "")
