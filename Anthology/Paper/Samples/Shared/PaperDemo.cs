@@ -170,50 +170,22 @@ namespace Shared
                 // Spacer
                 using (Gui.Box("Spacer").Enter()) { }
 
-                // Button.Primary("hello");
-
                 // Search bar - now using text-field style
-                // Paper.Box("SearchTextField")
-                //     .TextField(searchText, Fonts.fontMedium, newValue => searchText = newValue, "Search...")
-                //     .Style("text-field")
-                //     .SetScroll(Scroll.ScrollX)
                 Input.Secondary("SearchTextField", searchText, newValue => searchText = newValue, "Search...")
                     .Margin(0, 15, 15, 0);
 
                 // Theme Switch - using icon-button style
-                // Paper.Box("LightIcon")
-                //     .Style("icon-button")
-                //     .Margin(0, 10, 15, 0)
-                //     .Text(Text.Center(Icons.Lightbulb, Fonts.fontMedium, Themes.lightTextColor))
-                //     .OnClick((rect) => Themes.ToggleTheme());
                 Button.IconPrimary("LightIcon", Icons.Lightbulb)
                     .Margin(0, 10, 15, 0)
                     .OnClick((rect) => Themes.ToggleTheme());
 
                 // Notification icon
-                // Paper.Box("NotificationIcon")
-                //     .Style("icon-button")
-                //     .Margin(0, 10, 15, 0)
-                //     .Text(Text.Center(Icons.CircleExclamation, Fonts.fontMedium, Themes.lightTextColor))
-                //     .OnClick((rect) => Console.WriteLine("Notifications clicked"));
                 Button.IconSecondary("NotificationIcon", Icons.CircleExclamation)
                     .Margin(0, 10, 15, 0)
                     .OnClick((rect) => Console.WriteLine("Notifications clicked"));
 
                 // User Profile
-                // Paper.Box("UserProfile")
-                //     .Width(40)
-                //     .Height(40)
-                //     .Rounded(40)
-                //     .BackgroundColor(Themes.secondaryColor)
-                //     .Margin(0, 15, 15, 0)
-                //     .Text(Text.Center("M", Fonts.fontMedium, Color.White))
-                //     .OnClick((rect) => Console.WriteLine("Profile clicked"));
                 Button.IconPrimary("UserProfile", "M")
-                    // .Width(40)
-                    // .Height(40)
-                    // .Rounded(40)
-                    // .BackgroundColor(Themes.secondaryColor)
                     .Margin(0, 15, 15, 0)
                     .OnClick((rect) => Console.WriteLine("Profile clicked"));
             }
@@ -452,11 +424,6 @@ namespace Shared
                         using (Gui.Box("ChartCanvas")
                             .Translate(chartPosition.x, chartPosition.y)
                             .Scale(zoomLevel)
-                            //.TransformSelf((rect) => {
-                            //    Transform t = Transform.CreateTranslation(chartPosition) * Transform.CreateScale(zoomLevel);
-                            //    //t.RotateWithOrigin(Math.Abs(Math.Sin(time * 0.01f)), rect.Center.X, rect.Center.Y);
-                            //    return t;
-                            //})
                             .Enter())
                         {
                             // Draw a simple chart with animated data
@@ -1060,14 +1027,6 @@ namespace Shared
                             .Margin(10, 10, 5, 5)
                             // .StyleIf(isSelected, "period-button-selected")
                             .OnClick((rect) => { Console.WriteLine($"Category {categories[index]} clicked"); });
-
-                        // Gui.Box($"SettingsCat_{i}")
-                        //     .Height(50)
-                        //     .Margin(10, 10, 5, 5)
-                        //     .Style("button")
-                        //     // .StyleIf(isSelected, "period-button-selected")
-                        //     .Text(Text.Left($"  {categories[i]}", Fonts.fontSmall, itemTextColor))
-                        //     .OnClick((rect) => { Console.WriteLine($"Category {categories[index]} clicked"); });
                     }
                 }
 
@@ -1103,26 +1062,6 @@ namespace Shared
                             bool isOn = toggleState[i];
                             int index = i;
                             Switch.Primary($"Switch{index}", toggleState[index]).OnClick((_) => toggleState[index] = !toggleState[index]);
-
-                            // // Toggle switch - much simpler with styles!
-                            // bool isOn = toggleState[i];
-                            // int index = i;
-
-                            // using (Gui.Box($"ToggleSwitch_{i}")
-                            //     .Style("toggle")
-                            //     .StyleIf(isOn, "toggle-on")
-                            //     .StyleIf(!isOn, "toggle-off")
-                            //     .OnClick((rect) =>
-                            //     {
-                            //         toggleState[index] = !toggleState[index];
-                            //         Console.WriteLine($"Toggle {options[index]}: {!isOn}");
-                            //     })
-                            //     .Enter())
-                            // {
-                            //     Gui.Box($"ToggleDot_{i}")
-                            //         .Style("toggle-dot")
-                            //         .Left(Gui.Pixels(isOn ? 32 : 4));
-                            // }
                         }
 
                         // Add separator except for the last item
@@ -1150,7 +1089,6 @@ namespace Shared
                 // Settings content
                 using (Gui.Column("SettingsOptions")
                     .BackgroundColor(Themes.cardBackground)
-                    //.Style(BoxStyle.SolidRounded(cardBackground, 8f))
                     .Margin(15 / 2, 0, 0, 0)
                     .Clip()
                     .Enter())
@@ -1181,7 +1119,6 @@ namespace Shared
                 .Height(50)
                 .Rounded(8)
                 .BackgroundColor(Themes.cardBackground)
-                //.Style(BoxStyle.SolidRoundedWithBorder(cardBackground, Color.FromArgb(30, 0, 0, 0), 4f, 1f))
                 .Margin(15, 15, 0, 15)
                 .Enter())
             {

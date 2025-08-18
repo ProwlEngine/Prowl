@@ -327,7 +327,6 @@ namespace Shared
                 //.PositionType(PositionType.SelfDirected)
                 .Top(PaperDemo.Gui.Pixels(3))
                 .Transition(GuiProp.Left, 0.25, Easing.CubicInOut));
-
         }
 
         public static ElementBuilder Primary(string id, bool isOn)
