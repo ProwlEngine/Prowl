@@ -36,6 +36,8 @@ A simple but high-performance hardware-accelerated vector graphics library for t
 - **Portability**
   - OpenTK Backend
   - Raylib Backend
+  - SFML Backend
+  - Silk.NET OpenGL Backend
   - With more planned!
 
 ## Usage
