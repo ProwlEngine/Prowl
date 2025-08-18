@@ -269,7 +269,7 @@ namespace Prowl.PaperUI
                         break;
                 }
                 _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, Color.White);
-                _canvas.ClearGradient();
+                _canvas.ClearBrush();
             }
             else
             {
