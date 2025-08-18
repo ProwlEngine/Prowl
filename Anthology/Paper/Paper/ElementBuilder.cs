@@ -1069,7 +1069,7 @@ namespace Prowl.PaperUI
             Color? placeholderColor = null,
             [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
         {
-            const double TextXPadding = 4;
+            const double TextXPadding = 12;
 
             value = value ?? "";
 
