@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Paper", "Paper\Paper.csproj
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RaylibSample", "Samples\RaylibSample\RaylibSample.csproj", "{81493B71-1E37-4208-8B76-310CE13E4335}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj", "{D9BA596C-4152-4D83-A509-B0D20ACB0AA0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -35,6 +37,10 @@ Global
 		{81493B71-1E37-4208-8B76-310CE13E4335}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{81493B71-1E37-4208-8B76-310CE13E4335}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{81493B71-1E37-4208-8B76-310CE13E4335}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9BA596C-4152-4D83-A509-B0D20ACB0AA0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9BA596C-4152-4D83-A509-B0D20ACB0AA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9BA596C-4152-4D83-A509-B0D20ACB0AA0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9BA596C-4152-4D83-A509-B0D20ACB0AA0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
