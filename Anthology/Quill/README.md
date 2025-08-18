@@ -37,7 +37,6 @@ A simple but high-performance hardware-accelerated vector graphics library for t
   - OpenTK Backend
   - Raylib Backend
   - With more planned!
-	- BGFX, DirectX, SFML & Software
 
 ## Usage
 
