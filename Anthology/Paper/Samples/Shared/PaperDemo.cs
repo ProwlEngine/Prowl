@@ -177,7 +177,7 @@ namespace Shared
                 //     .TextField(searchText, Fonts.fontMedium, newValue => searchText = newValue, "Search...")
                 //     .Style("text-field")
                 //     .SetScroll(Scroll.ScrollX)
-                Input.Primary("SearchTextField", searchText, newValue => searchText = newValue, "Search...")
+                Input.Secondary("SearchTextField", searchText, newValue => searchText = newValue, "Search...")
                     .Margin(0, 15, 15, 0);
 
                 // Theme Switch - using icon-button style
@@ -196,7 +196,7 @@ namespace Shared
                 //     .Margin(0, 10, 15, 0)
                 //     .Text(Text.Center(Icons.CircleExclamation, Fonts.fontMedium, Themes.lightTextColor))
                 //     .OnClick((rect) => Console.WriteLine("Notifications clicked"));
-                Button.IconPrimary("NotificationIcon", Icons.CircleExclamation)
+                Button.IconSecondary("NotificationIcon", Icons.CircleExclamation)
                     .Margin(0, 10, 15, 0)
                     .OnClick((rect) => Console.WriteLine("Notifications clicked"));
 
@@ -671,116 +671,12 @@ namespace Shared
                             .Text(Text.Left($"Green Amount: {sliderValue:F2}", Fonts.fontMedium, Themes.textColor))
                             .Enter()) { }
 
-                        using (Gui.Box("SliderTrack")
-                            .Height(20)
-                            .BackgroundColor(Color.FromArgb(30, 0, 0, 0))
-                            //.Style(BoxStyle.SolidRounded(Color.FromArgb(30, 0, 0, 0), 10f))
-                            .Margin(0, 0, 20, 0)
-                            .OnHeld((e) =>
-                            {
-                                double parentWidth = e.ElementRect.width;
-                                double pointerX = e.PointerPosition.x - e.ElementRect.x;
-
-                                // Calculate new slider value based on pointer position
-                                sliderValue = Math.Clamp(pointerX / parentWidth, 0f, 1f);
-                            })
-                            .Enter())
-                        {
-                            // Filled part of slider
-                            using (Gui.Box("SliderFill")
-                                .Width(Gui.Percent(sliderValue * 100))
-                                .BackgroundColor(Themes.primaryColor)
-                                //.Style(BoxStyle.SolidRounded(primaryColor, 10f))
-                                .Enter())
-                            {
-                                // Slider handle
-                                using (Gui.Box("SliderHandle")
-                                    .Left(Gui.Percent(100, -10))
-                                    .Width(20)
-                                    .Height(20)
-                                    .BackgroundColor(Themes.textColor)
-                                    //.Style(BoxStyle.SolidRounded(textColor, 10f))
-                                    .PositionType(PositionType.SelfDirected)
-                                    .Enter()) { }
-                            }
-                        }
+                        // Slider control
+                        Slider.Primary("SliderTrack", sliderValue, newValue => sliderValue = newValue);
                     }
 
-                    // "Analysis" mock content
-                    using (Gui.Box("AnalyticsVisual")
-                        .Margin(20)
-                        .Enter())
-                    {
-                        // Add a simple pie chart visualization
-                        Gui.AddActionElement((vg, rect) => {
-                            double centerX = rect.x + rect.width / 2;
-                            double centerY = rect.y + rect.height / 2;
-                            double radius = Math.Min(rect.width, rect.height) * 0.4f;
-
-                            double startAngle = 0;
-                            double[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
-
-                            // Normalize Values
-                            double total = values.Sum();
-                            for (int i = 0; i < values.Length; i++)
-                                values[i] /= total;
-
-
-                            for (int i = 0; i < values.Length; i++)
-                            {
-                                // Calculate angles
-                                double angle = values[i] * Math.PI * 2;
-                                double endAngle = startAngle + angle;
-
-                                // Draw pie slice
-                                vg.BeginPath();
-                                vg.MoveTo(centerX, centerY);
-                                vg.Arc(centerX, centerY, radius, startAngle, endAngle);
-                                vg.LineTo(centerX, centerY);
-                                vg.SetFillColor(Themes.colorPalette[i % Themes.colorPalette.Length]);
-                                vg.Fill();
-
-                                // Draw outline
-                                vg.BeginPath();
-                                vg.MoveTo(centerX, centerY);
-                                vg.Arc(centerX, centerY, radius, startAngle, endAngle);
-                                vg.LineTo(centerX, centerY);
-                                vg.SetStrokeColor(Color.White);
-                                vg.SetStrokeWidth(2);
-                                vg.Stroke();
-
-                                // Draw percentage labels
-                                double labelAngle = startAngle + angle / 2;
-                                double labelRadius = radius * 0.7f;
-                                double labelX = centerX + Math.Cos(labelAngle) * labelRadius;
-                                double labelY = centerY + Math.Sin(labelAngle) * labelRadius;
-
-                                string label = $"{values[i] * 100:F0}%";
-                                vg.SetFillColor(Color.White);
-                                //vg.TextAlign(Align.Center | Align.Middle);
-                                //vg.FontSize(16);
-                                //vg.Text(labelX, labelY, label);
-                                vg.DrawText(Fonts.fontSmall, label, labelX, labelY, Color.White);
-
-                                // Move to next slice
-                                startAngle = endAngle;
-                            }
-
-                            // Draw center circle
-                            vg.BeginPath();
-                            vg.Circle(centerX, centerY, radius * 0.4f);
-                            vg.SetFillColor(Color.White);
-                            vg.Fill();
-
-                            // Draw center text
-                            // Draw center text
-                            //vg.FillColor(textColor);
-                            //vg.TextAlign(NvgSharp.Align.Center | NvgSharp.Align.Middle);
-                            //vg.FontSize(20);
-                            //vg.Text(centerX, centerY, $"Analytics\n{(sliderValue * 100):F0}%");
-                            //vg.Text(fontSmall, $"Analytics\n{(sliderValue * 100):F0}%", centerX, centerY);
-                        });
-                    }
+                    double[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
+                    PieChart.Primary("PieChart", values, 0);
                 }
 
                 using (Gui.Box("ScrollTest")
@@ -1160,13 +1056,18 @@ namespace Shared
                         Color itemTextColor = isSelected ? Themes.primaryColor : Themes.textColor;
                         var index = i;
 
-                        Gui.Box($"SettingsCat_{i}")
-                            .Height(50)
+                        Button.Outline($"SettingsCat_{i}", $"  {categories[i]}")
                             .Margin(10, 10, 5, 5)
-                            .Style("button")
-                            .StyleIf(isSelected, "period-button-selected")
-                            .Text(Text.Left($"  {categories[i]}", Fonts.fontSmall, itemTextColor))
+                            // .StyleIf(isSelected, "period-button-selected")
                             .OnClick((rect) => { Console.WriteLine($"Category {categories[index]} clicked"); });
+
+                        // Gui.Box($"SettingsCat_{i}")
+                        //     .Height(50)
+                        //     .Margin(10, 10, 5, 5)
+                        //     .Style("button")
+                        //     // .StyleIf(isSelected, "period-button-selected")
+                        //     .Text(Text.Left($"  {categories[i]}", Fonts.fontSmall, itemTextColor))
+                        //     .OnClick((rect) => { Console.WriteLine($"Category {categories[index]} clicked"); });
                     }
                 }
 
@@ -1199,25 +1100,29 @@ namespace Shared
                             Gui.Box($"SettingLabel_{i}")
                                 .Text(Text.Left(options[i], Fonts.fontMedium, Themes.textColor));
 
-                            // Toggle switch - much simpler with styles!
                             bool isOn = toggleState[i];
                             int index = i;
+                            Switch.Primary($"Switch{index}", toggleState[index]).OnClick((_) => toggleState[index] = !toggleState[index]);
 
-                            using (Gui.Box($"ToggleSwitch_{i}")
-                                .Style("toggle")
-                                .StyleIf(isOn, "toggle-on")
-                                .StyleIf(!isOn, "toggle-off")
-                                .OnClick((rect) =>
-                                {
-                                    toggleState[index] = !toggleState[index];
-                                    Console.WriteLine($"Toggle {options[index]}: {!isOn}");
-                                })
-                                .Enter())
-                            {
-                                Gui.Box($"ToggleDot_{i}")
-                                    .Style("toggle-dot")
-                                    .Left(Gui.Pixels(isOn ? 32 : 4));
-                            }
+                            // // Toggle switch - much simpler with styles!
+                            // bool isOn = toggleState[i];
+                            // int index = i;
+
+                            // using (Gui.Box($"ToggleSwitch_{i}")
+                            //     .Style("toggle")
+                            //     .StyleIf(isOn, "toggle-on")
+                            //     .StyleIf(!isOn, "toggle-off")
+                            //     .OnClick((rect) =>
+                            //     {
+                            //         toggleState[index] = !toggleState[index];
+                            //         Console.WriteLine($"Toggle {options[index]}: {!isOn}");
+                            //     })
+                            //     .Enter())
+                            // {
+                            //     Gui.Box($"ToggleDot_{i}")
+                            //         .Style("toggle-dot")
+                            //         .Left(Gui.Pixels(isOn ? 32 : 4));
+                            // }
                         }
 
                         // Add separator except for the last item
