@@ -38,7 +38,7 @@ Paper is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** imme
 
 
 
-https://github.com/user-attachments/assets/d8206009-5a0f-4769-85a2-90cb5d434757
+https://github.com/user-attachments/assets/4cac031e-325f-487d-994c-dff79740d575
 
 
 
