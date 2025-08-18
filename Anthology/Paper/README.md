@@ -95,6 +95,8 @@ For example, If you want to animate the roundness it is as simple as
         - Anti-Aliased
         - Scissoring
         - MoveTo, LineTo, CurveTo, Fill, Stroke, etc
+        - Box Shadows
+        - Linear, Radial and Box Gradients
         - Draw custom shapes at any time any where
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
