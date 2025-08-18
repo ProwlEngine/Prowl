@@ -23,7 +23,7 @@ namespace Shared
         public static void DefineStyles()
         {
             // Primary button variant
-            PaperDemo.P.CreateStyleFamily("shadcs-button-primary")
+            PaperDemo.Gui.CreateStyleFamily("shadcs-button-primary")
                 .Base(new StyleTemplate()
                     .Height(50)
                     .Rounded(8)
@@ -39,7 +39,7 @@ namespace Shared
                 .Register();
 
             // Primary button variant
-            PaperDemo.P.CreateStyleFamily("shadcs-button-secondary")
+            PaperDemo.Gui.CreateStyleFamily("shadcs-button-secondary")
                 .Base(new StyleTemplate()
                     .Height(50)
                     .Rounded(8)
@@ -55,7 +55,7 @@ namespace Shared
                 .Register();
 
             // Icon button styles
-            PaperDemo.P.CreateStyleFamily("shadcs-icon-button-primary")
+            PaperDemo.Gui.CreateStyleFamily("shadcs-icon-button-primary")
                 .Base(new StyleTemplate()
                     .Width(40)
                     .Height(40)
@@ -71,21 +71,21 @@ namespace Shared
 
         public static ElementBuilder Primary(string id, string text = "")
         {
-            return PaperDemo.P.Box("shadcs-button-" + id)
+            return PaperDemo.Gui.Box("shadcs-button-" + id)
                 .Text(Text.Center(text, Fonts.fontMedium, Themes.lightTextColor))
                 .Style("shadcs-button-primary");
         }
 
         public static ElementBuilder Secondary(string id, string text = "")
         {
-            return PaperDemo.P.Box("shadcs-button-" + id)
+            return PaperDemo.Gui.Box("shadcs-button-" + id)
                 .Text(Text.Center(text, Fonts.fontMedium, Themes.lightTextColor))
                 .Style("shadcs-button-secondary");
         }
 
         public static ElementBuilder IconPrimary(string id, string text = "")
         {
-            return PaperDemo.P.Box("shadcs-button-" + id)
+            return PaperDemo.Gui.Box("shadcs-button-" + id)
                 .Text(Text.Center(text, Fonts.fontMedium, Themes.lightTextColor))
                 .Style("shadcs-icon-button-primary");
         }
@@ -96,7 +96,7 @@ namespace Shared
         public static void DefineStyles()
         {
             // Text field styles
-            PaperDemo.P.CreateStyleFamily("text-field")
+            PaperDemo.Gui.CreateStyleFamily("text-field")
                 .Base(new StyleTemplate()
                     .Width(300)
                     .Height(40)
@@ -117,7 +117,7 @@ namespace Shared
 
         public static ElementBuilder Primary(string id, string value, Action<string> onChange = null, string placeholder = "")
         {
-            return PaperDemo.P.Box("shadcs-input-" + id)
+            return PaperDemo.Gui.Box("shadcs-input-" + id)
                 .TextField(value, Fonts.fontMedium, onChange, null, placeholder)
                 .Style("text-field")
                 .SetScroll(Scroll.ScrollX);

@@ -126,7 +126,7 @@ namespace Shared
         public static void DefineStyles()
         {
             // Card styles with hover effects
-            PaperDemo.P.CreateStyleFamily("card")
+            PaperDemo.Gui.CreateStyleFamily("card")
                 .Base(new StyleTemplate()
                     .BackgroundColor(cardBackground)
                     .Rounded(8)
@@ -146,7 +146,7 @@ namespace Shared
                 .Register();
 
             // Button styles
-            PaperDemo.P.CreateStyleFamily("button")
+            PaperDemo.Gui.CreateStyleFamily("button")
                 .Base(new StyleTemplate()
                     .Height(40)
                     .Rounded(8)
@@ -164,7 +164,7 @@ namespace Shared
                 .Register();
 
             // Primary button variant
-            PaperDemo.P.CreateStyleFamily("button-primary")
+            PaperDemo.Gui.CreateStyleFamily("button-primary")
                 .Base(new StyleTemplate()
                     .Height(50)
                     .Rounded(8)
@@ -184,7 +184,7 @@ namespace Shared
                 .Register();
 
             // Icon button styles
-            PaperDemo.P.CreateStyleFamily("icon-button")
+            PaperDemo.Gui.CreateStyleFamily("icon-button")
                 .Base(new StyleTemplate()
                     .Width(40)
                     .Height(40)
@@ -198,7 +198,7 @@ namespace Shared
                 .Register();
 
             // Sidebar styles
-            PaperDemo.P.CreateStyleFamily("sidebar")
+            PaperDemo.Gui.CreateStyleFamily("sidebar")
                 .Base(new StyleTemplate()
                     .BackgroundColor(cardBackground)
                     .Rounded(8)
@@ -215,7 +215,7 @@ namespace Shared
                 .Register();
 
             // Menu item styles
-            PaperDemo.P.CreateStyleFamily("menu-item")
+            PaperDemo.Gui.CreateStyleFamily("menu-item")
                 .Base(new StyleTemplate()
                     .Height(50)
                     .Margin(10, 10, 5, 5)
@@ -232,13 +232,13 @@ namespace Shared
                 .Register();
 
             // Menu item selected state
-            PaperDemo.P.RegisterStyle("menu-item-selected", new StyleTemplate()
+            PaperDemo.Gui.RegisterStyle("menu-item-selected", new StyleTemplate()
                 .BorderColor(primaryColor)
                 .BorderWidth(2)
                 .BackgroundColor(Color.FromArgb(30, primaryColor)));
 
             // Toggle switch styles
-            PaperDemo.P.CreateStyleFamily("toggle")
+            PaperDemo.Gui.CreateStyleFamily("toggle")
                 .Base(new StyleTemplate()
                     .Width(60)
                     .Height(30)
@@ -246,23 +246,23 @@ namespace Shared
                     .Transition(GuiProp.BackgroundColor, 0.25, Easing.CubicInOut))
                 .Register();
 
-            PaperDemo.P.RegisterStyle("toggle-on", new StyleTemplate()
+            PaperDemo.Gui.RegisterStyle("toggle-on", new StyleTemplate()
                 .BackgroundColor(secondaryColor));
 
-            PaperDemo.P.RegisterStyle("toggle-off", new StyleTemplate()
+            PaperDemo.Gui.RegisterStyle("toggle-off", new StyleTemplate()
                 .BackgroundColor(Color.FromArgb(100, lightTextColor)));
 
-            PaperDemo.P.RegisterStyle("toggle-dot", new StyleTemplate()
+            PaperDemo.Gui.RegisterStyle("toggle-dot", new StyleTemplate()
                 .Width(24)
                 .Height(24)
                 .Rounded(20)
                 .BackgroundColor(Color.White)
                 //.PositionType(PositionType.SelfDirected)
-                .Top(PaperDemo.P.Pixels(3))
+                .Top(PaperDemo.Gui.Pixels(3))
                 .Transition(GuiProp.Left, 0.25, Easing.CubicInOut));
 
             // Tab styles
-            PaperDemo.P.CreateStyleFamily("tab")
+            PaperDemo.Gui.CreateStyleFamily("tab")
                 .Base(new StyleTemplate()
                     .Transition(GuiProp.BackgroundColor, 0.2))
                 .Hovered(new StyleTemplate()
@@ -270,7 +270,7 @@ namespace Shared
                 .Register();
 
             // Text field styles
-            PaperDemo.P.CreateStyleFamily("text-field")
+            PaperDemo.Gui.CreateStyleFamily("text-field")
                 .Base(new StyleTemplate()
                     .Width(300)
                     .Height(40)
@@ -288,7 +288,7 @@ namespace Shared
                 .Register();
 
             // Stat card styles
-            PaperDemo.P.CreateStyleFamily("stat-card")
+            PaperDemo.Gui.CreateStyleFamily("stat-card")
                 .Base(new StyleTemplate()
                     .BackgroundColor(cardBackground)
                     .Rounded(8)
@@ -307,7 +307,7 @@ namespace Shared
                 .Register();
 
             // Period button styles
-            PaperDemo.P.CreateStyleFamily("period-button")
+            PaperDemo.Gui.CreateStyleFamily("period-button")
                 .Base(new StyleTemplate()
                     .Width(60)
                     .Height(30)
@@ -319,33 +319,33 @@ namespace Shared
                     .BackgroundColor(Color.FromArgb(50, primaryColor)))
                 .Register();
 
-            PaperDemo.P.RegisterStyle("period-button-selected", new StyleTemplate()
+            PaperDemo.Gui.RegisterStyle("period-button-selected", new StyleTemplate()
                 .BackgroundColor(primaryColor));
 
             // Activity icon styles
-            PaperDemo.P.RegisterStyle("activity-icon", new StyleTemplate()
+            PaperDemo.Gui.RegisterStyle("activity-icon", new StyleTemplate()
                 .Width(40)
                 .Height(40)
                 .Rounded(20));
 
             // Separator style
-            PaperDemo.P.RegisterStyle("separator", new StyleTemplate()
+            PaperDemo.Gui.RegisterStyle("separator", new StyleTemplate()
                 .Height(1)
                 .Margin(15, 15, 0, 0)
                 .BackgroundColor(Color.FromArgb(30, 0, 0, 0)));
 
             // Container styles
-            PaperDemo.P.RegisterStyle("container", new StyleTemplate()
+            PaperDemo.Gui.RegisterStyle("container", new StyleTemplate()
                 .BackgroundColor(cardBackground)
                 .Rounded(8));
 
             // Skill bar styles
-            PaperDemo.P.RegisterStyle("skill-bar-bg", new StyleTemplate()
+            PaperDemo.Gui.RegisterStyle("skill-bar-bg", new StyleTemplate()
                 .Height(15)
                 .Rounded(7.5)
                 .BackgroundColor(Color.FromArgb(30, 0, 0, 0)));
 
-            PaperDemo.P.RegisterStyle("skill-bar-fg", new StyleTemplate()
+            PaperDemo.Gui.RegisterStyle("skill-bar-fg", new StyleTemplate()
                 .Rounded(7.5));
         }
 
