@@ -3,6 +3,8 @@
 
 using System.Diagnostics;
 
+using CommandLine.Text;
+
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Assets;
@@ -277,6 +279,22 @@ public static partial class AssetDatabase
             return result;
         }
         return [];
+    }
+
+    public static bool GetDefaultAssets(out List<Guid> guids)
+    {
+        guids = new List<Guid>();
+        if (Project.Active == null)
+            return false;
+
+        foreach (FileInfo fileInfo in Project.Active?.DefaultsDirectory.EnumerateFiles())
+        {
+            MetaFile? meta = MetaFile.Load(fileInfo);
+
+            if (meta != null)
+                guids.Add(meta.guid);
+        }
+        return true;
     }
 
     #endregion

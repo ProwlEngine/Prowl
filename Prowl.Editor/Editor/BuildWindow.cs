@@ -77,7 +77,11 @@ public class BuildWindow : EditorWindow
 
                 // Name types are formatted as "Desktop_Player" -> "Desktop"
                 string name = builder.GetType().Name;
-                name = name.Substring(0, name.IndexOf('_'));
+
+                // Make sure name does actually include underscore
+                int underscoreIndex = name.IndexOf('_');
+                if (underscoreIndex > 0)
+                    name = name.Substring(0, underscoreIndex);
                 gui.Draw2D.DrawText(name, gui.CurrentNode.LayoutData.InnerRect);
             }
         }

@@ -11,6 +11,8 @@ using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 using Prowl.Runtime.Rendering;
 using Prowl.Echo;
+using System.IO;
+using Veldrid.MetalBindings;
 
 namespace Prowl.Editor.Build;
 
@@ -38,10 +40,17 @@ public class Desktop_Player : ProjectBuilder
     public AssetPacking assetPacking = AssetPacking.Used;
 
 
+    StreamWriter buildDebugWriter;
     protected override void Build(AssetRef<Scene>[] scenes, DirectoryInfo output)
     {
         string buildDataPath = Path.Combine(output.FullName, "GameData");
         Directory.CreateDirectory(buildDataPath);
+
+        // Build logging to file
+        buildDebugWriter = new StreamWriter(Path.Combine(output.FullName, "build_log.txt"), false);
+        buildDebugWriter.AutoFlush = true;
+
+        Debug.OnLog += BuildLog;
 
         // Debug.Log($"Compiling project assembly.");
         CompileProject(out string projectLib);
@@ -58,10 +67,20 @@ public class Desktop_Player : ProjectBuilder
         // Debug.Log($"Preparing project settings.");
         PackProjectSettings(buildDataPath);
 
-        Debug.Log($"Successfully built project to {output}");
-
         // Open the Build folder
         AssetDatabase.OpenPath(output, type: FileOpenType.FileExplorer);
+
+        Debug.OnLog -= BuildLog;
+        buildDebugWriter.Flush();
+        buildDebugWriter.Close();
+        Debug.Log($"Successfully built project to {output}");
+    }
+
+    void BuildLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity)
+    {
+        if (buildDebugWriter == null)
+            return;
+        buildDebugWriter.WriteLine($"[{logSeverity.ToString()}] {message}");
     }
 
 
@@ -242,13 +261,24 @@ public class Desktop_Player : ProjectBuilder
         }
         else
         {
+            // This is missing the skybox asset (and possibly other defaults)
+
             HashSet<Guid> assets = [];
             foreach (AssetRef<Scene> scene in scenes)
+            {
                 AssetDatabase.GetDependenciesDeep(scene.AssetID, ref assets);
+            }
+            if (AssetDatabase.GetDefaultAssets(out List<Guid> guids))
+            {
+                foreach (Guid assetID in guids)
+                    assets.Add(assetID);
+            }
+
+            // Get assets from /Defaults dir too
 
             // Include all Shaders in the build for the time being
-            foreach ((string, Guid, ushort) shader in AssetDatabase.GetAllAssetsOfType<Shader>())
-                assets.Add(shader.Item2);
+            foreach ((string name, Guid assetID, ushort fileId) shader in AssetDatabase.GetAllAssetsOfType<Shader>())
+                assets.Add(shader.assetID);
 
             AssetDatabase.ExportBuildPackages(assets.ToArray(), new DirectoryInfo(dataPath));
         }

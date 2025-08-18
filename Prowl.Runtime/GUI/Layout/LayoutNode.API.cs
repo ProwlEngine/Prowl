@@ -143,7 +143,8 @@ public partial class LayoutNode
         if (Parent != null)
             Parent.Children.Remove(this);
         Parent = newParent;
-        Parent.Children.Add(this);
+        if (Parent != null)
+            Parent.Children.Add(this);
         //Parent.GetNextNode();
     }
 
