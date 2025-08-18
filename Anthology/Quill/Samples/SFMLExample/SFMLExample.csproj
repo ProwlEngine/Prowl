@@ -8,9 +8,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Prowl.Quill" Version="0.4.2" />
       <PackageReference Include="SFML.Net" Version="2.6.1" />
     </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Quill\Quill.csproj" />
+  </ItemGroup>
 
     <Import Project="..\Common\Common.projitems" Label="Shared" />
 

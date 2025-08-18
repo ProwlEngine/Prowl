@@ -171,9 +171,9 @@ namespace SilkExample
 
         public void Dispose()
         {
-            _window?.Dispose();
-            _input?.Dispose();
             _gl?.Dispose();
+            _input?.Dispose();
+            _window?.Dispose();
         }
     }
 }

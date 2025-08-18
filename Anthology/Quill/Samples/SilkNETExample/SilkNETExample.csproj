@@ -9,11 +9,14 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Prowl.Quill" Version="0.4.2" />
       <PackageReference Include="Silk.NET.Input" Version="2.22.0" />
       <PackageReference Include="Silk.NET.OpenGL" Version="2.22.0" />
       <PackageReference Include="StbImageSharp" Version="2.30.15" />
     </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Quill\Quill.csproj" />
+  </ItemGroup>
 
     <Import Project="..\Common\Common.projitems" Label="Shared" />
 
