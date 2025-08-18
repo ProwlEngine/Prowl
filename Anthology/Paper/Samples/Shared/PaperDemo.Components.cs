@@ -323,7 +323,7 @@ namespace Shared
                 .Width(24)
                 .Height(24)
                 .Rounded(20)
-                .BackgroundColor(Themes.textColor)
+                .BackgroundColor(Color.White)
                 //.PositionType(PositionType.SelfDirected)
                 .Top(PaperDemo.Gui.Pixels(3))
                 .Transition(GuiProp.Left, 0.25, Easing.CubicInOut));
