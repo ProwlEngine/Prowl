@@ -39,7 +39,7 @@ namespace Shared
                 .Register();
 
             // Primary button variant
-            Paper.CreateStyleFamily("shadcs-button-secondary")
+            PaperDemo.P.CreateStyleFamily("shadcs-button-secondary")
                 .Base(new StyleTemplate()
                     .Height(50)
                     .Rounded(8)
@@ -78,7 +78,7 @@ namespace Shared
 
         public static ElementBuilder Secondary(string id, string text = "")
         {
-            return Paper.Box("shadcs-button-" + id)
+            return PaperDemo.P.Box("shadcs-button-" + id)
                 .Text(Text.Center(text, Fonts.fontMedium, Themes.lightTextColor))
                 .Style("shadcs-button-secondary");
         }
