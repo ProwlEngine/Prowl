@@ -13,12 +13,14 @@
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 # <p align="center">An Immediate-Mode UI Library</p>
+## <p align="center">📚 [View the Official Documentation](https://prowl.gitbook.io/prowl.paper) 📚</p>
 
 
 <span id="readme-top"></span>
 
 ### <p align="center">Table of Contents</p>
 1. [About The Project](#-about-the-project-)
+2. [Documentation](#-documentation-)
 2. [Features](#-features-)
 3. [Getting Started](#-getting-started-)
    * [Installation](#installation)
@@ -62,6 +64,11 @@ For example, If you want to animate the roundness it is as simple as
 ```cs
 .Rounded(YourAnimatedFloat)
 ```
+
+# <span align="center">📚 Documentation 📚</span>
+
+For a complete guide, tutorials, and API reference, please visit the **[Official Paper Documentation](https://prowl.gitbook.io/prowl.paper)**.
+
 
 # <span align="center">✨ Features ✨</span>
 
@@ -298,10 +305,6 @@ void UpdatePaperUIInput()
     }
 }
 ```
-
-## So much more!
-There's so much more I couldn't possibly fit it all into this Readme file.
-A more complete documentation & tutorial will be coming in the near future!
 
 # <span align="center">🤝 Contributing 🤝</span>
 
