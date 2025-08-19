@@ -1,11 +1,6 @@
-using FontStashSharp;
-using Prowl.PaperUI;
-using Prowl.PaperUI.Extras;
-using Prowl.Vector;
-
 using System.Drawing;
-using System.Reflection;
-using System.Data.Common;
+
+using Prowl.PaperUI;
 
 namespace Shared
 {
@@ -334,37 +329,18 @@ namespace Shared
             // Toggle switch - much simpler with styles!
             // bool isOn = toggleState[i];
             // int index = i;
-            var parent = PaperDemo.Gui.Box("shadcs-switch-" + id)
+
+            ElementBuilder builder;
+            using ((builder = PaperDemo.Gui.Box("shadcs-switch-" + id)
                 .Style("toggle")
                 .StyleIf(isOn, "toggle-on")
-                .StyleIf(!isOn, "toggle-off");
-            var cleanup = parent.Enter();
-
-            PaperDemo.Gui.Box($"ToggleDot{id}")
-                .Style("toggle-dot")
-                .Left(PaperDemo.Gui.Pixels(isOn ? 32 : 4));
-
-            cleanup.Dispose();
-            return parent;
-
-            // Toggle switch - much simpler with styles!
-            // bool isOn = toggleState[i];
-            // int index = i;
-            // using (PaperDemo.Gui.Box("shadcs-switch-" + id)
-            //     .Style("toggle")
-            //     .StyleIf(isOn, "toggle-on")
-            //     .StyleIf(!isOn, "toggle-off")
-            //     .OnClick((rect) =>
-            //     {
-            //         toggleState[index] = !toggleState[index];
-            //         Console.WriteLine($"Toggle {options[index]}: {!isOn}");
-            //     })
-            //     .Enter())
-            // {
-            //     Gui.Box($"ToggleDot_{i}")
-            //         .Style("toggle-dot")
-            //         .Left(Gui.Pixels(isOn ? 32 : 4));
-            // }
+                .StyleIf(!isOn, "toggle-off")).Enter())
+            { 
+                PaperDemo.Gui.Box($"ToggleDot{id}")
+                    .Style("toggle-dot")
+                    .Left(PaperDemo.Gui.Pixels(isOn ? 32 : 4));
+            }
+            return builder;
         }
     }
 
@@ -373,83 +349,83 @@ namespace Shared
         public static ElementBuilder Primary(string id, double[] values, double startAngle)
         {
             // "Analysis" mock content
-            var parent = PaperDemo.Gui.Box("shadcs-piechart-" + id)
-                .Margin(20);
-
-            var cleanup = parent.Enter();
-
-            // Add a simple pie chart visualization
-            PaperDemo.Gui.AddActionElement((vg, rect) =>
+            ElementBuilder builder;
+            using ((builder = PaperDemo.Gui.Box("shadcs-piechart-" + id)
+                .Margin(20)).Enter())
             {
-                double centerX = rect.x + rect.width / 2;
-                double centerY = rect.y + rect.height / 2;
-                double radius = Math.Min(rect.width, rect.height) * 0.4f;
 
-                // double startAngle = 0;
-                // double[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
-
-                // Normalize Values
-                double total = values.Sum();
-                for (int i = 0; i < values.Length; i++)
-                    values[i] /= total;
-
-
-                for (int i = 0; i < values.Length; i++)
+                // Add a simple pie chart visualization
+                PaperDemo.Gui.AddActionElement((vg, rect) =>
                 {
-                    // Calculate angles
-                    double angle = values[i] * Math.PI * 2;
-                    double endAngle = startAngle + angle;
+                    double centerX = rect.x + rect.width / 2;
+                    double centerY = rect.y + rect.height / 2;
+                    double radius = Math.Min(rect.width, rect.height) * 0.4f;
 
-                    // Draw pie slice
+                    // double startAngle = 0;
+                    // double[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
+
+                    // Normalize Values
+                    double total = values.Sum();
+                    for (int i = 0; i < values.Length; i++)
+                        values[i] /= total;
+
+
+                    for (int i = 0; i < values.Length; i++)
+                    {
+                        // Calculate angles
+                        double angle = values[i] * Math.PI * 2;
+                        double endAngle = startAngle + angle;
+
+                        // Draw pie slice
+                        vg.BeginPath();
+                        vg.MoveTo(centerX, centerY);
+                        vg.Arc(centerX, centerY, radius, startAngle, endAngle);
+                        vg.LineTo(centerX, centerY);
+                        vg.SetFillColor(Themes.colorPalette[i % Themes.colorPalette.Length]);
+                        vg.Fill();
+
+                        // Draw outline
+                        vg.BeginPath();
+                        vg.MoveTo(centerX, centerY);
+                        vg.Arc(centerX, centerY, radius, startAngle, endAngle);
+                        vg.LineTo(centerX, centerY);
+                        vg.SetStrokeColor(Color.White);
+                        vg.SetStrokeWidth(2);
+                        vg.Stroke();
+
+                        // Draw percentage labels
+                        double labelAngle = startAngle + angle / 2;
+                        double labelRadius = radius * 0.7f;
+                        double labelX = centerX + Math.Cos(labelAngle) * labelRadius;
+                        double labelY = centerY + Math.Sin(labelAngle) * labelRadius;
+
+                        string label = $"{values[i] * 100:F0}%";
+                        vg.SetFillColor(Color.White);
+                        //vg.TextAlign(Align.Center | Align.Middle);
+                        //vg.FontSize(16);
+                        //vg.Text(labelX, labelY, label);
+                        vg.DrawText(Fonts.fontSmall, label, labelX, labelY, Color.White);
+
+                        // Move to next slice
+                        startAngle = endAngle;
+                    }
+
+                    // Draw center circle
                     vg.BeginPath();
-                    vg.MoveTo(centerX, centerY);
-                    vg.Arc(centerX, centerY, radius, startAngle, endAngle);
-                    vg.LineTo(centerX, centerY);
-                    vg.SetFillColor(Themes.colorPalette[i % Themes.colorPalette.Length]);
+                    vg.Circle(centerX, centerY, radius * 0.4f);
+                    vg.SetFillColor(Color.White);
                     vg.Fill();
 
-                    // Draw outline
-                    vg.BeginPath();
-                    vg.MoveTo(centerX, centerY);
-                    vg.Arc(centerX, centerY, radius, startAngle, endAngle);
-                    vg.LineTo(centerX, centerY);
-                    vg.SetStrokeColor(Color.White);
-                    vg.SetStrokeWidth(2);
-                    vg.Stroke();
-
-                    // Draw percentage labels
-                    double labelAngle = startAngle + angle / 2;
-                    double labelRadius = radius * 0.7f;
-                    double labelX = centerX + Math.Cos(labelAngle) * labelRadius;
-                    double labelY = centerY + Math.Sin(labelAngle) * labelRadius;
-
-                    string label = $"{values[i] * 100:F0}%";
-                    vg.SetFillColor(Color.White);
-                    //vg.TextAlign(Align.Center | Align.Middle);
-                    //vg.FontSize(16);
-                    //vg.Text(labelX, labelY, label);
-                    vg.DrawText(Fonts.fontSmall, label, labelX, labelY, Color.White);
-
-                    // Move to next slice
-                    startAngle = endAngle;
-                }
-
-                // Draw center circle
-                vg.BeginPath();
-                vg.Circle(centerX, centerY, radius * 0.4f);
-                vg.SetFillColor(Color.White);
-                vg.Fill();
-
-                // Draw center text
-                // Draw center text
-                //vg.FillColor(textColor);
-                //vg.TextAlign(NvgSharp.Align.Center | NvgSharp.Align.Middle);
-                //vg.FontSize(20);
-                //vg.Text(centerX, centerY, $"Analytics\n{(sliderValue * 100):F0}%");
-                //vg.Text(fontSmall, $"Analytics\n{(sliderValue * 100):F0}%", centerX, centerY);
-            });
-            cleanup.Dispose();
-            return parent;
+                    // Draw center text
+                    // Draw center text
+                    //vg.FillColor(textColor);
+                    //vg.TextAlign(NvgSharp.Align.Center | NvgSharp.Align.Middle);
+                    //vg.FontSize(20);
+                    //vg.Text(centerX, centerY, $"Analytics\n{(sliderValue * 100):F0}%");
+                    //vg.Text(fontSmall, $"Analytics\n{(sliderValue * 100):F0}%", centerX, centerY);
+                });
+            }
+            return builder;
         }
 
         // // OLD
