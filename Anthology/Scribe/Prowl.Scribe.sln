@@ -7,9 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Scribe", "Scribe\Scribe.csp
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Samples\Tests\Tests.csproj", "{30A18D7B-D938-4C38-A679-4AF4507894D9}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RaylibTest", "RaylibTest\RaylibTest.csproj", "{0ACA52D0-4031-4FF9-AAAA-BB80B263C296}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RaylibTest", "Samples\RaylibTest\RaylibTest.csproj", "{0ACA52D0-4031-4FF9-AAAA-BB80B263C296}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,10 +19,6 @@ Global
 		{035195D4-56E5-4D31-B444-66C9ECDF7230}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{035195D4-56E5-4D31-B444-66C9ECDF7230}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{035195D4-56E5-4D31-B444-66C9ECDF7230}.Release|Any CPU.Build.0 = Release|Any CPU
-		{30A18D7B-D938-4C38-A679-4AF4507894D9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{30A18D7B-D938-4C38-A679-4AF4507894D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{30A18D7B-D938-4C38-A679-4AF4507894D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{30A18D7B-D938-4C38-A679-4AF4507894D9}.Release|Any CPU.Build.0 = Release|Any CPU
 		{0ACA52D0-4031-4FF9-AAAA-BB80B263C296}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0ACA52D0-4031-4FF9-AAAA-BB80B263C296}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0ACA52D0-4031-4FF9-AAAA-BB80B263C296}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -34,7 +28,6 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{30A18D7B-D938-4C38-A679-4AF4507894D9} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{0ACA52D0-4031-4FF9-AAAA-BB80B263C296} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
