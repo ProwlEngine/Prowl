@@ -225,10 +225,12 @@ namespace Prowl.Scribe
                     currentLine = new Line(new Vector2(0, currentY), i);
                 }
 
+                fontSystem.GetScaledVMetrics(glyph.Font, Settings.PixelSize, out var a, out var d, out var l);
+
                 // Add character to current line
                 var glyphInstance = new GlyphInstance(
                     glyph,
-                    new Vector2(currentX + glyph.Metrics.OffsetX, glyph.Metrics.OffsetY),
+                    new Vector2(currentX + glyph.Metrics.OffsetX, glyph.Metrics.OffsetY + a),
                     c,
                     charWidth
                 );
