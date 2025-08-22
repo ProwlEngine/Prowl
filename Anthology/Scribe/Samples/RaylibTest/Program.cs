@@ -256,7 +256,6 @@ internal class Program
             settings = TextLayoutSettings.Default;
             settings.PixelSize = 18;
             settings.MaxWidth = 600;
-            fontAtlas.ClearLayoutCache();
         }
 
         // Toggle views

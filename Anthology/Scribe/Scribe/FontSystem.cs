@@ -3,6 +3,95 @@ using System.Numerics;
 
 namespace Prowl.Scribe
 {
+    sealed class LruCache<K, V>
+    {
+        int _capacity;
+        readonly Dictionary<K, LinkedListNode<(K key, V val)>> _map = new();
+        readonly LinkedList<(K key, V val)> _lru = new();
+
+        public LruCache(int capacity) { _capacity = Math.Max(1, capacity); }
+        public int Capacity { get => _capacity; set { _capacity = Math.Max(1, value); Trim(); } }
+
+        public bool TryGetValue(K k, out V v)
+        {
+            if (_map.TryGetValue(k, out var node))
+            {
+                _lru.Remove(node); _lru.AddFirst(node);
+                v = node.Value.val; return true;
+            }
+            v = default!; return false;
+        }
+
+        public void Add(K k, V v)
+        {
+            if (_map.TryGetValue(k, out var node))
+            {
+                node.Value = (k, v);
+                _lru.Remove(node); _lru.AddFirst(node);
+            }
+            else
+            {
+                var nn = new LinkedListNode<(K, V)>((k, v));
+                _lru.AddFirst(nn);
+                _map[k] = nn;
+                Trim();
+            }
+        }
+
+        void Trim()
+        {
+            while (_map.Count > _capacity)
+            {
+                var last = _lru.Last; if (last == null) break;
+                _map.Remove(last.Value.key);
+                _lru.RemoveLast();
+            }
+        }
+
+        public void Clear() { _map.Clear(); _lru.Clear(); }
+    }
+
+    readonly struct LayoutCacheKey : IEquatable<LayoutCacheKey>
+    {
+        public readonly string Text;
+        public readonly int PxQ, LsQ, WsQ, LhQ, MwQ; // quantized floats
+        public readonly int TabSize, FontId;        // stable id, not object ref
+        public readonly TextWrapMode Wrap;
+        public readonly TextAlignment Align;
+
+        static int Q(float v, float stepTimes) => (int)MathF.Round(v * stepTimes);
+
+        public LayoutCacheKey(
+            string text, float pixelSize, float letterSpacing, float wordSpacing, float lineHeight,
+            int tabSize, TextWrapMode wrap, TextAlignment align, float maxWidth, int fontId)
+        {
+            Text = text ?? string.Empty;
+            PxQ = Q(pixelSize, 8f);  // ~1/8 px
+            LsQ = Q(letterSpacing, 8f);
+            WsQ = Q(wordSpacing, 8f);
+            LhQ = Q(lineHeight, 8f);
+            MwQ = Q(maxWidth, 4f);  // ~1/4 px
+            TabSize = tabSize; Wrap = wrap; Align = align; FontId = fontId;
+        }
+
+        public bool Equals(LayoutCacheKey o) =>
+            (ReferenceEquals(Text, o.Text) || (Text?.Equals(o.Text) ?? o.Text is null))
+            && PxQ == o.PxQ && LsQ == o.LsQ && WsQ == o.WsQ && LhQ == o.LhQ && MwQ == o.MwQ
+            && TabSize == o.TabSize && Wrap == o.Wrap && Align == o.Align && FontId == o.FontId;
+
+        public override bool Equals(object obj) => obj is LayoutCacheKey o && Equals(o);
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int h = Text?.GetHashCode() ?? 0;
+                h = (h * 397) ^ PxQ; h = (h * 397) ^ LsQ; h = (h * 397) ^ WsQ; h = (h * 397) ^ LhQ; h = (h * 397) ^ MwQ;
+                h = (h * 397) ^ TabSize; h = (h * 397) ^ (int)Wrap; h = (h * 397) ^ (int)Align; h = (h * 397) ^ FontId;
+                return h;
+            }
+        }
+    }
 
     public class FontSystem
     {
@@ -10,7 +99,14 @@ namespace Prowl.Scribe
         private readonly BinPacker binPacker;
         private readonly List<FontInfo> fonts;
         private readonly Dictionary<AtlasGlyph.CacheKey, AtlasGlyph> glyphCache;
-        private readonly Dictionary<string, TextLayout> layoutCache;
+
+        readonly LruCache<LayoutCacheKey, TextLayout> layoutCache;
+        readonly Dictionary<FontInfo, int> fontIds = new();
+
+        private readonly Dictionary<(int, int), float> kerningMapCache;
+        private readonly Dictionary<(FontInfo, float), (float, float, float)> verticalMetricsCache;
+
+        private readonly Dictionary<int, FontInfo> glyphFontCache;
 
         private object atlasTexture;
         private int atlasWidth;
@@ -23,8 +119,12 @@ namespace Prowl.Scribe
         public float ExpansionFactor { get; set; } = 2f;
         public int MaxAtlasSize { get; set; } = 4096;
         public int Padding { get; set; } = 1;
-        public bool CacheLayouts { get; set; } = true;
-        public int MaxLayoutCacheSize { get; set; } = 100;
+        int _maxLayout = 256;
+        public int MaxLayoutCacheSize {
+            get => _maxLayout;
+            set { _maxLayout = Math.Max(1, value); layoutCache.Capacity = _maxLayout; }
+        }
+        public bool CacheLayouts { get; set; } = false;
 
         public IEnumerable<FontInfo> Fonts => fonts;
         public int Width => atlasWidth;
@@ -45,7 +145,11 @@ namespace Prowl.Scribe
             binPacker = new BinPacker(atlasWidth, atlasHeight);
             fonts = new List<FontInfo>();
             glyphCache = new Dictionary<AtlasGlyph.CacheKey, AtlasGlyph>();
-            layoutCache = new Dictionary<string, TextLayout>();
+            layoutCache = new LruCache<LayoutCacheKey, TextLayout>(_maxLayout);
+            kerningMapCache = new Dictionary<(int, int), float>();
+            verticalMetricsCache = new Dictionary<(FontInfo, float), (float, float, float)>();
+
+            glyphFontCache = new Dictionary<int, FontInfo>();
 
             // Add a small white rectangle for rendering
             if (useWhiteRect)
@@ -71,6 +175,7 @@ namespace Prowl.Scribe
                 throw new InvalidDataException("Failed to initialize font");
 
             fonts.Add(fontInfo);
+            fontIds[fontInfo] = fonts.Count - 1;
 
             return fontInfo;
         }
@@ -82,6 +187,7 @@ namespace Prowl.Scribe
                 throw new InvalidDataException("Failed to initialize font");
 
             fonts.Add(fontInfo);
+            fontIds[fontInfo] = fonts.Count - 1;
 
             return fontInfo;
         }
@@ -135,48 +241,67 @@ namespace Prowl.Scribe
 
         public AtlasGlyph GetOrCreateGlyph(int codepoint, float pixelSize, FontInfo preferredFont = null)
         {
-            // Try preferred font first, then fallback to all fonts
-            var fontsToTry = preferredFont != null
-                ? new[] { preferredFont }.Concat(fonts.Where(f => f != preferredFont))
-                : fonts;
-
-            foreach (var font in fontsToTry)
+            // Try the preferred font first
+            if (preferredFont != null)
             {
-                // Check the cache first before checking if the font even has the glyph, since if it doesnt, it wont be in the cache,
-                // and we need to check the cache either way regardless. so doing it first if it IS in the cache lets us skip the HasGlyph check
-                var key = new AtlasGlyph.CacheKey(codepoint, pixelSize, font);
-                if (glyphCache.TryGetValue(key, out var cachedGlyph))
-                {
-                    return cachedGlyph;
-                }
-
-                if (!HasGlyph(font, codepoint)) continue;
-
-                var glyph = new AtlasGlyph(codepoint, pixelSize, font, this);
-
-                // Try to rasterize and add to atlas
-                if (TryAddGlyphToAtlas(glyph))
-                {
-                    glyphCache[key] = glyph;
+                var glyph = TryGetGlyphFromFont(preferredFont);
+                if (glyph != null)
                     return glyph;
-                }
+            }
 
-                // If we can't fit it, expand atlas and try again
-                if (AllowExpansion && TryExpandAtlas(glyph))
-                {
-                    if (TryAddGlyphToAtlas(glyph))
-                    {
-                        glyphCache[key] = glyph;
-                        return glyph;
-                    }
-                }
+            // then any cached font for this codepoint
+            glyphFontCache.TryGetValue(codepoint, out var cachedFont);
+            if (cachedFont != null && cachedFont != preferredFont)
+            {
+                var glyph = TryGetGlyphFromFont(cachedFont);
+                if (glyph != null)
+                    return glyph;
+            }
 
-                // Store in cache even if not in atlas (for metrics)
-                glyphCache[key] = glyph;
-                return glyph;
+            // not in either, Look in all loaded fonts for this glyph
+            foreach (var font in fonts)
+            {
+                if (font == preferredFont || font == cachedFont) continue;
+
+                var glyph = TryGetGlyphFromFont(font);
+                if (glyph != null)
+                    return glyph;
             }
 
             return null; // Glyph not found in any font
+
+            AtlasGlyph TryGetGlyphFromFont(FontInfo font)
+            {
+                var key = new AtlasGlyph.CacheKey(codepoint, pixelSize, font);
+                if (glyphCache.TryGetValue(key, out var cachedGlyph))
+                {
+                    glyphFontCache[codepoint] = font;
+                    return cachedGlyph;
+                }
+
+                if (!HasGlyph(font, codepoint))
+                    return null;
+
+                var glyph = new AtlasGlyph(codepoint, pixelSize, font, this);
+
+                if (TryAddGlyphToAtlas(glyph))
+                {
+                    glyphCache[key] = glyph;
+                    glyphFontCache[codepoint] = font;
+                    return glyph;
+                }
+
+                if (AllowExpansion && TryExpandAtlas(glyph) && TryAddGlyphToAtlas(glyph))
+                {
+                    glyphCache[key] = glyph;
+                    glyphFontCache[codepoint] = font;
+                    return glyph;
+                }
+
+                glyphCache[key] = glyph;
+                glyphFontCache[codepoint] = font;
+                return glyph;
+            }
         }
 
         private bool TryAddGlyphToAtlas(AtlasGlyph glyph)
@@ -240,7 +365,9 @@ namespace Prowl.Scribe
             glyphCache.Clear();
 
             // Clear the Layout Cache
-            ClearLayoutCache();
+            layoutCache.Clear();
+            kerningMapCache.Clear();
+            verticalMetricsCache.Clear();
 
             // Re-add white rect
             if (useWhiteRect)
@@ -278,11 +405,22 @@ namespace Prowl.Scribe
 
         public void GetScaledVMetrics(FontInfo font, float pixelSize, out float ascent, out float descent, out float lineGap)
         {
+            var key = (font, pixelSize);
+            if (verticalMetricsCache.TryGetValue(key, out var values))
+            {
+                ascent = values.Item1;
+                descent = values.Item2;
+                lineGap = values.Item3;
+                return;
+            }
+
             font.GetFontVMetrics(out int a, out int d, out int g);
             float s = font.ScaleForPixelHeight(pixelSize);
             ascent = a * s;
             descent = d * s; // stb returns negative descent; caller may convert to positive if desired
             lineGap = g * s;
+
+            verticalMetricsCache[key] = (ascent, descent, lineGap);
         }
 
         public GlyphBitmap? RenderGlyph(FontInfo fontInfo, int codepoint, float pixelSize)
@@ -316,15 +454,25 @@ namespace Prowl.Scribe
 
         public float GetKerning(FontInfo fontInfo, int leftCodepoint, int rightCodepoint, float pixelSize)
         {
+            var key = (leftCodepoint, rightCodepoint);
+            if (kerningMapCache.TryGetValue(key, out var kern))
+                return kern;
+
             int leftGlyph = fontInfo.FindGlyphIndex(leftCodepoint);
             int rightGlyph = fontInfo.FindGlyphIndex(rightCodepoint);
 
-            if (leftGlyph == 0 || rightGlyph == 0) return 0;
+            if (leftGlyph == 0 || rightGlyph == 0)
+            {
+                kerningMapCache[key] = 0;
+                return 0;
+            }
 
             float scale = fontInfo.ScaleForPixelHeight(pixelSize);
             int kernAdvance = fontInfo.GetGlyphKerningAdvance(leftGlyph, rightGlyph);
 
-            return kernAdvance * scale;
+            float result = kernAdvance * scale;
+            kerningMapCache[key] = result;
+            return result;
         }
 
         public bool HasGlyph(FontInfo fontInfo, int codepoint)
@@ -340,46 +488,34 @@ namespace Prowl.Scribe
         {
             if (string.IsNullOrEmpty(text))
             {
-                var emptyLayout = new TextLayout();
-                emptyLayout.UpdateLayout(text, settings, this);
-                return emptyLayout;
+                var empty = new TextLayout();
+                empty.UpdateLayout(text, settings, this);
+                return empty;
             }
 
-            string cacheKey = CacheLayouts ? GenerateLayoutCacheKey(text, settings) : null;
-
-            if (cacheKey != null && layoutCache.TryGetValue(cacheKey, out var cachedLayout))
+            if (!CacheLayouts)
             {
-                return cachedLayout;
+                var direct = new TextLayout();
+                direct.UpdateLayout(text, settings, this);
+                return direct;
             }
+
+            var key = GenerateLayoutCacheKey(text, settings);
+
+            if (layoutCache.TryGetValue(key, out var cached))
+                return cached;
 
             var layout = new TextLayout();
             layout.UpdateLayout(text, settings, this);
 
-            if (cacheKey != null)
-            {
-                // Manage cache size
-                if (layoutCache.Count >= MaxLayoutCacheSize)
-                {
-                    var firstKey = layoutCache.Keys.First();
-                    layoutCache.Remove(firstKey);
-                }
-                layoutCache[cacheKey] = layout;
-            }
-
+            layoutCache.Add(key, layout);
             return layout;
         }
 
-        private string GenerateLayoutCacheKey(string text, TextLayoutSettings settings)
-        {
-            return $"{text}|{settings.PixelSize}|{settings.LetterSpacing}|{settings.WordSpacing}|" +
-                   $"{settings.LineHeight}|{settings.TabSize}|{settings.WrapMode}|{settings.Alignment}|" +
-                   $"{settings.MaxWidth}|{settings.PreferredFont?.GetHashCode() ?? 0}";
-        }
-
-        public void ClearLayoutCache()
-        {
-            layoutCache.Clear();
-        }
+        int GetFontId(FontInfo fi) => (fi != null && fontIds.TryGetValue(fi, out var id)) ? id : -1;
+        LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
+            => new(text, s.PixelSize, s.LetterSpacing, s.WordSpacing, s.LineHeight,
+                   s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, GetFontId(s.PreferredFont));
 
         #endregion
 
