@@ -147,7 +147,7 @@ namespace Prowl.Scribe
         public CodeBlock(string language, string code) { Language = language; Code = code; }
     }
 
-    public enum TableAlignMD { None, Left, Center, Right }
+    public enum TableAlign { None, Left, Center, Right }
 
     public readonly struct Table
     {
@@ -164,9 +164,9 @@ namespace Prowl.Scribe
     public readonly struct TableCell
     {
         public readonly bool Header;
-        public readonly TableAlignMD Align;
+        public readonly TableAlign Align;
         public readonly List<Inline> Inlines;
-        public TableCell(bool header, TableAlignMD align, List<Inline> inlines) { Header = header; Align = align; Inlines = inlines; }
+        public TableCell(bool header, TableAlign align, List<Inline> inlines) { Header = header; Align = align; Inlines = inlines; }
     }
 
     public readonly struct HorizontalRule { }
@@ -429,7 +429,7 @@ namespace Prowl.Scribe
 
             // parse column alignments before consuming rows so header cells can use them
             var rows = new List<TableRow>();
-            TableAlignMD[] aligns = Array.Empty<TableAlignMD>();
+            TableAlign[] aligns = Array.Empty<TableAlign>();
             if (hasHeaderUnderline)
             {
                 aligns = ParseAligns(lines[1].Trim());
@@ -445,7 +445,7 @@ namespace Prowl.Scribe
                 for (int c = 0; c < parts.Length; c++)
                 {
                     bool header = hasHeaderUnderline && idx == 0; // header row
-                    var align = (c < aligns.Length) ? aligns[c] : TableAlignMD.None;
+                    var align = (c < aligns.Length) ? aligns[c] : TableAlign.None;
                     var inlines = ParseInlineBlock(parts[c].Trim());
                     cells.Add(new TableCell(header, align, inlines));
                 }
@@ -816,19 +816,19 @@ namespace Prowl.Scribe
             return parts;
         }
 
-        private static TableAlignMD[] ParseAligns(string underline)
+        private static TableAlign[] ParseAligns(string underline)
         {
             var parts = SplitPipes(underline);
-            var arr = new TableAlignMD[parts.Length];
+            var arr = new TableAlign[parts.Length];
             for (int i = 0; i < parts.Length; i++)
             {
                 var p = parts[i].Trim();
                 bool left = p.StartsWith(":");
                 bool right = p.EndsWith(":");
-                if (left && right) arr[i] = TableAlignMD.Center;
-                else if (left) arr[i] = TableAlignMD.Left;
-                else if (right) arr[i] = TableAlignMD.Right;
-                else arr[i] = TableAlignMD.None;
+                if (left && right) arr[i] = TableAlign.Center;
+                else if (left) arr[i] = TableAlign.Left;
+                else if (right) arr[i] = TableAlign.Right;
+                else arr[i] = TableAlign.None;
             }
             return arr;
         }

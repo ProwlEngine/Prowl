@@ -231,7 +231,7 @@ namespace Prowl.Scribe
             tls.LineHeight = lineHeightOverride ?? _s.LineHeight;
             tls.WrapMode = TextWrapMode.Wrap;
             tls.MaxWidth = widthOverride ?? _s.Width;
-            tls.Alignment = TextAlignmentMD.Left;
+            tls.Alignment = TextAlignment.Left;
             tls.PreferredFont = fontOverride ?? _s.ParagraphFont; 
             tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, tls.PreferredFont, styles);
 
@@ -298,7 +298,7 @@ namespace Prowl.Scribe
                     tlsNum.LineHeight = _s.LineHeight;
                     tlsNum.WrapMode = TextWrapMode.NoWrap;
                     tlsNum.MaxWidth = bulletBox;
-                    tlsNum.Alignment = TextAlignmentMD.Right;
+                    tlsNum.Alignment = TextAlignment.Right;
                     tlsNum.PreferredFont = _s.ParagraphFont;
                     var tlNum = _fs.CreateLayout($"{index}.", tlsNum);
                     dl.Ops.Add(new DrawText { Layout = tlNum, Pos = new Vector2(x + depth * _s.ListIndent, lineTop), Color = _s.ColorText });
@@ -350,7 +350,7 @@ namespace Prowl.Scribe
             tls.LineHeight = 1.25f;
             tls.WrapMode = TextWrapMode.Wrap;
             tls.MaxWidth = innerW;
-            tls.Alignment = TextAlignmentMD.Left;
+            tls.Alignment = TextAlignment.Left;
             tls.PreferredFont = _s.MonoFont;
 
             var tl = _fs.CreateLayout(cb.Code.Replace("\r\n", "\n"), tls);
@@ -474,10 +474,10 @@ namespace Prowl.Scribe
         }
 
 
-        private TextAlignmentMD AlignToText(TableAlignMD a) => a switch {
-            TableAlignMD.Center => TextAlignmentMD.Center,
-            TableAlignMD.Right => TextAlignmentMD.Right,
-            _ => TextAlignmentMD.Left
+        private TextAlignment AlignToText(TableAlign a) => a switch {
+            TableAlign.Center => TextAlignment.Center,
+            TableAlign.Right => TextAlignment.Right,
+            _ => TextAlignment.Left
         };
 
         private FontInfo ResolveFontForIndex(int idx, FontInfo baseFont, List<StyleSpan> spans)

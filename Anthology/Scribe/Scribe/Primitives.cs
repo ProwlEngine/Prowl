@@ -9,7 +9,7 @@ namespace Prowl.Scribe
         Wrap
     }
 
-    public enum TextAlignmentMD
+    public enum TextAlignment
     {
         Left,
         Center,
@@ -26,7 +26,7 @@ namespace Prowl.Scribe
         public float LineHeight; // multiplier (1.0 = normal, 1.2 = 20% larger)
         public int TabSize; // in characters
         public TextWrapMode WrapMode;
-        public TextAlignmentMD Alignment;
+        public TextAlignment Alignment;
         public float MaxWidth; // for wrapping, 0 = no limit
 
         public Func<int, FontInfo> FontSelector; // optional: index in the full string -> font
@@ -39,7 +39,7 @@ namespace Prowl.Scribe
             LineHeight = 1.0f,
             TabSize = 4,
             WrapMode = TextWrapMode.NoWrap,
-            Alignment = TextAlignmentMD.Left,
+            Alignment = TextAlignment.Left,
             MaxWidth = 0
         };
     }

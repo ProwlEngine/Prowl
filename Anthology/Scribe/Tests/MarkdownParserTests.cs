@@ -173,7 +173,7 @@ namespace Tests
             var hdr = t.Rows[0].Cells;
             Assert.All(hdr, c => Assert.True(c.Header));
             Assert.Equal(new[] { "h1", "h2", "h3" }, hdr.Select(c => Plain(c.Inlines)).ToArray());
-            Assert.Equal(new[] { TableAlignMD.Left, TableAlignMD.Center, TableAlignMD.Right }, hdr.Select(c => c.Align).ToArray());
+            Assert.Equal(new[] { TableAlign.Left, TableAlign.Center, TableAlign.Right }, hdr.Select(c => c.Align).ToArray());
             // first body row
             var r1 = t.Rows[1].Cells.Select(c => Plain(c.Inlines)).ToArray();
             Assert.Equal(new[] { "a", "b", "c" }, r1);
@@ -186,7 +186,7 @@ namespace Tests
             var d = Doc(md);
             var t = T(d, 0);
             var hdr = t.Rows[0].Cells;
-            Assert.Equal(new[] { TableAlignMD.Left, TableAlignMD.Center, TableAlignMD.Right }, hdr.Select(c => c.Align).ToArray());
+            Assert.Equal(new[] { TableAlign.Left, TableAlign.Center, TableAlign.Right }, hdr.Select(c => c.Align).ToArray());
         }
 
         [Fact]

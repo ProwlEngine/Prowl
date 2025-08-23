@@ -339,15 +339,15 @@ namespace Prowl.Scribe
 
         private void ApplyAlignment()
         {
-            if (Settings.Alignment == TextAlignmentMD.Left) return;
+            if (Settings.Alignment == TextAlignment.Left) return;
 
             float maxWidth = Settings.MaxWidth > 0 ? Settings.MaxWidth : GetMaxLineWidth();
 
             foreach (var line in Lines)
             {
                 float offset = Settings.Alignment switch {
-                    TextAlignmentMD.Center => (maxWidth - line.Width) * 0.5f,
-                    TextAlignmentMD.Right => maxWidth - line.Width,
+                    TextAlignment.Center => (maxWidth - line.Width) * 0.5f,
+                    TextAlignment.Right => maxWidth - line.Width,
                     //TextAlignment.Justify => 0, // Handle separately
                     _ => 0
                 };

@@ -210,10 +210,10 @@ for (int i = 0; i < 3; i++) {
         if (Raylib.IsKeyPressed(KeyboardKey.A))
         {
             settings.Alignment = settings.Alignment switch {
-                TextAlignmentMD.Left => TextAlignmentMD.Center,
-                TextAlignmentMD.Center => TextAlignmentMD.Right,
-                TextAlignmentMD.Right => TextAlignmentMD.Left,
-                _ => TextAlignmentMD.Left
+                TextAlignment.Left => TextAlignment.Center,
+                TextAlignment.Center => TextAlignment.Right,
+                TextAlignment.Right => TextAlignment.Left,
+                _ => TextAlignment.Left
             };
         }
 
@@ -282,7 +282,7 @@ for (int i = 0; i < 3; i++) {
     {
         var sample = "This paragraph demonstrates left/center/right alignment across a fixed width.";
         float y = pos.Y;
-        foreach (var (name, align) in new[] { ("Left", TextAlignmentMD.Left), ("Center", TextAlignmentMD.Center), ("Right", TextAlignmentMD.Right) })
+        foreach (var (name, align) in new[] { ("Left", TextAlignment.Left), ("Center", TextAlignment.Center), ("Right", TextAlignment.Right) })
         {
             var t = s; t.Alignment = align; t.WrapMode = TextWrapMode.Wrap; t.MaxWidth = 400;
             fs.DrawText(name + ":", new Vector2(pos.X, y), FontColor.Blue, 16);

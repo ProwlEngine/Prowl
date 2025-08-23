@@ -57,13 +57,13 @@ namespace Prowl.Scribe
         public readonly int PxQ, LsQ, WsQ, LhQ, MwQ; // quantized floats
         public readonly int TabSize, FontId;        // stable id, not object ref
         public readonly TextWrapMode Wrap;
-        public readonly TextAlignmentMD Align;
+        public readonly TextAlignment Align;
 
         static int Q(float v, float stepTimes) => (int)MathF.Round(v * stepTimes);
 
         public LayoutCacheKey(
             string text, float pixelSize, float letterSpacing, float wordSpacing, float lineHeight,
-            int tabSize, TextWrapMode wrap, TextAlignmentMD align, float maxWidth, int fontId)
+            int tabSize, TextWrapMode wrap, TextAlignment align, float maxWidth, int fontId)
         {
             Text = text ?? string.Empty;
             PxQ = Q(pixelSize, 8f);  // ~1/8 px
