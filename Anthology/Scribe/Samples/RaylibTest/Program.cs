@@ -1,15 +1,93 @@
-﻿// Program_MarkdownDemo.cs — Raylib demo with a Markdown mode using MarkdownLayoutEngine
-// Drop this alongside your existing files. It includes a new DemoMode.Markdown and wiring.
-// Requires:
-//   - Raylib_cs
-//   - Prowl.Scribe (FontSystem, IFontRenderer, TextLayout, TextLayoutSettings, FontColor, etc.)
-//   - Prowl.Markdown (AST + parser)
-//   - MarkdownLayoutEngine.cs (from the canvas)
-
-using Prowl.Scribe;
+﻿using Prowl.Scribe;
 using Raylib_cs;
-using StbTrueTypeSharp;
+using System.Diagnostics;
+using System.Dynamic;
 using System.Numerics;
+
+public sealed class RaylibMarkdownImageProvider : IMarkdownImageProvider, IDisposable
+{
+    public readonly struct MarkdownImage(object texture, float width, float height)
+    {
+        public readonly object Texture = texture;
+        public readonly float Width = width;
+        public readonly float Height = height;
+    }
+
+    private static readonly HttpClient _httpClient = new();
+    private readonly Dictionary<string, MarkdownImage> _cache = new();
+
+    public bool TryGetImage(string src, out object texture, out Vector2 size)
+    {
+        texture = default;
+        size = default;
+
+        if (_cache.TryGetValue(src, out var image))
+        {
+            texture = image.Texture;
+            size = new Vector2(image.Width, image.Height);
+            return true;
+        }
+
+        if (Uri.TryCreate(src, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            try
+            {
+                var bytes = _httpClient.GetByteArrayAsync(uri).GetAwaiter().GetResult();
+                string ext = Path.GetExtension(uri.AbsolutePath);
+                if (string.IsNullOrEmpty(ext))
+                    return false;
+
+                var img = Raylib.LoadImageFromMemory(ext, bytes);
+                var tex = Raylib.LoadTextureFromImage(img);
+                Raylib.SetTextureFilter(tex, TextureFilter.Bilinear);
+                Raylib.UnloadImage(img);
+                image = new MarkdownImage(tex, tex.Width, tex.Height);
+                _cache[src] = image;
+
+                texture = image.Texture;
+                size = new Vector2(image.Width, image.Height);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        else
+        {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string path = Path.Combine(baseDir, src);
+            if (!File.Exists(path))
+                return false;
+
+            try
+            {
+                var tex = Raylib.LoadTexture(path);
+                Raylib.SetTextureFilter(tex, TextureFilter.Bilinear);
+                image = new MarkdownImage(tex, tex.Width, tex.Height);
+                _cache[src] = image;
+
+                texture = image.Texture;
+                size = new Vector2(image.Width, image.Height);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        foreach (var kv in _cache)
+        {
+            if (kv.Value.Texture is Texture2D tex)
+                Raylib.UnloadTexture(tex);
+        }
+        _cache.Clear();
+    }
+}
 
 public class RaylibFontRenderer : IFontRenderer
 {
@@ -93,24 +171,15 @@ internal class Program
         var renderer = new RaylibFontRenderer();
         var fontAtlas = new FontSystem(renderer, 1024, 1024);
 
-        //// Load fonts
-        //FontInfo primaryFont = null;
-        //FontInfo monoFont = null;
-        //try
-        //{
-        //    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        //    string fontPath = Path.Combine(baseDir, "Fonts", "arial.ttf");
-        //    string monoPath = Path.Combine(baseDir, "Fonts", "consola.ttf"); // Consolas if present
-        //
-        //    if (File.Exists(fontPath)) primaryFont = fontAtlas.AddFont(fontPath);
-        //    if (File.Exists(monoPath)) monoFont = fontAtlas.AddFont(monoPath);
-        //}
-        //catch { }
+        fontAtlas.LoadSystemFonts();
 
-        try { fontAtlas.LoadSystemFonts(); } catch { }
-        //primaryFont ??= fontAtlas.DefaultFont; // fallbacks from system
-        //monoFont ??= primaryFont;
+        var arial = fontAtlas.GetFont("arial", FontStyle.Regular);
+        var arialBold = fontAtlas.GetFont("arial", FontStyle.Bold);
 
+        fontAtlas.DrawText("Hello World", Vector2.Zero, FontColor.White, TextLayoutSettings.Default);
+
+
+        var imageProvider = new RaylibMarkdownImageProvider();
         // Demo state
         var demoMode = DemoMode.Markdown; // start in Markdown mode
         var settings = TextLayoutSettings.Default;
@@ -133,7 +202,8 @@ internal class Program
 # Markdown Layout Engine
 Welcome to the *Markdown* **layout** ***showcase***. We support ~underline~, ~~strike~~, and ~~~overline~~~ decorations; also inline `code()`.
 Links: a labeled [blue link](https://example.com ""title"") and an autolink http://example.org
-Images are not supported for the time being: ![alt text](skip.png).
+Images are also supported, You can use file paths or URL's! 
+![Prowl logo](https://private-user-images.githubusercontent.com/23508114/313434781-5eef8da7-fb84-42f3-9d18-54b4f2d06551.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NTU5NTM5MDEsIm5iZiI6MTc1NTk1MzYwMSwicGF0aCI6Ii8yMzUwODExNC8zMTM0MzQ3ODEtNWVlZjhkYTctZmI4NC00MmYzLTlkMTgtNTRiNGYyZDA2NTUxLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTA4MjMlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwODIzVDEyNTMyMVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWVmZTIxMDQ2Nzc3YWNhOTUyM2QzMzI4MzM4NTNlYjJlOTM2NDFjYzM3OTI3NTVhMDBhOTY0OTJkMWM4ZDhjMmUmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.L7EhIKjZbEkpSpslfAUSMVct3-3Ceh0FV36-TeQ1j4U).
 
 ## Header2
 
@@ -179,7 +249,7 @@ for (int i = 0; i < 3; i++) {
             Raylib.BeginDrawing();
             Raylib.ClearBackground(new Color(245, 246, 250, 255));
 
-            DrawDemo(demoMode, sampleTexts[demoMode], settings, fontAtlas, renderer, showMetrics);
+            DrawDemo(demoMode, sampleTexts[demoMode], settings, fontAtlas, renderer, imageProvider, showMetrics);
             DrawUI(demoMode, settings, fontAtlas, showAtlas, showMetrics);
 
             if (showAtlas && fontAtlas.Texture is Texture2D atlasTexture)
@@ -189,6 +259,7 @@ for (int i = 0; i < 3; i++) {
             Raylib.EndDrawing();
         }
 
+        imageProvider.Dispose();
         Raylib.CloseWindow();
     }
 
@@ -234,8 +305,9 @@ for (int i = 0; i < 3; i++) {
     }
 
     static void DrawDemo(DemoMode mode, string text, TextLayoutSettings settings, FontSystem fontAtlas,
-        IFontRenderer renderer, bool showMetrics)
+        IFontRenderer renderer, IMarkdownImageProvider imageProvider, bool showMetrics)
     {
+        Raylib.SetMouseCursor(MouseCursor.Default);
         var contentArea = new Rectangle(50, 100, (int)settings.MaxWidth + 40, Raylib.GetScreenHeight() - 160);
         Raylib.DrawRectangleRec(contentArea, new Color(240, 240, 240, 100));
         Raylib.DrawRectangleLinesEx(contentArea, 2, Color.Gray);
@@ -256,7 +328,7 @@ for (int i = 0; i < 3; i++) {
                 DrawTypography(position, settings, fontAtlas);
                 break;
             case DemoMode.Markdown:
-                DrawMarkdown(text, position, settings, fontAtlas, renderer);
+                DrawMarkdown(text, position, settings, fontAtlas, renderer, imageProvider);
                 break;
         }
     }
@@ -309,7 +381,9 @@ for (int i = 0; i < 3; i++) {
     }
 
     // === Markdown demo ===
-    static void DrawMarkdown(string md, Vector2 pos, TextLayoutSettings baseText, FontSystem fs, IFontRenderer renderer)
+    static bool isMouseOverLink = false;
+    static void DrawMarkdown(string md, Vector2 pos, TextLayoutSettings baseText, FontSystem fs,
+        IFontRenderer renderer, IMarkdownImageProvider imageProvider)
     {
         var r = fs.GetFont("arial", FontStyle.Regular);
         var m = fs.GetFont("Consola", FontStyle.Regular);
@@ -327,10 +401,24 @@ for (int i = 0; i < 3; i++) {
         ms.ColorQuoteBar = new FontColor(180, 180, 190, 255);
         ms.ColorCodeBg = new FontColor(235, 235, 240, 255);
 
-        var engine = new MarkdownLayoutEngine(fs, renderer, ms);
+        var engine = new MarkdownLayoutEngine(fs, renderer, ms, imageProvider);
         var doc = Markdown.Parse(md);
         var dl = engine.Layout(doc, pos);
         engine.Render(dl);
+
+        var mouse = Raylib.GetMousePosition();
+        bool isMouseOverLink = engine.TryGetLinkAt(dl, mouse, out var href);
+
+        //if (isMouseOverLink)
+        //    Raylib.SetMouseCursor(MouseCursor.PointingHand);
+        //else
+        //    Raylib.SetMouseCursor(MouseCursor.Default);
+
+        if (isMouseOverLink && Raylib.IsMouseButtonPressed(MouseButton.Left))
+        {
+            try { Process.Start(new ProcessStartInfo(href) { UseShellExecute = true }); }
+            catch { }
+        }
     }
 
     static void DrawUI(object mode, TextLayoutSettings settings, FontSystem fs, bool showAtlas, bool showMetrics)

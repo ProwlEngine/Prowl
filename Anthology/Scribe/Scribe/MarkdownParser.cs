@@ -6,12 +6,11 @@ namespace Prowl.Scribe
     // Minimal markdown → AST
     // Focus: headings, blockquotes, lists (ordered/unordered, simple nesting), code blocks (```),
     // tables (pipe rows with optional header underline), anchors (#[name]), hr (---/===),
-    // paragraphs, and a compact inline syntax (strong/em/underline/strike/delete, code spans,
+    // paragraphs, and a compact inline syntax (strong/em/underline/strike/overline, code spans,
     // links, images, autolinks, hard line breaks).
     //
     // Notes
     // - This is a pragmatic, single-file parser intended for UI text rendering engines.
-    // - It favors predictable behavior over full Markdown spec coverage.
     // - Inline parsing is non-backtracking and fast; block parsing is line-anchored.
     // - The AST consists of lightweight readonly structs.
     //
@@ -115,7 +114,7 @@ namespace Prowl.Scribe
 
     public readonly struct Heading
     {
-        public readonly int Level; // 1..6
+        public readonly int Level; // 1..4
         public readonly List<Inline> Inlines;
         public Heading(int level, List<Inline> inlines) { Level = level; Inlines = inlines; }
     }
