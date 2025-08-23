@@ -762,18 +762,6 @@ namespace Prowl.Scribe
             return false;
         }
 
-        private static string Unescape(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return string.Empty;
-            var sb = new StringBuilder(s.Length);
-            for (int i = 0; i < s.Length; i++)
-            {
-                if (s[i] == '\\' && i + 1 < s.Length) { sb.Append(s[i + 1]); i++; }
-                else sb.Append(s[i]);
-            }
-            return sb.ToString();
-        }
-
         private static bool TryParseBracket(string s, int startBracket, out string label, out int nextIndex)
         {
             // startBracket points to '[' (or after '!' for image)

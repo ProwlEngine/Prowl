@@ -204,7 +204,8 @@ Images are also supported, You can use file paths or URL's!
 
 > A blockquote with enough text to wrap across multiple lines at regular font sizes, demonstrating wrapping.
 > But you can also expand blockquotes manually with > characters
->> Including nested block quotes!
+
+We've got *Italic* **Bold** and ***Bold Italic*** as well as escaped characters, lets go again \*Italic\* *\*\Bold\*\* and \*\*\*Bold Italic\*\*\*
 
 ### Header3
 
