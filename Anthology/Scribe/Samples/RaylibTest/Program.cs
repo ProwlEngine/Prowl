@@ -203,12 +203,13 @@ internal class Program
 Welcome to the *Markdown* **layout** ***showcase***. We support ~underline~, ~~strike~~, and ~~~overline~~~ decorations; also inline `code()`.
 Links: a labeled [blue link](https://example.com ""title"") and an autolink http://example.org
 Images are also supported, You can use file paths or URL's! 
-![Prowl logo](https://private-user-images.githubusercontent.com/23508114/313434781-5eef8da7-fb84-42f3-9d18-54b4f2d06551.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NTU5NTM5MDEsIm5iZiI6MTc1NTk1MzYwMSwicGF0aCI6Ii8yMzUwODExNC8zMTM0MzQ3ODEtNWVlZjhkYTctZmI4NC00MmYzLTlkMTgtNTRiNGYyZDA2NTUxLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTA4MjMlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwODIzVDEyNTMyMVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWVmZTIxMDQ2Nzc3YWNhOTUyM2QzMzI4MzM4NTNlYjJlOTM2NDFjYzM3OTI3NTVhMDBhOTY0OTJkMWM4ZDhjMmUmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.L7EhIKjZbEkpSpslfAUSMVct3-3Ceh0FV36-TeQ1j4U).
+![Prowl logo](ProwlLogo.png).
 
 ## Header2
 
 > A blockquote with enough text to wrap across multiple lines at regular font sizes, demonstrating wrapping.
 > But you can also expand blockquotes manually with > characters
+>> Including nested block quotes!
 
 ### Header3
 
