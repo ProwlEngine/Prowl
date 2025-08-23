@@ -163,7 +163,7 @@ namespace Prowl.Scribe
             return FontStyle.Regular;
         }
 
-        public void LoadSystemFonts()
+        public void LoadSystemFonts(params string[] priorityFamilies)
         {
             var paths = GetSystemFontPaths();
             foreach (var path in paths)
@@ -177,6 +177,44 @@ namespace Prowl.Scribe
                     // Silently skip problematic fonts
                 }
             }
+
+            ApplyFontPriorities(priorityFamilies);
+        }
+
+        void ApplyFontPriorities(string[] priorityFamilies)
+        {
+            if (priorityFamilies == null || priorityFamilies.Length == 0)
+                return;
+
+            var prioritized = new List<FontInfo>();
+            var seen = new HashSet<FontInfo>();
+
+            foreach (var fam in priorityFamilies)
+            {
+                if (string.IsNullOrEmpty(fam))
+                    continue;
+
+                foreach (var fi in fonts.Where(f => string.Equals(f.FamilyName, fam, StringComparison.OrdinalIgnoreCase)))
+                {
+                    prioritized.Add(fi);
+                    seen.Add(fi);
+                }
+            }
+
+            if (prioritized.Count == 0)
+                return;
+
+            var others = fonts.Where(f => !seen.Contains(f)).ToList();
+
+            fonts.Clear();
+            fonts.AddRange(prioritized);
+            fonts.AddRange(others);
+
+            fontIds.Clear();
+            for (int i = 0; i < fonts.Count; i++)
+                fontIds[fonts[i]] = i;
+
+            layoutCache.Clear();
         }
 
         private IEnumerable<string> GetSystemFontPaths()

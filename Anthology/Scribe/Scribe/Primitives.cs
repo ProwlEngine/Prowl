@@ -3,6 +3,46 @@ using System.Numerics;
 
 namespace Prowl.Scribe
 {
+
+    /// <summary>
+    /// Represents a node in the font atlas, typically a free rectangular space.
+    /// For a skyline bottom-left bin packer, this might store skyline segments.
+    /// </summary>
+    internal struct AtlasNode
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public int Width { get; set; }
+        public int Height { get; set; }
+
+        public AtlasNode(int x, int y, int width, int height = 0)
+        {
+            X = x;
+            Y = y;
+            Width = width;
+            Height = height;
+        }
+    }
+
+    /// <summary>
+    /// Represents a rectangular area, typically in a texture atlas.
+    /// </summary>
+    public struct AtlasRect
+    {
+        public int X;
+        public int Y;
+        public int Width;
+        public int Height;
+
+        public AtlasRect(int x, int y, int width, int height)
+        {
+            X = x;
+            Y = y;
+            Width = width;
+            Height = height;
+        }
+    }
+
     public enum TextWrapMode
     {
         NoWrap,

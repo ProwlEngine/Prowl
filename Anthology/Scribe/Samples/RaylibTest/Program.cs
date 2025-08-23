@@ -171,7 +171,7 @@ internal class Program
         var renderer = new RaylibFontRenderer();
         var fontAtlas = new FontSystem(renderer, 1024, 1024);
 
-        fontAtlas.LoadSystemFonts();
+        fontAtlas.LoadSystemFonts("arial", "times new roman");
 
         var imageProvider = new RaylibMarkdownImageProvider();
 
