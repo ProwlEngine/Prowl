@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Scribe
 {
-    sealed class LruCache<K, V>
+    sealed class LruCache<K, V> where K : notnull
     {
         int _capacity;
         readonly Dictionary<K, LinkedListNode<(K key, V val)>> _map = new();

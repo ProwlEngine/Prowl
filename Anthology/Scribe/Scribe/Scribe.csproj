@@ -9,4 +9,8 @@
     <AssemblyName>Prowl.$(MSBuildProjectName)</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tests" />
+  </ItemGroup>
+  
 </Project>
