@@ -61,7 +61,7 @@ namespace Prowl.Scribe
         Strong = 1 << 1, // <strong>
         Underline = 1 << 2, // <u>
         Strike = 1 << 3, // <s>
-        Delete = 1 << 4  // <del>
+        Overline = 1 << 4  // <del>
     }
 
     public readonly struct Block
@@ -147,7 +147,7 @@ namespace Prowl.Scribe
         public CodeBlock(string language, string code) { Language = language; Code = code; }
     }
 
-    public enum TableAlign { None, Left, Center, Right }
+    public enum TableAlignMD { None, Left, Center, Right }
 
     public readonly struct Table
     {
@@ -164,9 +164,9 @@ namespace Prowl.Scribe
     public readonly struct TableCell
     {
         public readonly bool Header;
-        public readonly TableAlign Align;
+        public readonly TableAlignMD Align;
         public readonly List<Inline> Inlines;
-        public TableCell(bool header, TableAlign align, List<Inline> inlines) { Header = header; Align = align; Inlines = inlines; }
+        public TableCell(bool header, TableAlignMD align, List<Inline> inlines) { Header = header; Align = align; Inlines = inlines; }
     }
 
     public readonly struct HorizontalRule { }
@@ -373,12 +373,11 @@ namespace Prowl.Scribe
                 {
                     int le2 = LineEnd(text, j);
                     string l2 = text.Substring(j, le2 - j);
-                    if (Regex.IsMatch(l2, "^[\\t ]+.+$"))
-                    {
-                        cont.AppendLine(l2);
-                        j = NextLineStart(text, le2);
-                    }
-                    else break;
+                    if (string.IsNullOrWhiteSpace(l2)) break;
+                    // stop if the line begins a new list item
+                    if (Regex.IsMatch(l2, "^(?:[+-]|\\d+\\.) +")) break;
+                    cont.AppendLine(l2);
+                    j = NextLineStart(text, le2);
                 }
 
                 var leadInlines = ParseInlineBlock(lead.TrimEnd());
@@ -424,28 +423,29 @@ namespace Prowl.Scribe
             if (lines.Count >= 2)
             {
                 var ul = lines[1].Trim();
-                hasHeaderUnderline = Regex.IsMatch(ul, "^\\| *:?-{3,}:? *(\\| *:?-{3,}:? *)*\\|?$");
+                // allow alignment row cells with a single or more dashes (e.g. |:--:|)
+                hasHeaderUnderline = Regex.IsMatch(ul, "^\\| *:?-+:? *(\\| *:?-+:? *)*\\|?$");
             }
 
+            // parse column alignments before consuming rows so header cells can use them
             var rows = new List<TableRow>();
-            TableAlign[] aligns = Array.Empty<TableAlign>();
+            TableAlignMD[] aligns = Array.Empty<TableAlignMD>();
+            if (hasHeaderUnderline)
+            {
+                aligns = ParseAligns(lines[1].Trim());
+            }
 
             for (int idx = 0; idx < lines.Count; idx++)
             {
-                var trimmed = lines[idx].Trim();
-                if (idx == 1 && hasHeaderUnderline)
-                {
-                    // parse aligns
-                    aligns = ParseAligns(trimmed);
-                    continue; // underline line is not a content row
-                }
+                if (idx == 1 && hasHeaderUnderline) continue; // underline line is not a content row
 
+                var trimmed = lines[idx].Trim();
                 var parts = SplitPipes(trimmed);
                 var cells = new List<TableCell>(parts.Length);
                 for (int c = 0; c < parts.Length; c++)
                 {
                     bool header = hasHeaderUnderline && idx == 0; // header row
-                    var align = (c < aligns.Length) ? aligns[c] : TableAlign.None;
+                    var align = (c < aligns.Length) ? aligns[c] : TableAlignMD.None;
                     var inlines = ParseInlineBlock(parts[c].Trim());
                     cells.Add(new TableCell(header, align, inlines));
                 }
@@ -643,7 +643,7 @@ namespace Prowl.Scribe
                         {
                             var inner = ApplyStyles(TokenizeInline(s.Substring(j, close - j)));
                             InlineStyle style = InlineStyle.None;
-                            if (ch == '~') style = count switch { 1 => InlineStyle.Underline, 2 => InlineStyle.Strike, _ => InlineStyle.Delete };
+                            if (ch == '~') style = count switch { 1 => InlineStyle.Underline, 2 => InlineStyle.Strike, _ => InlineStyle.Overline };
                             else if (ch == '*' || ch == '_')
                             {
                                 if (count >= 2) style |= InlineStyle.Strong;
@@ -816,19 +816,19 @@ namespace Prowl.Scribe
             return parts;
         }
 
-        private static TableAlign[] ParseAligns(string underline)
+        private static TableAlignMD[] ParseAligns(string underline)
         {
             var parts = SplitPipes(underline);
-            var arr = new TableAlign[parts.Length];
+            var arr = new TableAlignMD[parts.Length];
             for (int i = 0; i < parts.Length; i++)
             {
                 var p = parts[i].Trim();
                 bool left = p.StartsWith(":");
                 bool right = p.EndsWith(":");
-                if (left && right) arr[i] = TableAlign.Center;
-                else if (left) arr[i] = TableAlign.Left;
-                else if (right) arr[i] = TableAlign.Right;
-                else arr[i] = TableAlign.None;
+                if (left && right) arr[i] = TableAlignMD.Center;
+                else if (left) arr[i] = TableAlignMD.Left;
+                else if (right) arr[i] = TableAlignMD.Right;
+                else arr[i] = TableAlignMD.None;
             }
             return arr;
         }

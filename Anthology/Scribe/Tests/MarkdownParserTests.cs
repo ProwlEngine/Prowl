@@ -1,7 +1,3 @@
-using System;
-using System.Linq;
-using System.Collections.Generic;
-using Xunit;
 using Prowl.Scribe;
 
 namespace Tests
@@ -132,6 +128,21 @@ namespace Tests
             Assert.Equal(new[] { "one", "two", "three" }, list.Items.Select(x => Plain(x.Lead)).ToArray());
         }
 
+        [Fact]
+        public void List_Items_With_Continuation_Lines()
+        {
+            var md = "- first line\ncontinued line\n- second\n";
+            var d = Doc(md);
+            Assert.Single(d.Blocks);
+            var list = L(d, 0);
+            Assert.Equal(2, list.Items.Count);
+            Assert.Equal("first line", Plain(list.Items[0].Lead));
+            Assert.Single(list.Items[0].Children);
+            Assert.Equal(BlockKind.Paragraph, list.Items[0].Children[0].Kind);
+            Assert.Equal("continued line", Plain(list.Items[0].Children[0].Paragraph.Inlines));
+            Assert.Equal("second", Plain(list.Items[1].Lead));
+            Assert.Empty(list.Items[1].Children);
+        }
 
         [Fact]
         public void List_Nested_ByIndent()
@@ -162,12 +173,21 @@ namespace Tests
             var hdr = t.Rows[0].Cells;
             Assert.All(hdr, c => Assert.True(c.Header));
             Assert.Equal(new[] { "h1", "h2", "h3" }, hdr.Select(c => Plain(c.Inlines)).ToArray());
-            Assert.Equal(new[] { TableAlign.Left, TableAlign.Center, TableAlign.Right }, hdr.Select(c => c.Align).ToArray());
+            Assert.Equal(new[] { TableAlignMD.Left, TableAlignMD.Center, TableAlignMD.Right }, hdr.Select(c => c.Align).ToArray());
             // first body row
             var r1 = t.Rows[1].Cells.Select(c => Plain(c.Inlines)).ToArray();
             Assert.Equal(new[] { "a", "b", "c" }, r1);
         }
 
+        [Fact]
+        public void Table_Single_Dash_Alignment()
+        {
+            var md = "| h1 | h2 | h3 |\n| :- | :-: | -: |\n| a | b | c |\n";
+            var d = Doc(md);
+            var t = T(d, 0);
+            var hdr = t.Rows[0].Cells;
+            Assert.Equal(new[] { TableAlignMD.Left, TableAlignMD.Center, TableAlignMD.Right }, hdr.Select(c => c.Align).ToArray());
+        }
 
         [Fact]
         public void Links_Images_Autolinks()
@@ -219,7 +239,7 @@ namespace Tests
             // ~ underline, ~~ strike, ~~~ delete
             var u = inl.First(x => x.Kind == InlineKind.Span && x.Style.HasFlag(InlineStyle.Underline));
             var s = inl.First(x => x.Kind == InlineKind.Span && x.Style.HasFlag(InlineStyle.Strike));
-            var dlt = inl.First(x => x.Kind == InlineKind.Span && x.Style.HasFlag(InlineStyle.Delete));
+            var dlt = inl.First(x => x.Kind == InlineKind.Span && x.Style.HasFlag(InlineStyle.Overline));
             Assert.Equal("under", Plain(u.Children));
             Assert.Equal("strike", Plain(s.Children));
             Assert.Equal("del", Plain(dlt.Children));
@@ -268,7 +288,6 @@ console.log('ok');
             Assert.Equal(BlockKind.Heading, d.Blocks[1].Kind);
             Assert.Equal(BlockKind.Paragraph, d.Blocks[2].Kind);
             Assert.Equal(BlockKind.List, d.Blocks[3].Kind);
-            // error, theres another paragraph right here after list and before table, there shouldnt be
             Assert.Equal(BlockKind.Table, d.Blocks[4].Kind);
             Assert.Equal(BlockKind.HorizontalRule, d.Blocks[5].Kind);
             Assert.Equal(BlockKind.CodeBlock, d.Blocks[6].Kind);
