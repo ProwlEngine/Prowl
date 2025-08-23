@@ -1,4 +1,5 @@
 ﻿using StbTrueTypeSharp;
+using System.Globalization;
 using System.Numerics;
 using System.Text;
 
@@ -17,7 +18,6 @@ namespace Prowl.Scribe
         private readonly Dictionary<(int, int), float> kerningMapCache;
         private readonly Dictionary<(FontInfo, float), (float, float, float)> verticalMetricsCache;
 
-        private readonly Dictionary<int, FontInfo> glyphFontCache;
         private readonly Dictionary<(string, FontStyle), FontInfo> fontLookup;
 
         private object atlasTexture;
@@ -62,7 +62,6 @@ namespace Prowl.Scribe
             kerningMapCache = new Dictionary<(int, int), float>();
             verticalMetricsCache = new Dictionary<(FontInfo, float), (float, float, float)>();
 
-            glyphFontCache = new Dictionary<int, FontInfo>();
             fontLookup = new Dictionary<(string, FontStyle), FontInfo>();
 
             // Add a small white rectangle for rendering
@@ -129,6 +128,8 @@ namespace Prowl.Scribe
 
             var key = (family.ToLowerInvariant(), style);
             fontLookup[key] = fontInfo;
+
+            glyphCache.Clear();
         }
 
         static void ExtractFontMetadata(FontInfo fontInfo, out string family, out FontStyle style)
@@ -219,19 +220,10 @@ namespace Prowl.Scribe
                     return glyph;
             }
 
-            // then any cached font for this codepoint
-            glyphFontCache.TryGetValue(codepoint, out var cachedFont);
-            if (cachedFont != null && cachedFont != preferredFont)
-            {
-                var glyph = TryGetGlyphFromFont(cachedFont);
-                if (glyph != null)
-                    return glyph;
-            }
-
             // not in either, Look in all loaded fonts for this glyph
             foreach (var font in fonts)
             {
-                if (font == preferredFont || font == cachedFont) continue;
+                if (font == preferredFont) continue;
 
                 var glyph = TryGetGlyphFromFont(font);
                 if (glyph != null)
@@ -242,34 +234,28 @@ namespace Prowl.Scribe
 
             AtlasGlyph TryGetGlyphFromFont(FontInfo font)
             {
-                var key = new AtlasGlyph.CacheKey(codepoint, pixelSize, font);
-                if (glyphCache.TryGetValue(key, out var cachedGlyph))
-                {
-                    glyphFontCache[codepoint] = font;
-                    return cachedGlyph;
-                }
-
                 if (!HasGlyph(font, codepoint))
                     return null;
+
+                var key = new AtlasGlyph.CacheKey(codepoint, pixelSize, font);
+                if (glyphCache.TryGetValue(key, out var cachedGlyph))
+                    return cachedGlyph;
 
                 var glyph = new AtlasGlyph(codepoint, pixelSize, font, this);
 
                 if (TryAddGlyphToAtlas(glyph))
                 {
                     glyphCache[key] = glyph;
-                    glyphFontCache[codepoint] = font;
                     return glyph;
                 }
 
                 if (AllowExpansion && TryExpandAtlas(glyph) && TryAddGlyphToAtlas(glyph))
                 {
                     glyphCache[key] = glyph;
-                    glyphFontCache[codepoint] = font;
                     return glyph;
                 }
 
                 glyphCache[key] = glyph;
-                glyphFontCache[codepoint] = font;
                 return glyph;
             }
         }

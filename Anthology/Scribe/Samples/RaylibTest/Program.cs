@@ -165,7 +165,7 @@ internal class Program
         const int screenWidth = 1400;
         const int screenHeight = 900;
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
-        Raylib.InitWindow(screenWidth, screenHeight, "Text Layout + Markdown Demo");
+        Raylib.InitWindow(screenWidth, screenHeight, "Prowl.Scribe Raylib Sample");
 
         // Create font atlas with Raylib renderer
         var renderer = new RaylibFontRenderer();
@@ -173,13 +173,8 @@ internal class Program
 
         fontAtlas.LoadSystemFonts();
 
-        var arial = fontAtlas.GetFont("arial", FontStyle.Regular);
-        var arialBold = fontAtlas.GetFont("arial", FontStyle.Bold);
-
-        fontAtlas.DrawText("Hello World", Vector2.Zero, FontColor.White, TextLayoutSettings.Default);
-
-
         var imageProvider = new RaylibMarkdownImageProvider();
+
         // Demo state
         var demoMode = DemoMode.Markdown; // start in Markdown mode
         var settings = TextLayoutSettings.Default;
