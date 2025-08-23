@@ -57,13 +57,13 @@ namespace Prowl.Scribe
         public readonly int PxQ, LsQ, WsQ, LhQ, MwQ; // quantized floats
         public readonly int TabSize, FontId;        // stable id, not object ref
         public readonly TextWrapMode Wrap;
-        public readonly TextAlignment Align;
+        public readonly TextAlignmentMD Align;
 
         static int Q(float v, float stepTimes) => (int)MathF.Round(v * stepTimes);
 
         public LayoutCacheKey(
             string text, float pixelSize, float letterSpacing, float wordSpacing, float lineHeight,
-            int tabSize, TextWrapMode wrap, TextAlignment align, float maxWidth, int fontId)
+            int tabSize, TextWrapMode wrap, TextAlignmentMD align, float maxWidth, int fontId)
         {
             Text = text ?? string.Empty;
             PxQ = Q(pixelSize, 8f);  // ~1/8 px
@@ -113,6 +113,7 @@ namespace Prowl.Scribe
         private int atlasHeight;
 
         private bool useWhiteRect;
+        private float whiteU0, whiteV0, whiteU1, whiteV1;
 
         // Settings
         public bool AllowExpansion { get; set; } = true;
@@ -164,7 +165,12 @@ namespace Prowl.Scribe
                 Array.Fill<byte>(whiteData, 255);
 
                 renderer.UpdateTextureRegion(atlasTexture,
-                    new AtlasRect(x + Padding, y + Padding, 4, 4), whiteData);
+                    new AtlasRect(x, y, 4, 4), whiteData);
+
+                whiteU0 = (float)x / atlasWidth;
+                whiteV0 = (float)y / atlasHeight;
+                whiteU1 = (float)(x + 1) / atlasWidth;
+                whiteV1 = (float)(y + 1) / atlasHeight;
             }
         }
 

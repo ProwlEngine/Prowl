@@ -144,7 +144,11 @@ namespace Prowl.Scribe
                 for (int j = wordStart; j < wordEnd; j++)
                 {
                     char c = text[j];
-                    var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
+
+                    var selFont = Settings.FontSelector?.Invoke(j) ?? Settings.PreferredFont;
+                    var g = fontSystem.GetOrCreateGlyph(c, pixelSize, selFont);
+
+                    //var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
                     if (g == null) continue;
 
                     var adv = g.Metrics.AdvanceWidth + Settings.LetterSpacing;
@@ -213,7 +217,11 @@ namespace Prowl.Scribe
                 for (int j = wordStart; j < wordEnd; j++)
                 {
                     char c = text[j];
-                    var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
+
+                    var selFont = Settings.FontSelector?.Invoke(j) ?? Settings.PreferredFont;
+                    var g = fontSystem.GetOrCreateGlyph(c, pixelSize, selFont);
+
+                    //var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
                     if (g == null) continue;
 
                     if (prevForKern != 0)
@@ -260,7 +268,11 @@ namespace Prowl.Scribe
             for (int i = start; i < end; i++)
             {
                 char c = Text[i];
-                var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
+
+                var selFont = Settings.FontSelector?.Invoke(i) ?? Settings.PreferredFont;
+                var g = fontSystem.GetOrCreateGlyph(c, pixelSize, selFont);
+
+                //var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
                 if (g == null) continue;
 
                 float adv = g.Metrics.AdvanceWidth + Settings.LetterSpacing;
@@ -327,15 +339,15 @@ namespace Prowl.Scribe
 
         private void ApplyAlignment()
         {
-            if (Settings.Alignment == TextAlignment.Left) return;
+            if (Settings.Alignment == TextAlignmentMD.Left) return;
 
             float maxWidth = Settings.MaxWidth > 0 ? Settings.MaxWidth : GetMaxLineWidth();
 
             foreach (var line in Lines)
             {
                 float offset = Settings.Alignment switch {
-                    TextAlignment.Center => (maxWidth - line.Width) * 0.5f,
-                    TextAlignment.Right => maxWidth - line.Width,
+                    TextAlignmentMD.Center => (maxWidth - line.Width) * 0.5f,
+                    TextAlignmentMD.Right => maxWidth - line.Width,
                     //TextAlignment.Justify => 0, // Handle separately
                     _ => 0
                 };

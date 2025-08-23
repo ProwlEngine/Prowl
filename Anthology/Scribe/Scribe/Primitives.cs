@@ -9,7 +9,7 @@ namespace Prowl.Scribe
         Wrap
     }
 
-    public enum TextAlignment
+    public enum TextAlignmentMD
     {
         Left,
         Center,
@@ -26,8 +26,10 @@ namespace Prowl.Scribe
         public float LineHeight; // multiplier (1.0 = normal, 1.2 = 20% larger)
         public int TabSize; // in characters
         public TextWrapMode WrapMode;
-        public TextAlignment Alignment;
+        public TextAlignmentMD Alignment;
         public float MaxWidth; // for wrapping, 0 = no limit
+
+        public Func<int, FontInfo> FontSelector; // optional: index in the full string -> font
 
         public static TextLayoutSettings Default => new TextLayoutSettings {
             PixelSize = 16,
@@ -37,7 +39,7 @@ namespace Prowl.Scribe
             LineHeight = 1.0f,
             TabSize = 4,
             WrapMode = TextWrapMode.NoWrap,
-            Alignment = TextAlignment.Left,
+            Alignment = TextAlignmentMD.Left,
             MaxWidth = 0
         };
     }
