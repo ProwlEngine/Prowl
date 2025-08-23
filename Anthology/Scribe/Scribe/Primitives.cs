@@ -99,13 +99,15 @@ namespace Prowl.Scribe
         public Vector2 Position;
         public char Character;
         public float AdvanceWidth;
+        public int CharIndex;
 
-        public GlyphInstance(AtlasGlyph glyph, Vector2 position, char character, float advanceWidth)
+        public GlyphInstance(AtlasGlyph glyph, Vector2 position, char character, float advanceWidth, int charIndex)
         {
             Glyph = glyph;
             Position = position;
             Character = character;
             AdvanceWidth = advanceWidth;
+            CharIndex = charIndex;
         }
     }
 

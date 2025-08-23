@@ -69,10 +69,10 @@ namespace Prowl.Scribe
             }
 
             // Local to place a single glyph (no cross-line kerning)
-            void EmitGlyph(AtlasGlyph glyph, FontInfo font, char c, float offsetX, float offsetY, float advanceBase, ref float x, List<GlyphInstance> outList)
+            void EmitGlyph(AtlasGlyph glyph, FontInfo font, char c, float offsetX, float offsetY, float advanceBase, ref float x, List<GlyphInstance> outList, int charIndex)
             {
                 float a = GetAscender(font);
-                var gi = new GlyphInstance(glyph, new Vector2(x + offsetX, offsetY + a), c, advanceBase);
+                var gi = new GlyphInstance(glyph, new Vector2(x + offsetX, offsetY + a), c, advanceBase, charIndex);
                 outList.Add(gi);
                 x += advanceBase;
                 lastCodepointForKerning = c; // kerning only continues within the current word/run
@@ -85,7 +85,7 @@ namespace Prowl.Scribe
                 // Explicit newline
                 if (ch == '\n')
                 {
-                    FinalizeLine(ref line, currentY, lineHeight);
+                    FinalizeLine(ref line, currentY, lineHeight, i);
                     currentX = 0f;
                     currentY += lineHeight;
                     i++;
@@ -116,7 +116,7 @@ namespace Prowl.Scribe
                     if (wrapEnabled && currentX + runAdvance > maxWidth && line.Glyphs.Count > 0)
                     {
                         // wrap before the run
-                        FinalizeLine(ref line, currentY, lineHeight);
+                        FinalizeLine(ref line, currentY, lineHeight, s);
                         currentX = 0f;
                         currentY += lineHeight;
                         line = new Line(new Vector2(0, currentY), i);
@@ -188,7 +188,7 @@ namespace Prowl.Scribe
                     // If current line has content, wrap before placing the word
                     if (line.Glyphs.Count > 0)
                     {
-                        FinalizeLine(ref line, currentY, lineHeight);
+                        FinalizeLine(ref line, currentY, lineHeight, wordStart);
                         currentX = 0f;
                         currentY += lineHeight;
                         line = new Line(new Vector2(0, currentY), wordStart);
@@ -232,7 +232,7 @@ namespace Prowl.Scribe
 
                     EmitGlyph(g, g.Font, c, g.Metrics.OffsetX, g.Metrics.OffsetY,
                               g.Metrics.AdvanceWidth + Settings.LetterSpacing,
-                              ref currentX, line.Glyphs);
+                              ref currentX, line.Glyphs, j);
 
                     prevForKern = c;
                 }
@@ -243,7 +243,7 @@ namespace Prowl.Scribe
 
             // Finalize last line
             if (line.Glyphs.Count > 0 || Lines.Count == 0)
-                FinalizeLine(ref line, currentY, lineHeight);
+                FinalizeLine(ref line, currentY, lineHeight, i);
         }
 
         // Split a too-long word across lines, char by char, with minimal overhead.
@@ -284,7 +284,7 @@ namespace Prowl.Scribe
 
                 if (wrapEnabled && line.Glyphs.Count > 0 && currentX + k + adv > maxWidth)
                 {
-                    FinalizeLine(ref line, currentY, lineHeight);
+                    FinalizeLine(ref line, currentY, lineHeight, i);
                     currentX = 0f;
                     currentY += lineHeight;
                     line = new Line(new Vector2(0, currentY), i);
@@ -302,7 +302,7 @@ namespace Prowl.Scribe
 
                 // Emit glyph
                 float a = getAscender(g.Font);
-                var gi = new GlyphInstance(g, new Vector2(currentX + g.Metrics.OffsetX, g.Metrics.OffsetY + a), c, adv);
+                var gi = new GlyphInstance(g, new Vector2(currentX + g.Metrics.OffsetX, g.Metrics.OffsetY + a), c, adv, i);
                 line.Glyphs.Add(gi);
                 currentX += adv;
                 lastKernCode = c;
@@ -328,12 +328,12 @@ namespace Prowl.Scribe
             return index;
         }
 
-        private void FinalizeLine(ref Line line, float y, float lineHeight)
+        private void FinalizeLine(ref Line line, float y, float lineHeight, int endIndex)
         {
             line.Position = new Vector2(0, y);
             line.Height = lineHeight;
             line.Width = line.Glyphs.Count > 0 ? line.Glyphs[^1].Position.X + line.Glyphs[^1].AdvanceWidth : 0;
-            line.EndIndex = line.StartIndex + line.Glyphs.Count;
+            line.EndIndex = endIndex;
             Lines.Add(line);
         }
 
@@ -390,6 +390,142 @@ namespace Prowl.Scribe
             float maxWidth = GetMaxLineWidth();
             float totalHeight = Lines[^1].Position.Y + Lines[^1].Height;
             Size = new Vector2(maxWidth, totalHeight);
+        }
+
+        private Line GetLineForIndex(int index)
+        {
+            if (Lines.Count == 0)
+                return default;
+
+            foreach (var line in Lines)
+            {
+                if (index < line.EndIndex)
+                    return line;
+            }
+
+            return Lines[^1];
+        }
+
+        public Vector2 GetCursorPosition(int index)
+        {
+            if (Lines.Count == 0)
+                return Vector2.Zero;
+
+            index = Math.Clamp(index, 0, Text.Length);
+
+            foreach (var line in Lines)
+            {
+                if (index < line.StartIndex)
+                    return new Vector2(0, line.Position.Y);
+
+                if (index <= line.EndIndex)
+                {
+                    float currentX = 0f;
+                    int currentIndex = line.StartIndex;
+
+                    foreach (var glyph in line.Glyphs)
+                    {
+                        float glyphStart = glyph.Position.X - glyph.Glyph.Metrics.OffsetX;
+                        if (index <= glyph.CharIndex)
+                        {
+                            int spaces = glyph.CharIndex - currentIndex;
+                            if (spaces > 0)
+                            {
+                                float spaceWidth = (glyphStart - currentX) / spaces;
+                                float offset = index - currentIndex;
+                                return new Vector2(line.Position.X + currentX + spaceWidth * offset, line.Position.Y);
+                            }
+                            return new Vector2(line.Position.X + glyphStart, line.Position.Y);
+                        }
+
+                        currentX = glyphStart + glyph.AdvanceWidth;
+                        currentIndex = glyph.CharIndex + 1;
+                    }
+
+                    int trailing = line.EndIndex - currentIndex;
+                    if (trailing > 0)
+                    {
+                        float spaceWidth = trailing > 0 ? (line.Width - currentX) / trailing : 0f;
+                        float offset = index - currentIndex;
+                        return new Vector2(line.Position.X + currentX + spaceWidth * offset, line.Position.Y);
+                    }
+
+                    return new Vector2(line.Position.X + line.Width, line.Position.Y);
+                }
+            }
+
+            var last = Lines[^1];
+            return new Vector2(last.Width, last.Position.Y);
+        }
+
+        public int GetCursorIndex(Vector2 position)
+        {
+            if (Lines.Count == 0)
+                return 0;
+
+            Line line = Lines[0];
+            for (int li = 0; li < Lines.Count; li++)
+            {
+                var l = Lines[li];
+                if (position.Y < l.Position.Y + l.Height)
+                {
+                    line = l;
+                    break;
+                }
+                line = l;
+            }
+
+            float currentX = 0f;
+            int currentIndex = line.StartIndex;
+
+            foreach (var glyph in line.Glyphs)
+            {
+                float glyphStart = glyph.Position.X - glyph.Glyph.Metrics.OffsetX;
+                if (position.X < glyphStart)
+                {
+                    int spaces = glyph.CharIndex - currentIndex;
+                    if (spaces > 0)
+                    {
+                        float spaceWidth = (glyphStart - currentX) / spaces;
+                        float rel = position.X - currentX;
+                        int offset = spaceWidth > 0 ? (int)Math.Clamp(MathF.Round(rel / spaceWidth), 0, spaces) : 0;
+                        return currentIndex + offset;
+                    }
+                    return currentIndex;
+                }
+
+                float glyphEnd = glyphStart + glyph.AdvanceWidth;
+                if (position.X < glyphEnd)
+                {
+                    float mid = glyphStart + glyph.AdvanceWidth * 0.5f;
+                    return position.X < mid ? glyph.CharIndex : glyph.CharIndex + 1;
+                }
+
+                currentX = glyphEnd;
+                currentIndex = glyph.CharIndex + 1;
+            }
+
+            int trailingSpaces = line.EndIndex - currentIndex;
+            if (trailingSpaces > 0)
+            {
+                float spaceWidth = trailingSpaces > 0 ? (line.Width - currentX) / trailingSpaces : 0f;
+                float rel = position.X - currentX;
+                int offset = spaceWidth > 0 ? (int)Math.Clamp(MathF.Round(rel / spaceWidth), 0, trailingSpaces) : 0;
+                return currentIndex + offset;
+            }
+
+            return line.EndIndex;
+        }
+
+        public RectangleF GetCharacterRect(int index)
+        {
+            if (Lines.Count == 0 || index < 0 || index >= Text.Length)
+                return new RectangleF(0, 0, 0, 0);
+
+            var line = GetLineForIndex(index);
+            var start = GetCursorPosition(index);
+            var end = GetCursorPosition(index + 1);
+            return new RectangleF(start.X, line.Position.Y, end.X - start.X, line.Height);
         }
     }
 }
