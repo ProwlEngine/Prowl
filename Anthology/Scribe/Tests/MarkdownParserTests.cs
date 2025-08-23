@@ -84,6 +84,20 @@ namespace Tests
         }
 
 
+
+        [Fact]
+        public void Autolink_Excludes_Trailing_Punctuation()
+        {
+            var d = Doc("Visit http://example.com.\n");
+            var p = P(d, 0).Inlines;
+            var link = p.First(x => x.Kind == InlineKind.Link);
+            Assert.Equal("http://example.com", link.Href);
+            Assert.Equal("http://example.com", Plain(link.Children));
+            Assert.Equal(".", Plain(p.Last()));
+        }
+
+
+
         [Fact]
         public void List_Items_Allow_Empty()
         {
@@ -93,6 +107,27 @@ namespace Tests
             Assert.Equal(2, list.Items.Count);
             Assert.Equal(string.Empty, Plain(list.Items[0].Lead));
             Assert.Equal("b", Plain(list.Items[1].Lead));
+        }
+
+        [Fact]
+        public void List_Items_With_Tab_After_Marker()
+        {
+            var d = Doc("-\tfirst\n-\tsecond\n");
+            Assert.Single(d.Blocks);
+            var list = L(d, 0);
+            Assert.Equal(new[] { "first", "second" }, list.Items.Select(i => Plain(i.Lead)).ToArray());
+        }
+
+        [Fact]
+        public void UnorderedList_Asterisk()
+        {
+            var d = Doc("* alpha\n* beta\n");
+            Assert.Single(d.Blocks);
+            var list = L(d, 0);
+            Assert.False(list.Ordered);
+            Assert.Equal(2, list.Items.Count);
+            Assert.Equal("alpha", Plain(list.Items[0].Lead));
+            Assert.Equal("beta", Plain(list.Items[1].Lead));
         }
 
         [Fact]

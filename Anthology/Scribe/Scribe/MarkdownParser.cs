@@ -356,7 +356,7 @@ namespace Prowl.Scribe
             {
                 int le = LineEnd(text, i);
                 var line = text.Substring(i, le - i);
-                var m = Regex.Match(line, "^(?:([+-])|(\\d+)\\.) +(.*)$");
+                var m = Regex.Match(line, "^(?:([+*-])|(\\d+)\\.)\\s+(.*)$");
                 if (!m.Success) break;
 
                 bool thisOrdered = m.Groups[2].Success;
@@ -374,7 +374,7 @@ namespace Prowl.Scribe
                     string l2 = text.Substring(j, le2 - j);
                     if (string.IsNullOrWhiteSpace(l2)) break;
                     // stop if the line begins a new list item
-                    if (Regex.IsMatch(l2, "^(?:[+-]|\\d+\\.) +")) break;
+                    if (Regex.IsMatch(l2, "^(?:[+*-]|\\d+\\.)\\s+")) break;
                     cont.AppendLine(l2);
                     j = NextLineStart(text, le2);
                 }
@@ -508,7 +508,7 @@ namespace Prowl.Scribe
             if (Regex.IsMatch(line.Trim(), "^(?:===+|---+)$")) return true;
             if (line.StartsWith(">")) return true;
             if (line.TrimStart().StartsWith("|")) return true;
-            if (Regex.IsMatch(line, "^(?:[+-]|\\d+\\.) +")) return true;
+            if (Regex.IsMatch(line, "^(?:[+-]|\\d+\\.)\\s+")) return true;
             if (Regex.IsMatch(line.Trim(), "^#\\[[^\\]]+\\]$")) return true;
             return false;
         }
@@ -593,9 +593,11 @@ namespace Prowl.Scribe
                 {
                     int j = i;
                     while (j < text.Length && !char.IsWhiteSpace(text[j]) && text[j] != ')') j++;
-                    string url = text.Substring(i, j - i);
+                    int end = j;
+                    while (end > i && ".,:;!?".IndexOf(text[end - 1]) >= 0) end--;
+                    string url = text.Substring(i, end - i);
                     list.Add(Inline.Link(new List<Inline> { Inline.TextRun(url) }, url));
-                    i = j;
+                    i = end;
                     continue;
                 }
 
