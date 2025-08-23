@@ -83,8 +83,6 @@ namespace Tests
             Assert.Equal("Console.WriteLine(\"hi\");\n", Cb(d, 0).Code);
         }
 
-
-
         [Fact]
         public void Autolink_Excludes_Trailing_Punctuation()
         {
@@ -95,8 +93,6 @@ namespace Tests
             Assert.Equal("http://example.com", Plain(link.Children));
             Assert.Equal(".", Plain(p.Last()));
         }
-
-
 
         [Fact]
         public void List_Items_Allow_Empty()
@@ -116,6 +112,17 @@ namespace Tests
             Assert.Single(d.Blocks);
             var list = L(d, 0);
             Assert.Equal(new[] { "first", "second" }, list.Items.Select(i => Plain(i.Lead)).ToArray());
+        }
+
+        [Fact]
+        public void Escaped_Style_Markers_Are_Literal()
+        {
+            var md = @"\*not italic\* and \*\*not bold\*\*";
+            var d = Doc(md);
+            var inl = P(d, 0).Inlines;
+            // no span elements should be created from escaped markers
+            Assert.DoesNotContain(inl, x => x.Kind == InlineKind.Span);
+            Assert.Equal("*not italic* and **not bold**", Plain(inl));
         }
 
         [Fact]

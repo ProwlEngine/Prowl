@@ -606,7 +606,8 @@ namespace Prowl.Scribe
                 while (k < text.Length && !IsSpecial(text, k)) k++;
                 if (k > i)
                 {
-                    var run = Unescape(text.Substring(i, k - i));
+                    // Keep escapes for now; they'll be processed during style application
+                    var run = text.Substring(i, k - i);
                     list.Add(Inline.TextRun(run));
                     i = k;
                 }
@@ -629,9 +630,18 @@ namespace Prowl.Scribe
             {
                 if (t.Kind != InlineKind.Text) { output.Add(t); continue; }
                 string s = t.Text;
+                var sb = new StringBuilder();
                 int i = 0;
                 while (i < s.Length)
                 {
+                    // handle escapes for style markers and other characters
+                    if (s[i] == '\\' && i + 1 < s.Length)
+                    {
+                        sb.Append(s[i + 1]);
+                        i += 2;
+                        continue;
+                    }
+
                     // ~, *, _ groups of 1..3
                     char ch = s[i];
                     if (ch == '~' || ch == '*' || ch == '_')
@@ -642,6 +652,8 @@ namespace Prowl.Scribe
                         int close = IndexOfClosing(s, ch, count, j);
                         if (close > j)
                         {
+                            // flush any pending text before applying style
+                            if (sb.Length > 0) { output.Add(Inline.TextRun(sb.ToString())); sb.Clear(); }
                             var inner = ApplyStyles(TokenizeInline(s.Substring(j, close - j)));
                             InlineStyle style = InlineStyle.None;
                             if (ch == '~') style = count switch { 1 => InlineStyle.Underline, 2 => InlineStyle.Strike, _ => InlineStyle.Overline };
@@ -655,12 +667,11 @@ namespace Prowl.Scribe
                         }
                     }
 
-                    // normal char → emit text until next style marker
-                    int k = i;
-                    while (k < s.Length && s[k] != '~' && s[k] != '*' && s[k] != '_') k++;
-                    if (k > i) output.Add(Inline.TextRun(s.Substring(i, k - i)));
-                    i = k;
+                    // normal character
+                    sb.Append(ch);
+                    i++;
                 }
+                if (sb.Length > 0) { output.Add(Inline.TextRun(sb.ToString())); }
             }
             return CoalesceText(output);
         }
@@ -671,7 +682,12 @@ namespace Prowl.Scribe
             {
                 bool all = true;
                 for (int k = 0; k < count; k++) if (i + k >= s.Length || s[i + k] != ch) { all = false; break; }
-                if (all) return i;
+                if (all)
+                {
+                    // ignore escaped markers
+                    if (i > 0 && s[i - 1] == '\\') continue;
+                    return i;
+                }
             }
             return -1;
         }
