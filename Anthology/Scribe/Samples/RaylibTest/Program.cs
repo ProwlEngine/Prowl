@@ -93,29 +93,30 @@ internal class Program
         var renderer = new RaylibFontRenderer();
         var fontAtlas = new FontSystem(renderer, 1024, 1024);
 
-        // Load fonts
-        FontInfo primaryFont = null;
-        FontInfo monoFont = null;
-        try
-        {
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string fontPath = Path.Combine(baseDir, "Fonts", "arial.ttf");
-            string monoPath = Path.Combine(baseDir, "Fonts", "consola.ttf"); // Consolas if present
-
-            if (File.Exists(fontPath)) primaryFont = fontAtlas.AddFont(fontPath);
-            if (File.Exists(monoPath)) monoFont = fontAtlas.AddFont(monoPath);
-        }
-        catch { }
+        //// Load fonts
+        //FontInfo primaryFont = null;
+        //FontInfo monoFont = null;
+        //try
+        //{
+        //    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        //    string fontPath = Path.Combine(baseDir, "Fonts", "arial.ttf");
+        //    string monoPath = Path.Combine(baseDir, "Fonts", "consola.ttf"); // Consolas if present
+        //
+        //    if (File.Exists(fontPath)) primaryFont = fontAtlas.AddFont(fontPath);
+        //    if (File.Exists(monoPath)) monoFont = fontAtlas.AddFont(monoPath);
+        //}
+        //catch { }
 
         try { fontAtlas.LoadSystemFonts(); } catch { }
         //primaryFont ??= fontAtlas.DefaultFont; // fallbacks from system
-        monoFont ??= primaryFont;
+        //monoFont ??= primaryFont;
 
         // Demo state
         var demoMode = DemoMode.Markdown; // start in Markdown mode
         var settings = TextLayoutSettings.Default;
         settings.PixelSize = 18;
-        settings.PreferredFont = primaryFont;
+        //settings.PreferredFont = primaryFont;
+        settings.PreferredFont = fontAtlas.GetFont("arial", FontStyle.Regular);
         settings.LineHeight = 1.25f;
         settings.MaxWidth = 720;
 
@@ -178,7 +179,7 @@ for (int i = 0; i < 3; i++) {
             Raylib.BeginDrawing();
             Raylib.ClearBackground(new Color(245, 246, 250, 255));
 
-            DrawDemo(demoMode, sampleTexts[demoMode], settings, fontAtlas, renderer, primaryFont, monoFont, showMetrics);
+            DrawDemo(demoMode, sampleTexts[demoMode], settings, fontAtlas, renderer, showMetrics);
             DrawUI(demoMode, settings, fontAtlas, showAtlas, showMetrics);
 
             if (showAtlas && fontAtlas.Texture is Texture2D atlasTexture)
@@ -233,7 +234,7 @@ for (int i = 0; i < 3; i++) {
     }
 
     static void DrawDemo(DemoMode mode, string text, TextLayoutSettings settings, FontSystem fontAtlas,
-        IFontRenderer renderer, FontInfo primaryFont, FontInfo monoFont, bool showMetrics)
+        IFontRenderer renderer, bool showMetrics)
     {
         var contentArea = new Rectangle(50, 100, (int)settings.MaxWidth + 40, Raylib.GetScreenHeight() - 160);
         Raylib.DrawRectangleRec(contentArea, new Color(240, 240, 240, 100));
@@ -255,7 +256,7 @@ for (int i = 0; i < 3; i++) {
                 DrawTypography(position, settings, fontAtlas);
                 break;
             case DemoMode.Markdown:
-                DrawMarkdown(text, position, settings, fontAtlas, renderer, primaryFont, monoFont);
+                DrawMarkdown(text, position, settings, fontAtlas, renderer);
                 break;
         }
     }
@@ -307,10 +308,16 @@ for (int i = 0; i < 3; i++) {
         fs.DrawLayout(fs.CreateLayout("Line\nheight\nsample", lh), new Vector2(pos.X + 120, y), FontColor.Black);
     }
 
-    // === NEW: Markdown demo ===
-    static void DrawMarkdown(string md, Vector2 pos, TextLayoutSettings baseText, FontSystem fs, IFontRenderer renderer, FontInfo body, FontInfo mono)
+    // === Markdown demo ===
+    static void DrawMarkdown(string md, Vector2 pos, TextLayoutSettings baseText, FontSystem fs, IFontRenderer renderer)
     {
-        var ms = MarkdownLayoutSettings.Default(body, mono, width: baseText.MaxWidth);
+        var r = fs.GetFont("arial", FontStyle.Regular);
+        var m = fs.GetFont("Consola", FontStyle.Regular);
+        var b = fs.GetFont("arial", FontStyle.Bold);
+        var i = fs.GetFont("arial", FontStyle.Italic);
+        var bi = fs.GetFont("arial", FontStyle.BoldItalic);
+
+        var ms = MarkdownLayoutSettings.Default(r, r, b, i, bi, width: baseText.MaxWidth);
         ms.BaseSize = baseText.PixelSize;
         ms.LineHeight = baseText.LineHeight;
         ms.ParagraphSpacing = 10f;

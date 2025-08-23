@@ -87,7 +87,7 @@ namespace Prowl.Scribe
         public FontColor ColorCodeBg;        // used as solid quad color
         public FontColor ColorLink;
 
-        public static MarkdownLayoutSettings Default(FontInfo textFont, FontInfo monoFont, float width)
+        public static MarkdownLayoutSettings Default(FontInfo textFont, FontInfo? monoFont, FontInfo? boldFont, FontInfo? italicFont, FontInfo? boldItalicFont, float width)
         {
             return new MarkdownLayoutSettings {
                 Width = width,
@@ -106,6 +106,9 @@ namespace Prowl.Scribe
                 CodePadding = 8f,
                 ParagraphFont = textFont,
                 MonoFont = monoFont ?? textFont,
+                BoldFont = boldFont,
+                ItalicFont = italicFont,
+                BoldItalicFont = boldItalicFont,
                 ColorText = new FontColor(255, 255, 255, 255),
                 ColorMutedText = new FontColor(210, 210, 210, 255),
                 ColorRule = new FontColor(180, 180, 180, 255),

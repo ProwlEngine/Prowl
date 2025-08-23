@@ -1,4 +1,5 @@
-﻿using static StbTrueTypeSharp.Common;
+﻿using Prowl.Scribe;
+using static StbTrueTypeSharp.Common;
 
 namespace StbTrueTypeSharp
 {
@@ -23,7 +24,10 @@ namespace StbTrueTypeSharp
 		public int numGlyphs;
 		public Buf subrs = null;
 
-		private readonly Dictionary<int, int> unicodeMapCache = new();
+        public string FamilyName = string.Empty;
+        public FontStyle Style = FontStyle.Regular;
+
+        private readonly Dictionary<int, int> unicodeMapCache = new();
 
 		public int InitFont(byte[] data, int fontstart)
 		{

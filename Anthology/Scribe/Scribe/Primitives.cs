@@ -17,6 +17,15 @@ namespace Prowl.Scribe
         //Justify
     }
 
+
+    public enum FontStyle
+    {
+        Regular,
+        Bold,
+        Italic,
+        BoldItalic
+    }
+
     public struct TextLayoutSettings
     {
         public float PixelSize;

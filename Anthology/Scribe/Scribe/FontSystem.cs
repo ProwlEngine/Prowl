@@ -1,5 +1,6 @@
 ﻿using StbTrueTypeSharp;
 using System.Numerics;
+using System.Text;
 
 namespace Prowl.Scribe
 {
@@ -107,6 +108,7 @@ namespace Prowl.Scribe
         private readonly Dictionary<(FontInfo, float), (float, float, float)> verticalMetricsCache;
 
         private readonly Dictionary<int, FontInfo> glyphFontCache;
+        private readonly Dictionary<(string, FontStyle), FontInfo> fontLookup;
 
         private object atlasTexture;
         private int atlasWidth;
@@ -151,6 +153,7 @@ namespace Prowl.Scribe
             verticalMetricsCache = new Dictionary<(FontInfo, float), (float, float, float)>();
 
             glyphFontCache = new Dictionary<int, FontInfo>();
+            fontLookup = new Dictionary<(string, FontStyle), FontInfo>();
 
             // Add a small white rectangle for rendering
             if (useWhiteRect)
@@ -180,8 +183,7 @@ namespace Prowl.Scribe
             if (fontInfo.InitFont(File.ReadAllBytes(fontPath), 0) == 0)
                 throw new InvalidDataException("Failed to initialize font");
 
-            fonts.Add(fontInfo);
-            fontIds[fontInfo] = fonts.Count - 1;
+            RegisterFont(fontInfo);
 
             return fontInfo;
         }
@@ -192,10 +194,62 @@ namespace Prowl.Scribe
             if (fontInfo.InitFont(fontData, 0) == 0)
                 throw new InvalidDataException("Failed to initialize font");
 
+            RegisterFont(fontInfo);
+            return fontInfo;
+        }
+
+        public FontInfo GetFont(string familyName, FontStyle style = FontStyle.Regular)
+        {
+            if (string.IsNullOrEmpty(familyName))
+                return null;
+            var key = (familyName.ToLowerInvariant(), style);
+            fontLookup.TryGetValue(key, out var font);
+            return font;
+        }
+
+        void RegisterFont(FontInfo fontInfo)
+        {
+            ExtractFontMetadata(fontInfo, out var family, out var style);
+
+            fontInfo.FamilyName = family;
+            fontInfo.Style = style;
+
             fonts.Add(fontInfo);
             fontIds[fontInfo] = fonts.Count - 1;
 
-            return fontInfo;
+            var key = (family.ToLowerInvariant(), style);
+            fontLookup[key] = fontInfo;
+        }
+
+        static void ExtractFontMetadata(FontInfo fontInfo, out string family, out FontStyle style)
+        {
+            string fam = GetNameString(fontInfo, 1);
+            string sub = GetNameString(fontInfo, 2);
+
+            family = fam;
+            style = ParseStyle(sub);
+        }
+
+        static string GetNameString(FontInfo font, int nameId)
+        {
+            int len = 0;
+            var ptr = font.stbtt_GetFontNameString(font, ref len, 3, 1, 0x409, nameId);
+            if (ptr.IsNull || len == 0)
+                return string.Empty;
+            var buffer = new byte[len];
+            for (int i = 0; i < len; i++) buffer[i] = ptr[i];
+            return Encoding.BigEndianUnicode.GetString(buffer);
+        }
+
+        static FontStyle ParseStyle(string styleName)
+        {
+            var s = styleName?.ToLowerInvariant() ?? string.Empty;
+            bool bold = s.Contains("bold");
+            bool italic = s.Contains("italic") || s.Contains("oblique");
+            if (bold && italic) return FontStyle.BoldItalic;
+            if (bold) return FontStyle.Bold;
+            if (italic) return FontStyle.Italic;
+            return FontStyle.Regular;
         }
 
         public void LoadSystemFonts()
