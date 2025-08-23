@@ -835,13 +835,28 @@ namespace Prowl.Scribe
                     float thickness = 1f;// MathF.Max(1f, line.Height * 0.06f);
 
                     float y = deco.Kind switch {
-                        DecorationKind.Underline => yBase + line.Height * 0.66f,  // near baseline bottom
+                        DecorationKind.Underline => yBase + line.Height * 0.7f,  // near baseline bottom
                         DecorationKind.Strike => yBase + line.Height * 0.50f,  // midline
                         _ => yBase + line.Height * 0.18f   // Overline
                     };
 
+
+                    // Decide color: links use ColorLink, others use text color
+                    FontColor color = t.Color;
+                    if (deco.Kind == DecorationKind.Underline && t.LinkRanges != null)
+                    {
+                        foreach (var lr in t.LinkRanges)
+                        {
+                            if (lr.End > deco.CharStart && lr.Start < deco.CharEnd)
+                            {
+                                color = _s.ColorLink;
+                                break;
+                            }
+                        }
+                    }
+
                     // Make sure we draw at least a 1px wide segment
-                    AddQuad(ref verts, ref idx, ref vbase, new RectangleF(x0, y, MathF.Max(1, x1 - x0), thickness), t.Color);
+                    AddQuad(ref verts, ref idx, ref vbase, new RectangleF(x0, y, MathF.Max(1, x1 - x0), thickness), color);
                 }
             }
 
