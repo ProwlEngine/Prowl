@@ -648,6 +648,15 @@ namespace Prowl.Scribe
                     {
                         int count = 1; int j = i + 1;
                         while (j < s.Length && s[j] == ch && count < 3) { count++; j++; }
+
+                        if (ch == '_' && i > 0 && char.IsLetterOrDigit(s[i - 1]) && j < s.Length && char.IsLetterOrDigit(s[j]))
+                        {
+                            // underscores inside a word are treated as literal
+                            sb.Append(s.Substring(i, count));
+                            i += count;
+                            continue;
+                        }
+
                         // find matching closing markers
                         int close = IndexOfClosing(s, ch, count, j);
                         if (close > j)

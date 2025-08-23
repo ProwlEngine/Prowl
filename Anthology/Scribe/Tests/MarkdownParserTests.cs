@@ -49,6 +49,15 @@ namespace Tests
             Assert.Equal("World", Plain(H(d, 1).Inlines));
         }
 
+        [Fact]
+        public void Underscore_Within_Word_Is_Literal()
+        {
+            var d = Doc("foo_bar_baz");
+            var inl = P(d, 0).Inlines;
+            Assert.DoesNotContain(inl, x => x.Kind == InlineKind.Span);
+            Assert.Equal("foo_bar_baz", Plain(inl));
+        }
+
 
         [Fact]
         public void Paragraph_And_LineBreaks()
