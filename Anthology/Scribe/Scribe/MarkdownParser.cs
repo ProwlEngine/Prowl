@@ -789,14 +789,37 @@ namespace Prowl.Scribe
 
         private static bool TryParseParen(string s, int startParen, out string href, out string title, out int endIndex)
         {
-            // parse until matching ')', allowing spaces in title
-            int i = startParen; int depth = 0;
-            href = null; title = null; endIndex = startParen;
+            // parse until matching ')', allowing nested parentheses in the href
+            int i = startParen;
+            int depth = 0;
+            href = null;
+            title = null;
+            endIndex = startParen;
+
             // href
             while (i < s.Length && char.IsWhiteSpace(s[i])) i++;
             int hrefStart = i;
-            while (i < s.Length && !char.IsWhiteSpace(s[i]) && s[i] != ')') i++;
+            while (i < s.Length)
+            {
+                char ch = s[i];
+                if (ch == '(')
+                {
+                    depth++;
+                }
+                else if (ch == ')')
+                {
+                    if (depth == 0) break;
+                    depth--;
+                }
+                else if (char.IsWhiteSpace(ch) && depth == 0)
+                {
+                    break;
+                }
+                i++;
+            }
+
             href = s.Substring(hrefStart, i - hrefStart);
+
             while (i < s.Length && char.IsWhiteSpace(s[i])) i++;
             if (i < s.Length && s[i] != ')')
             {
@@ -806,7 +829,12 @@ namespace Prowl.Scribe
                 if ((title.StartsWith("\"") && title.EndsWith("\"")) || (title.StartsWith("'") && title.EndsWith("'")))
                     title = title.Length >= 2 ? title.Substring(1, title.Length - 2) : title;
             }
-            if (i < s.Length && s[i] == ')') { endIndex = i + 1; return true; }
+
+            if (i < s.Length && s[i] == ')')
+            {
+                endIndex = i + 1;
+                return true;
+            }
             return false;
         }
 

@@ -60,6 +60,19 @@ namespace Tests
 
 
         [Fact]
+        public void Link_Allows_Parentheses_In_Url()
+        {
+            var d = Doc("[link](http://example.com/foo_(bar))\n");
+            var p = P(d, 0).Inlines;
+            Assert.Single(p);
+            var link = p.First();
+            Assert.Equal(InlineKind.Link, link.Kind);
+            Assert.Equal("http://example.com/foo_(bar)", link.Href);
+        }
+
+
+
+        [Fact]
         public void Paragraph_And_LineBreaks()
         {
             var d = Doc("Hello\nWorld\n\nNext");
