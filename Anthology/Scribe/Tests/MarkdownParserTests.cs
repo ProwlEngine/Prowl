@@ -85,6 +85,17 @@ namespace Tests
 
 
         [Fact]
+        public void List_Items_Allow_Empty()
+        {
+            var d = Doc("- \n- b\n");
+            Assert.Single(d.Blocks);
+            var list = L(d, 0);
+            Assert.Equal(2, list.Items.Count);
+            Assert.Equal(string.Empty, Plain(list.Items[0].Lead));
+            Assert.Equal("b", Plain(list.Items[1].Lead));
+        }
+
+        [Fact]
         public void HorizontalRule_Variants()
         {
             var d = Doc("Hello\n\n---\n\n===\n");

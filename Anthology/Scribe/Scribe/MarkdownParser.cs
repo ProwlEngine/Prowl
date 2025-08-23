@@ -356,7 +356,7 @@ namespace Prowl.Scribe
             {
                 int le = LineEnd(text, i);
                 var line = text.Substring(i, le - i);
-                var m = Regex.Match(line, "^(?:([+-])|(\\d+)\\.) +(.+)$");
+                var m = Regex.Match(line, "^(?:([+-])|(\\d+)\\.) +(.*)$");
                 if (!m.Success) break;
 
                 bool thisOrdered = m.Groups[2].Success;
