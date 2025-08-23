@@ -832,7 +832,7 @@ namespace Prowl.Scribe
                     float x1 = t.Pos.X + line.Position.X + glyphs[i1].Position.X + glyphs[i1].AdvanceWidth;
 
                     float yBase = t.Pos.Y + line.Position.Y;
-                    float thickness = 1f;// MathF.Max(1f, line.Height * 0.06f);
+                    float thickness = MathF.Max(1f, line.Height * 0.06f);
 
                     float y = deco.Kind switch {
                         DecorationKind.Underline => yBase + line.Height * 0.7f,  // near baseline bottom
