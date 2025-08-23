@@ -391,7 +391,8 @@ namespace Prowl.Scribe
                 // bullet/number to be inserted before content
                 if (!list.Ordered)
                 {
-                    float r = _s.BulletRadius;
+                    //float r = _s.BulletRadius;
+                    float r = _s.BaseSize * 0.2f;
                     float bx = x + depth * _s.ListIndent + (bulletBox - 2 * r) * 0.5f;
                     float by = lineTop + _s.BaseSize * 0.35f; // approximate baseline offset
                     dl.Ops.Add(new DrawQuad { Rect = new RectangleF(bx, by, 2 * r, 2 * r), Color = _s.ColorText });
@@ -413,7 +414,8 @@ namespace Prowl.Scribe
                 // lead line
                 var para = new Paragraph(item.Lead);
                 float widthAvail = _s.Width - (contentX - x);
-                y = LayoutParagraph(para, contentX, y, dl, widthOverride: widthAvail);
+                // Subtrace Paragraph Spacing since LayoutParagraph adds that by default
+                y = LayoutParagraph(para, contentX, y, dl, widthOverride: widthAvail) - _s.ParagraphSpacing;
 
                 // nested children
                 foreach (var child in item.Children)
@@ -421,7 +423,7 @@ namespace Prowl.Scribe
                     switch (child.Kind)
                     {
                         case BlockKind.List: y = LayoutList(child.List, x, y, depth + 1, dl); break;
-                        case BlockKind.Paragraph: y = LayoutParagraph(child.Paragraph, contentX, y, dl, widthOverride: widthAvail); break;
+                        case BlockKind.Paragraph: y = LayoutParagraph(child.Paragraph, contentX, y, dl, widthOverride: widthAvail) - _s.ParagraphSpacing; break;
                         case BlockKind.CodeBlock: y = LayoutCode(child.CodeBlock, contentX, y, dl, widthOverride: widthAvail); break;
                         case BlockKind.BlockQuote: y = LayoutQuote(child.BlockQuote, contentX, y, dl, widthOverride: widthAvail); break;
                         case BlockKind.Table: y = LayoutTable(child.Table, contentX, y, dl, widthOverride: widthAvail); break;
