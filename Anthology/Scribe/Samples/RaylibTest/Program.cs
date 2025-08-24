@@ -3,6 +3,7 @@ using Raylib_cs;
 using System.Diagnostics;
 using System.Dynamic;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 public sealed class RaylibMarkdownImageProvider : IMarkdownImageProvider, IDisposable
 {
@@ -180,7 +181,14 @@ internal class Program
         var settings = TextLayoutSettings.Default;
         settings.PixelSize = 18;
         //settings.PreferredFont = primaryFont;
-        settings.PreferredFont = fontAtlas.GetFont("arial", FontStyle.Regular);
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            settings.PreferredFont = fontAtlas.GetFont("Segoe UI", FontStyle.Regular);
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            settings.PreferredFont = fontAtlas.GetFont("Arial", FontStyle.Regular);
+        else
+            settings.PreferredFont = fontAtlas.GetFont("Liberation Sans", FontStyle.Regular);
+        
         settings.LineHeight = 1.25f;
         settings.MaxWidth = 720;
 
@@ -382,11 +390,29 @@ for (int i = 0; i < 3; i++) {
     static void DrawMarkdown(string md, Vector2 pos, TextLayoutSettings baseText, FontSystem fs,
         IFontRenderer renderer, IMarkdownImageProvider imageProvider)
     {
-        var r = fs.GetFont("arial", FontStyle.Regular);
-        var m = fs.GetFont("Consola", FontStyle.Regular);
-        var b = fs.GetFont("arial", FontStyle.Bold);
-        var i = fs.GetFont("arial", FontStyle.Italic);
-        var bi = fs.GetFont("arial", FontStyle.BoldItalic);
+        string fontFamily = "";
+        string monoFontFamily = "";
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            fontFamily = "Segoe UI";
+            monoFontFamily = "Consola";
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            fontFamily = "Arial";
+            monoFontFamily = "Menlo";
+        }
+        else
+        {
+            fontFamily = "Liberation Sans";
+            monoFontFamily = "Liberation Mono";
+        }
+
+        var r = fs.GetFont(fontFamily, FontStyle.Regular);
+        var m = fs.GetFont(monoFontFamily, FontStyle.Regular);
+        var b = fs.GetFont(fontFamily, FontStyle.Bold);
+        var i = fs.GetFont(fontFamily, FontStyle.Italic);
+        var bi = fs.GetFont(fontFamily, FontStyle.BoldItalic);
 
         var ms = MarkdownLayoutSettings.Default(r, r, b, i, bi, width: baseText.MaxWidth);
         ms.BaseSize = baseText.PixelSize;
