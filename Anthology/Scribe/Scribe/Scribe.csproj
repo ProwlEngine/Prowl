@@ -6,10 +6,34 @@
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
     <AssemblyName>Prowl.$(MSBuildProjectName)</AssemblyName>
+    
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <NeutralLanguage>en-AU</NeutralLanguage>
+    <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <Title>Prowl.Scribe</Title>
+    <Authors>Wulferis</Authors>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Scribe</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Scribe</PackageProjectUrl>
+    <PackageTags>prowl;font;truetype;rasterizer;markdown;layout;rendering</PackageTags>
+    <Description>TrueType font parser, glyph layout engine, dynamic atlas packing, and Markdown renderer for the Prowl engine.</Description>
+    <Version>0.5.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
   
 </Project>

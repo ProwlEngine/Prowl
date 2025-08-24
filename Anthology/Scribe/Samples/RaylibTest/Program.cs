@@ -172,7 +172,7 @@ internal class Program
         var renderer = new RaylibFontRenderer();
         var fontAtlas = new FontSystem(renderer, 1024, 1024);
 
-        fontAtlas.LoadSystemFonts("arial", "times new roman");
+        fontAtlas.LoadSystemFonts("Segoe UI", "Arial", "Liberation Sans", "Consola", "Menlo", "Liberation Mono");
 
         var imageProvider = new RaylibMarkdownImageProvider();
 
@@ -390,6 +390,7 @@ for (int i = 0; i < 3; i++) {
     static void DrawMarkdown(string md, Vector2 pos, TextLayoutSettings baseText, FontSystem fs,
         IFontRenderer renderer, IMarkdownImageProvider imageProvider)
     {
+
         string fontFamily = "";
         string monoFontFamily = "";
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -414,7 +415,7 @@ for (int i = 0; i < 3; i++) {
         var i = fs.GetFont(fontFamily, FontStyle.Italic);
         var bi = fs.GetFont(fontFamily, FontStyle.BoldItalic);
 
-        var ms = MarkdownLayoutSettings.Default(r, r, b, i, bi, width: baseText.MaxWidth);
+        var ms = MarkdownLayoutSettings.Default(r, m, b, i, bi, width: baseText.MaxWidth);
         ms.BaseSize = baseText.PixelSize;
         ms.LineHeight = baseText.LineHeight;
         ms.ParagraphSpacing = 10f;
