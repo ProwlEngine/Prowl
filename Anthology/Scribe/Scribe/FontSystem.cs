@@ -20,7 +20,7 @@ namespace Prowl.Scribe
         readonly LruCache<LayoutCacheKey, TextLayout> layoutCache;
         readonly Dictionary<FontInfo, int> fontIds = new Dictionary<FontInfo, int>();
 
-        private readonly Dictionary<(int, int), float> kerningMapCache;
+        private readonly Dictionary<(FontInfo, int, int), float> kerningMapCache;
         private readonly Dictionary<(FontInfo, float), (float, float, float)> verticalMetricsCache;
 
         private readonly Dictionary<(string, FontStyle), FontInfo> fontLookup;
@@ -64,7 +64,7 @@ namespace Prowl.Scribe
             fonts = new List<FontInfo>();
             glyphCache = new Dictionary<AtlasGlyph.CacheKey, AtlasGlyph>();
             layoutCache = new LruCache<LayoutCacheKey, TextLayout>(_maxLayout);
-            kerningMapCache = new Dictionary<(int, int), float>();
+            kerningMapCache = new Dictionary<(FontInfo, int, int), float>();
             verticalMetricsCache = new Dictionary<(FontInfo, float), (float, float, float)>();
 
             fontLookup = new Dictionary<(string, FontStyle), FontInfo>();
@@ -149,7 +149,7 @@ namespace Prowl.Scribe
         static string GetNameString(FontInfo font, int nameId)
         {
             int len = 0;
-            var ptr = font.stbtt_GetFontNameString(font, ref len, 3, 1, 0x409, nameId);
+            var ptr = font.GetFontNameString(font, ref len, 3, 1, 0x409, nameId);
             if (ptr.IsNull || len == 0)
                 return string.Empty;
             var buffer = new byte[len];
@@ -463,7 +463,7 @@ namespace Prowl.Scribe
                 return;
             }
 
-            font.GetFontVMetrics(out int a, out int d, out int g);
+            font.GetFontVerticalMetrics(out int a, out int d, out int g);
             float s = font.ScaleForPixelHeight(pixelSize);
             ascent = a * s;
             descent = d * s; // stb returns negative descent; caller may convert to positive if desired
@@ -503,7 +503,7 @@ namespace Prowl.Scribe
 
         public float GetKerning(FontInfo fontInfo, int leftCodepoint, int rightCodepoint, float pixelSize)
         {
-            var key = (leftCodepoint, rightCodepoint);
+            var key = (fontInfo, leftCodepoint, rightCodepoint);
             if (kerningMapCache.TryGetValue(key, out var kern))
                 return kern;
 
