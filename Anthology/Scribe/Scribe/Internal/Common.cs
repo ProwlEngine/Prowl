@@ -1,15 +1,22 @@
-using System;
-using System.Numerics;
 using System.Runtime.InteropServices;
 
-namespace StbTrueTypeSharp
+namespace Prowl.Scribe.Internal
 {
-#if !STBSHARP_INTERNAL
-	public
-#else
-	internal
-#endif
-	static partial class Common
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct GlyphVertex
+    {
+        public short x;
+        public short y;
+        public short cx;
+        public short cy;
+        public short cx1;
+        public short cy1;
+        public byte type;
+        public byte padding;
+    }
+
+    internal static partial class Common
 	{
 		public const int STBTT_vmove = 1;
 		public const int STBTT_vline = 2;
@@ -68,27 +75,6 @@ namespace StbTrueTypeSharp
 		public const int STBTT_MAC_LANG_CHINESE_SIMPLIFIED = 33;
 		public const int STBTT_MAC_LANG_ITALIAN = 3;
 		public const int STBTT_MAC_LANG_CHINESE_TRAD = 19;
-
-		[StructLayout(LayoutKind.Sequential)]
-		public struct stbtt_kerningentry
-		{
-			public int glyph1;
-			public int glyph2;
-			public int advance;
-		}
-
-		[StructLayout(LayoutKind.Sequential)]
-		public struct stbtt_vertex
-		{
-			public short x;
-			public short y;
-			public short cx;
-			public short cy;
-			public short cx1;
-			public short cy1;
-			public byte type;
-			public byte padding;
-		}
 
 		public static uint stbtt__find_table(FakePtr<byte> data, uint fontstart, string tag)
 		{
@@ -170,7 +156,7 @@ namespace StbTrueTypeSharp
 			return 0;
 		}
 
-		public static void stbtt_setvertex(ref stbtt_vertex v, byte type, int x, int y, int cx, int cy)
+		public static void stbtt_setvertex(ref GlyphVertex v, byte type, int x, int y, int cx, int cy)
 		{
 			v.type = type;
 			v.x = (short)x;
@@ -179,10 +165,10 @@ namespace StbTrueTypeSharp
 			v.cy = (short)cy;
 		}
 
-		public static int stbtt__close_shape(stbtt_vertex[] vertices, int num_vertices, int was_off, int start_off,
+		public static int stbtt__close_shape(GlyphVertex[] vertices, int num_vertices, int was_off, int start_off,
 			int sx, int sy, int scx, int scy, int cx, int cy)
 		{
-			var v = new stbtt_vertex();
+			var v = new GlyphVertex();
 			if (start_off != 0)
 			{
 				if (was_off != 0)
@@ -343,8 +329,8 @@ namespace StbTrueTypeSharp
 			float scale = 0;
 			var info = new FontInfo();
 			info.InitFont(fontdata, stbtt_GetFontOffsetForIndex(fontdata, index));
-			scale = size > 0 ? info.ScaleForPixelHeight(size) : info.stbtt_ScaleForMappingEmToPixels(-size);
-			info.GetFontVMetrics(out i_ascent, out i_descent, out i_lineGap);
+			scale = size > 0 ? info.ScaleForPixelHeight(size) : info.ScaleForMappingEmToPixels(-size);
+			info.GetFontVerticalMetrics(out i_ascent, out i_descent, out i_lineGap);
 			ascent = i_ascent * scale;
 			descent = i_descent * scale;
 			lineGap = i_lineGap * scale;

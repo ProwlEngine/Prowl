@@ -1,6 +1,6 @@
-﻿namespace StbTrueTypeSharp
+﻿namespace Prowl.Scribe.Internal
 {
-	public class Buf
+    internal class Buf
 	{
 		public int cursor;
 		public FakePtr<byte> data;

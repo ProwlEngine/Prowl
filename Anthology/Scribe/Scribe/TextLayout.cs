@@ -1,4 +1,4 @@
-﻿using StbTrueTypeSharp;
+﻿using Prowl.Scribe.Internal;
 using System;
 using System.Collections.Generic;
 using System.Numerics;

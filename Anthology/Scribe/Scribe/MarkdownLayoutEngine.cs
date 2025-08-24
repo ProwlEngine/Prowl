@@ -6,7 +6,7 @@
 //   var ops = engine.Layout(doc, new Vector2(x, y));
 //   engine.Render(ops); // draws shapes + text
 
-using StbTrueTypeSharp;
+using Prowl.Scribe.Internal;
 using System;
 using System.Collections.Generic;
 using System.Linq;

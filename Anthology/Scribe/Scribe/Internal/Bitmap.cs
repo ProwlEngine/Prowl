@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Numerics;
-using static StbTrueTypeSharp.Common;
+using static Prowl.Scribe.Internal.Common;
 
-namespace StbTrueTypeSharp
+namespace Prowl.Scribe.Internal
 {
-    public class Bitmap
+    internal class Bitmap
     {
         // Backing fields match the original port for drop-in use elsewhere.
         public int w;                 // Width in pixels
@@ -15,7 +15,7 @@ namespace StbTrueTypeSharp
         /// <summary>Flatten curves → rasterize.</summary>
         public void Rasterize(
             float flatnessInPixels,
-            stbtt_vertex[] vertices,
+            GlyphVertex[] vertices,
             int numVerts,
             float scaleX,
             float scaleY,
@@ -370,7 +370,7 @@ namespace StbTrueTypeSharp
             RasterizeSortedEdges(edgePtr, n, vsubsample, offX, offY);
         }
 
-        private Vector2[] FlattenCurves(stbtt_vertex[] vertices, int numVerts, float objspaceFlatness, out int[] contourLengths, out int numContours)
+        private Vector2[] FlattenCurves(GlyphVertex[] vertices, int numVerts, float objspaceFlatness, out int[] contourLengths, out int numContours)
         {
             int vCount = Math.Min(numVerts, vertices?.Length ?? 0);
             contourLengths = null;
@@ -399,7 +399,7 @@ namespace StbTrueTypeSharp
             return points;
         }
 
-        private int FlattenCurvesPass(stbtt_vertex[] vertices, int vCount, float flat2, Vector2[] target, int[] contourLengths, bool fillContourLens)
+        private int FlattenCurvesPass(GlyphVertex[] vertices, int vCount, float flat2, Vector2[] target, int[] contourLengths, bool fillContourLens)
         {
             float x = 0f, y = 0f;
             int contourIndex = -1;

@@ -1,13 +1,8 @@
 ﻿using System;
 
-namespace StbTrueTypeSharp
+namespace Prowl.Scribe.Internal
 {
-#if !STBSHARP_INTERNAL
-	public
-#else
-	internal
-# endif
-	struct FakePtr<T> where T : new()
+    public struct FakePtr<T> where T : new()
 	{
 		public static readonly FakePtr<T> Null = new FakePtr<T>(null);
 
@@ -139,22 +134,22 @@ namespace StbTrueTypeSharp
 			return CreateWithSize(1);
 		}
 
-		public void memset(T value, int count)
+        internal void memset(T value, int count)
 		{
 			for (long i = 0; i < count; ++i) this[i] = value;
 		}
 
-		public static void memcpy(FakePtr<T> a, FakePtr<T> b, int count)
+        internal static void memcpy(FakePtr<T> a, FakePtr<T> b, int count)
 		{
 			for (long i = 0; i < count; ++i) a[i] = b[i];
 		}
 
-		public static void memcpy(T[] a, FakePtr<T> b, int count)
+        internal static void memcpy(T[] a, FakePtr<T> b, int count)
 		{
 			for (long i = 0; i < count; ++i) a[i] = b[i];
 		}
 
-		public static void memcpy(FakePtr<T> a, T[] b, int count)
+        internal static void memcpy(FakePtr<T> a, T[] b, int count)
 		{
 			for (long i = 0; i < count; ++i) a[i] = b[i];
 		}

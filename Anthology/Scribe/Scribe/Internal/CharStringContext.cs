@@ -1,8 +1,8 @@
-﻿using static StbTrueTypeSharp.Common;
+﻿using static Prowl.Scribe.Internal.Common;
 
-namespace StbTrueTypeSharp
+namespace Prowl.Scribe.Internal
 {
-	public class CharStringContext
+    internal class CharStringContext
 	{
 		public int bounds;
 		public float first_x;
@@ -12,7 +12,7 @@ namespace StbTrueTypeSharp
 		public int min_x;
 		public int min_y;
 		public int num_vertices;
-		public stbtt_vertex[] pvertices;
+		public GlyphVertex[] pvertices;
 		public int started;
 		public float x;
 		public float y;
@@ -43,7 +43,7 @@ namespace StbTrueTypeSharp
 			}
 			else
 			{
-				var v = new stbtt_vertex();
+				var v = new GlyphVertex();
 				stbtt_setvertex(ref v, type, x, y, cx, cy);
 				pvertices[num_vertices] = v;
 				pvertices[num_vertices].cx1 = (short)cx1;
