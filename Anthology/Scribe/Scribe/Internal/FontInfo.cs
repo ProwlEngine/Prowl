@@ -1,4 +1,6 @@
 ﻿using Prowl.Scribe;
+using System;
+using System.Collections.Generic;
 using static StbTrueTypeSharp.Common;
 
 namespace StbTrueTypeSharp
@@ -27,7 +29,7 @@ namespace StbTrueTypeSharp
         public string FamilyName = string.Empty;
         public FontStyle Style = FontStyle.Regular;
 
-        private readonly Dictionary<int, int> unicodeMapCache = new();
+        private readonly Dictionary<int, int> unicodeMapCache = new Dictionary<int, int>();
 
 		public int InitFont(byte[] data, int fontstart)
 		{
@@ -663,13 +665,17 @@ namespace StbTrueTypeSharp
 				b0 = b.stbtt__buf_get8();
 				switch (b0)
 				{
-					case 0x13 or 0x14:
+					case 0x13:
+				    case 0x14:
 						if (in_header != 0)
 							maskbits += sp / 2;
 						in_header = 0;
 						b.stbtt__buf_skip((maskbits + 7) / 8);
 						break;
-					case 0x01 or 0x03 or 0x12 or 0x17:
+					case 0x01:
+                    case 0x03:
+                    case 0x12:
+                    case 0x17:
 						maskbits += sp / 2;
 						break;
 					case 0x15:
@@ -696,7 +702,8 @@ namespace StbTrueTypeSharp
 						for (; i + 1 < sp; i += 2)
 							c.stbtt__csctx_rline_to(s[i], s[i + 1]);
 						break;
-					case 0x07 or 0x06:
+					case 0x07:
+                    case 0x06:
 						if (sp < 1)
 							return 0;
 						var goto_vlineto = b0 == 0x07 ? 1 : 0;
@@ -718,7 +725,8 @@ namespace StbTrueTypeSharp
 						}
 
 						break;
-					case 0x1F or 0x1E:
+					case 0x1F:
+                    case 0x1E:
 						if (sp < 4)
 							return 0;
 						var goto_hvcurveto = b0 == 0x1F ? 1 : 0;
@@ -766,7 +774,8 @@ namespace StbTrueTypeSharp
 							return 0;
 						c.stbtt__csctx_rccurve_to(s[i], s[i + 1], s[i + 2], s[i + 3], s[i + 4], s[i + 5]);
 						break;
-					case 0x1A or 0x1B:
+					case 0x1A:
+                    case 0x1B:
 						if (sp < 4)
 							return 0;
 						f = (float)0.0;
@@ -786,7 +795,8 @@ namespace StbTrueTypeSharp
 						}
 
 						break;
-					case 0x0A or 0x1D:
+					case 0x0A:
+                    case 0x1D:
 						if (b0 == 0x0A)
 							if (has_subrs == 0)
 							{

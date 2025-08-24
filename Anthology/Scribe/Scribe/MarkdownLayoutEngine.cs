@@ -7,6 +7,9 @@
 //   engine.Render(ops); // draws shapes + text
 
 using StbTrueTypeSharp;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 namespace Prowl.Scribe
@@ -140,8 +143,8 @@ namespace Prowl.Scribe
 
     public sealed class MarkdownDisplayList
     {
-        public readonly List<IDrawOp> Ops = new();
-        public readonly List<LinkInfo> Links = new();
+        public readonly List<IDrawOp> Ops = new List<IDrawOp>();
+        public readonly List<LinkInfo> Links = new List<LinkInfo>();
         public Vector2 Size; // overall width/height used
     }
 

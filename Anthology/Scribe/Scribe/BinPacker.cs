@@ -1,4 +1,7 @@
-﻿namespace Prowl.Scribe
+﻿using System;
+using System.Collections.Generic;
+
+namespace Prowl.Scribe
 {
 
     internal class BinPacker

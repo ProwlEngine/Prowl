@@ -1,4 +1,6 @@
-﻿using System.Text;
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Prowl.Scribe
@@ -96,14 +98,14 @@ namespace Prowl.Scribe
             Anchor = anchor;
         }
 
-        public static Block From(Paragraph p) => new(BlockKind.Paragraph, paragraph: p);
-        public static Block From(Heading h) => new(BlockKind.Heading, heading: h);
-        public static Block From(BlockQuote q) => new(BlockKind.BlockQuote, blockQuote: q);
-        public static Block From(ListBlock l) => new(BlockKind.List, list: l);
-        public static Block From(CodeBlock c) => new(BlockKind.CodeBlock, codeBlock: c);
-        public static Block From(Table t) => new(BlockKind.Table, table: t);
-        public static Block From(HorizontalRule hr) => new(BlockKind.HorizontalRule, hr: hr);
-        public static Block From(Anchor a) => new(BlockKind.Anchor, anchor: a);
+        public static Block From(Paragraph p) => new Block(BlockKind.Paragraph, paragraph: p);
+        public static Block From(Heading h) => new Block(BlockKind.Heading, heading: h);
+        public static Block From(BlockQuote q) => new Block(BlockKind.BlockQuote, blockQuote: q);
+        public static Block From(ListBlock l) => new Block(BlockKind.List, list: l);
+        public static Block From(CodeBlock c) => new Block(BlockKind.CodeBlock, codeBlock: c);
+        public static Block From(Table t) => new Block(BlockKind.Table, table: t);
+        public static Block From(HorizontalRule hr) => new Block(BlockKind.HorizontalRule, hr: hr);
+        public static Block From(Anchor a) => new Block(BlockKind.Anchor, anchor: a);
     }
 
     public readonly struct Paragraph
@@ -196,12 +198,12 @@ namespace Prowl.Scribe
             Title = title ?? string.Empty;
         }
 
-        public static Inline TextRun(string text) => new(InlineKind.Text, text: text);
-        public static Inline Code(string code) => new(InlineKind.Code, text: code);
-        public static Inline Span(InlineStyle style, List<Inline> children) => new(InlineKind.Span, style: style, children: children);
-        public static Inline Link(List<Inline> children, string href, string title = null) => new(InlineKind.Link, children: children, href: href, title: title);
-        public static Inline Image(string alt, string src, string title = null) => new(InlineKind.Image, text: alt, href: src, title: title);
-        public static Inline LineBreak() => new(InlineKind.LineBreak);
+        public static Inline TextRun(string text) => new Inline(InlineKind.Text, text: text);
+        public static Inline Code(string code) => new Inline(InlineKind.Code, text: code);
+        public static Inline Span(InlineStyle style, List<Inline> children) => new Inline(InlineKind.Span, style: style, children: children);
+        public static Inline Link(List<Inline> children, string href, string title = null) => new Inline(InlineKind.Link, children: children, href: href, title: title);
+        public static Inline Image(string alt, string src, string title = null) => new Inline(InlineKind.Image, text: alt, href: src, title: title);
+        public static Inline LineBreak() => new Inline(InlineKind.LineBreak);
     }
 
     #endregion

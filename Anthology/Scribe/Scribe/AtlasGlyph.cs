@@ -1,4 +1,5 @@
 ﻿using StbTrueTypeSharp;
+using System;
 
 namespace Prowl.Scribe
 {

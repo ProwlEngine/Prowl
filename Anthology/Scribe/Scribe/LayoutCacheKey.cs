@@ -1,4 +1,6 @@
-﻿namespace Prowl.Scribe
+﻿using System;
+
+namespace Prowl.Scribe
 {
     readonly struct LayoutCacheKey : IEquatable<LayoutCacheKey>
     {

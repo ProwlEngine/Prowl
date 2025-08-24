@@ -1,6 +1,11 @@
 ﻿using StbTrueTypeSharp;
+using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Prowl.Scribe
@@ -13,7 +18,7 @@ namespace Prowl.Scribe
         private readonly Dictionary<AtlasGlyph.CacheKey, AtlasGlyph> glyphCache;
 
         readonly LruCache<LayoutCacheKey, TextLayout> layoutCache;
-        readonly Dictionary<FontInfo, int> fontIds = new();
+        readonly Dictionary<FontInfo, int> fontIds = new Dictionary<FontInfo, int>();
 
         private readonly Dictionary<(int, int), float> kerningMapCache;
         private readonly Dictionary<(FontInfo, float), (float, float, float)> verticalMetricsCache;
@@ -219,33 +224,83 @@ namespace Prowl.Scribe
 
         private IEnumerable<string> GetSystemFontPaths()
         {
-            var paths = new List<string>();
+            // De-dupe final results
+            var yielded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            if (OperatingSystem.IsWindows())
+            // Safe enumerator that handles permissions and missing dirs
+            IEnumerable<string> EnumerateFontsUnder(string root)
             {
-                var fontDir = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
-                if (Directory.Exists(fontDir))
-                    paths.AddRange(Directory.GetFiles(fontDir, "*.ttf"));
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                var fontDirs = new[]
-                {
-                    "/usr/share/fonts",
-                    "/usr/local/share/fonts",
-                    "/System/Library/Fonts",
-                    "/Library/Fonts",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".fonts")
-                };
+                if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
+                    yield break;
 
-                foreach (var dir in fontDirs.Where(Directory.Exists))
+                var stack = new Stack<string>();
+                stack.Push(root);
+
+                while (stack.Count > 0)
                 {
-                    paths.AddRange(Directory.GetFiles(dir, "*.ttf", SearchOption.AllDirectories));
-                    paths.AddRange(Directory.GetFiles(dir, "*.otf", SearchOption.AllDirectories));
+                    string dir = stack.Pop();
+
+                    IEnumerable<string> files;
+                    try { files = Directory.EnumerateFiles(dir); }
+                    catch { files = Array.Empty<string>(); }
+
+                    foreach (var f in files)
+                    {
+                        string ext;
+                        try { ext = Path.GetExtension(f); }
+                        catch { continue; }
+
+                        if (string.Equals(ext, ".ttf", StringComparison.OrdinalIgnoreCase) && yielded.Add(f))
+                            yield return f;
+                    }
+
+                    IEnumerable<string> subdirs;
+                    try { subdirs = Directory.EnumerateDirectories(dir); }
+                    catch { subdirs = Array.Empty<string>(); }
+
+                    foreach (var d in subdirs)
+                        stack.Push(d);
                 }
             }
 
-            return paths;
+            // Build OS-specific search roots
+            var roots = new List<string>();
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // System fonts
+                roots.Add(Environment.GetFolderPath(Environment.SpecialFolder.Fonts));
+
+                // Per-user fonts (Windows 10+)
+                var userFonts = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Microsoft", "Windows", "Fonts");
+                roots.Add(userFonts);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                // System & local fonts
+                roots.Add("/usr/share/fonts");
+                roots.Add("/usr/local/share/fonts");
+
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                roots.Add(Path.Combine(home, ".fonts"));                  // legacy
+                roots.Add(Path.Combine(home, ".local", "share", "fonts"));// modern
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                // System & local fonts
+                roots.Add("/System/Library/Fonts");
+                roots.Add("/System/Library/Fonts/Supplemental");
+                roots.Add("/Library/Fonts");
+
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                roots.Add(Path.Combine(home, "Library", "Fonts"));
+            }
+
+            foreach (var r in roots.Distinct(StringComparer.OrdinalIgnoreCase))
+                foreach (var f in EnumerateFontsUnder(r))
+                    yield return f;
         }
 
         public AtlasGlyph GetOrCreateGlyph(int codepoint, float pixelSize, FontInfo preferredFont = null)
@@ -508,7 +563,7 @@ namespace Prowl.Scribe
 
         int GetFontId(FontInfo fi) => (fi != null && fontIds.TryGetValue(fi, out var id)) ? id : -1;
         LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
-            => new(text, s.PixelSize, s.LetterSpacing, s.WordSpacing, s.LineHeight,
+            => new LayoutCacheKey(text, s.PixelSize, s.LetterSpacing, s.WordSpacing, s.LineHeight,
                    s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, GetFontId(s.PreferredFont));
 
         #endregion

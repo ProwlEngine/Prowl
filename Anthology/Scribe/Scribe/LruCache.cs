@@ -1,10 +1,13 @@
-﻿namespace Prowl.Scribe
+﻿using System;
+using System.Collections.Generic;
+
+namespace Prowl.Scribe
 {
     sealed class LruCache<K, V> where K : notnull
     {
         int _capacity;
-        readonly Dictionary<K, LinkedListNode<(K key, V val)>> _map = new();
-        readonly LinkedList<(K key, V val)> _lru = new();
+        readonly Dictionary<K, LinkedListNode<(K key, V val)>> _map = new Dictionary<K, LinkedListNode<(K key, V val)>>();
+        readonly LinkedList<(K key, V val)> _lru = new LinkedList<(K key, V val)>();
 
         public LruCache(int capacity) { _capacity = Math.Max(1, capacity); }
         public int Capacity { get => _capacity; set { _capacity = Math.Max(1, value); Trim(); } }
