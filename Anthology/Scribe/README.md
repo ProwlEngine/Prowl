@@ -78,7 +78,7 @@ var imageProvider = new MyImageProvider(); // implements IMarkdownImageProvider
 
 // Get the fonts you would like the Markdown rendering to use
 var font = fs.GetFont("Arial", FontStyle.Regular);
-var mono = fs.GetFont("Consola", FontStyle.Regular);
+var mono = fs.GetFont("Consolas", FontStyle.Regular);
 var bold = fs.GetFont("Arial", FontStyle.Bold);
 var italic = fs.GetFont("Arial", FontStyle.Italic);
 var boldItalic = fs.GetFont("Arial", FontStyle.BoldItalic);
@@ -86,23 +86,20 @@ var boldItalic = fs.GetFont("Arial", FontStyle.BoldItalic);
 // Create the markdown Settings
 var settings = MarkdownLayoutSettings.Default(font, mono, bold, italic, boldItalic, width: 400);
 
-// Initialize the Markdown Layout Engine
-var engine = new MarkdownLayoutEngine(scribe, renderer, settings, imageProvider);
-
 // Parse your Markdown
 var document = Markdown.Parse(YourMarkdown);
 
-// Pass your Parsed Markdown into the Engine to calculate its Layout at the specified location
-var markdownLayout = engine.Layout(document, position);
+// Layout the markdown (relative to 0,0)
+var markdownLayout = MarkdownLayoutEngine.Layout(document, scribe, settings, imageProvider);
 
-// Draw your Markdown
-engine.Render(markdownLayout);
+// Render your Markdown at the specified position
+MarkdownLayoutEngine.Render(markdownLayout, scribe, renderer, position, settings);
 
 // You can also check if the mouse cursor is hovering over a Clickable Link!
-bool isMouseOverLink = engine.TryGetLinkAt(markdownLayout, mouse, out var href);
+bool isMouseOverLink = MarkdownLayoutEngine.TryGetLinkAt(markdownLayout, mouse, position, out var href);
 ```
 
-<img width="736" height="1106" alt="MarkdownShowcase" src="https://github.com/user-attachments/assets/c4ef6229-ef1c-41a2-bbf9-51a806ff4252" />
+![MarkdownShowcase](https://github.com/user-attachments/assets/c4ef6229-ef1c-41a2-bbf9-51a806ff4252)
 
 # <span align="center">🤝 Contributing 🤝</span>
 

@@ -424,13 +424,12 @@ for (int i = 0; i < 3; i++) {
         ms.ColorQuoteBar = new FontColor(180, 180, 190, 255);
         ms.ColorCodeBg = new FontColor(235, 235, 240, 255);
 
-        var engine = new MarkdownLayoutEngine(fs, renderer, ms, imageProvider);
         var doc = Markdown.Parse(md);
-        var dl = engine.Layout(doc, pos);
-        engine.Render(dl);
+        var dl = MarkdownLayoutEngine.Layout(doc, fs, ms, imageProvider);
+        MarkdownLayoutEngine.Render(dl, fs, renderer, pos, ms);
 
         var mouse = Raylib.GetMousePosition();
-        bool isMouseOverLink = engine.TryGetLinkAt(dl, mouse, out var href);
+        bool isMouseOverLink = MarkdownLayoutEngine.TryGetLinkAt(dl, mouse, pos, out var href);
 
         //if (isMouseOverLink)
         //    Raylib.SetMouseCursor(MouseCursor.PointingHand);

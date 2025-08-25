@@ -2,9 +2,8 @@
 // Shapes/lines are emitted as quads sampling the atlas at UV(0,0) (white texel).
 //
 // Usage:
-//   var engine = new Prowl.Scribe.MarkdownLayoutEngine(fontSystem, renderer, settings);
-//   var ops = engine.Layout(doc, new Vector2(x, y));
-//   engine.Render(ops); // draws shapes + text
+//   var dl = MarkdownLayoutEngine.Layout(doc, fontSystem, settings, imageProvider);
+//   MarkdownLayoutEngine.Render(dl, fontSystem, renderer, new Vector2(x, y)); // draws shapes + text
 
 using Prowl.Scribe.Internal;
 using System;
@@ -150,67 +149,53 @@ namespace Prowl.Scribe
 
     #endregion
 
-    public sealed class MarkdownLayoutEngine
+    public static class MarkdownLayoutEngine
     {
-        private readonly FontSystem _fs;
-        private readonly IFontRenderer _renderer; // to draw shape quads
-        private readonly MarkdownLayoutSettings _s;
-        private readonly IMarkdownImageProvider? _imageProvider;
-
-        public MarkdownLayoutEngine(FontSystem fs, IFontRenderer renderer, in MarkdownLayoutSettings settings, IMarkdownImageProvider? imageProvider = null)
-        {
-            _fs = fs ?? throw new ArgumentNullException(nameof(fs));
-            _renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
-            _s = settings;
-            _imageProvider = imageProvider;
-        }
-
-
         #region Public API
 
-        public MarkdownDisplayList Layout(Document doc, Vector2 origin)
+        public static MarkdownDisplayList Layout(Document doc, FontSystem fontSystem, MarkdownLayoutSettings settings, IMarkdownImageProvider? imageProvider = null)
         {
             var dl = new MarkdownDisplayList();
-            float cursorY = origin.Y;
-            float maxRight = origin.X;
+            float cursorY = 0;
+            float maxRight = 0;
 
             foreach (var block in doc.Blocks)
             {
                 switch (block.Kind)
                 {
                     case BlockKind.Heading:
-                        cursorY = LayoutHeading(block.Heading, origin.X, cursorY, dl);
+                        cursorY = LayoutHeading(block.Heading, 0, cursorY, dl, fontSystem, settings);
                         break;
                     case BlockKind.Paragraph:
-                        cursorY = LayoutParagraph(block.Paragraph, origin.X, cursorY, dl);
+                        cursorY = LayoutParagraph(block.Paragraph, 0, cursorY, dl, fontSystem, settings, imageProvider);
                         break;
                     case BlockKind.BlockQuote:
-                        cursorY = LayoutQuote(block.BlockQuote, origin.X, cursorY, dl);
+                        cursorY = LayoutQuote(block.BlockQuote, 0, cursorY, dl, fontSystem, settings, imageProvider);
                         break;
                     case BlockKind.List:
-                        cursorY = LayoutList(block.List, origin.X, cursorY, 0, dl);
+                        cursorY = LayoutList(block.List, 0, cursorY, 0, dl, fontSystem, settings, imageProvider);
                         break;
                     case BlockKind.CodeBlock:
-                        cursorY = LayoutCode(block.CodeBlock, origin.X, cursorY, dl);
+                        cursorY = LayoutCode(block.CodeBlock, 0, cursorY, dl, fontSystem, settings);
                         break;
                     case BlockKind.HorizontalRule:
-                        cursorY = LayoutHr(origin.X, cursorY, dl);
+                        cursorY = LayoutHr(0, cursorY, dl, settings);
                         break;
                     case BlockKind.Table:
-                        cursorY = LayoutTable(block.Table, origin.X, cursorY, dl);
+                        cursorY = LayoutTable(block.Table, 0, cursorY, dl, fontSystem, settings);
                         break;
                     case BlockKind.Anchor:
                         // no-op for visuals; if you want jump-to, record map here.
                         break;
                 }
-                maxRight = MathF.Max(maxRight, origin.X + _s.Width);
+                maxRight = MathF.Max(maxRight, settings.Width);
             }
 
-            dl.Size = new Vector2(_s.Width, cursorY - origin.Y);
+            dl.Size = new Vector2(settings.Width, cursorY);
             return dl;
         }
 
-        public void Render(MarkdownDisplayList dl)
+        public static void Render(MarkdownDisplayList dl, FontSystem fontSystem, IFontRenderer renderer, Vector2 position, MarkdownLayoutSettings settings)
         {
             if (dl == null || dl.Ops.Count == 0) return;
 
@@ -223,13 +208,14 @@ namespace Prowl.Scribe
             {
                 if (op is DrawQuad q)
                 {
-                    AddQuad(ref verts, ref idx, ref vbase, q.Rect, q.Color);
+                    var offsetRect = new RectangleF(q.Rect.X + position.X, q.Rect.Y + position.Y, q.Rect.Width, q.Rect.Height);
+                    AddQuad(ref verts, ref idx, ref vbase, offsetRect, q.Color);
                 }
             }
 
             if (verts.Count > 0)
             {
-                _renderer.DrawQuads(_fs.Texture, verts.ToArray(), idx.ToArray());
+                renderer.DrawQuads(fontSystem.Texture, verts.ToArray(), idx.ToArray());
             }
 
             // Draw text and images in submission order
@@ -237,33 +223,38 @@ namespace Prowl.Scribe
             {
                 if (op is DrawText t)
                 {
-                    _fs.DrawLayout(t.Layout, t.Pos, t.Color);
+                    var offsetPos = new Vector2(t.Pos.X + position.X, t.Pos.Y + position.Y);
+                    fontSystem.DrawLayout(t.Layout, offsetPos, t.Color);
                     if (t.LinkRanges != null && t.LinkRanges.Count > 0)
-                        DrawLinkOverprint(t);
+                        DrawLinkOverprint(t, position, fontSystem, renderer, settings);
                     if (t.Decorations != null && t.Decorations.Count > 0)
-                        DrawDecorations(t);
+                        DrawDecorations(t, position, fontSystem, renderer, settings);
                 }
                 else if (op is DrawImage img)
                 {
                     var vertsImg = new IFontRenderer.Vertex[4];
                     var idxImg = new int[] { 0, 2, 1, 1, 2, 3 };
                     var r = img.Rect;
-                    vertsImg[0] = new IFontRenderer.Vertex(new Vector3(r.X, r.Y, 0), FontColor.White, new Vector2(0, 0));
-                    vertsImg[1] = new IFontRenderer.Vertex(new Vector3(r.X + r.Width, r.Y, 0), FontColor.White, new Vector2(1, 0));
-                    vertsImg[2] = new IFontRenderer.Vertex(new Vector3(r.X, r.Y + r.Height, 0), FontColor.White, new Vector2(0, 1));
-                    vertsImg[3] = new IFontRenderer.Vertex(new Vector3(r.X + r.Width, r.Y + r.Height, 0), FontColor.White, new Vector2(1, 1));
-                    _renderer.DrawQuads(img.Texture, vertsImg, idxImg);
+                    float offsetX = r.X + position.X;
+                    float offsetY = r.Y + position.Y;
+                    vertsImg[0] = new IFontRenderer.Vertex(new Vector3(offsetX, offsetY, 0), FontColor.White, new Vector2(0, 0));
+                    vertsImg[1] = new IFontRenderer.Vertex(new Vector3(offsetX + r.Width, offsetY, 0), FontColor.White, new Vector2(1, 0));
+                    vertsImg[2] = new IFontRenderer.Vertex(new Vector3(offsetX, offsetY + r.Height, 0), FontColor.White, new Vector2(0, 1));
+                    vertsImg[3] = new IFontRenderer.Vertex(new Vector3(offsetX + r.Width, offsetY + r.Height, 0), FontColor.White, new Vector2(1, 1));
+                    renderer.DrawQuads(img.Texture, vertsImg, idxImg);
                 }
             }
         }
 
-        public bool TryGetLinkAt(MarkdownDisplayList dl, Vector2 point, out string href)
+        public static bool TryGetLinkAt(MarkdownDisplayList dl, Vector2 point, Vector2 renderOffset, out string href)
         {
             foreach (var link in dl.Links)
             {
                 var r = link.Rect;
-                if (point.X >= r.X && point.X <= r.X + r.Width &&
-                    point.Y >= r.Y && point.Y <= r.Y + r.Height)
+                float adjustedX = r.X + renderOffset.X;
+                float adjustedY = r.Y + renderOffset.Y;
+                if (point.X >= adjustedX && point.X <= adjustedX + r.Width &&
+                    point.Y >= adjustedY && point.Y <= adjustedY + r.Height)
                 {
                     href = link.Href;
                     return true;
@@ -277,10 +268,10 @@ namespace Prowl.Scribe
 
         #region Block layout
 
-        private float LayoutParagraph(Paragraph p, float x, float y, MarkdownDisplayList dl,
+        private static float LayoutParagraph(Paragraph p, float x, float y, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings, IMarkdownImageProvider? imageProvider,
                                       float? sizeOverride = null, float? lineHeightOverride = null, FontInfo fontOverride = null, float? widthOverride = null)
         {
-            float wAvail = widthOverride ?? _s.Width;
+            float wAvail = widthOverride ?? settings.Width;
             var segment = new List<Inline>();
             foreach (var inline in p.Inlines)
             {
@@ -288,10 +279,10 @@ namespace Prowl.Scribe
                 {
                     if (segment.Count > 0)
                     {
-                        y = LayoutTextSegment(segment, x, y, dl, sizeOverride, lineHeightOverride, fontOverride, wAvail);
+                        y = LayoutTextSegment(segment, x, y, dl, fontSystem, settings, sizeOverride, lineHeightOverride, fontOverride, wAvail);
                         segment.Clear();
                     }
-                    y = LayoutImage(inline, x, y, dl, sizeOverride, lineHeightOverride, fontOverride, wAvail);
+                    y = LayoutImage(inline, x, y, dl, fontSystem, settings, imageProvider, sizeOverride, lineHeightOverride, fontOverride, wAvail);
                 }
                 else
                 {
@@ -299,40 +290,40 @@ namespace Prowl.Scribe
                 }
             }
             if (segment.Count > 0)
-                y = LayoutTextSegment(segment, x, y, dl, sizeOverride, lineHeightOverride, fontOverride, wAvail);
+                y = LayoutTextSegment(segment, x, y, dl, fontSystem, settings, sizeOverride, lineHeightOverride, fontOverride, wAvail);
 
-            return y + _s.ParagraphSpacing;
+            return y + settings.ParagraphSpacing;
         }
 
-        private float LayoutTextSegment(List<Inline> inlines, float x, float y, MarkdownDisplayList dl,
+        private static float LayoutTextSegment(List<Inline> inlines, float x, float y, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings,
                                         float? sizeOverride, float? lineHeightOverride, FontInfo fontOverride, float width)
         {
             var (text, decos, linkSpans, styles) = FlattenInlines(inlines);
 
             var tls = TextLayoutSettings.Default;
-            tls.PixelSize = sizeOverride ?? _s.BaseSize;
-            tls.LineHeight = lineHeightOverride ?? _s.LineHeight;
+            tls.PixelSize = sizeOverride ?? settings.BaseSize;
+            tls.LineHeight = lineHeightOverride ?? settings.LineHeight;
             tls.WrapMode = TextWrapMode.Wrap;
             tls.MaxWidth = width;
             tls.Alignment = TextAlignment.Left;
-            tls.PreferredFont = fontOverride ?? _s.ParagraphFont;
-            tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, tls.PreferredFont, styles);
+            tls.PreferredFont = fontOverride ?? settings.ParagraphFont;
+            tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, tls.PreferredFont, styles, settings);
 
-            var tl = _fs.CreateLayout(text, tls);
+            var tl = fontSystem.CreateLayout(text, tls);
             var linkRanges = new List<IntRange>();
             foreach (var ls in linkSpans) linkRanges.Add(ls.Range);
 
-            var op = new DrawText { Layout = tl, Pos = new Vector2(x, y), Color = _s.ColorText, Decorations = decos, LinkRanges = linkRanges };
+            var op = new DrawText { Layout = tl, Pos = new Vector2(x, y), Color = settings.ColorText, Decorations = decos, LinkRanges = linkRanges };
             dl.Ops.Add(op);
             if (linkSpans.Count > 0)
                 AddLinkHitBoxes(dl, op, linkSpans);
             return y + tl.Size.Y;
         }
 
-        private float LayoutImage(Inline img, float x, float y, MarkdownDisplayList dl,
+        private static float LayoutImage(Inline img, float x, float y, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings, IMarkdownImageProvider? imageProvider,
                                   float? sizeOverride, float? lineHeightOverride, FontInfo fontOverride, float widthAvail)
         {
-            if (_imageProvider != null && _imageProvider.TryGetImage(img.Href, out var tex, out var size))
+            if (imageProvider != null && imageProvider.TryGetImage(img.Href, out var tex, out var size))
             {
                 float w = size.X;
                 float h = size.Y;
@@ -347,44 +338,43 @@ namespace Prowl.Scribe
             }
             // fallback to alt text
             var alt = new List<Inline> { Inline.TextRun(img.Text) };
-            return LayoutTextSegment(alt, x, y, dl, sizeOverride, lineHeightOverride, fontOverride, widthAvail);
+            return LayoutTextSegment(alt, x, y, dl, fontSystem, settings, sizeOverride, lineHeightOverride, fontOverride, widthAvail);
         }
 
-
-        private float LayoutHeading(Heading h, float x, float y, MarkdownDisplayList dl, float? widthOverride = null)
+        private static float LayoutHeading(Heading h, float x, float y, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings, float? widthOverride = null)
         {
-            float scale = h.Level switch { 1 => _s.Heading1Scale, 2 => _s.Heading2Scale, 3 => _s.Heading3Scale, _ => 1.1f };
-            float size = _s.BaseSize * scale;
-            float lh = MathF.Max(_s.LineHeight, 1.0f);
-            return LayoutParagraph(new Paragraph(h.Inlines), x, y, dl, size, lh, widthOverride: widthOverride);
+            float scale = h.Level switch { 1 => settings.Heading1Scale, 2 => settings.Heading2Scale, 3 => settings.Heading3Scale, _ => 1.1f };
+            float size = settings.BaseSize * scale;
+            float lh = MathF.Max(settings.LineHeight, 1.0f);
+            return LayoutParagraph(new Paragraph(h.Inlines), x, y, dl, fontSystem, settings, null, size, lh, widthOverride: widthOverride);
         }
 
-        private float LayoutQuote(BlockQuote q, float x, float y, MarkdownDisplayList dl, float? widthOverride = null)
+        private static float LayoutQuote(BlockQuote q, float x, float y, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings, IMarkdownImageProvider? imageProvider, float? widthOverride = null)
         {
-            float wAvail = widthOverride ?? _s.Width;
+            float wAvail = widthOverride ?? settings.Width;
 
             // measure paragraph first to get height
             var beforeOpsCount = dl.Ops.Count; 
-            float indent = _s.BlockQuoteBarWidth + _s.BlockQuoteIndent;
+            float indent = settings.BlockQuoteBarWidth + settings.BlockQuoteIndent;
             float yAfter = LayoutParagraph(
                 new Paragraph(q.Inlines),
-                x + indent, y, dl,
+                x + indent, y, dl, fontSystem, settings, imageProvider,
                 widthOverride: wAvail - indent
             );
-            float h = yAfter - y - _s.ParagraphSpacing;
+            float h = yAfter - y - settings.ParagraphSpacing;
 
             // prepend left bar quad (ensure it renders under text by ordering)
             dl.Ops.Insert(beforeOpsCount, new DrawQuad {
-                Rect = new RectangleF(x, y, _s.BlockQuoteBarWidth, h),
-                Color = _s.ColorQuoteBar
+                Rect = new RectangleF(x, y, settings.BlockQuoteBarWidth, h),
+                Color = settings.ColorQuoteBar
             });
             return yAfter;
         }
 
-        private float LayoutList(ListBlock list, float x, float y, int depth, MarkdownDisplayList dl)
+        private static float LayoutList(ListBlock list, float x, float y, int depth, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings, IMarkdownImageProvider? imageProvider)
         {
-            float bulletBox = _s.BaseSize * 1.5f;
-            float contentX = x + depth * _s.ListIndent + bulletBox;
+            float bulletBox = settings.BaseSize * 1.5f;
+            float contentX = x + depth * settings.ListIndent + bulletBox;
 
             int index = 1;
 
@@ -394,44 +384,44 @@ namespace Prowl.Scribe
                 // bullet/number to be inserted before content
                 if (!list.Ordered)
                 {
-                    //float r = _s.BulletRadius;
-                    float r = _s.BaseSize * 0.2f;
-                    float bx = x + depth * _s.ListIndent + (bulletBox - 2 * r) * 0.5f;
-                    float by = lineTop + _s.BaseSize * 0.35f; // approximate baseline offset
-                    dl.Ops.Add(new DrawQuad { Rect = new RectangleF(bx, by, 2 * r, 2 * r), Color = _s.ColorText });
+                    //float r = settings.BulletRadius;
+                    float r = settings.BaseSize * 0.2f;
+                    float bx = x + depth * settings.ListIndent + (bulletBox - 2 * r) * 0.5f;
+                    float by = lineTop + settings.BaseSize * 0.35f; // approximate baseline offset
+                    dl.Ops.Add(new DrawQuad { Rect = new RectangleF(bx, by, 2 * r, 2 * r), Color = settings.ColorText });
                 }
                 else
                 {
                     // right-aligned number inside bulletBox
                     var tlsNum = TextLayoutSettings.Default;
-                    tlsNum.PixelSize = _s.BaseSize;
-                    tlsNum.LineHeight = _s.LineHeight;
+                    tlsNum.PixelSize = settings.BaseSize;
+                    tlsNum.LineHeight = settings.LineHeight;
                     tlsNum.WrapMode = TextWrapMode.NoWrap;
                     tlsNum.MaxWidth = bulletBox;
                     tlsNum.Alignment = TextAlignment.Right;
-                    tlsNum.PreferredFont = _s.ParagraphFont;
-                    var tlNum = _fs.CreateLayout($"{index}.", tlsNum);
-                    dl.Ops.Add(new DrawText { Layout = tlNum, Pos = new Vector2(x + depth * _s.ListIndent, lineTop), Color = _s.ColorText });
+                    tlsNum.PreferredFont = settings.ParagraphFont;
+                    var tlNum = fontSystem.CreateLayout($"{index}.", tlsNum);
+                    dl.Ops.Add(new DrawText { Layout = tlNum, Pos = new Vector2(x + depth * settings.ListIndent, lineTop), Color = settings.ColorText });
                 }
 
                 // lead line
                 var para = new Paragraph(item.Lead);
-                float widthAvail = _s.Width - (contentX - x);
+                float widthAvail = settings.Width - (contentX - x);
                 // Subtrace Paragraph Spacing since LayoutParagraph adds that by default
-                y = LayoutParagraph(para, contentX, y, dl, widthOverride: widthAvail) - _s.ParagraphSpacing;
+                y = LayoutParagraph(para, contentX, y, dl, fontSystem, settings, imageProvider, widthOverride: widthAvail) - settings.ParagraphSpacing;
 
                 // nested children
                 foreach (var child in item.Children)
                 {
                     switch (child.Kind)
                     {
-                        case BlockKind.List: y = LayoutList(child.List, x, y, depth + 1, dl); break;
-                        case BlockKind.Paragraph: y = LayoutParagraph(child.Paragraph, contentX, y, dl, widthOverride: widthAvail) - _s.ParagraphSpacing; break;
-                        case BlockKind.CodeBlock: y = LayoutCode(child.CodeBlock, contentX, y, dl, widthOverride: widthAvail); break;
-                        case BlockKind.BlockQuote: y = LayoutQuote(child.BlockQuote, contentX, y, dl, widthOverride: widthAvail); break;
-                        case BlockKind.Table: y = LayoutTable(child.Table, contentX, y, dl, widthOverride: widthAvail); break;
-                        case BlockKind.HorizontalRule: y = LayoutHr(contentX, y, dl); break;
-                        case BlockKind.Heading: y = LayoutHeading(child.Heading, contentX, y, dl); break;
+                        case BlockKind.List: y = LayoutList(child.List, x, y, depth + 1, dl, fontSystem, settings, imageProvider); break;
+                        case BlockKind.Paragraph: y = LayoutParagraph(child.Paragraph, contentX, y, dl, fontSystem, settings, imageProvider, widthOverride: widthAvail) - settings.ParagraphSpacing; break;
+                        case BlockKind.CodeBlock: y = LayoutCode(child.CodeBlock, contentX, y, dl, fontSystem, settings, widthOverride: widthAvail); break;
+                        case BlockKind.BlockQuote: y = LayoutQuote(child.BlockQuote, contentX, y, dl, fontSystem, settings, imageProvider, widthOverride: widthAvail); break;
+                        case BlockKind.Table: y = LayoutTable(child.Table, contentX, y, dl, fontSystem, settings, widthOverride: widthAvail); break;
+                        case BlockKind.HorizontalRule: y = LayoutHr(contentX, y, dl, settings); break;
+                        case BlockKind.Heading: y = LayoutHeading(child.Heading, contentX, y, dl, fontSystem, settings); break;
                     }
                 }
 
@@ -441,41 +431,41 @@ namespace Prowl.Scribe
             return y;
         }
 
-        private float LayoutHr(float x, float y, MarkdownDisplayList dl)
+        private static float LayoutHr(float x, float y, MarkdownDisplayList dl, MarkdownLayoutSettings settings)
         {
-            y += _s.HrSpacing;
-            dl.Ops.Add(new DrawQuad { Rect = new RectangleF(x, y, _s.Width, _s.HrThickness), Color = _s.ColorRule });
-            y += _s.HrThickness + _s.HrSpacing;
+            y += settings.HrSpacing;
+            dl.Ops.Add(new DrawQuad { Rect = new RectangleF(x, y, settings.Width, settings.HrThickness), Color = settings.ColorRule });
+            y += settings.HrThickness + settings.HrSpacing;
             return y;
         }
 
-        private float LayoutCode(CodeBlock cb, float x, float y, MarkdownDisplayList dl, float? widthOverride = null)
+        private static float LayoutCode(CodeBlock cb, float x, float y, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings, float? widthOverride = null)
         {
-            float pad = _s.CodePadding;
-            float wAvail = widthOverride ?? _s.Width;
+            float pad = settings.CodePadding;
+            float wAvail = widthOverride ?? settings.Width;
             float innerX = x + pad;
             float innerW = MathF.Max(0, wAvail - 2 * pad);
 
             var tls = TextLayoutSettings.Default;
-            tls.PixelSize = _s.BaseSize * 0.95f;
+            tls.PixelSize = settings.BaseSize * 0.95f;
             tls.LineHeight = 1.25f;
             tls.WrapMode = TextWrapMode.Wrap;
             tls.MaxWidth = innerW;
             tls.Alignment = TextAlignment.Left;
-            tls.PreferredFont = _s.MonoFont;
+            tls.PreferredFont = settings.MonoFont;
 
-            var tl = _fs.CreateLayout(cb.Code.Replace("\r\n", "\n"), tls);
+            var tl = fontSystem.CreateLayout(cb.Code.Replace("\r\n", "\n"), tls);
             float h = tl.Size.Y + 2 * pad;
-            dl.Ops.Add(new DrawQuad { Rect = new RectangleF(x, y, wAvail, h), Color = _s.ColorCodeBg });
-            dl.Ops.Add(new DrawText { Layout = tl, Pos = new Vector2(innerX, y + pad), Color = _s.ColorText });
-            return y + h + _s.ParagraphSpacing;
+            dl.Ops.Add(new DrawQuad { Rect = new RectangleF(x, y, wAvail, h), Color = settings.ColorCodeBg });
+            dl.Ops.Add(new DrawText { Layout = tl, Pos = new Vector2(innerX, y + pad), Color = settings.ColorText });
+            return y + h + settings.ParagraphSpacing;
         }
 
-        private float LayoutTable(Table t, float x, float y, MarkdownDisplayList dl, float? widthOverride = null)
+        private static float LayoutTable(Table t, float x, float y, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings, float? widthOverride = null)
         {
             int cols = t.Rows.Max(r => r.Cells.Count);
             float[] minCol = new float[cols];
-            float wAvail = widthOverride ?? _s.Width;
+            float wAvail = widthOverride ?? settings.Width;
 
             // pass 1: min widths via NoWrap measure
             foreach (var row in t.Rows)
@@ -485,15 +475,15 @@ namespace Prowl.Scribe
                     var cell = row.Cells[c]; 
                     var (text, _, _, styles) = FlattenInlines(cell.Inlines);
                     var tls = TextLayoutSettings.Default;
-                    tls.PixelSize = _s.BaseSize;
-                    tls.LineHeight = _s.LineHeight;
+                    tls.PixelSize = settings.BaseSize;
+                    tls.LineHeight = settings.LineHeight;
                     tls.WrapMode = TextWrapMode.NoWrap;
                     tls.MaxWidth = float.MaxValue;
                     tls.Alignment = AlignToText(cell.Align);
-                    tls.PreferredFont = _s.ParagraphFont;
-                    tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, tls.PreferredFont, styles);
+                    tls.PreferredFont = settings.ParagraphFont;
+                    tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, tls.PreferredFont, styles, settings);
 
-                    var tl = _fs.CreateLayout(text, tls);
+                    var tl = fontSystem.CreateLayout(text, tls);
                     minCol[c] = MathF.Max(minCol[c], tl.Size.X);
                 }
             }
@@ -522,7 +512,7 @@ namespace Prowl.Scribe
             float rowY = y;
             var perRowHeights = new float[t.Rows.Count];
 
-            // Pass 2: layout rows (we’ll emit text now and draw grid after we know full height)
+            // Pass 2: layout rows (we'll emit text now and draw grid after we know full height)
             for (int r = 0; r < t.Rows.Count; r++)
             {
                 var row = t.Rows[r];
@@ -535,19 +525,19 @@ namespace Prowl.Scribe
                     var (text, decos, linkSpans, styles) = FlattenInlines(cell.Inlines);
 
                     var tls = TextLayoutSettings.Default;
-                    tls.PixelSize = _s.BaseSize;
-                    tls.LineHeight = _s.LineHeight;
+                    tls.PixelSize = settings.BaseSize;
+                    tls.LineHeight = settings.LineHeight;
                     tls.WrapMode = TextWrapMode.Wrap;
                     tls.MaxWidth = colW[c];
                     tls.Alignment = AlignToText(cell.Align);
-                    tls.PreferredFont = _s.ParagraphFont;
-                    tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, tls.PreferredFont, styles);
+                    tls.PreferredFont = settings.ParagraphFont;
+                    tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, tls.PreferredFont, styles, settings);
 
-                    var tl = _fs.CreateLayout(text, tls);
+                    var tl = fontSystem.CreateLayout(text, tls);
 
                     var linkRanges = new List<IntRange>();
                     foreach (var ls in linkSpans) linkRanges.Add(ls.Range);
-                    var op = new DrawText { Layout = tl, Pos = new Vector2(cx, rowY), Color = _s.ColorText, Decorations = decos, LinkRanges = linkRanges };
+                    var op = new DrawText { Layout = tl, Pos = new Vector2(cx, rowY), Color = settings.ColorText, Decorations = decos, LinkRanges = linkRanges };
                     dl.Ops.Add(op);
                     if (linkSpans.Count > 0) AddLinkHitBoxes(dl, op, linkSpans);
                     rowHeight = MathF.Max(rowHeight, tl.Size.Y);
@@ -570,7 +560,7 @@ namespace Prowl.Scribe
                 {
                     dl.Ops.Insert(0, new DrawQuad {
                         Rect = new RectangleF(x, yCursor - th * 0.5f, wAvail, th),
-                        Color = _s.ColorRule
+                        Color = settings.ColorRule
                     });
                     if (r < t.Rows.Count) yCursor += perRowHeights[r];
                 }
@@ -580,21 +570,20 @@ namespace Prowl.Scribe
             {
                 dl.Ops.Insert(0, new DrawQuad {
                     Rect = new RectangleF(colX[c] - th * 0.5f, tableTop, th, tableBottom - tableTop),
-                    Color = _s.ColorRule
+                    Color = settings.ColorRule
                 });
             }
 
-            return tableBottom + _s.ParagraphSpacing;
+            return tableBottom + settings.ParagraphSpacing;
         }
 
-
-        private TextAlignment AlignToText(TableAlign a) => a switch {
+        private static TextAlignment AlignToText(TableAlign a) => a switch {
             TableAlign.Center => TextAlignment.Center,
             TableAlign.Right => TextAlignment.Right,
             _ => TextAlignment.Left
         };
 
-        private FontInfo ResolveFontForIndex(int idx, FontInfo baseFont, List<StyleSpan> spans)
+        private static FontInfo ResolveFontForIndex(int idx, FontInfo baseFont, List<StyleSpan> spans, MarkdownLayoutSettings settings)
         {
             bool bold = false, italic = false;
             // combine overlapping spans (small inputs; O(n) scan is fine)
@@ -604,9 +593,9 @@ namespace Prowl.Scribe
                 if (idx >= s.Start && idx < s.End) { bold |= s.Bold; italic |= s.Italic; if (bold && italic) break; }
             }
 
-            if (bold && italic && _s.BoldItalicFont != null) return _s.BoldItalicFont;
-            if (bold && _s.BoldFont != null) return _s.BoldFont;
-            if (italic && _s.ItalicFont != null) return _s.ItalicFont;
+            if (bold && italic && settings.BoldItalicFont != null) return settings.BoldItalicFont;
+            if (bold && settings.BoldFont != null) return settings.BoldFont;
+            if (italic && settings.ItalicFont != null) return settings.ItalicFont;
             return baseFont;
         }
 
@@ -614,7 +603,7 @@ namespace Prowl.Scribe
 
         #region Inline flattening & decorations
 
-        private (string text, List<DecorationSpan> decos, List<LinkSpan> links, List<StyleSpan> styles) FlattenInlines(List<Inline> inlines)
+        private static (string text, List<DecorationSpan> decos, List<LinkSpan> links, List<StyleSpan> styles) FlattenInlines(List<Inline> inlines)
         {
             var sb = new System.Text.StringBuilder();
             var decos = new List<DecorationSpan>();
@@ -696,8 +685,7 @@ namespace Prowl.Scribe
             return (sb.ToString(), decos, links, styles);
         }
 
-
-        private void DrawLinkOverprint(DrawText t)
+        private static void DrawLinkOverprint(DrawText t, Vector2 position, FontSystem fontSystem, IFontRenderer renderer, MarkdownLayoutSettings settings)
         {
             var layout = t.Layout;
             if (layout.Lines == null || layout.Lines.Count == 0) return;
@@ -743,10 +731,10 @@ namespace Prowl.Scribe
                         var g = ginst.Glyph;              // AtlasGlyph
                         if (!g.IsInAtlas || g.AtlasWidth <= 0 || g.AtlasHeight <= 0) continue;
 
-                        float x = t.Pos.X + line.Position.X + ginst.Position.X;
-                        float y = t.Pos.Y + line.Position.Y + ginst.Position.Y;
+                        float x = t.Pos.X + position.X + line.Position.X + ginst.Position.X;
+                        float y = t.Pos.Y + position.Y + line.Position.Y + ginst.Position.Y;
 
-                        var c = _s.ColorLink;
+                        var c = settings.ColorLink;
                         // 4 vertices (pos, uv, color)
                         verts.Add(new IFontRenderer.Vertex(new Vector3(x, y, 0), c, new Vector2(g.U0, g.V0)));
                         verts.Add(new IFontRenderer.Vertex(new Vector3(x + g.AtlasWidth, y, 0), c, new Vector2(g.U1, g.V0)));
@@ -760,11 +748,10 @@ namespace Prowl.Scribe
             }
 
             if (verts.Count > 0)
-                _renderer.DrawQuads(_fs.Texture, verts.ToArray(), idx.ToArray());
+                renderer.DrawQuads(fontSystem.Texture, verts.ToArray(), idx.ToArray());
         }
 
-
-        private void DrawDecorations(DrawText t)
+        private static void DrawDecorations(DrawText t, Vector2 position, FontSystem fontSystem, IFontRenderer renderer, MarkdownLayoutSettings settings)
         {
             var layout = t.Layout;
             if (layout.Lines == null || layout.Lines.Count == 0) return;
@@ -833,10 +820,10 @@ namespace Prowl.Scribe
                     if (i1 == -1 || i1 < i0) continue;
 
                     // Convert glyph span -> x range
-                    float x0 = t.Pos.X + line.Position.X + glyphs[i0].Position.X;
-                    float x1 = t.Pos.X + line.Position.X + glyphs[i1].Position.X + glyphs[i1].AdvanceWidth;
+                    float x0 = t.Pos.X + position.X + line.Position.X + glyphs[i0].Position.X;
+                    float x1 = t.Pos.X + position.X + line.Position.X + glyphs[i1].Position.X + glyphs[i1].AdvanceWidth;
 
-                    float yBase = t.Pos.Y + line.Position.Y;
+                    float yBase = t.Pos.Y + position.Y + line.Position.Y;
                     float thickness = MathF.Max(1f, line.Height * 0.06f);
 
                     float y = deco.Kind switch {
@@ -854,7 +841,7 @@ namespace Prowl.Scribe
                         {
                             if (lr.End > deco.CharStart && lr.Start < deco.CharEnd)
                             {
-                                color = _s.ColorLink;
+                                color = settings.ColorLink;
                                 break;
                             }
                         }
@@ -866,10 +853,10 @@ namespace Prowl.Scribe
             }
 
             if (verts.Count > 0)
-                _renderer.DrawQuads(_fs.Texture, verts.ToArray(), idx.ToArray());
+                renderer.DrawQuads(fontSystem.Texture, verts.ToArray(), idx.ToArray());
         }
 
-        private void AddLinkHitBoxes(MarkdownDisplayList dl, DrawText t, List<LinkSpan> links)
+        private static void AddLinkHitBoxes(MarkdownDisplayList dl, DrawText t, List<LinkSpan> links)
         {
             var layout = t.Layout;
             if (layout.Lines == null || layout.Lines.Count == 0) return;
@@ -913,7 +900,6 @@ namespace Prowl.Scribe
                 }
             }
         }
-
 
         #endregion
 
