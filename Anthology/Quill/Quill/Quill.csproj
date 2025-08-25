@@ -60,7 +60,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Prowl.Scribe" Version="0.5.0" />
+    <PackageReference Include="Prowl.Scribe" Version="0.6.0" />
   </ItemGroup>
 
 </Project>

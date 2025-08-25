@@ -1790,7 +1790,7 @@ namespace Prowl.Quill
 
         #region Markdown
 
-        private MarkdownLayoutEngine? _activeMarkdownEngine = null;
+        private MarkdownLayoutSettings? _activeMDSettings = null;
         private MarkdownDisplayList? _activeMarkdownList = null;
 
         public void SetMarkdownImageProvider(IMarkdownImageProvider provider)
@@ -1798,26 +1798,24 @@ namespace Prowl.Quill
             _markdownImageProvider = provider;
         }
 
-        public void SetMarkdown(string markdown, Vector2 position, MarkdownLayoutSettings settings)
+        public void SetMarkdown(string markdown, MarkdownLayoutSettings settings)
         {
             var doc = Markdown.Parse(markdown);
-            _activeMarkdownEngine = new MarkdownLayoutEngine(_scribeRenderer.FontEngine, _scribeRenderer, settings, _markdownImageProvider);
-            _activeMarkdownList = _activeMarkdownEngine.Layout(doc, position);
-
-            _activeMarkdownEngine.Render(_activeMarkdownList);
+            _activeMDSettings = settings;
+            _activeMarkdownList = MarkdownLayoutEngine.Layout(doc, _scribeRenderer.FontEngine, settings, _markdownImageProvider);
         }
 
-        public void DrawMarkdown()
+        public void DrawMarkdown(Vector2 position)
         {
-            if (_activeMarkdownList == null || _activeMarkdownEngine == null)
+            if (_activeMarkdownList == null || _activeMDSettings == null)
                 return;
 
-            _activeMarkdownEngine.Render(_activeMarkdownList);
+            MarkdownLayoutEngine.Render(_activeMarkdownList, _scribeRenderer.FontEngine, _scribeRenderer, position, _activeMDSettings.Value);
         }
 
-        public bool GetMarkdownLinkAt(Vector2 point, bool useScissor, out string href)
+        public bool GetMarkdownLinkAt(Vector2 renderOffset, Vector2 point, bool useScissor, out string href)
         {
-            if (_activeMarkdownList == null || _activeMarkdownEngine == null)
+            if (_activeMarkdownList == null || _activeMDSettings == null)
             {
                 href = null;
                 return false;
@@ -1848,7 +1846,7 @@ namespace Prowl.Quill
             }
 
 
-            return _activeMarkdownEngine.TryGetLinkAt(_activeMarkdownList, point, out href);
+            return MarkdownLayoutEngine.TryGetLinkAt(_activeMarkdownList, point, renderOffset, out href);
         }
 
         #endregion
