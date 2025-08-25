@@ -1,12 +1,8 @@
-﻿// SFMLRenderer.cs
+﻿using Prowl.Quill;
+using Prowl.Vector;
 using SFML.Graphics;
 using SFML.Graphics.Glsl;
 using SFML.System;
-using Prowl.Quill;
-using Prowl.Vector;
-using System;
-using System.Collections.Generic;
-using System.Drawing;
 using Color = System.Drawing.Color;
 using IntRect = Prowl.Vector.IntRect;
 
@@ -189,7 +185,7 @@ void main()
             if (Shader.IsAvailable)
             {
                 // Create and set orthographic projection matrix
-                Mat4 projMat = new Mat4(
+                Mat4 projMat = new(
                     2.0f/width, 0, 0, -1,
                     0, -2.0f/height, 0, 1,
                     0, 0, 1, 0,
@@ -204,7 +200,7 @@ void main()
         /// </summary>
         public void Cleanup()
         {
-            Dispose();
+            ((ICanvasRenderer)this).Dispose();
         }
 
         public object CreateTexture(uint width, uint height)
@@ -233,12 +229,12 @@ void main()
             _window = window;
         }
 
-        private Vec4 ToVec4(Color color)
+        private static Vec4 ToVec4(Color color)
         {
             return new Vec4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
         }
 
-        private Mat4 ToMat4(Matrix4x4 mat)
+        private static Mat4 ToMat4(Matrix4x4 mat)
         {
             // Try transposing the matrix when converting
             // This swaps the row-major and column-major formats
@@ -256,7 +252,7 @@ void main()
                 return;
 
             // Create the blend mode only once
-            BlendMode premultipliedAlpha = new BlendMode(
+            BlendMode premultipliedAlpha = new(
                 BlendMode.Factor.One, // Source color factor
                 BlendMode.Factor.OneMinusSrcAlpha, // Destination color factor
                 BlendMode.Equation.Add, // Color equation
@@ -289,7 +285,7 @@ void main()
                     int idx = (int)canvas.Indices[indexOffset + j];
                     var vertex = canvas.Vertices[idx];
 
-                    SFML.Graphics.Vertex sfmlVertex = new SFML.Graphics.Vertex(
+                    SFML.Graphics.Vertex sfmlVertex = new(
                         new Vector2f((float)vertex.Position.x, (float)vertex.Position.y),
                         new SFML.Graphics.Color(vertex.Color.R, vertex.Color.G, vertex.Color.B, vertex.Color.A),
                         new Vector2f((float)vertex.UV.x, (float)vertex.UV.y)
@@ -331,7 +327,7 @@ void main()
                 }
 
                 // Draw current batch with appropriate texture and shader
-                RenderStates states = new RenderStates(
+                RenderStates states = new(
                     premultipliedAlpha,
                     Transform.Identity,
                     texture,
@@ -346,8 +342,7 @@ void main()
         {
             _shader?.Dispose();
             _vertexArray?.Dispose();
-            if (_vertexBuffer != null)
-                _vertexBuffer.Dispose();
+            _vertexBuffer?.Dispose();
         }
     }
 }
