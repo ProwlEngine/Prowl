@@ -5,7 +5,6 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
-    <AssemblyName>Prowl.$(MSBuildProjectName)</AssemblyName>
     
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
@@ -17,7 +16,7 @@
     <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Scribe</RepositoryUrl>
     <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Scribe</PackageProjectUrl>
     <PackageTags>prowl;font;truetype;rasterizer;markdown;layout;rendering</PackageTags>
-    <Description>TrueType font parser, glyph layout engine, dynamic atlas packing, and Markdown renderer for the Prowl engine.</Description>
+    <Description>TrueType font parser, glyph layout engine, dynamic atlas packing, and Markdown renderer.</Description>
     <Version>0.5.0</Version>
   </PropertyGroup>
 
