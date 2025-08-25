@@ -194,4 +194,22 @@ namespace Prowl.PaperUI
         Radial = 2,
         Box = 3
     }
+
+    /// <summary>
+    /// Defines rendering and interaction layers for elements.
+    /// </summary>
+    public enum Layer
+    {
+        /// <summary>Default layer rendered first.</summary>
+        Base = 0,
+
+        /// <summary>Rendered above the base layer.</summary>
+        Overlay = 1,
+
+        /// <summary>Rendered above the overlay layer.</summary>
+        Modal = 2,
+
+        /// <summary>Topmost layer rendered last.</summary>
+        Topmost = 3
+    }
 }

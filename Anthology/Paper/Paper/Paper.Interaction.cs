@@ -121,14 +121,24 @@ namespace Prowl.PaperUI
         #region Element Hit Testing
 
         /// <summary>
-        /// Recursively finds the topmost interactable element under the pointer.
+        /// Finds the topmost interactable element under the pointer across all layers.
         /// </summary>
-        /// <param name="element">Current element to check</param>
-        /// <param name="parentTransform">Accumulated transform from parent elements</param>
-        /// <returns>The topmost interactable element or null if none found</returns>
         private Element? FindTopmostInteractableElement(Element element, Transform2D parentTransform)
+            => FindTopmostInteractableElementForLayer(element, parentTransform, Layer.Modal)
+            ?? FindTopmostInteractableElementForLayer(element, parentTransform, Layer.Overlay)
+            ?? FindTopmostInteractableElementForLayer(element, parentTransform, Layer.Base);
+
+        /// <summary>
+        /// Recursively finds the topmost interactable element for the specified layer.
+        /// </summary>
+        private Element? FindTopmostInteractableElementForLayer(Element element, Transform2D parentTransform, Layer layer, bool inLayer = false)
         {
             if (element == null)
+                return null;
+
+            if (layer == Layer.Base && element.Layer != Layer.Base)
+                return null;
+            if (layer == Layer.Overlay && element.Layer == Layer.Modal)
                 return null;
 
             // Calculate the combined transform
@@ -144,39 +154,33 @@ namespace Prowl.PaperUI
             // Check if pointer is over this element
             bool isPointerOverElement = IsPointOverElement(element, localX, localY);
 
-            // If scissor is enabled, only check children if pointer is inside the element
-            if (element._scissorEnabled == false || isPointerOverElement)
+            bool shouldCheckChildren = element._scissorEnabled == false || isPointerOverElement;
+
+            // Scrollbars offset the position of children
+            Transform2D childTransform = combinedTransform;
+            if (shouldCheckChildren && this.HasElementStorage(element, "ScrollState"))
             {
-                // Scrollbars offset the position of children
-                bool hasScrollState = this.HasElementStorage(element, "ScrollState");
-                Transform2D childTransform = combinedTransform;
-                if (hasScrollState)
-                {
-                    ScrollState scrollState = this.GetElementStorage<ScrollState>(element, "ScrollState");
-                    var transform = Transform2D.CreateTranslation(-scrollState.Position);
-                    childTransform.Premultiply(ref transform);
-                }
+                ScrollState scrollState = this.GetElementStorage<ScrollState>(element, "ScrollState");
+                var transform = Transform2D.CreateTranslation(-scrollState.Position);
+                childTransform.Premultiply(ref transform);
+            }
 
-                // Check children first (front to back, respecting z-order)
-                if (element.Children != null && element.Children.Count > 0)
+            // Check children first (front to back, respecting z-order)
+            if (shouldCheckChildren && element.Children != null && element.Children.Count > 0)
+            {
+                for (int i = element.Children.Count - 1; i >= 0; i--)
                 {
-                    var sortedChildren = element.GetSortedChildren;
-
-                    for (int i = sortedChildren.Count - 1; i >= 0; i--)
-                    {
-                        var interactableChild = FindTopmostInteractableElement(sortedChildren[i], childTransform);
-                        if (interactableChild != null)
-                            return interactableChild;
-                    }
+                    var interactableChild = FindTopmostInteractableElementForLayer(element.Children[i], childTransform, layer, inLayer || element.Layer == layer);
+                    if (interactableChild != null)
+                        return interactableChild;
                 }
             }
 
-            // If pointer is not over element, return null
-            if (!isPointerOverElement)
+            bool isInLayer = inLayer || element.Layer == layer;
+            if (!isPointerOverElement || element.IsNotInteractable || !isInLayer)
                 return null;
 
-            // Return this element if it's interactable
-            return element.IsNotInteractable ? null : element;
+            return element;
         }
 
         /// <summary>

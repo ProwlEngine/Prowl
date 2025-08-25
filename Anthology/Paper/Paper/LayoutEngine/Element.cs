@@ -44,7 +44,6 @@ namespace Prowl.PaperUI.LayoutEngine
 
         public bool Visible = true;
 
-        internal double ZLayer = 0.0f;
         internal LayoutType LayoutType = LayoutType.Column;
         internal PositionType PositionType = PositionType.ParentDirected;
 
@@ -53,7 +52,7 @@ namespace Prowl.PaperUI.LayoutEngine
         internal ElementStyle _elementStyle = new();
         internal bool _scissorEnabled = false;
 
-        internal List<Element> GetSortedChildren => Children.OrderBy(c => c.ZLayer).ToList();
+        internal Layer Layer = Layer.Base;
 
         // Layout results
         internal double X;

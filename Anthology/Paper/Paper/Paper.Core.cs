@@ -146,7 +146,13 @@ namespace Prowl.PaperUI
             HandleInteractions();
 
             // Render all elements
-            RenderElement(RootElement);
+            List<Element> overlayElements = new();
+            List<Element> modalElements = new();
+            RenderElement(RootElement, Layer.Base, overlayElements, modalElements);
+            foreach (var overlay in overlayElements)
+                RenderElement(overlay, Layer.Overlay, null, modalElements);
+            foreach (var modal in modalElements)
+                RenderElement(modal, Layer.Modal, null, null);
 
             // Update stats
             CountOfAllElements = (uint)_createdElements.Count;
@@ -189,12 +195,34 @@ namespace Prowl.PaperUI
         #region Rendering
 
         /// <summary>
-        /// Renders an element and its children recursively.
+        /// Renders an element and its children recursively with layering support.
         /// </summary>
-        private void RenderElement(Element element)
+        private void RenderElement(Element element, Layer currentLayer, List<Element>? overlayElements, List<Element>? modalElements)
         {
             if (element.Visible == false)
                 return;
+
+            if (currentLayer == Layer.Base)
+            {
+                if (element.Layer == Layer.Overlay)
+                {
+                    overlayElements?.Add(element);
+                    return;
+                }
+                else if (element.Layer == Layer.Modal)
+                {
+                    modalElements?.Add(element);
+                    return;
+                }
+            }
+            else if (currentLayer == Layer.Overlay)
+            {
+                if (element.Layer == Layer.Modal)
+                {
+                    modalElements?.Add(element);
+                    return;
+                }
+            }
 
             var rect = new Rect(element.X, element.Y, element.LayoutWidth, element.LayoutHeight);
             _canvas.SaveState();
@@ -336,10 +364,9 @@ namespace Prowl.PaperUI
                 _canvas.TransformBy(transform);
             }
 
-            // Draw children sorted by Z-order
-            var sortedChildren = element.GetSortedChildren;
-            foreach (var child in sortedChildren)
-                RenderElement(child);
+            // Draw children
+            foreach (var child in element.Children)
+                RenderElement(child, currentLayer, overlayElements, modalElements);
 
             // Draw scrollbars if needed
             if (hasScrollState)

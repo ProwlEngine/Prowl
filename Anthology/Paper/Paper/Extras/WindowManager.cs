@@ -291,7 +291,6 @@ namespace Prowl.PaperUI.Extras
             // Main window container
             var bgStyle = style.GetBackgroundTemplate();
             using (_paper.Box($"Window_{state.Id}")
-                .Depth(100_000 + state.ZOrder)
                 .PositionType(PositionType.SelfDirected)
                 .Position(state.Position.x, state.Position.y)
 

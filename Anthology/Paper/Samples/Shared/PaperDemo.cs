@@ -321,9 +321,9 @@ namespace Shared
         private static void RenderDashboardTab()
         {
             using (Gui.Row("DashboardCards")
-        .Height(120)
-        .Margin(0, 0, 15, 0)
-        .Enter())
+                .Height(120)
+                .Margin(0, 0, 15, 0)
+                .Enter())
             {
                 string[] statNames = { "Total Users", "Revenue", "Projects", "Conversion" };
                 string[] statValues = { "3,456", "$12,345", "24", "8.5%" };
@@ -339,6 +339,19 @@ namespace Shared
                         .Margin(i == 0 ? 0 : (15 / 2f), i == 3 ? 0 : (15 / 2f), 0, 0)
                         .Enter())
                     {
+                        if(i == 0)
+                        {
+                            Gui.Box($"StatIcon_{i}")
+                                .Size(500)
+                                .Layer(Layer.Overlay)
+                                .PositionType(PositionType.SelfDirected)
+                                .Top(Gui.Percent(100))
+                                .BackgroundColor(Color.FromArgb(150, Themes.backgroundColor))
+                                .BorderWidth(2)
+                                .BorderColor(Color.Red)
+                                .Rounded(8);
+                        }
+
                         // Card icon with conditional styling based on parent hover
                         Gui.Box($"StatIcon_{i}")
                             .Size(40)
