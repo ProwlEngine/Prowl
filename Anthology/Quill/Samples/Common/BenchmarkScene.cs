@@ -1,5 +1,5 @@
-﻿using FontStashSharp;
-using Prowl.Quill;
+﻿using Prowl.Quill;
+using Prowl.Scribe.Internal;
 using Prowl.Vector;
 using System.Drawing;
 
@@ -23,9 +23,9 @@ namespace Common
         private const int MAX_HISTORY_SAMPLES = 60;
         private double _averageFrameTime = 0;
 
-        private SpriteFontBase _font;
+        private FontInfo _font;
 
-        public BenchmarkScene(Canvas canvas, SpriteFontBase font, double width, double height)
+        public BenchmarkScene(Canvas canvas, FontInfo font, double width, double height)
         {
             _canvas = canvas;
             _font = font;
@@ -170,7 +170,6 @@ namespace Common
             string fpsText = $"FPS: {fps:F1}";
             string frameTimeText = $"Frame Time: {_averageFrameTime:F2} ms";
 
-            // Simple text drawing (you'll need to implement this based on your font system)
             DrawSimpleText(perfText, x + 10, y + 15, Color.FromArgb(255, 255, 255, 100));
             DrawSimpleText(fpsText, x + 10, y + 35, Color.FromArgb(255, 100, 255, 100));
             DrawSimpleText(frameTimeText, x + 10, y + 55, Color.White);
@@ -178,13 +177,9 @@ namespace Common
             Console.Title = $"FPS: {fps:F1} | Frame Time: {_averageFrameTime:F2} ms | Shapes: {RECT_COUNT + CIRCLE_COUNT}";
         }
 
-        // Simple text drawing method - you can replace this with your actual text rendering
         private void DrawSimpleText(string text, double x, double y, Color color)
         {
-            // This is a placeholder - replace with your actual text rendering method
-            // For example, if you have VectorFont like in the original code:
-            // VectorFont.DrawString(_canvas, text, x, y, 12, color, 1f);
-            _canvas.DrawText(_font, text, x, y, color);
+            _canvas.DrawText(text, x, y, color, 17, _font);
         }
     }
 }

@@ -1,10 +1,10 @@
 ﻿// SilkWindow.cs - Simplified
+using Common;
+using Prowl.Quill;
+using Prowl.Scribe.Internal;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
-using Prowl.Quill;
-using Common;
-using FontStashSharp;
 using Vector2 = Prowl.Vector.Vector2;
 
 namespace SilkExample
@@ -27,9 +27,8 @@ namespace SilkExample
         // Resources
         private TextureSilk _whiteTexture;
         private TextureSilk _demoTexture;
-        private SpriteFontBase _mainFont;
-        private SpriteFontBase _smallFont;
-        private SpriteFontBase _decorativeFont;
+        private FontInfo _mainFont;
+        private FontInfo _decorativeFont;
         
         // Input tracking
         private bool _isDragging = false;
@@ -64,10 +63,11 @@ namespace SilkExample
             _gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             _renderer = new SilkNetRenderer(_gl);
             _renderer.Initialize((int)_window.Size.X, (int)_window.Size.Y, _whiteTexture);
-            _canvas = new Canvas(_renderer);
+            _canvas = new Canvas(_renderer, new FontAtlasSettings());
 
             // Load fonts
-            LoadFonts();
+            _mainFont = _canvas.AddFont("Fonts/Roboto.ttf");
+            _decorativeFont = _canvas.AddFont("Fonts/Alamak.ttf");
 
             // Initialize demo
             _demo = new CanvasDemo(
@@ -76,27 +76,8 @@ namespace SilkExample
                 (int)_window.Size.Y, 
                 _demoTexture, 
                 _mainFont, 
-                _smallFont, 
                 _decorativeFont
             );
-        }
-
-        private void LoadFonts()
-        {
-            var fontSystem = new FontSystem();
-            using (var stream = File.OpenRead("Fonts/Roboto.ttf"))
-            {
-                fontSystem.AddFont(stream);
-                _mainFont = fontSystem.GetFont(32);
-                _smallFont = fontSystem.GetFont(16);
-            }
-            
-            var decorativeFontSystem = new FontSystem();
-            using (var stream = File.OpenRead("Fonts/Alamak.ttf"))
-            {
-                decorativeFontSystem.AddFont(stream);
-                _decorativeFont = decorativeFontSystem.GetFont(32);
-            }
         }
 
         private void SetupInputHandlers()

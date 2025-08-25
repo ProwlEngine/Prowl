@@ -1,19 +1,43 @@
-﻿using FontStashSharp;
-using FontStashSharp.Interfaces;
+﻿using Prowl.Scribe;
+using Prowl.Scribe.Internal;
 using Prowl.Vector;
 using System;
 using System.Drawing;
 
 namespace Prowl.Quill
 {
-    internal class TextRenderer : IFontStashRenderer2, ITexture2DManager
+    public class FontAtlasSettings 
+    {
+        public bool AllowExpansion = true;
+        public float ExpansionFactor = 2f;
+        public int AtlasSize = 1024;
+        public int MaxAtlasSize = 4096;
+        public bool UseLayoutCache = true;
+        public int MaxLayoutCacheSize = 256;
+        public int AtlasPadding = 1;
+    }
+
+    public class TextRenderer : IFontRenderer
     {
         private readonly Canvas _canvas;
 
-        public TextRenderer(Canvas canvas) => _canvas = canvas;
+        private FontSystem _fontSystem;
 
-        /// <summary> Lets the texture manager for font operations. </summary>
-        public ITexture2DManager TextureManager => this;
+        public FontSystem FontEngine => _fontSystem;
+
+        internal TextRenderer(Canvas canvas, FontAtlasSettings settings)
+        {
+            _canvas = canvas;
+
+            _fontSystem = new FontSystem(this, settings.AtlasSize, settings.AtlasSize, true);
+
+            _fontSystem.AllowExpansion = settings.AllowExpansion;
+            _fontSystem.ExpansionFactor = settings.ExpansionFactor;
+            _fontSystem.MaxAtlasSize = settings.MaxAtlasSize;
+            _fontSystem.CacheLayouts = settings.UseLayoutCache;
+            _fontSystem.MaxLayoutCacheSize = settings.MaxLayoutCacheSize;
+            _fontSystem.Padding = settings.AtlasPadding;
+        }
 
         /// <summary>
         /// Creates a new texture with the specified dimensions.
@@ -21,56 +45,50 @@ namespace Prowl.Quill
         public object CreateTexture(int width, int height) => _canvas._renderer.CreateTexture((uint)width, (uint)height);
 
         /// <summary>
-        /// Gets the size of a texture.
+        /// Updates texture data in the specified region.
         /// </summary>
-        public Point GetTextureSize(object texture) 
+        public void UpdateTextureRegion(object texture, AtlasRect bounds, byte[] data)
         {
-            Vector2Int size = _canvas._renderer.GetTextureSize(texture);
-            return new Point(size.x, size.y);
+            // The data is single channel, we need to convert it to RGBA
+            byte[] rgbaData = new byte[bounds.Width * bounds.Height * 4];
+            for (int i = 0; i < bounds.Width * bounds.Height; i++)
+            {
+                byte value = data[i];
+                rgbaData[i * 4 + 0] = value; // R
+                rgbaData[i * 4 + 1] = value; // G
+                rgbaData[i * 4 + 2] = value; // B
+                rgbaData[i * 4 + 3] = value; // A
+            }
+
+            _canvas._renderer.SetTextureData(texture, new IntRect(bounds.X, bounds.Y, bounds.Width, bounds.Height), rgbaData);
         }
 
         /// <summary>
-        /// Updates texture data in the specified region.
-        /// </summary>
-        public void SetTextureData(object texture, Rectangle bounds, byte[] data) => _canvas._renderer.SetTextureData(texture, new IntRect(bounds.X, bounds.Y, bounds.Width, bounds.Height), data);
-
-        /// <summary>
         /// Draws a quad with the given texture and coordinates.
-        /// Called by FontStashSharp when rendering glyphs.
+        /// Called by Quill when rendering glyphs.
         /// </summary>
-        public void DrawQuad(object texture, ref VertexPositionColorTexture topLeft, ref VertexPositionColorTexture topRight, ref VertexPositionColorTexture bottomLeft, ref VertexPositionColorTexture bottomRight)
+        public void DrawQuads(object texture, ReadOnlySpan<IFontRenderer.Vertex> vertices, ReadOnlySpan<int> indices)
         {
-            // Transform vertices through the current transform matrix
-            Vector2 pos;
-
-            // Top-left vertex
-            pos = _canvas.TransformPoint(new Vector2(topLeft.Position.X, topLeft.Position.Y));
-            var newTopLeft = new Vertex(new Vector2(Math.Round(pos.x), Math.Round(pos.y)), new Vector2(topLeft.TextureCoordinate.X, topLeft.TextureCoordinate.Y), ToColor(topLeft.Color));
-
-            // Top-right vertex
-            pos = _canvas.TransformPoint(new Vector2(topRight.Position.X, topRight.Position.Y));
-            var newTopRight = new Vertex(new Vector2(Math.Round(pos.x), Math.Round(pos.y)), new Vector2(topRight.TextureCoordinate.X, topRight.TextureCoordinate.Y), ToColor(topRight.Color));
-
-            // Bottom-right vertex
-            pos = _canvas.TransformPoint(new Vector2(bottomRight.Position.X, bottomRight.Position.Y));
-            var newBottomRight = new Vertex(new Vector2(Math.Round(pos.x), Math.Round(pos.y)), new Vector2(bottomRight.TextureCoordinate.X, bottomRight.TextureCoordinate.Y), ToColor(bottomRight.Color));
-
-            // Bottom-left vertex
-            pos = _canvas.TransformPoint(new Vector2(bottomLeft.Position.X, bottomLeft.Position.Y));
-            var newBottomLeft = new Vertex(new Vector2(Math.Round(pos.x), Math.Round(pos.y)), new Vector2(bottomLeft.TextureCoordinate.X, bottomLeft.TextureCoordinate.Y), ToColor(bottomLeft.Color));
-
             _canvas.SetTexture(texture);
 
-            // Add vertices to form two triangles (a quad)
-            _canvas.AddVertex(newTopLeft);
-            _canvas.AddVertex(newBottomRight);
-            _canvas.AddVertex(newTopRight);
-            _canvas.AddTriangle();
+            for (int i = 0; i < indices.Length; i += 3)
+            {
+                var a = vertices[indices[i + 0]];
+                var b = vertices[indices[i + 1]];
+                var c = vertices[indices[i + 2]];
 
-            _canvas.AddVertex(newTopLeft);
-            _canvas.AddVertex(newBottomLeft);
-            _canvas.AddVertex(newBottomRight);
-            _canvas.AddTriangle();
+                // Transform vertices through the current transform matrix
+                int index = _canvas.Vertices.Count;
+                var vertA = new Vertex(_canvas.TransformPoint(new Vector2(a.Position.X, a.Position.Y)), a.TextureCoordinate, ToColor(a.Color));
+                var vertB = new Vertex(_canvas.TransformPoint(new Vector2(b.Position.X, b.Position.Y)), b.TextureCoordinate, ToColor(b.Color));
+                var vertC = new Vertex(_canvas.TransformPoint(new Vector2(c.Position.X, c.Position.Y)), c.TextureCoordinate, ToColor(c.Color));
+
+                _canvas.AddVertex(vertA);
+                _canvas.AddVertex(vertC);
+                _canvas.AddVertex(vertB);
+
+                _canvas.AddTriangle(index, index + 1, index + 2);
+            }
 
             _canvas.SetTexture(null);
         }
@@ -78,35 +96,32 @@ namespace Prowl.Quill
         /// <summary>
         /// Renders text at the specified position with the given parameters.
         /// </summary>
-        public void Text(SpriteFontBase font, string text, Vector2 position, Color color, double rotation = 0f, Vector2 origin = default(Vector2), Vector2? scale = null, double layerDepth = 0f, double characterSpacing = 0f, double lineSpacing = 0f, TextStyle textStyle = TextStyle.None)
+        public void DrawText(string text, Vector2 position, Color color, float pixelSize, FontInfo preferredFont = null, float letterSpacing = 0f)
         {
-            if (string.IsNullOrWhiteSpace(text) || font == null)
+            if (string.IsNullOrWhiteSpace(text))
                 return;
 
-            font.DrawText(this, text, position, ToFSColor(color), (float)rotation, origin, scale, (float)layerDepth, (float)characterSpacing, (float)lineSpacing, textStyle);
+            _fontSystem.DrawText(text, position, ToFSColor(color), pixelSize, preferredFont, letterSpacing);
         }
 
         /// <summary>
         /// Renders text at the specified position with the given parameters.
         /// </summary>
-        public void Text(SpriteFontBase font, string text, Vector2 position, Color[] colors, double rotation = 0f, Vector2 origin = default(Vector2), Vector2? scale = null, double layerDepth = 0f, double characterSpacing = 0f, double lineSpacing = 0f, TextStyle textStyle = TextStyle.None)
+        public void DrawText(string text, Vector2 position, Color color, TextLayoutSettings settings)
         {
-            if (string.IsNullOrWhiteSpace(text) || font == null)
+            if (string.IsNullOrWhiteSpace(text))
                 return;
 
-            var fsColors = new FSColor[colors.Length];
-            for (int i = 0; i < colors.Length; i++)
-                fsColors[i] = ToFSColor(colors[i]);
-
-            font.DrawText(this, text, position, fsColors, (float)rotation, origin, scale, (float)layerDepth, (float)characterSpacing, (float)lineSpacing, textStyle);
+            TextLayout layout = _fontSystem.CreateLayout(text, settings);
+            _fontSystem.DrawLayout(layout, position, color);
         }
 
-        private static FSColor ToFSColor(Color color)
+        private static FontColor ToFSColor(Color color)
         {
-            return new FSColor(color.R, color.G, color.B, color.A);
+            return new FontColor(color.R, color.G, color.B, color.A);
         }
 
-        private static Color ToColor(FSColor color)
+        private static Color ToColor(FontColor color)
         {
             return Color.FromArgb(color.A, color.R, color.G, color.B);
         }

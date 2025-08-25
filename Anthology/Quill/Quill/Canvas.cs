@@ -1,5 +1,6 @@
-﻿using FontStashSharp;
-using Prowl.Quill.External.LibTessDotNet;
+﻿using Prowl.Quill.External.LibTessDotNet;
+using Prowl.Scribe;
+using Prowl.Scribe.Internal;
 using Prowl.Vector;
 using System;
 using System.Collections.Generic;
@@ -195,11 +196,12 @@ namespace Prowl.Quill
         private ProwlCanvasState _state;
         private double _globalAlpha;
 
-        private TextRenderer _fontStashRenderer;
+        private TextRenderer _scribeRenderer;
 
         private double _devicePixelRatio = 1.0f;
         private double _pixelWidth = 1.0f;
         private double _pixelHalf = 0.5f;
+
         public double DevicePixelRatio
         {
             get => _devicePixelRatio;
@@ -213,13 +215,15 @@ namespace Prowl.Quill
             }
         }
 
-        public Canvas(ICanvasRenderer renderer)
+        public TextRenderer Text => _scribeRenderer;
+
+        public Canvas(ICanvasRenderer renderer, FontAtlasSettings fontAtlasSettings)
         {
             if (renderer == null)
                 throw new ArgumentNullException(nameof(renderer), "Renderer cannot be null.");
 
             _renderer = renderer;
-            _fontStashRenderer = new TextRenderer(this);
+            _scribeRenderer = new TextRenderer(this, fontAtlasSettings);
             Clear();
         }
 
@@ -1736,30 +1740,50 @@ namespace Prowl.Quill
         #endregion
 
         #region Text
+        public FontInfo AddFont(string fontPath) => _scribeRenderer.FontEngine.AddFont(fontPath);
+        public FontInfo AddFont(byte[] fontData) => _scribeRenderer.FontEngine.AddFont(fontData);
+        public void LoadSystemFonts(params string[] priorityFonts) => _scribeRenderer.FontEngine.LoadSystemFonts(priorityFonts);
+        public FontInfo GetFont(string familyName, FontStyle style = FontStyle.Regular) => _scribeRenderer.FontEngine.GetFont(familyName, style);
+        public Vector2 MeasureText(string text, double pixelSize, FontInfo preferredFont = null, double letterSpacing = 0f) => _scribeRenderer.FontEngine.MeasureText(text, (float)pixelSize, preferredFont, (float)letterSpacing);
+        public Vector2 MeasureText(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.MeasureText(text, settings);
 
-        public void DrawText(SpriteFontBase font, string text, double x, double y, Color color, double rotation = 0f, Vector2 origin = default(Vector2), Vector2? scale = null, double layerDepth = 0f, double characterSpacing = 0f, double lineSpacing = 0f, TextStyle textStyle = TextStyle.None)
+        public void DrawText(string text, double x, double y, FontColor color, double pixelSize, FontInfo preferredFont = null, double letterSpacing = 0f, Vector2? origin = null)
         {
-            if (origin != default(Vector2))
+            Vector2 position = new Vector2(x, y);
+            if (origin.HasValue)
             {
-                // Convert normalized origin to Pixels
-                var size = font.MeasureString(text, scale, (float)characterSpacing, (float)lineSpacing);
-                origin = new Vector2((origin.x * size.X) - characterSpacing, origin.y * size.Y);
+                var textSize = MeasureText(text, pixelSize, preferredFont, letterSpacing);
+                position.x -= textSize.x * origin.Value.x;
+                position.y -= textSize.y * origin.Value.y;
             }
-
-            _fontStashRenderer.Text(font, text, new Vector2(x, y), color, rotation, origin, scale, layerDepth, characterSpacing, lineSpacing, textStyle);
-        }
-        public void DrawText(SpriteFontBase font, string text, double x, double y, Color[] colors, double rotation = 0f, Vector2 origin = default(Vector2), Vector2? scale = null, double layerDepth = 0f, double characterSpacing = 0f, double lineSpacing = 0f, TextStyle textStyle = TextStyle.None)
-        {
-            if (origin != default(Vector2))
-            {
-                // Convert normalized origin to Pixels
-                var size = font.MeasureString(text, scale, (float)characterSpacing, (float)lineSpacing);
-                origin = new Vector2(origin.x * size.X, origin.y * size.Y);
-            }
-
-            _fontStashRenderer.Text(font, text, new Vector2(x, y), colors, rotation, origin, scale, layerDepth, characterSpacing, lineSpacing, textStyle);
+            _scribeRenderer.FontEngine.DrawText(text, position, color, (float)pixelSize, preferredFont, (float)letterSpacing);
         }
 
+        public void DrawText(string text, double x, double y, FontColor color, TextLayoutSettings settings, Vector2? origin = null)
+        {
+            Vector2 position = new Vector2(x, y);
+            if (origin.HasValue)
+            {
+                var textSize = MeasureText(text, settings);
+                position.x -= textSize.x * origin.Value.x;
+                position.y -= textSize.y * origin.Value.y;
+            }
+            _scribeRenderer.FontEngine.DrawText(text, position, color, settings);
+        }
+
+        public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.CreateLayout(text, settings);
+
+        public void DrawLayout(TextLayout layout, double x, double y, FontColor color, Vector2? origin = null)
+        {
+            Vector2 position = new Vector2(x, y);
+            if (origin.HasValue)
+            {
+                var layoutSize = layout.Size;
+                position.x -= layoutSize.X * origin.Value.x;
+                position.y -= layoutSize.Y * origin.Value.y;
+            }
+            _scribeRenderer.FontEngine.DrawLayout(layout, position, color);
+        }
         #endregion
 
         #region Helpers

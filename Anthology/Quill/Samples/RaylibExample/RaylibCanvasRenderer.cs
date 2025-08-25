@@ -184,10 +184,23 @@ void main()
 
         public object CreateTexture(uint width, uint height)
         {
-            var image = GenImageColor((int)width, (int)height, new Color(0, 0, 0, 0));
-            var texture = LoadTextureFromImage(image);
-            SetTextureFilter(texture, TextureFilter.Bilinear);
-            return texture;
+            unsafe
+            {
+                var data = new byte[width * height * 4];
+                fixed (byte* dataPtr = data)
+                {
+                    Image image = new Image {
+                        Data = (void*)dataPtr,
+                        Width = (int)width,
+                        Height = (int)height,
+                        Format = PixelFormat.UncompressedR8G8B8A8,
+                        Mipmaps = 1
+                    };
+                    var texture = Raylib_cs.Raylib.LoadTextureFromImage(image);
+                    Raylib_cs.Raylib.SetTextureFilter(texture, TextureFilter.Bilinear);
+                    return texture;
+                }
+            }
         }
 
         public Vector2Int GetTextureSize(object texture)
@@ -202,7 +215,9 @@ void main()
             // Update the texture data with the provided byte array
             if (texture is not Texture2D tex)
                 throw new ArgumentException("Texture must be of type Texture2D");
-            UpdateTextureRec(tex, new(bounds.x, bounds.y, bounds.width, bounds.height), data);
+
+            Rectangle updateRect = new Rectangle(bounds.x, bounds.y, bounds.width, bounds.height);
+            Raylib_cs.Raylib.UpdateTextureRec(tex, updateRect, data);
         }
 
         void SetUniforms(Prowl.Quill.DrawCall drawCall)

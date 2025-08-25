@@ -1,13 +1,11 @@
 ﻿// SFMLWindow.cs
+using Common;
+using Prowl.Quill;
+using Prowl.Scribe.Internal;
+using Prowl.Vector;
 using SFML.Graphics;
 using SFML.System;
 using SFML.Window;
-using FontStashSharp;
-using Prowl.Quill;
-using Prowl.Vector;
-using System;
-using System.IO;
-using Common;
 
 namespace SFMLExample
 {
@@ -34,9 +32,8 @@ namespace SFMLExample
         private TextureSFML _demoTexture;
         
         // Fonts
-        private SpriteFontBase RobotoFont32;
-        private SpriteFontBase RobotoFont16;
-        private SpriteFontBase AlamakFont32;
+        private FontInfo RobotoFont;
+        private FontInfo AlamakFont;
         
         // Input tracking
         private Vector2i _lastMousePos;
@@ -86,27 +83,14 @@ namespace SFMLExample
             _renderer.SetRenderWindow(_window);
             
             // Initialize canvas
-            _canvas = new Canvas(_renderer);
-            
+            _canvas = new Canvas(_renderer, new FontAtlasSettings());
+
             // Load fonts
-            FontSystem fonts = new FontSystem();
-            using (var stream = File.OpenRead("Fonts/Roboto.ttf"))
-            {
-                fonts.AddFont(stream);
-                RobotoFont32 = fonts.GetFont(32);
-                RobotoFont16 = fonts.GetFont(16);
-            }
-            
-            fonts = new FontSystem();
-            using (var stream = File.OpenRead("Fonts/Alamak.ttf"))
-            {
-                fonts.AddFont(stream);
-                AlamakFont32 = fonts.GetFont(32);
-            }
+            _canvas.AddFont("Fonts/Roboto.ttf");
+            _canvas.AddFont("Fonts/Alamak.ttf");
             
             // Initialize demo
-            _demo = new CanvasDemo(_canvas, (int)_window.Size.X, (int)_window.Size.Y, 
-                _demoTexture, RobotoFont32, RobotoFont16, AlamakFont32);
+            _demo = new CanvasDemo(_canvas, (int)_window.Size.X, (int)_window.Size.Y, _demoTexture, RobotoFont, AlamakFont);
         }
         
         private void OnResize(object sender, SizeEventArgs e)
