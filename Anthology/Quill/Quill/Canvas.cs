@@ -202,6 +202,8 @@ namespace Prowl.Quill
         private double _pixelWidth = 1.0f;
         private double _pixelHalf = 0.5f;
 
+        private IMarkdownImageProvider? _markdownImageProvider = null;
+
         public double DevicePixelRatio
         {
             get => _devicePixelRatio;
@@ -1740,6 +1742,7 @@ namespace Prowl.Quill
         #endregion
 
         #region Text
+
         public FontInfo AddFont(string fontPath) => _scribeRenderer.FontEngine.AddFont(fontPath);
         public FontInfo AddFont(byte[] fontData) => _scribeRenderer.FontEngine.AddFont(fontData);
         public void LoadSystemFonts(params string[] priorityFonts) => _scribeRenderer.FontEngine.LoadSystemFonts(priorityFonts);
@@ -1784,6 +1787,72 @@ namespace Prowl.Quill
             }
             _scribeRenderer.FontEngine.DrawLayout(layout, position, color);
         }
+
+        #region Markdown
+
+        private MarkdownLayoutEngine? _activeMarkdownEngine = null;
+        private MarkdownDisplayList? _activeMarkdownList = null;
+
+        public void SetMarkdownImageProvider(IMarkdownImageProvider provider)
+        {
+            _markdownImageProvider = provider;
+        }
+
+        public void SetMarkdown(string markdown, Vector2 position, MarkdownLayoutSettings settings)
+        {
+            var doc = Markdown.Parse(markdown);
+            _activeMarkdownEngine = new MarkdownLayoutEngine(_scribeRenderer.FontEngine, _scribeRenderer, settings, _markdownImageProvider);
+            _activeMarkdownList = _activeMarkdownEngine.Layout(doc, position);
+
+            _activeMarkdownEngine.Render(_activeMarkdownList);
+        }
+
+        public void DrawMarkdown()
+        {
+            if (_activeMarkdownList == null || _activeMarkdownEngine == null)
+                return;
+
+            _activeMarkdownEngine.Render(_activeMarkdownList);
+        }
+
+        public bool GetMarkdownLinkAt(Vector2 point, bool useScissor, out string href)
+        {
+            if (_activeMarkdownList == null || _activeMarkdownEngine == null)
+            {
+                href = null;
+                return false;
+            }
+
+            // Check if point is within scissor rect if enabled
+            if (useScissor && _state.scissorExtent.x > 0)
+            {
+                // Transform point to scissor space
+                var scissorMatrix = _state.scissor.Inverse().ToMatrix4x4();
+                var transformedPoint = new Vector2(
+                    (float)(scissorMatrix.M11 * point.x + scissorMatrix.M12 * point.y + scissorMatrix.M14),
+                    (float)(scissorMatrix.M21 * point.x + scissorMatrix.M22 * point.y + scissorMatrix.M24)
+                );
+
+                // Check if the point is within the scissor extent
+                var distanceFromEdges = new Vector2(
+                    Math.Abs(transformedPoint.x) - _state.scissorExtent.x,
+                    Math.Abs(transformedPoint.y) - _state.scissorExtent.y
+                );
+
+                // If either distance is positive, we're outside the scissor region
+                if (distanceFromEdges.x > 0.5 || distanceFromEdges.y > 0.5)
+                {
+                    href = null;
+                    return false;
+                }
+            }
+
+
+            return _activeMarkdownEngine.TryGetLinkAt(_activeMarkdownList, point, out href);
+        }
+
+        #endregion
+
         #endregion
 
         #region Helpers
