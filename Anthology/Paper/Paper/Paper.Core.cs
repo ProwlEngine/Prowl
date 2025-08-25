@@ -152,7 +152,7 @@ namespace Prowl.PaperUI
             foreach (var overlay in overlayElements)
                 RenderElement(overlay, Layer.Overlay, null, modalElements);
             foreach (var modal in modalElements)
-                RenderElement(modal, Layer.Modal, null, null);
+                RenderElement(modal, Layer.Topmost, null, null);
 
             // Update stats
             CountOfAllElements = (uint)_createdElements.Count;
@@ -209,7 +209,7 @@ namespace Prowl.PaperUI
                     overlayElements?.Add(element);
                     return;
                 }
-                else if (element.Layer == Layer.Modal)
+                else if (element.Layer == Layer.Topmost)
                 {
                     modalElements?.Add(element);
                     return;
@@ -217,7 +217,7 @@ namespace Prowl.PaperUI
             }
             else if (currentLayer == Layer.Overlay)
             {
-                if (element.Layer == Layer.Modal)
+                if (element.Layer == Layer.Topmost)
                 {
                     modalElements?.Add(element);
                     return;

@@ -124,7 +124,7 @@ namespace Prowl.PaperUI
         /// Finds the topmost interactable element under the pointer across all layers.
         /// </summary>
         private Element? FindTopmostInteractableElement(Element element, Transform2D parentTransform)
-            => FindTopmostInteractableElementForLayer(element, parentTransform, Layer.Modal)
+            => FindTopmostInteractableElementForLayer(element, parentTransform, Layer.Topmost)
             ?? FindTopmostInteractableElementForLayer(element, parentTransform, Layer.Overlay)
             ?? FindTopmostInteractableElementForLayer(element, parentTransform, Layer.Base);
 
@@ -138,7 +138,7 @@ namespace Prowl.PaperUI
 
             if (layer == Layer.Base && element.Layer != Layer.Base)
                 return null;
-            if (layer == Layer.Overlay && element.Layer == Layer.Modal)
+            if (layer == Layer.Overlay && element.Layer == Layer.Topmost)
                 return null;
 
             // Calculate the combined transform
