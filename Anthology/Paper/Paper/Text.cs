@@ -66,6 +66,16 @@ namespace Prowl.PaperUI
                 LineSpacing = lineSpacing
             };
         }
+        public static Text Create(
+            string value,
+            SpriteFontBase font,
+            double alignX = 0,
+            double alignY = 0,
+            double xOffset = 0,
+            double yOffset = 0,
+            double layerDepth = 0,
+            double characterSpacing = 0,
+            double lineSpacing = 0) => Create(value, font, Color.White, alignX, alignY, xOffset, yOffset, layerDepth, characterSpacing, lineSpacing);
 
         public static Text Left(string value, SpriteFontBase font, Color? color = null) =>
             Create(value, font, color, 0.0, 0.5);
