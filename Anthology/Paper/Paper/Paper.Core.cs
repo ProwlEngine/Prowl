@@ -312,7 +312,7 @@ namespace Prowl.PaperUI
             if (borderWidth > 0.0f && borderColor.A > 0)
             {
                 _canvas.BeginPath();
-                _canvas.RoundedRect(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w);
+                _canvas.RoundedRect(rect.x-1, rect.y-1, rect.width+1, rect.height+1, rounded.x, rounded.y, rounded.z, rounded.w);
                 _canvas.SetStrokeColor(borderColor);
                 _canvas.SetStrokeWidth(borderWidth);
                 _canvas.Stroke();
