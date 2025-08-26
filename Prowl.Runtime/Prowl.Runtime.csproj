@@ -62,6 +62,7 @@
   <ItemGroup>
     <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
     <PackageReference Include="Jitter2.Double" Version="2.4.8-alpha" />
+    <PackageReference Include="NVorbis" Version="0.10.5" />
     <PackageReference Include="Prowl.Echo" Version="1.7.0" />
     <PackageReference Include="Silk.NET.OpenAL" Version="2.22.0" />
     <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />

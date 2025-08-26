@@ -42,6 +42,7 @@
     <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="Glslang.NET" Version="1.2.0" />
+    <PackageReference Include="NVorbis" Version="0.10.5" />
     <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
     <PackageReference Include="SixLabors.ImageSharp.Textures" Version="0.0.0-alpha.0.140" />
     <PackageReference Include="SPIRV-Cross.NET" Version="1.0.1" />
