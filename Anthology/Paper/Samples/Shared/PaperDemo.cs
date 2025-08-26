@@ -1,9 +1,7 @@
-﻿using Prowl.PaperUI;
-using Prowl.PaperUI.Extras;
-using Prowl.Vector;
+﻿using System.Drawing;
 
-using System.Drawing;
-using System.Reflection;
+using Prowl.PaperUI;
+using Prowl.Vector;
 
 // using Shared.Components;
 
@@ -20,7 +18,7 @@ namespace Shared
 
         // Sample data for visualization
         static double[] dataPoints = { 0.2f, 0.5f, 0.3f, 0.8f, 0.4f, 0.7f, 0.6f };
-        static readonly string[] tabNames = { "Dashboard", "Analytics", "Profile", "Settings", "Windows" };
+        static readonly string[] tabNames = { "Dashboard", "Analytics", "Profile", "Settings" }; //, "Windows" };
 
         static double time = 0;
 
@@ -32,7 +30,8 @@ namespace Shared
         public static void Initialize(Paper paper)
         {
             Gui = paper;
-            Fonts.Initialize();
+            Fonts.Initialize(Gui);
+            Gui.LoadSystemFonts("Segoe UI", "Arial", "Liberation Sans", "Consolas", "Menlo", "Liberation Mono");
             Themes.Initialize();
         }
 
@@ -74,74 +73,74 @@ namespace Shared
             }
         }
 
-        public static bool isWindowAOpen = true;
-        public static bool isWindowBOpen = true;
-        public static WindowManager windowManager;
-
-        private static void TestWindows()
-        {
-            windowManager ??= new WindowManager(Gui);
-
-            // Window Tests
-            windowManager.SetWindowFont(Fonts.fontMedium);
-            windowManager.Window("MyTestWindowA", ref isWindowAOpen, "Test Window", () =>
-            {
-                // Window content rendering
-                using (Gui.Column("WindowInnerContent")
-                        .Enter())
-                {
-                    windowManager.Window("MyTestWindowB", ref isWindowBOpen, "Recursive Window", () =>
-                    {
-                        // Window content rendering
-                        using (Gui.Column("WindowInnerContent")
-                            .Enter())
-                        {
-                            using (Gui.Box("Title")
-                                .Height(40)
-                                .Text(Text.Center("Hello from Window System", Fonts.fontLarge, Themes.textColor))
-                                .Enter()) { }
-
-                            using (Gui.Box("Content")
-                                .Text(Text.Left("This is content inside the window. You can close, resize, and drag this window.", Fonts.fontMedium, Themes.textColor))
-                                .Enter()) { }
-
-                            using (Gui.Box("Button")
-                                .PositionType(PositionType.SelfDirected)
-                                .Width(200)
-                                .Height(200)
-                                .Margin(Gui.Stretch(), 0, Gui.Stretch(), 0)
-                                .BackgroundColor(Themes.primaryColor)
-                                //.Style(BoxStyle.SolidRounded(primaryColor, 8f))
-                                //.HoverStyle(BoxStyle.SolidRounded(secondaryColor, 12f))
-                                //.ActiveStyle(BoxStyle.SolidRounded(primaryColor, 16f))
-                                //.FocusedStyle(BoxStyle.SolidRoundedWithBorder(backgroundColor, textColor, 20f, 1f))
-                                .Text(Text.Center("Click Me", Fonts.fontMedium, Color.White))
-                                .OnClick((rect) => Console.WriteLine("Button in window clicked!"))
-                                .Enter()) { }
-                        }
-                    });
-                }
-            });
-
-
-            //var myWindowB = ImGui.CreateWindow(
-            //    fontMedium,
-            //    "My OtherWindow",
-            //    new Vector2(100, 400),
-            //    new Vector2(200, 100),
-            //    (window) => {
-            //        // Window content rendering
-            //        using (ImGui.Column("WindowInnerContent")
-            //            .Enter())
-            //        {
-            //            using (ImGui.LayoutBox("Title")
-            //                .Height(40)
-            //                .Text(TextStyle.Center("Why Hello There", fontLarge, textColor))
-            //                .Enter()) { }
-            //        }
-            //    }
-            //);
-        }
+        //public static bool isWindowAOpen = true;
+        //public static bool isWindowBOpen = true;
+        //public static WindowManager windowManager;
+        //
+        //private static void TestWindows()
+        //{
+        //    windowManager ??= new WindowManager(Gui);
+        //
+        //    // Window Tests
+        //    windowManager.SetWindowFont(Fonts.fontMedium);
+        //    windowManager.Window("MyTestWindowA", ref isWindowAOpen, "Test Window", () =>
+        //    {
+        //        // Window content rendering
+        //        using (Gui.Column("WindowInnerContent")
+        //                .Enter())
+        //        {
+        //            windowManager.Window("MyTestWindowB", ref isWindowBOpen, "Recursive Window", () =>
+        //            {
+        //                // Window content rendering
+        //                using (Gui.Column("WindowInnerContent")
+        //                    .Enter())
+        //                {
+        //                    using (Gui.Box("Title")
+        //                        .Height(40)
+        //                        .Text(Text.Center("Hello from Window System", Fonts.fontLarge, Themes.textColor))
+        //                        .Enter()) { }
+        //
+        //                    using (Gui.Box("Content")
+        //                        .Text(Text.Left("This is content inside the window. You can close, resize, and drag this window.", Fonts.fontMedium, Themes.textColor))
+        //                        .Enter()) { }
+        //
+        //                    using (Gui.Box("Button")
+        //                        .PositionType(PositionType.SelfDirected)
+        //                        .Width(200)
+        //                        .Height(200)
+        //                        .Margin(Gui.Stretch(), 0, Gui.Stretch(), 0)
+        //                        .BackgroundColor(Themes.primaryColor)
+        //                        //.Style(BoxStyle.SolidRounded(primaryColor, 8f))
+        //                        //.HoverStyle(BoxStyle.SolidRounded(secondaryColor, 12f))
+        //                        //.ActiveStyle(BoxStyle.SolidRounded(primaryColor, 16f))
+        //                        //.FocusedStyle(BoxStyle.SolidRoundedWithBorder(backgroundColor, textColor, 20f, 1f))
+        //                        .Text(Text.Center("Click Me", Fonts.fontMedium, Color.White))
+        //                        .OnClick((rect) => Console.WriteLine("Button in window clicked!"))
+        //                        .Enter()) { }
+        //                }
+        //            });
+        //        }
+        //    });
+        //
+        //
+        //    //var myWindowB = ImGui.CreateWindow(
+        //    //    fontMedium,
+        //    //    "My OtherWindow",
+        //    //    new Vector2(100, 400),
+        //    //    new Vector2(200, 100),
+        //    //    (window) => {
+        //    //        // Window content rendering
+        //    //        using (ImGui.Column("WindowInnerContent")
+        //    //            .Enter())
+        //    //        {
+        //    //            using (ImGui.LayoutBox("Title")
+        //    //                .Height(40)
+        //    //                .Text(TextStyle.Center("Why Hello There", fontLarge, textColor))
+        //    //                .Enter()) { }
+        //    //        }
+        //    //    }
+        //    //);
+        //}
 
         private static void RenderTopNavBar()
         {
@@ -159,12 +158,12 @@ namespace Shared
                     Gui.Box("LogoInner")
                         .Size(50)
                         .Margin(10)
-                        .Text(Text.Center(Icons.Newspaper, Fonts.fontLarge, Themes.lightTextColor));
+                        .Text(Icons.Newspaper).FontSize(32).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter);
 
                     Gui.Box("LogoText")
                         .PositionType(PositionType.SelfDirected)
                         .Left(50 + 15)
-                        .Text(Text.Left("PaperUI Demo", Fonts.fontTitle, Themes.textColor));
+                        .Text("PaperUI Demo").FontSize(40).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft);
                 }
 
                 // Spacer
@@ -201,10 +200,10 @@ namespace Shared
                 // Menu header
                 Gui.Box("MenuHeader")
                     .Height(60)
-                    .Text(Text.Center("Menu", Fonts.fontMedium, Themes.textColor));
+                    .Text("Menu").FontSize(26).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter);
 
                 string[] menuIcons = { Icons.House, Icons.ChartBar, Icons.User, Icons.Gear, Icons.WindowMaximize };
-                string[] menuItems = { "Dashboard", "Analytics", "Users", "Settings", "Windows" };
+                string[] menuItems = { "Dashboard", "Analytics", "Users", "Settings" };//, "Windows" };
 
                 for (int i = 0; i < menuItems.Length; i++)
                 {
@@ -221,13 +220,13 @@ namespace Shared
                         Gui.Box($"MenuItemIcon_{i}")
                             .Width(55)
                             .Height(50)
-                            .Text(Text.Center(menuIcons[i], Fonts.fontSmall, Themes.textColor));
+                            .Text(menuIcons[i]).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter).FontSize(19);
 
                         Gui.Box($"MenuItem_{i}")
                             .Width(100)
                             .PositionType(PositionType.SelfDirected)
                             .Left(50 + 15)
-                            .Text(Text.Center($"{menuItems[i]}", Fonts.fontSmall, Themes.textColor));
+                            .Text(menuItems[i]).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter).FontSize(19);
                     }
                 }
 
@@ -249,13 +248,13 @@ namespace Shared
                         .Enter())
                     {
                         Gui.Box("UpgradeText")
-                            .Text(Text.Center("Upgrade to Pro", Fonts.fontMedium, Color.White));
+                            .Text("Upgrade to Pro").TextColor(Color.White).Alignment(TextAlignment.MiddleCenter).FontSize(26);
 
                         Gui.Box("UpgradeButton")
                             .Style("button")
                             .Height(30)
                             .BackgroundColor(Color.White)
-                            .Text(Text.Center("Upgrade", Fonts.fontSmall, Themes.primaryColor))
+                            .Text("Upgrade").TextColor(Themes.primaryColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                             .OnClick((rect) => Console.WriteLine("Upgrade clicked"));
                     }
                 }
@@ -278,7 +277,7 @@ namespace Shared
                     case 1: RenderAnalyticsTab(); break;
                     case 2: RenderProfileTab(); break;
                     case 3: RenderSettingsTab(); break;
-                    case 4: RenderWindowsTab(); break;
+                    //case 4: RenderWindowsTab(); break;
                     default: RenderDashboardTab(); break;
                 }
             }
@@ -301,7 +300,7 @@ namespace Shared
                     using (Gui.Box($"Tab_{i}")
                         .Width(Gui.Stretch(tabWidth))
                         .Style("tab")
-                        .Text(Text.Center(tabNames[i], Fonts.fontMedium, tabColor))
+                        .Text(tabNames[i]).TextColor(tabColor).Alignment(TextAlignment.MiddleCenter).FontSize(26)
                         .OnClick((rect) => selectedTabIndex = index)
                         .Enter())
                     {
@@ -339,19 +338,6 @@ namespace Shared
                         .Margin(i == 0 ? 0 : (15 / 2f), i == 3 ? 0 : (15 / 2f), 0, 0)
                         .Enter())
                     {
-                        if(i == 0)
-                        {
-                            Gui.Box($"StatIcon_{i}")
-                                .Size(500)
-                                .Layer(Layer.Overlay)
-                                .PositionType(PositionType.SelfDirected)
-                                .Top(Gui.Percent(100))
-                                .BackgroundColor(Color.FromArgb(150, Themes.backgroundColor))
-                                .BorderWidth(2)
-                                .BorderColor(Color.Red)
-                                .Rounded(8);
-                        }
-
                         // Card icon with conditional styling based on parent hover
                         Gui.Box($"StatIcon_{i}")
                             .Size(40)
@@ -370,10 +356,10 @@ namespace Shared
                         {
                             Gui.Box($"StatLabel_{i}")
                                 .Height(Gui.Pixels(25))
-                                .Text(Text.Left(statNames[i], Fonts.fontSmall, Themes.lightTextColor));
+                                .Text(statNames[i]).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19);
 
                             Gui.Box($"StatValue_{i}")
-                                .Text(Text.Left(statValues[i], Fonts.fontLarge, Themes.textColor));
+                                .Text(statValues[i]).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(32);
                         }
                     }
                 }
@@ -399,7 +385,7 @@ namespace Shared
                         .Enter())
                     {
                         using (Gui.Box("ChartTitle")
-                            .Text(Text.Left("Performance Overview", Fonts.fontMedium, Themes.textColor))
+                            .Text("Performance Overview").TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26)
                             .Enter()) { }
 
                         using (Gui.Row("ChartControls")
@@ -419,7 +405,7 @@ namespace Shared
                                         .BackgroundColor(Color.FromArgb(50, Themes.primaryColor))
                                         .End()
                                     .Transition(GuiProp.BackgroundColor, 0.2f)
-                                    .Text(Text.Center(period, Fonts.fontSmall, period == "Week" ? Color.White : Themes.lightTextColor))
+                                    .Text(period).TextColor(period == "Week" ? Color.White : Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                                     .OnClick((rect) => Console.WriteLine($"Period {period} clicked"))
                                     .Enter()) { }
                             }
@@ -560,7 +546,7 @@ namespace Shared
                         using (Gui.Box("PanelHeader")
                             .Height(60)
                             .Margin(20, 20, 20, 0)
-                            .Text(Text.Left("Recent Activity", Fonts.fontMedium, Themes.textColor))
+                            .Text("Recent Activity").TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26)
                             .Enter()) { }
 
                         // Activity items
@@ -601,12 +587,12 @@ namespace Shared
                                     using (Gui.Box($"ActivityText_{i}")
                                         .Height(Gui.Pixels(20))
                                         .Margin(0, 0, 15, 0)
-                                        .Text(Text.Left(activities[i], Fonts.fontSmall, Themes.textColor))
+                                        .Text(activities[i]).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                         .Enter()) { }
 
                                     using (Gui.Box($"ActivityTime_{i}")
                                         .Height(Gui.Pixels(20))
-                                        .Text(Text.Left(timestamps[i], Fonts.fontSmall, Themes.lightTextColor))
+                                        .Text(timestamps[i]).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                         .Enter()) { }
                                 }
                             }
@@ -637,7 +623,7 @@ namespace Shared
                     using (Gui.Box("AnalyticsHeader")
                         .Height(80)
                         .Margin(20)
-                        .Text(Text.Left("Analytics Dashboard", Fonts.fontLarge, Themes.textColor))
+                        .Text("Analytics Dashboard").TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(32)
                         .Enter()) { }
 
                     // Interactive slider as a demo control
@@ -648,7 +634,7 @@ namespace Shared
                     {
                         using (Gui.Box("SliderLabel")
                             .Height(30)
-                            .Text(Text.Left($"Green Amount: {sliderValue:F2}", Fonts.fontMedium, Themes.textColor))
+                            .Text($"Green Amount: {sliderValue:F2}").TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26)
                             .Enter()) { }
 
                         // Slider control
@@ -735,7 +721,7 @@ namespace Shared
                                             .Height(50)
                                             .Rounded(25)
                                             .BackgroundColor(Color.FromArgb(60, 255, 255, 255))
-                                            .Text(Text.Center(icon, Fonts.fontMedium, Themes.textColor))
+                                            .Text(icon).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter).FontSize(26)
                                             .Enter()) { }
 
                                         // Content
@@ -745,12 +731,11 @@ namespace Shared
                                         {
                                             using (Gui.Box($"CardTitle_{i}")
                                                 .Height(25)
-                                                .Text(Text.Left($"Item {i}", Fonts.fontMedium, Themes.textColor))
+                                                .Text($"Item {i}").TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26)
                                                 .Enter()) { }
 
                                             using (Gui.Box($"CardDescription_{i}")
-                                                .Text(Text.Left($"Interactive card with animations", Fonts.fontSmall,
-                                                    Color.FromArgb(200, Themes.textColor)))
+                                                .Text("Interactive card with animations").TextColor(Color.FromArgb(200, Themes.textColor)).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                                 .Enter()) { }
                                         }
                                     }
@@ -796,7 +781,7 @@ namespace Shared
                                 .Height(120)
                                 .BackgroundColor(Themes.secondaryColor)
                                 //.Style(BoxStyle.SolidRounded(secondaryColor, 60f))
-                                .Text(Text.Center("J", Fonts.fontTitle, Color.White))
+                                .Text("J").TextColor(Color.White).Alignment(TextAlignment.MiddleCenter).FontSize(48)
                                 .Enter()) { }
 
                             // Spacer to Center Avatar
@@ -807,13 +792,13 @@ namespace Shared
                         // User name
                         using (Gui.Box("UserName")
                             .Height(40)
-                            .Text(Text.Center("John Doe", Fonts.fontLarge, Themes.textColor))
+                            .Text("John Doe").TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter).FontSize(32)
                             .Enter()) { }
 
                         // User title
                         using (Gui.Box("UserTitle")
                             .Height(30)
-                            .Text(Text.Center("Senior Developer", Fonts.fontMedium, Themes.lightTextColor))
+                            .Text("Senior Developer").TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter).FontSize(26)
                             .Enter()) { }
                     }
 
@@ -834,12 +819,12 @@ namespace Shared
                             {
                                 using (Gui.Box($"StatValue_{i}")
                                     .Height(40)
-                                    .Text(Text.Center(statValues[i], Fonts.fontLarge, Themes.primaryColor))
+                                    .Text(statValues[i]).TextColor(Themes.primaryColor).Alignment(TextAlignment.MiddleCenter).FontSize(32)
                                     .Enter()) { }
 
                                 using (Gui.Box($"StatLabel_{i}")
                                     .Height(30)
-                                    .Text(Text.Center(statLabels[i], Fonts.fontSmall, Themes.lightTextColor))
+                                    .Text(statLabels[i]).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                                     .Enter()) { }
                             }
                         }
@@ -861,11 +846,11 @@ namespace Shared
                             {
                                 using (Gui.Box($"ContactLabel_{i}")
                                     .Width(100)
-                                    .Text(Text.Left(contactLabels[i] + ":", Fonts.fontSmall, Themes.lightTextColor))
+                                    .Text(contactLabels[i] + ":").TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                     .Enter()) { }
 
                                 using (Gui.Box($"ContactValue_{i}")
-                                    .Text(Text.Left(contactValues[i], Fonts.fontSmall, Themes.textColor))
+                                    .Text(contactValues[i]).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                     .Enter()) { }
                             }
                         }
@@ -889,7 +874,7 @@ namespace Shared
                         using (Gui.Box("ActivityHeader")
                             .Height(60)
                             .Margin(20, 20, 0, 0)
-                            .Text(Text.Left("Activity Tracker", Fonts.fontMedium, Themes.textColor))
+                            .Text("Activity Tracker").TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26)
                             .Enter()) { }
 
                         // Week days
@@ -902,7 +887,7 @@ namespace Shared
                             foreach (var day in days)
                             {
                                 using (Gui.Box($"Day_{day}")
-                                    .Text(Text.Center(day, Fonts.fontSmall, Themes.lightTextColor))
+                                    .Text(day).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                                     .Enter()) { }
                             }
                         }
@@ -959,7 +944,7 @@ namespace Shared
                         using (Gui.Box("SkillsHeader")
                             .Height(20)
                             .Margin(20, 20, 20, 0)
-                            .Text(Text.MiddleLeft("Skills", Fonts.fontMedium, Themes.textColor))
+                            .Text("Skills").TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26)
                             .Enter()) { }
 
                         // Skill bars
@@ -980,7 +965,7 @@ namespace Shared
                                     // Skill label
                                     using (Gui.Box($"SkillLabel_{i}")
                                         .Height(25)
-                                        .Text(Text.Left(skills[i], Fonts.fontSmall, Themes.textColor))
+                                        .Text(skills[i]).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                         .Enter()) { }
 
                                     // Skill bar
@@ -1002,7 +987,7 @@ namespace Shared
                                         // Percentage label
                                         using (Gui.Box($"SkillPercent_{i}")
                                             .Width(40)
-                                            .Text(Text.Right($"{animatedLevel * 100:F0}%", Fonts.fontSmall, Themes.lightTextColor))
+                                            .Text($"{animatedLevel * 100:F0}%").TextColor(Themes.lightTextColor).Alignment(TextAlignment.Right).FontSize(19)
                                             .Enter()) { }
                                     }
                                 }
@@ -1053,7 +1038,7 @@ namespace Shared
                     Gui.Box("SettingsHeader")
                         .Height(80)
                         .Margin(20)
-                        .Text(Text.Left("General Settings", Fonts.fontLarge, Themes.textColor));
+                        .Text("General Settings").TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(32);
 
                     // Toggle options - much cleaner now!
                     string[] options = {
@@ -1070,7 +1055,7 @@ namespace Shared
                         {
                             // Option label
                             Gui.Box($"SettingLabel_{i}")
-                                .Text(Text.Left(options[i], Fonts.fontMedium, Themes.textColor));
+                                .Text(options[i]).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26);
 
                             bool isOn = toggleState[i];
                             int index = i;
@@ -1087,44 +1072,44 @@ namespace Shared
                     // Save button
                     Gui.Box("SaveSettings")
                         .Style("button-primary")
-                        .Text(Text.Center("Save Changes", Fonts.fontMedium, Color.White))
+                        .Text("Save Changes").TextColor(Color.White).Alignment(TextAlignment.MiddleCenter).FontSize(26)
                         .Margin(20, 0, 20, 20)
                         .OnClick((rect) => Console.WriteLine("Save settings clicked"));
                 }
             }
         }
-        private static void RenderWindowsTab()
-        {
-            using (Gui.Row("WindowsContent")
-                .Margin(0, 0, 15, 0)
-                .Enter())
-            {
-                // Settings content
-                using (Gui.Column("SettingsOptions")
-                    .BackgroundColor(Themes.cardBackground)
-                    .Margin(15 / 2, 0, 0, 0)
-                    .Clip()
-                    .Enter())
-                {
-                    // Button to open windows
-                    using (Gui.Box("OpenWindowsButton")
-                        .Height(50)
-                        .Margin(20)
-                        .Text(Text.Center("Open Windows", Fonts.fontMedium, Themes.textColor))
-                        .Style("button.primary")
-                        .OnClick((rect) => OpenWindows())
-                        .Enter()) { }
-
-                    TestWindows();
-                }
-            }
-        }
-
-        private static void OpenWindows()
-        {
-            isWindowAOpen = true;
-            isWindowBOpen = true;
-        }
+        //private static void RenderWindowsTab()
+        //{
+        //    using (Gui.Row("WindowsContent")
+        //        .Margin(0, 0, 15, 0)
+        //        .Enter())
+        //    {
+        //        // Settings content
+        //        using (Gui.Column("SettingsOptions")
+        //            .BackgroundColor(Themes.cardBackground)
+        //            .Margin(15 / 2, 0, 0, 0)
+        //            .Clip()
+        //            .Enter())
+        //        {
+        //            // Button to open windows
+        //            using (Gui.Box("OpenWindowsButton")
+        //                .Height(50)
+        //                .Margin(20)
+        //                .Text(Text.Center("Open Windows", Fonts.fontMedium, Themes.textColor))
+        //                .Style("button.primary")
+        //                .OnClick((rect) => OpenWindows())
+        //                .Enter()) { }
+        //
+        //            TestWindows();
+        //        }
+        //    }
+        //}
+        //
+        //private static void OpenWindows()
+        //{
+        //    isWindowAOpen = true;
+        //    isWindowBOpen = true;
+        //}
 
         private static void RenderFooter()
         {
@@ -1138,13 +1123,13 @@ namespace Shared
                 // Copyright
                 using (Gui.Box("Copyright")
                     .Margin(15, 0, 0, 0)
-                    .Text(Text.Left("© 2025 PaperUI Demo.", Fonts.fontSmall, Themes.lightTextColor))
+                    .Text("© 2025 PaperUI Demo.").TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                     .Enter()) { }
 
                 // FPS Counter
-                Gui.Box("FPS").Text(Text.Left($"FPS: {1f / Gui.DeltaTime:F1}", Fonts.fontSmall, Themes.lightTextColor));
-                Gui.Box("NodeCounter").Text(Text.Left($"Nodes: {Gui.CountOfAllElements}", Fonts.fontSmall, Themes.lightTextColor));
-                Gui.Box("MS").Text(Text.Left($"Frame ms: {Gui.MillisecondsSpent}", Fonts.fontSmall, Themes.lightTextColor));
+                Gui.Box("FPS").Text($"FPS: {1f / Gui.DeltaTime:F1}").TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19);
+                Gui.Box("NodeCounter").Text($"Nodes: {Gui.CountOfAllElements}").TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19);
+                Gui.Box("MS").Text($"Frame ms: {Gui.MillisecondsSpent}").TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19);
 
                 // Footer links
                 string[] links = { "Terms", "Privacy", "Contact", "Help" };
@@ -1155,7 +1140,7 @@ namespace Shared
                     {
                         using (Gui.Box($"Link_{link}")
                             .Width(Gui.Stretch(1f / links.Length))
-                            .Text(Text.Center(link, Fonts.fontSmall, Themes.primaryColor))
+                            .Text(link).TextColor(Themes.primaryColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                             .OnClick((rect) => Console.WriteLine($"Link {link} clicked"))
                             .Enter()) { }
                     }

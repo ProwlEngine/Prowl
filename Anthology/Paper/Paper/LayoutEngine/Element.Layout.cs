@@ -175,7 +175,23 @@
                 double? pMain = main.IsAuto ? null : (double?)computedMain;
                 double? pCross = cross.IsAuto ? null : (double?)computedCross;
 
+                // 1) Try ContentSizer if defined
                 var contentSize = element.ContentSizing(parentLayoutType, pMain, pCross);
+
+                // 2) Otherwise, try text processing
+                if (!contentSize.HasValue && !string.IsNullOrEmpty(element.Paragraph))
+                {
+                    // Available width = parent's main, respecting constraints
+                    double availableWidth = parentLayoutType == LayoutType.Row
+                        ? (pMain ?? parentMain)
+                        : (pCross ?? parentCross);
+
+                    var textSize = element.ProcessText((float)availableWidth);
+
+                    if (textSize.x > 0 || textSize.y > 0)
+                        contentSize = (textSize.x, textSize.y);
+                }
+
                 if (contentSize.HasValue)
                 {
                     computedMain = contentSize.Value.Item1;

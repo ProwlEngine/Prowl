@@ -60,6 +60,21 @@ namespace Prowl.PaperUI
         Auto
     }
 
+    public enum TextAlignment
+    {
+        Left,
+        Center,
+        Right,
+
+        MiddleLeft,
+        MiddleCenter,
+        MiddleRight,
+
+        BottomLeft,
+        BottomCenter,
+        BottomRight,
+    }
+
     /// <summary>
     /// Defines path winding direction for vector shapes.
     /// </summary>

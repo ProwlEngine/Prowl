@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Vector;
+using Prowl.Scribe;
 
 namespace Prowl.PaperUI
 {
@@ -56,7 +57,8 @@ namespace Prowl.PaperUI
         /// <param name="renderer">The canvas renderer implementation</param>
         /// <param name="width">Viewport width</param>
         /// <param name="height">Viewport height</param>
-        public Paper(ICanvasRenderer renderer, double width, double height)
+        /// <param name="fontAtlas">Font atlas settings for text rendering</param>
+        public Paper(ICanvasRenderer renderer, double width, double height, FontAtlasSettings fontAtlas)
         {
             _width = width;
             _height = height;
@@ -78,7 +80,7 @@ namespace Prowl.PaperUI
             _elementStack.Push(_rootElement);
 
             // Create canvas
-            _canvas = new Canvas(renderer);
+            _canvas = new Canvas(renderer, fontAtlas);
 
             InitializeInput();
         }
@@ -90,6 +92,21 @@ namespace Prowl.PaperUI
         {
             _width = width;
             _height = height;
+        }
+
+        public void AddFont(string fontPath)
+        {
+            _canvas.AddFont(fontPath);
+        }
+
+        public void AddFont(byte[] fontData)
+        {
+            _canvas.AddFont(fontData);
+        }
+
+        public void LoadSystemFonts(params string[] priorityFonts)
+        {
+            _canvas.LoadSystemFonts(priorityFonts);
         }
 
         /// <summary>
@@ -325,11 +342,10 @@ namespace Prowl.PaperUI
             }
 
             // Draw text style
-            var text = (Text)element._elementStyle.GetValue(GuiProp.Text);
-            if (!string.IsNullOrEmpty(text.Value) && text.Font != null)
+            if (!string.IsNullOrEmpty(element.Paragraph))
             {
                 _canvas.SaveState();
-                text.Draw(_canvas, rect);
+                element.DrawText(rect.x, rect.y, (float)rect.width, (float)rect.height);
                 _canvas.RestoreState();
             }
 
