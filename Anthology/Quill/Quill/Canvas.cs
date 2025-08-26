@@ -1790,37 +1790,44 @@ namespace Prowl.Quill
 
         #region Markdown
 
-        private MarkdownLayoutSettings? _activeMDSettings = null;
-        private MarkdownDisplayList? _activeMarkdownList = null;
+        public struct QuillMarkdown
+        {
+            internal MarkdownLayoutSettings Settings;
+            internal MarkdownDisplayList List;
+
+            public readonly Vector2 Size => List.Size;
+
+            internal QuillMarkdown(MarkdownLayoutSettings settings, MarkdownDisplayList list)
+            {
+                Settings = settings;
+                List = list;
+            }
+        }
 
         public void SetMarkdownImageProvider(IMarkdownImageProvider provider)
         {
             _markdownImageProvider = provider;
         }
 
-        public void SetMarkdown(string markdown, MarkdownLayoutSettings settings)
+        public QuillMarkdown CreateMarkdown(string markdown, MarkdownLayoutSettings settings)
         {
             var doc = Markdown.Parse(markdown);
-            _activeMDSettings = settings;
-            _activeMarkdownList = MarkdownLayoutEngine.Layout(doc, _scribeRenderer.FontEngine, settings, _markdownImageProvider);
+
+            QuillMarkdown md = new QuillMarkdown() {
+                Settings = settings,
+                List = MarkdownLayoutEngine.Layout(doc, _scribeRenderer.FontEngine, settings, _markdownImageProvider)
+            };
+
+            return md;
         }
 
-        public void DrawMarkdown(Vector2 position)
+        public void DrawMarkdown(QuillMarkdown markdown, Vector2 position)
         {
-            if (_activeMarkdownList == null || _activeMDSettings == null)
-                return;
-
-            MarkdownLayoutEngine.Render(_activeMarkdownList, _scribeRenderer.FontEngine, _scribeRenderer, position, _activeMDSettings.Value);
+            MarkdownLayoutEngine.Render(markdown.List, _scribeRenderer.FontEngine, _scribeRenderer, position, markdown.Settings);
         }
 
-        public bool GetMarkdownLinkAt(Vector2 renderOffset, Vector2 point, bool useScissor, out string href)
+        public bool GetMarkdownLinkAt(QuillMarkdown markdown, Vector2 renderOffset, Vector2 point, bool useScissor, out string href)
         {
-            if (_activeMarkdownList == null || _activeMDSettings == null)
-            {
-                href = null;
-                return false;
-            }
-
             // Check if point is within scissor rect if enabled
             if (useScissor && _state.scissorExtent.x > 0)
             {
@@ -1846,7 +1853,7 @@ namespace Prowl.Quill
             }
 
 
-            return MarkdownLayoutEngine.TryGetLinkAt(_activeMarkdownList, point, renderOffset, out href);
+            return MarkdownLayoutEngine.TryGetLinkAt(markdown.List, point, renderOffset, out href);
         }
 
         #endregion
