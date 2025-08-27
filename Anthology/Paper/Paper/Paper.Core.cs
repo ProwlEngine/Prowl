@@ -423,7 +423,7 @@ namespace Prowl.PaperUI
                     ? Color.FromArgb(220, 130, 130, 130)
                     : Color.FromArgb(180, 100, 100, 100);
 
-                canvas.RoundedRectFilled(trackX + ScrollState.ScrollbarPadding, thumbY, trackWidth - ScrollState.ScrollbarPadding * 2, thumbHeight, 10, 10, 10, 10, thumbColor);
+                canvas.RoundedRectFilled(trackX + ScrollState.ScrollbarPadding, thumbY + ScrollState.ScrollbarPadding, trackWidth - ScrollState.ScrollbarPadding * 2, thumbHeight - ScrollState.ScrollbarPadding * 2, 10, 10, 10, 10, thumbColor);
             }
 
             if (hasHorizontal)
@@ -438,7 +438,7 @@ namespace Prowl.PaperUI
                     ? Color.FromArgb(220, 130, 130, 130)
                     : Color.FromArgb(180, 100, 100, 100);
 
-                canvas.RoundedRectFilled(thumbX, trackY + ScrollState.ScrollbarPadding, thumbWidth, trackHeight - ScrollState.ScrollbarPadding * 2, 10, 10, 10, 10, thumbColor);
+                canvas.RoundedRectFilled(thumbX + ScrollState.ScrollbarPadding, trackY + ScrollState.ScrollbarPadding, thumbWidth, trackHeight - ScrollState.ScrollbarPadding * 2, 10, 10, 10, 10, thumbColor);
             }
         }
 
