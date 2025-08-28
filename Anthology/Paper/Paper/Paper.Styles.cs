@@ -1,6 +1,7 @@
 ﻿using System.Drawing;
 
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Scribe;
 using Prowl.Vector;
 
 namespace Prowl.PaperUI
@@ -74,7 +75,14 @@ namespace Prowl.PaperUI
         #endregion
 
         #region Text Properties
-        Text,
+        TextColor,
+
+        WordSpacing,
+        LetterSpacing,
+        LineHeight,
+
+        TabSize,
+        FontSize,
         #endregion
     }
 
@@ -597,10 +605,6 @@ namespace Prowl.PaperUI
             {
                 return t > 0.5 ? endString : startString;
             }
-            else if (start is Text textStart && end is Text textEnd)
-            {
-                return Text.Lerp(textStart, textEnd, t);
-            }
             else if (start is Gradient gradientStart && end is Gradient gradientEnd)
             {
                 return Gradient.Lerp(gradientStart, gradientEnd, t);
@@ -689,7 +693,14 @@ namespace Prowl.PaperUI
                 GuiProp.Transform => Transform2D.Identity,
 
                 // Text Properties
-                GuiProp.Text => Text.Empty,
+                GuiProp.TextColor => Color.White,
+
+                GuiProp.WordSpacing => (double)0.0,
+                GuiProp.LetterSpacing => (double)0.0,
+                GuiProp.LineHeight => (double)1.0,
+
+                GuiProp.TabSize => (int)4,
+                GuiProp.FontSize => (float)16.0f,
 
                 _ => throw new ArgumentOutOfRangeException(nameof(property), property, null)
             };

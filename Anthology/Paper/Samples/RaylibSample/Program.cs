@@ -28,7 +28,7 @@ internal class Program
         SetTargetFPS(60);
 
         _renderer = new RaylibCanvasRenderer();
-        P = new Paper(_renderer, width, height);
+        P = new Paper(_renderer, width, height, new Prowl.Quill.FontAtlasSettings());
         P.SetClipboardHandler(new RaylibClipboardHandler());
 
         // Initialize the Demo, this loads the Demo fonts and other resources
