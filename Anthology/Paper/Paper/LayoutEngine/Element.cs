@@ -94,6 +94,8 @@ namespace Prowl.PaperUI.LayoutEngine
 
         internal Vector2 ProcessText(float availableWidth)
         {
+            if (ProcessedText) return Vector2.zero; // Already processed
+
             if (string.IsNullOrWhiteSpace(Paragraph)) return Vector2.zero;
 
             ProcessedText = true;
