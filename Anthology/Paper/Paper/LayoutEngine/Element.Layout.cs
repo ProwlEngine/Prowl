@@ -1,4 +1,6 @@
-﻿namespace Prowl.PaperUI.LayoutEngine
+﻿using Prowl.Vector;
+
+namespace Prowl.PaperUI.LayoutEngine
 {
     public partial class Element
     {
@@ -189,7 +191,12 @@
                     var textSize = element.ProcessText((float)availableWidth);
 
                     if (textSize.x > 0 || textSize.y > 0)
-                        contentSize = (textSize.x, textSize.y);
+                    {
+                        if (parentLayoutType == LayoutType.Row)
+                            contentSize = (textSize.x, textSize.y);
+                        else
+                            contentSize = (textSize.y, textSize.x);
+                    }
                 }
 
                 if (contentSize.HasValue)
