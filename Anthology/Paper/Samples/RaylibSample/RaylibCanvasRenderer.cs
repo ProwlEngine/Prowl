@@ -188,7 +188,7 @@ void main()
     {
         var image = GenImageColor((int)width, (int)height, new Color(0, 0, 0, 0));
         var texture = LoadTextureFromImage(image);
-        SetTextureFilter(texture, TextureFilter.Bilinear);
+        SetTextureFilter(texture, TextureFilter.Point);
         return texture;
     }
 
