@@ -31,7 +31,6 @@ namespace Shared
         {
             Gui = paper;
             Fonts.Initialize(Gui);
-            Gui.LoadSystemFonts("Segoe UI", "Arial", "Liberation Sans", "Consolas", "Menlo", "Liberation Mono");
             Themes.Initialize();
         }
 

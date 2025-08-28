@@ -31,6 +31,9 @@ namespace Shared
                 stream.Read(data, 0, data.Length);
                 gui.AddFont(data);
             }
+
+            // Load System Font as Backups
+            gui.LoadSystemFonts("Arial", "Segoe UI", "Liberation Sans", "Consolas", "Menlo", "Liberation Mono");
         }
     }
 }
