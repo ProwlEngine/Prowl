@@ -1,4 +1,5 @@
 ﻿using System.Drawing;
+using System.Net.Cache;
 using System.Runtime.Serialization.Formatters;
 
 using Prowl.PaperUI.Events;
@@ -144,6 +145,32 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 return _quillMarkdown.Value.Size;
             }
+        }
+
+        internal int GetIndexAtPosition(Rect rect, Vector2 screenPosition)
+        {
+            if (string.IsNullOrWhiteSpace(Paragraph)) return 0;
+            if (IsMarkdown) throw new Exception("Markdown text cannot be edited!");
+
+            if (!ProcessedText)
+                ProcessText((float)rect.width);
+
+            Vector2 relPosition = screenPosition - rect.Position;
+
+            return _textLayout!.GetCursorIndex(relPosition);
+        }
+
+        internal Vector2 GetPositionAtIndex(Rect rect, int index)
+        {
+            if (string.IsNullOrWhiteSpace(Paragraph)) return Vector2.zero;
+            if (IsMarkdown) throw new Exception("Markdown text cannot be edited!");
+
+            if (!ProcessedText)
+                ProcessText((float)rect.width);
+
+            Vector2 relPosition = _textLayout!.GetCursorPosition(index);
+
+            return rect.Position + relPosition;
         }
 
         internal void DrawText(double x, double y, float availableWidth, float availableHeight)

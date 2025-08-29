@@ -1108,14 +1108,12 @@ namespace Prowl.PaperUI
         ///// Creates a text field control that allows users to input and edit text.
         ///// </summary>
         ///// <param name="value">Current text value</param>
-        ///// <param name="font">Font used to render the text</param>
         ///// <param name="onChange">Optional callback when the text changes</param>
         ///// <param name="placeholder">Optional placeholder text shown when the field is empty</param>
         ///// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
         ///// <returns>A builder for configuring the text field</returns>
         //public ElementBuilder TextField(
         //    string value,
-        //    FontInfo? font = null,
         //    Action<string> onChange = null,
         //    Color? textColor = null,
         //    string placeholder = "",
@@ -1179,7 +1177,7 @@ namespace Prowl.PaperUI
         //            _paper.SetElementStorage(_element, "SelectionEnd", -1);
         //
         //            // Ensure cursor is visible
-        //            EnsureCursorVisible(currentValue, font, pos);
+        //            EnsureCursorVisible(currentValue, pos);
         //        }
         //    });
         //
@@ -1191,7 +1189,7 @@ namespace Prowl.PaperUI
         //
         //        // Calculate cursor position based on click position
         //        var clickPos = e.RelativePosition.x - TextXPadding + scrollOffsetValue; // Adjust for padding
-        //        int newPosition = CalculateTextPosition(currentValue, font, clickPos);
+        //        int newPosition = CalculateTextPosition(currentValue, clickPos);
         //        newPosition = Math.Clamp(newPosition, 0, currentValue.Length);
         //
         //        _paper.SetElementStorage(_element, "CursorPosition", newPosition);
@@ -1201,7 +1199,7 @@ namespace Prowl.PaperUI
         //        _paper.SetElementStorage(_element, "SelectionEnd", -1);
         //
         //        // Ensure cursor is visible
-        //        EnsureCursorVisible(currentValue, font, newPosition);
+        //        EnsureCursorVisible(currentValue, newPosition);
         //    });
         //
         //    // Handle dragging for text selection
@@ -1211,7 +1209,7 @@ namespace Prowl.PaperUI
         //        double scrollOffsetValue = _paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
         //
         //        // Start selection at cursor position
-        //        int pos = CalculateTextPosition(currentValue, font, e.RelativePosition.x - TextXPadding + scrollOffsetValue);
+        //        int pos = CalculateTextPosition(currentValue, e.RelativePosition.x - TextXPadding + scrollOffsetValue);
         //        pos = Math.Clamp(pos, 0, currentValue.Length);
         //
         //        _paper.SetElementStorage(_element, "CursorPosition", pos);
@@ -1219,7 +1217,7 @@ namespace Prowl.PaperUI
         //        _paper.SetElementStorage(_element, "SelectionEnd", pos);
         //
         //        // Ensure cursor is visible
-        //        EnsureCursorVisible(currentValue, font, pos);
+        //        EnsureCursorVisible(currentValue, pos);
         //    });
         //
         //    OnDragging((DragEvent e) =>
@@ -1248,14 +1246,14 @@ namespace Prowl.PaperUI
         //                _paper.SetElementStorage(_element, "ScrollOffset", scrollOffsetValue);
         //            }
         //
-        //            int pos = CalculateTextPosition(currentValue, font, e.RelativePosition.x - TextXPadding + scrollOffsetValue);
+        //            int pos = CalculateTextPosition(currentValue, e.RelativePosition.x - TextXPadding + scrollOffsetValue);
         //            pos = Math.Clamp(pos, 0, currentValue.Length);
         //
         //            _paper.SetElementStorage(_element, "CursorPosition", pos);
         //            _paper.SetElementStorage(_element, "SelectionEnd", pos);
         //
         //            // Ensure cursor is visible with updated scroll position
-        //            EnsureCursorVisible(currentValue, font, pos);
+        //            EnsureCursorVisible(currentValue, pos);
         //        }
         //    });
         //
@@ -1438,7 +1436,7 @@ namespace Prowl.PaperUI
         //        _paper.SetElementStorage(_element, "SelectionEnd", selEnd);
         //
         //        // Ensure cursor is visible
-        //        EnsureCursorVisible(currentValue, font, curPos);
+        //        EnsureCursorVisible(currentValue, curPos);
         //
         //        // Notify of changes if needed
         //        if (valueChanged && onChange != null)
@@ -1482,7 +1480,7 @@ namespace Prowl.PaperUI
         //            _paper.SetElementStorage(_element, "SelectionEnd", selEnd);
         //
         //            // Ensure cursor is visible
-        //            EnsureCursorVisible(currentValue, font, curPos);
+        //            EnsureCursorVisible(currentValue, curPos);
         //
         //            // Notify of changes
         //            onChange?.Invoke(currentValue);
@@ -1575,39 +1573,39 @@ namespace Prowl.PaperUI
         ///// <summary>
         ///// Ensures the cursor is visible by adjusting scroll position if needed.
         ///// </summary>
-        //private void EnsureCursorVisible(string text, FontInfo font, int cursorPosition)
+        //private void EnsureCursorVisible(string text, int cursorPosition)
         //{
-        //    double scrollOffset = _paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
-        //
-        //    // Calculate current cursor position
-        //    double cursorX = CalculateTextWidth(text.Substring(0, cursorPosition), font);
-        //
-        //    // Get current visible area (estimate from last layout)
-        //    double visibleWidth = _element.LayoutWidth - 8; // Subtract padding
-        //
-        //    const double margin = 20.0; // Margin to keep cursor away from edge
-        //
-        //    // If cursor is to the left of visible area
-        //    if (cursorX < scrollOffset + margin)
-        //    {
-        //        // Scroll to show cursor with left margin
-        //        scrollOffset = Math.Max(0, cursorX - margin);
-        //    }
-        //    // If cursor is to the right of visible area
-        //    else if (cursorX > scrollOffset + visibleWidth - margin)
-        //    {
-        //        // Scroll to show cursor with right margin
-        //        scrollOffset = cursorX - visibleWidth + margin;
-        //    }
-        //
-        //    // Update scroll position
-        //    _paper.SetElementStorage(_element, "ScrollOffset", scrollOffset);
+        //    //double scrollOffset = _paper.GetElementStorage<double>(_element, "ScrollOffset", 0.0);
+        //    //
+        //    //// Calculate current cursor position
+        //    //double cursorX = CalculateTextWidth(text.Substring(0, cursorPosition), font);
+        //    //
+        //    //// Get current visible area (estimate from last layout)
+        //    //double visibleWidth = _element.LayoutWidth - 8; // Subtract padding
+        //    //
+        //    //const double margin = 20.0; // Margin to keep cursor away from edge
+        //    //
+        //    //// If cursor is to the left of visible area
+        //    //if (cursorX < scrollOffset + margin)
+        //    //{
+        //    //    // Scroll to show cursor with left margin
+        //    //    scrollOffset = Math.Max(0, cursorX - margin);
+        //    //}
+        //    //// If cursor is to the right of visible area
+        //    //else if (cursorX > scrollOffset + visibleWidth - margin)
+        //    //{
+        //    //    // Scroll to show cursor with right margin
+        //    //    scrollOffset = cursorX - visibleWidth + margin;
+        //    //}
+        //    //
+        //    //// Update scroll position
+        //    //_paper.SetElementStorage(_element, "ScrollOffset", scrollOffset);
         //}
         //
         ///// <summary>
         ///// Calculates the closest text position based on an X coordinate in a text string.
         ///// </summary>
-        //private static int CalculateTextPosition(string text, FontInfo font, double x)
+        //private static int CalculateTextPosition(string text, double x)
         //{
         //    if (string.IsNullOrEmpty(text)) return 0;
         //
@@ -1628,15 +1626,6 @@ namespace Prowl.PaperUI
         //    }
         //
         //    return closestPosition;
-        //}
-        //
-        ///// <summary>
-        ///// Calculates the width of a text string using the specified font.
-        ///// </summary>
-        //private static double CalculateTextWidth(string text, FontInfo font)
-        //{
-        //    if (string.IsNullOrEmpty(text)) return 0;
-        //    return font.MeasureString(text).X;
         //}
         //
         ///// <summary>
