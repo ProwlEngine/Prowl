@@ -21,7 +21,6 @@ namespace Prowl.Scribe
         readonly Dictionary<FontInfo, int> fontIds = new Dictionary<FontInfo, int>();
 
         private readonly Dictionary<(FontInfo, int, int), float> kerningMapCache;
-        private readonly Dictionary<(FontInfo, float), (float, float, float)> verticalMetricsCache;
 
         private readonly Dictionary<(string, FontStyle), FontInfo> fontLookup;
 
@@ -65,7 +64,6 @@ namespace Prowl.Scribe
             glyphCache = new Dictionary<AtlasGlyph.CacheKey, AtlasGlyph>();
             layoutCache = new LruCache<LayoutCacheKey, TextLayout>(_maxLayout);
             kerningMapCache = new Dictionary<(FontInfo, int, int), float>();
-            verticalMetricsCache = new Dictionary<(FontInfo, float), (float, float, float)>();
 
             fontLookup = new Dictionary<(string, FontStyle), FontInfo>();
 
@@ -416,7 +414,6 @@ namespace Prowl.Scribe
             // Clear the Layout Cache
             layoutCache.Clear();
             kerningMapCache.Clear();
-            verticalMetricsCache.Clear();
 
             // Re-add white rect
             if (useWhiteRect)
@@ -454,22 +451,10 @@ namespace Prowl.Scribe
 
         public void GetScaledVMetrics(FontInfo font, float pixelSize, out float ascent, out float descent, out float lineGap)
         {
-            var key = (font, pixelSize);
-            if (verticalMetricsCache.TryGetValue(key, out var values))
-            {
-                ascent = values.Item1;
-                descent = values.Item2;
-                lineGap = values.Item3;
-                return;
-            }
-
-            font.GetFontVerticalMetrics(out int a, out int d, out int g);
             float s = font.ScaleForPixelHeight(pixelSize);
-            ascent = a * s;
-            descent = d * s; // stb returns negative descent; caller may convert to positive if desired
-            lineGap = g * s;
-
-            verticalMetricsCache[key] = (ascent, descent, lineGap);
+            ascent = font.Ascent * s;
+            descent = font.Descent * s; // stb returns negative descent; caller may convert to positive if desired
+            lineGap = font.Linegap * s;
         }
 
         public GlyphBitmap? RenderGlyph(FontInfo fontInfo, int codepoint, float pixelSize)

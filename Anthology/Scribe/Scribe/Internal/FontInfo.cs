@@ -30,6 +30,10 @@ namespace Prowl.Scribe.Internal
         public string FamilyName { get; internal set; } = string.Empty;
         public FontStyle Style { get; internal set; } = FontStyle.Regular;
 
+        public int Ascent { get; private set; } = 0;
+        public int Descent { get; private set; } = 0;
+        public int Linegap { get; private set; } = 0;
+
         internal int InitFont(byte[] data, int fontstart)
 		{
 			uint cmap = 0;
@@ -133,7 +137,13 @@ namespace Prowl.Scribe.Internal
 			if (this.index_map == 0)
 				return 0;
 			this.indexToLocFormat = ttUSHORT(ptr + this.head + 50);
-			return 1;
+
+            GetFontVerticalMetrics(out int a, out int d, out int l);
+            Ascent = a;
+            Descent = d;
+            Linegap = l;
+
+            return 1;
 		}
 
 		public int FindGlyphIndex(int codepoint)
@@ -311,10 +321,10 @@ namespace Prowl.Scribe.Internal
             //    int xAdvance = stbtt__GetGlyphGPOSInfoAdvance(g1, g2);
             //    if (xAdvance != 0) return xAdvance;
             //}
-			//
+            //
             //if (this.kern != 0)
             //    return stbtt__GetGlyphKernInfoAdvance(g1, g2);
-			//
+            //
             //return 0;
 
             var xAdvance = 0;
@@ -340,24 +350,6 @@ namespace Prowl.Scribe.Internal
                                           2 * (glyph_index - numOfLongHorMetrics));
             }
         }
-
-        public void GetFontVerticalMetrics(out int ascent, out int descent, out int lineGap)
-		{
-			ascent = ttSHORT(this.data + this.hhea + 4);
-			descent = ttSHORT(this.data + this.hhea + 6);
-			lineGap = ttSHORT(this.data + this.hhea + 8);
-		}
-
-		public int GetFontVerticalMetricsOS2(ref int typoAscent, ref int typoDescent, ref int typoLineGap)
-		{
-			var tab = (int)stbtt__find_table(this.data, (uint)this.fontstart, "OS/2");
-			if (tab == 0)
-				return 0;
-			typoAscent = ttSHORT(this.data + tab + 68);
-			typoDescent = ttSHORT(this.data + tab + 70);
-			typoLineGap = ttSHORT(this.data + tab + 72);
-			return 1;
-		}
 
 		public void GetFontBoundingBox(ref int x0, ref int y0, ref int x1, ref int y1)
 		{
@@ -472,6 +464,24 @@ namespace Prowl.Scribe.Internal
 
 
         #region Private Methods
+
+        private void GetFontVerticalMetrics(out int ascent, out int descent, out int lineGap)
+        {
+            ascent = ttSHORT(this.data + this.hhea + 4);
+            descent = ttSHORT(this.data + this.hhea + 6);
+            lineGap = ttSHORT(this.data + this.hhea + 8);
+        }
+
+        private int GetFontVerticalMetricsOS2(ref int typoAscent, ref int typoDescent, ref int typoLineGap)
+        {
+            var tab = (int)stbtt__find_table(this.data, (uint)this.fontstart, "OS/2");
+            if (tab == 0)
+                return 0;
+            typoAscent = ttSHORT(this.data + tab + 68);
+            typoDescent = ttSHORT(this.data + tab + 70);
+            typoLineGap = ttSHORT(this.data + tab + 72);
+            return 1;
+        }
 
         private int GetGlyfOffset(int glyph_index)
         {
