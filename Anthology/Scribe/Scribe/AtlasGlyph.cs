@@ -8,7 +8,7 @@ namespace Prowl.Scribe
         public int Codepoint { get; }
         public int GlyphIndex { get; }
         public float PixelSize { get; }
-        public FontInfo Font { get; }
+        public FontFile Font { get; }
 
         // Glyph metrics
         public GlyphMetrics Metrics { get; }
@@ -29,7 +29,7 @@ namespace Prowl.Scribe
 
         public bool IsInAtlas => AtlasX >= 0 && AtlasY >= 0;
 
-        public AtlasGlyph(int codepoint, float pixelSize, FontInfo font, FontSystem atlas)
+        public AtlasGlyph(int codepoint, float pixelSize, FontFile font, FontSystem atlas)
         {
             Codepoint = codepoint;
             GlyphIndex = font.FindGlyphIndex(codepoint);
@@ -42,9 +42,9 @@ namespace Prowl.Scribe
         {
             public readonly int Codepoint;
             public readonly int QuantizedSize;
-            private readonly FontInfo fontFace;
+            private readonly FontFile fontFace;
 
-            public CacheKey(int codepoint, float pixelSize, FontInfo fontFace)
+            public CacheKey(int codepoint, float pixelSize, FontFile fontFace)
             {
                 Codepoint = codepoint;
                 QuantizedSize = (int)(pixelSize * 10 + 0.5f); // 0.1 precision

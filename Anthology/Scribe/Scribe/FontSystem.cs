@@ -1,7 +1,6 @@
 ﻿using Prowl.Scribe.Internal;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -14,13 +13,13 @@ namespace Prowl.Scribe
     {
         private readonly IFontRenderer renderer;
         private readonly BinPacker binPacker;
-        private readonly List<FontInfo> fonts;
+        private readonly List<FontFile> fonts;
         private readonly Dictionary<AtlasGlyph.CacheKey, AtlasGlyph> glyphCache;
 
         readonly LruCache<LayoutCacheKey, TextLayout> layoutCache;
-        readonly Dictionary<FontInfo, int> fontIds = new Dictionary<FontInfo, int>();
+        private readonly Dictionary<FontStyle, List<FontFile>> styleFonts;
 
-        private readonly Dictionary<(string, FontStyle), FontInfo> fontLookup;
+        private readonly Dictionary<(string, FontStyle), FontFile> fontLookup;
 
         private object atlasTexture;
         private int atlasWidth;
@@ -41,7 +40,7 @@ namespace Prowl.Scribe
         }
         public bool CacheLayouts { get; set; } = false;
 
-        public IEnumerable<FontInfo> Fonts => fonts;
+        public IEnumerable<FontFile> Fonts => fonts;
         public int Width => atlasWidth;
         public int Height => atlasHeight;
         public object Texture => atlasTexture;
@@ -58,11 +57,14 @@ namespace Prowl.Scribe
 
             atlasTexture = renderer.CreateTexture(atlasWidth, atlasHeight);
             binPacker = new BinPacker(atlasWidth, atlasHeight);
-            fonts = new List<FontInfo>();
+            fonts = new List<FontFile>();
+            styleFonts = new Dictionary<FontStyle, List<FontFile>>();
+            foreach (FontStyle fs in Enum.GetValues(typeof(FontStyle)))
+                styleFonts[fs] = new List<FontFile>();
             glyphCache = new Dictionary<AtlasGlyph.CacheKey, AtlasGlyph>();
             layoutCache = new LruCache<LayoutCacheKey, TextLayout>(_maxLayout);
 
-            fontLookup = new Dictionary<(string, FontStyle), FontInfo>();
+            fontLookup = new Dictionary<(string, FontStyle), FontFile>();
 
             // Add a small white rectangle for rendering
             if (useWhiteRect)
@@ -86,135 +88,39 @@ namespace Prowl.Scribe
             }
         }
 
-        public FontInfo AddFont(string fontPath)
+        public void AddFont(FontFile font)
         {
-            var fontInfo = new FontInfo();
-            if (fontInfo.InitFont(File.ReadAllBytes(fontPath), 0) == 0)
-                throw new InvalidDataException("Failed to initialize font");
+            fonts.Add(font);
+            styleFonts[font.Style].Add(font);
 
-            RegisterFont(fontInfo);
-
-            return fontInfo;
-        }
-
-        public FontInfo AddFont(byte[] fontData)
-        {
-            var fontInfo = new FontInfo();
-            if (fontInfo.InitFont(fontData, 0) == 0)
-                throw new InvalidDataException("Failed to initialize font");
-
-            RegisterFont(fontInfo);
-            return fontInfo;
-        }
-
-        public FontInfo GetFont(string familyName, FontStyle style = FontStyle.Regular)
-        {
-            if (string.IsNullOrEmpty(familyName))
-                return null;
-            var key = (familyName.ToLowerInvariant(), style);
-            fontLookup.TryGetValue(key, out var font);
-            return font;
-        }
-
-        void RegisterFont(FontInfo fontInfo)
-        {
-            ExtractFontMetadata(fontInfo, out var family, out var style);
-
-            fontInfo.FamilyName = family;
-            fontInfo.Style = style;
-
-            fonts.Add(fontInfo);
-            fontIds[fontInfo] = fonts.Count - 1;
-
-            var key = (family.ToLowerInvariant(), style);
-            fontLookup[key] = fontInfo;
+            var key = (font.FamilyName, font.Style);
+            fontLookup[key] = font;
 
             glyphCache.Clear();
         }
 
-        static void ExtractFontMetadata(FontInfo fontInfo, out string family, out FontStyle style)
+        public FontFile? GetFont(string family, FontStyle style)
         {
-            string fam = GetNameString(fontInfo, 1);
-            string sub = GetNameString(fontInfo, 2);
-
-            family = fam;
-            style = ParseStyle(sub);
+            return fontLookup.TryGetValue((family, style), out var font) ? font : null;
         }
 
-        static string GetNameString(FontInfo font, int nameId)
-        {
-            int len = 0;
-            var ptr = font.GetFontNameString(font, ref len, 3, 1, 0x409, nameId);
-            if (ptr.IsNull || len == 0)
-                return string.Empty;
-            var buffer = new byte[len];
-            for (int i = 0; i < len; i++) buffer[i] = ptr[i];
-            return Encoding.BigEndianUnicode.GetString(buffer);
-        }
-
-        static FontStyle ParseStyle(string styleName)
-        {
-            var s = styleName?.ToLowerInvariant() ?? string.Empty;
-            bool bold = s.Contains("bold");
-            bool italic = s.Contains("italic") || s.Contains("oblique");
-            if (bold && italic) return FontStyle.BoldItalic;
-            if (bold) return FontStyle.Bold;
-            if (italic) return FontStyle.Italic;
-            return FontStyle.Regular;
-        }
-
-        public void LoadSystemFonts(params string[] priorityFamilies)
+        public IEnumerable<FontFile> EnumerateSystemFonts()
         {
             var paths = GetSystemFontPaths();
             foreach (var path in paths)
             {
+                FontFile font = null;
                 try
                 {
-                    AddFont(path);
+                    font = new FontFile(path);
                 }
                 catch
                 {
-                    // Silently skip problematic fonts
+                    continue; // Silently skip problematic fonts
                 }
+                if (font != null)
+                    yield return font;
             }
-
-            ApplyFontPriorities(priorityFamilies);
-        }
-
-        void ApplyFontPriorities(string[] priorityFamilies)
-        {
-            if (priorityFamilies == null || priorityFamilies.Length == 0)
-                return;
-
-            var prioritized = new List<FontInfo>();
-            var seen = new HashSet<FontInfo>();
-
-            foreach (var fam in priorityFamilies)
-            {
-                if (string.IsNullOrEmpty(fam))
-                    continue;
-
-                foreach (var fi in fonts.Where(f => string.Equals(f.FamilyName, fam, StringComparison.OrdinalIgnoreCase)))
-                {
-                    prioritized.Add(fi);
-                    seen.Add(fi);
-                }
-            }
-
-            if (prioritized.Count == 0)
-                return;
-
-            var others = fonts.Where(f => !seen.Contains(f)).ToList();
-
-            fonts.Clear();
-            fonts.AddRange(prioritized);
-            fonts.AddRange(others);
-
-            fontIds.Clear();
-            for (int i = 0; i < fonts.Count; i++)
-                fontIds[fonts[i]] = i;
-
-            layoutCache.Clear();
         }
 
         private IEnumerable<string> GetSystemFontPaths()
@@ -298,31 +204,29 @@ namespace Prowl.Scribe
                     yield return f;
         }
 
-        public AtlasGlyph GetOrCreateGlyph(int codepoint, float pixelSize, FontInfo preferredFont = null)
+        public AtlasGlyph GetOrCreateGlyph(int codepoint, float pixelSize, FontFile font)
         {
-            // Try the preferred font first
-            if (preferredFont != null)
-            {
-                var glyph = TryGetGlyphFromFont(preferredFont);
-                if (glyph != null)
-                    return glyph;
-            }
+            if(font == null) throw new ArgumentNullException(nameof(font));
 
-            // not in either, Look in all loaded fonts for this glyph
-            foreach (var font in fonts)
-            {
-                if (font == preferredFont) continue;
+            var glyph = TryGetGlyphFromFont(font);
+            if (glyph != null)
+                return glyph;
 
-                var glyph = TryGetGlyphFromFont(font);
+            foreach (var f in fonts)
+            {
+                if (f == font) continue;
+                if (f.Style != font.Style) continue; // Needs to match style to what the user requested
+
+                glyph = TryGetGlyphFromFont(f);
                 if (glyph != null)
                     return glyph;
             }
 
             return null; // Glyph not found in any font
 
-            AtlasGlyph TryGetGlyphFromFont(FontInfo font)
+            AtlasGlyph TryGetGlyphFromFont(FontFile font)
             {
-                if (!HasGlyph(font, codepoint))
+                if (font.FindGlyphIndex(codepoint) <= 0)
                     return null;
 
                 var key = new AtlasGlyph.CacheKey(codepoint, pixelSize, font);
@@ -420,7 +324,7 @@ namespace Prowl.Scribe
 
         #region Metrics and Getters
 
-        public GlyphMetrics? GetGlyphMetrics(FontInfo fontInfo, int codepoint, float pixelSize)
+        public GlyphMetrics? GetGlyphMetrics(FontFile fontInfo, int codepoint, float pixelSize)
         {
             int glyphIndex = fontInfo.FindGlyphIndex(codepoint);
             if (glyphIndex == 0) return null;
@@ -445,7 +349,7 @@ namespace Prowl.Scribe
             };
         }
 
-        public void GetScaledVMetrics(FontInfo font, float pixelSize, out float ascent, out float descent, out float lineGap)
+        public void GetScaledVMetrics(FontFile font, float pixelSize, out float ascent, out float descent, out float lineGap)
         {
             float s = font.ScaleForPixelHeight(pixelSize);
             ascent = font.Ascent * s;
@@ -453,7 +357,7 @@ namespace Prowl.Scribe
             lineGap = font.Linegap * s;
         }
 
-        public GlyphBitmap? RenderGlyph(FontInfo fontInfo, int codepoint, float pixelSize)
+        public GlyphBitmap? RenderGlyph(FontFile fontInfo, int codepoint, float pixelSize)
         {
             int glyphIndex = fontInfo.FindGlyphIndex(codepoint);
             if (glyphIndex == 0) return null;
@@ -482,7 +386,7 @@ namespace Prowl.Scribe
             };
         }
 
-        public float GetKerning(FontInfo fontInfo, int leftCodepoint, int rightCodepoint, float pixelSize)
+        public float GetKerning(FontFile fontInfo, int leftCodepoint, int rightCodepoint, float pixelSize)
         {
             int leftGlyph = fontInfo.FindGlyphIndex(leftCodepoint);
             int rightGlyph = fontInfo.FindGlyphIndex(rightCodepoint);
@@ -525,20 +429,19 @@ namespace Prowl.Scribe
             return layout;
         }
 
-        int GetFontId(FontInfo fi) => (fi != null && fontIds.TryGetValue(fi, out var id)) ? id : -1;
         LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
             => new LayoutCacheKey(text, s.PixelSize, s.LetterSpacing, s.WordSpacing, s.LineHeight,
-                   s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, GetFontId(s.PreferredFont));
+                   s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, s.Font.GetHashCode());
 
         #endregion
 
         #region Updated API Methods
 
-        public Vector2 MeasureText(string text, float pixelSize, FontInfo preferredFont = null, float letterSpacing = 0)
+        public Vector2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0)
         {
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = pixelSize;
-            settings.PreferredFont = preferredFont;
+            settings.Font = font;
             settings.LetterSpacing = letterSpacing;
 
             var layout = CreateLayout(text, settings);
@@ -551,16 +454,16 @@ namespace Prowl.Scribe
             return layout.Size;
         }
 
-        public void DrawText(string text, Vector2 position, FontColor color, float pixelSize,
-            FontInfo preferredFont = null, float letterSpacing = 0)
+        public void DrawText(string text, Vector2 position, FontColor color, float pixelSize, FontFile font, float letterSpacing = 0)
         {
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = pixelSize;
-            settings.PreferredFont = preferredFont;
+            settings.Font = font;
             settings.LetterSpacing = letterSpacing;
 
             DrawText(text, position, color, settings);
         }
+
 
         public void DrawText(string text, Vector2 position, FontColor color, TextLayoutSettings settings)
         {

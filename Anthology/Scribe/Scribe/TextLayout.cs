@@ -62,7 +62,7 @@ namespace Prowl.Scribe
 
             // Ascender cache per font object; we only need 'a' to place the glyph vertically
             var ascenderCache = new Dictionary<object, float>(8);
-            float GetAscender(FontInfo font)
+            float GetAscender(FontFile font)
             {
                 if (ascenderCache.TryGetValue(font, out var a)) return a;
                 fontSystem.GetScaledVMetrics(font, pixelSize, out var asc, out _, out _);
@@ -71,7 +71,7 @@ namespace Prowl.Scribe
             }
 
             // Local to place a single glyph (no cross-line kerning)
-            void EmitGlyph(AtlasGlyph glyph, FontInfo font, char c, float offsetX, float offsetY, float advanceBase, ref float x, List<GlyphInstance> outList, int charIndex)
+            void EmitGlyph(AtlasGlyph glyph, FontFile font, char c, float offsetX, float offsetY, float advanceBase, ref float x, List<GlyphInstance> outList, int charIndex)
             {
                 float a = GetAscender(font);
                 var gi = new GlyphInstance(glyph, new Vector2(x + offsetX, offsetY + a), c, advanceBase, charIndex);
@@ -147,8 +147,10 @@ namespace Prowl.Scribe
                 {
                     char c = text[j];
 
-                    var selFont = Settings.FontSelector?.Invoke(j) ?? Settings.PreferredFont;
-                    var g = fontSystem.GetOrCreateGlyph(c, pixelSize, selFont);
+                    FontFile font = Settings.Font;
+                    if (Settings.FontSelector != null)
+                        font = Settings.FontSelector(j);
+                    var g = fontSystem.GetOrCreateGlyph(c, pixelSize, font);
 
                     //var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
                     if (g == null) continue;
@@ -220,8 +222,10 @@ namespace Prowl.Scribe
                 {
                     char c = text[j];
 
-                    var selFont = Settings.FontSelector?.Invoke(j) ?? Settings.PreferredFont;
-                    var g = fontSystem.GetOrCreateGlyph(c, pixelSize, selFont);
+                    FontFile font = Settings.Font;
+                    if (Settings.FontSelector != null)
+                        font = Settings.FontSelector(j);
+                    var g = fontSystem.GetOrCreateGlyph(c, pixelSize, font);
 
                     //var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
                     if (g == null) continue;
@@ -261,7 +265,7 @@ namespace Prowl.Scribe
             float spaceAdvance,
             bool wrapEnabled,
             float maxWidth,
-            Func<FontInfo, float> getAscender)
+            Func<FontFile, float> getAscender)
         {
             float pixelSize = Settings.PixelSize;
 
@@ -271,8 +275,10 @@ namespace Prowl.Scribe
             {
                 char c = Text[i];
 
-                var selFont = Settings.FontSelector?.Invoke(i) ?? Settings.PreferredFont;
-                var g = fontSystem.GetOrCreateGlyph(c, pixelSize, selFont);
+                FontFile font = Settings.Font;
+                if (Settings.FontSelector != null)
+                    font = Settings.FontSelector(i);
+                var g = fontSystem.GetOrCreateGlyph(c, pixelSize, font);
 
                 //var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
                 if (g == null) continue;
@@ -316,7 +322,7 @@ namespace Prowl.Scribe
 
         private float GetSpaceWidth(FontSystem fontSystem)
         {
-            var spaceGlyph = fontSystem.GetOrCreateGlyph(' ', Settings.PixelSize, Settings.PreferredFont);
+            var spaceGlyph = fontSystem.GetOrCreateGlyph(' ', Settings.PixelSize, Settings.Font);
             return spaceGlyph?.Metrics.AdvanceWidth ?? Settings.PixelSize * 0.25f;
         }
 

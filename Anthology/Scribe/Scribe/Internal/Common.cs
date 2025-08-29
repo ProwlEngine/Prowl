@@ -76,22 +76,6 @@ namespace Prowl.Scribe.Internal
 		public const int STBTT_MAC_LANG_ITALIAN = 3;
 		public const int STBTT_MAC_LANG_CHINESE_TRAD = 19;
 
-		public static uint stbtt__find_table(FakePtr<byte> data, uint fontstart, string tag)
-		{
-			int num_tables = ttUSHORT(data + fontstart + 4);
-			var tabledir = fontstart + 12;
-			int i;
-			for (i = 0; i < num_tables; ++i)
-			{
-				var loc = (uint)(tabledir + 16 * i);
-				if ((data + loc + 0)[0] == tag[0] && (data + loc + 0)[1] == tag[1] &&
-					(data + loc + 0)[2] == tag[2] && (data + loc + 0)[3] == tag[3])
-					return ttULONG(data + loc + 8);
-			}
-
-			return 0;
-		}
-
 		public static ushort ttUSHORT(FakePtr<byte> p)
 		{
 			return (ushort)(p[0] * 256 + p[1]);
@@ -320,21 +304,21 @@ namespace Prowl.Scribe.Internal
 			return -1;
 		}
 
-		public static void stbtt_GetScaledFontVMetrics(byte[] fontdata, int index, float size, ref float ascent,
-			ref float descent, ref float lineGap)
-		{
-			var i_ascent = 0;
-			var i_descent = 0;
-			var i_lineGap = 0;
-			float scale = 0;
-			var info = new FontInfo();
-			info.InitFont(fontdata, stbtt_GetFontOffsetForIndex(fontdata, index));
-			scale = size > 0 ? info.ScaleForPixelHeight(size) : info.ScaleForMappingEmToPixels(-size);
-			info.GetFontVerticalMetrics(out i_ascent, out i_descent, out i_lineGap);
-			ascent = i_ascent * scale;
-			descent = i_descent * scale;
-			lineGap = i_lineGap * scale;
-		}
+		//public static void stbtt_GetScaledFontVMetrics(byte[] fontdata, int index, float size, ref float ascent,
+		//	ref float descent, ref float lineGap)
+		//{
+		//	var i_ascent = 0;
+		//	var i_descent = 0;
+		//	var i_lineGap = 0;
+		//	float scale = 0;
+		//	var info = new FontInfo();
+		//	info.InitFont(fontdata, stbtt_GetFontOffsetForIndex(fontdata, index));
+		//	scale = size > 0 ? info.ScaleForPixelHeight(size) : info.ScaleForMappingEmToPixels(-size);
+		//	info.GetFontVerticalMetrics(out i_ascent, out i_descent, out i_lineGap);
+		//	ascent = i_ascent * scale;
+		//	descent = i_descent * scale;
+		//	lineGap = i_lineGap * scale;
+		//}
 
 		public static int stbtt__CompareUTF8toUTF16_bigendian_prefix(FakePtr<byte> s1, int len1, FakePtr<byte> s2,
 			int len2)
@@ -478,12 +462,12 @@ namespace Prowl.Scribe.Internal
 				return 0;
 			if (flags != 0)
 			{
-				hd = stbtt__find_table(fc, offset, "head");
+				hd = FindTable(fc, offset, "head");
 				if ((ttUSHORT(fc + hd + 44) & 7) != (flags & 7))
 					return 0;
 			}
 
-			nm = stbtt__find_table(fc, offset, "name");
+			nm = FindTable(fc, offset, "name");
 			if (nm == 0)
 				return 0;
 			if (flags != 0)
@@ -506,6 +490,22 @@ namespace Prowl.Scribe.Internal
 			}
 
 			return 0;
+
+			uint FindTable(FakePtr<byte> data, uint fontstart, string tag)
+			{
+			    int num_tables = ttUSHORT(data + fontstart + 4);
+			    var tabledir = fontstart + 12;
+			    int i;
+			    for (i = 0; i < num_tables; ++i)
+			    {
+			        var loc = (uint)(tabledir + 16 * i);
+			        if ((data + loc + 0)[0] == tag[0] && (data + loc + 0)[1] == tag[1] &&
+			            (data + loc + 0)[2] == tag[2] && (data + loc + 0)[3] == tag[3])
+			            return ttULONG(data + loc + 8);
+			    }
+
+			    return 0;
+			}
 		}
 
 		public static int stbtt_FindMatchingFont_internal(byte[] font_collection, FakePtr<byte> name_utf8, int flags)

@@ -1,5 +1,6 @@
 using Prowl.Scribe;
 using System.Numerics;
+using System.Linq;
 
 namespace Tests
 {
@@ -27,7 +28,7 @@ namespace Tests
             var font = fs.Fonts.First();
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = 16;
-            settings.PreferredFont = font;
+            settings.Font = new FontFilter(font.Style, font.FamilyName);
 
             var layout = fs.CreateLayout("Just testing to make sure this works\nas it should.", settings);
 

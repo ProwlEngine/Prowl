@@ -160,6 +160,9 @@ internal class Program
         Markdown // NEW
     }
 
+    static FontFile primaryFont;
+    static FontFile secondaryFont;
+
     static void Main(string[] args)
     {
         const int screenWidth = 1400;
@@ -171,7 +174,26 @@ internal class Program
         var renderer = new RaylibFontRenderer();
         var fontAtlas = new FontSystem(renderer, 1024, 1024);
 
-        fontAtlas.LoadSystemFonts("Segoe UI", "Arial", "Liberation Sans", "Consola", "Menlo", "Liberation Mono");
+        string[] supported = { "Segoe UI", "Arial", "Liberation Sans", "Consolas", "Menlo", "Liberation Mono" };
+        Dictionary<string, FontFile> loadedFonts = new Dictionary<string, FontFile>(StringComparer.OrdinalIgnoreCase);
+        foreach (var font in fontAtlas.EnumerateSystemFonts())
+        {
+            fontAtlas.AddFont(font); // Load them all so it can find fallbacks for glyphs
+
+            if (supported.Contains(font.FamilyName, StringComparer.OrdinalIgnoreCase))
+            {
+                if (font.Style == FontStyle.Regular)
+                {
+                    if (primaryFont == null)
+                        primaryFont = font;
+
+                    if (primaryFont != null && secondaryFont == null)
+                        secondaryFont = font;
+
+                    loadedFonts[font.FamilyName] = font;
+                }
+            }
+        }
 
         var imageProvider = new RaylibMarkdownImageProvider();
 
@@ -182,12 +204,12 @@ internal class Program
         //settings.PreferredFont = primaryFont;
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            settings.PreferredFont = fontAtlas.GetFont("Segoe UI", FontStyle.Regular);
+            settings.Font = loadedFonts["Segoe UI"];
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            settings.PreferredFont = fontAtlas.GetFont("Arial", FontStyle.Regular);
+            settings.Font = loadedFonts["Arial"];
         else
-            settings.PreferredFont = fontAtlas.GetFont("Liberation Sans", FontStyle.Regular);
-        
+            settings.Font = loadedFonts["Liberation Sans"];
+
         settings.LineHeight = 1.25f;
         settings.MaxWidth = 720;
 
@@ -348,10 +370,10 @@ for (int i = 0; i < 3; i++) {
     {
         var w = s; w.WrapMode = TextWrapMode.Wrap; w.MaxWidth = MathF.Max(260, s.MaxWidth * 0.5f);
         var nw = s; nw.WrapMode = TextWrapMode.NoWrap; nw.MaxWidth = w.MaxWidth;
-        fs.DrawText("Wrap ON:", pos, FontColor.Red, 16);
+        fs.DrawText("Wrap ON:", pos, FontColor.Red, 16, primaryFont);
         fs.DrawLayout(fs.CreateLayout(text, w), pos + new Vector2(0, 22), FontColor.Black);
         var x2 = pos.X + w.MaxWidth + 60;
-        fs.DrawText("Wrap OFF:", new Vector2(x2, pos.Y), FontColor.Red, 16);
+        fs.DrawText("Wrap OFF:", new Vector2(x2, pos.Y), FontColor.Red, 16, primaryFont);
         fs.DrawLayout(fs.CreateLayout(text, nw), new Vector2(x2, pos.Y + 22), FontColor.Black);
     }
 
@@ -362,7 +384,7 @@ for (int i = 0; i < 3; i++) {
         foreach (var (name, align) in new[] { ("Left", TextAlignment.Left), ("Center", TextAlignment.Center), ("Right", TextAlignment.Right) })
         {
             var t = s; t.Alignment = align; t.WrapMode = TextWrapMode.Wrap; t.MaxWidth = 400;
-            fs.DrawText(name + ":", new Vector2(pos.X, y), FontColor.Blue, 16);
+            fs.DrawText(name + ":", new Vector2(pos.X, y), FontColor.Blue, 16, primaryFont);
             var layout = fs.CreateLayout(sample, t);
             fs.DrawLayout(layout, new Vector2(pos.X, y + 22), FontColor.Black);
             y += layout.Size.Y + 40;
@@ -375,12 +397,12 @@ for (int i = 0; i < 3; i++) {
         for (float spacing = 0; spacing <= 2; spacing += 1)
         {
             var t = s; t.LetterSpacing = spacing; t.WrapMode = TextWrapMode.NoWrap;
-            fs.DrawText($"Spacing {spacing:F1}:", new Vector2(pos.X, y), FontColor.Blue, 14);
+            fs.DrawText($"Spacing {spacing:F1}:", new Vector2(pos.X, y), FontColor.Blue, 14, primaryFont);
             fs.DrawText("Letter Spacing", new Vector2(pos.X + 120, y), FontColor.Black, t);
             y += 28;
         }
         var lh = s; lh.LineHeight = 1.6f; lh.WrapMode = TextWrapMode.NoWrap;
-        fs.DrawText("Line height:", new Vector2(pos.X, y), FontColor.Blue, 14);
+        fs.DrawText("Line height:", new Vector2(pos.X, y), FontColor.Blue, 14, primaryFont);
         fs.DrawLayout(fs.CreateLayout("Line\nheight\nsample", lh), new Vector2(pos.X + 120, y), FontColor.Black);
     }
 
@@ -395,7 +417,7 @@ for (int i = 0; i < 3; i++) {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             fontFamily = "Segoe UI";
-            monoFontFamily = "Consola";
+            monoFontFamily = "Consolas";
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
@@ -408,13 +430,7 @@ for (int i = 0; i < 3; i++) {
             monoFontFamily = "Liberation Mono";
         }
 
-        var r = fs.GetFont(fontFamily, FontStyle.Regular);
-        var m = fs.GetFont(monoFontFamily, FontStyle.Regular);
-        var b = fs.GetFont(fontFamily, FontStyle.Bold);
-        var i = fs.GetFont(fontFamily, FontStyle.Italic);
-        var bi = fs.GetFont(fontFamily, FontStyle.BoldItalic);
-
-        var ms = MarkdownLayoutSettings.Default(r, m, b, i, bi, width: baseText.MaxWidth);
+        var ms = MarkdownLayoutSettings.Default(primaryFont, secondaryFont, width: baseText.MaxWidth);
         ms.BaseSize = baseText.PixelSize;
         ms.LineHeight = baseText.LineHeight;
         ms.ParagraphSpacing = 10f;
@@ -445,21 +461,21 @@ for (int i = 0; i < 3; i++) {
 
     static void DrawUI(object mode, TextLayoutSettings settings, FontSystem fs, bool showAtlas, bool showMetrics)
     {
-        fs.DrawText($"Demo Mode: {mode}", new Vector2(50, 20), FontColor.Black, 24);
+        fs.DrawText($"Demo Mode: {mode}", new Vector2(50, 20), FontColor.Black, 24, primaryFont);
         var sx = Raylib.GetScreenWidth() - 380;
         var sy = 20;
-        fs.DrawText("Settings:", new Vector2(sx, sy), FontColor.Blue, 16); sy += 24;
-        fs.DrawText($"Font Size: {settings.PixelSize}", new Vector2(sx, sy), FontColor.Black, 14); sy += 18;
-        fs.DrawText($"Max Width: {settings.MaxWidth}", new Vector2(sx, sy), FontColor.Black, 14); sy += 18;
-        fs.DrawText($"Wrap: {settings.WrapMode}", new Vector2(sx, sy), FontColor.Black, 14); sy += 18;
-        fs.DrawText($"Alignment: {settings.Alignment}", new Vector2(sx, sy), FontColor.Black, 14); sy += 18;
-        fs.DrawText($"Line Height: {settings.LineHeight:F2}", new Vector2(sx, sy), FontColor.Black, 14);
+        fs.DrawText("Settings:", new Vector2(sx, sy), FontColor.Blue, 16, primaryFont); sy += 24;
+        fs.DrawText($"Font Size: {settings.PixelSize}", new Vector2(sx, sy), FontColor.Black, 14, primaryFont); sy += 18;
+        fs.DrawText($"Max Width: {settings.MaxWidth}", new Vector2(sx, sy), FontColor.Black, 14, primaryFont); sy += 18;
+        fs.DrawText($"Wrap: {settings.WrapMode}", new Vector2(sx, sy), FontColor.Black, 14, primaryFont); sy += 18;
+        fs.DrawText($"Alignment: {settings.Alignment}", new Vector2(sx, sy), FontColor.Black, 14, primaryFont); sy += 18;
+        fs.DrawText($"Line Height: {settings.LineHeight:F2}", new Vector2(sx, sy), FontColor.Black, 14, primaryFont);
 
         var cy = Raylib.GetScreenHeight() - 124;
-        fs.DrawText("Controls:", new Vector2(50, cy), FontColor.Blue, 16); cy += 22;
-        fs.DrawText("1-4 Modes, 5 Markdown | ↑↓ size | ←→ width | W wrap | A align", new Vector2(50, cy), FontColor.Gray, 12); cy += 18;
-        fs.DrawText("TAB ± letter spacing | [ ] word spacing | -/= line height | T tabs", new Vector2(50, cy), FontColor.Gray, 12); cy += 18;
-        fs.DrawText("SPACE atlas | M metrics | R reset", new Vector2(50, cy), FontColor.Gray, 12);
+        fs.DrawText("Controls:", new Vector2(50, cy), FontColor.Blue, 16, primaryFont); cy += 22;
+        fs.DrawText("1-4 Modes, 5 Markdown | ↑↓ size | ←→ width | W wrap | A align", new Vector2(50, cy), FontColor.Gray, 12, primaryFont); cy += 18;
+        fs.DrawText("TAB ± letter spacing | [ ] word spacing | -/= line height | T tabs", new Vector2(50, cy), FontColor.Gray, 12, primaryFont); cy += 18;
+        fs.DrawText("SPACE atlas | M metrics | R reset", new Vector2(50, cy), FontColor.Gray, 12, primaryFont);
     }
 
     static void DrawAtlasView(Texture2D atlasTexture, FontSystem fs)
@@ -471,6 +487,6 @@ for (int i = 0; i < 3; i++) {
         Rectangle src = new Rectangle(0, 0, atlasTexture.Width, atlasTexture.Height);
         Rectangle dst = new Rectangle(ax, ay, disp, disp);
         Raylib.DrawTexturePro(atlasTexture, src, dst, Vector2.Zero, 0, Color.White);
-        fs.DrawText($"Atlas {fs.Width}x{fs.Height}", new Vector2(ax, ay + disp + 6), FontColor.Black, 14);
+        fs.DrawText($"Atlas {fs.Width}x{fs.Height}", new Vector2(ax, ay + disp + 6), FontColor.Black, 14, primaryFont);
     }
 }

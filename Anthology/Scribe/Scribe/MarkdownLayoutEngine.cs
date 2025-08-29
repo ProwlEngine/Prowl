@@ -95,11 +95,8 @@ namespace Prowl.Scribe
         public float HrSpacing;              // top/bottom margins around HR
         public float CodePadding;            // padding inside code block bg
 
-        public FontInfo ParagraphFont;       // main font
-        public FontInfo MonoFont;            // code font
-        public FontInfo BoldFont;        // optional
-        public FontInfo ItalicFont;      // optional
-        public FontInfo BoldItalicFont;  // optional
+        public FontFile ParagraphFont;       // main font
+        public FontFile MonoFont;            // code font
 
         public FontColor ColorText;
         public FontColor ColorMutedText;
@@ -108,7 +105,7 @@ namespace Prowl.Scribe
         public FontColor ColorCodeBg;        // used as solid quad color
         public FontColor ColorLink;
 
-        public static MarkdownLayoutSettings Default(FontInfo textFont, FontInfo? monoFont, FontInfo? boldFont, FontInfo? italicFont, FontInfo? boldItalicFont, float width)
+        public static MarkdownLayoutSettings Default(FontFile textFont, FontFile monoFont, float width)
         {
             return new MarkdownLayoutSettings {
                 Width = width,
@@ -126,10 +123,7 @@ namespace Prowl.Scribe
                 HrSpacing = 8f,
                 CodePadding = 8f,
                 ParagraphFont = textFont,
-                MonoFont = monoFont ?? textFont,
-                BoldFont = boldFont,
-                ItalicFont = italicFont,
-                BoldItalicFont = boldItalicFont,
+                MonoFont = monoFont,
                 ColorText = new FontColor(255, 255, 255, 255),
                 ColorMutedText = new FontColor(210, 210, 210, 255),
                 ColorRule = new FontColor(180, 180, 180, 255),
@@ -269,7 +263,7 @@ namespace Prowl.Scribe
         #region Block layout
 
         private static float LayoutParagraph(Paragraph p, float x, float y, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings, IMarkdownImageProvider? imageProvider,
-                                      float? sizeOverride = null, float? lineHeightOverride = null, FontInfo fontOverride = null, float? widthOverride = null)
+                                      float? sizeOverride = null, float? lineHeightOverride = null, FontFile? fontOverride = null, float? widthOverride = null)
         {
             float wAvail = widthOverride ?? settings.Width;
             var segment = new List<Inline>();
@@ -296,18 +290,19 @@ namespace Prowl.Scribe
         }
 
         private static float LayoutTextSegment(List<Inline> inlines, float x, float y, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings,
-                                        float? sizeOverride, float? lineHeightOverride, FontInfo fontOverride, float width)
+                                        float? sizeOverride, float? lineHeightOverride, FontFile? fontOverride, float width)
         {
             var (text, decos, linkSpans, styles) = FlattenInlines(inlines);
 
+            var baseFont = fontOverride ?? settings.ParagraphFont;
             var tls = TextLayoutSettings.Default;
             tls.PixelSize = sizeOverride ?? settings.BaseSize;
             tls.LineHeight = lineHeightOverride ?? settings.LineHeight;
             tls.WrapMode = TextWrapMode.Wrap;
             tls.MaxWidth = width;
             tls.Alignment = TextAlignment.Left;
-            tls.PreferredFont = fontOverride ?? settings.ParagraphFont;
-            tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, tls.PreferredFont, styles, settings);
+            tls.Font = baseFont;
+            tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, fontSystem, baseFont, styles, settings);
 
             var tl = fontSystem.CreateLayout(text, tls);
             var linkRanges = new List<IntRange>();
@@ -321,7 +316,7 @@ namespace Prowl.Scribe
         }
 
         private static float LayoutImage(Inline img, float x, float y, MarkdownDisplayList dl, FontSystem fontSystem, MarkdownLayoutSettings settings, IMarkdownImageProvider? imageProvider,
-                                  float? sizeOverride, float? lineHeightOverride, FontInfo fontOverride, float widthAvail)
+                                  float? sizeOverride, float? lineHeightOverride, FontFile? fontOverride, float widthAvail)
         {
             if (imageProvider != null && imageProvider.TryGetImage(img.Href, out var tex, out var size))
             {
@@ -399,7 +394,7 @@ namespace Prowl.Scribe
                     tlsNum.WrapMode = TextWrapMode.NoWrap;
                     tlsNum.MaxWidth = bulletBox;
                     tlsNum.Alignment = TextAlignment.Right;
-                    tlsNum.PreferredFont = settings.ParagraphFont;
+                    tlsNum.Font = settings.ParagraphFont;
                     var tlNum = fontSystem.CreateLayout($"{index}.", tlsNum);
                     dl.Ops.Add(new DrawText { Layout = tlNum, Pos = new Vector2(x + depth * settings.ListIndent, lineTop), Color = settings.ColorText });
                 }
@@ -452,7 +447,7 @@ namespace Prowl.Scribe
             tls.WrapMode = TextWrapMode.Wrap;
             tls.MaxWidth = innerW;
             tls.Alignment = TextAlignment.Left;
-            tls.PreferredFont = settings.MonoFont;
+            tls.Font = settings.MonoFont;
 
             var tl = fontSystem.CreateLayout(cb.Code.Replace("\r\n", "\n"), tls);
             float h = tl.Size.Y + 2 * pad;
@@ -480,8 +475,8 @@ namespace Prowl.Scribe
                     tls.WrapMode = TextWrapMode.NoWrap;
                     tls.MaxWidth = float.MaxValue;
                     tls.Alignment = AlignToText(cell.Align);
-                    tls.PreferredFont = settings.ParagraphFont;
-                    tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, tls.PreferredFont, styles, settings);
+                    tls.Font = settings.ParagraphFont;
+                    tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, fontSystem, settings.ParagraphFont, styles, settings);
 
                     var tl = fontSystem.CreateLayout(text, tls);
                     minCol[c] = MathF.Max(minCol[c], tl.Size.X);
@@ -530,8 +525,8 @@ namespace Prowl.Scribe
                     tls.WrapMode = TextWrapMode.Wrap;
                     tls.MaxWidth = colW[c];
                     tls.Alignment = AlignToText(cell.Align);
-                    tls.PreferredFont = settings.ParagraphFont;
-                    tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, tls.PreferredFont, styles, settings);
+                    tls.Font = settings.ParagraphFont;
+                    tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, fontSystem, settings.ParagraphFont, styles, settings);
 
                     var tl = fontSystem.CreateLayout(text, tls);
 
@@ -583,19 +578,18 @@ namespace Prowl.Scribe
             _ => TextAlignment.Left
         };
 
-        private static FontInfo ResolveFontForIndex(int idx, FontInfo baseFont, List<StyleSpan> spans, MarkdownLayoutSettings settings)
+        private static FontFile ResolveFontForIndex(int idx, FontSystem fs, FontFile baseFont, List<StyleSpan> spans, MarkdownLayoutSettings settings)
         {
             bool bold = false, italic = false;
-            // combine overlapping spans (small inputs; O(n) scan is fine)
             for (int i = 0; i < spans.Count; i++)
             {
                 var s = spans[i];
                 if (idx >= s.Start && idx < s.End) { bold |= s.Bold; italic |= s.Italic; if (bold && italic) break; }
             }
 
-            if (bold && italic && settings.BoldItalicFont != null) return settings.BoldItalicFont;
-            if (bold && settings.BoldFont != null) return settings.BoldFont;
-            if (italic && settings.ItalicFont != null) return settings.ItalicFont;
+            if (bold && italic) return fs.GetFont(baseFont.FamilyName, FontStyle.BoldItalic) ?? baseFont;
+            if (bold) return fs.GetFont(baseFont.FamilyName, FontStyle.Bold) ?? baseFont;
+            if (italic) return fs.GetFont(baseFont.FamilyName, FontStyle.Italic) ?? baseFont;
             return baseFont;
         }
 

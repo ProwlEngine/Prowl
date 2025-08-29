@@ -71,7 +71,7 @@ namespace Prowl.Scribe
     public struct TextLayoutSettings
     {
         public float PixelSize;
-        public FontInfo PreferredFont;
+        public FontFile Font;
         public float LetterSpacing;
         public float WordSpacing;
         public float LineHeight; // multiplier (1.0 = normal, 1.2 = 20% larger)
@@ -80,11 +80,11 @@ namespace Prowl.Scribe
         public TextAlignment Alignment;
         public float MaxWidth; // for wrapping, 0 = no limit
 
-        public Func<int, FontInfo> FontSelector; // optional: index in the full string -> font
+        public Func<int, FontFile> FontSelector; // optional: index in the full string -> font
 
         public static TextLayoutSettings Default => new TextLayoutSettings {
             PixelSize = 16,
-            PreferredFont = null,
+            Font = null,
             LetterSpacing = 0,
             WordSpacing = 0,
             LineHeight = 1.0f,

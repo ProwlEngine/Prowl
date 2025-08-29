@@ -1,10 +1,13 @@
-﻿using System;
+﻿using Prowl.Scribe.Internal;
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using static Prowl.Scribe.Internal.Common;
 
-namespace Prowl.Scribe.Internal
+namespace Prowl.Scribe
 {
-    public class FontInfo
+    public class FontFile
     {
         private Buf cff = null;
         private Buf charstrings = null;
@@ -35,6 +38,43 @@ namespace Prowl.Scribe.Internal
         public int Descent { get; private set; } = 0;
         public int Linegap { get; private set; } = 0;
 
+        public FontFile(FileInfo file)
+        {
+            if(file.Exists == false)
+                throw new FileNotFoundException("Font file not found", file.FullName);
+
+            if (InitFont(File.ReadAllBytes(file.FullName), 0) == 0)
+                throw new InvalidDataException("Failed to initialize font");
+        }
+
+        public FontFile(string path)
+        {
+            var file = new FileInfo(path);
+            if (file.Exists == false)
+                throw new FileNotFoundException("Font file not found", file.FullName);
+
+            if (InitFont(File.ReadAllBytes(file.FullName), 0) == 0)
+                throw new InvalidDataException("Failed to initialize font");
+        }
+
+        public FontFile(Stream stream)
+        {
+            byte[] data = null;
+            using (var ms = new MemoryStream())
+            {
+                stream.CopyTo(ms);
+                data = ms.ToArray();
+            }
+            if (InitFont(data, 0) == 0)
+                throw new InvalidDataException("Failed to initialize font");
+        }
+
+        public FontFile(byte[] data)
+        {
+            if (InitFont(data, 0) == 0)
+                throw new InvalidDataException("Failed to initialize font");
+        }
+
         internal int InitFont(byte[] data, int fontstart)
 		{
 			uint cmap = 0;
@@ -45,14 +85,14 @@ namespace Prowl.Scribe.Internal
 			this.data = ptr;
 			this.fontstart = fontstart;
 			this.cff = new Buf(FakePtr<byte>.Null, 0);
-			cmap = stbtt__find_table(ptr, (uint)fontstart, "cmap");
-			this.loca = (int)stbtt__find_table(ptr, (uint)fontstart, "loca");
-			this.head = (int)stbtt__find_table(ptr, (uint)fontstart, "head");
-			this.glyf = (int)stbtt__find_table(ptr, (uint)fontstart, "glyf");
-			this.hhea = (int)stbtt__find_table(ptr, (uint)fontstart, "hhea");
-			this.hmtx = (int)stbtt__find_table(ptr, (uint)fontstart, "hmtx");
-			this.kern = (int)stbtt__find_table(ptr, (uint)fontstart, "kern");
-			this.gpos = (int)stbtt__find_table(ptr, (uint)fontstart, "GPOS");
+			cmap = FindTable(ptr, (uint)fontstart, "cmap");
+			this.loca = (int)FindTable(ptr, (uint)fontstart, "loca");
+			this.head = (int)FindTable(ptr, (uint)fontstart, "head");
+			this.glyf = (int)FindTable(ptr, (uint)fontstart, "glyf");
+			this.hhea = (int)FindTable(ptr, (uint)fontstart, "hhea");
+			this.hmtx = (int)FindTable(ptr, (uint)fontstart, "hmtx");
+			this.kern = (int)FindTable(ptr, (uint)fontstart, "kern");
+			this.gpos = (int)FindTable(ptr, (uint)fontstart, "GPOS");
 			if (cmap == 0 || this.head == 0 || this.hhea == 0 || this.hmtx == 0)
 				return 0;
 			if (this.glyf != 0)
@@ -70,7 +110,7 @@ namespace Prowl.Scribe.Internal
 				var fdarrayoff = (uint)0;
 				var fdselectoff = (uint)0;
 				uint cff = 0;
-				cff = stbtt__find_table(ptr, (uint)fontstart, "CFF ");
+				cff = FindTable(ptr, (uint)fontstart, "CFF ");
 				if (cff == 0)
 					return 0;
 				this.fontdicts = new Buf(FakePtr<byte>.Null, 0);
@@ -107,7 +147,7 @@ namespace Prowl.Scribe.Internal
 				this.charstrings = b.stbtt__cff_get_index();
 			}
 
-			t = stbtt__find_table(ptr, (uint)fontstart, "maxp");
+			t = FindTable(ptr, (uint)fontstart, "maxp");
 			if (t != 0)
 				this.numGlyphs = ttUSHORT(ptr + t + 4);
 			else
@@ -144,10 +184,16 @@ namespace Prowl.Scribe.Internal
             Descent = d;
             Linegap = l;
 
-            return 1;
-		}
+            string fam = GetNameString(1);
+            string sub = GetNameString(2);
 
-		public int FindGlyphIndex(int codepoint)
+            FamilyName = fam.ToLowerInvariant();
+            Style = ParseStyle(sub);
+
+            return 1;
+        }
+
+        public int FindGlyphIndex(int codepoint)
 		{
 			if (unicodeMapCache.TryGetValue(codepoint, out var cached))
 				return cached;
@@ -445,22 +491,22 @@ namespace Prowl.Scribe.Internal
 				gbm.Rasterize(0.35f, vertices, num_verts, scale_x, scale_y, ix0, iy0, 1);
 		}
 
-		public FakePtr<byte> GetFontNameString(FontInfo font, ref int length, int platformID, int encodingID, int languageID, int nameID)
+		public FakePtr<byte> GetFontNameString(ref int length, int platformID, int encodingID, int languageID, int nameID)
 		{
-			var offset = (uint)font.fontstart;
-			var nm = stbtt__find_table(font.data, offset, "name");
+			var offset = (uint)fontstart;
+			var nm = FindTable(data, offset, "name");
 			if (nm == 0)
 				return FakePtr<byte>.Null;
-            int count = ttUSHORT(font.data + nm + 2);
-            int stringOffset = (int)(nm + ttUSHORT(font.data + nm + 4));
+            int count = ttUSHORT(data + nm + 2);
+            int stringOffset = (int)(nm + ttUSHORT(data + nm + 4));
 			for (int i = 0; i < count; ++i)
 			{
 				var loc = (uint)(nm + 6 + 12 * i);
-				if (platformID == ttUSHORT(font.data + loc + 0) && encodingID == ttUSHORT(font.data + loc + 2) &&
-					languageID == ttUSHORT(font.data + loc + 4) && nameID == ttUSHORT(font.data + loc + 6))
+				if (platformID == ttUSHORT(data + loc + 0) && encodingID == ttUSHORT(data + loc + 2) &&
+					languageID == ttUSHORT(data + loc + 4) && nameID == ttUSHORT(data + loc + 6))
 				{
-					length = ttUSHORT(font.data + loc + 8);
-					return font.data + stringOffset + ttUSHORT(font.data + loc + 10);
+					length = ttUSHORT(data + loc + 8);
+					return data + stringOffset + ttUSHORT(data + loc + 10);
 				}
 			}
 
@@ -469,6 +515,44 @@ namespace Prowl.Scribe.Internal
 
 
         #region Private Methods
+
+        private uint FindTable(FakePtr<byte> data, uint fontstart, string tag)
+        {
+            int num_tables = ttUSHORT(data + fontstart + 4);
+            var tabledir = fontstart + 12;
+            int i;
+            for (i = 0; i < num_tables; ++i)
+            {
+                var loc = (uint)(tabledir + 16 * i);
+                if ((data + loc + 0)[0] == tag[0] && (data + loc + 0)[1] == tag[1] &&
+                    (data + loc + 0)[2] == tag[2] && (data + loc + 0)[3] == tag[3])
+                    return ttULONG(data + loc + 8);
+            }
+
+            return 0;
+        }
+
+        private string GetNameString(int nameId)
+        {
+            int len = 0;
+            var ptr = GetFontNameString(ref len, 3, 1, 0x409, nameId);
+            if (ptr.IsNull || len == 0)
+                return string.Empty;
+            var buffer = new byte[len];
+            for (int i = 0; i < len; i++) buffer[i] = ptr[i];
+            return Encoding.BigEndianUnicode.GetString(buffer);
+        }
+
+        private FontStyle ParseStyle(string styleName)
+        {
+            var s = styleName?.ToLowerInvariant() ?? string.Empty;
+            bool bold = s.Contains("bold");
+            bool italic = s.Contains("italic") || s.Contains("oblique");
+            if (bold && italic) return FontStyle.BoldItalic;
+            if (bold) return FontStyle.Bold;
+            if (italic) return FontStyle.Italic;
+            return FontStyle.Regular;
+        }
 
         private void GetFontVerticalMetrics(out int ascent, out int descent, out int lineGap)
         {
@@ -479,7 +563,7 @@ namespace Prowl.Scribe.Internal
 
         private int GetFontVerticalMetricsOS2(ref int typoAscent, ref int typoDescent, ref int typoLineGap)
         {
-            var tab = (int)stbtt__find_table(this.data, (uint)this.fontstart, "OS/2");
+            var tab = (int)FindTable(this.data, (uint)this.fontstart, "OS/2");
             if (tab == 0)
                 return 0;
             typoAscent = ttSHORT(this.data + tab + 68);
