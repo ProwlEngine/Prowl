@@ -20,8 +20,6 @@ namespace Prowl.Scribe
         readonly LruCache<LayoutCacheKey, TextLayout> layoutCache;
         readonly Dictionary<FontInfo, int> fontIds = new Dictionary<FontInfo, int>();
 
-        private readonly Dictionary<(FontInfo, int, int), float> kerningMapCache;
-
         private readonly Dictionary<(string, FontStyle), FontInfo> fontLookup;
 
         private object atlasTexture;
@@ -63,7 +61,6 @@ namespace Prowl.Scribe
             fonts = new List<FontInfo>();
             glyphCache = new Dictionary<AtlasGlyph.CacheKey, AtlasGlyph>();
             layoutCache = new LruCache<LayoutCacheKey, TextLayout>(_maxLayout);
-            kerningMapCache = new Dictionary<(FontInfo, int, int), float>();
 
             fontLookup = new Dictionary<(string, FontStyle), FontInfo>();
 
@@ -413,7 +410,6 @@ namespace Prowl.Scribe
 
             // Clear the Layout Cache
             layoutCache.Clear();
-            kerningMapCache.Clear();
 
             // Re-add white rect
             if (useWhiteRect)
@@ -488,30 +484,13 @@ namespace Prowl.Scribe
 
         public float GetKerning(FontInfo fontInfo, int leftCodepoint, int rightCodepoint, float pixelSize)
         {
-            var key = (fontInfo, leftCodepoint, rightCodepoint);
-            if (kerningMapCache.TryGetValue(key, out var kern))
-                return kern;
-
             int leftGlyph = fontInfo.FindGlyphIndex(leftCodepoint);
             int rightGlyph = fontInfo.FindGlyphIndex(rightCodepoint);
-
-            if (leftGlyph == 0 || rightGlyph == 0)
-            {
-                kerningMapCache[key] = 0;
-                return 0;
-            }
 
             float scale = fontInfo.ScaleForPixelHeight(pixelSize);
             int kernAdvance = fontInfo.GetGlyphKerningAdvance(leftGlyph, rightGlyph);
 
-            float result = kernAdvance * scale;
-            kerningMapCache[key] = result;
-            return result;
-        }
-
-        public bool HasGlyph(FontInfo fontInfo, int codepoint)
-        {
-            return fontInfo.FindGlyphIndex(codepoint) != 0;
+            return kernAdvance * scale;
         }
 
         #endregion

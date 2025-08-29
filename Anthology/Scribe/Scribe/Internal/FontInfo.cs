@@ -26,6 +26,7 @@ namespace Prowl.Scribe.Internal
         private Buf subrs = null;
 
         private readonly Dictionary<int, int> unicodeMapCache = new Dictionary<int, int>();
+        private readonly Dictionary<(int, int), int> kerningMapCache = new Dictionary<(int, int), int>();
 
         public string FamilyName { get; internal set; } = string.Empty;
         public FontStyle Style { get; internal set; } = FontStyle.Regular;
@@ -326,6 +327,10 @@ namespace Prowl.Scribe.Internal
             //    return stbtt__GetGlyphKernInfoAdvance(g1, g2);
             //
             //return 0;
+
+            var key = (g1, g2);
+            if (kerningMapCache.TryGetValue(key, out var kern))
+                return kern;
 
             var xAdvance = 0;
 			if (this.gpos != 0)
