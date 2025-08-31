@@ -796,7 +796,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Clean up styles at the end of a frame.
         /// </summary>
-        private void OfOfFrameCleanupStyles(Dictionary<ulong, Element> createdElements)
+        private void EndOfFrameCleanupStyles(Dictionary<ulong, Element> createdElements)
         {
             // Clean up any elements that haven't been accessed this frame
             List<ulong> elementsToRemove = new List<ulong>();

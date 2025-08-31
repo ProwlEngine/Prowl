@@ -179,7 +179,7 @@ namespace Prowl.PaperUI
             EndInputFrame();
 
             // Cleanup
-            OfOfFrameCleanupStyles(_createdElements);
+            EndOfFrameCleanupStyles(_createdElements);
 
             // Performance measurement
             _timer.Stop();
