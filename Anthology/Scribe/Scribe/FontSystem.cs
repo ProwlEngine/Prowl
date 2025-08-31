@@ -17,9 +17,6 @@ namespace Prowl.Scribe
         private readonly Dictionary<AtlasGlyph.CacheKey, AtlasGlyph> glyphCache;
 
         readonly LruCache<LayoutCacheKey, TextLayout> layoutCache;
-        private readonly Dictionary<FontStyle, List<FontFile>> styleFonts;
-
-        private readonly Dictionary<(string, FontStyle), FontFile> fontLookup;
 
         private object atlasTexture;
         private int atlasWidth;
@@ -58,13 +55,8 @@ namespace Prowl.Scribe
             atlasTexture = renderer.CreateTexture(atlasWidth, atlasHeight);
             binPacker = new BinPacker(atlasWidth, atlasHeight);
             fonts = new List<FontFile>();
-            styleFonts = new Dictionary<FontStyle, List<FontFile>>();
-            foreach (FontStyle fs in Enum.GetValues(typeof(FontStyle)))
-                styleFonts[fs] = new List<FontFile>();
             glyphCache = new Dictionary<AtlasGlyph.CacheKey, AtlasGlyph>();
             layoutCache = new LruCache<LayoutCacheKey, TextLayout>(_maxLayout);
-
-            fontLookup = new Dictionary<(string, FontStyle), FontFile>();
 
             // Add a small white rectangle for rendering
             if (useWhiteRect)
@@ -91,17 +83,8 @@ namespace Prowl.Scribe
         public void AddFont(FontFile font)
         {
             fonts.Add(font);
-            styleFonts[font.Style].Add(font);
-
-            var key = (font.FamilyName, font.Style);
-            fontLookup[key] = font;
 
             glyphCache.Clear();
-        }
-
-        public FontFile? GetFont(string family, FontStyle style)
-        {
-            return fontLookup.TryGetValue((family, style), out var font) ? font : null;
         }
 
         public IEnumerable<FontFile> EnumerateSystemFonts()

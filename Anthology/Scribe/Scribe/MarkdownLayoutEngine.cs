@@ -97,6 +97,9 @@ namespace Prowl.Scribe
 
         public FontFile ParagraphFont;       // main font
         public FontFile MonoFont;            // code font
+        public FontFile BoldFont;            // bolt font
+        public FontFile ItalicFont;          // italic font
+        public FontFile BoldItalicFont;      // bold italic font
 
         public FontColor ColorText;
         public FontColor ColorMutedText;
@@ -105,8 +108,10 @@ namespace Prowl.Scribe
         public FontColor ColorCodeBg;        // used as solid quad color
         public FontColor ColorLink;
 
-        public static MarkdownLayoutSettings Default(FontFile textFont, FontFile monoFont, float width)
+        public static MarkdownLayoutSettings Default(FontFile textFont, float width, FontFile? monoFont = null, FontFile? boldFont = null, FontFile italicFont = null, FontFile boldItalicFont = null)
         {
+            if (textFont == null) throw new ArgumentNullException(nameof(textFont));
+
             return new MarkdownLayoutSettings {
                 Width = width,
                 BaseSize = 18f,
@@ -123,7 +128,10 @@ namespace Prowl.Scribe
                 HrSpacing = 8f,
                 CodePadding = 8f,
                 ParagraphFont = textFont,
-                MonoFont = monoFont,
+                MonoFont = monoFont ?? textFont,
+                BoldFont = boldFont ?? textFont,
+                ItalicFont = italicFont ?? textFont,
+                BoldItalicFont = boldItalicFont ?? textFont,
                 ColorText = new FontColor(255, 255, 255, 255),
                 ColorMutedText = new FontColor(210, 210, 210, 255),
                 ColorRule = new FontColor(180, 180, 180, 255),
@@ -587,9 +595,9 @@ namespace Prowl.Scribe
                 if (idx >= s.Start && idx < s.End) { bold |= s.Bold; italic |= s.Italic; if (bold && italic) break; }
             }
 
-            if (bold && italic) return fs.GetFont(baseFont.FamilyName, FontStyle.BoldItalic) ?? baseFont;
-            if (bold) return fs.GetFont(baseFont.FamilyName, FontStyle.Bold) ?? baseFont;
-            if (italic) return fs.GetFont(baseFont.FamilyName, FontStyle.Italic) ?? baseFont;
+            if (bold && italic) return settings.BoldItalicFont;
+            if (bold) return settings.BoldFont;
+            if (italic) return settings.ItalicFont;
             return baseFont;
         }
 
