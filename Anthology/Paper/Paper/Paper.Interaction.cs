@@ -214,7 +214,7 @@ namespace Prowl.PaperUI
             ElementHandle current = handle;
             while (current.IsValid)
             {
-                ref ElementData data = ref handle.Data;
+                ref ElementData data = ref current.Data;
 
                 _elementsInBubblePath.Add(data.ID);
                 if (data.StopPropagation)
@@ -460,7 +460,7 @@ namespace Prowl.PaperUI
                 return;
 
             ElementHandle focusedElement = FindElementByID(_focusedElementId);
-            if (focusedElement.IsValid)
+            if (!focusedElement.IsValid)
                 return;
 
             ref ElementData data = ref focusedElement.Data;
