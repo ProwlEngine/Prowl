@@ -7,10 +7,10 @@ namespace Prowl.PaperUI.Events;
 
 public class FocusEvent
 {
-    public Element Source { get; }
+    public ElementHandle Source { get; }
     public bool IsFocused { get; }
 
-    public FocusEvent(Element source, bool isFocused)
+    public FocusEvent(ElementHandle source, bool isFocused)
     {
         Source = source;
         IsFocused = isFocused;

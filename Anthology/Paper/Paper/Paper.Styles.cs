@@ -739,26 +739,29 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="deltaTime">The time since the last frame.</param>
         /// <param name="element">The root element to start updating from.</param>
-        private void UpdateStyles(double deltaTime, Element element)
+        private void UpdateStyles(double deltaTime, ElementHandle element)
         {
-            ulong id = element.ID;
+            ulong id = element.Data.ID;
             if (_activeStyles.TryGetValue(id, out var style))
             {
                 // Update the style properties
                 style.Update(deltaTime);
-                element._elementStyle = style;
+                element.Data._elementStyle = style;
             }
             else
             {
                 // Create a new style if it doesn't exist
-                style = element._elementStyle ?? new ElementStyle();
-                element._elementStyle = style;
+                style = element.Data._elementStyle ?? new ElementStyle();
+                element.Data._elementStyle = style;
                 _activeStyles[id] = style;
             }
 
             // Update Children
-            foreach (var child in element.Children)
+            foreach (var childIndex in element.Data.ChildIndices)
+            {
+                var child = new ElementHandle(this, childIndex);
                 UpdateStyles(deltaTime, child);
+            }
         }
 
         /// <summary>
@@ -796,13 +799,13 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Clean up styles at the end of a frame.
         /// </summary>
-        private void OfOfFrameCleanupStyles(Dictionary<ulong, Element> createdElements)
+        private void OfOfFrameCleanupStyles(HashSet<ulong> createdElements)
         {
             // Clean up any elements that haven't been accessed this frame
             List<ulong> elementsToRemove = new List<ulong>();
             foreach (var kvp in _activeStyles)
             {
-                if (!createdElements.ContainsKey(kvp.Key))
+                if (!createdElements.Contains(kvp.Key))
                     elementsToRemove.Add(kvp.Key);
                 else
                     kvp.Value.EndOfFrame(); // Reset the style for the next frame
@@ -870,7 +873,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="element">The element to apply styles to</param>
         /// <param name="baseName">The base style name (e.g., "button")</param>
-        public void ApplyStyleWithStates(Element element, string baseName)
+        public void ApplyStyleWithStates(ElementHandle element, string baseName)
         {
             // Apply base style first
             if (TryGetStyle(baseName, out var baseStyle))
@@ -881,9 +884,9 @@ namespace Prowl.PaperUI
             // Apply pseudo-states in order
             var pseudoStates = new[]
             {
-                ("hovered", IsElementHovered(element.ID)),
-                ("focused", IsElementFocused(element.ID)),
-                ("active", IsElementActive(element.ID))
+                ("hovered", IsElementHovered(element.Data.ID)),
+                ("focused", IsElementFocused(element.Data.ID)),
+                ("active", IsElementActive(element.Data.ID))
             };
 
             foreach (var (state, isActive) in pseudoStates)

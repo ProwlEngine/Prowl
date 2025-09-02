@@ -12,7 +12,7 @@ public class DragEvent : ElementEvent
     public Vector2 Delta { get; }
     public Vector2 TotalDelta { get; }
 
-    public DragEvent(Element source, Rect elementRect, Vector2 pointerPos, Vector2 startPos, Vector2 delta, Vector2 totalDelta)
+    public DragEvent(ElementHandle source, Rect elementRect, Vector2 pointerPos, Vector2 startPos, Vector2 delta, Vector2 totalDelta)
         : base(source, elementRect, pointerPos)
     {
         StartPosition = startPos;

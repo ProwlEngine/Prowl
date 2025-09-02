@@ -18,7 +18,7 @@ namespace Prowl.PaperUI
         private ElementHandle _rootElementHandle;
         internal Stack<ElementHandle> _elementStack = new Stack<ElementHandle>();
         private readonly Stack<ulong> _IDStack = new();
-        private readonly Dictionary<ulong, Element> _createdElements = [];
+        private readonly HashSet<ulong> _createdElements = [];
 
         private readonly Dictionary<ulong, Hashtable> _storage = [];
 
@@ -39,13 +39,13 @@ namespace Prowl.PaperUI
 
         // Public properties
         public Rect ScreenRect => new Rect(0, 0, _width, _height);
-        public Element RootElement => GetElementWrapper(_rootElementHandle);
+        public ElementHandle RootElement => _rootElementHandle;
         public Canvas Canvas => _canvas;
 
         /// <summary>
         /// Gets the current parent element in the element hierarchy.
         /// </summary>
-        public Element CurrentParent => GetElementWrapper(_elementStack.Peek());
+        public ElementHandle CurrentParent => _elementStack.Peek();
 
         #endregion
 
@@ -146,7 +146,7 @@ namespace Prowl.PaperUI
 
             // Layout phase
             OnEndOfFramePreLayout?.Invoke();
-            RootElement.Layout();
+            _rootElementHandle.Data.Layout(this);
             OnEndOfFramePostLayout?.Invoke();
 
             // Post-layout callbacks
@@ -159,8 +159,8 @@ namespace Prowl.PaperUI
             HandleInteractions();
 
             // Render all elements
-            List<Element> overlayElements = new();
-            List<Element> modalElements = new();
+            List<ElementHandle> overlayElements = new();
+            List<ElementHandle> modalElements = new();
             RenderElement(RootElement, Layer.Base, overlayElements, modalElements);
             foreach (var overlay in overlayElements)
                 RenderElement(overlay, Layer.Overlay, null, modalElements);
@@ -185,15 +185,17 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Calls post-layout callbacks for an element and its children.
         /// </summary>
-        private void CallPostLayoutRecursive(Element element)
+        private void CallPostLayoutRecursive(ElementHandle handle)
         {
-            _elementStack.Push(element.Handle);
+            if (handle.IsValid == false) return;
+
+            _elementStack.Push(handle);
             try
             {
-                element?.OnPostLayout?.Invoke(element, new Rect(element.X, element.Y, element.LayoutWidth, element.LayoutHeight));
-                for (int i = 0; i < element?.Children.Count; i++)
+                handle.Data.OnPostLayout?.Invoke(handle, new Rect(handle.Data.X, handle.Data.Y, handle.Data.LayoutWidth, handle.Data.LayoutHeight));
+                for (int i = 0; i < handle.Data.ChildIndices.Count; i++)
                 {
-                    var child = element.Children[i];
+                    var child = new ElementHandle(this, handle.Data.ChildIndices[i]);
                     CallPostLayoutRecursive(child);
                 }
             }
@@ -210,43 +212,43 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Renders an element and its children recursively with layering support.
         /// </summary>
-        private void RenderElement(Element element, Layer currentLayer, List<Element>? overlayElements, List<Element>? modalElements)
+        private void RenderElement(ElementHandle handle, Layer currentLayer, List<ElementHandle>? overlayElements, List<ElementHandle>? modalElements)
         {
-            if (element.Visible == false)
+            if (handle.Data.Visible == false)
                 return;
 
             if (currentLayer == Layer.Base)
             {
-                if (element.Layer == Layer.Overlay)
+                if (handle.Data.Layer == Layer.Overlay)
                 {
-                    overlayElements?.Add(element);
+                    overlayElements?.Add(handle);
                     return;
                 }
-                else if (element.Layer == Layer.Topmost)
+                else if (handle.Data.Layer == Layer.Topmost)
                 {
-                    modalElements?.Add(element);
+                    modalElements?.Add(handle);
                     return;
                 }
             }
             else if (currentLayer == Layer.Overlay)
             {
-                if (element.Layer == Layer.Topmost)
+                if (handle.Data.Layer == Layer.Topmost)
                 {
-                    modalElements?.Add(element);
+                    modalElements?.Add(handle);
                     return;
                 }
             }
 
-            var rect = new Rect(element.X, element.Y, element.LayoutWidth, element.LayoutHeight);
+            var rect = new Rect(handle.Data.X, handle.Data.Y, handle.Data.LayoutWidth, handle.Data.LayoutHeight);
             _canvas.SaveState();
 
             // Apply element transform
-            Transform2D styleTransform = element._elementStyle.GetTransformForElement(rect);
+            Transform2D styleTransform = handle.Data._elementStyle.GetTransformForElement(rect);
             _canvas.TransformBy(styleTransform);
 
             // Draw box shadow before background
-            var rounded = (Vector4)element._elementStyle.GetValue(GuiProp.Rounded);
-            var boxShadow = (BoxShadow)element._elementStyle.GetValue(GuiProp.BoxShadow);
+            var rounded = (Vector4)handle.Data._elementStyle.GetValue(GuiProp.Rounded);
+            var boxShadow = (BoxShadow)handle.Data._elementStyle.GetValue(GuiProp.BoxShadow);
             if (boxShadow.IsVisible)
             {
                 _canvas.SaveState();
@@ -280,7 +282,7 @@ namespace Prowl.PaperUI
             }
 
             // Draw background (gradient overrides background color)
-            var gradient = (Gradient)element._elementStyle.GetValue(GuiProp.BackgroundGradient);
+            var gradient = (Gradient)handle.Data._elementStyle.GetValue(GuiProp.BackgroundGradient);
             if (gradient.Type != GradientType.None)
             {
                 switch (gradient.Type)
@@ -314,14 +316,14 @@ namespace Prowl.PaperUI
             }
             else
             {
-                var backgroundColor = (Color)element._elementStyle.GetValue(GuiProp.BackgroundColor);
+                var backgroundColor = (Color)handle.Data._elementStyle.GetValue(GuiProp.BackgroundColor);
                 if (backgroundColor.A > 0)
                     _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, backgroundColor);
             }
 
             // Draw border if needed
-            var borderColor = (Color)element._elementStyle.GetValue(GuiProp.BorderColor);
-            var borderWidth = (double)element._elementStyle.GetValue(GuiProp.BorderWidth);
+            var borderColor = (Color)handle.Data._elementStyle.GetValue(GuiProp.BorderColor);
+            var borderWidth = (double)handle.Data._elementStyle.GetValue(GuiProp.BorderWidth);
             if (borderWidth > 0.0f && borderColor.A > 0)
             {
                 _canvas.BeginPath();
@@ -332,27 +334,27 @@ namespace Prowl.PaperUI
             }
 
             // Apply scissor if enabled
-            if (element._scissorEnabled)
+            if (handle.Data._scissorEnabled)
             {
                 _canvas.IntersectScissor(rect.x, rect.y, rect.width, rect.height);
             }
 
             // Draw text style
-            if (!string.IsNullOrEmpty(element.Paragraph))
+            if (!string.IsNullOrEmpty(handle.Data.Paragraph))
             {
                 _canvas.SaveState();
-                element.DrawText(rect.x, rect.y, (float)rect.width, (float)rect.height);
+                DrawText(ref handle, rect.x, rect.y, (float)rect.width, (float)rect.height);
                 _canvas.RestoreState();
             }
 
 
             // Process custom render actions
-            if (element._renderCommands != null)
+            if (handle.Data._renderCommands != null)
             {
-                foreach (var cmd in element._renderCommands)
+                foreach (var cmd in handle.Data._renderCommands)
                 {
                     _canvas.SaveState();
-                    _elementStack.Push(element.Handle);
+                    _elementStack.Push(handle);
                     try
                     {
                         cmd.RenderAction?.Invoke(_canvas, rect);
@@ -366,26 +368,29 @@ namespace Prowl.PaperUI
             }
 
             // Scrollbars offset the position of children
-            bool hasScrollState = this.HasElementStorage(element, "ScrollState");
+            bool hasScrollState = this.HasElementStorage(handle, "ScrollState");
             ScrollState scrollState = new();
             if (hasScrollState)
             {
                 _canvas.SaveState();
-                scrollState = this.GetElementStorage<ScrollState>(element, "ScrollState");
+                scrollState = this.GetElementStorage<ScrollState>(handle, "ScrollState");
                 var transform = Transform2D.CreateTranslation(-scrollState.Position);
                 _canvas.TransformBy(transform);
             }
 
             // Draw children
-            foreach (var child in element.Children)
+            foreach (var childIndex in handle.Data.ChildIndices)
+            {
+                var child = new ElementHandle(this, childIndex);
                 RenderElement(child, currentLayer, overlayElements, modalElements);
+            }
 
             // Draw scrollbars if needed
             if (hasScrollState)
             {
                 _canvas.RestoreState();
 
-                Scroll flags = element.ScrollFlags;
+                Scroll flags = handle.Data.ScrollFlags;
                 bool needsHorizontalScroll = scrollState.ContentSize.x > scrollState.ViewportSize.x && (flags & Scroll.ScrollX) != 0;
                 bool needsVerticalScroll = scrollState.ContentSize.y > scrollState.ViewportSize.y && (flags & Scroll.ScrollY) != 0;
                 bool shouldShowScrollbars = (flags & Scroll.Hidden) == 0 &&
@@ -395,7 +400,7 @@ namespace Prowl.PaperUI
                 if (shouldShowScrollbars)
                 {
                     // Check for custom scrollbar renderer
-                    var customRenderer = element.CustomScrollbarRenderer;
+                    var customRenderer = handle.Data.CustomScrollbarRenderer;
 
                     if (customRenderer != null)
                     {
@@ -411,6 +416,74 @@ namespace Prowl.PaperUI
             }
 
             _canvas.RestoreState();
+        }
+
+        private void DrawText(ref ElementHandle handle, double x, double y, float availableWidth, float availableHeight)
+        {
+            if (string.IsNullOrWhiteSpace(handle.Data.Paragraph)) return;
+
+            if (!handle.Data.ProcessedText)
+                handle.Data.ProcessText(this, availableWidth);
+
+            Canvas canvas = handle.Owner?.Canvas ?? throw new InvalidOperationException("Owner paper or canvas is not set.");
+
+            var color = (Color)handle.Data._elementStyle.GetValue(GuiProp.TextColor);
+
+            FontColor fs = new FontColor(color.R, color.G, color.B, color.A);
+
+            // Calculate vertical alignment offset
+            double yOffset = 0;
+            Vector2 textSize;
+
+            if (handle.Data.IsMarkdown == false)
+            {
+                if (handle.Data._textLayout == null) throw new InvalidOperationException("Text layout is not processed.");
+
+                textSize = handle.Data._textLayout.Size;
+            }
+            else
+            {
+                if (handle.Data._quillMarkdown == null) throw new InvalidOperationException("Markdown layout is not processed.");
+
+                var markdownResult = handle.Data._quillMarkdown as dynamic;
+                textSize = markdownResult?.Size ?? Vector2.zero;
+            }
+
+            // Apply vertical alignment based on TextAlignment
+            switch (handle.Data.TextAlignment)
+            {
+                case TextAlignment.MiddleLeft:
+                case TextAlignment.MiddleCenter:
+                case TextAlignment.MiddleRight:
+                    yOffset = (availableHeight - textSize.y) / 2.0;
+                    break;
+
+                case TextAlignment.BottomLeft:
+                case TextAlignment.BottomCenter:
+                case TextAlignment.BottomRight:
+                    yOffset = availableHeight - textSize.y;
+                    break;
+
+                case TextAlignment.Left:
+                case TextAlignment.Center:
+                case TextAlignment.Right:
+                default:
+                    yOffset = 0; // Top alignment (default)
+                    break;
+            }
+
+            // Apply the calculated offset to the y position
+            double finalY = y + yOffset;
+
+            if (handle.Data.IsMarkdown == false)
+            {
+                canvas.DrawLayout(handle.Data._textLayout, x, finalY, fs);
+            }
+            else
+            {
+                var markdownResult = handle.Data._quillMarkdown as dynamic;
+                canvas.DrawMarkdown(markdownResult, new Vector2(x, finalY));
+            }
         }
 
         /// <summary>
@@ -463,13 +536,10 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="id">The ID to search for</param>
         /// <returns>The found element or null if not found</returns>
-        public Element? FindElementByID(ulong id)
+        public ElementHandle FindElementByID(ulong id)
         {
-            if (_createdElements.TryGetValue(id, out var element))
-                return element;
-                
             var handle = FindElementHandleByID(id);
-            return handle.HasValue ? GetElementWrapper(handle.Value) : null;
+            return handle;
         }
 
         /// <summary>
@@ -484,19 +554,18 @@ namespace Prowl.PaperUI
 
             ulong storageHash = 0;
             if(_IDStack.Count > 0)
-                storageHash = (ulong)HashCode.Combine(CurrentParent.ID, _IDStack.Peek(), stringID, intID);
+                storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID);
             else
-                storageHash = (ulong)HashCode.Combine(CurrentParent.ID, stringID, intID);
+                storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, stringID, intID);
 
-            if (_createdElements.ContainsKey(storageHash))
-                throw new Exception("Element already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + " Parent: " + CurrentParent.ID + "\nPlease use a different ID.");
+            if (_createdElements.Contains(storageHash))
+                throw new Exception("Element already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + " Parent: " + CurrentParent.Data.ID + "\nPlease use a different ID.");
 
             var handle = CreateElement(storageHash);
-            var element = GetElementWrapper(handle);
-            var builder = new ElementBuilder(this, element);
-            _createdElements.Add(storageHash, element);
+            var builder = new ElementBuilder(this, handle);
+            _createdElements.Add(storageHash);
 
-            AddChild(element);
+            AddChild(ref handle);
 
             return builder;
         }
@@ -521,40 +590,47 @@ namespace Prowl.PaperUI
         /// <exception cref="Exception"></exception>
         public void MoveToRoot()
         {
-            if (CurrentParent == null)
+            if (CurrentParent.IsValid == false)
                 throw new Exception("Not currently inside an Element.");
 
-            if(CurrentParent.Parent != null)
-                CurrentParent.Parent.Children.Remove(CurrentParent);
+            var parentHandle = CurrentParent.GetParentHandle();
+            if (parentHandle.IsValid)
+                parentHandle.Data.ChildIndices.Remove(CurrentParent.Index);
 
-            RootElement.Children.Add(CurrentParent);
+            RootElement.Data.ChildIndices.Add(CurrentParent.Index);
         }
 
         /// <summary>
         /// Adds a child element to the current parent.
         /// </summary>
-        internal void AddChild(Element element)
+        internal void AddChild(ref ElementHandle handle)
         {
-            if (element.Parent != null)
+            var parentHandle = handle.GetParentHandle();
+
+            if (parentHandle.IsValid)
                 throw new Exception("Element already has a parent.");
 
-            element.Parent = CurrentParent;
-            CurrentParent.Children.Add(element);
+            handle.Data.ParentIndex = CurrentParent.Index;
+            CurrentParent.Data.ChildIndices.Add(handle.Index);
         }
 
-        public void AddActionElement(Action<Canvas, Rect> renderAction) => AddActionElement(CurrentParent, renderAction);
+        public void AddActionElement(Action<Canvas, Rect> renderAction)
+        {
+            var current = CurrentParent;
+            AddActionElement(ref current, renderAction);
+        }
 
         /// <summary>
         /// Adds a custom render action to an element.
         /// </summary>
-        public void AddActionElement(Element element, Action<Canvas, Rect> renderAction)
+        public void AddActionElement(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
         {
-            ArgumentNullException.ThrowIfNull(element);
+            ArgumentNullException.ThrowIfNull(handle);
             ArgumentNullException.ThrowIfNull(renderAction);
 
-            element._renderCommands ??= new();
-            element._renderCommands.Add(new ElementRenderCommand {
-                Element = element,
+            handle.Data._renderCommands ??= new();
+            handle.Data._renderCommands.Add(new ElementRenderCommand {
+                Element = handle,
                 RenderAction = renderAction,
             });
         }
@@ -587,17 +663,17 @@ namespace Prowl.PaperUI
         #region Element Storage
 
         /// <summary> Get a value from the global GUI storage this persists across all Frames and Elements </summary>
-        public T GetRootStorage<T>(string key) => GetElementStorage<T>(RootElement, key, default);
+        public T GetRootStorage<T>(string key) => GetElementStorage<T>(_rootElementHandle, key, default);
         /// <summary> Set a value in the root element </summary>
-        public void SetRootStorage<T>(string key, T value) => SetElementStorage(RootElement, key, value);
+        public void SetRootStorage<T>(string key, T value) => SetElementStorage(_rootElementHandle, key, value);
 
         /// <summary> Get a value from the current element's storage </summary>
         public T GetElementStorage<T>(string key, T defaultValue = default) => GetElementStorage(CurrentParent, key, defaultValue);
 
         /// <summary> Get a value from the current element's storage </summary>
-        public T GetElementStorage<T>(Element el, string key, T defaultValue = default)
+        public T GetElementStorage<T>(ElementHandle el, string key, T defaultValue = default)
         {
-            if (!_storage.TryGetValue(el.ID, out var storage))
+            if (!_storage.TryGetValue(el.Data.ID, out var storage))
                 return defaultValue;
 
             if (storage.ContainsKey(key))
@@ -607,15 +683,15 @@ namespace Prowl.PaperUI
         }
 
         /// <summary> Check if a key exists in the current element's storage </summary>
-        public bool HasElementStorage(Element el, string key) => _storage.TryGetValue(el.ID, out var storage) && storage.ContainsKey(key);
+        public bool HasElementStorage(ElementHandle el, string key) => _storage.TryGetValue(el.Data.ID, out var storage) && storage.ContainsKey(key);
 
         /// <summary> Set a value in the current element's storage </summary>
         public void SetElementStorage<T>(string key, T value) => SetElementStorage(CurrentParent, key, value);
         /// <summary> Set a value in the current element's storage </summary>
-        public void SetElementStorage<T>(Element el, string key, T value)
+        public void SetElementStorage<T>(ElementHandle el, string key, T value)
         {
-            if (!_storage.TryGetValue(el.ID, out var storage))
-                _storage[el.ID] = storage = [];
+            if (!_storage.TryGetValue(el.Data.ID, out var storage))
+                _storage[el.Data.ID] = storage = [];
 
             storage[key] = value;
         }
@@ -625,7 +701,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Gets the current value of a text field.
         /// </summary>
-        public string GetTextFieldValue(Element element)
+        public string GetTextFieldValue(ElementHandle element)
         {
             return this.GetElementStorage<string>(element, "Value", "");
         }
@@ -633,7 +709,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the value of a text field.
         /// </summary>
-        public void SetTextFieldValue(Element element, string value)
+        public void SetTextFieldValue(ElementHandle element, string value)
         {
             this.SetElementStorage(element, "Value", value);
             this.SetElementStorage(element, "CursorPosition", value.Length);

@@ -9,9 +9,6 @@ namespace Prowl.PaperUI
         private Stack<int> _freeIndices = new Stack<int>();
         private int _rootElementIndex = -1;
 
-        // Element wrapper cache to maintain object identity
-        private readonly Dictionary<int, Element> _elementWrappers = new Dictionary<int, Element>();
-
         public int ElementCount => _elementCount;
 
         public ref ElementData GetElementData(int index)
@@ -19,19 +16,6 @@ namespace Prowl.PaperUI
             if (index < 0 || index >= _elementCount)
                 throw new IndexOutOfRangeException($"Element index {index} is out of range");
             return ref _elements[index];
-        }
-
-        public Element GetElementWrapper(ElementHandle handle)
-        {
-            if (!handle.IsValid)
-                throw new InvalidOperationException("Invalid element handle");
-
-            if (_elementWrappers.TryGetValue(handle.Index, out var wrapper))
-                return wrapper;
-
-            wrapper = new Element(handle);
-            _elementWrappers[handle.Index] = wrapper;
-            return wrapper;
         }
 
         public ElementHandle CreateElement(ulong id)
@@ -83,9 +67,6 @@ namespace Prowl.PaperUI
                 DestroyElement(childHandle);
             }
 
-            // Remove from wrapper cache
-            _elementWrappers.Remove(handle.Index);
-
             // Clear the element data
             elementData = default;
             _freeIndices.Push(handle.Index);
@@ -110,21 +91,20 @@ namespace Prowl.PaperUI
 
         internal void ClearElements()
         {
-            _elementWrappers.Clear();
             _elementCount = 0;
             _freeIndices.Clear();
             _rootElementIndex = -1;
         }
 
         // Helper method to find element by ID
-        public ElementHandle? FindElementHandleByID(ulong id)
+        public ElementHandle FindElementHandleByID(ulong id)
         {
             for (int i = 0; i < _elementCount; i++)
             {
                 if (_elements[i].ID == id)
                     return new ElementHandle(this, i);
             }
-            return null;
+            return default;
         }
 
         // Validation method for debugging

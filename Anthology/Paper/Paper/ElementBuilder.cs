@@ -16,11 +16,11 @@ namespace Prowl.PaperUI
 
     public abstract class StyleSetterBase<T> : IStyleSetter<T> where T : StyleSetterBase<T>
     {
-        public Element _element { get; protected set; }
+        public ElementHandle _handle { get; protected set; }
 
-        protected StyleSetterBase(Element element)
+        protected StyleSetterBase(ElementHandle element)
         {
-            _element = element;
+            _handle = element;
         }
 
         public abstract T SetStyleProperty(GuiProp property, object value);
@@ -339,14 +339,14 @@ namespace Prowl.PaperUI
         private static readonly ObjectPool<StateDrivenStyle> _pool = new ObjectPool<StateDrivenStyle>(() => new StateDrivenStyle());
 
         // Private constructor for the pool
-        private StateDrivenStyle() : base(null)
+        private StateDrivenStyle() : base(default)
         {
             _owner = null;
             _isActive = false;
         }
 
         // Constructor for direct creation (used internally)
-        private StateDrivenStyle(ElementBuilder owner, bool isActive) : base(owner._element)
+        private StateDrivenStyle(ElementBuilder owner, bool isActive) : base(owner._handle)
         {
             _owner = owner;
             _isActive = isActive;
@@ -368,7 +368,7 @@ namespace Prowl.PaperUI
         private void Initialize(ElementBuilder owner, bool isActive)
         {
             // Use reflection or another method to set base.Element
-            _element = owner._element;
+            _handle = owner._handle;
 
             // Set fields with new values
             _owner = owner;
@@ -378,7 +378,7 @@ namespace Prowl.PaperUI
         public StateDrivenStyle Style(StyleTemplate style)
         {
             if (_isActive)
-                style.ApplyTo(_element);
+                style.ApplyTo(_handle);
 
             return this;
         }
@@ -387,7 +387,7 @@ namespace Prowl.PaperUI
         {
             if (_isActive)
                 foreach (var styleName in names)
-                    _owner._paper.ApplyStyleWithStates(_element, styleName);
+                    _owner._paper.ApplyStyleWithStates(_handle, styleName);
 
             return this;
         }
@@ -397,7 +397,7 @@ namespace Prowl.PaperUI
             if (condition)
             {
                 foreach(var styleName in names)
-                    _owner._paper.ApplyStyleWithStates(_element, styleName);
+                    _owner._paper.ApplyStyleWithStates(_handle, styleName);
             }
             return this;
         }
@@ -405,7 +405,7 @@ namespace Prowl.PaperUI
         public override StateDrivenStyle SetStyleProperty(GuiProp property, object value)
         {
             if (_isActive)
-                _owner._paper.SetStyleProperty(_element.ID, property, value);
+                _owner._paper.SetStyleProperty(_handle.Data.ID, property, value);
             return this;
         }
 
@@ -418,7 +418,7 @@ namespace Prowl.PaperUI
         protected override StateDrivenStyle SetTransition(GuiProp property, double duration, Func<double, double> easing)
         {
             if (_isActive)
-                _owner._paper.SetTransitionConfig(_element.ID, property, duration, easing);
+                _owner._paper.SetTransitionConfig(_handle.Data.ID, property, duration, easing);
             return this;
         }
 
@@ -445,7 +445,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a new style template
         /// </summary>
-        public StyleTemplate() : base(null) { }
+        public StyleTemplate() : base(default) { }
 
         /// <summary>
         /// Sets a style property in the template
@@ -472,18 +472,18 @@ namespace Prowl.PaperUI
         /// Applies all style properties in this template to an element
         /// </summary>
         /// <param name="element">The element to apply styles to</param>
-        public void ApplyTo(Element element)
+        public void ApplyTo(ElementHandle element)
         {
             if (element.Owner == null) throw new ArgumentNullException(nameof(element));
             foreach (var kvp in _styleProperties)
             {
-                element.Owner!.SetStyleProperty(element.ID, kvp.Key, kvp.Value);
+                element.Owner!.SetStyleProperty(element.Data.ID, kvp.Key, kvp.Value);
             }
 
             // Apply transitions
             foreach (var kvp in _transitions)
             {
-                element.Owner!.SetTransitionConfig(element.ID, kvp.Key, kvp.Value.duration, kvp.Value.easing);
+                element.Owner!.SetTransitionConfig(element.Data.ID, kvp.Key, kvp.Value.duration, kvp.Value.easing);
             }
         }
 
@@ -537,22 +537,22 @@ namespace Prowl.PaperUI
         public StateDrivenStyle Normal => StateDrivenStyle.Get(this, true);
 
         /// <summary>Style properties applied when the element is hovered.</summary>
-        public StateDrivenStyle Hovered => StateDrivenStyle.Get(this, _paper.IsElementHovered(_element.ID));
+        public StateDrivenStyle Hovered => StateDrivenStyle.Get(this, _paper.IsElementHovered(_handle.Data.ID));
 
         /// <summary>Style properties applied when the element is active (pressed).</summary>
-        public StateDrivenStyle Active => StateDrivenStyle.Get(this, _paper.IsElementActive(_element.ID));
+        public StateDrivenStyle Active => StateDrivenStyle.Get(this, _paper.IsElementActive(_handle.Data.ID));
 
         /// <summary>Style properties applied when the element has focus.</summary>
-        public StateDrivenStyle Focused => StateDrivenStyle.Get(this, _paper.IsElementFocused(_element.ID));
+        public StateDrivenStyle Focused => StateDrivenStyle.Get(this, _paper.IsElementFocused(_handle.Data.ID));
 
-        public ElementBuilder(Paper paper, Element element) : base(element)
+        public ElementBuilder(Paper paper, ElementHandle handle) : base(handle)
         {
             _paper = paper;
         }
 
         public override ElementBuilder SetStyleProperty(GuiProp property, object value)
         {
-            _paper.SetStyleProperty(_element.ID, property, value);
+            _paper.SetStyleProperty(_handle.Data.ID, property, value);
             return this;
         }
 
@@ -564,7 +564,7 @@ namespace Prowl.PaperUI
         /// <param name="easing">Optional easing function</param>
         protected override ElementBuilder SetTransition(GuiProp property, double duration, Func<double, double> easing)
         {
-            _paper.SetTransitionConfig(_element.ID, property, duration, easing);
+            _paper.SetTransitionConfig(_handle.Data.ID, property, duration, easing);
             return this;
         }
 
@@ -577,30 +577,31 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Inherits style properties from the specified element or from the parent if not specified.
         /// </summary>
-        public ElementBuilder InheritStyle(Element? element = null)
+        public ElementBuilder InheritStyle(ElementHandle? element = null)
         {
             if (element != null)
             {
-                _element._elementStyle.SetParent(element._elementStyle);
+                _handle.Data._elementStyle.SetParent(element.Value.Data._elementStyle);
                 return this;
             }
 
-            if (_element.Parent != null)
-                _element._elementStyle.SetParent(_element.Parent._elementStyle);
+            var parentHandle = _handle.GetParentHandle();
+            if (parentHandle.IsValid)
+                _handle.Data._elementStyle.SetParent(parentHandle.Data._elementStyle);
 
             return this;
         }
 
         public ElementBuilder Style(StyleTemplate style)
         {
-            style.ApplyTo(_element);
+            style.ApplyTo(_handle);
             return this;
         }
 
         public ElementBuilder Style(params string[] names)
         {
             foreach (var name in names)
-                _paper.ApplyStyleWithStates(_element, name);
+                _paper.ApplyStyleWithStates(_handle, name);
 
             return this;
         }
@@ -609,7 +610,7 @@ namespace Prowl.PaperUI
         {
             if(condition)
                 foreach (var name in names)
-                    _paper.ApplyStyleWithStates(_element, name);
+                    _paper.ApplyStyleWithStates(_handle, name);
             return this;
         }
 
@@ -618,25 +619,25 @@ namespace Prowl.PaperUI
         /// <summary>Makes the element incapable of receiving focus.</summary>
         public ElementBuilder IsNotFocusable()
         {
-            _element.IsFocusable = false;
+            _handle.Data.IsFocusable = false;
             return this;
         }
 
         /// <summary>Sets a callback that runs after layout calculation is complete.</summary>
-        public ElementBuilder OnPostLayout(Action<Element, Rect> handler)
+        public ElementBuilder OnPostLayout(Action<ElementHandle, Rect> handler)
         {
-            _element.OnPostLayout += handler;
+            _handle.Data.OnPostLayout += handler;
             return this;
         }
 
         /// <summary>Sets a callback that runs after layout calculation is complete, with a captured value.</summary>
-        public ElementBuilder OnPostLayout<T>(T capturedValue, Action<T, Element, Rect> handler) =>
-            OnPostLayout((Element element, Rect rect) => handler(capturedValue, element, rect));
+        public ElementBuilder OnPostLayout<T>(T capturedValue, Action<T, ElementHandle, Rect> handler) =>
+            OnPostLayout((ElementHandle element, Rect rect) => handler(capturedValue, element, rect));
 
         /// <summary>Sets a callback that runs when the element is pressed.</summary>
         public ElementBuilder OnPress(Action<ClickEvent> handler)
         {
-            _element.OnPress += handler;
+            _handle.Data.OnPress += handler;
             return this;
         }
 
@@ -647,7 +648,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is held down.</summary>
         public ElementBuilder OnHeld(Action<ClickEvent> handler)
         {
-            _element.OnHeld += handler;
+            _handle.Data.OnHeld += handler;
             return this;
         }
 
@@ -658,7 +659,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is clicked.</summary>
         public ElementBuilder OnClick(Action<ClickEvent> handler)
         {
-            _element.OnClick += handler;
+            _handle.Data.OnClick += handler;
             return this;
         }
 
@@ -669,7 +670,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is dragged.</summary>
         public ElementBuilder OnDragStart(Action<DragEvent> handler)
         {
-            _element.OnDragStart += handler;
+            _handle.Data.OnDragStart += handler;
             return this;
         }
 
@@ -680,7 +681,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is dragged.</summary>
         public ElementBuilder OnDragging(Action<DragEvent> handler)
         {
-            _element.OnDragging += handler;
+            _handle.Data.OnDragging += handler;
             return this;
         }
 
@@ -691,7 +692,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is released after dragging.</summary>
         public ElementBuilder OnDragEnd(Action<DragEvent> handler)
         {
-            _element.OnDragEnd += handler;
+            _handle.Data.OnDragEnd += handler;
             return this;
         }
 
@@ -702,7 +703,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the mouse button is released after clicking this element.</summary>
         public ElementBuilder OnRelease(Action<ClickEvent> handler)
         {
-            _element.OnRelease += handler;
+            _handle.Data.OnRelease += handler;
             return this;
         }
 
@@ -713,7 +714,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is double-clicked.</summary>
         public ElementBuilder OnDoubleClick(Action<ClickEvent> handler)
         {
-            _element.OnDoubleClick += handler;
+            _handle.Data.OnDoubleClick += handler;
             return this;
         }
 
@@ -724,7 +725,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the element is right-clicked.</summary>
         public ElementBuilder OnRightClick(Action<ClickEvent> handler)
         {
-            _element.OnRightClick += handler;
+            _handle.Data.OnRightClick += handler;
             return this;
         }
 
@@ -735,7 +736,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when scrolling occurs over the element.</summary>
         public ElementBuilder OnScroll(Action<ScrollEvent> handler)
         {
-            _element.OnScroll += handler;
+            _handle.Data.OnScroll += handler;
             return this;
         }
 
@@ -746,7 +747,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when a key is pressed while the element is focused.</summary>
         public ElementBuilder OnKeyPressed(Action<KeyEvent> handler)
         {
-            _element.OnKeyPressed += handler;
+            _handle.Data.OnKeyPressed += handler;
             return this;
         }
 
@@ -757,7 +758,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when a character is typed while the element is focused.</summary>
         public ElementBuilder OnTextInput(Action<TextInputEvent> handler)
         {
-            _element.OnTextInput += handler;
+            _handle.Data.OnTextInput += handler;
             return this;
         }
 
@@ -768,7 +769,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the cursor hovers over the element.</summary>
         public ElementBuilder OnHover(Action<ElementEvent> handler)
         {
-            _element.OnHover += handler;
+            _handle.Data.OnHover += handler;
             return this;
         }
 
@@ -779,7 +780,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the Focused state changes.</summary>
         public ElementBuilder OnFocusChange(Action<FocusEvent> handler)
         {
-            _element.OnFocusChange += handler;
+            _handle.Data.OnFocusChange += handler;
             return this;
         }
 
@@ -790,7 +791,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the cursor enters the element's bounds.</summary>
         public ElementBuilder OnEnter(Action<ElementEvent> handler)
         {
-            _element.OnEnter += handler;
+            _handle.Data.OnEnter += handler;
             return this;
         }
 
@@ -801,7 +802,7 @@ namespace Prowl.PaperUI
         /// <summary>Sets a callback that runs when the cursor leaves the element's bounds.</summary>
         public ElementBuilder OnLeave(Action<ElementEvent> handler)
         {
-            _element.OnLeave += handler;
+            _handle.Data.OnLeave += handler;
             return this;
         }
 
@@ -816,14 +817,14 @@ namespace Prowl.PaperUI
         /// <summary>Makes the element non-interactive (ignores mouse/touch events).</summary>
         public ElementBuilder IsNotInteractable()
         {
-            _element.IsNotInteractable = true;
+            _handle.Data.IsNotInteractable = true;
             return this;
         }
 
         /// <summary>Makes any event on this element not trigger any parent events.</summary>
         public ElementBuilder StopEventPropagation()
         {
-            _element.StopPropagation = true;
+            _handle.Data.StopPropagation = true;
             return this;
         }
 
@@ -831,7 +832,7 @@ namespace Prowl.PaperUI
         /// <param name="layoutType">How child elements should be arranged (Row or Column)</param>
         public ElementBuilder LayoutType(LayoutType layoutType)
         {
-            _element.LayoutType = layoutType;
+            _handle.Data.LayoutType = layoutType;
             return this;
         }
 
@@ -839,7 +840,7 @@ namespace Prowl.PaperUI
         /// <param name="positionType">Position strategy (SelfDirected or ParentDirected)</param>
         public ElementBuilder PositionType(PositionType positionType)
         {
-            _element.PositionType = positionType;
+            _handle.Data.PositionType = positionType;
             return this;
         }
 
@@ -847,14 +848,14 @@ namespace Prowl.PaperUI
         /// <param name="visible">True to show the element, false to hide it</param>
         public ElementBuilder Visible(bool visible)
         {
-            _element.Visible = visible;
+            _handle.Data.Visible = visible;
             return this;
         }
 
         /// <summary>Enables content clipping to the element's bounds.</summary>
         public ElementBuilder Clip()
         {
-            _element._scissorEnabled = true;
+            _handle.Data._scissorEnabled = true;
             return this;
         }
 
@@ -862,7 +863,7 @@ namespace Prowl.PaperUI
         /// <param name="layer">Layer on which the element should be rendered.</param>
         public ElementBuilder Layer(Layer layer)
         {
-            _element.Layer = layer;
+            _handle.Data.Layer = layer;
             return this;
         }
 
@@ -871,8 +872,8 @@ namespace Prowl.PaperUI
         /// <param name="useMarkdown">Whether to parse the text as Markdown</param>
         public ElementBuilder Text(string text, bool useMarkdown = false)
         {
-            _element.IsMarkdown = useMarkdown;
-            _element.Paragraph = text;
+            _handle.Data.IsMarkdown = useMarkdown;
+            _handle.Data.Paragraph = text;
             return this;
         }
 
@@ -882,7 +883,7 @@ namespace Prowl.PaperUI
         /// <param name="mode">The Text Alignment mode to apply</param>
         public ElementBuilder Alignment(TextAlignment mode)
         {
-            _element.TextAlignment = mode;
+            _handle.Data.TextAlignment = mode;
             return this;
         }
 
@@ -892,7 +893,7 @@ namespace Prowl.PaperUI
         /// <param name="mode">The text wrapping mode to apply</param>
         public ElementBuilder Wrap(TextWrapMode mode)
         {
-            _element.WrapMode = mode;
+            _handle.Data.WrapMode = mode;
             return this;
         }
 
@@ -902,9 +903,9 @@ namespace Prowl.PaperUI
         /// <param name="monoFamily">A mono font family, used in Markdown as the Mono Font</param>
         public ElementBuilder Font(string? family, FontStyle style, string monoFamily)
         {
-            _element.FontFamily = family;
-            _element.FontStyle = style;
-            _element.FontMonoFamily = monoFamily;
+            _handle.Data.FontFamily = family;
+            _handle.Data.FontStyle = style;
+            _handle.Data.FontMonoFamily = monoFamily;
             return this;
         }
 
@@ -915,17 +916,17 @@ namespace Prowl.PaperUI
         public ElementBuilder SetScroll(Scroll flags)
         {
             // Set the scroll flags directly on the element
-            _element.ScrollFlags = flags;
+            _handle.Data.ScrollFlags = flags;
 
             // Enable clipping for scrollable elements
             if (flags != Scroll.None)
             {
-                _element._scissorEnabled = true;
+                _handle.Data._scissorEnabled = true;
 
                 // Initialize scroll state if not already present
-                if (!_paper.HasElementStorage(_element, "ScrollState"))
+                if (!_paper.HasElementStorage(_handle, "ScrollState"))
                 {
-                    _paper.SetElementStorage(_element, "ScrollState", new ScrollState());
+                    _paper.SetElementStorage(_handle, "ScrollState", new ScrollState());
                 }
 
                 // Set up scrolling event handlers
@@ -940,9 +941,9 @@ namespace Prowl.PaperUI
         /// </summary>
         public ElementBuilder SetScrollPosition(Vector2 position)
         {
-            var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+            var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
             state.Position = position;
-            _paper.SetElementStorage(_element, "ScrollState", state);
+            _paper.SetElementStorage(_handle, "ScrollState", state);
             return this;
         }
 
@@ -952,7 +953,7 @@ namespace Prowl.PaperUI
         public ElementBuilder CustomScrollbarRenderer(Action<Canvas, Rect, ScrollState> renderer)
         {
             // Store the renderer directly on the element
-            _element.CustomScrollbarRenderer = renderer;
+            _handle.Data.CustomScrollbarRenderer = renderer;
             return this;
         }
 
@@ -963,7 +964,7 @@ namespace Prowl.PaperUI
         {
             // Update content and viewport sizes after layout
             OnPostLayout((element, rect) => {
-                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
 
                 // Set viewport size to current element size
                 state.ViewportSize = new Vector2(rect.width, rect.height);
@@ -973,8 +974,9 @@ namespace Prowl.PaperUI
                 double maxX = 0;
                 double maxY = 0;
 
-                foreach (var child in element.Children)
+                foreach (var childIndex in element.Data.ChildIndices)
                 {
+                    ref var child = ref element.Owner!.GetElementData(childIndex);
                     maxX = Math.Max(maxX, child.RelativeX + child.LayoutWidth);
                     maxY = Math.Max(maxY, child.RelativeY + child.LayoutHeight);
                 }
@@ -982,45 +984,45 @@ namespace Prowl.PaperUI
                 state.ContentSize = new Vector2(maxX, maxY);
                 state.ClampScrollPosition();
 
-                _paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_handle, "ScrollState", state);
             });
 
             // Handle hover events to detect when cursor is over scrollbars
             OnHover((e) => {
-                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
                 Vector2 mousePos = _paper.PointerPos;
 
                 // Check if pointer is over scrollbars
-                state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
-                state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
+                state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
+                state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
 
-                _paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_handle, "ScrollState", state);
             });
 
             // Handle mouse leaving the element
             OnLeave((rect) => {
-                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
                 state.IsVerticalScrollbarHovered = false;
                 state.IsHorizontalScrollbarHovered = false;
-                _paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_handle, "ScrollState", state);
             });
 
             // Handle scrolling with mouse wheel
             OnScroll((e) => {
-                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
 
                 // Don't handle wheel scrolling if actively dragging scrollbars
                 if (state.IsDraggingVertical || state.IsDraggingHorizontal)
                     return;
 
-                if ((_element.ScrollFlags & Scroll.ScrollY) != 0)
+                if ((_handle.Data.ScrollFlags & Scroll.ScrollY) != 0)
                 {
                     state.Position = new Vector2(
                         state.Position.x,
                         state.Position.y - e.Delta * 30  // Adjust scroll speed as needed
                     );
                 }
-                else if ((_element.ScrollFlags & Scroll.ScrollX) != 0)
+                else if ((_handle.Data.ScrollFlags & Scroll.ScrollX) != 0)
                 {
                     state.Position = new Vector2(
                         state.Position.x - e.Delta * 30,
@@ -1029,20 +1031,20 @@ namespace Prowl.PaperUI
                 }
 
                 state.ClampScrollPosition();
-                _paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_handle, "ScrollState", state);
             });
 
             // Handle start scrollbar drag
             OnDragStart((e) => {
-                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
 
-                if (state.AreScrollbarsHidden(_element.ScrollFlags)) return;
+                if (state.AreScrollbarsHidden(_handle.Data.ScrollFlags)) return;
 
                 Vector2 mousePos = _paper.PointerPos;
 
                 // Check if click is on a scrollbar
-                bool onVertical = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
-                bool onHorizontal = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
+                bool onVertical = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
+                bool onHorizontal = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
 
                 // Start dragging the appropriate scrollbar
                 if (onVertical)
@@ -1058,45 +1060,45 @@ namespace Prowl.PaperUI
                     state.ScrollStartPosition = state.Position;
                 }
 
-                _paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_handle, "ScrollState", state);
             });
 
             // Handle dragging scrollbars
             OnDragging((e) => {
-                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
 
-                if (state.AreScrollbarsHidden(_element.ScrollFlags)) return;
+                if (state.AreScrollbarsHidden(_handle.Data.ScrollFlags)) return;
 
                 Vector2 mousePos = _paper.PointerPos;
 
                 // Handle scrollbar dragging
                 if (state.IsDraggingVertical)
                 {
-                    state.HandleVerticalScrollbarDrag(mousePos, e.ElementRect, _element.ScrollFlags);
+                    state.HandleVerticalScrollbarDrag(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
                 }
                 else if (state.IsDraggingHorizontal)
                 {
-                    state.HandleHorizontalScrollbarDrag(mousePos, e.ElementRect, _element.ScrollFlags);
+                    state.HandleHorizontalScrollbarDrag(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
                 }
 
-                _paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_handle, "ScrollState", state);
             });
 
             // Handle after dragging
             OnDragEnd((e) => {
-                var state = _paper.GetElementStorage<ScrollState>(_element, "ScrollState", new ScrollState());
+                var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
 
-                if (state.AreScrollbarsHidden(_element.ScrollFlags)) return;
+                if (state.AreScrollbarsHidden(_handle.Data.ScrollFlags)) return;
 
                 state.IsDraggingVertical = false;
                 state.IsDraggingHorizontal = false;
 
                 // Update hover state on release
                 Vector2 mousePos = _paper.PointerPos;
-                state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
-                state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _element.ScrollFlags);
+                state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
+                state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
 
-                _paper.SetElementStorage(_element, "ScrollState", state);
+                _paper.SetElementStorage(_handle, "ScrollState", state);
             });
         }
 
@@ -1139,7 +1141,7 @@ namespace Prowl.PaperUI
         //    Color tColor = isEmpty ? placeholderColor.Value : textColor.Value;
         //
         //    // Store focus state
-        //    bool isFocused = _paper.IsElementFocused(_element.ID);
+        //    bool isFocused = _paper.IsElementFocused(_element.Handle.Data.ID);
         //    _paper.SetElementStorage(_element, "IsFocused", isFocused);
         //
         //    // Create a blinking cursor position tracker
@@ -1675,11 +1677,11 @@ namespace Prowl.PaperUI
         public IDisposable Enter()
         {
             var currentParent = _paper.CurrentParent;
-            if (currentParent.Handle.Equals(_element.Handle))
+            if (currentParent.Equals(_handle))
                 throw new InvalidOperationException("Cannot enter the same element twice.");
 
             // Push this element onto the stack
-            _paper._elementStack.Push(_element.Handle);
+            _paper._elementStack.Push(_handle);
 
             return this;
         }

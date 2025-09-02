@@ -63,7 +63,7 @@ namespace Prowl.PaperUI.LayoutEngine
         {
             foreach (int childIndex in elementHandle.Data.ChildIndices)
             {
-                yield return new ElementHandle(elementHandle.GUI, childIndex);
+                yield return new ElementHandle(elementHandle.Owner, childIndex);
             }
         }
         private static UnitValue GetMainBetween(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.RowBetween, GuiProp.ColBetween);
@@ -185,10 +185,10 @@ namespace Prowl.PaperUI.LayoutEngine
             var borderCrossAfterUnit = GetBorderCrossAfter(ref element, parentLayoutType);
             double borderCrossAfter = borderCrossAfterUnit.ToPx(computedCross, DEFAULT_BORDER_WIDTH);
 
-            var visibleChildren = element.ChildIndices.Where(idx => elementHandle.GUI.GetElementData(idx).Visible).ToList();
+            var visibleChildren = element.ChildIndices.Where(idx => elementHandle.Owner.GetElementData(idx).Visible).ToList();
             int numChildren = visibleChildren.Count;
             var parentDirectedChildren = visibleChildren
-                .Where(idx => elementHandle.GUI.GetElementData(idx).PositionType == PositionType.ParentDirected)
+                .Where(idx => elementHandle.Owner.GetElementData(idx).PositionType == PositionType.ParentDirected)
                 .ToList();
             int numParentDirectedChildren = parentDirectedChildren.Count;
 
@@ -212,7 +212,7 @@ namespace Prowl.PaperUI.LayoutEngine
                         ? (pMain ?? parentMain)
                         : (pCross ?? parentCross);
 
-                    var textSize = ProcessText(ref element, elementHandle.GUI, (float)availableWidth);
+                    var textSize = element.ProcessText(elementHandle.Owner, (float)availableWidth);
 
                     if (textSize.x > 0 || textSize.y > 0)
                     {
@@ -276,8 +276,8 @@ namespace Prowl.PaperUI.LayoutEngine
             for (int i = 0; i < parentDirected.Count; i++)
             {
                 var (childIndex, listIndex) = parentDirected[i];
-                ref var child = ref elementHandle.GUI.GetElementData(childIndex);
-                var childHandle = new ElementHandle(elementHandle.GUI, childIndex);
+                ref var child = ref elementHandle.Owner.GetElementData(childIndex);
+                var childHandle = new ElementHandle(elementHandle.Owner, childIndex);
 
                 // Get desired space and size
                 UnitValue childMainBefore = GetMainBefore(ref child, layoutType);
@@ -315,7 +315,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     else if (i + 1 < parentDirected.Count)
                     {
                         var nextChildIndex = parentDirected[i + 1].ChildIndex;
-                        ref var nextChild = ref elementHandle.GUI.GetElementData(nextChildIndex);
+                        ref var nextChild = ref elementHandle.Owner.GetElementData(nextChildIndex);
                         var nextMainBefore = GetMainBefore(ref nextChild, layoutType);
                         if (nextMainBefore.IsAuto)
                         {
@@ -1221,12 +1221,6 @@ namespace Prowl.PaperUI.LayoutEngine
 
             return size;
         }
-
-        private static UISize DoLayout(Element element, LayoutType parentLayoutType, double parentMain, double parentCross, double? fixedCross = null)
-        {
-            return DoLayout(element._handle, parentLayoutType, parentMain, parentCross, fixedCross);
-        }
-
         private static void SetElementBounds(ElementHandle elementHandle, LayoutType layoutType, double mainPos, double crossPos, double main, double cross)
         {
             ref ElementData element = ref elementHandle.Data;
@@ -1247,7 +1241,7 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
 
-        private static Vector2 ProcessText(ref ElementData element, Paper gui, float availableWidth)
+        internal static Vector2 ProcessText(this ref ElementData element, Paper gui, float availableWidth)
         {
             if (element.ProcessedText) return Vector2.zero;
 

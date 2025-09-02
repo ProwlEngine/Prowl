@@ -9,7 +9,7 @@ namespace Prowl.PaperUI.Events;
 public class ElementEvent
 {
     // The element that triggered the event
-    public Element Source { get; }
+    public ElementHandle Source { get; }
 
     // The calculated layout rectangle of the element
     public Rect ElementRect { get; }
@@ -23,7 +23,7 @@ public class ElementEvent
     // The pointer position relative to the element's top-left corner
     public Vector2 RelativePosition { get; }
 
-    public ElementEvent(Element source, Rect elementRect, Vector2 pointerPos)
+    public ElementEvent(ElementHandle source, Rect elementRect, Vector2 pointerPos)
     {
         Source = source;
         ElementRect = elementRect;

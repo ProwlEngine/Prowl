@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
 using Prowl.PaperUI.Events;
 using Prowl.Quill;
 using Prowl.Scribe;
 using Prowl.Vector;
-using static Prowl.Quill.Canvas;
 
 namespace Prowl.PaperUI.LayoutEngine
 {
@@ -18,7 +14,7 @@ namespace Prowl.PaperUI.LayoutEngine
         public bool IsNotInteractable;
         public bool StopPropagation;
 
-        // Event handlers - stored as indices to avoid GC issues
+        // Event handlers
         public Action<ClickEvent> OnClick;
         public Action<ClickEvent> OnPress;
         public Action<ClickEvent> OnRelease;

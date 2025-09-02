@@ -2,24 +2,32 @@ namespace Prowl.PaperUI.LayoutEngine
 {
     public readonly struct ElementHandle : IEquatable<ElementHandle>
     {
-        public readonly Paper GUI;
+        public readonly Paper Owner;
         public readonly int Index;
 
         public ElementHandle(Paper gui, int index)
         {
-            GUI = gui;
+            Owner = gui;
             Index = index;
         }
 
-        public bool IsValid => GUI != null && Index >= 0 && Index < GUI.ElementCount;
+        public bool IsValid => Owner != null && Index >= 0 && Index < Owner.ElementCount;
 
-        public ref ElementData Data => ref GUI.GetElementData(Index);
+        public ref ElementData Data => ref Owner.GetElementData(Index);
 
-        public bool Equals(ElementHandle other) => GUI == other.GUI && Index == other.Index;
+        public ElementHandle GetParentHandle()
+        {
+            if (!IsValid || Data.ParentIndex == -1)
+                return default;
+
+            return new ElementHandle(Owner, Data.ParentIndex);
+        }
+
+        public bool Equals(ElementHandle other) => Owner == other.Owner && Index == other.Index;
 
         public override bool Equals(object obj) => obj is ElementHandle other && Equals(other);
 
-        public override int GetHashCode() => HashCode.Combine(GUI, Index);
+        public override int GetHashCode() => HashCode.Combine(Owner, Index);
 
         public static bool operator ==(ElementHandle left, ElementHandle right) => left.Equals(right);
 
