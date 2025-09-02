@@ -106,7 +106,10 @@ namespace Prowl.PaperUI
                 {
                     ref ElementData data = ref hoveredElement.Data;
                     data.OnScroll?.Invoke(new ScrollEvent(hoveredElement, data.LayoutRect, PointerPos, PointerWheel));
-                    BubbleEventToParents(hoveredElement, parent => parent.Data.OnScroll?.Invoke(new ScrollEvent(parent, parent.Data.LayoutRect, PointerPos, PointerWheel)));
+                    BubbleEventToParents(hoveredElement, parent => {
+                        ref ElementData parentData = ref parent.Data;
+                        parentData.OnScroll?.Invoke(new ScrollEvent(parent, parentData.LayoutRect, PointerPos, PointerWheel));
+                    });
                 }
             }
 
@@ -169,11 +172,12 @@ namespace Prowl.PaperUI
             }
 
             // Check children first (front to back, respecting z-order)
-            if (shouldCheckChildren && data.ChildIndices.Count > 0)
+            var childIndices = data.ChildIndices;
+            if (shouldCheckChildren && childIndices.Count > 0)
             {
-                for (int i = data.ChildIndices.Count - 1; i >= 0; i--)
+                for (int i = childIndices.Count - 1; i >= 0; i--)
                 {
-                    var childHandle = new ElementHandle(handle.Owner, data.ChildIndices[i]);
+                    var childHandle = new ElementHandle(handle.Owner, childIndices[i]);
 
                     var interactableChild = FindTopmostInteractableElementForLayer(ref childHandle, childTransform, layer, inLayer || data.Layer == layer);
                     if (interactableChild.IsValid)
@@ -191,7 +195,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Tests if a point in local coordinates is within an element.
         /// </summary>
-        private bool IsPointOverElementData(ElementData data, double localX, double localY)
+        private bool IsPointOverElementData(in ElementData data, double localX, double localY)
         {
             return  localX >= data.X &&
                     localX <= data.X + data.LayoutWidth &&
@@ -206,15 +210,16 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Builds the bubble path from an element to the root.
         /// </summary>
-        private void BuildBubblePath(ElementHandle handle)
+        private void BuildBubblePath(in ElementHandle handle)
         {
-            if (handle.Data.StopPropagation)
+            ref ElementData data = ref handle.Data;
+            if (data.StopPropagation)
                 return;
 
             ElementHandle current = handle;
             while (current.IsValid)
             {
-                ref ElementData data = ref current.Data;
+                data = ref current.Data;
 
                 _elementsInBubblePath.Add(data.ID);
                 if (data.StopPropagation)
@@ -226,16 +231,18 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Propagates an event up the element hierarchy.
         /// </summary>
-        private void BubbleEventToParents(ElementHandle element, Action<ElementHandle> eventHandler)
+        private void BubbleEventToParents(in ElementHandle element, Action<ElementHandle> eventHandler)
         {
-            if (element.Data.StopPropagation)
+            ref ElementData data = ref element.Data;
+            if (data.StopPropagation)
                 return;
 
             ElementHandle current = element.GetParentHandle();
             while (current.IsValid)
             {
                 eventHandler(current);
-                if (current.Data.StopPropagation)
+                data = ref current.Data;
+                if (data.StopPropagation)
                     break;
                 current = current.GetParentHandle();
             }
@@ -258,9 +265,13 @@ namespace Prowl.PaperUI
             foreach (var leftElementId in leftElements)
             {
                 ElementHandle leftElement = FindElementByID(leftElementId);
-                if (leftElement.IsValid && leftElement.Data.OnLeave != null)
+                if (leftElement.IsValid)
                 {
-                    leftElement.Data.OnLeave(new ElementEvent(leftElement, leftElement.Data.LayoutRect, PointerPos));
+                    ref ElementData data = ref leftElement.Data;
+                    if (data.OnLeave != null)
+                    {
+                        data.OnLeave(new ElementEvent(leftElement, data.LayoutRect, PointerPos));
+                    }
                 }
                 _wasHoveredState[leftElementId] = false;
             }
@@ -271,14 +282,15 @@ namespace Prowl.PaperUI
                 ElementHandle hoveredElement = FindElementByID(hoveredId);
                 if (hoveredElement.IsValid)
                 {
+                    ref ElementData data = ref hoveredElement.Data;
                     bool wasHovered = _wasHoveredState.TryGetValue(hoveredId, out bool hoveredState) && hoveredState;
 
                     // Only trigger enter event if element wasn't hovered before
-                    if (!wasHovered && hoveredElement.Data.OnEnter != null)
-                        hoveredElement.Data.OnEnter(new ElementEvent(hoveredElement, hoveredElement.Data.LayoutRect, PointerPos));
+                    if (!wasHovered && data.OnEnter != null)
+                        data.OnEnter(new ElementEvent(hoveredElement, data.LayoutRect, PointerPos));
 
                     // Always trigger hover event
-                    hoveredElement.Data.OnHover?.Invoke(new ElementEvent(hoveredElement, hoveredElement.Data.LayoutRect, PointerPos));
+                    data.OnHover?.Invoke(new ElementEvent(hoveredElement, data.LayoutRect, PointerPos));
 
                     _wasHoveredState[hoveredId] = true;
                 }
@@ -298,11 +310,15 @@ namespace Prowl.PaperUI
                     ElementHandle hoveredElement = FindElementByID(_theHoveredElementId);
                     if (hoveredElement.IsValid)
                     {
+                        ref ElementData data = ref hoveredElement.Data;
                         // Direct event
-                        hoveredElement.Data.OnDoubleClick?.Invoke(new ClickEvent(hoveredElement, hoveredElement.Data.LayoutRect, PointerPos, PaperMouseBtn.Left));
+                        data.OnDoubleClick?.Invoke(new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
                         // Bubble event
-                        BubbleEventToParents(hoveredElement, parent => parent.Data.OnDoubleClick?.Invoke(new ClickEvent(parent, parent.Data.LayoutRect, PointerPos, PaperMouseBtn.Left)));
+                        BubbleEventToParents(hoveredElement, parent => {
+                            ref ElementData parentData = ref parent.Data;
+                            parentData.OnDoubleClick?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Left));
+                        });
                     }
                 }
             }
@@ -319,25 +335,30 @@ namespace Prowl.PaperUI
                     ElementHandle activeElement = FindElementByID(_activeElementId);
                     if (activeElement.IsValid)
                     {
+                        ref ElementData data = ref activeElement.Data;
                         // Direct event
-                        activeElement.Data.OnPress?.Invoke(new ClickEvent(activeElement, activeElement.Data.LayoutRect, PointerPos, PaperMouseBtn.Left));
+                        data.OnPress?.Invoke(new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
                         // Bubble event
-                        BubbleEventToParents(activeElement, parent => parent.Data.OnPress?.Invoke(new ClickEvent(parent, parent.Data.LayoutRect, PointerPos, PaperMouseBtn.Left)));
+                        BubbleEventToParents(activeElement, parent => {
+                            ref ElementData parentData = ref parent.Data;
+                            parentData.OnPress?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Left));
+                        });
 
                         // Update focus state
-                        if (activeElement.Data.IsFocusable)
+                        if (data.IsFocusable)
                         {
                             if (_focusedElementId != _activeElementId)
                             {
-                                activeElement.Data.OnFocusChange?.Invoke(new FocusEvent(activeElement, true));
+                                data.OnFocusChange?.Invoke(new FocusEvent(activeElement, true));
 
                                 if (_focusedElementId != 0)
                                 {
                                     ElementHandle oldFocusedElement = FindElementByID(_focusedElementId);
                                     if (oldFocusedElement.IsValid)
                                     {
-                                        oldFocusedElement.Data.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
+                                        ref ElementData oldData = ref oldFocusedElement.Data;
+                                        oldData.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
                                     }
                                 }
 
@@ -405,11 +426,15 @@ namespace Prowl.PaperUI
                     ElementHandle hoveredElement = FindElementByID(_theHoveredElementId);
                     if (hoveredElement.IsValid)
                     {
+                        ref ElementData data = ref hoveredElement.Data;
                         // Direct event
-                        hoveredElement.Data.OnRightClick?.Invoke(new ClickEvent(hoveredElement, hoveredElement.Data.LayoutRect, PointerPos, PaperMouseBtn.Right));
+                        data.OnRightClick?.Invoke(new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Right));
 
                         // Bubble event
-                        BubbleEventToParents(hoveredElement, parent => parent.Data.OnRightClick?.Invoke(new ClickEvent(parent, parent.Data.LayoutRect, PointerPos, PaperMouseBtn.Right)));
+                        BubbleEventToParents(hoveredElement, parent => {
+                            ref ElementData parentData = ref parent.Data;
+                            parentData.OnRightClick?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Right));
+                        });
                     }
                 }
             }
@@ -426,25 +451,35 @@ namespace Prowl.PaperUI
                     data.OnHeld?.Invoke(new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
                     // Bubble event
-                    BubbleEventToParents(activeElement, parent => parent.Data.OnHeld?.Invoke(new ClickEvent(parent, parent.Data.LayoutRect, PointerPos, PaperMouseBtn.Left)));
+                    BubbleEventToParents(activeElement, parent => {
+                        ref ElementData parentData = ref parent.Data;
+                        parentData.OnHeld?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Left));
+                    });
 
                     if (IsPointerMoving)
                     {
                         bool wasDragging = _isDragging.TryGetValue(_activeElementId, out bool isDragging) && isDragging;
                         Vector2 startPos = _dragStartPos[_activeElementId];
+                        Rect layoutRect = data.LayoutRect;
 
                         // Handle drag start
                         if (!wasDragging)
                         {
-                            data.OnDragStart?.Invoke(new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
-                            BubbleEventToParents(activeElement, parent => parent.Data.OnDragStart?.Invoke(new DragEvent(parent, parent.Data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta)));
+                            data.OnDragStart?.Invoke(new DragEvent(activeElement, layoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
+                            BubbleEventToParents(activeElement, parent => {
+                                ref ElementData parentData = ref parent.Data;
+                                parentData.OnDragStart?.Invoke(new DragEvent(parent, parentData.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
+                            });
 
                             _isDragging[_activeElementId] = true;
                         }
 
                         // Handle continuous dragging
-                        data.OnDragging?.Invoke(new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
-                        BubbleEventToParents(activeElement, parent => parent.Data.OnDragging?.Invoke(new DragEvent(parent, parent.Data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta)));
+                        data.OnDragging?.Invoke(new DragEvent(activeElement, layoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
+                        BubbleEventToParents(activeElement, parent => {
+                            ref ElementData parentData = ref parent.Data;
+                            parentData.OnDragging?.Invoke(new DragEvent(parent, parentData.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
+                        });
                     }
                 }
             }
