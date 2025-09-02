@@ -149,7 +149,7 @@ namespace Prowl.PaperUI.LayoutEngine
         /// <param name="b">Ending value</param>
         /// <param name="blendFactor">Interpolation factor (0.0 to 1.0)</param>
         /// <returns>Interpolated UnitValue</returns>
-        public static UnitValue Lerp(UnitValue a, UnitValue b, double blendFactor)
+        public static UnitValue Lerp(in UnitValue a, in UnitValue b, double blendFactor)
         {
             // Ensure blend factor is between 0 and 1
             blendFactor = Math.Clamp(blendFactor, 0f, 1f);

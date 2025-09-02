@@ -95,85 +95,85 @@ namespace Prowl.PaperUI
         public T AspectRatio(double ratio) => SetStyleProperty(GuiProp.AspectRatio, ratio);
 
         /// <summary>Sets both width and height to the same value.</summary>
-        public T Size(UnitValue sizeUniform) => Size(sizeUniform, sizeUniform);
+        public T Size(in UnitValue sizeUniform) => Size(sizeUniform, sizeUniform);
 
         /// <summary>Sets the width and height of the element.</summary>
-        public T Size(UnitValue width, UnitValue height)
+        public T Size(in UnitValue width, in UnitValue height)
         {
             SetStyleProperty(GuiProp.Width, width);
             return SetStyleProperty(GuiProp.Height, height);
         }
 
         /// <summary>Sets the width of the element.</summary>
-        public T Width(UnitValue width) => SetStyleProperty(GuiProp.Width, width);
+        public T Width(in UnitValue width) => SetStyleProperty(GuiProp.Width, width);
 
         /// <summary>Sets the height of the element.</summary>
-        public T Height(UnitValue height) => SetStyleProperty(GuiProp.Height, height);
+        public T Height(in UnitValue height) => SetStyleProperty(GuiProp.Height, height);
 
         /// <summary>Sets the minimum width of the element.</summary>
-        public T MinWidth(UnitValue minWidth) => SetStyleProperty(GuiProp.MinWidth, minWidth);
+        public T MinWidth(in UnitValue minWidth) => SetStyleProperty(GuiProp.MinWidth, minWidth);
 
         /// <summary>Sets the maximum width of the element.</summary>
-        public T MaxWidth(UnitValue maxWidth) => SetStyleProperty(GuiProp.MaxWidth, maxWidth);
+        public T MaxWidth(in UnitValue maxWidth) => SetStyleProperty(GuiProp.MaxWidth, maxWidth);
 
         /// <summary>Sets the minimum height of the element.</summary>
-        public T MinHeight(UnitValue minHeight) => SetStyleProperty(GuiProp.MinHeight, minHeight);
+        public T MinHeight(in UnitValue minHeight) => SetStyleProperty(GuiProp.MinHeight, minHeight);
 
         /// <summary>Sets the maximum height of the element.</summary>
-        public T MaxHeight(UnitValue maxHeight) => SetStyleProperty(GuiProp.MaxHeight, maxHeight);
+        public T MaxHeight(in UnitValue maxHeight) => SetStyleProperty(GuiProp.MaxHeight, maxHeight);
 
         /// <summary>Sets the position of the element from the left and top edges.</summary>
-        public T Position(UnitValue left, UnitValue top)
+        public T Position(in UnitValue left, in UnitValue top)
         {
             SetStyleProperty(GuiProp.Left, left);
             return SetStyleProperty(GuiProp.Top, top);
         }
 
         /// <summary>Sets the left position of the element.</summary>
-        public T Left(UnitValue left) => SetStyleProperty(GuiProp.Left, left);
+        public T Left(in UnitValue left) => SetStyleProperty(GuiProp.Left, left);
 
         /// <summary>Sets the right position of the element.</summary>
-        public T Right(UnitValue right) => SetStyleProperty(GuiProp.Right, right);
+        public T Right(in UnitValue right) => SetStyleProperty(GuiProp.Right, right);
 
         /// <summary>Sets the top position of the element.</summary>
-        public T Top(UnitValue top) => SetStyleProperty(GuiProp.Top, top);
+        public T Top(in UnitValue top) => SetStyleProperty(GuiProp.Top, top);
 
         /// <summary>Sets the bottom position of the element.</summary>
-        public T Bottom(UnitValue bottom) => SetStyleProperty(GuiProp.Bottom, bottom);
+        public T Bottom(in UnitValue bottom) => SetStyleProperty(GuiProp.Bottom, bottom);
 
         /// <summary>Sets the minimum left position of the element.</summary>
-        public T MinLeft(UnitValue minLeft) => SetStyleProperty(GuiProp.MinLeft, minLeft);
+        public T MinLeft(in UnitValue minLeft) => SetStyleProperty(GuiProp.MinLeft, minLeft);
 
         /// <summary>Sets the maximum left position of the element.</summary>
-        public T MaxLeft(UnitValue maxLeft) => SetStyleProperty(GuiProp.MaxLeft, maxLeft);
+        public T MaxLeft(in UnitValue maxLeft) => SetStyleProperty(GuiProp.MaxLeft, maxLeft);
 
         /// <summary>Sets the minimum right position of the element.</summary>
-        public T MinRight(UnitValue minRight) => SetStyleProperty(GuiProp.MinRight, minRight);
+        public T MinRight(in UnitValue minRight) => SetStyleProperty(GuiProp.MinRight, minRight);
 
         /// <summary>Sets the maximum right position of the element.</summary>
-        public T MaxRight(UnitValue maxRight) => SetStyleProperty(GuiProp.MaxRight, maxRight);
+        public T MaxRight(in UnitValue maxRight) => SetStyleProperty(GuiProp.MaxRight, maxRight);
 
         /// <summary>Sets the minimum top position of the element.</summary>
-        public T MinTop(UnitValue minTop) => SetStyleProperty(GuiProp.MinTop, minTop);
+        public T MinTop(in UnitValue minTop) => SetStyleProperty(GuiProp.MinTop, minTop);
 
         /// <summary>Sets the maximum top position of the element.</summary>
-        public T MaxTop(UnitValue maxTop) => SetStyleProperty(GuiProp.MaxTop, maxTop);
+        public T MaxTop(in UnitValue maxTop) => SetStyleProperty(GuiProp.MaxTop, maxTop);
 
         /// <summary>Sets the minimum bottom position of the element.</summary>
-        public T MinBottom(UnitValue minBottom) => SetStyleProperty(GuiProp.MinBottom, minBottom);
+        public T MinBottom(in UnitValue minBottom) => SetStyleProperty(GuiProp.MinBottom, minBottom);
 
         /// <summary>Sets the maximum bottom position of the element.</summary>
-        public T MaxBottom(UnitValue maxBottom) => SetStyleProperty(GuiProp.MaxBottom, maxBottom);
+        public T MaxBottom(in UnitValue maxBottom) => SetStyleProperty(GuiProp.MaxBottom, maxBottom);
 
         /// <summary>Sets uniform margin on all sides.</summary>
-        public T Margin(UnitValue all) => Margin(all, all, all, all);
+        public T Margin(in UnitValue all) => Margin(all, all, all, all);
 
         /// <summary>Sets horizontal and vertical margins.</summary>
-        public T Margin(UnitValue horizontal, UnitValue vertical) =>
+        public T Margin(in UnitValue horizontal, in UnitValue vertical) =>
             Margin(horizontal, horizontal, vertical, vertical);
 
         /// <summary>Sets individual margins for each side.</summary>
-        public T Margin(UnitValue left, UnitValue right, UnitValue top, UnitValue bottom)
+        public T Margin(in UnitValue left, in UnitValue right, in UnitValue top, in UnitValue bottom)
         {
             SetStyleProperty(GuiProp.Left, left);
             SetStyleProperty(GuiProp.Right, right);
@@ -182,44 +182,44 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>Sets the left padding for child elements.</summary>
-        public T ChildLeft(UnitValue childLeft) => SetStyleProperty(GuiProp.ChildLeft, childLeft);
+        public T ChildLeft(in UnitValue childLeft) => SetStyleProperty(GuiProp.ChildLeft, childLeft);
 
         /// <summary>Sets the right padding for child elements.</summary>
-        public T ChildRight(UnitValue childRight) => SetStyleProperty(GuiProp.ChildRight, childRight);
+        public T ChildRight(in UnitValue childRight) => SetStyleProperty(GuiProp.ChildRight, childRight);
 
         /// <summary>Sets the top padding for child elements.</summary>
-        public T ChildTop(UnitValue childTop) => SetStyleProperty(GuiProp.ChildTop, childTop);
+        public T ChildTop(in UnitValue childTop) => SetStyleProperty(GuiProp.ChildTop, childTop);
 
         /// <summary>Sets the bottom padding for child elements.</summary>
-        public T ChildBottom(UnitValue childBottom) => SetStyleProperty(GuiProp.ChildBottom, childBottom);
+        public T ChildBottom(in UnitValue childBottom) => SetStyleProperty(GuiProp.ChildBottom, childBottom);
 
         /// <summary>Sets the spacing between rows in a container.</summary>
-        public T RowBetween(UnitValue rowBetween) => SetStyleProperty(GuiProp.RowBetween, rowBetween);
+        public T RowBetween(in UnitValue rowBetween) => SetStyleProperty(GuiProp.RowBetween, rowBetween);
 
         /// <summary>Sets the spacing between columns in a container.</summary>
-        public T ColBetween(UnitValue colBetween) => SetStyleProperty(GuiProp.ColBetween, colBetween);
+        public T ColBetween(in UnitValue colBetween) => SetStyleProperty(GuiProp.ColBetween, colBetween);
 
         /// <summary>Sets the left border width.</summary>
-        public T BorderLeft(UnitValue borderLeft) => SetStyleProperty(GuiProp.BorderLeft, borderLeft);
+        public T BorderLeft(in UnitValue borderLeft) => SetStyleProperty(GuiProp.BorderLeft, borderLeft);
 
         /// <summary>Sets the right border width.</summary>
-        public T BorderRight(UnitValue borderRight) => SetStyleProperty(GuiProp.BorderRight, borderRight);
+        public T BorderRight(in UnitValue borderRight) => SetStyleProperty(GuiProp.BorderRight, borderRight);
 
         /// <summary>Sets the top border width.</summary>
-        public T BorderTop(UnitValue borderTop) => SetStyleProperty(GuiProp.BorderTop, borderTop);
+        public T BorderTop(in UnitValue borderTop) => SetStyleProperty(GuiProp.BorderTop, borderTop);
 
         /// <summary>Sets the bottom border width.</summary>
-        public T BorderBottom(UnitValue borderBottom) => SetStyleProperty(GuiProp.BorderBottom, borderBottom);
+        public T BorderBottom(in UnitValue borderBottom) => SetStyleProperty(GuiProp.BorderBottom, borderBottom);
 
         /// <summary>Sets uniform border width on all sides.</summary>
-        public T Border(UnitValue all) => Border(all, all, all, all);
+        public T Border(in UnitValue all) => Border(all, all, all, all);
 
         /// <summary>Sets horizontal and vertical border widths.</summary>
-        public T Border(UnitValue horizontal, UnitValue vertical) =>
+        public T Border(in UnitValue horizontal, in UnitValue vertical) =>
             Border(horizontal, horizontal, vertical, vertical);
 
         /// <summary>Sets individual border widths for each side.</summary>
-        public T Border(UnitValue left, UnitValue right, UnitValue top, UnitValue bottom)
+        public T Border(in UnitValue left, in UnitValue right, in UnitValue top, in UnitValue bottom)
         {
             SetStyleProperty(GuiProp.BorderLeft, left);
             SetStyleProperty(GuiProp.BorderRight, right);
