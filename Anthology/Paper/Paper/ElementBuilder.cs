@@ -545,7 +545,7 @@ namespace Prowl.PaperUI
         /// <summary>Style properties applied when the element has focus.</summary>
         public StateDrivenStyle Focused => StateDrivenStyle.Get(this, _paper.IsElementFocused(_element.ID));
 
-        public ElementBuilder(Paper paper, ulong storageHash) : base(new Element { Owner = paper, ID = storageHash })
+        public ElementBuilder(Paper paper, Element element) : base(element)
         {
             _paper = paper;
         }
@@ -1675,11 +1675,11 @@ namespace Prowl.PaperUI
         public IDisposable Enter()
         {
             var currentParent = _paper.CurrentParent;
-            if (currentParent == _element)
+            if (currentParent.Handle.Equals(_element.Handle))
                 throw new InvalidOperationException("Cannot enter the same element twice.");
 
             // Push this element onto the stack
-            _paper._elementStack.Push(_element);
+            _paper._elementStack.Push(_element.Handle);
 
             return this;
         }

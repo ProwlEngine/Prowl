@@ -1,215 +1,442 @@
-﻿using System.Drawing;
-using System.Runtime.Serialization.Formatters;
-
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 using Prowl.PaperUI.Events;
 using Prowl.Quill;
 using Prowl.Scribe;
 using Prowl.Vector;
 
-using static Prowl.Quill.Canvas;
-
 namespace Prowl.PaperUI.LayoutEngine
 {
     public partial class Element
     {
-        public Paper? Owner { get; internal set; } = null;
-        public ulong ID { get; internal set; } = 0;
+        internal ElementHandle _handle;
 
-        // Events
-        public bool IsFocusable { get; set; } = true;
-        public bool IsNotInteractable { get; set; } = false;
-        public bool StopPropagation { get; set; } = false;
-
-        public Action<ClickEvent>? OnClick { get; set; }
-        public Action<ClickEvent>? OnPress { get; set; }
-        public Action<ClickEvent>? OnRelease { get; set; }
-        public Action<ClickEvent>? OnDoubleClick { get; set; }
-        public Action<ClickEvent>? OnRightClick { get; set; }
-        public Action<ClickEvent>? OnHeld { get; set; }
-
-        public Action<DragEvent>? OnDragStart { get; set; }
-        public Action<DragEvent>? OnDragging { get; set; }
-        public Action<DragEvent>? OnDragEnd { get; set; }
-
-        public Action<ScrollEvent>? OnScroll { get; set; }
-        public Action<ElementEvent>? OnHover { get; set; }
-        public Action<ElementEvent>? OnEnter { get; set; }
-        public Action<ElementEvent>? OnLeave { get; set; }
-
-        public Action<KeyEvent>? OnKeyPressed { get; set; }
-        public Action<TextInputEvent>? OnTextInput { get; set; }
-        public Action<FocusEvent>? OnFocusChange { get; set; }
-
-        public Action<Element, Rect>? OnPostLayout { get; set; }
-
-        public Scroll ScrollFlags { get; set; } = Scroll.None;
-        public Action<Canvas, Rect, ScrollState> CustomScrollbarRenderer { get; set; }
-
-        public Element? Parent { get; internal set; }
-        public List<Element> Children { get; } = [];
-
-        public bool Visible = true;
-
-        internal LayoutType LayoutType = LayoutType.Column;
-        internal PositionType PositionType = PositionType.ParentDirected;
-
-        internal bool IsMarkdown = false;
-        internal string? Paragraph = null;
-        internal string? FontFamily = null;
-        internal string? FontMonoFamily = null;
-        internal FontStyle FontStyle = FontStyle.Regular;
-        internal TextWrapMode WrapMode = TextWrapMode.NoWrap;
-        internal TextAlignment TextAlignment = TextAlignment.Left;
-
-        internal QuillMarkdown? _quillMarkdown = null;
-        internal TextLayout? _textLayout = null;
-
-        // Rendering
-        internal List<ElementRenderCommand>? _renderCommands = null;
-        internal ElementStyle _elementStyle = new();
-        internal bool _scissorEnabled = false;
-
-        internal Layer Layer = Layer.Base;
-
-        // Layout results
-        internal bool ProcessedText = false;
-        internal double X;
-        internal double Y;
-        internal double LayoutWidth;
-        internal double LayoutHeight;
-        internal double RelativeX;
-        internal double RelativeY;
-        internal Rect LayoutRect => new Rect(X, Y, LayoutWidth, LayoutHeight);
-
-        // Content sizing for auto-sized elements
-        internal Func<double?, double?, (double, double)?> ContentSizer { get; set; }
-
-        internal void AddRenderElement(ElementRenderCommand element)
+        public Element(ElementHandle handle)
         {
-            _renderCommands ??= new List<ElementRenderCommand>();
-            _renderCommands.Add(element);
+            _handle = handle;
         }
 
-        internal List<ElementRenderCommand>? GetRenderElements() => _renderCommands;
+        public ElementHandle Handle => _handle;
+        public bool IsValid => _handle.IsValid;
 
-        internal Vector2 ProcessText(float availableWidth)
+        // Properties that delegate to the underlying ElementData
+        public Paper Owner => _handle.GUI;
+        
+        public ulong ID
         {
-            if (ProcessedText) return Vector2.zero; // Already processed
+            get => _handle.Data.ID;
+            internal set => _handle.Data.ID = value;
+        }
 
-            if (string.IsNullOrWhiteSpace(Paragraph)) return Vector2.zero;
+        public bool IsFocusable
+        {
+            get => _handle.Data.IsFocusable;
+            set => _handle.Data.IsFocusable = value;
+        }
 
-            ProcessedText = true;
+        public bool IsNotInteractable
+        {
+            get => _handle.Data.IsNotInteractable;
+            set => _handle.Data.IsNotInteractable = value;
+        }
 
-            Canvas canvas = Owner?.Canvas ?? throw new InvalidOperationException("Owner paper or canvas is not set.");
+        public bool StopPropagation
+        {
+            get => _handle.Data.StopPropagation;
+            set => _handle.Data.StopPropagation = value;
+        }
 
-            if (IsMarkdown == false)
+        public Action<ClickEvent> OnClick
+        {
+            get => _handle.Data.OnClick;
+            set => _handle.Data.OnClick = value;
+        }
+
+        public Action<ClickEvent> OnPress
+        {
+            get => _handle.Data.OnPress;
+            set => _handle.Data.OnPress = value;
+        }
+
+        public Action<ClickEvent> OnRelease
+        {
+            get => _handle.Data.OnRelease;
+            set => _handle.Data.OnRelease = value;
+        }
+
+        public Action<ClickEvent> OnDoubleClick
+        {
+            get => _handle.Data.OnDoubleClick;
+            set => _handle.Data.OnDoubleClick = value;
+        }
+
+        public Action<ClickEvent> OnRightClick
+        {
+            get => _handle.Data.OnRightClick;
+            set => _handle.Data.OnRightClick = value;
+        }
+
+        public Action<ClickEvent> OnHeld
+        {
+            get => _handle.Data.OnHeld;
+            set => _handle.Data.OnHeld = value;
+        }
+
+        public Action<DragEvent> OnDragStart
+        {
+            get => _handle.Data.OnDragStart;
+            set => _handle.Data.OnDragStart = value;
+        }
+
+        public Action<DragEvent> OnDragging
+        {
+            get => _handle.Data.OnDragging;
+            set => _handle.Data.OnDragging = value;
+        }
+
+        public Action<DragEvent> OnDragEnd
+        {
+            get => _handle.Data.OnDragEnd;
+            set => _handle.Data.OnDragEnd = value;
+        }
+
+        public Action<ScrollEvent> OnScroll
+        {
+            get => _handle.Data.OnScroll;
+            set => _handle.Data.OnScroll = value;
+        }
+
+        public Action<ElementEvent> OnHover
+        {
+            get => _handle.Data.OnHover;
+            set => _handle.Data.OnHover = value;
+        }
+
+        public Action<ElementEvent> OnEnter
+        {
+            get => _handle.Data.OnEnter;
+            set => _handle.Data.OnEnter = value;
+        }
+
+        public Action<ElementEvent> OnLeave
+        {
+            get => _handle.Data.OnLeave;
+            set => _handle.Data.OnLeave = value;
+        }
+
+        public Action<KeyEvent> OnKeyPressed
+        {
+            get => _handle.Data.OnKeyPressed;
+            set => _handle.Data.OnKeyPressed = value;
+        }
+
+        public Action<TextInputEvent> OnTextInput
+        {
+            get => _handle.Data.OnTextInput;
+            set => _handle.Data.OnTextInput = value;
+        }
+
+        public Action<FocusEvent> OnFocusChange
+        {
+            get => _handle.Data.OnFocusChange;
+            set => _handle.Data.OnFocusChange = value;
+        }
+
+        public Action<Element, Rect> OnPostLayout
+        {
+            get => _handle.Data.OnPostLayout != null 
+                ? (elem, rect) => _handle.Data.OnPostLayout(_handle, rect) 
+                : null;
+            set => _handle.Data.OnPostLayout = value != null 
+                ? (handle, rect) => value(handle.GUI.GetElementWrapper(handle), rect) 
+                : null;
+        }
+
+        public Scroll ScrollFlags
+        {
+            get => _handle.Data.ScrollFlags;
+            set => _handle.Data.ScrollFlags = value;
+        }
+
+        public Action<Canvas, Rect, ScrollState> CustomScrollbarRenderer
+        {
+            get => _handle.Data.CustomScrollbarRenderer;
+            set => _handle.Data.CustomScrollbarRenderer = value;
+        }
+
+        public Element Parent
+        {
+            get
             {
-                var settings = TextLayoutSettings.Default;
-
-                settings.WordSpacing = Convert.ToSingle(_elementStyle.GetValue(GuiProp.WordSpacing));
-                settings.LetterSpacing = Convert.ToSingle(_elementStyle.GetValue(GuiProp.LetterSpacing));
-                settings.LineHeight = Convert.ToSingle(_elementStyle.GetValue(GuiProp.LineHeight));
-
-                settings.TabSize = (int)_elementStyle.GetValue(GuiProp.TabSize);
-                settings.PixelSize = Convert.ToSingle(_elementStyle.GetValue(GuiProp.FontSize));
-
-                if(TextAlignment == TextAlignment.Left || TextAlignment == TextAlignment.MiddleLeft || TextAlignment == TextAlignment.BottomLeft)
-                    settings.Alignment = Scribe.TextAlignment.Left;
-
-                else if (TextAlignment == TextAlignment.Center || TextAlignment == TextAlignment.MiddleCenter || TextAlignment == TextAlignment.BottomCenter)
-                    settings.Alignment = Scribe.TextAlignment.Center;
-
-                else if(TextAlignment == TextAlignment.Right || TextAlignment == TextAlignment.MiddleRight || TextAlignment == TextAlignment.BottomRight)
-                    settings.Alignment = Scribe.TextAlignment.Right;
-
-                settings.PreferredFont = canvas.GetFont(FontFamily, FontStyle);
-                settings.WrapMode = WrapMode;
-
-                settings.MaxWidth = availableWidth;
-
-                _textLayout = canvas.CreateLayout(Paragraph, settings);
-
-                return _textLayout.Size;
+                if (_handle.Data.ParentIndex == -1) return null;
+                var parentHandle = new ElementHandle(_handle.GUI, _handle.Data.ParentIndex);
+                return _handle.GUI.GetElementWrapper(parentHandle);
             }
-            else
+            internal set
             {
-                var r = canvas.GetFont(FontFamily, FontStyle);
-                var m = canvas.GetFont(FontMonoFamily, FontStyle);
-                var b = canvas.GetFont(FontFamily, FontStyle.Bold);
-                var i = canvas.GetFont(FontFamily, FontStyle.Italic);
-                var bi = canvas.GetFont(FontFamily, FontStyle.BoldItalic);
-                var settings = MarkdownLayoutSettings.Default(r, m, b, i, bi, availableWidth);
-
-                _quillMarkdown = canvas.CreateMarkdown(Paragraph, settings);
-
-                return _quillMarkdown.Value.Size;
+                _handle.Data.ParentIndex = value?._handle.Index ?? -1;
             }
         }
 
-        internal void DrawText(double x, double y, float availableWidth, float availableHeight)
+        public IList<Element> Children
         {
-            if (string.IsNullOrWhiteSpace(Paragraph)) return;
-
-            if (!ProcessedText)
-                ProcessText(availableWidth);
-
-            Canvas canvas = Owner?.Canvas ?? throw new InvalidOperationException("Owner paper or canvas is not set.");
-
-            var color = (Color)_elementStyle.GetValue(GuiProp.TextColor);
-
-            FontColor fs = new FontColor(color.R, color.G, color.B, color.A);
-
-            // Calculate vertical alignment offset
-            double yOffset = 0;
-            Vector2 textSize;
-
-            if (IsMarkdown == false)
+            get
             {
-                if(_textLayout == null) throw new InvalidOperationException("Text layout is not processed.");
-
-                textSize = _textLayout.Size;
+                return new ElementChildrenList(_handle);
             }
-            else
+        }
+
+        public bool Visible
+        {
+            get => _handle.Data.Visible;
+            set => _handle.Data.Visible = value;
+        }
+
+        internal LayoutType LayoutType
+        {
+            get => _handle.Data.LayoutType;
+            set => _handle.Data.LayoutType = value;
+        }
+
+        internal PositionType PositionType
+        {
+            get => _handle.Data.PositionType;
+            set => _handle.Data.PositionType = value;
+        }
+
+        internal bool IsMarkdown
+        {
+            get => _handle.Data.IsMarkdown;
+            set => _handle.Data.IsMarkdown = value;
+        }
+
+        internal string Paragraph
+        {
+            get => _handle.Data.Paragraph;
+            set => _handle.Data.Paragraph = value;
+        }
+
+        internal string FontFamily
+        {
+            get => _handle.Data.FontFamily;
+            set => _handle.Data.FontFamily = value;
+        }
+
+        internal string FontMonoFamily
+        {
+            get => _handle.Data.FontMonoFamily;
+            set => _handle.Data.FontMonoFamily = value;
+        }
+
+        internal FontStyle FontStyle
+        {
+            get => _handle.Data.FontStyle;
+            set => _handle.Data.FontStyle = value;
+        }
+
+        internal TextWrapMode WrapMode
+        {
+            get => _handle.Data.WrapMode;
+            set => _handle.Data.WrapMode = value;
+        }
+
+        internal TextAlignment TextAlignment
+        {
+            get => _handle.Data.TextAlignment;
+            set => _handle.Data.TextAlignment = value;
+        }
+
+        internal object _quillMarkdown
+        {
+            get => _handle.Data._quillMarkdown;
+            set => _handle.Data._quillMarkdown = value;
+        }
+
+        internal TextLayout _textLayout
+        {
+            get => _handle.Data._textLayout;
+            set => _handle.Data._textLayout = value;
+        }
+
+        internal List<ElementRenderCommand> _renderCommands
+        {
+            get => _handle.Data._renderCommands;
+            set => _handle.Data._renderCommands = value;
+        }
+
+        internal ElementStyle _elementStyle
+        {
+            get => _handle.Data._elementStyle;
+            set => _handle.Data._elementStyle = value;
+        }
+
+        internal bool _scissorEnabled
+        {
+            get => _handle.Data._scissorEnabled;
+            set => _handle.Data._scissorEnabled = value;
+        }
+
+        internal Layer Layer
+        {
+            get => _handle.Data.Layer;
+            set => _handle.Data.Layer = value;
+        }
+
+        internal bool ProcessedText
+        {
+            get => _handle.Data.ProcessedText;
+            set => _handle.Data.ProcessedText = value;
+        }
+
+        internal double X
+        {
+            get => _handle.Data.X;
+            set => _handle.Data.X = value;
+        }
+
+        internal double Y
+        {
+            get => _handle.Data.Y;
+            set => _handle.Data.Y = value;
+        }
+
+        internal double LayoutWidth
+        {
+            get => _handle.Data.LayoutWidth;
+            set => _handle.Data.LayoutWidth = value;
+        }
+
+        internal double LayoutHeight
+        {
+            get => _handle.Data.LayoutHeight;
+            set => _handle.Data.LayoutHeight = value;
+        }
+
+        internal double RelativeX
+        {
+            get => _handle.Data.RelativeX;
+            set => _handle.Data.RelativeX = value;
+        }
+
+        internal double RelativeY
+        {
+            get => _handle.Data.RelativeY;
+            set => _handle.Data.RelativeY = value;
+        }
+
+        internal Rect LayoutRect => _handle.Data.LayoutRect;
+
+        internal Func<double?, double?, (double, double)?> ContentSizer
+        {
+            get => _handle.Data.ContentSizer;
+            set => _handle.Data.ContentSizer = value;
+        }
+    }
+
+    // Helper class to provide List<Element> interface for children
+    public class ElementChildrenList : IList<Element>
+    {
+        private readonly ElementHandle _handle;
+
+        public ElementChildrenList(ElementHandle handle)
+        {
+            _handle = handle;
+        }
+
+        public Element this[int index]
+        {
+            get
             {
-                if (_quillMarkdown == null) throw new InvalidOperationException("Markdown layout is not processed.");
-
-                textSize = _quillMarkdown.Value.Size;
+                int childIndex = _handle.Data.ChildIndices[index];
+                var childHandle = new ElementHandle(_handle.GUI, childIndex);
+                return _handle.GUI.GetElementWrapper(childHandle);
             }
+            set => throw new NotSupportedException("Cannot directly set children");
+        }
 
-            // Apply vertical alignment based on TextAlignment
-            switch (TextAlignment)
+        public int Count => _handle.Data.ChildIndices.Count;
+        public bool IsReadOnly => false;
+
+        public void Add(Element item)
+        {
+            if (item._handle.GUI != _handle.GUI)
+                throw new InvalidOperationException("Element belongs to different GUI instance");
+
+            _handle.Data.ChildIndices.Add(item._handle.Index);
+            item._handle.Data.ParentIndex = _handle.Index;
+        }
+
+        public void Clear()
+        {
+            foreach (int childIndex in _handle.Data.ChildIndices)
             {
-                case TextAlignment.MiddleLeft:
-                case TextAlignment.MiddleCenter:
-                case TextAlignment.MiddleRight:
-                    yOffset = (availableHeight - textSize.y) / 2.0;
-                    break;
-                    
-                case TextAlignment.BottomLeft:
-                case TextAlignment.BottomCenter:
-                case TextAlignment.BottomRight:
-                    yOffset = availableHeight - textSize.y;
-                    break;
-                    
-                case TextAlignment.Left:
-                case TextAlignment.Center:
-                case TextAlignment.Right:
-                default:
-                    yOffset = 0; // Top alignment (default)
-                    break;
+                var childHandle = new ElementHandle(_handle.GUI, childIndex);
+                childHandle.Data.ParentIndex = -1;
             }
+            _handle.Data.ChildIndices.Clear();
+        }
 
-            // Apply the calculated offset to the y position
-            double finalY = y + yOffset;
+        public bool Contains(Element item)
+        {
+            return _handle.Data.ChildIndices.Contains(item._handle.Index);
+        }
 
-            if (IsMarkdown == false)
+        public void CopyTo(Element[] array, int arrayIndex)
+        {
+            for (int i = 0; i < _handle.Data.ChildIndices.Count; i++)
             {
-                canvas.DrawLayout(_textLayout, x, finalY, fs);
+                int childIndex = _handle.Data.ChildIndices[i];
+                var childHandle = new ElementHandle(_handle.GUI, childIndex);
+                array[arrayIndex + i] = _handle.GUI.GetElementWrapper(childHandle);
             }
-            else
+        }
+
+        public IEnumerator<Element> GetEnumerator()
+        {
+            foreach (int childIndex in _handle.Data.ChildIndices)
             {
-                canvas.DrawMarkdown(_quillMarkdown.Value, new Vector2(x, finalY));
+                var childHandle = new ElementHandle(_handle.GUI, childIndex);
+                yield return _handle.GUI.GetElementWrapper(childHandle);
             }
+        }
+
+        public int IndexOf(Element item)
+        {
+            return _handle.Data.ChildIndices.IndexOf(item._handle.Index);
+        }
+
+        public void Insert(int index, Element item)
+        {
+            if (item._handle.GUI != _handle.GUI)
+                throw new InvalidOperationException("Element belongs to different GUI instance");
+
+            _handle.Data.ChildIndices.Insert(index, item._handle.Index);
+            item._handle.Data.ParentIndex = _handle.Index;
+        }
+
+        public bool Remove(Element item)
+        {
+            bool removed = _handle.Data.ChildIndices.Remove(item._handle.Index);
+            if (removed)
+            {
+                item._handle.Data.ParentIndex = -1;
+            }
+            return removed;
+        }
+
+        public void RemoveAt(int index)
+        {
+            int childIndex = _handle.Data.ChildIndices[index];
+            var childHandle = new ElementHandle(_handle.GUI, childIndex);
+            childHandle.Data.ParentIndex = -1;
+            _handle.Data.ChildIndices.RemoveAt(index);
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
         }
     }
 }

@@ -15,8 +15,8 @@ namespace Prowl.PaperUI
         #region Fields & Properties
 
         // Layout and hierarchy management
-        private LayoutEngine.Element _rootElement;
-        internal Stack<LayoutEngine.Element> _elementStack = new Stack<LayoutEngine.Element>();
+        private ElementHandle _rootElementHandle;
+        internal Stack<ElementHandle> _elementStack = new Stack<ElementHandle>();
         private readonly Stack<ulong> _IDStack = new();
         private readonly Dictionary<ulong, Element> _createdElements = [];
 
@@ -39,13 +39,13 @@ namespace Prowl.PaperUI
 
         // Public properties
         public Rect ScreenRect => new Rect(0, 0, _width, _height);
-        public Element RootElement => _rootElement;
+        public Element RootElement => GetElementWrapper(_rootElementHandle);
         public Canvas Canvas => _canvas;
 
         /// <summary>
         /// Gets the current parent element in the element hierarchy.
         /// </summary>
-        public LayoutEngine.Element CurrentParent => _elementStack.Peek();
+        public Element CurrentParent => GetElementWrapper(_elementStack.Peek());
 
         #endregion
 
@@ -64,12 +64,10 @@ namespace Prowl.PaperUI
             _height = height;
             _renderer = renderer;
 
-            // Create root element
-            _rootElement = new LayoutEngine.Element {
-                ID = 0
-            };
-            _rootElement._elementStyle.SetDirectValue(GuiProp.Width, UnitValue.Pixels(_width));
-            _rootElement._elementStyle.SetDirectValue(GuiProp.Height, UnitValue.Pixels(_height));
+            // Initialize element storage and create root element
+            ClearElements();
+            InitializeRootElement(_width, _height);
+            _rootElementHandle = GetRootElementHandle();
 
             // Clear collections
             _elementStack.Clear();
@@ -77,7 +75,7 @@ namespace Prowl.PaperUI
             _createdElements.Clear();
 
             // Push the root element onto the stack
-            _elementStack.Push(_rootElement);
+            _elementStack.Push(_rootElementHandle);
 
             // Create canvas
             _canvas = new Canvas(renderer, fontAtlas);
@@ -122,14 +120,12 @@ namespace Prowl.PaperUI
             _elementStack.Clear();
 
             // Reset with just the root element
-            _rootElement = new LayoutEngine.Element {
-                ID = 0
-            };
-            _rootElement._elementStyle.SetDirectValue(GuiProp.Width, UnitValue.Pixels(_width));
-            _rootElement._elementStyle.SetDirectValue(GuiProp.Height, UnitValue.Pixels(_height));
+            ClearElements();
+            InitializeRootElement(_width, _height);
+            _rootElementHandle = GetRootElementHandle();
 
             // Initialize stacks
-            _elementStack.Push(_rootElement);
+            _elementStack.Push(_rootElementHandle);
             _IDStack.Clear();
             _IDStack.Push(0);
             _createdElements.Clear();
@@ -146,15 +142,15 @@ namespace Prowl.PaperUI
         public void EndFrame()
         {
             // Update element styles
-            UpdateStyles(DeltaTime, _rootElement);
+            UpdateStyles(DeltaTime, RootElement);
 
             // Layout phase
             OnEndOfFramePreLayout?.Invoke();
-            _rootElement.Layout();
+            RootElement.Layout();
             OnEndOfFramePostLayout?.Invoke();
 
             // Post-layout callbacks
-            CallPostLayoutRecursive(_rootElement);
+            CallPostLayoutRecursive(RootElement);
 
             // Reset rendering state
             _canvas.ResetState();
@@ -189,9 +185,9 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Calls post-layout callbacks for an element and its children.
         /// </summary>
-        private void CallPostLayoutRecursive(LayoutEngine.Element element)
+        private void CallPostLayoutRecursive(Element element)
         {
-            _elementStack.Push(element);
+            _elementStack.Push(element.Handle);
             try
             {
                 element?.OnPostLayout?.Invoke(element, new Rect(element.X, element.Y, element.LayoutWidth, element.LayoutHeight));
@@ -356,7 +352,7 @@ namespace Prowl.PaperUI
                 foreach (var cmd in element._renderCommands)
                 {
                     _canvas.SaveState();
-                    _elementStack.Push(element);
+                    _elementStack.Push(element.Handle);
                     try
                     {
                         cmd.RenderAction?.Invoke(_canvas, rect);
@@ -471,7 +467,9 @@ namespace Prowl.PaperUI
         {
             if (_createdElements.TryGetValue(id, out var element))
                 return element;
-            return null;
+                
+            var handle = FindElementHandleByID(id);
+            return handle.HasValue ? GetElementWrapper(handle.Value) : null;
         }
 
         /// <summary>
@@ -493,10 +491,12 @@ namespace Prowl.PaperUI
             if (_createdElements.ContainsKey(storageHash))
                 throw new Exception("Element already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + " Parent: " + CurrentParent.ID + "\nPlease use a different ID.");
 
-            var builder = new ElementBuilder(this, storageHash);
-            _createdElements.Add(storageHash, builder._element);
+            var handle = CreateElement(storageHash);
+            var element = GetElementWrapper(handle);
+            var builder = new ElementBuilder(this, element);
+            _createdElements.Add(storageHash, element);
 
-            AddChild(builder._element);
+            AddChild(element);
 
             return builder;
         }
@@ -533,7 +533,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Adds a child element to the current parent.
         /// </summary>
-        internal void AddChild(LayoutEngine.Element element)
+        internal void AddChild(Element element)
         {
             if (element.Parent != null)
                 throw new Exception("Element already has a parent.");
@@ -587,9 +587,9 @@ namespace Prowl.PaperUI
         #region Element Storage
 
         /// <summary> Get a value from the global GUI storage this persists across all Frames and Elements </summary>
-        public T GetRootStorage<T>(string key) => GetElementStorage<T>(_rootElement, key, default);
+        public T GetRootStorage<T>(string key) => GetElementStorage<T>(RootElement, key, default);
         /// <summary> Set a value in the root element </summary>
-        public void SetRootStorage<T>(string key, T value) => SetElementStorage(_rootElement, key, value);
+        public void SetRootStorage<T>(string key, T value) => SetElementStorage(RootElement, key, value);
 
         /// <summary> Get a value from the current element's storage </summary>
         public T GetElementStorage<T>(string key, T defaultValue = default) => GetElementStorage(CurrentParent, key, defaultValue);
