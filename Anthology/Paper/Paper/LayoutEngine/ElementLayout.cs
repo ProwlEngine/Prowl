@@ -3,40 +3,30 @@ using Prowl.Vector;
 
 namespace Prowl.PaperUI.LayoutEngine
 {
-    public static class ElementDataLayoutExtensions
+    public static class ElementLayout
     {
         private const double DEFAULT_MIN = double.MinValue;
         private const double DEFAULT_MAX = double.MaxValue;
         private const double DEFAULT_BORDER_WIDTH = 0f;
 
-        internal static UISize Layout(this ref ElementData element, Paper gui)
+        internal static UISize Layout(ElementHandle elementHandle, Paper gui)
         {
-            var wValue = (UnitValue)element._elementStyle.GetValue(GuiProp.Width);
-            var hValue = (UnitValue)element._elementStyle.GetValue(GuiProp.Height);
+            ref var data = ref elementHandle.Data;
+
+            var wValue = (UnitValue)data._elementStyle.GetValue(GuiProp.Width);
+            var hValue = (UnitValue)data._elementStyle.GetValue(GuiProp.Height);
             double width = wValue.IsPixels ? wValue.Value : throw new Exception("Root element must have fixed width");
             double height = hValue.IsPixels ? hValue.Value : throw new Exception("Root element must have fixed height");
 
-            element.RelativeX = 0;
-            element.RelativeY = 0;
-            element.LayoutWidth = width;
-            element.LayoutHeight = height;
-
-            // Find the element index in the GUI's element storage
-            int elementIndex = -1;
-            for (int i = 0; i < gui.ElementCount; i++)
-            {
-                if (gui.GetElementData(i).ID == element.ID)
-                {
-                    elementIndex = i;
-                    break;
-                }
-            }
-            var elementHandle = new ElementHandle(gui, elementIndex);
+            data.RelativeX = 0;
+            data.RelativeY = 0;
+            data.LayoutWidth = width;
+            data.LayoutHeight = height;
 
             var size = DoLayout(elementHandle, LayoutType.Column, height, width);
 
             // Convert relative positions to absolute positions
-            ComputeAbsolutePositions(ref element, gui);
+            ComputeAbsolutePositions(ref data, gui);
 
             return size;
         }
@@ -136,6 +126,8 @@ namespace Prowl.PaperUI.LayoutEngine
             var aspectRatio = (double)element._elementStyle.GetValue(GuiProp.AspectRatio);
             if (aspectRatio >= 0)
             {
+                aspectRatio = Math.Max(0.001, aspectRatio); // Prevent divide-by-zero
+
                 // Handle aspect ratio differently based on which dimension is more constrained
                 if (main.IsAuto && !cross.IsAuto)
                 {
@@ -185,11 +177,22 @@ namespace Prowl.PaperUI.LayoutEngine
             var borderCrossAfterUnit = GetBorderCrossAfter(ref element, parentLayoutType);
             double borderCrossAfter = borderCrossAfterUnit.ToPx(computedCross, DEFAULT_BORDER_WIDTH);
 
-            var visibleChildren = element.ChildIndices.Where(idx => elementHandle.Owner.GetElementData(idx).Visible).ToList();
+            // Pre-allocate and filter in single pass to avoid LINQ overhead
+            var visibleChildren = new List<int>();
+            var parentDirectedChildren = new List<int>();
+            
+            foreach (int childIdx in element.ChildIndices)
+            {
+                var childData = elementHandle.Owner.GetElementData(childIdx);
+                if (childData.Visible)
+                {
+                    visibleChildren.Add(childIdx);
+                    if (childData.PositionType == PositionType.ParentDirected)
+                        parentDirectedChildren.Add(childIdx);
+                }
+            }
+            
             int numChildren = visibleChildren.Count;
-            var parentDirectedChildren = visibleChildren
-                .Where(idx => elementHandle.Owner.GetElementData(idx).PositionType == PositionType.ParentDirected)
-                .ToList();
             int numParentDirectedChildren = parentDirectedChildren.Count;
 
             double mainSum = 0f;
@@ -268,14 +271,13 @@ namespace Prowl.PaperUI.LayoutEngine
             UnitValue elementChildMainBetween = GetMainBetween(ref element, layoutType);
 
             // Get first and last parent-directed children for spacing
-            var parentDirected = parentDirectedChildren.Select((childIdx, i) => (ChildIndex: childIdx, ListIndex: i)).ToList();
-            int? first = parentDirected.Count > 0 ? 0 : null;
-            int? last = parentDirected.Count > 0 ? parentDirected.Count - 1 : first;
+            int? first = parentDirectedChildren.Count > 0 ? 0 : null;
+            int? last = parentDirectedChildren.Count > 0 ? parentDirectedChildren.Count - 1 : first;
 
             // Process each parent-directed child
-            for (int i = 0; i < parentDirected.Count; i++)
+            for (int i = 0; i < parentDirectedChildren.Count; i++)
             {
-                var (childIndex, listIndex) = parentDirected[i];
+                int childIndex = parentDirectedChildren[i];
                 ref var child = ref elementHandle.Owner.GetElementData(childIndex);
                 var childHandle = new ElementHandle(elementHandle.Owner, childIndex);
 
@@ -312,9 +314,9 @@ namespace Prowl.PaperUI.LayoutEngine
                     {
                         childMainAfter = elementChildMainAfter;
                     }
-                    else if (i + 1 < parentDirected.Count)
+                    else if (i + 1 < parentDirectedChildren.Count)
                     {
-                        var nextChildIndex = parentDirected[i + 1].ChildIndex;
+                        var nextChildIndex = parentDirectedChildren[i + 1];
                         ref var nextChild = ref elementHandle.Owner.GetElementData(nextChildIndex);
                         var nextMainBefore = GetMainBefore(ref nextChild, layoutType);
                         if (nextMainBefore.IsAuto)
@@ -542,8 +544,9 @@ namespace Prowl.PaperUI.LayoutEngine
 
                     double totalViolation = 0f;
 
-                    foreach (var item in crossAxis.Where(item => !item.Frozen))
+                    foreach (var item in crossAxis)
                     {
+                        if (item.Frozen) continue;
                         double actualCross = (item.Factor * childCrossFreeSpace / crossFlexSum);
 
                         if (item.ItemType == StretchItem.ItemTypes.Size && !GetMain(ref child.Element.Data, layoutType).IsStretch)
@@ -566,8 +569,9 @@ namespace Prowl.PaperUI.LayoutEngine
                         item.Computed = clamped;
                     }
 
-                    foreach (var item in crossAxis.Where(item => !item.Frozen))
+                    foreach (var item in crossAxis)
                     {
+                        if (item.Frozen) continue;
                         // Freeze over-stretched items
                         if (totalViolation > 0f)
                             item.Frozen = item.Violation > 0f;
@@ -642,8 +646,9 @@ namespace Prowl.PaperUI.LayoutEngine
                     double freeMainSpace = actualParentMain - mainSum - borderMainBefore - borderMainAfter;
                     double totalViolation = 0f;
 
-                    foreach (var item in mainAxis.Where(item => !item.Frozen))
+                    foreach (var item in mainAxis)
                     {
+                        if (item.Frozen) continue;
                         double actualMain = (item.Factor * freeMainSpace / mainFlexSum);
                         var child = children[item.Index];
 
@@ -668,8 +673,9 @@ namespace Prowl.PaperUI.LayoutEngine
                         item.Computed = clamped;
                     }
 
-                    foreach (var item in mainAxis.Where(item => !item.Frozen))
+                    foreach (var item in mainAxis)
                     {
+                        if (item.Frozen) continue;
                         var child = children[item.Index];
 
                         // Freeze over-stretched items
@@ -738,8 +744,9 @@ namespace Prowl.PaperUI.LayoutEngine
             computedCross = Math.Min(maxCross, Math.Max(minCross, computedCross));
 
             // Handle self-directed children
-            foreach (var childHandle in GetChildren(elementHandle).Where(h => h.Data.Visible && h.Data.PositionType == PositionType.SelfDirected))
+            foreach (var childHandle in GetChildren(elementHandle))
             {
+                if (!childHandle.Data.Visible || childHandle.Data.PositionType != PositionType.SelfDirected) continue;
                 UnitValue childMainBefore = GetMainBefore(ref childHandle.Data, layoutType);
                 UnitValue childMain = GetMain(ref childHandle.Data, layoutType);
                 UnitValue childMainAfter = GetMainAfter(ref childHandle.Data, layoutType);
@@ -789,7 +796,7 @@ namespace Prowl.PaperUI.LayoutEngine
             }
 
             // Process cross-axis stretching for self-directed children
-            for (int i = parentDirected.Count; i < children.Count; i++)
+            for (int i = parentDirectedChildren.Count; i < children.Count; i++)
             {
                 var child = children[i];
                 ProcessChildCrossStretching(child, layoutType, actualParentCross, actualParentMain,
@@ -797,7 +804,7 @@ namespace Prowl.PaperUI.LayoutEngine
             }
 
             // Process main-axis stretching for self-directed children
-            for (int i = parentDirected.Count; i < children.Count; i++)
+            for (int i = parentDirectedChildren.Count; i < children.Count; i++)
             {
                 var child = children[i];
                 ProcessChildMainStretching(child, layoutType, actualParentMain, actualParentCross,
@@ -942,8 +949,9 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 double totalViolation = 0f;
 
-                foreach (var item in crossAxis.Where(item => !item.Frozen))
+                foreach (var item in crossAxis)
                 {
+                    if (item.Frozen) continue;
                     double actualCross = (item.Factor * crossFreeSpace / crossFlexSum);
 
                     if (item.ItemType == StretchItem.ItemTypes.Size && !GetMain(ref child.Element.Data, layoutType).IsStretch)
@@ -962,8 +970,9 @@ namespace Prowl.PaperUI.LayoutEngine
                     item.Computed = clamped;
                 }
 
-                foreach (var item in crossAxis.Where(item => !item.Frozen))
+                foreach (var item in crossAxis)
                 {
+                    if (item.Frozen) continue;
                     // Freeze over-stretched items
                     if (totalViolation > 0f)
                         item.Frozen = item.Violation > 0f;
@@ -1052,8 +1061,9 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 double totalViolation = 0f;
 
-                foreach (var item in mainAxis.Where(item => !item.Frozen))
+                foreach (var item in mainAxis)
                 {
+                    if (item.Frozen) continue;
                     double actualMain = (item.Factor * mainFreeSpace / mainFlexSum);
 
                     if (item.ItemType == StretchItem.ItemTypes.Size)
@@ -1076,8 +1086,9 @@ namespace Prowl.PaperUI.LayoutEngine
                     item.Computed = clamped;
                 }
 
-                foreach (var item in mainAxis.Where(item => !item.Frozen))
+                foreach (var item in mainAxis)
                 {
+                    if (item.Frozen) continue;
                     // Freeze over-stretched items
                     if (totalViolation > 0f)
                         item.Frozen = item.Violation > 0f;
@@ -1163,8 +1174,9 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 double totalViolation = 0f;
 
-                foreach (var item in crossAxis.Where(item => !item.Frozen))
+                foreach (var item in crossAxis)
                 {
+                    if (item.Frozen) continue;
                     double actualCross = (item.Factor * crossFreeSpace / crossFlexSum);
 
                     double clamped = Math.Min(item.Max, Math.Max(item.Min, actualCross));
@@ -1173,8 +1185,9 @@ namespace Prowl.PaperUI.LayoutEngine
                     item.Computed = clamped;
                 }
 
-                foreach (var item in crossAxis.Where(item => !item.Frozen))
+                foreach (var item in crossAxis)
                 {
+                    if (item.Frozen) continue;
                     // Freeze over-stretched items
                     if (totalViolation > 0f)
                         item.Frozen = item.Violation > 0f;

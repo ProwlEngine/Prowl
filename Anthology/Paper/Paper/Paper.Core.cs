@@ -146,7 +146,7 @@ namespace Prowl.PaperUI
 
             // Layout phase
             OnEndOfFramePreLayout?.Invoke();
-            _rootElementHandle.Data.Layout(this);
+            ElementLayout.Layout(_rootElementHandle, this);
             OnEndOfFramePostLayout?.Invoke();
 
             // Post-layout callbacks
