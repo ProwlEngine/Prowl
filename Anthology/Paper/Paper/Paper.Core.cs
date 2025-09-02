@@ -161,7 +161,7 @@ namespace Prowl.PaperUI
             // Render all elements
             List<ElementHandle> overlayElements = new();
             List<ElementHandle> modalElements = new();
-            RenderElement(RootElement, Layer.Base, overlayElements, modalElements);
+            RenderElement(_rootElementHandle, Layer.Base, overlayElements, modalElements);
             foreach (var overlay in overlayElements)
                 RenderElement(overlay, Layer.Overlay, null, modalElements);
             foreach (var modal in modalElements)
@@ -212,7 +212,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Renders an element and its children recursively with layering support.
         /// </summary>
-        private void RenderElement(ElementHandle handle, Layer currentLayer, List<ElementHandle>? overlayElements, List<ElementHandle>? modalElements)
+        private void RenderElement(in ElementHandle handle, Layer currentLayer, List<ElementHandle>? overlayElements, List<ElementHandle>? modalElements)
         {
             ref var data = ref handle.Data;
 
@@ -253,7 +253,6 @@ namespace Prowl.PaperUI
             var boxShadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
             if (boxShadow.IsVisible)
             {
-                _canvas.SaveState();
                 double buffer = boxShadow.Blur * 0.5;
                 double sx = rect.x + boxShadow.OffsetX - buffer - boxShadow.Spread;
                 double sy = rect.y + boxShadow.OffsetY - buffer - boxShadow.Spread;
@@ -281,7 +280,7 @@ namespace Prowl.PaperUI
                     rounded.z, rounded.w,
                     Color.White);
 
-                _canvas.RestoreState();
+                _canvas.ClearBrush();
             }
 
             // Draw background (gradient overrides background color)
@@ -346,7 +345,7 @@ namespace Prowl.PaperUI
             if (!string.IsNullOrEmpty(data.Paragraph))
             {
                 _canvas.SaveState();
-                DrawText(ref handle, rect.x, rect.y, (float)rect.width, (float)rect.height);
+                DrawText(handle, rect.x, rect.y, (float)rect.width, (float)rect.height);
                 _canvas.RestoreState();
             }
 
@@ -356,7 +355,7 @@ namespace Prowl.PaperUI
             {
                 foreach (var cmd in data._renderCommands)
                 {
-                    _canvas.SaveState();
+                    //_canvas.SaveState(); // Making this the Users responsibility to ensure they restore state, since not all custom draws will change state.
                     _elementStack.Push(handle);
                     try
                     {
@@ -365,7 +364,7 @@ namespace Prowl.PaperUI
                     finally
                     {
                         _elementStack.Pop();
-                        _canvas.RestoreState();
+                        //_canvas.RestoreState();
                     }
                 }
             }
@@ -421,7 +420,7 @@ namespace Prowl.PaperUI
             _canvas.RestoreState();
         }
 
-        private void DrawText(ref ElementHandle handle, double x, double y, float availableWidth, float availableHeight)
+        private void DrawText(in ElementHandle handle, double x, double y, float availableWidth, float availableHeight)
         {
             if (string.IsNullOrWhiteSpace(handle.Data.Paragraph)) return;
 
