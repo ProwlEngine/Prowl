@@ -533,7 +533,8 @@ namespace Prowl.PaperUI.LayoutEngine
                 }
 
                 // Calculate cross stretch
-                while (crossAxis.Any(item => !item.Frozen))
+                int unfrozenCrossCount = crossAxis.Count;
+                while (unfrozenCrossCount > 0)
                 {
                     double childCrossFreeSpace = actualParentCross
                         - borderCrossBefore
@@ -583,6 +584,7 @@ namespace Prowl.PaperUI.LayoutEngine
                         if (item.Frozen)
                         {
                             crossFlexSum -= item.Factor;
+                            unfrozenCrossCount--;
 
                             switch (item.ItemType)
                             {
@@ -641,7 +643,8 @@ namespace Prowl.PaperUI.LayoutEngine
             // Calculate main-axis stretching for parent-directed children
             if (mainAxis.Count > 0)
             {
-                while (mainAxis.Any(item => !item.Frozen))
+                int unfrozenMainCount = mainAxis.Count;
+                while (unfrozenMainCount > 0)
                 {
                     double freeMainSpace = actualParentMain - mainSum - borderMainBefore - borderMainAfter;
                     double totalViolation = 0f;
@@ -690,6 +693,7 @@ namespace Prowl.PaperUI.LayoutEngine
                         {
                             mainFlexSum -= item.Factor;
                             mainSum += item.Computed;
+                            unfrozenMainCount--;
 
                             switch (item.ItemType)
                             {
@@ -820,6 +824,8 @@ namespace Prowl.PaperUI.LayoutEngine
 
             if (aspectRatio >= 0)
             {
+                aspectRatio = Math.Max(0.001, aspectRatio); // Prevent divide-by-zero
+
                 if (main.IsStretch && cross.IsStretch)
                 {
                     // Both stretch - constrain by the smaller dimension
@@ -942,7 +948,8 @@ namespace Prowl.PaperUI.LayoutEngine
                 crossAxis.Add(new StretchItem(childIndex, childCrossAfter.Value, StretchItem.ItemTypes.After, min, max));
             }
 
-            while (crossAxis.Any(item => !item.Frozen))
+            int unfrozenCrossCount = crossAxis.Count;
+            while (unfrozenCrossCount > 0)
             {
                 double crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
                     - child.CrossBefore - child.Cross - child.CrossAfter;
@@ -984,6 +991,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (item.Frozen)
                     {
                         crossFlexSum -= item.Factor;
+                        unfrozenCrossCount--;
 
                         switch (item.ItemType)
                         {
@@ -1054,7 +1062,8 @@ namespace Prowl.PaperUI.LayoutEngine
                 mainAxis.Add(new StretchItem(childIndex, childMainAfter.Value, StretchItem.ItemTypes.After, min, max));
             }
 
-            while (mainAxis.Any(item => !item.Frozen))
+            int unfrozenMainCount = mainAxis.Count;
+            while (unfrozenMainCount > 0)
             {
                 double mainFreeSpace = parentMain - borderMainBefore - borderMainAfter
                     - child.MainBefore - child.Main - child.MainAfter;
@@ -1100,6 +1109,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (item.Frozen)
                     {
                         mainFlexSum -= item.Factor;
+                        unfrozenMainCount--;
 
                         switch (item.ItemType)
                         {
@@ -1167,7 +1177,8 @@ namespace Prowl.PaperUI.LayoutEngine
                 crossAxis.Add(new StretchItem(childIndex, childCrossAfter.Value, StretchItem.ItemTypes.After, min, max));
             }
 
-            while (crossAxis.Any(item => !item.Frozen))
+            int unfrozenCrossCount = crossAxis.Count;
+            while (unfrozenCrossCount > 0)
             {
                 double crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
                     - child.CrossBefore - child.Cross - child.CrossAfter;
@@ -1199,6 +1210,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (item.Frozen)
                     {
                         crossFlexSum -= item.Factor;
+                        unfrozenCrossCount--;
 
                         switch (item.ItemType)
                         {
