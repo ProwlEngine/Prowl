@@ -214,17 +214,19 @@ namespace Prowl.PaperUI
         /// </summary>
         private void RenderElement(ElementHandle handle, Layer currentLayer, List<ElementHandle>? overlayElements, List<ElementHandle>? modalElements)
         {
-            if (handle.Data.Visible == false)
+            ref var data = ref handle.Data;
+
+            if (data.Visible == false)
                 return;
 
             if (currentLayer == Layer.Base)
             {
-                if (handle.Data.Layer == Layer.Overlay)
+                if (data.Layer == Layer.Overlay)
                 {
                     overlayElements?.Add(handle);
                     return;
                 }
-                else if (handle.Data.Layer == Layer.Topmost)
+                else if (data.Layer == Layer.Topmost)
                 {
                     modalElements?.Add(handle);
                     return;
@@ -232,23 +234,23 @@ namespace Prowl.PaperUI
             }
             else if (currentLayer == Layer.Overlay)
             {
-                if (handle.Data.Layer == Layer.Topmost)
+                if (data.Layer == Layer.Topmost)
                 {
                     modalElements?.Add(handle);
                     return;
                 }
             }
 
-            var rect = new Rect(handle.Data.X, handle.Data.Y, handle.Data.LayoutWidth, handle.Data.LayoutHeight);
+            var rect = new Rect(data.X, data.Y, data.LayoutWidth, data.LayoutHeight);
             _canvas.SaveState();
 
             // Apply element transform
-            Transform2D styleTransform = handle.Data._elementStyle.GetTransformForElement(rect);
+            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
             _canvas.TransformBy(styleTransform);
 
             // Draw box shadow before background
-            var rounded = (Vector4)handle.Data._elementStyle.GetValue(GuiProp.Rounded);
-            var boxShadow = (BoxShadow)handle.Data._elementStyle.GetValue(GuiProp.BoxShadow);
+            var rounded = (Vector4)data._elementStyle.GetValue(GuiProp.Rounded);
+            var boxShadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
             if (boxShadow.IsVisible)
             {
                 _canvas.SaveState();
@@ -278,11 +280,12 @@ namespace Prowl.PaperUI
                     rounded.x, rounded.y,
                     rounded.z, rounded.w,
                     Color.White);
+
                 _canvas.RestoreState();
             }
 
             // Draw background (gradient overrides background color)
-            var gradient = (Gradient)handle.Data._elementStyle.GetValue(GuiProp.BackgroundGradient);
+            var gradient = (Gradient)data._elementStyle.GetValue(GuiProp.BackgroundGradient);
             if (gradient.Type != GradientType.None)
             {
                 switch (gradient.Type)
@@ -316,14 +319,14 @@ namespace Prowl.PaperUI
             }
             else
             {
-                var backgroundColor = (Color)handle.Data._elementStyle.GetValue(GuiProp.BackgroundColor);
+                var backgroundColor = (Color)data._elementStyle.GetValue(GuiProp.BackgroundColor);
                 if (backgroundColor.A > 0)
                     _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, backgroundColor);
             }
 
             // Draw border if needed
-            var borderColor = (Color)handle.Data._elementStyle.GetValue(GuiProp.BorderColor);
-            var borderWidth = (double)handle.Data._elementStyle.GetValue(GuiProp.BorderWidth);
+            var borderColor = (Color)data._elementStyle.GetValue(GuiProp.BorderColor);
+            var borderWidth = (double)data._elementStyle.GetValue(GuiProp.BorderWidth);
             if (borderWidth > 0.0f && borderColor.A > 0)
             {
                 _canvas.BeginPath();
@@ -334,13 +337,13 @@ namespace Prowl.PaperUI
             }
 
             // Apply scissor if enabled
-            if (handle.Data._scissorEnabled)
+            if (data._scissorEnabled)
             {
                 _canvas.IntersectScissor(rect.x, rect.y, rect.width, rect.height);
             }
 
             // Draw text style
-            if (!string.IsNullOrEmpty(handle.Data.Paragraph))
+            if (!string.IsNullOrEmpty(data.Paragraph))
             {
                 _canvas.SaveState();
                 DrawText(ref handle, rect.x, rect.y, (float)rect.width, (float)rect.height);
@@ -349,9 +352,9 @@ namespace Prowl.PaperUI
 
 
             // Process custom render actions
-            if (handle.Data._renderCommands != null)
+            if (data._renderCommands != null)
             {
-                foreach (var cmd in handle.Data._renderCommands)
+                foreach (var cmd in data._renderCommands)
                 {
                     _canvas.SaveState();
                     _elementStack.Push(handle);
@@ -379,7 +382,7 @@ namespace Prowl.PaperUI
             }
 
             // Draw children
-            foreach (var childIndex in handle.Data.ChildIndices)
+            foreach (var childIndex in data.ChildIndices)
             {
                 var child = new ElementHandle(this, childIndex);
                 RenderElement(child, currentLayer, overlayElements, modalElements);
@@ -390,7 +393,7 @@ namespace Prowl.PaperUI
             {
                 _canvas.RestoreState();
 
-                Scroll flags = handle.Data.ScrollFlags;
+                Scroll flags = data.ScrollFlags;
                 bool needsHorizontalScroll = scrollState.ContentSize.x > scrollState.ViewportSize.x && (flags & Scroll.ScrollX) != 0;
                 bool needsVerticalScroll = scrollState.ContentSize.y > scrollState.ViewportSize.y && (flags & Scroll.ScrollY) != 0;
                 bool shouldShowScrollbars = (flags & Scroll.Hidden) == 0 &&
@@ -400,7 +403,7 @@ namespace Prowl.PaperUI
                 if (shouldShowScrollbars)
                 {
                     // Check for custom scrollbar renderer
-                    var customRenderer = handle.Data.CustomScrollbarRenderer;
+                    var customRenderer = data.CustomScrollbarRenderer;
 
                     if (customRenderer != null)
                     {
