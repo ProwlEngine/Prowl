@@ -1150,6 +1150,182 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
+        /// Helper methods for TextField state management.
+        /// </summary>
+        private TextFieldState LoadTextFieldState(string initialValue)
+        {
+            var defaultState = new TextFieldState
+            {
+                Value = initialValue ?? "",
+                CursorPosition = (initialValue ?? "").Length,
+                SelectionStart = -1,
+                SelectionEnd = -1,
+                ScrollOffset = 0.0,
+                IsFocused = false
+            };
+            
+            var state = _paper.GetElementStorage(_handle, "TextFieldState", defaultState);
+            state.IsFocused = _paper.IsElementFocused(_handle.Data.ID);
+            state.ClampValues();
+            return state;
+        }
+        
+        private void SaveTextFieldState(TextFieldState state)
+        {
+            _paper.SetElementStorage(_handle, "TextFieldState", state);
+        }
+        
+        private TextLayoutSettings CreateTextLayoutSettings(FontFile font, float fontSize, float letterSpacing)
+        {
+            var settings = TextLayoutSettings.Default;
+            settings.PixelSize = fontSize;
+            settings.Font = font;
+            settings.LetterSpacing = letterSpacing;
+            settings.Alignment = Scribe.TextAlignment.Left;
+            settings.MaxWidth = float.MaxValue;
+            return settings;
+        }
+        
+        private bool IsShiftPressed() => _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
+        private bool IsControlPressed() => _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
+
+        private bool ProcessKeyCommand(ref TextFieldState state, PaperKey key)
+        {
+            bool valueChanged = false;
+            
+            switch (key)
+            {
+                case PaperKey.Backspace:
+                    if (state.HasSelection)
+                    {
+                        state.DeleteSelection();
+                        valueChanged = true;
+                    }
+                    else if (state.CursorPosition > 0)
+                    {
+                        state.Value = state.Value.Remove(state.CursorPosition - 1, 1);
+                        state.CursorPosition--;
+                        valueChanged = true;
+                    }
+                    break;
+                    
+                case PaperKey.Delete:
+                    if (state.HasSelection)
+                    {
+                        state.DeleteSelection();
+                        valueChanged = true;
+                    }
+                    else if (state.CursorPosition < state.Value.Length)
+                    {
+                        state.Value = state.Value.Remove(state.CursorPosition, 1);
+                        valueChanged = true;
+                    }
+                    break;
+                    
+                case PaperKey.Left:
+                    if (IsShiftPressed())
+                    {
+                        if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                        state.CursorPosition = Math.Max(0, state.CursorPosition - 1);
+                        state.SelectionEnd = state.CursorPosition;
+                    }
+                    else
+                    {
+                        if (state.HasSelection)
+                            state.CursorPosition = Math.Min(state.SelectionStart, state.SelectionEnd);
+                        else
+                            state.CursorPosition = Math.Max(0, state.CursorPosition - 1);
+                        state.ClearSelection();
+                    }
+                    break;
+                    
+                case PaperKey.Right:
+                    if (IsShiftPressed())
+                    {
+                        if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                        state.CursorPosition = Math.Min(state.Value.Length, state.CursorPosition + 1);
+                        state.SelectionEnd = state.CursorPosition;
+                    }
+                    else
+                    {
+                        if (state.HasSelection)
+                            state.CursorPosition = Math.Max(state.SelectionStart, state.SelectionEnd);
+                        else
+                            state.CursorPosition = Math.Min(state.Value.Length, state.CursorPosition + 1);
+                        state.ClearSelection();
+                    }
+                    break;
+                    
+                case PaperKey.Home:
+                    if (IsShiftPressed())
+                    {
+                        if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                        state.CursorPosition = 0;
+                        state.SelectionEnd = state.CursorPosition;
+                    }
+                    else
+                    {
+                        state.CursorPosition = 0;
+                        state.ClearSelection();
+                    }
+                    break;
+                    
+                case PaperKey.End:
+                    if (IsShiftPressed())
+                    {
+                        if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                        state.CursorPosition = state.Value.Length;
+                        state.SelectionEnd = state.CursorPosition;
+                    }
+                    else
+                    {
+                        state.CursorPosition = state.Value.Length;
+                        state.ClearSelection();
+                    }
+                    break;
+                    
+                case PaperKey.A when IsControlPressed():
+                    state.SelectionStart = 0;
+                    state.SelectionEnd = state.Value.Length;
+                    state.CursorPosition = state.SelectionEnd;
+                    break;
+                    
+                case PaperKey.C when IsControlPressed() && state.HasSelection:
+                    {
+                        int start = Math.Min(state.SelectionStart, state.SelectionEnd);
+                        int end = Math.Max(state.SelectionStart, state.SelectionEnd);
+                        _paper.SetClipboard(state.Value.Substring(start, end - start));
+                    }
+                    break;
+                    
+                case PaperKey.X when IsControlPressed() && state.HasSelection:
+                    {
+                        int start = Math.Min(state.SelectionStart, state.SelectionEnd);
+                        int end = Math.Max(state.SelectionStart, state.SelectionEnd);
+                        _paper.SetClipboard(state.Value.Substring(start, end - start));
+                        state.DeleteSelection();
+                        valueChanged = true;
+                    }
+                    break;
+                    
+                case PaperKey.V when IsControlPressed():
+                    {
+                        string clipText = _paper.GetClipboard();
+                        if (!string.IsNullOrEmpty(clipText))
+                        {
+                            if (state.HasSelection) state.DeleteSelection();
+                            state.Value = state.Value.Insert(state.CursorPosition, clipText);
+                            state.CursorPosition += clipText.Length;
+                            valueChanged = true;
+                        }
+                    }
+                    break;
+            }
+            
+            return valueChanged;
+        }
+
+        /// <summary>
         /// Creates a text field control that allows users to input and edit text.
         /// </summary>
         /// <param name="value">Current text value</param>
@@ -1174,370 +1350,109 @@ namespace Prowl.PaperUI
             [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
         {
             const double TextXPadding = 12;
-        
-            value = value ?? "";
-        
+            
             Clip();
-        
-            // Store the current value in element storage
-            _paper.SetElementStorage(_handle, "Value", value);
-        
-            // Get the text to display (value or placeholder)
-            bool isEmpty = string.IsNullOrEmpty(value);
-            string displayText = isEmpty ? placeholder : value;
+            
+            // Initialize state
+            var state = LoadTextFieldState(value);
             textColor ??= Color.FromArgb(255, 250, 250, 250);
             placeholderColor ??= Color.FromArgb(160, 200, 200, 200);
-            Color tColor = isEmpty ? placeholderColor.Value : textColor.Value;
-        
-            // Store focus state
-            bool isFocused = _paper.IsElementFocused(_handle.Data.ID);
-            _paper.SetElementStorage(_handle, "IsFocused", isFocused);
-        
-            // Create a blinking cursor position tracker
-            int cursorPosition = _paper.GetElementStorage(_handle, "CursorPosition", value.Length);
-            // Clamp cursor position to valid range
-            cursorPosition = Math.Clamp(cursorPosition, 0, value.Length);
-            _paper.SetElementStorage(_handle, "CursorPosition", cursorPosition);
-        
-            // Selection range (if text is selected)
-            int selectionStart = _paper.GetElementStorage(_handle, "SelectionStart", -1);
-            int selectionEnd = _paper.GetElementStorage(_handle, "SelectionEnd", -1);
-            // Clamp selection range to valid range
-            selectionStart = Math.Clamp(selectionStart, 0, value.Length);
-            selectionEnd = Math.Clamp(selectionEnd, 0, value.Length);
-            _paper.SetElementStorage(_handle, "SelectionStart", selectionStart);
-            _paper.SetElementStorage(_handle, "SelectionEnd", selectionEnd);
-        
-            // Text scroll offset (for horizontal scrolling)
-            double scrollOffset = _paper.GetElementStorage(_handle, "ScrollOffset", 0.0);
-            _paper.SetElementStorage(_handle, "ScrollOffset", scrollOffset);
-        
-            // Set the text content
-            //Text(PaperUI.Text.Left($"  {displayText}", font, textColor));
         
             // Handle focus changes
             OnFocusChange((FocusEvent e) =>
             {
-                _paper.SetElementStorage(_handle, "IsFocused", e.IsFocused);
-        
-                // When gaining focus, place cursor at the end of text
+                var currentState = LoadTextFieldState(value);
+                currentState.IsFocused = e.IsFocused;
+                
                 if (e.IsFocused)
                 {
-                    string currentValue = _paper.GetElementStorage<string>(_handle, "Value", "");
-                    int pos = currentValue.Length;
-                    _paper.SetElementStorage(_handle, "CursorPosition", pos);
-                    _paper.SetElementStorage(_handle, "SelectionStart", -1);
-                    _paper.SetElementStorage(_handle, "SelectionEnd", -1);
-        
-                    // Ensure cursor is visible
-                    EnsureCursorVisible(currentValue, font, fontSize, letterSpacing, pos);
+                    currentState.CursorPosition = currentState.Value.Length;
+                    currentState.ClearSelection();
+                    EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
                 }
+                
+                SaveTextFieldState(currentState);
             });
         
             // Handle mouse clicks for cursor positioning
             OnClick((ClickEvent e) =>
             {
-                string currentValue = _paper.GetElementStorage<string>(_handle, "Value", "");
-                double scrollOffsetValue = _paper.GetElementStorage<double>(_handle, "ScrollOffset", 0.0);
-        
-                // Calculate cursor position based on click position
-                var clickPos = e.RelativePosition.x - TextXPadding + scrollOffsetValue; // Adjust for padding
-                int newPosition = CalculateTextPosition(currentValue, font, fontSize, letterSpacing, clickPos);
-                newPosition = Math.Clamp(newPosition, 0, currentValue.Length);
-        
-                _paper.SetElementStorage(_handle, "CursorPosition", newPosition);
-        
-                // Clear selection on click
-                _paper.SetElementStorage(_handle, "SelectionStart", -1);
-                _paper.SetElementStorage(_handle, "SelectionEnd", -1);
-        
-                // Ensure cursor is visible
-                EnsureCursorVisible(currentValue, font, fontSize, letterSpacing, newPosition);
+                var currentState = LoadTextFieldState(value);
+                var clickPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffset;
+                currentState.CursorPosition = Math.Clamp(
+                    CalculateTextPosition(currentState.Value, font, fontSize, letterSpacing, clickPos),
+                    0, currentState.Value.Length);
+                currentState.ClearSelection();
+                EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
+                SaveTextFieldState(currentState);
             });
         
             // Handle dragging for text selection
             OnDragStart((DragEvent e) =>
             {
-                string currentValue = _paper.GetElementStorage<string>(_handle, "Value", "");
-                double scrollOffsetValue = _paper.GetElementStorage<double>(_handle, "ScrollOffset", 0.0);
-        
-                // Start selection at cursor position
-                int pos = CalculateTextPosition(currentValue, font, fontSize, letterSpacing, e.RelativePosition.x - TextXPadding + scrollOffsetValue);
-                pos = Math.Clamp(pos, 0, currentValue.Length);
-        
-                _paper.SetElementStorage(_handle, "CursorPosition", pos);
-                _paper.SetElementStorage(_handle, "SelectionStart", pos);
-                _paper.SetElementStorage(_handle, "SelectionEnd", pos);
-        
-                // Ensure cursor is visible
-                EnsureCursorVisible(currentValue, font, fontSize, letterSpacing, pos);
+                var currentState = LoadTextFieldState(value);
+                var dragPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffset;
+                var pos = Math.Clamp(CalculateTextPosition(currentState.Value, font, fontSize, letterSpacing, dragPos), 0, currentState.Value.Length);
+                
+                currentState.CursorPosition = pos;
+                currentState.SelectionStart = pos;
+                currentState.SelectionEnd = pos;
+                EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
+                SaveTextFieldState(currentState);
             });
         
             OnDragging((DragEvent e) =>
             {
-                string currentValue = _paper.GetElementStorage<string>(_handle, "Value", "");
-                double scrollOffsetValue = _paper.GetElementStorage<double>(_handle, "ScrollOffset", 0.0);
-        
-                // Update selection end while dragging
-                int start = _paper.GetElementStorage<int>(_handle, "SelectionStart", -1);
-                if (start >= 0)
-                {
-                    // Auto-scroll when dragging near edges
-                    double edgeScrollSensitivity = 20.0;
-                    double scrollSpeed = 2.0;
-        
-                    if (e.RelativePosition.x < edgeScrollSensitivity)
-                    {
-                        // Scroll left
-                        scrollOffsetValue = Math.Max(0, scrollOffsetValue - scrollSpeed);
-                        _paper.SetElementStorage(_handle, "ScrollOffset", scrollOffsetValue);
-                    }
-                    else if (e.RelativePosition.x > e.ElementRect.width - edgeScrollSensitivity)
-                    {
-                        // Scroll right
-                        scrollOffsetValue += scrollSpeed;
-                        _paper.SetElementStorage(_handle, "ScrollOffset", scrollOffsetValue);
-                    }
-        
-                    int pos = CalculateTextPosition(currentValue, font, fontSize, letterSpacing, e.RelativePosition.x - TextXPadding + scrollOffsetValue);
-                    pos = Math.Clamp(pos, 0, currentValue.Length);
-        
-                    _paper.SetElementStorage(_handle, "CursorPosition", pos);
-                    _paper.SetElementStorage(_handle, "SelectionEnd", pos);
-        
-                    // Ensure cursor is visible with updated scroll position
-                    EnsureCursorVisible(currentValue, font, fontSize, letterSpacing, pos);
-                }
+                var currentState = LoadTextFieldState(value);
+                if (currentState.SelectionStart < 0) return;
+                
+                // Auto-scroll when dragging near edges
+                const double edgeScrollSensitivity = 20.0;
+                const double scrollSpeed = 2.0;
+                
+                if (e.RelativePosition.x < edgeScrollSensitivity)
+                    currentState.ScrollOffset = Math.Max(0, currentState.ScrollOffset - scrollSpeed);
+                else if (e.RelativePosition.x > e.ElementRect.width - edgeScrollSensitivity)
+                    currentState.ScrollOffset += scrollSpeed;
+                
+                var dragPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffset;
+                var pos = Math.Clamp(CalculateTextPosition(currentState.Value, font, fontSize, letterSpacing, dragPos), 0, currentState.Value.Length);
+                
+                currentState.CursorPosition = pos;
+                currentState.SelectionEnd = pos;
+                EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
+                SaveTextFieldState(currentState);
             });
         
-            // Handle keyboard input
+            // Handle keyboard input  
             OnKeyPressed((KeyEvent e) =>
             {
-                if (!isFocused) return;
-        
-                string currentValue = _paper.GetElementStorage<string>(_handle, "Value", "");
-                int curPos = _paper.GetElementStorage<int>(_handle, "CursorPosition", 0);
-                int selStart = _paper.GetElementStorage<int>(_handle, "SelectionStart", -1);
-                int selEnd = _paper.GetElementStorage<int>(_handle, "SelectionEnd", -1);
-        
-                bool valueChanged = false;
-        
-                // Process key commands
-                switch (e.Key)
-                {
-                    case PaperKey.Backspace:
-                        if (HasSelection())
-                        {
-                            DeleteSelection(ref currentValue, ref curPos, ref selStart, ref selEnd);
-                            valueChanged = true;
-                        }
-                        else if (curPos > 0)
-                        {
-                            currentValue = currentValue.Remove(curPos - 1, 1);
-                            curPos--;
-                            valueChanged = true;
-                        }
-                        break;
-        
-                    case PaperKey.Delete:
-                        if (HasSelection())
-                        {
-                            DeleteSelection(ref currentValue, ref curPos, ref selStart, ref selEnd);
-                            valueChanged = true;
-                        }
-                        else if (curPos < currentValue.Length)
-                        {
-                            currentValue = currentValue.Remove(curPos, 1);
-                            valueChanged = true;
-                        }
-                        break;
-        
-                    case PaperKey.Left:
-                        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift))
-                        {
-                            // Shift+Left: extend selection
-                            if (selStart < 0) selStart = curPos;
-                            curPos = Math.Max(0, curPos - 1);
-                            selEnd = curPos;
-                        }
-                        else
-                        {
-                            // Just move cursor
-                            if (HasSelection())
-                            {
-                                // Move to beginning of selection
-                                curPos = Math.Min(selStart, selEnd);
-                                ClearSelection(ref selStart, ref selEnd);
-                            }
-                            else
-                            {
-                                curPos = Math.Max(0, curPos - 1);
-                            }
-                        }
-                        break;
-        
-                    case PaperKey.Right:
-                        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift))
-                        {
-                            // Shift+Right: extend selection
-                            if (selStart < 0) selStart = curPos;
-                            curPos = Math.Min(currentValue.Length, curPos + 1);
-                            selEnd = curPos;
-                        }
-                        else
-                        {
-                            // Just move cursor
-                            if (HasSelection())
-                            {
-                                // Move to end of selection
-                                curPos = Math.Max(selStart, selEnd);
-                                ClearSelection(ref selStart, ref selEnd);
-                            }
-                            else
-                            {
-                                curPos = Math.Min(currentValue.Length, curPos + 1);
-                            }
-                        }
-                        break;
-        
-                    case PaperKey.Home:
-                        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift))
-                        {
-                            if (selStart < 0) selStart = curPos;
-                            curPos = 0;
-                            selEnd = curPos;
-                        }
-                        else
-                        {
-                            curPos = 0;
-                            ClearSelection(ref selStart, ref selEnd);
-                        }
-                        break;
-        
-                    case PaperKey.End:
-                        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift))
-                        {
-                            if (selStart < 0) selStart = curPos;
-                            curPos = currentValue.Length;
-                            selEnd = curPos;
-                        }
-                        else
-                        {
-                            curPos = currentValue.Length;
-                            ClearSelection(ref selStart, ref selEnd);
-                        }
-                        break;
-        
-                    case PaperKey.A:
-                        if (_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl))
-                        {
-                            // Select all
-                            selStart = 0;
-                            selEnd = currentValue.Length;
-                            curPos = selEnd;
-                        }
-                        break;
-        
-                    case PaperKey.C:
-                        if ((_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl)) && HasSelection())
-                        {
-                            // Copy selection
-                            int start = Math.Min(selStart, selEnd);
-                            int end = Math.Max(selStart, selEnd);
-                            string selectedText = currentValue.Substring(start, end - start);
-                            _paper.SetClipboard(selectedText);
-                        }
-                        break;
-        
-                    case PaperKey.X:
-                        if ((_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl)) && HasSelection())
-                        {
-                            // Cut selection
-                            int start = Math.Min(selStart, selEnd);
-                            int end = Math.Max(selStart, selEnd);
-                            string selectedText = currentValue.Substring(start, end - start);
-                            _paper.SetClipboard(selectedText);
-                            DeleteSelection(ref currentValue, ref curPos, ref selStart, ref selEnd);
-                            valueChanged = true;
-                        }
-                        break;
-        
-                    case PaperKey.V:
-                        if (_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl))
-                        {
-                            // Paste from clipboard
-                            string clipText = _paper.GetClipboard();
-                            if (!string.IsNullOrEmpty(clipText))
-                            {
-                                if (HasSelection())
-                                {
-                                    DeleteSelection(ref currentValue, ref curPos, ref selStart, ref selEnd);
-                                }
-        
-                                currentValue = currentValue.Insert(curPos, clipText);
-                                curPos += clipText.Length;
-                                valueChanged = true;
-                            }
-                        }
-                        break;
-                }
-        
-                // Update stored values
-                _paper.SetElementStorage(_handle, "Value", currentValue);
-                _paper.SetElementStorage(_handle, "CursorPosition", curPos);
-                _paper.SetElementStorage(_handle, "SelectionStart", selStart);
-                _paper.SetElementStorage(_handle, "SelectionEnd", selEnd);
-        
-                // Ensure cursor is visible
-                EnsureCursorVisible(currentValue, font, fontSize, letterSpacing, curPos);
-        
-                // Notify of changes if needed
-                if (valueChanged && onChange != null)
-                {
-                    onChange(currentValue);
-                }
-        
-                // Helper functions
-                bool HasSelection()
-                {
-                    return selStart >= 0 && selEnd >= 0 && selStart != selEnd;
-                }
+                var currentState = LoadTextFieldState(value);
+                if (!currentState.IsFocused) return;
+                
+                bool valueChanged = ProcessKeyCommand(ref currentState, e.Key);
+                
+                EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
+                SaveTextFieldState(currentState);
+                
+                if (valueChanged)
+                    onChange?.Invoke(currentState.Value);
             });
         
             // Handle character input
             OnTextInput((TextInputEvent e) =>
             {
-                if (!isFocused) return;
-        
-                string currentValue = _paper.GetElementStorage<string>(_handle, "Value", "");
-                int curPos = _paper.GetElementStorage<int>(_handle, "CursorPosition", 0);
-                int selStart = _paper.GetElementStorage<int>(_handle, "SelectionStart", -1);
-                int selEnd = _paper.GetElementStorage<int>(_handle, "SelectionEnd", -1);
-        
-                // If we have a selection, delete it first
-                if (selStart >= 0 && selEnd >= 0 && selStart != selEnd)
-                {
-                    DeleteSelection(ref currentValue, ref curPos, ref selStart, ref selEnd);
-                }
-        
-                // Insert the character
-                if (!char.IsControl(e.Character))
-                {
-                    currentValue = currentValue.Insert(curPos, e.Character.ToString());
-                    curPos++;
-        
-                    // Update the value
-                    _paper.SetElementStorage(_handle, "Value", currentValue);
-                    _paper.SetElementStorage(_handle, "CursorPosition", curPos);
-                    _paper.SetElementStorage(_handle, "SelectionStart", selStart);
-                    _paper.SetElementStorage(_handle, "SelectionEnd", selEnd);
-        
-                    // Ensure cursor is visible
-                    EnsureCursorVisible(currentValue, font, fontSize, letterSpacing, curPos);
-        
-                    // Notify of changes
-                    onChange?.Invoke(currentValue);
-                }
+                var currentState = LoadTextFieldState(value);
+                if (!currentState.IsFocused || char.IsControl(e.Character)) return;
+                
+                if (currentState.HasSelection) currentState.DeleteSelection();
+                
+                currentState.Value = currentState.Value.Insert(currentState.CursorPosition, e.Character.ToString());
+                currentState.CursorPosition++;
+                
+                EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
+                SaveTextFieldState(currentState);
+                onChange?.Invoke(currentState.Value);
             });
         
             // Render cursor and selection
@@ -1545,94 +1460,60 @@ namespace Prowl.PaperUI
             {
                 _paper.AddActionElement(ref elHandle, (canvas, r) =>
                 {
-                    string currentValue = _paper.GetElementStorage<string>(elHandle, "Value", "");
-                    double scrollOffsetValue = _paper.GetElementStorage<double>(elHandle, "ScrollOffset", 0.0);
-        
-                    // Apply scroll transform to content
+                    var renderState = LoadTextFieldState(value);
+                    var settings = CreateTextLayoutSettings(font, fontSize, letterSpacing);
+                    
                     canvas.SaveState();
-                    canvas.TransformBy(Transform2D.CreateTranslation(-scrollOffsetValue, 0));
-        
-                    // Draw text
-                    double y = r.y + (r.height / 2);
-                    if (string.IsNullOrEmpty(currentValue))
+                    canvas.TransformBy(Transform2D.CreateTranslation(-renderState.ScrollOffset, 0));
+                    
+                    // Draw text or placeholder
+                    double textY = r.y + (r.height / 2);
+                    if (string.IsNullOrEmpty(renderState.Value))
                     {
-                        // Draw placeholder text
-                        var settings = TextLayoutSettings.Default;
-                        settings.PixelSize = fontSize;
-                        settings.Font = font;
-                        settings.LetterSpacing = letterSpacing;
-                        settings.Alignment = Scribe.TextAlignment.Left;
-                        settings.MaxWidth = float.MaxValue;
-
                         var placeholderSize = _paper.MeasureText(placeholder, settings);
-                        canvas.DrawText(placeholder, (float)(r.x + TextXPadding), (float)(y - placeholderSize.y / 2), placeholderColor.Value, fontSize, font);
-                        canvas.DrawText(placeholder, (float)(r.x + TextXPadding), (float)(y - placeholderSize.y / 2), placeholderColor.Value, fontSize, font);
+                        canvas.DrawText(placeholder, (float)(r.x + TextXPadding), (float)(textY - placeholderSize.y / 2), placeholderColor.Value, fontSize, font);
                     }
                     else
                     {
-                        // Draw actual text
-                        var settings = TextLayoutSettings.Default;
-                        settings.PixelSize = fontSize;
-                        settings.Font = font;
-                        settings.LetterSpacing = letterSpacing;
-                        settings.Alignment = Scribe.TextAlignment.Left;
-                        settings.MaxWidth = float.MaxValue;
-                        var textSize = _paper.MeasureText(currentValue, settings);
-                        canvas.DrawText(currentValue, (float)(r.x + TextXPadding), (float)(y - textSize.y / 2), tColor, fontSize, font);
+                        var textSize = _paper.MeasureText(renderState.Value, settings);
+                        var isEmpty = string.IsNullOrEmpty(renderState.Value);
+                        var displayColor = isEmpty ? placeholderColor.Value : textColor.Value;
+                        canvas.DrawText(renderState.Value, (float)(r.x + TextXPadding), (float)(textY - textSize.y / 2), displayColor, fontSize, font);
                     }
-        
-                    if (isFocused)
+                    
+                    // Draw selection and cursor if focused
+                    if (renderState.IsFocused)
                     {
                         _paper.CaptureKeyboard();
-        
-                        // Draw text selection if applicable
-                        int selStart = _paper.GetElementStorage<int>(elHandle, "SelectionStart", -1);
-                        int selEnd = _paper.GetElementStorage<int>(elHandle, "SelectionEnd", -1);
-        
-                        if (selStart >= 0 && selEnd >= 0 && selStart != selEnd)
+                        
+                        // Draw selection background
+                        if (renderState.HasSelection)
                         {
-                            // Ensure start < end
-                            if (selStart > selEnd)
-                            {
-                                int temp = selStart;
-                                selStart = selEnd;
-                                selEnd = temp;
-                            }
-        
-                            // Calculate selection rectangle using TextLayout
-                            double startX = GetCursorPositionFromIndex(currentValue, font, fontSize, letterSpacing, selStart).x;
-                            double endX = GetCursorPositionFromIndex(currentValue, font, fontSize, letterSpacing, selEnd).x;
-        
-                            // Draw selection background
+                            int start = Math.Min(renderState.SelectionStart, renderState.SelectionEnd);
+                            int end = Math.Max(renderState.SelectionStart, renderState.SelectionEnd);
+                            
+                            double startX = GetCursorPositionFromIndex(renderState.Value, font, fontSize, letterSpacing, start).x;
+                            double endX = GetCursorPositionFromIndex(renderState.Value, font, fontSize, letterSpacing, end).x;
+                            
                             canvas.BeginPath();
-                            canvas.RoundedRect(
-                                r.x + startX + TextXPadding,
-                                r.y + (r.height - fontSize) / 2,
-                                endX - startX,
-                                fontSize,
-                                2, 2, 2, 2);
+                            canvas.RoundedRect(r.x + startX + TextXPadding, r.y + (r.height - fontSize) / 2, endX - startX, fontSize, 2, 2, 2, 2);
                             canvas.SetFillColor(Color.FromArgb(100, 100, 150, 255));
                             canvas.Fill();
                         }
-        
-                        // Draw cursor if we have focus
-                        int cursorPos = _paper.GetElementStorage<int>(elHandle, "CursorPosition", 0);
-        
-                        // Only draw cursor during visible part of blink cycle
+                        
+                        // Draw blinking cursor
                         if ((int)(_paper.Time * 2) % 2 == 0)
                         {
-                            double cursorX = r.x + TextXPadding + GetCursorPositionFromIndex(currentValue, font, fontSize, letterSpacing, cursorPos).x;
-                            double cursorHeight = fontSize;
-        
+                            double cursorX = r.x + TextXPadding + GetCursorPositionFromIndex(renderState.Value, font, fontSize, letterSpacing, renderState.CursorPosition).x;
                             canvas.BeginPath();
-                            canvas.MoveTo(cursorX, r.y + (r.height - cursorHeight) / 2);
-                            canvas.LineTo(cursorX, r.y + (r.height - cursorHeight) / 2 + cursorHeight);
+                            canvas.MoveTo(cursorX, r.y + (r.height - fontSize) / 2);
+                            canvas.LineTo(cursorX, r.y + (r.height + fontSize) / 2);
                             canvas.SetStrokeColor(Color.FromArgb(255, 250, 250, 250));
                             canvas.SetStrokeWidth(1);
                             canvas.Stroke();
                         }
                     }
-
+                    
                     canvas.RestoreState();
                 });
             });
@@ -1645,12 +1526,10 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Ensures the cursor is visible by adjusting scroll position if needed.
         /// </summary>
-        private void EnsureCursorVisible(string text, FontFile font, float fontSize, float letterSpacing, int cursorPosition)
+        private void EnsureCursorVisible(ref TextFieldState state, FontFile font, float fontSize, float letterSpacing)
         {
-            double scrollOffset = _paper.GetElementStorage<double>(_handle, "ScrollOffset", 0.0);
-        
             // Calculate current cursor position using TextLayout
-            double cursorX = GetCursorPositionFromIndex(text, font, fontSize, letterSpacing, cursorPosition).x;
+            double cursorX = GetCursorPositionFromIndex(state.Value, font, fontSize, letterSpacing, state.CursorPosition).x;
         
             // Get current visible area (estimate from last layout)
             double visibleWidth = _handle.Data.LayoutWidth - 24; // Subtract padding
@@ -1658,39 +1537,26 @@ namespace Prowl.PaperUI
             const double margin = 20.0; // Margin to keep cursor away from edge
         
             // If cursor is to the left of visible area
-            if (cursorX < scrollOffset + margin)
+            if (cursorX < state.ScrollOffset + margin)
             {
                 // Scroll to show cursor with left margin
-                scrollOffset = Math.Max(0, cursorX - margin);
+                state.ScrollOffset = Math.Max(0, cursorX - margin);
             }
             // If cursor is to the right of visible area
-            else if (cursorX > scrollOffset + visibleWidth - margin)
+            else if (cursorX > state.ScrollOffset + visibleWidth - margin)
             {
                 // Scroll to show cursor with right margin
-                scrollOffset = cursorX - visibleWidth + margin;
+                state.ScrollOffset = cursorX - visibleWidth + margin;
             }
-        
-            // Update scroll position
-            _paper.SetElementStorage(_handle, "ScrollOffset", scrollOffset);
         }
         
         /// <summary>
-        /// Calculates the closest text position based on an X coordinate in a text string using TextLayout.
+        /// Calculates the closest text position based on an X coordinate using TextLayout.
         /// </summary>
         private int CalculateTextPosition(string text, FontFile font, float fontSize, float letterSpacing, double x)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-        
-            // Create TextLayoutSettings
-            var settings = TextLayoutSettings.Default;
-            settings.PixelSize = fontSize;
-            settings.Font = font;
-            settings.LetterSpacing = letterSpacing;
-            settings.Alignment = Scribe.TextAlignment.Left;
-            settings.MaxWidth = float.MaxValue;
-        
-            // Create TextLayout and use GetCursorIndex
-            var textLayout = _paper.CreateLayout(text, settings);
+            var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(font, fontSize, letterSpacing));
             return textLayout.GetCursorIndex(new Vector2(x, 0));
         }
         
@@ -1700,53 +1566,8 @@ namespace Prowl.PaperUI
         private Vector2 GetCursorPositionFromIndex(string text, FontFile font, float fontSize, float letterSpacing, int index)
         {
             if (string.IsNullOrEmpty(text) || index <= 0) return Vector2.zero;
-        
-            // Create TextLayoutSettings
-            var settings = TextLayoutSettings.Default;
-            settings.PixelSize = fontSize;
-            settings.Font = font;
-            settings.LetterSpacing = letterSpacing;
-            settings.Alignment = Scribe.TextAlignment.Left;
-            settings.MaxWidth = float.MaxValue;
-        
-            // Create TextLayout and use GetCursorPosition
-            var textLayout = _paper.CreateLayout(text, settings);
+            var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(font, fontSize, letterSpacing));
             return textLayout.GetCursorPosition(index);
-        }
-        
-        /// <summary>
-        /// Calculates the width up to a specific character index using TextLayout.
-        /// </summary>
-        private double CalculateTextWidth(string text, FontFile font, float fontSize, float letterSpacing)
-        {
-            if (string.IsNullOrEmpty(text)) return 0;
-            return GetCursorPositionFromIndex(text, font, fontSize, letterSpacing, text.Length).x;
-        }
-        
-        /// <summary>
-        /// Clears the text selection.
-        /// </summary>
-        private static void ClearSelection(ref int selStart, ref int selEnd)
-        {
-            selStart = -1;
-            selEnd = -1;
-        }
-        
-        /// <summary>
-        /// Deletes the selected text.
-        /// </summary>
-        private static void DeleteSelection(ref string value, ref int cursorPos, ref int selStart, ref int selEnd)
-        {
-            int start = Math.Min(selStart, selEnd);
-            int end = Math.Max(selStart, selEnd);
-            int length = end - start;
-        
-            value = value.Remove(start, length);
-            cursorPos = start;
-        
-            // Clear selection
-            selStart = -1;
-            selEnd = -1;
         }
         
         #endregion
