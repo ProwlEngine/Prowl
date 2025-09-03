@@ -17,7 +17,7 @@
     <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Scribe</PackageProjectUrl>
     <PackageTags>prowl;font;truetype;rasterizer;markdown;layout;rendering</PackageTags>
     <Description>TrueType font parser, glyph layout engine, dynamic atlas packing, and Markdown renderer.</Description>
-    <Version>0.6.0</Version>
+    <Version>0.7.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
