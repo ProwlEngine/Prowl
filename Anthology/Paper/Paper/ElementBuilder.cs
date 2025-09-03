@@ -621,6 +621,24 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>
+        /// Hooks this element to its parent's interaction states.
+        /// When the parent is hovered, active, focused, or dragging, this element will also be considered in those states and receive the events.
+        /// </summary>
+        public ElementBuilder HookToParent()
+        {
+            _handle.Data.IsHookedToParent = true;
+            
+            // Mark the parent as having hooked children for optimization
+            ElementHandle parent = _handle.GetParentHandle();
+            if (parent.IsValid)
+            {
+                parent.Data.IsAHookedParent = true;
+            }
+            
+            return this;
+        }
+
         /// <summary>Sets a callback that runs after layout calculation is complete.</summary>
         public ElementBuilder OnPostLayout(Action<ElementHandle, Rect> handler)
         {

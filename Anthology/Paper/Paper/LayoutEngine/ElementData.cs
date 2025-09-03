@@ -43,6 +43,12 @@ namespace Prowl.PaperUI.LayoutEngine
         // Hierarchy
         public int ParentIndex;
         public List<int> ChildIndices;
+        
+        // Interaction hooking - whether this element inherits parent's interaction state
+        public bool IsHookedToParent;
+        
+        // Interaction hooking - whether this element has hooked children (optimization flag)
+        public bool IsAHookedParent;
 
         public bool Visible;
 
@@ -97,6 +103,8 @@ namespace Prowl.PaperUI.LayoutEngine
                 StopPropagation = false,
                 ParentIndex = -1,
                 ChildIndices = new List<int>(),
+                IsHookedToParent = false,
+                IsAHookedParent = false,
                 Visible = true,
                 LayoutType = LayoutType.Column,
                 PositionType = PositionType.ParentDirected,
