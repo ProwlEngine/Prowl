@@ -672,11 +672,18 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
-        /// Process keyboard events for the focused element
+        /// Process keyboard events for the focused element and global navigation
         /// </summary>
         private void HandleKeyboardEvents()
         {
-            // If no element has focus, there's nothing to do
+            // Process global navigation keys first (Tab)
+            if (IsKeyPressed(PaperKey.Tab))
+            {
+                HandleTabNavigation();
+                return; // Don't process other keys when Tab is pressed
+            }
+
+            // If no element has focus, there's nothing to do for other keys
             if (_focusedElementId == 0)
                 return;
 
@@ -711,6 +718,97 @@ namespace Prowl.PaperUI
                 PropagateEventToHookedChildren(focusedElement, child => {
                     ref ElementData childData = ref child.Data;
                     childData.OnTextInput?.Invoke(new TextInputEvent(child, c));
+                });
+            }
+        }
+
+        /// <summary>
+        /// Handles Tab key navigation between elements with TabIndex
+        /// </summary>
+        private void HandleTabNavigation()
+        {
+            // Get all elements with valid tab indices
+            var tabbableElements = new List<(int tabIndex, ulong elementId)>();
+            
+            // Brute force search through all elements
+            for (int i = 0; i < _elementCount; i++)
+            {
+                ref ElementData data = ref _elements[i];
+                if (data.TabIndex >= 0 && data.IsFocusable && data.Visible)
+                {
+                    tabbableElements.Add((data.TabIndex, data.ID));
+                }
+            }
+
+            // If no tabbable elements, do nothing
+            if (tabbableElements.Count == 0)
+                return;
+
+            // Sort by tab index
+            tabbableElements.Sort((a, b) => a.tabIndex.CompareTo(b.tabIndex));
+
+            ulong nextElementId;
+
+            if (_focusedElementId == 0)
+            {
+                // No element focused, focus the first one (lowest TabIndex)
+                nextElementId = tabbableElements[0].elementId;
+            }
+            else
+            {
+                // Find current element in the list
+                int currentIndex = -1;
+                for (int i = 0; i < tabbableElements.Count; i++)
+                {
+                    if (tabbableElements[i].elementId == _focusedElementId)
+                    {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+
+                if (currentIndex == -1)
+                {
+                    // Current focused element doesn't have a TabIndex, focus first tabbable element
+                    nextElementId = tabbableElements[0].elementId;
+                }
+                else
+                {
+                    // Move to next element, wrapping around to first if at end
+                    int nextIndex = (currentIndex + 1) % tabbableElements.Count;
+                    nextElementId = tabbableElements[nextIndex].elementId;
+                }
+            }
+
+            // Focus the next element
+            ElementHandle nextElement = FindElementByID(nextElementId);
+            if (nextElement.IsValid)
+            {
+                // Update focused element
+                if (_focusedElementId != 0)
+                {
+                    ElementHandle oldFocusedElement = FindElementByID(_focusedElementId);
+                    if (oldFocusedElement.IsValid)
+                    {
+                        ref ElementData oldData = ref oldFocusedElement.Data;
+                        oldData.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
+                        
+                        // Propagate focus loss to hooked children
+                        PropagateEventToHookedChildren(oldFocusedElement, child => {
+                            ref ElementData childData = ref child.Data;
+                            childData.OnFocusChange?.Invoke(new FocusEvent(child, false));
+                        });
+                    }
+                }
+
+                _focusedElementId = nextElementId;
+                ref ElementData nextData = ref nextElement.Data;
+                nextData.OnFocusChange?.Invoke(new FocusEvent(nextElement, true));
+                
+                // Propagate focus gain to hooked children
+                PropagateEventToHookedChildren(nextElement, child => {
+                    ref ElementData childData = ref child.Data;
+                    childData.OnFocusChange?.Invoke(new FocusEvent(child, true));
                 });
             }
         }

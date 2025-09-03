@@ -159,7 +159,7 @@ namespace Shared
 
         public static ElementBuilder Secondary(string id, string value, Action<string> onChange = null, string placeholder = "")
         {
-            ElementBuilder parent = PaperDemo.Gui.Box("shadcs-input-" + id).Style("shadcs-text-field-secondary");
+            ElementBuilder parent = PaperDemo.Gui.Box("shadcs-input-" + id).Style("shadcs-text-field-secondary").TabIndex(0);
             using (parent.Enter())
             {
                 PaperDemo.Gui.Box("area")
@@ -204,7 +204,7 @@ namespace Shared
 
         public static ElementBuilder Secondary(string id, string value, Action<string> onChange = null, string placeholder = "")
         {
-            ElementBuilder parent = PaperDemo.Gui.Box("shadcs-textarea-" + id).Style("shadcs-text-area-secondary");
+            ElementBuilder parent = PaperDemo.Gui.Box("shadcs-textarea-" + id).Style("shadcs-text-area-secondary").TabIndex(1);
             using (parent.Enter())
             {
                 PaperDemo.Gui.Box("area")

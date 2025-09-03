@@ -639,6 +639,17 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>
+        /// Sets the tab index for keyboard navigation. 
+        /// Elements with lower tab indices are focused first when pressing Tab.
+        /// Use -1 to exclude from tab navigation (default).
+        /// </summary>
+        public ElementBuilder TabIndex(int index)
+        {
+            _handle.Data.TabIndex = index;
+            return this;
+        }
+
         /// <summary>Sets a callback that runs after layout calculation is complete.</summary>
         public ElementBuilder OnPostLayout(Action<ElementHandle, Rect> handler)
         {

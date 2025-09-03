@@ -49,6 +49,9 @@ namespace Prowl.PaperUI.LayoutEngine
         
         // Interaction hooking - whether this element has hooked children (optimization flag)
         public bool IsAHookedParent;
+        
+        // Tab navigation - element's position in tab order (-1 means not focusable via tab)
+        public int TabIndex;
 
         public bool Visible;
 
@@ -105,6 +108,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 ChildIndices = new List<int>(),
                 IsHookedToParent = false,
                 IsAHookedParent = false,
+                TabIndex = -1,
                 Visible = true,
                 LayoutType = LayoutType.Column,
                 PositionType = PositionType.ParentDirected,
