@@ -1294,7 +1294,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 else if(element.TextAlignment == TextAlignment.Right || element.TextAlignment == TextAlignment.MiddleRight || element.TextAlignment == TextAlignment.BottomRight)
                     settings.Alignment = Scribe.TextAlignment.Right;
 
-                settings.PreferredFont = canvas.GetFont(element.FontFamily, element.FontStyle);
+                settings.Font = element.Font;
                 settings.WrapMode = element.WrapMode;
                 settings.MaxWidth = availableWidth;
 
@@ -1304,12 +1304,12 @@ namespace Prowl.PaperUI.LayoutEngine
             }
             else
             {
-                var r = canvas.GetFont(element.FontFamily, element.FontStyle);
-                var m = canvas.GetFont(element.FontMonoFamily, element.FontStyle);
-                var b = canvas.GetFont(element.FontFamily, FontStyle.Bold);
-                var i = canvas.GetFont(element.FontFamily, FontStyle.Italic);
-                var bi = canvas.GetFont(element.FontFamily, FontStyle.BoldItalic);
-                var settings = MarkdownLayoutSettings.Default(r, m, b, i, bi, availableWidth);
+                var r = element.Font;
+                var m = element.FontMono;
+                var b = element.FontBold;
+                var i = element.FontItalic;
+                var bi = element.FontBoldItalic;
+                var settings = MarkdownLayoutSettings.Default(r, availableWidth, m, b, i, bi);
 
                 element._quillMarkdown = canvas.CreateMarkdown(element.Paragraph, settings);
 

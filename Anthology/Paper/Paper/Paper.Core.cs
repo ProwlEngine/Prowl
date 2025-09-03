@@ -92,20 +92,13 @@ namespace Prowl.PaperUI
             _height = height;
         }
 
-        public void AddFont(string fontPath)
-        {
-            _canvas.AddFont(fontPath);
-        }
+        public void AddFallbackFont(FontFile font) => _canvas.AddFallbackFont(font);
 
-        public void AddFont(byte[] fontData)
-        {
-            _canvas.AddFont(fontData);
-        }
+        public IEnumerable<FontFile> EnumerateSystemFonts() => _canvas.EnumerateSystemFonts();
 
-        public void LoadSystemFonts(params string[] priorityFonts)
-        {
-            _canvas.LoadSystemFonts(priorityFonts);
-        }
+        public Prowl.Vector.Vector2 MeasureText(string text, double pixelSize, FontFile font, double letterSpacing = 0.0) => _canvas.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
+
+        public Prowl.Vector.Vector2 MeasureText(string text, TextLayoutSettings settings) => _canvas.MeasureText(text, settings);
 
         /// <summary>
         /// Begins a new UI frame, resetting the element hierarchy.

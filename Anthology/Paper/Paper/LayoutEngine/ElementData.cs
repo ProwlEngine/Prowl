@@ -53,8 +53,11 @@ namespace Prowl.PaperUI.LayoutEngine
         // Text properties
         public bool IsMarkdown;
         public string Paragraph;
-        public string FontFamily;
-        public string FontMonoFamily;
+        public FontFile Font;
+        public FontFile FontBold;
+        public FontFile FontItalic;
+        public FontFile FontBoldItalic;
+        public FontFile FontMono;
         public FontStyle FontStyle;
         public TextWrapMode WrapMode;
         public TextAlignment TextAlignment;
@@ -99,8 +102,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 PositionType = PositionType.ParentDirected,
                 IsMarkdown = false,
                 Paragraph = null,
-                FontFamily = null,
-                FontMonoFamily = null,
+                Font = null,
                 FontStyle = FontStyle.Regular,
                 WrapMode = TextWrapMode.NoWrap,
                 TextAlignment = TextAlignment.Left,

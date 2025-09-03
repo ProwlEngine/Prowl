@@ -100,35 +100,35 @@ namespace Shared
         public static ElementBuilder Primary(string id, string text = "")
         {
             return PaperDemo.Gui.Box("shadcs-button-" + id)
-                .Text(text).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter)
+                .Text(text, Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-button-primary");
         }
 
         public static ElementBuilder Secondary(string id, string text = "")
         {
             return PaperDemo.Gui.Box("shadcs-button-" + id)
-                .Text(text).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
+                .Text(text, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-button-secondary");
         }
 
         public static ElementBuilder Outline(string id, string text = "")
         {
             return PaperDemo.Gui.Box("shadcs-button-" + id)
-                .Text(text).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
+                .Text(text, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-button-outline");
         }
 
         public static ElementBuilder IconPrimary(string id, string text = "")
         {
             return PaperDemo.Gui.Box("shadcs-button-" + id)
-                .Text(text).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter)
+                .Text(text, Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-icon-button-primary");
         }
 
         public static ElementBuilder IconSecondary(string id, string text = "")
         {
             return PaperDemo.Gui.Box("shadcs-button-" + id)
-                .Text(text).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
+                .Text(text, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-icon-button-secondary");
         }
     }
@@ -404,7 +404,7 @@ namespace Shared
                         //vg.TextAlign(Align.Center | Align.Middle);
                         //vg.FontSize(16);
                         //vg.Text(labelX, labelY, label);
-                        vg.DrawText(label, labelX, labelY, Color.White, 18);
+                        vg.DrawText(label, labelX, labelY, Color.White, 18, Fonts.arial);
 
                         // Move to next slice
                         startAngle = endAngle;

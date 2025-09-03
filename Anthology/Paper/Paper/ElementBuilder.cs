@@ -870,10 +870,26 @@ namespace Prowl.PaperUI
         /// <summary>Sets the text content of the element.</summary>
         /// <param name="text">The text to display</param>
         /// <param name="useMarkdown">Whether to parse the text as Markdown</param>
-        public ElementBuilder Text(string text, bool useMarkdown = false)
+        public ElementBuilder Text(string text, FontFile font)
         {
-            _handle.Data.IsMarkdown = useMarkdown;
+            _handle.Data.IsMarkdown = false;
             _handle.Data.Paragraph = text;
+            _handle.Data.Font = font;
+            return this;
+        }
+
+        /// <summary>Sets the text content of the element.</summary>
+        /// <param name="text">The text to display</param>
+        /// <param name="useMarkdown">Whether to parse the text as Markdown</param>
+        public ElementBuilder Markdown(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
+        {
+            _handle.Data.IsMarkdown = true;
+            _handle.Data.Paragraph = text;
+            _handle.Data.Font = font;
+            _handle.Data.FontBold = bold;
+            _handle.Data.FontItalic = italic;
+            _handle.Data.FontBoldItalic = boldItalic;
+            _handle.Data.FontMono = mono;
             return this;
         }
 
@@ -894,18 +910,6 @@ namespace Prowl.PaperUI
         public ElementBuilder Wrap(TextWrapMode mode)
         {
             _handle.Data.WrapMode = mode;
-            return this;
-        }
-
-        /// <summary> Sets the font family and style for the element's text. </summary>
-        /// <param name="family">The font family name (null for default)</param>
-        /// <param name="style">The font style to apply</param>
-        /// <param name="monoFamily">A mono font family, used in Markdown as the Mono Font</param>
-        public ElementBuilder Font(string? family, FontStyle style, string monoFamily)
-        {
-            _handle.Data.FontFamily = family;
-            _handle.Data.FontStyle = style;
-            _handle.Data.FontMonoFamily = monoFamily;
             return this;
         }
 
