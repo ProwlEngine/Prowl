@@ -288,6 +288,9 @@ namespace Prowl.PaperUI
         // Inheritance
         private ElementStyle? _parent;
 
+        private static object[] _defaultValues;
+        private static bool _initialized = false;
+
         #endregion
 
         #region Public Methods
@@ -636,74 +639,87 @@ namespace Prowl.PaperUI
         /// </summary>
         private object GetDefaultValue(GuiProp property)
         {
-            return property switch {
-                // Visual Properties
-                GuiProp.BackgroundColor => Color.Transparent,
-                GuiProp.BackgroundGradient => Gradient.None,
-                GuiProp.BorderColor => Color.Transparent,
-                GuiProp.BorderWidth => (double)0.0,
-                GuiProp.Rounded => new Vector4(0, 0, 0, 0),
-                GuiProp.BoxShadow => BoxShadow.None,
+            InitializeDefaults();
+            int index = (int)property;
+            return _defaultValues[index];
+        }
 
-                // Core Layout Properties
-                GuiProp.AspectRatio => (double)-1.0,
-                GuiProp.Width => UnitValue.Stretch(),
-                GuiProp.Height => UnitValue.Stretch(),
-                GuiProp.MinWidth => UnitValue.Pixels(0),
-                GuiProp.MaxWidth => UnitValue.Pixels(double.MaxValue),
-                GuiProp.MinHeight => UnitValue.Pixels(0),
-                GuiProp.MaxHeight => UnitValue.Pixels(double.MaxValue),
+        #endregion
 
-                // Positioning Properties
-                GuiProp.Left => UnitValue.Auto,
-                GuiProp.Right => UnitValue.Auto,
-                GuiProp.Top => UnitValue.Auto,
-                GuiProp.Bottom => UnitValue.Auto,
-                GuiProp.MinLeft => UnitValue.Pixels(0),
-                GuiProp.MaxLeft => UnitValue.Pixels(double.MaxValue),
-                GuiProp.MinRight => UnitValue.Pixels(0),
-                GuiProp.MaxRight => UnitValue.Pixels(double.MaxValue),
-                GuiProp.MinTop => UnitValue.Pixels(0),
-                GuiProp.MaxTop => UnitValue.Pixels(double.MaxValue),
-                GuiProp.MinBottom => UnitValue.Pixels(0),
-                GuiProp.MaxBottom => UnitValue.Pixels(double.MaxValue),
+        #region Private Methods
 
-                // Child Layout Properties
-                GuiProp.ChildLeft => UnitValue.Auto,
-                GuiProp.ChildRight => UnitValue.Auto,
-                GuiProp.ChildTop => UnitValue.Auto,
-                GuiProp.ChildBottom => UnitValue.Auto,
-                GuiProp.RowBetween => UnitValue.Auto,
-                GuiProp.ColBetween => UnitValue.Auto,
-                GuiProp.BorderLeft => UnitValue.Pixels(0),
-                GuiProp.BorderRight => UnitValue.Pixels(0),
-                GuiProp.BorderTop => UnitValue.Pixels(0),
-                GuiProp.BorderBottom => UnitValue.Pixels(0),
+        public static void InitializeDefaults()
+        {
+            if (_initialized) return;
 
-                // Transform Properties
-                GuiProp.TranslateX => (double)0.0,
-                GuiProp.TranslateY => (double)0.0,
-                GuiProp.ScaleX => (double)1.0,
-                GuiProp.ScaleY => (double)1.0,
-                GuiProp.Rotate => (double)0.0,
-                GuiProp.SkewX => (double)0.0,
-                GuiProp.SkewY => (double)0.0,
-                GuiProp.OriginX => (double)0.5, // Default is center
-                GuiProp.OriginY => (double)0.5, // Default is center
-                GuiProp.Transform => Transform2D.Identity,
+            // Assuming GuiProp enum values are contiguous starting from 0
+            int maxEnumValue = Enum.GetValues<GuiProp>().Max(x => (int)x);
+            _defaultValues = new object[maxEnumValue + 1];
 
-                // Text Properties
-                GuiProp.TextColor => Color.White,
+            // Visual Properties
+            _defaultValues[(int)GuiProp.BackgroundColor] = Color.Transparent;
+            _defaultValues[(int)GuiProp.BackgroundGradient] = Gradient.None;
+            _defaultValues[(int)GuiProp.BorderColor] = Color.Transparent;
+            _defaultValues[(int)GuiProp.BorderWidth] = 0.0;
+            _defaultValues[(int)GuiProp.Rounded] = new Vector4(0, 0, 0, 0);
+            _defaultValues[(int)GuiProp.BoxShadow] = BoxShadow.None;
 
-                GuiProp.WordSpacing => (double)0.0,
-                GuiProp.LetterSpacing => (double)0.0,
-                GuiProp.LineHeight => (double)1.0,
+            // Core Layout Properties
+            _defaultValues[(int)GuiProp.AspectRatio] = -1.0;
+            _defaultValues[(int)GuiProp.Width] = UnitValue.Stretch();
+            _defaultValues[(int)GuiProp.Height] = UnitValue.Stretch();
+            _defaultValues[(int)GuiProp.MinWidth] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.MaxWidth] = UnitValue.Pixels(double.MaxValue);
+            _defaultValues[(int)GuiProp.MinHeight] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.MaxHeight] = UnitValue.Pixels(double.MaxValue);
 
-                GuiProp.TabSize => (int)4,
-                GuiProp.FontSize => (float)16.0f,
+            // Positioning Properties
+            _defaultValues[(int)GuiProp.Left] = UnitValue.Auto;
+            _defaultValues[(int)GuiProp.Right] = UnitValue.Auto;
+            _defaultValues[(int)GuiProp.Top] = UnitValue.Auto;
+            _defaultValues[(int)GuiProp.Bottom] = UnitValue.Auto;
+            _defaultValues[(int)GuiProp.MinLeft] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.MaxLeft] = UnitValue.Pixels(double.MaxValue);
+            _defaultValues[(int)GuiProp.MinRight] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.MaxRight] = UnitValue.Pixels(double.MaxValue);
+            _defaultValues[(int)GuiProp.MinTop] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.MaxTop] = UnitValue.Pixels(double.MaxValue);
+            _defaultValues[(int)GuiProp.MinBottom] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.MaxBottom] = UnitValue.Pixels(double.MaxValue);
 
-                _ => throw new ArgumentOutOfRangeException(nameof(property), property, null)
-            };
+            // Child Layout Properties
+            _defaultValues[(int)GuiProp.ChildLeft] = UnitValue.Auto;
+            _defaultValues[(int)GuiProp.ChildRight] = UnitValue.Auto;
+            _defaultValues[(int)GuiProp.ChildTop] = UnitValue.Auto;
+            _defaultValues[(int)GuiProp.ChildBottom] = UnitValue.Auto;
+            _defaultValues[(int)GuiProp.RowBetween] = UnitValue.Auto;
+            _defaultValues[(int)GuiProp.ColBetween] = UnitValue.Auto;
+            _defaultValues[(int)GuiProp.BorderLeft] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.BorderRight] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.BorderTop] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.BorderBottom] = UnitValue.Pixels(0);
+
+            // Transform Properties
+            _defaultValues[(int)GuiProp.TranslateX] = 0.0;
+            _defaultValues[(int)GuiProp.TranslateY] = 0.0;
+            _defaultValues[(int)GuiProp.ScaleX] = 1.0;
+            _defaultValues[(int)GuiProp.ScaleY] = 1.0;
+            _defaultValues[(int)GuiProp.Rotate] = 0.0;
+            _defaultValues[(int)GuiProp.SkewX] = 0.0;
+            _defaultValues[(int)GuiProp.SkewY] = 0.0;
+            _defaultValues[(int)GuiProp.OriginX] = 0.5;
+            _defaultValues[(int)GuiProp.OriginY] = 0.5;
+            _defaultValues[(int)GuiProp.Transform] = Transform2D.Identity;
+
+            // Text Properties
+            _defaultValues[(int)GuiProp.TextColor] = Color.White;
+            _defaultValues[(int)GuiProp.WordSpacing] = 0.0;
+            _defaultValues[(int)GuiProp.LetterSpacing] = 0.0;
+            _defaultValues[(int)GuiProp.LineHeight] = 1.0;
+            _defaultValues[(int)GuiProp.TabSize] = 4;
+            _defaultValues[(int)GuiProp.FontSize] = 16.0f;
+
+            _initialized = true;
         }
 
         #endregion
@@ -739,26 +755,29 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="deltaTime">The time since the last frame.</param>
         /// <param name="element">The root element to start updating from.</param>
-        private void UpdateStyles(double deltaTime, Element element)
+        private void UpdateStyles(double deltaTime, ElementHandle element)
         {
-            ulong id = element.ID;
+            ulong id = element.Data.ID;
             if (_activeStyles.TryGetValue(id, out var style))
             {
                 // Update the style properties
                 style.Update(deltaTime);
-                element._elementStyle = style;
+                element.Data._elementStyle = style;
             }
             else
             {
                 // Create a new style if it doesn't exist
-                style = element._elementStyle ?? new ElementStyle();
-                element._elementStyle = style;
+                style = element.Data._elementStyle ?? new ElementStyle();
+                element.Data._elementStyle = style;
                 _activeStyles[id] = style;
             }
 
             // Update Children
-            foreach (var child in element.Children)
+            foreach (var childIndex in element.Data.ChildIndices)
+            {
+                var child = new ElementHandle(this, childIndex);
                 UpdateStyles(deltaTime, child);
+            }
         }
 
         /// <summary>
@@ -802,7 +821,7 @@ namespace Prowl.PaperUI
             List<ulong> elementsToRemove = new List<ulong>();
             foreach (var kvp in _activeStyles)
             {
-                if (!createdElements.ContainsKey(kvp.Key))
+                if (!createdElements.Contains(kvp.Key))
                     elementsToRemove.Add(kvp.Key);
                 else
                     kvp.Value.EndOfFrame(); // Reset the style for the next frame
@@ -870,7 +889,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="element">The element to apply styles to</param>
         /// <param name="baseName">The base style name (e.g., "button")</param>
-        public void ApplyStyleWithStates(Element element, string baseName)
+        public void ApplyStyleWithStates(ElementHandle element, string baseName)
         {
             // Apply base style first
             if (TryGetStyle(baseName, out var baseStyle))
@@ -881,9 +900,9 @@ namespace Prowl.PaperUI
             // Apply pseudo-states in order
             var pseudoStates = new[]
             {
-                ("hovered", IsElementHovered(element.ID)),
-                ("focused", IsElementFocused(element.ID)),
-                ("active", IsElementActive(element.ID))
+                ("hovered", IsElementHovered(element.Data.ID)),
+                ("focused", IsElementFocused(element.Data.ID)),
+                ("active", IsElementActive(element.Data.ID))
             };
 
             foreach (var (state, isActive) in pseudoStates)

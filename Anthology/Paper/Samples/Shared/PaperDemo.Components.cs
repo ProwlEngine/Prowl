@@ -1,6 +1,7 @@
 using System.Drawing;
 
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 
 namespace Shared
 {
@@ -10,6 +11,7 @@ namespace Shared
         {
             Button.DefineStyles();
             Input.DefineStyles();
+            TextArea.DefineStyles();
             Switch.DefineStyles();
         }
     }
@@ -100,35 +102,35 @@ namespace Shared
         public static ElementBuilder Primary(string id, string text = "")
         {
             return PaperDemo.Gui.Box("shadcs-button-" + id)
-                .Text(text).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter)
+                .Text(text, Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-button-primary");
         }
 
         public static ElementBuilder Secondary(string id, string text = "")
         {
             return PaperDemo.Gui.Box("shadcs-button-" + id)
-                .Text(text).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
+                .Text(text, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-button-secondary");
         }
 
         public static ElementBuilder Outline(string id, string text = "")
         {
             return PaperDemo.Gui.Box("shadcs-button-" + id)
-                .Text(text).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
+                .Text(text, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-button-outline");
         }
 
         public static ElementBuilder IconPrimary(string id, string text = "")
         {
             return PaperDemo.Gui.Box("shadcs-button-" + id)
-                .Text(text).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter)
+                .Text(text, Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-icon-button-primary");
         }
 
         public static ElementBuilder IconSecondary(string id, string text = "")
         {
             return PaperDemo.Gui.Box("shadcs-button-" + id)
-                .Text(text).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
+                .Text(text, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-icon-button-secondary");
         }
     }
@@ -157,10 +159,63 @@ namespace Shared
 
         public static ElementBuilder Secondary(string id, string value, Action<string> onChange = null, string placeholder = "")
         {
-            return PaperDemo.Gui.Box("shadcs-input-" + id)
-                //.TextField(value, Fonts.fontMedium, onChange, Themes.textColor, placeholder, Color.FromArgb(100, Themes.textColor))
-                .Style("shadcs-text-field-secondary")
-                .SetScroll(Scroll.ScrollX);
+            ElementBuilder parent = PaperDemo.Gui.Box("shadcs-input-" + id).Style("shadcs-text-field-secondary").TabIndex(0);
+            using (parent.Enter())
+            {
+                PaperDemo.Gui.Box("area")
+                    .Margin(8, UnitValue.StretchOne)
+                    .HookToParent()
+                    .IsNotInteractable()
+                    .Width(UnitValue.StretchOne)
+                    .Height(UnitValue.StretchOne)
+                    .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor));
+            }
+            return parent;
+
+            //return PaperDemo.Gui.Box("shadcs-input-" + id)
+            //    .TextField(value, Fonts.arial, onChange, Themes.textColor, placeholder, Color.FromArgb(100, Themes.textColor))
+            //    .Style("shadcs-text-field-secondary");
+            //    //.SetScroll(Scroll.ScrollX);
+        }
+    }
+
+    public static class TextArea
+    {
+        public static void DefineStyles()
+        {
+            // Text field styles
+            PaperDemo.Gui.CreateStyleFamily("shadcs-text-area-secondary")
+                .Base(new StyleTemplate()
+                    .Width(300)
+                    .Height(Prowl.PaperUI.LayoutEngine.UnitValue.Auto)
+                    //.MaxHeight(100)
+                    .Rounded(8)
+                    .BackgroundColor(Themes.secondaryColor)
+                    .BorderColor(Color.Transparent)
+                    .BorderWidth(0)
+                    .Transition(GuiProp.BorderColor, 0.2)
+                    .Transition(GuiProp.BorderWidth, 0.2))
+                .Focused(new StyleTemplate()
+                    .BorderColor(Themes.primaryColor)
+                    .BorderWidth(1)
+                    .BackgroundColor(Themes.secondaryColor))
+                .Register();
+        }
+
+        public static ElementBuilder Secondary(string id, string value, Action<string> onChange = null, string placeholder = "")
+        {
+            ElementBuilder parent = PaperDemo.Gui.Box("shadcs-textarea-" + id).Style("shadcs-text-area-secondary").TabIndex(1);
+            using (parent.Enter())
+            {
+                PaperDemo.Gui.Box("area")
+                    .Margin(8)
+                    .HookToParent()
+                    .IsNotInteractable()
+                    .Width(UnitValue.StretchOne)
+                    .Height(UnitValue.Auto)
+                    .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor));
+            }
+            return parent;
         }
     }
 
@@ -404,7 +459,7 @@ namespace Shared
                         //vg.TextAlign(Align.Center | Align.Middle);
                         //vg.FontSize(16);
                         //vg.Text(labelX, labelY, label);
-                        vg.DrawText(label, labelX, labelY, Color.White, 18);
+                        vg.DrawText(label, labelX, labelY, Color.White, 18, Fonts.arial);
 
                         // Move to next slice
                         startAngle = endAngle;

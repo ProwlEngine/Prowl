@@ -8,7 +8,7 @@ namespace Prowl.PaperUI
     /// </summary>
     internal class ElementRenderCommand
     {
-        public LayoutEngine.Element Element { get; set; }
+        public LayoutEngine.ElementHandle Element { get; set; }
         public Action<Canvas, Rect>? RenderAction { get; set; }
     }
 }

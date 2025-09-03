@@ -7,10 +7,10 @@ namespace Prowl.PaperUI.Events;
 
 public class TextInputEvent
 {
-    public Element Source { get; }
+    public ElementHandle Source { get; }
     public char Character { get; }
 
-    public TextInputEvent(Element source, char character)
+    public TextInputEvent(ElementHandle source, char character)
     {
         Source = source;
         Character = character;

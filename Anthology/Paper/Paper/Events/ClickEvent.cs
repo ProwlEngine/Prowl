@@ -10,7 +10,7 @@ public class ClickEvent : ElementEvent
 {
     public PaperMouseBtn Button { get; }
 
-    public ClickEvent(Element source, Rect elementRect, Vector2 pointerPos, PaperMouseBtn button)
+    public ClickEvent(ElementHandle source, Rect elementRect, Vector2 pointerPos, PaperMouseBtn button)
         : base(source, elementRect, pointerPos)
     {
         Button = button;

@@ -10,7 +10,7 @@ public class ScrollEvent : ElementEvent
 {
     public double Delta { get; }
 
-    public ScrollEvent(Element source, Rect elementRect, Vector2 pointerPos, double delta)
+    public ScrollEvent(ElementHandle source, Rect elementRect, Vector2 pointerPos, double delta)
         : base(source, elementRect, pointerPos)
     {
         Delta = delta;

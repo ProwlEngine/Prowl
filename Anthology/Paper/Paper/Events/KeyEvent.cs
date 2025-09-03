@@ -7,11 +7,11 @@ namespace Prowl.PaperUI.Events;
 
 public class KeyEvent
 {
-    public Element Source { get; }
+    public ElementHandle Source { get; }
     public PaperKey Key { get; }
     public bool IsRepeat { get; }
 
-    public KeyEvent(Element source, PaperKey key, bool isRepeat)
+    public KeyEvent(ElementHandle source, PaperKey key, bool isRepeat)
     {
         Source = source;
         Key = key;

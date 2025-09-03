@@ -1,39 +1,44 @@
 using System.Reflection;
 
 using Prowl.PaperUI;
+using Prowl.Scribe;
 
 namespace Shared
 {
     public static class Fonts
     {
+        public static FontFile arial;
+        public static FontFile arialb;
+        public static FontFile ariali;
+        public static FontFile arialbi;
+
+        public static FontFile consola;
+
         public static void Initialize(Paper gui)
         {
             // Load fonts with different sizes
-            var assembly = Assembly.GetExecutingAssembly();
-            using (Stream? stream = assembly.GetManifestResourceStream("Shared.EmbeddedResources.font.ttf"))
-            {
-                if (stream == null) throw new Exception("Could not load font resource");
-                byte[] data = new byte[stream.Length];
-                stream.Read(data, 0, data.Length);
-                gui.AddFont(data);
-            }
-            using (Stream? stream = assembly.GetManifestResourceStream("Shared.EmbeddedResources.fa-regular-400.ttf"))
-            {
-                if (stream == null) throw new Exception("Could not load font resource");
-                byte[] data = new byte[stream.Length];
-                stream.Read(data, 0, data.Length);
-                gui.AddFont(data);
-            }
-            using (Stream? stream = assembly.GetManifestResourceStream("Shared.EmbeddedResources.fa-solid-900.ttf"))
-            {
-                if (stream == null) throw new Exception("Could not load font resource");
-                byte[] data = new byte[stream.Length];
-                stream.Read(data, 0, data.Length);
-                gui.AddFont(data);
-            }
+            arial = LoadEmbeddedFont("arial");
+            arialb = LoadEmbeddedFont("arialb");
+            ariali = LoadEmbeddedFont("ariali");
+            arialbi = LoadEmbeddedFont("arialbi");
 
-            // Load System Font as Backups
-            gui.LoadSystemFonts("Arial", "Segoe UI", "Liberation Sans", "Consolas", "Menlo", "Liberation Mono");
+            consola = LoadEmbeddedFont("consola");
+
+            // Add FontAwesome as a Fallback font
+            var faReg = LoadEmbeddedFont("fa-regular-400");
+            var faSolid = LoadEmbeddedFont("fa-solid-900");
+
+            gui.AddFallbackFont(faReg);
+            gui.AddFallbackFont(faSolid);
+        }
+
+        private static FontFile LoadEmbeddedFont(string fontName)
+        {
+            using (Stream? stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Shared.EmbeddedResources.{fontName}.ttf"))
+            {
+                if (stream == null) throw new Exception("Could not load font resource");
+                return new FontFile(stream);
+            }
         }
     }
 }
