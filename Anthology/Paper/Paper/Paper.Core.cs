@@ -100,6 +100,8 @@ namespace Prowl.PaperUI
 
         public Prowl.Vector.Vector2 MeasureText(string text, TextLayoutSettings settings) => _canvas.MeasureText(text, settings);
 
+        public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _canvas.CreateLayout(text, settings);
+
         /// <summary>
         /// Begins a new UI frame, resetting the element hierarchy.
         /// </summary>

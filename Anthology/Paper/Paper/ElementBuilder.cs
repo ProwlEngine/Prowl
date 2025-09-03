@@ -1111,6 +1111,45 @@ namespace Prowl.PaperUI
         #region Text Field
 
         /// <summary>
+        /// Internal state container for text field data to reduce storage operations.
+        /// </summary>
+        private struct TextFieldState
+        {
+            public string Value;
+            public int CursorPosition;
+            public int SelectionStart;
+            public int SelectionEnd;
+            public double ScrollOffset;
+            public bool IsFocused;
+
+            public readonly bool HasSelection => SelectionStart >= 0 && SelectionEnd >= 0 && SelectionStart != SelectionEnd;
+            
+            public void ClearSelection()
+            {
+                SelectionStart = -1;
+                SelectionEnd = -1;
+            }
+            
+            public void DeleteSelection()
+            {
+                if (!HasSelection) return;
+                
+                int start = Math.Min(SelectionStart, SelectionEnd);
+                int end = Math.Max(SelectionStart, SelectionEnd);
+                Value = Value.Remove(start, end - start);
+                CursorPosition = start;
+                ClearSelection();
+            }
+            
+            public void ClampValues()
+            {
+                CursorPosition = Math.Clamp(CursorPosition, 0, Value.Length);
+                SelectionStart = SelectionStart < 0 ? -1 : Math.Clamp(SelectionStart, 0, Value.Length);
+                SelectionEnd = SelectionEnd < 0 ? -1 : Math.Clamp(SelectionEnd, 0, Value.Length);
+            }
+        }
+
+        /// <summary>
         /// Creates a text field control that allows users to input and edit text.
         /// </summary>
         /// <param name="value">Current text value</param>
@@ -1560,9 +1599,9 @@ namespace Prowl.PaperUI
                                 selEnd = temp;
                             }
         
-                            // Calculate selection rectangle
-                            double startX = CalculateTextWidth(currentValue.Substring(0, selStart), font, fontSize, letterSpacing);
-                            double endX = CalculateTextWidth(currentValue.Substring(0, selEnd), font, fontSize, letterSpacing);
+                            // Calculate selection rectangle using TextLayout
+                            double startX = GetCursorPositionFromIndex(currentValue, font, fontSize, letterSpacing, selStart).x;
+                            double endX = GetCursorPositionFromIndex(currentValue, font, fontSize, letterSpacing, selEnd).x;
         
                             // Draw selection background
                             canvas.BeginPath();
@@ -1582,7 +1621,7 @@ namespace Prowl.PaperUI
                         // Only draw cursor during visible part of blink cycle
                         if ((int)(_paper.Time * 2) % 2 == 0)
                         {
-                            double cursorX = r.x + TextXPadding + CalculateTextWidth(currentValue.Substring(0, cursorPos), font, fontSize, letterSpacing);
+                            double cursorX = r.x + TextXPadding + GetCursorPositionFromIndex(currentValue, font, fontSize, letterSpacing, cursorPos).x;
                             double cursorHeight = fontSize;
         
                             canvas.BeginPath();
@@ -1610,8 +1649,8 @@ namespace Prowl.PaperUI
         {
             double scrollOffset = _paper.GetElementStorage<double>(_handle, "ScrollOffset", 0.0);
         
-            // Calculate current cursor position
-            double cursorX = CalculateTextWidth(text.Substring(0, cursorPosition), font, fontSize, letterSpacing);
+            // Calculate current cursor position using TextLayout
+            double cursorX = GetCursorPositionFromIndex(text, font, fontSize, letterSpacing, cursorPosition).x;
         
             // Get current visible area (estimate from last layout)
             double visibleWidth = _handle.Data.LayoutWidth - 24; // Subtract padding
@@ -1636,38 +1675,52 @@ namespace Prowl.PaperUI
         }
         
         /// <summary>
-        /// Calculates the closest text position based on an X coordinate in a text string.
+        /// Calculates the closest text position based on an X coordinate in a text string using TextLayout.
         /// </summary>
         private int CalculateTextPosition(string text, FontFile font, float fontSize, float letterSpacing, double x)
         {
             if (string.IsNullOrEmpty(text)) return 0;
         
-            double closestDistance = double.MaxValue;
-            int closestPosition = 0;
+            // Create TextLayoutSettings
+            var settings = TextLayoutSettings.Default;
+            settings.PixelSize = fontSize;
+            settings.Font = font;
+            settings.LetterSpacing = letterSpacing;
+            settings.Alignment = Scribe.TextAlignment.Left;
+            settings.MaxWidth = float.MaxValue;
         
-            // Check each possible position
-            for (int i = 0; i <= text.Length; i++)
-            {
-                double posWidth = CalculateTextWidth(text.Substring(0, i), font, fontSize, letterSpacing);
-                double distance = Math.Abs(posWidth - x);
-        
-                if (distance < closestDistance)
-                {
-                    closestDistance = distance;
-                    closestPosition = i;
-                }
-            }
-        
-            return closestPosition;
+            // Create TextLayout and use GetCursorIndex
+            var textLayout = _paper.CreateLayout(text, settings);
+            return textLayout.GetCursorIndex(new Vector2(x, 0));
         }
         
         /// <summary>
-        /// Calculates the width of a text string using the specified font.
+        /// Calculates the cursor position for a specific character index using TextLayout.
+        /// </summary>
+        private Vector2 GetCursorPositionFromIndex(string text, FontFile font, float fontSize, float letterSpacing, int index)
+        {
+            if (string.IsNullOrEmpty(text) || index <= 0) return Vector2.zero;
+        
+            // Create TextLayoutSettings
+            var settings = TextLayoutSettings.Default;
+            settings.PixelSize = fontSize;
+            settings.Font = font;
+            settings.LetterSpacing = letterSpacing;
+            settings.Alignment = Scribe.TextAlignment.Left;
+            settings.MaxWidth = float.MaxValue;
+        
+            // Create TextLayout and use GetCursorPosition
+            var textLayout = _paper.CreateLayout(text, settings);
+            return textLayout.GetCursorPosition(index);
+        }
+        
+        /// <summary>
+        /// Calculates the width up to a specific character index using TextLayout.
         /// </summary>
         private double CalculateTextWidth(string text, FontFile font, float fontSize, float letterSpacing)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            return _paper.MeasureText(text, fontSize, font, letterSpacing).x;
+            return GetCursorPositionFromIndex(text, font, fontSize, letterSpacing, text.Length).x;
         }
         
         /// <summary>
