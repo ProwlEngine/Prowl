@@ -159,8 +159,41 @@ namespace Shared
         {
             return PaperDemo.Gui.Box("shadcs-input-" + id)
                 .TextField(value, Fonts.arial, onChange, Themes.textColor, placeholder, Color.FromArgb(100, Themes.textColor))
+                .Style("shadcs-text-field-secondary");
+                //.SetScroll(Scroll.ScrollX);
+        }
+    }
+
+    public static class TextArea
+    {
+        public static void DefineStyles()
+        {
+            // Text field styles
+            PaperDemo.Gui.CreateStyleFamily("shadcs-text-field-secondary")
+                .Base(new StyleTemplate()
+                    .Width(300)
+                    .Height(40)
+                    .Rounded(8)
+                    .BackgroundColor(Themes.secondaryColor)
+                    .BorderColor(Color.Transparent)
+                    .BorderWidth(0)
+                    .Transition(GuiProp.BorderColor, 0.2)
+                    .Transition(GuiProp.BorderWidth, 0.2))
+                .Focused(new StyleTemplate()
+                    .BorderColor(Themes.primaryColor)
+                    .BorderWidth(1)
+                    .BackgroundColor(Themes.secondaryColor))
+                .Register();
+        }
+
+        public static ElementBuilder Secondary(string id, string value, Action<string> onChange = null, string placeholder = "")
+        {
+            return PaperDemo.Gui.Box("shadcs-input-" + id)
+                .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor))
                 .Style("shadcs-text-field-secondary")
-                .SetScroll(Scroll.ScrollX);
+                .Height(Prowl.PaperUI.LayoutEngine.UnitValue.Auto)
+                .MinHeight(40);
+                //.SetScroll(Scroll.ScrollX);
         }
     }
 

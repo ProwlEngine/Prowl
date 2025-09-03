@@ -76,9 +76,16 @@ namespace Prowl.PaperUI.LayoutEngine
             if (element.ContentSizer == null)
                 return null;
 
-            return parentLayoutType == LayoutType.Row
-                ? element.ContentSizer(parentMain, parentCross)
-                : element.ContentSizer(parentCross, parentMain)?.Let(t => (t.Item2, t.Item1));
+            if(parentLayoutType == LayoutType.Row)
+            {
+                return element.ContentSizer(parentMain, parentCross);
+            }
+            else
+            {
+                var result = element.ContentSizer(parentCross, parentMain);
+                if(result == null) return null;
+                return (result.Value.Item2, result.Value.Item1);
+            }
         }
 
         private static UISize DoLayout(ElementHandle elementHandle, LayoutType parentLayoutType, double parentMain, double parentCross)

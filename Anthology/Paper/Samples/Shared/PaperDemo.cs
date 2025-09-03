@@ -999,6 +999,11 @@ namespace Shared
 
         private static void RenderSettingsTab()
         {
+
+            TextArea.Secondary("SearchTextField", searchText, newValue => searchText = newValue, "Search...")
+                .Margin(0, 15, 15, 0);
+
+            return;
             using (Gui.Row("SettingsContent")
                 .Margin(0, 0, 15, 0)
                 .Enter())

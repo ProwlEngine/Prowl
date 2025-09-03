@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+﻿using System.Diagnostics;
+using System.Drawing;
 
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
@@ -315,10 +316,7 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        public T Transition(GuiProp property, double duration, Func<double, double> easing = null)
-        {
-            return SetTransition(property, duration, easing);
-        }
+        public T Transition(GuiProp property, double duration, Func<double, double> easing = null) => SetTransition(property, duration, easing);
 
         /// <summary>
         /// Abstract method to handle transition setting - implemented by derived classes
@@ -1165,19 +1163,65 @@ namespace Prowl.PaperUI
 
         #endregion
 
-        #region Text Field
+        #region Text Input
 
         /// <summary>
-        /// Internal state container for text field data to reduce storage operations.
+        /// Settings for text input controls (TextField and TextArea).
         /// </summary>
-        private struct TextFieldState
+        public struct TextInputSettings
+        {
+            /// <summary>Font used to render the text</summary>
+            public FontFile Font;
+            
+            /// <summary>Font size in pixels</summary>
+            public float FontSize;
+            
+            /// <summary>Letter spacing</summary>
+            public float LetterSpacing;
+            
+            /// <summary>Color of the text</summary>
+            public Color TextColor;
+            
+            /// <summary>Placeholder text shown when the field is empty</summary>
+            public string Placeholder;
+            
+            /// <summary>Color of the placeholder text</summary>
+            public Color PlaceholderColor;
+            
+            /// <summary>Whether the input is read-only</summary>
+            public bool ReadOnly;
+            
+            /// <summary>Maximum number of characters allowed (0 = no limit)</summary>
+            public int MaxLength;
+
+            /// <summary>Creates default text input settings</summary>
+            public static TextInputSettings Default => new TextInputSettings
+            {
+                Font = null,
+                FontSize = 16f,
+                LetterSpacing = 0f,
+                TextColor = Color.FromArgb(255, 250, 250, 250),
+                Placeholder = "",
+                PlaceholderColor = Color.FromArgb(160, 200, 200, 200),
+                ReadOnly = false,
+                MaxLength = 0
+            };
+        }
+
+        /// <summary>
+        /// Internal state container for text input data to reduce storage operations.
+        /// Supports both single-line and multi-line text input.
+        /// </summary>
+        private struct TextInputState
         {
             public string Value;
             public int CursorPosition;
             public int SelectionStart;
             public int SelectionEnd;
-            public double ScrollOffset;
+            public double ScrollOffsetX;
+            public double ScrollOffsetY;
             public bool IsFocused;
+            public bool IsMultiLine;
 
             public readonly bool HasSelection => SelectionStart >= 0 && SelectionEnd >= 0 && SelectionStart != SelectionEnd;
             
@@ -1204,49 +1248,120 @@ namespace Prowl.PaperUI
                 SelectionStart = SelectionStart < 0 ? -1 : Math.Clamp(SelectionStart, 0, Value.Length);
                 SelectionEnd = SelectionEnd < 0 ? -1 : Math.Clamp(SelectionEnd, 0, Value.Length);
             }
+            
+            /// <summary>Gets the current line that contains the cursor</summary>
+            public readonly int GetCursorLine()
+            {
+                if (!IsMultiLine || string.IsNullOrEmpty(Value)) return 0;
+                
+                int line = 0;
+                for (int i = 0; i < CursorPosition && i < Value.Length; i++)
+                {
+                    if (Value[i] == '\n') line++;
+                }
+                return line;
+            }
+            
+            /// <summary>Gets all lines in the text</summary>
+            public readonly string[] GetLines()
+            {
+                if (string.IsNullOrEmpty(Value)) return new[] { "" };
+                return Value.Split('\n');
+            }
+            
+            /// <summary>Gets the column position of the cursor within its line</summary>
+            public readonly int GetCursorColumn()
+            {
+                if (string.IsNullOrEmpty(Value)) return 0;
+                if (CursorPosition == 0) return 0;
+                
+                int lastNewline = Value.LastIndexOf('\n', Math.Min(CursorPosition - 1, Value.Length - 1));
+                return CursorPosition - (lastNewline + 1);
+            }
         }
 
         /// <summary>
-        /// Helper methods for TextField state management.
+        /// Helper methods for text input state management.
         /// </summary>
-        private TextFieldState LoadTextFieldState(string initialValue)
+        private TextInputState LoadTextInputState(string initialValue, bool isMultiLine)
         {
-            var defaultState = new TextFieldState
+            var defaultState = new TextInputState
             {
                 Value = initialValue ?? "",
                 CursorPosition = (initialValue ?? "").Length,
                 SelectionStart = -1,
                 SelectionEnd = -1,
-                ScrollOffset = 0.0,
-                IsFocused = false
+                ScrollOffsetX = 0.0,
+                ScrollOffsetY = 0.0,
+                IsFocused = false,
+                IsMultiLine = isMultiLine
             };
             
-            var state = _paper.GetElementStorage(_handle, "TextFieldState", defaultState);
+            var state = _paper.GetElementStorage(_handle, "TextInputState", defaultState);
             state.IsFocused = _paper.IsElementFocused(_handle.Data.ID);
+            state.IsMultiLine = isMultiLine; // Ensure consistency
             state.ClampValues();
             return state;
         }
         
-        private void SaveTextFieldState(TextFieldState state)
+        private void SaveTextInputState(TextInputState state)
         {
-            _paper.SetElementStorage(_handle, "TextFieldState", state);
+            _paper.SetElementStorage(_handle, "TextInputState", state);
         }
         
-        private TextLayoutSettings CreateTextLayoutSettings(FontFile font, float fontSize, float letterSpacing)
+        private TextLayoutSettings CreateTextLayoutSettings(TextInputSettings inputSettings, bool isMultiLine, double maxWidth = float.MaxValue)
         {
             var settings = TextLayoutSettings.Default;
-            settings.PixelSize = fontSize;
-            settings.Font = font;
-            settings.LetterSpacing = letterSpacing;
+            settings.PixelSize = inputSettings.FontSize;
+            settings.Font = inputSettings.Font;
+            settings.LetterSpacing = inputSettings.LetterSpacing;
             settings.Alignment = Scribe.TextAlignment.Left;
-            settings.MaxWidth = float.MaxValue;
+            settings.MaxWidth = (float)maxWidth;
+            settings.WrapMode = Scribe.TextWrapMode.NoWrap;
+            
             return settings;
         }
         
         private bool IsShiftPressed() => _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
         private bool IsControlPressed() => _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
 
-        private bool ProcessKeyCommand(ref TextFieldState state, PaperKey key)
+        private void MoveCursorVertical(ref TextInputState state, int direction, TextInputSettings settings)
+        {
+            if (!state.IsMultiLine) return;
+            
+            var lines = state.GetLines();
+            int currentLine = state.GetCursorLine();
+            int targetLine = Math.Clamp(currentLine + direction, 0, lines.Length - 1);
+            
+            if (targetLine == currentLine) return;
+
+            int currentColumn = state.GetCursorColumn();
+
+            // Move to the same column in the target line, or end of line if shorter
+            int targetColumn = Math.Min(currentColumn, lines[targetLine].Length);
+            
+            // Calculate new cursor position
+            int newPosition = 0;
+            for (int i = 0; i < targetLine; i++)
+            {
+                newPosition += lines[i].Length + 1; // +1 for newline
+            }
+            newPosition += targetColumn;
+            
+            if (IsShiftPressed())
+            {
+                if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                state.CursorPosition = newPosition;
+                state.SelectionEnd = newPosition;
+            }
+            else
+            {
+                state.CursorPosition = newPosition;
+                state.ClearSelection();
+            }
+        }
+
+        private bool ProcessKeyCommand(ref TextInputState state, PaperKey key, TextInputSettings settings)
         {
             bool valueChanged = false;
             
@@ -1370,12 +1485,69 @@ namespace Prowl.PaperUI
                         string clipText = _paper.GetClipboard();
                         if (!string.IsNullOrEmpty(clipText))
                         {
-                            if (state.HasSelection) state.DeleteSelection();
-                            state.Value = state.Value.Insert(state.CursorPosition, clipText);
-                            state.CursorPosition += clipText.Length;
-                            valueChanged = true;
+                            // For single-line, replace newlines with spaces
+                            if (!state.IsMultiLine)
+                                clipText = clipText.Replace('\n', ' ').Replace('\r', ' ');
+                                
+                            // Check max length
+                            if (settings.MaxLength > 0)
+                            {
+                                int availableLength = settings.MaxLength - state.Value.Length;
+                                if (state.HasSelection)
+                                {
+                                    int selectionLength = Math.Abs(state.SelectionEnd - state.SelectionStart);
+                                    availableLength += selectionLength;
+                                }
+                                if (availableLength > 0 && clipText.Length > availableLength)
+                                    clipText = clipText.Substring(0, availableLength);
+                            }
+                            
+                            if (!string.IsNullOrEmpty(clipText))
+                            {
+                                if (state.HasSelection) state.DeleteSelection();
+                                state.Value = state.Value.Insert(state.CursorPosition, clipText);
+                                state.CursorPosition += clipText.Length;
+                                valueChanged = true;
+                            }
                         }
                     }
+                    break;
+
+                // Seems a bit buggy in scribe so ignoring this for the time being
+                //case PaperKey.Tab:
+                //    if (!settings.ReadOnly)
+                //    {
+                //        if (state.HasSelection) state.DeleteSelection();
+                //        
+                //        // Check max length
+                //        if (settings.MaxLength == 0 || state.Value.Length < settings.MaxLength)
+                //        {
+                //            state.Value = state.Value.Insert(state.CursorPosition, "\t");
+                //            state.CursorPosition++;
+                //            valueChanged = true;
+                //        }
+                //    }
+                //    break;
+                    
+                case PaperKey.Enter when state.IsMultiLine:
+                    if (state.HasSelection) state.DeleteSelection();
+                    
+                    // Check max length
+                    // Check max length and read-only
+                    if (!settings.ReadOnly && (settings.MaxLength == 0 || state.Value.Length < settings.MaxLength))
+                    {
+                        state.Value = state.Value.Insert(state.CursorPosition, "\n");
+                        state.CursorPosition++;
+                        valueChanged = true;
+                    }
+                    break;
+                    
+                case PaperKey.Up when state.IsMultiLine:
+                    MoveCursorVertical(ref state, -1, settings);
+                    break;
+                    
+                case PaperKey.Down when state.IsMultiLine:
+                    MoveCursorVertical(ref state, 1, settings);
                     break;
             }
             
@@ -1383,7 +1555,25 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
-        /// Creates a text field control that allows users to input and edit text.
+        /// Creates a single-line text field control that allows users to input and edit text.
+        /// </summary>
+        /// <param name="value">Current text value</param>
+        /// <param name="settings">Text input settings</param>
+        /// <param name="onChange">Optional callback when the text changes</param>
+        /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+        /// <returns>A builder for configuring the text field</returns>
+        public ElementBuilder TextField(
+            string value,
+            TextInputSettings settings,
+            Action<string> onChange = null,
+            [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
+        {
+            return CreateTextInput(value, settings, onChange, false, intID);
+        }
+
+        /// <summary>
+        /// Creates a single-line text field control with simple parameters.
+        /// For more control, use the overload that takes TextInputSettings.
         /// </summary>
         /// <param name="value">Current text value</param>
         /// <param name="font">Font used to render the text</param>
@@ -1406,61 +1596,141 @@ namespace Prowl.PaperUI
             float letterSpacing = 0f,
             [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
         {
+            var settings = TextInputSettings.Default;
+            settings.Font = font;
+            settings.FontSize = fontSize;
+            settings.LetterSpacing = letterSpacing;
+            settings.TextColor = textColor ?? settings.TextColor;
+            settings.Placeholder = placeholder;
+            settings.PlaceholderColor = placeholderColor ?? settings.PlaceholderColor;
+            
+            return CreateTextInput(value, settings, onChange, false, intID);
+        }
+
+        /// <summary>
+        /// Creates a multi-line text area control that allows users to input and edit text with vertical scrolling.
+        /// </summary>
+        /// <param name="value">Current text value</param>
+        /// <param name="settings">Text input settings</param>
+        /// <param name="onChange">Optional callback when the text changes</param>
+        /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+        /// <returns>A builder for configuring the text area</returns>
+        public ElementBuilder TextArea(
+            string value,
+            TextInputSettings settings,
+            Action<string> onChange = null,
+            [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
+        {
+            return CreateTextInput(value, settings, onChange, true, intID);
+        }
+
+        /// <summary>
+        /// Creates a multi-line text area control with simple parameters.
+        /// For more control, use the overload that takes TextInputSettings.
+        /// </summary>
+        /// <param name="value">Current text value</param>
+        /// <param name="font">Font used to render the text</param>
+        /// <param name="onChange">Optional callback when the text changes</param>
+        /// <param name="placeholder">Optional placeholder text shown when the area is empty</param>
+        /// <param name="textColor">Color of the text</param>
+        /// <param name="placeholderColor">Color of the placeholder text</param>
+        /// <param name="fontSize">Font size in pixels</param>
+        /// <param name="letterSpacing">Letter spacing</param>
+        /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+        /// <returns>A builder for configuring the text area</returns>
+        public ElementBuilder TextArea(
+            string value,
+            FontFile font,
+            Action<string> onChange = null,
+            string placeholder = "",
+            Color? textColor = null,
+            Color? placeholderColor = null,
+            float fontSize = 16f,
+            float letterSpacing = 0f,
+            [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
+        {
+            var settings = TextInputSettings.Default;
+            settings.Font = font;
+            settings.FontSize = fontSize;
+            settings.LetterSpacing = letterSpacing;
+            settings.TextColor = textColor ?? settings.TextColor;
+            settings.Placeholder = placeholder;
+            settings.PlaceholderColor = placeholderColor ?? settings.PlaceholderColor;
+            
+            return CreateTextInput(value, settings, onChange, true, intID);
+        }
+
+        private ElementBuilder CreateTextInput(
+            string value,
+            TextInputSettings settings,
+            Action<string> onChange,
+            bool isMultiLine,
+            int intID)
+        {
             const double TextXPadding = 12;
+            const double TextYPadding = 8;
             
             Clip();
             
             // Initialize state
-            var state = LoadTextFieldState(value);
-            textColor ??= Color.FromArgb(255, 250, 250, 250);
-            placeholderColor ??= Color.FromArgb(160, 200, 200, 200);
-        
+            var state = LoadTextInputState(value, isMultiLine);
+
+            ContentSizer((width, height) =>
+            {
+                var currentState = LoadTextInputState(value, isMultiLine);
+                var textLayout = _paper.CreateLayout(currentState.Value, CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth - 24));
+
+                return (width ?? 0, Math.Max(height ?? 0, textLayout.Size.Y));
+            });
+
             // Handle focus changes
             OnFocusChange((FocusEvent e) =>
             {
-                var currentState = LoadTextFieldState(value);
+                var currentState = LoadTextInputState(value, isMultiLine);
                 currentState.IsFocused = e.IsFocused;
                 
                 if (e.IsFocused)
                 {
                     currentState.CursorPosition = currentState.Value.Length;
                     currentState.ClearSelection();
-                    EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
+                    EnsureCursorVisible(ref currentState, settings, isMultiLine);
                 }
                 
-                SaveTextFieldState(currentState);
+                SaveTextInputState(currentState);
             });
         
             // Handle mouse clicks for cursor positioning
             OnClick((ClickEvent e) =>
             {
-                var currentState = LoadTextFieldState(value);
-                var clickPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffset;
+                var currentState = LoadTextInputState(value, isMultiLine);
+                var clickPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffsetX;
+                var clickPosY = isMultiLine ? e.RelativePosition.y - TextYPadding + currentState.ScrollOffsetY : 0;
                 currentState.CursorPosition = Math.Clamp(
-                    CalculateTextPosition(currentState.Value, font, fontSize, letterSpacing, clickPos),
+                    CalculateTextPosition(currentState.Value, settings, isMultiLine, clickPos, clickPosY),
                     0, currentState.Value.Length);
                 currentState.ClearSelection();
-                EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
-                SaveTextFieldState(currentState);
+                EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                SaveTextInputState(currentState);
             });
         
             // Handle dragging for text selection
             OnDragStart((DragEvent e) =>
             {
-                var currentState = LoadTextFieldState(value);
-                var dragPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffset;
-                var pos = Math.Clamp(CalculateTextPosition(currentState.Value, font, fontSize, letterSpacing, dragPos), 0, currentState.Value.Length);
+                var currentState = LoadTextInputState(value, isMultiLine);
+                var dragPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffsetX;
+                var dragPosY = isMultiLine ? e.RelativePosition.y - TextYPadding + currentState.ScrollOffsetY : 0;
+                var pos = Math.Clamp(CalculateTextPosition(currentState.Value, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
                 
                 currentState.CursorPosition = pos;
                 currentState.SelectionStart = pos;
                 currentState.SelectionEnd = pos;
-                EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
-                SaveTextFieldState(currentState);
+                EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                SaveTextInputState(currentState);
             });
         
             OnDragging((DragEvent e) =>
             {
-                var currentState = LoadTextFieldState(value);
+                var currentState = LoadTextInputState(value, isMultiLine);
                 if (currentState.SelectionStart < 0) return;
                 
                 // Auto-scroll when dragging near edges
@@ -1468,29 +1738,38 @@ namespace Prowl.PaperUI
                 const double scrollSpeed = 2.0;
                 
                 if (e.RelativePosition.x < edgeScrollSensitivity)
-                    currentState.ScrollOffset = Math.Max(0, currentState.ScrollOffset - scrollSpeed);
+                    currentState.ScrollOffsetX = Math.Max(0, currentState.ScrollOffsetX - scrollSpeed);
                 else if (e.RelativePosition.x > e.ElementRect.width - edgeScrollSensitivity)
-                    currentState.ScrollOffset += scrollSpeed;
+                    currentState.ScrollOffsetX += scrollSpeed;
                 
-                var dragPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffset;
-                var pos = Math.Clamp(CalculateTextPosition(currentState.Value, font, fontSize, letterSpacing, dragPos), 0, currentState.Value.Length);
+                if (isMultiLine)
+                {
+                    if (e.RelativePosition.y < edgeScrollSensitivity)
+                        currentState.ScrollOffsetY = Math.Max(0, currentState.ScrollOffsetY - scrollSpeed);
+                    else if (e.RelativePosition.y > e.ElementRect.height - edgeScrollSensitivity)
+                        currentState.ScrollOffsetY += scrollSpeed;
+                }
+                
+                var dragPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffsetX;
+                var dragPosY = isMultiLine ? e.RelativePosition.y - TextYPadding + currentState.ScrollOffsetY : 0;
+                var pos = Math.Clamp(CalculateTextPosition(currentState.Value, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
                 
                 currentState.CursorPosition = pos;
                 currentState.SelectionEnd = pos;
-                EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
-                SaveTextFieldState(currentState);
+                EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                SaveTextInputState(currentState);
             });
         
             // Handle keyboard input  
             OnKeyPressed((KeyEvent e) =>
             {
-                var currentState = LoadTextFieldState(value);
+                var currentState = LoadTextInputState(value, isMultiLine);
                 if (!currentState.IsFocused) return;
                 
-                bool valueChanged = ProcessKeyCommand(ref currentState, e.Key);
+                bool valueChanged = ProcessKeyCommand(ref currentState, e.Key, settings);
                 
-                EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
-                SaveTextFieldState(currentState);
+                EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                SaveTextInputState(currentState);
                 
                 if (valueChanged)
                     onChange?.Invoke(currentState.Value);
@@ -1499,43 +1778,61 @@ namespace Prowl.PaperUI
             // Handle character input
             OnTextInput((TextInputEvent e) =>
             {
-                var currentState = LoadTextFieldState(value);
-                if (!currentState.IsFocused || char.IsControl(e.Character)) return;
+                var currentState = LoadTextInputState(value, isMultiLine);
+                if (!currentState.IsFocused || char.IsControl(e.Character) || settings.ReadOnly) return;
+                
+                // Check max length
+                if (settings.MaxLength > 0 && currentState.Value.Length >= settings.MaxLength && !currentState.HasSelection)
+                    return;
                 
                 if (currentState.HasSelection) currentState.DeleteSelection();
+                
+                // For single-line, don't allow newlines
+                if (!isMultiLine && (e.Character == '\n' || e.Character == '\r'))
+                    return;
                 
                 currentState.Value = currentState.Value.Insert(currentState.CursorPosition, e.Character.ToString());
                 currentState.CursorPosition++;
                 
-                EnsureCursorVisible(ref currentState, font, fontSize, letterSpacing);
-                SaveTextFieldState(currentState);
+                EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                SaveTextInputState(currentState);
                 onChange?.Invoke(currentState.Value);
             });
-        
+
             // Render cursor and selection
             OnPostLayout((ElementHandle elHandle, Rect rect) =>
             {
                 _paper.AddActionElement(ref elHandle, (canvas, r) =>
                 {
-                    var renderState = LoadTextFieldState(value);
-                    var settings = CreateTextLayoutSettings(font, fontSize, letterSpacing);
+                    var renderState = LoadTextInputState(value, isMultiLine);
+                    var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, r.width - TextXPadding * 2);
                     
                     canvas.SaveState();
-                    canvas.TransformBy(Transform2D.CreateTranslation(-renderState.ScrollOffset, 0));
+                    canvas.TransformBy(Transform2D.CreateTranslation(-renderState.ScrollOffsetX, -renderState.ScrollOffsetY));
                     
                     // Draw text or placeholder
-                    double textY = r.y + (r.height / 2);
                     if (string.IsNullOrEmpty(renderState.Value))
                     {
-                        var placeholderSize = _paper.MeasureText(placeholder, settings);
-                        canvas.DrawText(placeholder, (float)(r.x + TextXPadding), (float)(textY - placeholderSize.y / 2), placeholderColor.Value, fontSize, font);
+                        var placeholderSize = _paper.MeasureText(settings.Placeholder, layoutSettings);
+                        var textY = isMultiLine ? r.y + TextYPadding : r.y + (r.height / 2) - (placeholderSize.y / 2);
+                        canvas.DrawText(settings.Placeholder, (float)(r.x + TextXPadding), (float)textY, settings.PlaceholderColor, settings.FontSize, settings.Font);
                     }
                     else
                     {
-                        var textSize = _paper.MeasureText(renderState.Value, settings);
-                        var isEmpty = string.IsNullOrEmpty(renderState.Value);
-                        var displayColor = isEmpty ? placeholderColor.Value : textColor.Value;
-                        canvas.DrawText(renderState.Value, (float)(r.x + TextXPadding), (float)(textY - textSize.y / 2), displayColor, fontSize, font);
+                        var textY = isMultiLine ? r.y + TextYPadding : r.y + (r.height / 2);
+                        var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
+                        
+                        if (isMultiLine)
+                        {
+                            // For multi-line, draw using the text layout
+                            canvas.DrawText(renderState.Value, (float)(r.x + TextXPadding), (float)textY, settings.TextColor, settings.FontSize, settings.Font);
+                        }
+                        else
+                        {
+                            // For single-line, center vertically
+                            var textSize = _paper.MeasureText(renderState.Value, layoutSettings);
+                            canvas.DrawText(renderState.Value, (float)(r.x + TextXPadding), (float)(textY - textSize.y / 2), settings.TextColor, settings.FontSize, settings.Font);
+                        }
                     }
                     
                     // Draw selection and cursor if focused
@@ -1549,11 +1846,17 @@ namespace Prowl.PaperUI
                             int start = Math.Min(renderState.SelectionStart, renderState.SelectionEnd);
                             int end = Math.Max(renderState.SelectionStart, renderState.SelectionEnd);
                             
-                            double startX = GetCursorPositionFromIndex(renderState.Value, font, fontSize, letterSpacing, start).x;
-                            double endX = GetCursorPositionFromIndex(renderState.Value, font, fontSize, letterSpacing, end).x;
+                            var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
+                            var startPos = textLayout.GetCursorPosition(start);
+                            var endPos = textLayout.GetCursorPosition(end);
                             
                             canvas.BeginPath();
-                            canvas.RoundedRect(r.x + startX + TextXPadding, r.y + (r.height - fontSize) / 2, endX - startX, fontSize, 2, 2, 2, 2);
+                            canvas.RoundedRect(
+                                r.x + startPos.X + TextXPadding, 
+                                r.y + startPos.Y + TextYPadding, 
+                                endPos.X - startPos.X, 
+                                settings.FontSize, 
+                                2, 2, 2, 2);
                             canvas.SetFillColor(Color.FromArgb(100, 100, 150, 255));
                             canvas.Fill();
                         }
@@ -1561,11 +1864,15 @@ namespace Prowl.PaperUI
                         // Draw blinking cursor
                         if ((int)(_paper.Time * 2) % 2 == 0)
                         {
-                            double cursorX = r.x + TextXPadding + GetCursorPositionFromIndex(renderState.Value, font, fontSize, letterSpacing, renderState.CursorPosition).x;
+                            var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
+                            var cursorPos = textLayout.GetCursorPosition(renderState.CursorPosition);
+                            double cursorX = r.x + cursorPos.X + TextXPadding;
+                            double cursorY = r.y + cursorPos.Y + TextYPadding;
+                            
                             canvas.BeginPath();
-                            canvas.MoveTo(cursorX, r.y + (r.height - fontSize) / 2);
-                            canvas.LineTo(cursorX, r.y + (r.height + fontSize) / 2);
-                            canvas.SetStrokeColor(Color.FromArgb(255, 250, 250, 250));
+                            canvas.MoveTo(cursorX, cursorY);
+                            canvas.LineTo(cursorX, cursorY + settings.FontSize);
+                            canvas.SetStrokeColor(settings.TextColor);
                             canvas.SetStrokeWidth(1);
                             canvas.Stroke();
                         }
@@ -1574,7 +1881,7 @@ namespace Prowl.PaperUI
                     canvas.RestoreState();
                 });
             });
-        
+
             return this;
         }
         
@@ -1583,38 +1890,55 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Ensures the cursor is visible by adjusting scroll position if needed.
         /// </summary>
-        private void EnsureCursorVisible(ref TextFieldState state, FontFile font, float fontSize, float letterSpacing)
+        private void EnsureCursorVisible(ref TextInputState state, TextInputSettings settings, bool isMultiLine)
         {
-            // Calculate current cursor position using TextLayout
-            double cursorX = GetCursorPositionFromIndex(state.Value, font, fontSize, letterSpacing, state.CursorPosition).x;
-        
-            // Get current visible area (estimate from last layout)
-            double visibleWidth = _handle.Data.LayoutWidth - 24; // Subtract padding
-        
-            const double margin = 20.0; // Margin to keep cursor away from edge
-        
-            // If cursor is to the left of visible area
-            if (cursorX < state.ScrollOffset + margin)
+            if (isMultiLine)
             {
-                // Scroll to show cursor with left margin
-                state.ScrollOffset = Math.Max(0, cursorX - margin);
+                // For multi-line, we need both horizontal and vertical scrolling
+                var textLayout = _paper.CreateLayout(state.Value, CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth - 24));
+                var cursorPos = textLayout.GetCursorPosition(state.CursorPosition);
+                
+                double visibleWidth = _handle.Data.LayoutWidth - 24;
+                double visibleHeight = _handle.Data.LayoutHeight - 16;
+                
+                const double margin = 10.0;
+                
+                // Horizontal scrolling
+                if (cursorPos.X < state.ScrollOffsetX + margin)
+                    state.ScrollOffsetX = Math.Max(0, cursorPos.X - margin);
+                else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
+                    state.ScrollOffsetX = cursorPos.X - visibleWidth + margin;
+                
+                // Vertical scrolling
+                if (cursorPos.Y < state.ScrollOffsetY + margin)
+                    state.ScrollOffsetY = Math.Max(0, cursorPos.Y - margin);
+                else if (cursorPos.Y > state.ScrollOffsetY + visibleHeight - margin)
+                    state.ScrollOffsetY = cursorPos.Y - visibleHeight + margin;
             }
-            // If cursor is to the right of visible area
-            else if (cursorX > state.ScrollOffset + visibleWidth - margin)
+            else
             {
-                // Scroll to show cursor with right margin
-                state.ScrollOffset = cursorX - visibleWidth + margin;
+                // Single-line horizontal scrolling only
+                var cursorPos = GetCursorPositionFromIndex(state.Value, settings.Font, settings.FontSize, settings.LetterSpacing, state.CursorPosition);
+                
+                double visibleWidth = _handle.Data.LayoutWidth - 24;
+                const double margin = 20.0;
+                
+                if (cursorPos.x < state.ScrollOffsetX + margin)
+                    state.ScrollOffsetX = Math.Max(0, cursorPos.x - margin);
+                else if (cursorPos.x > state.ScrollOffsetX + visibleWidth - margin)
+                    state.ScrollOffsetX = cursorPos.x - visibleWidth + margin;
             }
         }
         
         /// <summary>
-        /// Calculates the closest text position based on an X coordinate using TextLayout.
+        /// Calculates the closest text position based on coordinates using TextLayout.
         /// </summary>
-        private int CalculateTextPosition(string text, FontFile font, float fontSize, float letterSpacing, double x)
+        private int CalculateTextPosition(string text, TextInputSettings settings, bool isMultiLine, double x, double y = 0)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(font, fontSize, letterSpacing));
-            return textLayout.GetCursorIndex(new Vector2(x, 0));
+            var maxWidth = isMultiLine ? _handle.Data.LayoutWidth - 24 : float.MaxValue;
+            var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, maxWidth));
+            return textLayout.GetCursorIndex(new Vector2(x, y));
         }
         
         /// <summary>
@@ -1623,7 +1947,12 @@ namespace Prowl.PaperUI
         private Vector2 GetCursorPositionFromIndex(string text, FontFile font, float fontSize, float letterSpacing, int index)
         {
             if (string.IsNullOrEmpty(text) || index <= 0) return Vector2.zero;
-            var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(font, fontSize, letterSpacing));
+            var settings = TextLayoutSettings.Default;
+            settings.Font = font;
+            settings.PixelSize = fontSize;
+            settings.LetterSpacing = letterSpacing;
+            settings.MaxWidth = float.MaxValue;
+            var textLayout = _paper.CreateLayout(text, settings);
             return textLayout.GetCursorPosition(index);
         }
         
