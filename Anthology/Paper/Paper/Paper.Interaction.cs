@@ -302,27 +302,6 @@ namespace Prowl.PaperUI
         /// </summary>
         private void HandleMouseEvents()
         {
-            // Handle double-click
-            if (IsPointerDoubleClick(PaperMouseBtn.Left))
-            {
-                if (_theHoveredElementId != 0)
-                {
-                    ElementHandle hoveredElement = FindElementByID(_theHoveredElementId);
-                    if (hoveredElement.IsValid)
-                    {
-                        ref ElementData data = ref hoveredElement.Data;
-                        // Direct event
-                        data.OnDoubleClick?.Invoke(new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
-
-                        // Bubble event
-                        BubbleEventToParents(hoveredElement, parent => {
-                            ref ElementData parentData = ref parent.Data;
-                            parentData.OnDoubleClick?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Left));
-                        });
-                    }
-                }
-            }
-
             // Handle press
             if (IsPointerPressed(PaperMouseBtn.Left))
             {
@@ -434,6 +413,27 @@ namespace Prowl.PaperUI
                         BubbleEventToParents(hoveredElement, parent => {
                             ref ElementData parentData = ref parent.Data;
                             parentData.OnRightClick?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Right));
+                        });
+                    }
+                }
+            }
+
+            // Handle double-click
+            if (IsPointerDoubleClick(PaperMouseBtn.Left))
+            {
+                if (_theHoveredElementId != 0)
+                {
+                    ElementHandle hoveredElement = FindElementByID(_theHoveredElementId);
+                    if (hoveredElement.IsValid)
+                    {
+                        ref ElementData data = ref hoveredElement.Data;
+                        // Direct event
+                        data.OnDoubleClick?.Invoke(new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
+
+                        // Bubble event
+                        BubbleEventToParents(hoveredElement, parent => {
+                            ref ElementData parentData = ref parent.Data;
+                            parentData.OnDoubleClick?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Left));
                         });
                     }
                 }
