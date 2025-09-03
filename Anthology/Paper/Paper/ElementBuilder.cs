@@ -1780,7 +1780,7 @@ namespace Prowl.PaperUI
             int intID)
         {
             Clip();
-            
+
             // Initialize state
             var state = LoadTextInputState(value, isMultiLine);
 
@@ -1792,7 +1792,7 @@ namespace Prowl.PaperUI
                     var textSettings = CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth);
                     var textLayout = _paper.CreateLayout(currentState.Value, textSettings);
 
-                    return (width ?? 0, Math.Max(height ?? textSettings.PixelSize * textSettings.LineHeight, textLayout.Size.Y));
+                    return (width ?? textSettings.PixelSize, Math.Max(height ?? textSettings.PixelSize * textSettings.LineHeight, textLayout.Size.Y));
                 });
             }
 
