@@ -125,6 +125,9 @@ namespace Prowl.PaperUI
 
         #region Interaction State
 
+        // Drag threshold - minimum distance to move before starting drag
+        private const float DRAG_THRESHOLD = 5.0f; // pixels
+
         // Element interaction state tracking
         private ulong _theHoveredElementId = 0;  // The ID of the element directly hovered by the pointer
         private ulong _activeElementId = 0;      // Currently active (pressed) element
@@ -632,10 +635,12 @@ namespace Prowl.PaperUI
                     {
                         bool wasDragging = _isDragging.TryGetValue(_activeElementId, out bool isDragging) && isDragging;
                         Vector2 startPos = _dragStartPos[_activeElementId];
+                        Vector2 currentPos = PointerPos;
+                        double distanceMoved = (currentPos - startPos).magnitude;
                         Rect layoutRect = data.LayoutRect;
 
-                        // Handle drag start
-                        if (!wasDragging)
+                        // Only start dragging if we've moved beyond the threshold
+                        if (!wasDragging && distanceMoved >= DRAG_THRESHOLD)
                         {
                             data.OnDragStart?.Invoke(new DragEvent(activeElement, layoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
                             
