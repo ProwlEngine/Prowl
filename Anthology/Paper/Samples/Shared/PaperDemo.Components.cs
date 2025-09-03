@@ -192,7 +192,7 @@ namespace Shared
                 .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor))
                 .Style("shadcs-text-field-secondary")
                 .Height(Prowl.PaperUI.LayoutEngine.UnitValue.Auto)
-                .MinHeight(40);
+                .MaxHeight(100);
                 //.SetScroll(Scroll.ScrollX);
         }
     }

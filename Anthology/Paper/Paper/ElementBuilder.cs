@@ -1278,6 +1278,16 @@ namespace Prowl.PaperUI
                 int lastNewline = Value.LastIndexOf('\n', Math.Min(CursorPosition - 1, Value.Length - 1));
                 return CursorPosition - (lastNewline + 1);
             }
+            
+            /// <summary>Clamps scroll offsets to valid ranges for text input</summary>
+            public void ClampScrollOffsets(double contentWidth, double contentHeight, double visibleWidth, double visibleHeight)
+            {
+                double maxScrollX = Math.Max(0, contentWidth - visibleWidth);
+                double maxScrollY = Math.Max(0, contentHeight - visibleHeight);
+                
+                ScrollOffsetX = Math.Clamp(ScrollOffsetX, 0, maxScrollX);
+                ScrollOffsetY = Math.Clamp(ScrollOffsetY, 0, maxScrollY);
+            }
         }
 
         /// <summary>
@@ -1667,21 +1677,22 @@ namespace Prowl.PaperUI
             bool isMultiLine,
             int intID)
         {
-            const double TextXPadding = 12;
-            const double TextYPadding = 8;
-            
             Clip();
             
             // Initialize state
             var state = LoadTextInputState(value, isMultiLine);
 
-            ContentSizer((width, height) =>
+            if (isMultiLine)
             {
-                var currentState = LoadTextInputState(value, isMultiLine);
-                var textLayout = _paper.CreateLayout(currentState.Value, CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth - 24));
+                ContentSizer((width, height) =>
+                {
+                    var currentState = LoadTextInputState(value, isMultiLine);
+                    var textSettings = CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth);
+                    var textLayout = _paper.CreateLayout(currentState.Value, textSettings);
 
-                return (width ?? 0, Math.Max(height ?? 0, textLayout.Size.Y));
-            });
+                    return (width ?? 0, Math.Max(height ?? textSettings.PixelSize * textSettings.LineHeight, textLayout.Size.Y));
+                });
+            }
 
             // Handle focus changes
             OnFocusChange((FocusEvent e) =>
@@ -1703,8 +1714,8 @@ namespace Prowl.PaperUI
             OnClick((ClickEvent e) =>
             {
                 var currentState = LoadTextInputState(value, isMultiLine);
-                var clickPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffsetX;
-                var clickPosY = isMultiLine ? e.RelativePosition.y - TextYPadding + currentState.ScrollOffsetY : 0;
+                var clickPos = e.RelativePosition.x + currentState.ScrollOffsetX;
+                var clickPosY = isMultiLine ? e.RelativePosition.y + currentState.ScrollOffsetY : 0;
                 currentState.CursorPosition = Math.Clamp(
                     CalculateTextPosition(currentState.Value, settings, isMultiLine, clickPos, clickPosY),
                     0, currentState.Value.Length);
@@ -1717,8 +1728,8 @@ namespace Prowl.PaperUI
             OnDragStart((DragEvent e) =>
             {
                 var currentState = LoadTextInputState(value, isMultiLine);
-                var dragPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffsetX;
-                var dragPosY = isMultiLine ? e.RelativePosition.y - TextYPadding + currentState.ScrollOffsetY : 0;
+                var dragPos = e.RelativePosition.x + currentState.ScrollOffsetX;
+                var dragPosY = isMultiLine ? e.RelativePosition.y + currentState.ScrollOffsetY : 0;
                 var pos = Math.Clamp(CalculateTextPosition(currentState.Value, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
                 
                 currentState.CursorPosition = pos;
@@ -1750,8 +1761,15 @@ namespace Prowl.PaperUI
                         currentState.ScrollOffsetY += scrollSpeed;
                 }
                 
-                var dragPos = e.RelativePosition.x - TextXPadding + currentState.ScrollOffsetX;
-                var dragPosY = isMultiLine ? e.RelativePosition.y - TextYPadding + currentState.ScrollOffsetY : 0;
+                // Clamp scroll offsets after auto-scroll
+                var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, e.ElementRect.width);
+                var textLayout = _paper.CreateLayout(currentState.Value, layoutSettings);
+                double visibleWidth = e.ElementRect.width;
+                double visibleHeight = e.ElementRect.height;
+                currentState.ClampScrollOffsets(textLayout.Size.X, textLayout.Size.Y, visibleWidth, visibleHeight);
+                
+                var dragPos = e.RelativePosition.x + currentState.ScrollOffsetX;
+                var dragPosY = isMultiLine ? e.RelativePosition.y + currentState.ScrollOffsetY : 0;
                 var pos = Math.Clamp(CalculateTextPosition(currentState.Value, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
                 
                 currentState.CursorPosition = pos;
@@ -1805,7 +1823,7 @@ namespace Prowl.PaperUI
                 _paper.AddActionElement(ref elHandle, (canvas, r) =>
                 {
                     var renderState = LoadTextInputState(value, isMultiLine);
-                    var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, r.width - TextXPadding * 2);
+                    var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, r.width);
                     
                     canvas.SaveState();
                     canvas.TransformBy(Transform2D.CreateTranslation(-renderState.ScrollOffsetX, -renderState.ScrollOffsetY));
@@ -1813,26 +1831,11 @@ namespace Prowl.PaperUI
                     // Draw text or placeholder
                     if (string.IsNullOrEmpty(renderState.Value))
                     {
-                        var placeholderSize = _paper.MeasureText(settings.Placeholder, layoutSettings);
-                        var textY = isMultiLine ? r.y + TextYPadding : r.y + (r.height / 2) - (placeholderSize.y / 2);
-                        canvas.DrawText(settings.Placeholder, (float)(r.x + TextXPadding), (float)textY, settings.PlaceholderColor, settings.FontSize, settings.Font);
+                        canvas.DrawText(settings.Placeholder, (float)(r.x), (float)r.y, settings.PlaceholderColor, settings.FontSize, settings.Font);
                     }
                     else
                     {
-                        var textY = isMultiLine ? r.y + TextYPadding : r.y + (r.height / 2);
-                        var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
-                        
-                        if (isMultiLine)
-                        {
-                            // For multi-line, draw using the text layout
-                            canvas.DrawText(renderState.Value, (float)(r.x + TextXPadding), (float)textY, settings.TextColor, settings.FontSize, settings.Font);
-                        }
-                        else
-                        {
-                            // For single-line, center vertically
-                            var textSize = _paper.MeasureText(renderState.Value, layoutSettings);
-                            canvas.DrawText(renderState.Value, (float)(r.x + TextXPadding), (float)(textY - textSize.y / 2), settings.TextColor, settings.FontSize, settings.Font);
-                        }
+                        canvas.DrawText(renderState.Value, (float)(r.x), (float)r.y, settings.TextColor, settings.FontSize, settings.Font);
                     }
                     
                     // Draw selection and cursor if focused
@@ -1852,8 +1855,8 @@ namespace Prowl.PaperUI
                             
                             canvas.BeginPath();
                             canvas.RoundedRect(
-                                r.x + startPos.X + TextXPadding, 
-                                r.y + startPos.Y + TextYPadding, 
+                                r.x + startPos.X, 
+                                r.y + startPos.Y, 
                                 endPos.X - startPos.X, 
                                 settings.FontSize, 
                                 2, 2, 2, 2);
@@ -1866,8 +1869,8 @@ namespace Prowl.PaperUI
                         {
                             var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
                             var cursorPos = textLayout.GetCursorPosition(renderState.CursorPosition);
-                            double cursorX = r.x + cursorPos.X + TextXPadding;
-                            double cursorY = r.y + cursorPos.Y + TextYPadding;
+                            double cursorX = r.x + cursorPos.X;
+                            double cursorY = r.y + cursorPos.Y;
                             
                             canvas.BeginPath();
                             canvas.MoveTo(cursorX, cursorY);
@@ -1895,11 +1898,11 @@ namespace Prowl.PaperUI
             if (isMultiLine)
             {
                 // For multi-line, we need both horizontal and vertical scrolling
-                var textLayout = _paper.CreateLayout(state.Value, CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth - 24));
+                var textLayout = _paper.CreateLayout(state.Value, CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth));
                 var cursorPos = textLayout.GetCursorPosition(state.CursorPosition);
                 
-                double visibleWidth = _handle.Data.LayoutWidth - 24;
-                double visibleHeight = _handle.Data.LayoutHeight - 16;
+                double visibleWidth = _handle.Data.LayoutWidth;
+                double visibleHeight = _handle.Data.LayoutHeight;
                 
                 const double margin = 10.0;
                 
@@ -1914,19 +1917,26 @@ namespace Prowl.PaperUI
                     state.ScrollOffsetY = Math.Max(0, cursorPos.Y - margin);
                 else if (cursorPos.Y > state.ScrollOffsetY + visibleHeight - margin)
                     state.ScrollOffsetY = cursorPos.Y - visibleHeight + margin;
+
+                // Clamp scroll offsets to content bounds
+                state.ClampScrollOffsets(textLayout.Size.X, textLayout.Size.Y, visibleWidth, visibleHeight);
             }
             else
             {
                 // Single-line horizontal scrolling only
                 var cursorPos = GetCursorPositionFromIndex(state.Value, settings.Font, settings.FontSize, settings.LetterSpacing, state.CursorPosition);
                 
-                double visibleWidth = _handle.Data.LayoutWidth - 24;
+                double visibleWidth = _handle.Data.LayoutWidth;
                 const double margin = 20.0;
                 
                 if (cursorPos.x < state.ScrollOffsetX + margin)
                     state.ScrollOffsetX = Math.Max(0, cursorPos.x - margin);
                 else if (cursorPos.x > state.ScrollOffsetX + visibleWidth - margin)
                     state.ScrollOffsetX = cursorPos.x - visibleWidth + margin;
+
+                // Clamp horizontal scroll offset for single-line
+                var textSize = _paper.MeasureText(state.Value, CreateTextLayoutSettings(settings, false, float.MaxValue));
+                state.ClampScrollOffsets(textSize.x, textSize.y, visibleWidth, _handle.Data.LayoutHeight);
             }
         }
         
@@ -1936,7 +1946,7 @@ namespace Prowl.PaperUI
         private int CalculateTextPosition(string text, TextInputSettings settings, bool isMultiLine, double x, double y = 0)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            var maxWidth = isMultiLine ? _handle.Data.LayoutWidth - 24 : float.MaxValue;
+            var maxWidth = isMultiLine ? _handle.Data.LayoutWidth : float.MaxValue;
             var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, maxWidth));
             return textLayout.GetCursorIndex(new Vector2(x, y));
         }
