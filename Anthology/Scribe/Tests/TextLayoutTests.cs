@@ -17,7 +17,14 @@ namespace Tests
         {
             var renderer = new TestFontRenderer();
             var fs = new FontSystem(renderer);
-            fs.LoadSystemFonts("arial");
+            foreach(var font in fs.EnumerateSystemFonts())
+            {
+                if(font.Style == FontStyle.Regular)
+                {
+                    fs.AddFont(font);
+                    break;
+                }
+            }
             return fs;
         }
 
@@ -28,7 +35,7 @@ namespace Tests
             var font = fs.Fonts.First();
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = 16;
-            settings.Font = new FontFilter(font.Style, font.FamilyName);
+            settings.Font = font;
 
             var layout = fs.CreateLayout("Just testing to make sure this works\nas it should.", settings);
 
@@ -40,6 +47,23 @@ namespace Tests
                 var idx = layout.GetCursorIndex(hit);
                 Assert.Equal(i, idx);
             }
+        }
+
+        [Fact]
+        public void FontFileMeasureMatchesLayout()
+        {
+            var fs = CreateSystem();
+            var font = fs.Fonts.First();
+            var settings = TextLayoutSettings.Default;
+            settings.PixelSize = 20;
+            settings.Font = font;
+
+            string text = "Measure this string\nwith two lines";
+
+            var layout = fs.CreateLayout(text, settings);
+            var sizeFromFont = font.MeasureText(text, settings);
+
+            Assert.Equal(layout.Size, sizeFromFont);
         }
     }
 }

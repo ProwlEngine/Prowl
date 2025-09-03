@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Numerics;
 using System.Text;
 using static Prowl.Scribe.Internal.Common;
 
@@ -513,6 +514,127 @@ namespace Prowl.Scribe
 			return FakePtr<byte>.Null;
 		}
 
+        #region Measurement
+
+        public Vector2 MeasureText(string text, float pixelSize, float letterSpacing = 0f)
+        {
+            var settings = TextLayoutSettings.Default;
+            settings.PixelSize = pixelSize;
+            settings.Font = this;
+            settings.LetterSpacing = letterSpacing;
+            return MeasureText(text, settings);
+        }
+
+        public Vector2 MeasureText(string text, TextLayoutSettings settings)
+        {
+            if (string.IsNullOrEmpty(text))
+                return Vector2.Zero;
+
+            float scale = ScaleForPixelHeight(settings.PixelSize);
+            float lineHeight = settings.PixelSize * settings.LineHeight;
+
+            float spaceAdvance = settings.WordSpacing;
+            int spaceGlyph = FindGlyphIndex(' ');
+            if (spaceGlyph != 0)
+            {
+                int aw = 0, lsb = 0;
+                GetGlyphHorizontalMetrics(spaceGlyph, ref aw, ref lsb);
+                spaceAdvance += aw * scale;
+            }
+            float tabWidth = spaceAdvance * settings.TabSize;
+
+            bool wrap = settings.WrapMode == TextWrapMode.Wrap && settings.MaxWidth > 0f;
+            float maxWidth = 0f;
+            float currentX = 0f;
+            float totalHeight = lineHeight;
+            int prevGlyph = 0;
+
+            int i = 0;
+            while (i < text.Length)
+            {
+                char ch = text[i];
+
+                if (ch == '\n')
+                {
+                    maxWidth = Math.Max(maxWidth, currentX);
+                    currentX = 0f;
+                    totalHeight += lineHeight;
+                    prevGlyph = 0;
+                    i++;
+                    continue;
+                }
+
+                if (ch == '\t')
+                {
+                    float tabStop = ((int)(currentX / tabWidth) + 1) * tabWidth;
+                    if (wrap && currentX > 0f && tabStop > settings.MaxWidth)
+                    {
+                        maxWidth = Math.Max(maxWidth, currentX);
+                        currentX = 0f;
+                        totalHeight += lineHeight;
+                        tabStop = ((int)(currentX / tabWidth) + 1) * tabWidth;
+                    }
+                    currentX = tabStop;
+                    prevGlyph = 0;
+                    i++;
+                    continue;
+                }
+
+                if (char.IsWhiteSpace(ch))
+                {
+                    if (wrap && currentX > 0f && currentX + spaceAdvance > settings.MaxWidth)
+                    {
+                        maxWidth = Math.Max(maxWidth, currentX);
+                        currentX = 0f;
+                        totalHeight += lineHeight;
+                    }
+                    else
+                    {
+                        currentX += spaceAdvance;
+                    }
+                    prevGlyph = 0;
+                    i++;
+                    continue;
+                }
+
+                while (i < text.Length)
+                {
+                    ch = text[i];
+                    if (ch == '\n' || ch == '\t' || char.IsWhiteSpace(ch))
+                        break;
+
+                    int glyph = FindGlyphIndex(ch);
+                    if (glyph != 0)
+                    {
+                        float kern = 0f;
+                        if (prevGlyph != 0)
+                            kern = GetGlyphKerningAdvance(prevGlyph, glyph) * scale;
+
+                        int aw = 0, lsb = 0;
+                        GetGlyphHorizontalMetrics(glyph, ref aw, ref lsb);
+                        float adv = aw * scale + settings.LetterSpacing;
+
+                        if (wrap && currentX > 0f && currentX + kern + adv > settings.MaxWidth)
+                        {
+                            maxWidth = Math.Max(maxWidth, currentX);
+                            currentX = 0f;
+                            totalHeight += lineHeight;
+                            kern = 0f;
+                        }
+
+                        currentX += kern + adv;
+                        prevGlyph = glyph;
+                    }
+
+                    i++;
+                }
+            }
+
+            maxWidth = Math.Max(maxWidth, currentX);
+            return new Vector2(maxWidth, totalHeight);
+        }
+
+        #endregion
 
         #region Private Methods
 
