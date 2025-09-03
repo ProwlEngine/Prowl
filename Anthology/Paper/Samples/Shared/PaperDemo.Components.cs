@@ -159,10 +159,23 @@ namespace Shared
 
         public static ElementBuilder Secondary(string id, string value, Action<string> onChange = null, string placeholder = "")
         {
-            return PaperDemo.Gui.Box("shadcs-input-" + id)
-                .TextField(value, Fonts.arial, onChange, Themes.textColor, placeholder, Color.FromArgb(100, Themes.textColor))
-                .Style("shadcs-text-field-secondary");
-                //.SetScroll(Scroll.ScrollX);
+            ElementBuilder parent = PaperDemo.Gui.Box("shadcs-input-" + id).Style("shadcs-text-field-secondary");
+            using (parent.Enter())
+            {
+                PaperDemo.Gui.Box("area")
+                    .Margin(8, UnitValue.StretchOne)
+                    .HookToParent()
+                    .IsNotInteractable()
+                    .Width(UnitValue.StretchOne)
+                    .Height(UnitValue.StretchOne)
+                    .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor));
+            }
+            return parent;
+
+            //return PaperDemo.Gui.Box("shadcs-input-" + id)
+            //    .TextField(value, Fonts.arial, onChange, Themes.textColor, placeholder, Color.FromArgb(100, Themes.textColor))
+            //    .Style("shadcs-text-field-secondary");
+            //    //.SetScroll(Scroll.ScrollX);
         }
     }
 
