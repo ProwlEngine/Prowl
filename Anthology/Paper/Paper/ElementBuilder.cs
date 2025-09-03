@@ -852,6 +852,63 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>
+        /// Sets a content sizing function for auto-sized elements.
+        /// The function receives optional width and height constraints and should return the preferred content size.
+        /// This is particularly useful for custom controls that need to calculate their own size based on content.
+        /// </summary>
+        /// <param name="sizer">
+        /// Function that takes (maxWidth?, maxHeight?) and returns (preferredWidth, preferredHeight)?.
+        /// Return null if the element cannot be sized with the given constraints.
+        /// </param>
+        /// <returns>This builder for method chaining</returns>
+        /// <example>
+        /// // Example: Size based on text content
+        /// .ContentSizer((maxWidth, maxHeight) => {
+        ///     var textSize = MeasureText("My content", font, fontSize);
+        ///     return (textSize.Width + padding * 2, textSize.Height + padding * 2);
+        /// })
+        /// 
+        /// // Example: Aspect ratio sizing
+        /// .ContentSizer((maxWidth, maxHeight) => {
+        ///     const double aspectRatio = 16.0 / 9.0;
+        ///     if (maxWidth.HasValue) {
+        ///         return (maxWidth.Value, maxWidth.Value / aspectRatio);
+        ///     }
+        ///     if (maxHeight.HasValue) {
+        ///         return (maxHeight.Value * aspectRatio, maxHeight.Value);
+        ///     }
+        ///     return (320, 180); // Default size
+        /// })
+        /// </example>
+        public ElementBuilder ContentSizer(Func<double?, double?, (double, double)?> sizer)
+        {
+            _handle.Data.ContentSizer = sizer;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets a simple content sizing function that returns a fixed size.
+        /// </summary>
+        /// <param name="width">Fixed preferred width</param>
+        /// <param name="height">Fixed preferred height</param>
+        /// <returns>This builder for method chaining</returns>
+        public ElementBuilder ContentSizer(double width, double height)
+        {
+            _handle.Data.ContentSizer = (_, _) => (width, height);
+            return this;
+        }
+
+        /// <summary>
+        /// Removes any content sizing function, allowing the element to use default sizing behavior.
+        /// </summary>
+        /// <returns>This builder for method chaining</returns>
+        public ElementBuilder ClearContentSizer()
+        {
+            _handle.Data.ContentSizer = null;
+            return this;
+        }
+
         /// <summary>Enables content clipping to the element's bounds.</summary>
         public ElementBuilder Clip()
         {
