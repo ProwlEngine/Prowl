@@ -13,7 +13,7 @@ namespace Prowl.Scribe
     {
         private readonly IFontRenderer renderer;
         private readonly BinPacker binPacker;
-        private readonly List<FontFile> fonts;
+        private readonly List<FontFile> fallbackFonts;
         private readonly Dictionary<AtlasGlyph.CacheKey, AtlasGlyph> glyphCache;
 
         readonly LruCache<LayoutCacheKey, TextLayout> layoutCache;
@@ -37,11 +37,11 @@ namespace Prowl.Scribe
         }
         public bool CacheLayouts { get; set; } = false;
 
-        public IEnumerable<FontFile> Fonts => fonts;
+        public IEnumerable<FontFile> FallbackFonts => fallbackFonts;
         public int Width => atlasWidth;
         public int Height => atlasHeight;
         public object Texture => atlasTexture;
-        public int FontCount => fonts.Count;
+        public int FontCount => fallbackFonts.Count;
 
         public FontSystem(IFontRenderer renderer, int initialWidth = 512, int initialHeight = 512, bool includeWhiteRect = true)
         {
@@ -54,7 +54,7 @@ namespace Prowl.Scribe
 
             atlasTexture = renderer.CreateTexture(atlasWidth, atlasHeight);
             binPacker = new BinPacker(atlasWidth, atlasHeight);
-            fonts = new List<FontFile>();
+            fallbackFonts = new List<FontFile>();
             glyphCache = new Dictionary<AtlasGlyph.CacheKey, AtlasGlyph>();
             layoutCache = new LruCache<LayoutCacheKey, TextLayout>(_maxLayout);
 
@@ -80,9 +80,9 @@ namespace Prowl.Scribe
             }
         }
 
-        public void AddFont(FontFile font)
+        public void AddFallbackFont(FontFile font)
         {
-            fonts.Add(font);
+            fallbackFonts.Add(font);
 
             glyphCache.Clear();
         }
@@ -195,7 +195,8 @@ namespace Prowl.Scribe
             if (glyph != null)
                 return glyph;
 
-            foreach (var f in fonts)
+            // Check Fallback Fonts
+            foreach (var f in fallbackFonts)
             {
                 if (f == font) continue;
                 if (f.Style != font.Style) continue; // Needs to match style to what the user requested

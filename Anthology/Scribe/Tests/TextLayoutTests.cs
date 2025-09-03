@@ -21,7 +21,7 @@ namespace Tests
             {
                 if(font.Style == FontStyle.Regular)
                 {
-                    fs.AddFont(font);
+                    fs.AddFallbackFont(font);
                     break;
                 }
             }
@@ -32,7 +32,7 @@ namespace Tests
         public void CursorPositionRoundtrip()
         {
             var fs = CreateSystem();
-            var font = fs.Fonts.First();
+            var font = fs.FallbackFonts.First();
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = 16;
             settings.Font = font;
@@ -53,7 +53,7 @@ namespace Tests
         public void FontFileMeasureMatchesLayout()
         {
             var fs = CreateSystem();
-            var font = fs.Fonts.First();
+            var font = fs.FallbackFonts.First();
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = 20;
             settings.Font = font;
