@@ -169,7 +169,7 @@ namespace Shared
                     .Width(UnitValue.StretchOne)
                     .Height(19)
                     .FontSize(19)
-                    .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor));
+                    .TextField(value, Fonts.arial, onChange, Themes.textColor, placeholder, Color.FromArgb(100, Themes.textColor));
             }
             return parent;
 

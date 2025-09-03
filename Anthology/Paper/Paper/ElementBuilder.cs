@@ -1217,6 +1217,9 @@ namespace Prowl.PaperUI
             /// <summary>Maximum number of characters allowed (0 = no limit)</summary>
             public int MaxLength;
 
+            /// <summary>Allow text to wrap instead of scrolling (For Multi-Line Only)</summary>
+            public bool DoWrap;
+
             /// <summary>Creates default text input settings</summary>
             public static TextInputSettings Default => new TextInputSettings
             {
@@ -1225,7 +1228,8 @@ namespace Prowl.PaperUI
                 Placeholder = "",
                 PlaceholderColor = Color.FromArgb(160, 200, 200, 200),
                 ReadOnly = false,
-                MaxLength = 0
+                MaxLength = 0,
+                DoWrap = true
             };
         }
 
@@ -1351,7 +1355,7 @@ namespace Prowl.PaperUI
             settings.LetterSpacing = (float)letterSpacing;
             settings.Alignment = Scribe.TextAlignment.Left;
             settings.MaxWidth = (float)maxWidth;
-            settings.WrapMode = Scribe.TextWrapMode.NoWrap;
+            settings.WrapMode = (isMultiLine && inputSettings.DoWrap) ? Scribe.TextWrapMode.Wrap : TextWrapMode.NoWrap;
             
             return settings;
         }
@@ -1801,7 +1805,7 @@ namespace Prowl.PaperUI
                 ContentSizer((width, height) =>
                 {
                     var currentState = LoadTextInputState(value, isMultiLine);
-                    var textSettings = CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth);
+                    var textSettings = CreateTextLayoutSettings(settings, true, (float)(width ?? float.MaxValue));
                     var textLayout = _paper.CreateLayout(currentState.Value, textSettings);
 
                     return (width ?? textSettings.PixelSize, Math.Max(height ?? textSettings.PixelSize * textSettings.LineHeight, textLayout.Size.Y));
@@ -1987,11 +1991,11 @@ namespace Prowl.PaperUI
                     // Draw text or placeholder
                     if (string.IsNullOrEmpty(renderState.Value))
                     {
-                        canvas.DrawText(settings.Placeholder, (float)(r.x), (float)r.y, settings.PlaceholderColor, fontSize, settings.Font);
+                        canvas.DrawText(settings.Placeholder, (float)(r.x), (float)r.y, settings.PlaceholderColor, layoutSettings);
                     }
                     else
                     {
-                        canvas.DrawText(renderState.Value, (float)(r.x), (float)r.y, settings.TextColor, fontSize, settings.Font);
+                        canvas.DrawText(renderState.Value, (float)(r.x), (float)r.y, settings.TextColor, layoutSettings);
                     }
                     
                     // Draw selection and cursor if focused
