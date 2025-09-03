@@ -1,6 +1,7 @@
 using System.Drawing;
 
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 
 namespace Shared
 {
@@ -10,6 +11,7 @@ namespace Shared
         {
             Button.DefineStyles();
             Input.DefineStyles();
+            TextArea.DefineStyles();
             Switch.DefineStyles();
         }
     }
@@ -169,10 +171,11 @@ namespace Shared
         public static void DefineStyles()
         {
             // Text field styles
-            PaperDemo.Gui.CreateStyleFamily("shadcs-text-field-secondary")
+            PaperDemo.Gui.CreateStyleFamily("shadcs-text-area-secondary")
                 .Base(new StyleTemplate()
                     .Width(300)
-                    .Height(40)
+                    .Height(Prowl.PaperUI.LayoutEngine.UnitValue.Auto)
+                    //.MaxHeight(100)
                     .Rounded(8)
                     .BackgroundColor(Themes.secondaryColor)
                     .BorderColor(Color.Transparent)
@@ -188,12 +191,18 @@ namespace Shared
 
         public static ElementBuilder Secondary(string id, string value, Action<string> onChange = null, string placeholder = "")
         {
-            return PaperDemo.Gui.Box("shadcs-input-" + id)
-                .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor))
-                .Style("shadcs-text-field-secondary")
-                .Height(Prowl.PaperUI.LayoutEngine.UnitValue.Auto)
-                .MaxHeight(100);
-                //.SetScroll(Scroll.ScrollX);
+            ElementBuilder parent = PaperDemo.Gui.Box("shadcs-textarea-" + id).Style("shadcs-text-area-secondary");
+            using (parent.Enter())
+            {
+                PaperDemo.Gui.Box("area")
+                    .Margin(8)
+                    .HookToParent()
+                    .IsNotInteractable()
+                    .Width(UnitValue.StretchOne)
+                    .Height(UnitValue.Auto)
+                    .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor));
+            }
+            return parent;
         }
     }
 
