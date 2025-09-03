@@ -1,4 +1,5 @@
 ﻿using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
 using System.Drawing;
@@ -23,9 +24,9 @@ namespace Common
         private const int MAX_HISTORY_SAMPLES = 60;
         private double _averageFrameTime = 0;
 
-        private FontInfo _font;
+        private FontFile _font;
 
-        public BenchmarkScene(Canvas canvas, FontInfo font, double width, double height)
+        public BenchmarkScene(Canvas canvas, FontFile font, double width, double height)
         {
             _canvas = canvas;
             _font = font;

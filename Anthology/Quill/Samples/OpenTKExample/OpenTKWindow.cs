@@ -4,6 +4,7 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
 
@@ -29,8 +30,8 @@ namespace OpenTKExample
         private TextureTK _whiteTexture;
         private TextureTK _demoTexture;
 
-        private FontInfo RobotoFont;
-        private FontInfo AlamakFont;
+        private FontFile RobotoFont;
+        private FontFile AlamakFont;
 
         public OpenTKWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings)
         {
@@ -52,9 +53,8 @@ namespace OpenTKExample
             _renderer.Initialize(ClientSize.X, ClientSize.Y, _whiteTexture);
             _canvas = new Canvas(_renderer, new FontAtlasSettings());
 
-            // Load textures
-            _canvas.AddFont("Fonts/Roboto.ttf");
-            _canvas.AddFont("Fonts/Alamak.ttf");
+            RobotoFont = new FontFile("Fonts/Roboto.ttf");
+            AlamakFont = new FontFile("Fonts/Alamak.ttf");
 
             _demos = new List<IDemo>
             {

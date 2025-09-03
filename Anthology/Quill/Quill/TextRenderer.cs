@@ -93,29 +93,6 @@ namespace Prowl.Quill
             _canvas.SetTexture(null);
         }
 
-        /// <summary>
-        /// Renders text at the specified position with the given parameters.
-        /// </summary>
-        public void DrawText(string text, Vector2 position, Color color, float pixelSize, FontInfo preferredFont = null, float letterSpacing = 0f)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-                return;
-
-            _fontSystem.DrawText(text, position, ToFSColor(color), pixelSize, preferredFont, letterSpacing);
-        }
-
-        /// <summary>
-        /// Renders text at the specified position with the given parameters.
-        /// </summary>
-        public void DrawText(string text, Vector2 position, Color color, TextLayoutSettings settings)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-                return;
-
-            TextLayout layout = _fontSystem.CreateLayout(text, settings);
-            _fontSystem.DrawLayout(layout, position, color);
-        }
-
         private static FontColor ToFSColor(Color color)
         {
             return new FontColor(color.R, color.G, color.B, color.A);

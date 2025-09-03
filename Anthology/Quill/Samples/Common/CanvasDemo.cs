@@ -1,4 +1,5 @@
 ﻿using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
 using System.Drawing;
@@ -12,8 +13,8 @@ namespace Common
         private double _width;
         private double _height;
         private object _texture;
-        private FontInfo _fontA;
-        private FontInfo _fontB;
+        private FontFile _fontA;
+        private FontFile _fontB;
 
         private double _time;
 
@@ -28,7 +29,7 @@ namespace Common
         private double _currentFps = 0;
         private const double FPS_UPDATE_INTERVAL = 0.5; // Update FPS display every half second
 
-        public CanvasDemo(Canvas canvas, double width, double height, object texture, FontInfo fontA, FontInfo fontB)
+        public CanvasDemo(Canvas canvas, double width, double height, object texture, FontFile fontA, FontFile fontB)
         {
             _canvas = canvas;
             _width = width;

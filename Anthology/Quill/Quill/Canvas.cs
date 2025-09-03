@@ -1743,23 +1743,21 @@ namespace Prowl.Quill
 
         #region Text
 
-        public FontInfo AddFont(string fontPath) => _scribeRenderer.FontEngine.AddFont(fontPath);
-        public FontInfo AddFont(byte[] fontData) => _scribeRenderer.FontEngine.AddFont(fontData);
-        public void LoadSystemFonts(params string[] priorityFonts) => _scribeRenderer.FontEngine.LoadSystemFonts(priorityFonts);
-        public FontInfo GetFont(string familyName, FontStyle style = FontStyle.Regular) => _scribeRenderer.FontEngine.GetFont(familyName, style);
-        public Vector2 MeasureText(string text, double pixelSize, FontInfo preferredFont = null, double letterSpacing = 0f) => _scribeRenderer.FontEngine.MeasureText(text, (float)pixelSize, preferredFont, (float)letterSpacing);
+        public void AddFallbackFont(FontFile font) => _scribeRenderer.FontEngine.AddFallbackFont(font);
+        public IEnumerable<FontFile> EnumerateSystemFonts() => _scribeRenderer.FontEngine.EnumerateSystemFonts();
+        public Vector2 MeasureText(string text, double pixelSize, FontFile font, double letterSpacing = 0f) => _scribeRenderer.FontEngine.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
         public Vector2 MeasureText(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.MeasureText(text, settings);
 
-        public void DrawText(string text, double x, double y, FontColor color, double pixelSize, FontInfo preferredFont = null, double letterSpacing = 0f, Vector2? origin = null)
+        public void DrawText(string text, double x, double y, FontColor color, double pixelSize, FontFile font, double letterSpacing = 0f, Vector2? origin = null)
         {
             Vector2 position = new Vector2(x, y);
             if (origin.HasValue)
             {
-                var textSize = MeasureText(text, pixelSize, preferredFont, letterSpacing);
-                position.x -= textSize.x * origin.Value.x;
-                position.y -= textSize.y * origin.Value.y;
+                var textSize = _scribeRenderer.FontEngine.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
+                position.x -= textSize.X * origin.Value.x;
+                position.y -= textSize.Y * origin.Value.y;
             }
-            _scribeRenderer.FontEngine.DrawText(text, position, color, (float)pixelSize, preferredFont, (float)letterSpacing);
+            _scribeRenderer.FontEngine.DrawText(text, position, color, (float)pixelSize, font, (float)letterSpacing);
         }
 
         public void DrawText(string text, double x, double y, FontColor color, TextLayoutSettings settings, Vector2? origin = null)
@@ -1767,9 +1765,9 @@ namespace Prowl.Quill
             Vector2 position = new Vector2(x, y);
             if (origin.HasValue)
             {
-                var textSize = MeasureText(text, settings);
-                position.x -= textSize.x * origin.Value.x;
-                position.y -= textSize.y * origin.Value.y;
+                var textSize = _scribeRenderer.FontEngine.MeasureText(text, settings);
+                position.x -= textSize.X * origin.Value.x;
+                position.y -= textSize.Y * origin.Value.y;
             }
             _scribeRenderer.FontEngine.DrawText(text, position, color, settings);
         }

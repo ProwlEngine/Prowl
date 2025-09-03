@@ -1,5 +1,6 @@
 ﻿using Common;
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
 using Raylib_cs;
@@ -13,8 +14,8 @@ namespace RaylibExample
         static float zoom = 1.0f;
         static float rotation = 0.0f;
 
-        static FontInfo RobotoFont;
-        static FontInfo AlamakFont;
+        static FontFile RobotoFont;
+        static FontFile AlamakFont;
 
         static void Main(string[] args)
         {
@@ -31,8 +32,8 @@ namespace RaylibExample
             Texture2D demoTexture = LoadTexture("Textures/wall.png");
 
             Canvas canvas = new Canvas(renderer, new FontAtlasSettings());
-            RobotoFont = canvas.AddFont("Fonts/Roboto.ttf");
-            AlamakFont = canvas.AddFont("Fonts/Alamak.ttf");
+            RobotoFont = new FontFile("Fonts/Roboto.ttf");
+            AlamakFont = new FontFile("Fonts/Alamak.ttf");
 
             var demos = new List<IDemo>
             {
