@@ -2021,29 +2021,39 @@ namespace Prowl.PaperUI
                                 float lineHeight = settings.FontSize;
                                 float currentY = startPos.Y;
                                 
+                                // Get line indices from Y positions
+                                int startLineIndex = (int)(startPos.Y / lineHeight);
+                                int endLineIndex = (int)(endPos.Y / lineHeight);
+                                
                                 // First line: from start position to end of line
+                                float firstLineWidth = startLineIndex < textLayout.Lines.Count ? textLayout.Lines[startLineIndex].Width : 0;
+                                
                                 canvas.BeginPath();
                                 canvas.RoundedRect(
                                     r.x + startPos.X,
                                     r.y + currentY,
-                                    r.width - startPos.X,
+                                    firstLineWidth - startPos.X,
                                     lineHeight,
                                     2, 2, 2, 2);
                                 canvas.Fill();
                                 
-                                // Middle lines: full width rectangles
+                                // Middle lines: use actual line widths from textLayout
                                 currentY += lineHeight;
-                                while (currentY < endPos.Y)
+                                int currentLineIndex = startLineIndex + 1;
+                                while (currentY < endPos.Y && currentLineIndex < textLayout.Lines.Count)
                                 {
+                                    float lineWidth = textLayout.Lines[currentLineIndex].Width;
+                                    
                                     canvas.BeginPath();
                                     canvas.RoundedRect(
                                         r.x,
                                         r.y + currentY,
-                                        r.width,
+                                        lineWidth,
                                         lineHeight,
                                         2, 2, 2, 2);
                                     canvas.Fill();
                                     currentY += lineHeight;
+                                    currentLineIndex++;
                                 }
                                 
                                 // Last line: from start of line to end position
