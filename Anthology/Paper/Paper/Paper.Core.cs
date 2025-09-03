@@ -691,29 +691,6 @@ namespace Prowl.PaperUI
             storage[key] = value;
         }
 
-        #region Text Field Storage Helpers
-
-        /// <summary>
-        /// Gets the current value of a text field.
-        /// </summary>
-        public string GetTextFieldValue(ElementHandle element)
-        {
-            return this.GetElementStorage<string>(element, "Value", "");
-        }
-
-        /// <summary>
-        /// Sets the value of a text field.
-        /// </summary>
-        public void SetTextFieldValue(ElementHandle element, string value)
-        {
-            this.SetElementStorage(element, "Value", value);
-            this.SetElementStorage(element, "CursorPosition", value.Length);
-            this.SetElementStorage(element, "SelectionStart", -1);
-            this.SetElementStorage(element, "SelectionEnd", -1);
-        }
-
-        #endregion
-
         #endregion
 
         #region Layout Helpers

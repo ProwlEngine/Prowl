@@ -168,7 +168,7 @@ namespace Shared
                 // Spacer
                 using (Gui.Box("Spacer").Enter()) { }
 
-                // Search bar - now using text-field style
+                // Search bar
                 Input.Secondary("SearchTextField", searchText, newValue => searchText = newValue, "Search...")
                     .Margin(0, 15, 15, 0);
 

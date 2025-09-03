@@ -158,7 +158,7 @@ namespace Shared
         public static ElementBuilder Secondary(string id, string value, Action<string> onChange = null, string placeholder = "")
         {
             return PaperDemo.Gui.Box("shadcs-input-" + id)
-                //.TextField(value, Fonts.fontMedium, onChange, Themes.textColor, placeholder, Color.FromArgb(100, Themes.textColor))
+                .TextField(value, Fonts.arial, onChange, Themes.textColor, placeholder, Color.FromArgb(100, Themes.textColor))
                 .Style("shadcs-text-field-secondary")
                 .SetScroll(Scroll.ScrollX);
         }
