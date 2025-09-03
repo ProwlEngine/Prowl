@@ -167,7 +167,8 @@ namespace Shared
                     .HookToParent()
                     .IsNotInteractable()
                     .Width(UnitValue.StretchOne)
-                    .Height(UnitValue.StretchOne)
+                    .Height(19)
+                    .FontSize(19)
                     .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor));
             }
             return parent;
@@ -213,6 +214,7 @@ namespace Shared
                     .IsNotInteractable()
                     .Width(UnitValue.StretchOne)
                     .Height(UnitValue.Auto)
+                    .FontSize(19)
                     .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor));
             }
             return parent;

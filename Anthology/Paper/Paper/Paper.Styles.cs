@@ -717,7 +717,7 @@ namespace Prowl.PaperUI
             _defaultValues[(int)GuiProp.LetterSpacing] = 0.0;
             _defaultValues[(int)GuiProp.LineHeight] = 1.0;
             _defaultValues[(int)GuiProp.TabSize] = 4;
-            _defaultValues[(int)GuiProp.FontSize] = 16.0f;
+            _defaultValues[(int)GuiProp.FontSize] = 16.0;
 
             _initialized = true;
         }
@@ -815,7 +815,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Clean up styles at the end of a frame.
         /// </summary>
-        private void EndOfFrameCleanupStyles(Dictionary<ulong, Element> createdElements)
+        private void EndOfFrameCleanupStyles(HashSet<ulong> createdElements)
         {
             // Clean up any elements that haven't been accessed this frame
             List<ulong> elementsToRemove = new List<ulong>();

@@ -236,16 +236,16 @@ namespace Prowl.PaperUI
         public T TextColor(Color color) => SetStyleProperty(GuiProp.TextColor, color);
 
         /// <summary>Sets the spacing between words in text.</summary>
-        public T WordSpacing(float spacing) => SetStyleProperty(GuiProp.WordSpacing, spacing);
+        public T WordSpacing(double spacing) => SetStyleProperty(GuiProp.WordSpacing, spacing);
         /// <summary>Sets the spacing between letters in text.</summary>
-        public T LetterSpacing(float spacing) => SetStyleProperty(GuiProp.LetterSpacing, spacing);
+        public T LetterSpacing(double spacing) => SetStyleProperty(GuiProp.LetterSpacing, spacing);
         /// <summary>Sets the height of a line in text.</summary>
-        public T LineHeight(float height) => SetStyleProperty(GuiProp.LineHeight, height);
+        public T LineHeight(double height) => SetStyleProperty(GuiProp.LineHeight, height);
 
         /// <summary>Sets the size of a Tab character in spaces.</summary>
         public T TabSize(int size) => SetStyleProperty(GuiProp.TabSize, size);
         /// <summary>Sets the size of text in pixels.</summary>
-        public T FontSize(float size) => SetStyleProperty(GuiProp.FontSize, size);
+        public T FontSize(double size) => SetStyleProperty(GuiProp.FontSize, size);
 
         #endregion
 
@@ -1202,12 +1202,6 @@ namespace Prowl.PaperUI
             /// <summary>Font used to render the text</summary>
             public FontFile Font;
             
-            /// <summary>Font size in pixels</summary>
-            public float FontSize;
-            
-            /// <summary>Letter spacing</summary>
-            public float LetterSpacing;
-            
             /// <summary>Color of the text</summary>
             public Color TextColor;
             
@@ -1227,8 +1221,6 @@ namespace Prowl.PaperUI
             public static TextInputSettings Default => new TextInputSettings
             {
                 Font = null,
-                FontSize = 16f,
-                LetterSpacing = 0f,
                 TextColor = Color.FromArgb(255, 250, 250, 250),
                 Placeholder = "",
                 PlaceholderColor = Color.FromArgb(160, 200, 200, 200),
@@ -1350,10 +1342,13 @@ namespace Prowl.PaperUI
         
         private TextLayoutSettings CreateTextLayoutSettings(TextInputSettings inputSettings, bool isMultiLine, double maxWidth = float.MaxValue)
         {
+            var fontSize = (double)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
+            var letterSpacing = (double)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
+
             var settings = TextLayoutSettings.Default;
-            settings.PixelSize = inputSettings.FontSize;
+            settings.PixelSize = (float)fontSize;
             settings.Font = inputSettings.Font;
-            settings.LetterSpacing = inputSettings.LetterSpacing;
+            settings.LetterSpacing = (float)letterSpacing;
             settings.Alignment = Scribe.TextAlignment.Left;
             settings.MaxWidth = (float)maxWidth;
             settings.WrapMode = Scribe.TextWrapMode.NoWrap;
@@ -1722,8 +1717,6 @@ namespace Prowl.PaperUI
         /// <param name="placeholder">Optional placeholder text shown when the field is empty</param>
         /// <param name="textColor">Color of the text</param>
         /// <param name="placeholderColor">Color of the placeholder text</param>
-        /// <param name="fontSize">Font size in pixels</param>
-        /// <param name="letterSpacing">Letter spacing</param>
         /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
         /// <returns>A builder for configuring the text field</returns>
         public ElementBuilder TextField(
@@ -1733,14 +1726,10 @@ namespace Prowl.PaperUI
             Color? textColor = null,
             string placeholder = "",
             Color? placeholderColor = null,
-            float fontSize = 16f,
-            float letterSpacing = 0f,
             [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
         {
             var settings = TextInputSettings.Default;
             settings.Font = font;
-            settings.FontSize = fontSize;
-            settings.LetterSpacing = letterSpacing;
             settings.TextColor = textColor ?? settings.TextColor;
             settings.Placeholder = placeholder;
             settings.PlaceholderColor = placeholderColor ?? settings.PlaceholderColor;
@@ -1775,8 +1764,6 @@ namespace Prowl.PaperUI
         /// <param name="placeholder">Optional placeholder text shown when the area is empty</param>
         /// <param name="textColor">Color of the text</param>
         /// <param name="placeholderColor">Color of the placeholder text</param>
-        /// <param name="fontSize">Font size in pixels</param>
-        /// <param name="letterSpacing">Letter spacing</param>
         /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
         /// <returns>A builder for configuring the text area</returns>
         public ElementBuilder TextArea(
@@ -1786,14 +1773,10 @@ namespace Prowl.PaperUI
             string placeholder = "",
             Color? textColor = null,
             Color? placeholderColor = null,
-            float fontSize = 16f,
-            float letterSpacing = 0f,
             [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
         {
             var settings = TextInputSettings.Default;
             settings.Font = font;
-            settings.FontSize = fontSize;
-            settings.LetterSpacing = letterSpacing;
             settings.TextColor = textColor ?? settings.TextColor;
             settings.Placeholder = placeholder;
             settings.PlaceholderColor = placeholderColor ?? settings.PlaceholderColor;
@@ -1998,15 +1981,17 @@ namespace Prowl.PaperUI
                     
                     canvas.SaveState();
                     canvas.TransformBy(Transform2D.CreateTranslation(-renderState.ScrollOffsetX, -renderState.ScrollOffsetY));
-                    
+
+                    var fontSize = (double)elHandle.Data._elementStyle.GetValue(GuiProp.FontSize);
+
                     // Draw text or placeholder
                     if (string.IsNullOrEmpty(renderState.Value))
                     {
-                        canvas.DrawText(settings.Placeholder, (float)(r.x), (float)r.y, settings.PlaceholderColor, settings.FontSize, settings.Font);
+                        canvas.DrawText(settings.Placeholder, (float)(r.x), (float)r.y, settings.PlaceholderColor, fontSize, settings.Font);
                     }
                     else
                     {
-                        canvas.DrawText(renderState.Value, (float)(r.x), (float)r.y, settings.TextColor, settings.FontSize, settings.Font);
+                        canvas.DrawText(renderState.Value, (float)(r.x), (float)r.y, settings.TextColor, fontSize, settings.Font);
                     }
                     
                     // Draw selection and cursor if focused
@@ -2026,18 +2011,18 @@ namespace Prowl.PaperUI
                             
                             canvas.SetFillColor(Color.FromArgb(100, 100, 150, 255));
                             
-                            if (isMultiLine && Math.Abs(endPos.Y - startPos.Y) > settings.FontSize / 2)
+                            if (isMultiLine && Math.Abs(endPos.Y - startPos.Y) > fontSize / 2)
                             {
                                 // Multi-line selection: Draw rectangles for each line
-                                float lineHeight = settings.FontSize;
-                                float currentY = startPos.Y;
+                                double lineHeight = fontSize * layoutSettings.LineHeight;
+                                double currentY = startPos.Y;
                                 
                                 // Get line indices from Y positions
                                 int startLineIndex = (int)(startPos.Y / lineHeight);
                                 int endLineIndex = (int)(endPos.Y / lineHeight);
-                                
+
                                 // First line: from start position to end of line
-                                float firstLineWidth = startLineIndex < textLayout.Lines.Count ? textLayout.Lines[startLineIndex].Width : 0;
+                                double firstLineWidth = startLineIndex < textLayout.Lines.Count ? textLayout.Lines[startLineIndex].Width : 0;
                                 
                                 canvas.BeginPath();
                                 canvas.RoundedRect(
@@ -2087,8 +2072,8 @@ namespace Prowl.PaperUI
                                 canvas.RoundedRect(
                                     r.x + startPos.X, 
                                     r.y + startPos.Y, 
-                                    endPos.X - startPos.X, 
-                                    settings.FontSize, 
+                                    endPos.X - startPos.X,
+                                    fontSize, 
                                     2, 2, 2, 2);
                                 canvas.Fill();
                             }
@@ -2104,7 +2089,7 @@ namespace Prowl.PaperUI
                             
                             canvas.BeginPath();
                             canvas.MoveTo(cursorX, cursorY);
-                            canvas.LineTo(cursorX, cursorY + settings.FontSize);
+                            canvas.LineTo(cursorX, cursorY + fontSize);
                             canvas.SetStrokeColor(settings.TextColor);
                             canvas.SetStrokeWidth(1);
                             canvas.Stroke();
@@ -2154,7 +2139,9 @@ namespace Prowl.PaperUI
             else
             {
                 // Single-line horizontal scrolling only
-                var cursorPos = GetCursorPositionFromIndex(state.Value, settings.Font, settings.FontSize, settings.LetterSpacing, state.CursorPosition);
+                var fontSize = (double)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
+                var letterSpacing = (double)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
+                var cursorPos = GetCursorPositionFromIndex(state.Value, settings.Font, fontSize, letterSpacing, state.CursorPosition);
                 
                 double visibleWidth = _handle.Data.LayoutWidth;
                 const double margin = 20.0;
@@ -2165,7 +2152,7 @@ namespace Prowl.PaperUI
                     state.ScrollOffsetX = cursorPos.x - visibleWidth + margin;
 
                 // Clamp horizontal scroll offset for single-line
-                var textSize = _paper.MeasureText(state.Value, CreateTextLayoutSettings(settings, false, float.MaxValue));
+                var textSize = _paper.MeasureText(state.Value, CreateTextLayoutSettings(settings, false, double.MaxValue));
                 state.ClampScrollOffsets(textSize.x, textSize.y, visibleWidth, _handle.Data.LayoutHeight);
             }
         }
@@ -2176,7 +2163,7 @@ namespace Prowl.PaperUI
         private int CalculateTextPosition(string text, TextInputSettings settings, bool isMultiLine, double x, double y = 0)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            var maxWidth = isMultiLine ? _handle.Data.LayoutWidth : float.MaxValue;
+            var maxWidth = isMultiLine ? _handle.Data.LayoutWidth : double.MaxValue;
             var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, maxWidth));
             return textLayout.GetCursorIndex(new Vector2(x, y));
         }
@@ -2184,13 +2171,13 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Calculates the cursor position for a specific character index using TextLayout.
         /// </summary>
-        private Vector2 GetCursorPositionFromIndex(string text, FontFile font, float fontSize, float letterSpacing, int index)
+        private Vector2 GetCursorPositionFromIndex(string text, FontFile font, double fontSize, double letterSpacing, int index)
         {
             if (string.IsNullOrEmpty(text) || index <= 0) return Vector2.zero;
             var settings = TextLayoutSettings.Default;
             settings.Font = font;
-            settings.PixelSize = fontSize;
-            settings.LetterSpacing = letterSpacing;
+            settings.PixelSize = (float)fontSize;
+            settings.LetterSpacing = (float)letterSpacing;
             settings.MaxWidth = float.MaxValue;
             var textLayout = _paper.CreateLayout(text, settings);
             return textLayout.GetCursorPosition(index);

@@ -699,7 +699,7 @@ namespace Prowl.PaperUI
             var keys = _storage.Keys.ToArray();
             foreach (var storedID in keys)
             {
-                if (_createdElements.ContainsKey(storedID))
+                if (_createdElements.Contains(storedID))
                     continue;
 
                 // We didnt create this element this frame, so it no longer exists, delete any storage for it.
