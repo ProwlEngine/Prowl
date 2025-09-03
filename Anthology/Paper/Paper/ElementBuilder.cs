@@ -1335,6 +1335,76 @@ namespace Prowl.PaperUI
         private bool IsShiftPressed() => _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
         private bool IsControlPressed() => _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
 
+        /// <summary>
+        /// Finds the start of the previous word from the current position
+        /// </summary>
+        private int FindPreviousWordStart(string text, int position)
+        {
+            if (string.IsNullOrEmpty(text) || position <= 0) return 0;
+            
+            int pos = Math.Min(position - 1, text.Length - 1);
+            
+            // Skip whitespace
+            while (pos > 0 && char.IsWhiteSpace(text[pos]))
+                pos--;
+            
+            // Skip word characters
+            while (pos > 0 && !char.IsWhiteSpace(text[pos]))
+                pos--;
+            
+            // Move to start of word if we stopped at whitespace
+            if (pos > 0 && char.IsWhiteSpace(text[pos]))
+                pos++;
+                
+            return pos;
+        }
+
+        /// <summary>
+        /// Finds the end of the next word from the current position
+        /// </summary>
+        private int FindNextWordEnd(string text, int position)
+        {
+            if (string.IsNullOrEmpty(text) || position >= text.Length) return text?.Length ?? 0;
+            
+            int pos = position;
+            
+            // Skip whitespace
+            while (pos < text.Length && char.IsWhiteSpace(text[pos]))
+                pos++;
+            
+            // Skip word characters
+            while (pos < text.Length && !char.IsWhiteSpace(text[pos]))
+                pos++;
+                
+            return pos;
+        }
+
+        /// <summary>
+        /// Finds the boundaries of the word at the given position
+        /// </summary>
+        private (int start, int end) FindWordBoundaries(string text, int position)
+        {
+            if (string.IsNullOrEmpty(text) || position < 0 || position >= text.Length)
+                return (position, position);
+            
+            // If we're on whitespace, return the position as both start and end
+            if (char.IsWhiteSpace(text[position]))
+                return (position, position);
+            
+            int start = position;
+            int end = position;
+            
+            // Find start of word
+            while (start > 0 && !char.IsWhiteSpace(text[start - 1]))
+                start--;
+            
+            // Find end of word
+            while (end < text.Length && !char.IsWhiteSpace(text[end]))
+                end++;
+                
+            return (start, end);
+        }
+
         private void MoveCursorVertical(ref TextInputState state, int direction, TextInputSettings settings)
         {
             if (!state.IsMultiLine) return;
@@ -1405,7 +1475,23 @@ namespace Prowl.PaperUI
                     break;
                     
                 case PaperKey.Left:
-                    if (IsShiftPressed())
+                    if (IsControlPressed())
+                    {
+                        // Ctrl+Left: Move to previous word
+                        int newPos = FindPreviousWordStart(state.Value, state.CursorPosition);
+                        if (IsShiftPressed())
+                        {
+                            if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                            state.CursorPosition = newPos;
+                            state.SelectionEnd = state.CursorPosition;
+                        }
+                        else
+                        {
+                            state.CursorPosition = newPos;
+                            state.ClearSelection();
+                        }
+                    }
+                    else if (IsShiftPressed())
                     {
                         if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
                         state.CursorPosition = Math.Max(0, state.CursorPosition - 1);
@@ -1422,7 +1508,23 @@ namespace Prowl.PaperUI
                     break;
                     
                 case PaperKey.Right:
-                    if (IsShiftPressed())
+                    if (IsControlPressed())
+                    {
+                        // Ctrl+Right: Move to next word
+                        int newPos = FindNextWordEnd(state.Value, state.CursorPosition);
+                        if (IsShiftPressed())
+                        {
+                            if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                            state.CursorPosition = newPos;
+                            state.SelectionEnd = state.CursorPosition;
+                        }
+                        else
+                        {
+                            state.CursorPosition = newPos;
+                            state.ClearSelection();
+                        }
+                    }
+                    else if (IsShiftPressed())
                     {
                         if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
                         state.CursorPosition = Math.Min(state.Value.Length, state.CursorPosition + 1);
@@ -1710,18 +1812,58 @@ namespace Prowl.PaperUI
                 SaveTextInputState(currentState);
             });
         
-            // Handle mouse clicks for cursor positioning
-            OnClick((ClickEvent e) =>
+            // Handle mouse clicks for cursor positioning and Shift+Click range selection
+            OnPress((ClickEvent e) =>
             {
                 var currentState = LoadTextInputState(value, isMultiLine);
                 var clickPos = e.RelativePosition.x + currentState.ScrollOffsetX;
                 var clickPosY = isMultiLine ? e.RelativePosition.y + currentState.ScrollOffsetY : 0;
-                currentState.CursorPosition = Math.Clamp(
+                var newPosition = Math.Clamp(
                     CalculateTextPosition(currentState.Value, settings, isMultiLine, clickPos, clickPosY),
                     0, currentState.Value.Length);
-                currentState.ClearSelection();
+
+                if (IsShiftPressed())
+                {
+                    // Shift+Click: Extend or create selection to clicked position
+                    if (currentState.SelectionStart < 0)
+                    {
+                        // Start new selection from current cursor position
+                        currentState.SelectionStart = currentState.CursorPosition;
+                    }
+                    currentState.SelectionEnd = newPosition;
+                    currentState.CursorPosition = newPosition;
+                }
+                else
+                {
+                    // Regular click: Place cursor and clear selection
+                    currentState.CursorPosition = newPosition;
+                    currentState.ClearSelection();
+                }
+                
                 EnsureCursorVisible(ref currentState, settings, isMultiLine);
                 SaveTextInputState(currentState);
+            });
+
+            // Handle double-click for word selection
+            OnDoubleClick((ClickEvent e) =>
+            {
+                var currentState = LoadTextInputState(value, isMultiLine);
+                var clickPos = e.RelativePosition.x + currentState.ScrollOffsetX;
+                var clickPosY = isMultiLine ? e.RelativePosition.y + currentState.ScrollOffsetY : 0;
+                var clickPosition = Math.Clamp(
+                    CalculateTextPosition(currentState.Value, settings, isMultiLine, clickPos, clickPosY),
+                    0, currentState.Value.Length);
+
+                // Select the word at the clicked position
+                var (wordStart, wordEnd) = FindWordBoundaries(currentState.Value, clickPosition);
+                if (wordStart != wordEnd)
+                {
+                    currentState.SelectionStart = wordStart;
+                    currentState.SelectionEnd = wordEnd;
+                    currentState.CursorPosition = wordEnd;
+                    EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                    SaveTextInputState(currentState);
+                }
             });
         
             // Handle dragging for text selection
