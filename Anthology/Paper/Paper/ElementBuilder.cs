@@ -1853,15 +1853,64 @@ namespace Prowl.PaperUI
                             var startPos = textLayout.GetCursorPosition(start);
                             var endPos = textLayout.GetCursorPosition(end);
                             
-                            canvas.BeginPath();
-                            canvas.RoundedRect(
-                                r.x + startPos.X, 
-                                r.y + startPos.Y, 
-                                endPos.X - startPos.X, 
-                                settings.FontSize, 
-                                2, 2, 2, 2);
                             canvas.SetFillColor(Color.FromArgb(100, 100, 150, 255));
-                            canvas.Fill();
+                            
+                            if (isMultiLine && Math.Abs(endPos.Y - startPos.Y) > settings.FontSize / 2)
+                            {
+                                // Multi-line selection: Draw rectangles for each line
+                                float lineHeight = settings.FontSize;
+                                float currentY = startPos.Y;
+                                
+                                // First line: from start position to end of line
+                                canvas.BeginPath();
+                                canvas.RoundedRect(
+                                    r.x + startPos.X,
+                                    r.y + currentY,
+                                    r.width - startPos.X,
+                                    lineHeight,
+                                    2, 2, 2, 2);
+                                canvas.Fill();
+                                
+                                // Middle lines: full width rectangles
+                                currentY += lineHeight;
+                                while (currentY < endPos.Y)
+                                {
+                                    canvas.BeginPath();
+                                    canvas.RoundedRect(
+                                        r.x,
+                                        r.y + currentY,
+                                        r.width,
+                                        lineHeight,
+                                        2, 2, 2, 2);
+                                    canvas.Fill();
+                                    currentY += lineHeight;
+                                }
+                                
+                                // Last line: from start of line to end position
+                                if (endPos.X > 0)
+                                {
+                                    canvas.BeginPath();
+                                    canvas.RoundedRect(
+                                        r.x,
+                                        r.y + endPos.Y,
+                                        endPos.X,
+                                        lineHeight,
+                                        2, 2, 2, 2);
+                                    canvas.Fill();
+                                }
+                            }
+                            else
+                            {
+                                // Single-line selection: Draw one rectangle
+                                canvas.BeginPath();
+                                canvas.RoundedRect(
+                                    r.x + startPos.X, 
+                                    r.y + startPos.Y, 
+                                    endPos.X - startPos.X, 
+                                    settings.FontSize, 
+                                    2, 2, 2, 2);
+                                canvas.Fill();
+                            }
                         }
                         
                         // Draw blinking cursor
