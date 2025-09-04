@@ -1452,7 +1452,10 @@ namespace Prowl.PaperUI
             int newPosition = 0;
             for (int i = 0; i < targetLine; i++)
             {
-                newPosition += lines[i].Length + 1; // +1 for newline
+                newPosition += lines[i].Length;
+                // Only add +1 for newline if this isn't the last line in the original text
+                if (i < lines.Length - 1 || state.Value.EndsWith('\n'))
+                    newPosition += 1;
             }
             newPosition += targetColumn;
             
