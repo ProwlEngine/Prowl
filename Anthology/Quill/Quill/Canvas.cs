@@ -233,7 +233,6 @@ namespace Prowl.Quill
         {
             _drawCalls.Clear();
             _textureStack.Clear();
-            AddDrawCmd();
 
             _indices.Clear();
             _vertices.Clear();
@@ -464,9 +463,6 @@ namespace Prowl.Quill
 
         public void AddVertex(Vertex vertex)
         {
-            if (_drawCalls.Count == 0)
-                return;
-
             if (_globalAlpha != 1.0f)
                 vertex.a = (byte)(vertex.a * _globalAlpha);
 
@@ -487,9 +483,6 @@ namespace Prowl.Quill
         public void AddTriangle(int v1, int v2, int v3) => AddTriangle((uint)v1, (uint)v2, (uint)v3);
         public void AddTriangle(uint v1, uint v2, uint v3)
         {
-            if (_drawCalls.Count == 0)
-                return;
-
             // Add the triangle indices to the list
             _indices.Add(v1);
             _indices.Add(v2);
@@ -501,7 +494,9 @@ namespace Prowl.Quill
         private void AddTriangleCount(int count)
         {
             if (_drawCalls.Count == 0)
-                return;
+            {
+                AddDrawCmd();
+            }
 
             DrawCall lastDrawCall = _drawCalls[_drawCalls.Count - 1];
 
