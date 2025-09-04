@@ -38,6 +38,7 @@ namespace Prowl.Scribe
             float currentX = 0f;
             float currentY = 0f;
             int i = 0;
+            bool hasTrailingNewline = false;
 
             Lines.Clear();
 
@@ -92,6 +93,7 @@ namespace Prowl.Scribe
                     i++;
                     line = new Line(new Vector2(0, currentY), i);
                     lastCodepointForKerning = 0;
+                    hasTrailingNewline = true;
                     continue;
                 }
 
@@ -134,6 +136,9 @@ namespace Prowl.Scribe
                 // Word [i..wordEnd)
                 int wordStart = i;
                 int wordEnd = FindWordEnd(i);
+                
+                // We're processing actual content, so clear the trailing newline flag
+                hasTrailingNewline = false;
 
                 // -------- First pass for the word: measure cheaply (no vmetrics per glyph) --------
                 float wordWidthNoLeadingKerning = 0f;
@@ -247,7 +252,8 @@ namespace Prowl.Scribe
             }
 
             // Finalize last line
-            if (line.Glyphs.Count > 0 || Lines.Count == 0)
+            // Always finalize if: has glyphs, is the first line, or was created by a trailing newline
+            if (line.Glyphs.Count > 0 || Lines.Count == 0 || hasTrailingNewline)
                 FinalizeLine(ref line, currentY, lineHeight, i, currentX);
         }
 
