@@ -31,7 +31,7 @@
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
     <PackageReference Include="Prowl.Vector">
-      <Version>0.5.2</Version>
+      <Version>0.5.3</Version>
     </PackageReference>
   </ItemGroup>
 
@@ -60,7 +60,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Prowl.Scribe" Version="0.7.2" />
+    <PackageReference Include="Prowl.Scribe" Version="0.7.5" />
   </ItemGroup>
 
 </Project>
