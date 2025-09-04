@@ -86,7 +86,7 @@ namespace Prowl.Scribe
                 // Explicit newline
                 if (ch == '\n')
                 {
-                    FinalizeLine(ref line, currentY, lineHeight, i);
+                    FinalizeLine(ref line, currentY, lineHeight, i, currentX);
                     currentX = 0f;
                     currentY += lineHeight;
                     i++;
@@ -117,7 +117,7 @@ namespace Prowl.Scribe
                     if (wrapEnabled && currentX + runAdvance > maxWidth && line.Glyphs.Count > 0)
                     {
                         // wrap before the run
-                        FinalizeLine(ref line, currentY, lineHeight, s);
+                        FinalizeLine(ref line, currentY, lineHeight, s, currentX);
                         currentX = 0f;
                         currentY += lineHeight;
                         line = new Line(new Vector2(0, currentY), i);
@@ -191,7 +191,7 @@ namespace Prowl.Scribe
                     // If current line has content, wrap before placing the word
                     if (line.Glyphs.Count > 0)
                     {
-                        FinalizeLine(ref line, currentY, lineHeight, wordStart);
+                        FinalizeLine(ref line, currentY, lineHeight, wordStart, currentX);
                         currentX = 0f;
                         currentY += lineHeight;
                         line = new Line(new Vector2(0, currentY), wordStart);
@@ -248,7 +248,7 @@ namespace Prowl.Scribe
 
             // Finalize last line
             if (line.Glyphs.Count > 0 || Lines.Count == 0)
-                FinalizeLine(ref line, currentY, lineHeight, i);
+                FinalizeLine(ref line, currentY, lineHeight, i, currentX);
         }
 
         // Split a too-long word across lines, char by char, with minimal overhead.
@@ -291,7 +291,7 @@ namespace Prowl.Scribe
 
                 if (wrapEnabled && line.Glyphs.Count > 0 && currentX + k + adv > maxWidth)
                 {
-                    FinalizeLine(ref line, currentY, lineHeight, i);
+                    FinalizeLine(ref line, currentY, lineHeight, i, currentX);
                     currentX = 0f;
                     currentY += lineHeight;
                     line = new Line(new Vector2(0, currentY), i);
@@ -335,11 +335,13 @@ namespace Prowl.Scribe
             return index;
         }
 
-        private void FinalizeLine(ref Line line, float y, float lineHeight, int endIndex)
+        private void FinalizeLine(ref Line line, float y, float lineHeight, int endIndex, float currentX)
         {
             line.Position = new Vector2(0, y);
             line.Height = lineHeight;
-            line.Width = line.Glyphs.Count > 0 ? line.Glyphs[^1].Position.X + line.Glyphs[^1].AdvanceWidth : 0;
+            // Use the maximum of glyph-based width and currentX to account for trailing whitespace
+            float glyphWidth = line.Glyphs.Count > 0 ? line.Glyphs[^1].Position.X + line.Glyphs[^1].AdvanceWidth : 0;
+            line.Width = Math.Max(glyphWidth, currentX);
             line.EndIndex = endIndex;
             Lines.Add(line);
         }
@@ -399,7 +401,7 @@ namespace Prowl.Scribe
             Size = new Vector2(maxWidth, totalHeight);
         }
 
-        private Line GetLineForIndex(int index)
+        public Line GetLineForIndex(int index)
         {
             if (Lines.Count == 0)
                 return default;
@@ -518,7 +520,24 @@ namespace Prowl.Scribe
                 float spaceWidth = trailingSpaces > 0 ? (line.Width - currentX) / trailingSpaces : 0f;
                 float rel = position.X - currentX;
                 int offset = spaceWidth > 0 ? (int)Math.Clamp(MathF.Round(rel / spaceWidth), 0, trailingSpaces) : 0;
-                return currentIndex + offset;
+                int result = currentIndex + offset;
+                
+                // Special case: if this is the last line and we're hitting at/after the line width,
+                // return the text length to handle trailing special characters properly
+                bool isLastLine = Lines.IndexOf(line) == Lines.Count - 1;
+                if (isLastLine && position.X >= line.Width)
+                {
+                    return Math.Max(result, Text.Length);
+                }
+                
+                return result;
+            }
+
+            // If no trailing spaces but we're past the end of visible content on the last line
+            bool isLastLine2 = Lines.IndexOf(line) == Lines.Count - 1;
+            if (isLastLine2 && position.X >= currentX)
+            {
+                return Text.Length;
             }
 
             return line.EndIndex;

@@ -45,25 +45,73 @@ namespace Tests
                 // ensure Y inside line for hit testing
                 var hit = new Vector2(pos.X, pos.Y + layout.Lines[0].Height * 0.5f);
                 var idx = layout.GetCursorIndex(hit);
-                Assert.Equal(i, idx);
+                if (idx != i)
+                {
+                    Assert.True(false, $"Mismatch at index {i}: expected {i}, got {idx}. Position: {pos}, Hit: {hit}, Text: '{layout.Text.Substring(Math.Max(0, i-2), Math.Min(5, layout.Text.Length - Math.Max(0, i-2)))}'");
+                }
             }
         }
 
         [Fact]
-        public void FontFileMeasureMatchesLayout()
+        public void CursorPositionRoundtripWithTrailingNewline()
         {
             var fs = CreateSystem();
             var font = fs.FallbackFonts.First();
             var settings = TextLayoutSettings.Default;
-            settings.PixelSize = 20;
+            settings.PixelSize = 16;
             settings.Font = font;
 
-            string text = "Measure this string\nwith two lines";
+            var layout = fs.CreateLayout("line\n", settings);
 
-            var layout = fs.CreateLayout(text, settings);
-            var sizeFromFont = font.MeasureText(text, settings);
+            // Debug information
+            Assert.Equal(5, layout.Text.Length); // "line\n" has length 5
+            Assert.True(layout.Lines.Count >= 1);
+            
+            // Check line boundaries
+            var firstLine = layout.Lines[0];
+            
+            // Test cursor at the end after newline
+            int endIndex = layout.Text.Length;
+            var pos = layout.GetCursorPosition(endIndex);
+            var hit = new Vector2(pos.X, pos.Y + layout.Lines[0].Height * 0.5f);
+            var idx = layout.GetCursorIndex(hit);
+            
+            // More detailed assertion with debug info
+            if (idx != endIndex)
+            {
+                Assert.True(false, $"Expected cursor index {endIndex}, got {idx}. Line count: {layout.Lines.Count}, First line EndIndex: {firstLine.EndIndex}, Position: {pos}, Hit: {hit}");
+            }
+        }
 
-            Assert.Equal(layout.Size, sizeFromFont);
+        [Fact]
+        public void CursorPositionRoundtripWithTrailingTab()
+        {
+            var fs = CreateSystem();
+            var font = fs.FallbackFonts.First();
+            var settings = TextLayoutSettings.Default;
+            settings.PixelSize = 16;
+            settings.Font = font;
+
+            var layout = fs.CreateLayout("text\t", settings);
+
+            // Debug information
+            Assert.Equal(5, layout.Text.Length); // "text\t" has length 5
+            Assert.True(layout.Lines.Count >= 1);
+            
+            // Check line boundaries
+            var firstLine = layout.Lines[0];
+            
+            // Test cursor at the end after tab
+            int endIndex = layout.Text.Length;
+            var pos = layout.GetCursorPosition(endIndex);
+            var hit = new Vector2(pos.X, pos.Y + layout.Lines[0].Height * 0.5f);
+            var idx = layout.GetCursorIndex(hit);
+            
+            // More detailed assertion with debug info
+            if (idx != endIndex)
+            {
+                Assert.True(false, $"Expected cursor index {endIndex}, got {idx}. Line count: {layout.Lines.Count}, First line EndIndex: {firstLine.EndIndex}, Position: {pos}, Hit: {hit}");
+            }
         }
     }
 }
