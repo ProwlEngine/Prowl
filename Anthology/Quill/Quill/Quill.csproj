@@ -9,7 +9,7 @@
     <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Quill</PackageProjectUrl>
     <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Quill</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Version>0.6.5</Version>
+    <Version>0.6.6</Version>
     <Title>Prowl.Quill</Title>
     <Authors>Wulferis</Authors>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
