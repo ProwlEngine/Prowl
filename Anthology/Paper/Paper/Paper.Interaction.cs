@@ -146,6 +146,8 @@ namespace Prowl.PaperUI
 
         public bool WantsCapturePointer => _theHoveredElementId != 0 || _activeElementId != 0;
 
+        public bool SkipKeyboardNavigation = false;
+
         #endregion
 
         #region Interaction Processing
@@ -193,6 +195,8 @@ namespace Prowl.PaperUI
 
             // Process keyboard events for focused element
             HandleKeyboardEvents();
+
+            SkipKeyboardNavigation = false; // Reset keyboard navigation skip flag at end of frame
         }
 
         #endregion
@@ -682,7 +686,7 @@ namespace Prowl.PaperUI
         private void HandleKeyboardEvents()
         {
             // Process global navigation keys first (Tab)
-            if (IsKeyPressed(PaperKey.Tab))
+            if (!SkipKeyboardNavigation && IsKeyPressed(PaperKey.Tab))
             {
                 HandleTabNavigation();
                 return; // Don't process other keys when Tab is pressed

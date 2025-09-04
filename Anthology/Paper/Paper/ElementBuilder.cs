@@ -1797,6 +1797,13 @@ namespace Prowl.PaperUI
         {
             Clip();
 
+            if(_paper.IsParentFocused && isMultiLine)
+            {
+                // If a text input field is focused and its a Multi-Line input field, Then Tab navigation is disabled
+                // Since we want tab to actually add the tab character
+                _paper.SkipKeyboardNavigation = true;
+            }
+
             // Initialize state
             var state = LoadTextInputState(value, isMultiLine);
 
