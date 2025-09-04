@@ -512,8 +512,10 @@ namespace Prowl.Quill
 
             if (!isDrawStateSame)
             {
-                // If the texture or scissor state has changed, add a new draw call
-                AddDrawCmd();
+                // If draw state has changed and the last draw call has already been used, add a new draw call
+                if (lastDrawCall.ElementCount != 0)
+                    AddDrawCmd();
+
                 lastDrawCall = _drawCalls[_drawCalls.Count - 1];
                 lastDrawCall.Texture = _state.texture;
                 lastDrawCall.scissor = _state.scissor;
