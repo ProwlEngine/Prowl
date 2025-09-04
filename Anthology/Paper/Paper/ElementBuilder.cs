@@ -1654,20 +1654,20 @@ namespace Prowl.PaperUI
                     break;
 
                 // Seems a bit buggy in scribe so ignoring this for the time being
-                //case PaperKey.Tab:
-                //    if (!settings.ReadOnly)
-                //    {
-                //        if (state.HasSelection) state.DeleteSelection();
-                //        
-                //        // Check max length
-                //        if (settings.MaxLength == 0 || state.Value.Length < settings.MaxLength)
-                //        {
-                //            state.Value = state.Value.Insert(state.CursorPosition, "\t");
-                //            state.CursorPosition++;
-                //            valueChanged = true;
-                //        }
-                //    }
-                //    break;
+                case PaperKey.Tab:
+                    if (!settings.ReadOnly)
+                    {
+                        if (state.HasSelection) state.DeleteSelection();
+                        
+                        // Check max length
+                        if (settings.MaxLength == 0 || state.Value.Length < settings.MaxLength)
+                        {
+                            state.Value = state.Value.Insert(state.CursorPosition, "\t");
+                            state.CursorPosition++;
+                            valueChanged = true;
+                        }
+                    }
+                    break;
                     
                 case PaperKey.Enter when state.IsMultiLine:
                     if (state.HasSelection) state.DeleteSelection();
