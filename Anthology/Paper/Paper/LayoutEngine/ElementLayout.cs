@@ -88,6 +88,37 @@ namespace Prowl.PaperUI.LayoutEngine
             }
         }
 
+        // CHANGE 05/09/2025: New method that handles both ContentSizing and text processing
+        // This ensures both min constraints and auto sizing consider all content types
+        private static (double, double)? GetContentSize(ElementHandle elementHandle, LayoutType parentLayoutType, double? parentMain, double? parentCross)
+        {
+            ref var element = ref elementHandle.Data;
+
+            // 1) Try ContentSizer if defined
+            var contentSize = ContentSizing(elementHandle, parentLayoutType, parentMain, parentCross);
+
+            // 2) Otherwise, try text processing
+            if (!contentSize.HasValue && !string.IsNullOrEmpty(element.Paragraph))
+            {
+                // Available width = parent's main, respecting constraints
+                double availableWidth = parentLayoutType == LayoutType.Row
+                    ? (parentMain ?? double.MaxValue)
+                    : (parentCross ?? double.MaxValue);
+
+                var textSize = element.ProcessText(elementHandle.Owner, (float)availableWidth);
+
+                if (textSize.x > 0 || textSize.y > 0)
+                {
+                    if (parentLayoutType == LayoutType.Row)
+                        contentSize = (textSize.x, textSize.y);
+                    else
+                        contentSize = (textSize.y, textSize.x);
+                }
+            }
+
+            return contentSize;
+        }
+
         private static UISize DoLayout(ElementHandle elementHandle, LayoutType parentLayoutType, double parentMain, double parentCross)
         {
             ref var element = ref elementHandle.Data;
@@ -211,27 +242,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 double? pMain = main.IsAuto ? null : (double?)computedMain;
                 double? pCross = cross.IsAuto ? null : (double?)computedCross;
 
-                // 1) Try ContentSizer if defined
-                var contentSize = ContentSizing(elementHandle, parentLayoutType, pMain, pCross);
-
-                // 2) Otherwise, try text processing
-                if (!contentSize.HasValue && !string.IsNullOrEmpty(element.Paragraph))
-                {
-                    // Available width = parent's main, respecting constraints
-                    double availableWidth = parentLayoutType == LayoutType.Row
-                        ? (pMain ?? parentMain)
-                        : (pCross ?? parentCross);
-
-                    var textSize = element.ProcessText(elementHandle.Owner, (float)availableWidth);
-
-                    if (textSize.x > 0 || textSize.y > 0)
-                    {
-                        if (parentLayoutType == LayoutType.Row)
-                            contentSize = (textSize.x, textSize.y);
-                        else
-                            contentSize = (textSize.y, textSize.x);
-                    }
-                }
+                var contentSize = GetContentSize(elementHandle, parentLayoutType, pMain, pCross);
 
                 if (contentSize.HasValue)
                 {
@@ -240,13 +251,15 @@ namespace Prowl.PaperUI.LayoutEngine
                 }
             }
 
+            // CHANGE 05/09/2025: Fixed min constraint calculation to include both ContentSizing and text processing
+            // OLD CODE: Only used ContentSizing, missing text content for min size calculations
             if ((GetMinMain(ref element, parentLayoutType).IsAuto || GetMinCross(ref element, parentLayoutType).IsAuto)
                 && numParentDirectedChildren == 0)
             {
                 double? pMain = GetMinMain(ref element, parentLayoutType).IsAuto ? null : (double?)computedMain;
                 double? pCross = GetMinCross(ref element, parentLayoutType).IsAuto ? null : (double?)computedCross;
 
-                var contentSize = ContentSizing(elementHandle, parentLayoutType, pMain, pCross);
+                var contentSize = GetContentSize(elementHandle, parentLayoutType, pMain, pCross);
                 if (contentSize.HasValue)
                 {
                     minMain = contentSize.Value.Item1;
