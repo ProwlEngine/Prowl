@@ -1,5 +1,6 @@
 ﻿using System.Drawing;
 
+using Prowl.Paper.Utilities;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Scribe;
 using Prowl.Vector;
@@ -626,12 +627,17 @@ namespace Prowl.PaperUI
         /// </summary>
         private Color InterpolateColor(Color start, Color end, double t)
         {
-            int r = (int)(start.R + (end.R - start.R) * t);
-            int g = (int)(start.G + (end.G - start.G) * t);
-            int b = (int)(start.B + (end.B - start.B) * t);
-            int a = (int)(start.A + (end.A - start.A) * t);
+            // If start is fully transparent, replace its RGB with end's RGB
+            if (start.A == 0)
+                start = Color.FromArgb(0, end.R, end.G, end.B);
 
-            return Color.FromArgb(a, r, g, b);
+            // If end is fully transparent, replace its RGB with start's RGB
+            if (end.A == 0)
+                end = Color.FromArgb(0, start.R, start.G, start.B);
+
+            var a = HSV.FromColor(start);
+            var b = HSV.FromColor(end);
+            return HSV.Lerp(a, b, t).ToColor();
         }
 
         /// <summary>
