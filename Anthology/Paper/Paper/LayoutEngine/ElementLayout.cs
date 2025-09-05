@@ -1288,7 +1288,7 @@ namespace Prowl.PaperUI.LayoutEngine
 
         internal static Vector2 ProcessText(this ref ElementData element, Paper gui, float availableWidth)
         {
-            if (element.ProcessedText) return Vector2.zero;
+            //if (element.ProcessedText) return Vector2.zero;
 
             if (string.IsNullOrWhiteSpace(element.Paragraph)) return Vector2.zero;
 

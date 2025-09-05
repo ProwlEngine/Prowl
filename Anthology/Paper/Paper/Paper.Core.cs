@@ -420,7 +420,7 @@ namespace Prowl.PaperUI
         {
             if (string.IsNullOrWhiteSpace(handle.Data.Paragraph)) return;
 
-            if (!handle.Data.ProcessedText)
+            //if (!handle.Data.ProcessedText)
                 handle.Data.ProcessText(this, availableWidth);
 
             Canvas canvas = handle.Owner?.Canvas ?? throw new InvalidOperationException("Owner paper or canvas is not set.");
