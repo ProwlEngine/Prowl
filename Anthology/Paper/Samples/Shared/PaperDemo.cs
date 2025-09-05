@@ -1,6 +1,7 @@
 ﻿using System.Drawing;
 
 using Prowl.PaperUI;
+using Prowl.PaperUI.Themes.Origami;
 using Prowl.Vector;
 
 // using Shared.Components;
@@ -999,8 +1000,11 @@ namespace Shared
 
         private static void RenderSettingsTab()
         {
+            OrigamiExample.ShowExample(Gui, Fonts.arial);
+
             //TextArea.Secondary("SearchTextField", searchText, newValue => searchText = newValue, "Search...")
             //    .Margin(0, 15, 15, 0);
+            return;
 
             using (Gui.Row("SettingsContent")
                 .Margin(0, 0, 15, 0)
