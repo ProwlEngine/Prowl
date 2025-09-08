@@ -182,6 +182,7 @@ namespace Prowl.Quill
         internal Vector2 CurrentPointInternal => _currentSubPath.Points[_currentSubPath.Points.Count - 1];
         internal ICanvasRenderer _renderer;
 
+        internal bool _isNewDrawCallRequested = false;
         internal List<DrawCall> _drawCalls = new List<DrawCall>();
         internal Stack<object> _textureStack = new Stack<object>();
 
@@ -459,7 +460,13 @@ namespace Prowl.Quill
 
         #region Draw Calls
 
-        public void AddDrawCmd() => _drawCalls.Add(new DrawCall());
+        /// <summary>
+        /// Ensure that future commands are not batched as part of any existing draw call.
+        /// </summary>
+        public void RequestNewDrawCall()
+        {
+            _isNewDrawCallRequested = true;
+        }
 
         public void AddVertex(Vertex vertex)
         {
@@ -495,7 +502,7 @@ namespace Prowl.Quill
         {
             if (_drawCalls.Count == 0)
             {
-                AddDrawCmd();
+                _drawCalls.Add(new DrawCall());
             }
 
             DrawCall lastDrawCall = _drawCalls[_drawCalls.Count - 1];
@@ -505,17 +512,19 @@ namespace Prowl.Quill
                 lastDrawCall.scissor == _state.scissor &&
                 lastDrawCall.Brush.EqualsOther(_state.brush);
 
-            if (!isDrawStateSame)
+            if (!isDrawStateSame || _isNewDrawCallRequested)
             {
                 // If draw state has changed and the last draw call has already been used, add a new draw call
                 if (lastDrawCall.ElementCount != 0)
-                    AddDrawCmd();
+                    _drawCalls.Add(new DrawCall());
 
                 lastDrawCall = _drawCalls[_drawCalls.Count - 1];
                 lastDrawCall.Texture = _state.texture;
                 lastDrawCall.scissor = _state.scissor;
                 lastDrawCall.scissorExtent = _state.scissorExtent;
                 lastDrawCall.Brush = _state.brush;
+
+                _isNewDrawCallRequested = false;
             }
 
             lastDrawCall.ElementCount += count * 3;
