@@ -123,7 +123,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         public {{TYPE_PREFIX}}3 ClosestPointTo({{TYPE_PREFIX}}3 point)
         {
             {{TYPE_PREFIX}}3 closestPoint;
-            Intersection{{TYPE_PREFIX}}.ClosestPointOnLineSegmentToPoint(Start, End, point, out closestPoint);
+            Intersection{{TEMPLATE_SUFFIX}}.ClosestPointOnLineSegmentToPoint(Start, End, point, out closestPoint);
             return closestPoint;
         }
 
@@ -153,7 +153,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public {{TYPE}} GetSqrDistanceToPoint({{TYPE_PREFIX}}3 point)
         {
-            return Intersection{{TYPE_PREFIX}}.DistanceSqPointToLineSegment(Start, End, point);
+            return Intersection{{TEMPLATE_SUFFIX}}.DistanceSqPointToLineSegment(Start, End, point);
         }
 
         /// <summary>
@@ -186,9 +186,9 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <param name="intersectionPoint">The intersection point if found.</param>
         /// <returns>True if intersection occurs within the segment.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool IntersectsPlane(Plane{{TYPE_PREFIX}} plane, out {{TYPE_PREFIX}}3 intersectionPoint)
+        public bool IntersectsPlane(Plane{{TEMPLATE_SUFFIX}} plane, out {{TYPE_PREFIX}}3 intersectionPoint)
         {
-            return Intersection{{TYPE_PREFIX}}.LineSegmentPlane(Start, End, plane.Normal, plane.D, out intersectionPoint);
+            return Intersection{{TEMPLATE_SUFFIX}}.LineSegmentPlane(Start, End, plane.Normal, plane.D, out intersectionPoint);
         }
 
         /// <summary>
@@ -202,7 +202,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void GetClosestPoints({{CLASS_NAME}} other, out {{TYPE_PREFIX}}3 point1, out {{TYPE_PREFIX}}3 point2, out {{TYPE}} t1, out {{TYPE}} t2)
         {
-            Intersection{{TYPE_PREFIX}}.ClosestPointsLineSegmentLineSegment(Start, End, other.Start, other.End, out point1, out point2, out t1, out t2);
+            Intersection{{TEMPLATE_SUFFIX}}.ClosestPointsLineSegmentLineSegment(Start, End, other.Start, other.End, out point1, out point2, out t1, out t2);
         }
 
         /// <summary>
@@ -213,7 +213,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public {{TYPE}} GetSqrDistanceToSegment({{CLASS_NAME}} other)
         {
-            return Intersection{{TYPE_PREFIX}}.DistanceSqSegmentSegment(Start, End, other.Start, other.End);
+            return Intersection{{TEMPLATE_SUFFIX}}.DistanceSqSegmentSegment(Start, End, other.Start, other.End);
         }
 
         /// <summary>
@@ -323,7 +323,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <param name="length">The length of the segment.</param>
         /// <returns>A line segment starting at the ray origin.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static {{CLASS_NAME}} FromRay(Ray{{TYPE_PREFIX}} ray, {{TYPE}} length)
+        public static {{CLASS_NAME}} FromRay(Ray{{TEMPLATE_SUFFIX}} ray, {{TYPE}} length)
         {
             return new {{CLASS_NAME}}(ray.Origin, ray.Origin + ray.Direction * length);
         }

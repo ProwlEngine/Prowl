@@ -112,7 +112,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Intersects({{CLASS_NAME}} other)
         {
-            return Intersection{{TYPE_PREFIX}}.SphereSphereOverlap(Center, Radius, other.Center, other.Radius);
+            return Intersection{{TEMPLATE_SUFFIX}}.SphereSphereOverlap(Center, Radius, other.Center, other.Radius);
         }
 
         /// <summary>
@@ -121,9 +121,9 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <param name="aabb">The AABB to test.</param>
         /// <returns>True if the sphere intersects the AABB.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Intersects(AABB{{TYPE_PREFIX}} aabb)
+        public bool Intersects(AABB{{TEMPLATE_SUFFIX}} aabb)
         {
-            return Intersection{{TYPE_PREFIX}}.SphereAABBOverlap(Center, Radius, aabb.Min, aabb.Max);
+            return Intersection{{TEMPLATE_SUFFIX}}.SphereAABBOverlap(Center, Radius, aabb.Min, aabb.Max);
         }
 
         /// <summary>
@@ -158,7 +158,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         public {{TYPE_PREFIX}}3 ClosestPointTo({{TYPE_PREFIX}}3 point)
         {
             {{TYPE_PREFIX}}3 closestPoint;
-            Intersection{{TYPE_PREFIX}}.ClosestPointOnSphereToPoint(point, Center, Radius, out closestPoint);
+            Intersection{{TEMPLATE_SUFFIX}}.ClosestPointOnSphereToPoint(point, Center, Radius, out closestPoint);
             return closestPoint;
         }
 

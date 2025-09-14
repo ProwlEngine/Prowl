@@ -141,7 +141,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             IsClosed = closed;
             Tension = {{ZERO}};
             CustomUpVectors = null;
-            WorldUpVector = Double3.UnitY;
+            WorldUpVector = {{TYPE_PREFIX}}3.UnitY;
 
             if (controlPoints.Length != tangents.Length)
                 throw new ArgumentException("Control points and tangents arrays must have the same length.");
@@ -1272,10 +1272,10 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
        /// </summary>
        /// <param name="subdivisions">Number of subdivisions for accurate bounds calculation.</param>
        /// <returns>The axis-aligned bounding box containing the spline.</returns>
-       public AABB{{TYPE_PREFIX}} GetBounds(int subdivisions = 100)
+       public AABB{{TEMPLATE_SUFFIX}} GetBounds(int subdivisions = 100)
        {
            if (ControlPoints == null || ControlPoints.Length == 0)
-               return new AABB{{TYPE_PREFIX}}({{TYPE_PREFIX}}3.Zero, {{TYPE_PREFIX}}3.Zero);
+               return new AABB{{TEMPLATE_SUFFIX}}({{TYPE_PREFIX}}3.Zero, {{TYPE_PREFIX}}3.Zero);
 
            {{TYPE_PREFIX}}3 min = ControlPoints[0];
            {{TYPE_PREFIX}}3 max = ControlPoints[0];
@@ -1313,7 +1313,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                );
            }
 
-           return new AABB{{TYPE_PREFIX}}(min, max);
+           return new AABB{{TEMPLATE_SUFFIX}}(min, max);
        }
 
        #endregion

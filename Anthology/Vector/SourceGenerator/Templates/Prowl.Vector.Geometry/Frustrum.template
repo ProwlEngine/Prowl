@@ -15,19 +15,19 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
     public struct {{CLASS_NAME}} : IEquatable<{{CLASS_NAME}}>, IFormattable
     {
         /// <summary>The 6 frustum planes: Near, Far, Left, Right, Top, Bottom.</summary>
-        public Plane{{TYPE_PREFIX}}[] Planes;
+        public Plane{{TEMPLATE_SUFFIX}}[] Planes;
 
         /// <summary>
         /// Initializes a new frustum with the specified planes.
         /// </summary>
         /// <param name="planes">Array of 6 planes in order: Near, Far, Left, Right, Top, Bottom.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public {{CLASS_NAME}}(Plane{{TYPE_PREFIX}}[] planes)
+        public {{CLASS_NAME}}(Plane{{TEMPLATE_SUFFIX}}[] planes)
         {
             if (planes == null || planes.Length != 6)
                 throw new ArgumentException("Frustum requires exactly 6 planes", nameof(planes));
             
-            Planes = new Plane{{TYPE_PREFIX}}[6];
+            Planes = new Plane{{TEMPLATE_SUFFIX}}[6];
             Array.Copy(planes, Planes, 6);
         }
 
@@ -41,14 +41,14 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <param name="top">Top plane.</param>
         /// <param name="bottom">Bottom plane.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public {{CLASS_NAME}}(Plane{{TYPE_PREFIX}} near, Plane{{TYPE_PREFIX}} far, Plane{{TYPE_PREFIX}} left, 
-                             Plane{{TYPE_PREFIX}} right, Plane{{TYPE_PREFIX}} top, Plane{{TYPE_PREFIX}} bottom)
+        public {{CLASS_NAME}}(Plane{{TEMPLATE_SUFFIX}} near, Plane{{TEMPLATE_SUFFIX}} far, Plane{{TEMPLATE_SUFFIX}} left, 
+                             Plane{{TEMPLATE_SUFFIX}} right, Plane{{TEMPLATE_SUFFIX}} top, Plane{{TEMPLATE_SUFFIX}} bottom)
         {
-            Planes = new Plane{{TYPE_PREFIX}}[6] { near, far, left, right, top, bottom };
+            Planes = new Plane{{TEMPLATE_SUFFIX}}[6] { near, far, left, right, top, bottom };
         }
 
         /// <summary>Gets or sets the near plane.</summary>
-        public Plane{{TYPE_PREFIX}} Near
+        public Plane{{TEMPLATE_SUFFIX}} Near
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => Planes[0];
@@ -57,7 +57,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         }
 
         /// <summary>Gets or sets the far plane.</summary>
-        public Plane{{TYPE_PREFIX}} Far
+        public Plane{{TEMPLATE_SUFFIX}} Far
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => Planes[1];
@@ -66,7 +66,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         }
 
         /// <summary>Gets or sets the left plane.</summary>
-        public Plane{{TYPE_PREFIX}} Left
+        public Plane{{TEMPLATE_SUFFIX}} Left
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => Planes[2];
@@ -75,7 +75,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         }
 
         /// <summary>Gets or sets the right plane.</summary>
-        public Plane{{TYPE_PREFIX}} Right
+        public Plane{{TEMPLATE_SUFFIX}} Right
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => Planes[3];
@@ -84,7 +84,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         }
 
         /// <summary>Gets or sets the top plane.</summary>
-        public Plane{{TYPE_PREFIX}} Top
+        public Plane{{TEMPLATE_SUFFIX}} Top
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => Planes[4];
@@ -93,7 +93,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         }
 
         /// <summary>Gets or sets the bottom plane.</summary>
-        public Plane{{TYPE_PREFIX}} Bottom
+        public Plane{{TEMPLATE_SUFFIX}} Bottom
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => Planes[5];
@@ -109,7 +109,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <returns>The extracted frustum.</returns>
         public static {{CLASS_NAME}} FromMatrix({{TYPE_PREFIX}}4x4 viewProjectionMatrix)
         {
-            var planes = new Plane{{TYPE_PREFIX}}[6];
+            var planes = new Plane{{TEMPLATE_SUFFIX}}[6];
             
             // Extract planes from matrix (Gribb/Hartmann method)
             // Left plane
@@ -119,7 +119,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                 viewProjectionMatrix.c3.Z + viewProjectionMatrix.c0.Z
             );
             {{TYPE}} leftD = viewProjectionMatrix.c3.W + viewProjectionMatrix.c0.W;
-            planes[2] = new Plane{{TYPE_PREFIX}}(leftNormal, leftD);
+            planes[2] = new Plane{{TEMPLATE_SUFFIX}}(leftNormal, leftD);
 
             // Right plane
             {{TYPE_PREFIX}}3 rightNormal = new {{TYPE_PREFIX}}3(
@@ -128,7 +128,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                 viewProjectionMatrix.c3.Z - viewProjectionMatrix.c0.Z
             );
             {{TYPE}} rightD = viewProjectionMatrix.c3.W - viewProjectionMatrix.c0.W;
-            planes[3] = new Plane{{TYPE_PREFIX}}(rightNormal, rightD);
+            planes[3] = new Plane{{TEMPLATE_SUFFIX}}(rightNormal, rightD);
 
             // Bottom plane
             {{TYPE_PREFIX}}3 bottomNormal = new {{TYPE_PREFIX}}3(
@@ -137,7 +137,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                 viewProjectionMatrix.c3.Z + viewProjectionMatrix.c1.Z
             );
             {{TYPE}} bottomD = viewProjectionMatrix.c3.W + viewProjectionMatrix.c1.W;
-            planes[5] = new Plane{{TYPE_PREFIX}}(bottomNormal, bottomD);
+            planes[5] = new Plane{{TEMPLATE_SUFFIX}}(bottomNormal, bottomD);
 
             // Top plane
             {{TYPE_PREFIX}}3 topNormal = new {{TYPE_PREFIX}}3(
@@ -146,7 +146,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                 viewProjectionMatrix.c3.Z - viewProjectionMatrix.c1.Z
             );
             {{TYPE}} topD = viewProjectionMatrix.c3.W - viewProjectionMatrix.c1.W;
-            planes[4] = new Plane{{TYPE_PREFIX}}(topNormal, topD);
+            planes[4] = new Plane{{TEMPLATE_SUFFIX}}(topNormal, topD);
 
             // Near plane
             {{TYPE_PREFIX}}3 nearNormal = new {{TYPE_PREFIX}}3(
@@ -155,7 +155,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                 viewProjectionMatrix.c2.Z
             );
             {{TYPE}} nearD = viewProjectionMatrix.c2.W;
-            planes[0] = new Plane{{TYPE_PREFIX}}(nearNormal, nearD);
+            planes[0] = new Plane{{TEMPLATE_SUFFIX}}(nearNormal, nearD);
 
             // Far plane
             {{TYPE_PREFIX}}3 farNormal = new {{TYPE_PREFIX}}3(
@@ -164,7 +164,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                 viewProjectionMatrix.c3.Z - viewProjectionMatrix.c2.Z
             );
             {{TYPE}} farD = viewProjectionMatrix.c3.W - viewProjectionMatrix.c2.W;
-            planes[1] = new Plane{{TYPE_PREFIX}}(farNormal, farD);
+            planes[1] = new Plane{{TEMPLATE_SUFFIX}}(farNormal, farD);
 
             return new {{CLASS_NAME}}(planes);
         }
@@ -199,7 +199,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                 ds[i] = Planes[i].D;
             }
             
-            return Intersection{{TYPE_PREFIX}}.FrustumContainsPoint(normals, ds, point);
+            return Intersection{{TEMPLATE_SUFFIX}}.FrustumContainsPoint(normals, ds, point);
         }
 
         /// <summary>
@@ -208,7 +208,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <param name="sphere">The sphere to test.</param>
         /// <returns>True if the sphere intersects the frustum.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Intersects(Sphere{{TYPE_PREFIX}} sphere)
+        public bool Intersects(Sphere{{TEMPLATE_SUFFIX}} sphere)
         {
             {{TYPE_PREFIX}}3[] normals = new {{TYPE_PREFIX}}3[6];
             {{TYPE}}[] ds = new {{TYPE}}[6];
@@ -219,7 +219,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                 ds[i] = Planes[i].D;
             }
             
-            return Intersection{{TYPE_PREFIX}}.FrustumIntersectsSphere(normals, ds, sphere.Center, sphere.Radius);
+            return Intersection{{TEMPLATE_SUFFIX}}.FrustumIntersectsSphere(normals, ds, sphere.Center, sphere.Radius);
         }
 
         /// <summary>
@@ -228,7 +228,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <param name="aabb">The AABB to test.</param>
         /// <returns>True if the AABB intersects the frustum.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Intersects(AABB{{TYPE_PREFIX}} aabb)
+        public bool Intersects(AABB{{TEMPLATE_SUFFIX}} aabb)
         {
             {{TYPE_PREFIX}}3[] normals = new {{TYPE_PREFIX}}3[6];
             {{TYPE}}[] ds = new {{TYPE}}[6];
@@ -239,7 +239,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                 ds[i] = Planes[i].D;
             }
             
-            return Intersection{{TYPE_PREFIX}}.FrustumIntersectsAABB(normals, ds, aabb.Min, aabb.Max);
+            return Intersection{{TEMPLATE_SUFFIX}}.FrustumIntersectsAABB(normals, ds, aabb.Min, aabb.Max);
         }
 
         /// <summary>
@@ -249,7 +249,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <returns>The transformed frustum.</returns>
         public {{CLASS_NAME}} Transform({{TYPE_PREFIX}}4x4 matrix)
         {
-            var transformedPlanes = new Plane{{TYPE_PREFIX}}[6];
+            var transformedPlanes = new Plane{{TEMPLATE_SUFFIX}}[6];
             
             // Transform each plane by the inverse transpose of the matrix
             {{TYPE_PREFIX}}4x4 invTranspose = Maths.Transpose(Maths.Inverse(matrix));
@@ -258,7 +258,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             {
                 {{TYPE_PREFIX}}4 planeVec = new {{TYPE_PREFIX}}4(Planes[i].Normal, Planes[i].D);
                 {{TYPE_PREFIX}}4 transformedPlaneVec = Maths.Mul(invTranspose, planeVec);
-                transformedPlanes[i] = new Plane{{TYPE_PREFIX}}(transformedPlaneVec.XYZ, transformedPlaneVec.W);
+                transformedPlanes[i] = new Plane{{TEMPLATE_SUFFIX}}(transformedPlaneVec.XYZ, transformedPlaneVec.W);
             }
             
             return new {{CLASS_NAME}}(transformedPlanes);
@@ -274,7 +274,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
                 {{TYPE}} length = Maths.Length(Planes[i].Normal);
                 if (length > {{EPSILON}})
                 {
-                    Planes[i] = new Plane{{TYPE_PREFIX}}(
+                    Planes[i] = new Plane{{TEMPLATE_SUFFIX}}(
                         Planes[i].Normal / length,
                         Planes[i].D / length
                     );
@@ -317,7 +317,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// </summary>
         /// <param name="sphere">The sphere to classify.</param>
         /// <returns>Number of planes the sphere is completely behind.</returns>
-        public int ClassifySphere(Sphere{{TYPE_PREFIX}} sphere)
+        public int ClassifySphere(Sphere{{TEMPLATE_SUFFIX}} sphere)
         {
             int planesOutside = 0;
             for (int i = 0; i < 6; i++)
@@ -336,13 +336,13 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// </summary>
         /// <param name="aabb">The AABB to classify.</param>
         /// <returns>Number of planes the AABB is completely behind.</returns>
-        public int ClassifyAABB(AABB{{TYPE_PREFIX}} aabb)
+        public int ClassifyAABB(AABB{{TEMPLATE_SUFFIX}} aabb)
         {
             int planesOutside = 0;
             for (int i = 0; i < 6; i++)
             {
-                var classification = Intersection{{TYPE_PREFIX}}.ClassifyAABBToPlane(aabb.Min, aabb.Max, Planes[i].Normal, Planes[i].D);
-                if (classification == Intersection{{TYPE_PREFIX}}.PlaneIntersectionType.Back)
+                var classification = Intersection{{TEMPLATE_SUFFIX}}.ClassifyAABBToPlane(aabb.Min, aabb.Max, Planes[i].Normal, Planes[i].D);
+                if (classification == Intersection{{TEMPLATE_SUFFIX}}.PlaneIntersectionType.Back)
                 {
                     planesOutside++;
                 }
@@ -395,8 +395,8 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             {{TYPE_PREFIX}}3 farCenter = position + forward * farDist;
             
             // Near and far planes
-            Plane{{TYPE_PREFIX}} near = new Plane{{TYPE_PREFIX}}(forward, Maths.Dot(forward, nearCenter));
-            Plane{{TYPE_PREFIX}} far = new Plane{{TYPE_PREFIX}}(-forward, Maths.Dot(-forward, farCenter));
+            Plane{{TEMPLATE_SUFFIX}} near = new Plane{{TEMPLATE_SUFFIX}}(forward, Maths.Dot(forward, nearCenter));
+            Plane{{TEMPLATE_SUFFIX}} far = new Plane{{TEMPLATE_SUFFIX}}(-forward, Maths.Dot(-forward, farCenter));
             
             // Side planes
             {{TYPE_PREFIX}}3 leftNormal = Maths.Normalize(Maths.Cross(actualUp, forward + right * tanHalfFovX));
@@ -404,10 +404,10 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             {{TYPE_PREFIX}}3 topNormal = Maths.Normalize(Maths.Cross(right, forward + actualUp * tanHalfFovY));
             {{TYPE_PREFIX}}3 bottomNormal = Maths.Normalize(Maths.Cross(forward - actualUp * tanHalfFovY, right));
             
-            Plane{{TYPE_PREFIX}} p_left = new Plane{{TYPE_PREFIX}}(leftNormal, Maths.Dot(leftNormal, position));
-            Plane{{TYPE_PREFIX}} p_right = new Plane{{TYPE_PREFIX}}(rightNormal, Maths.Dot(rightNormal, position));
-            Plane{{TYPE_PREFIX}} p_top = new Plane{{TYPE_PREFIX}}(topNormal, Maths.Dot(topNormal, position));
-            Plane{{TYPE_PREFIX}} p_bottom = new Plane{{TYPE_PREFIX}}(bottomNormal, Maths.Dot(bottomNormal, position));
+            Plane{{TEMPLATE_SUFFIX}} p_left = new Plane{{TEMPLATE_SUFFIX}}(leftNormal, Maths.Dot(leftNormal, position));
+            Plane{{TEMPLATE_SUFFIX}} p_right = new Plane{{TEMPLATE_SUFFIX}}(rightNormal, Maths.Dot(rightNormal, position));
+            Plane{{TEMPLATE_SUFFIX}} p_top = new Plane{{TEMPLATE_SUFFIX}}(topNormal, Maths.Dot(topNormal, position));
+            Plane{{TEMPLATE_SUFFIX}} p_bottom = new Plane{{TEMPLATE_SUFFIX}}(bottomNormal, Maths.Dot(bottomNormal, position));
             
             return new {{CLASS_NAME}}(near, far, p_left, p_right, p_top, p_bottom);
         }
@@ -425,17 +425,17 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         public static {{CLASS_NAME}} CreateOrthographic({{TYPE}} left, {{TYPE}} right, {{TYPE}} bottom, 
                                                         {{TYPE}} top, {{TYPE}} nearDist, {{TYPE}} farDist)
         {
-            var planes = new Plane{{TYPE_PREFIX}}[6];
+            var planes = new Plane{{TEMPLATE_SUFFIX}}[6];
             
             // Near and far planes (assuming Z forward)
-            planes[0] = new Plane{{TYPE_PREFIX}}(new {{TYPE_PREFIX}}3({{ZERO}}, {{ZERO}}, {{ONE}}), nearDist);
-            planes[1] = new Plane{{TYPE_PREFIX}}(new {{TYPE_PREFIX}}3({{ZERO}}, {{ZERO}}, -{{ONE}}), -farDist);
+            planes[0] = new Plane{{TEMPLATE_SUFFIX}}(new {{TYPE_PREFIX}}3({{ZERO}}, {{ZERO}}, {{ONE}}), nearDist);
+            planes[1] = new Plane{{TEMPLATE_SUFFIX}}(new {{TYPE_PREFIX}}3({{ZERO}}, {{ZERO}}, -{{ONE}}), -farDist);
             
             // Side planes
-            planes[2] = new Plane{{TYPE_PREFIX}}(new {{TYPE_PREFIX}}3({{ONE}}, {{ZERO}}, {{ZERO}}), -left);    // Left
-            planes[3] = new Plane{{TYPE_PREFIX}}(new {{TYPE_PREFIX}}3(-{{ONE}}, {{ZERO}}, {{ZERO}}), right);   // Right
-            planes[4] = new Plane{{TYPE_PREFIX}}(new {{TYPE_PREFIX}}3({{ZERO}}, -{{ONE}}, {{ZERO}}), top);     // Top
-            planes[5] = new Plane{{TYPE_PREFIX}}(new {{TYPE_PREFIX}}3({{ZERO}}, {{ONE}}, {{ZERO}}), -bottom);  // Bottom
+            planes[2] = new Plane{{TEMPLATE_SUFFIX}}(new {{TYPE_PREFIX}}3({{ONE}}, {{ZERO}}, {{ZERO}}), -left);    // Left
+            planes[3] = new Plane{{TEMPLATE_SUFFIX}}(new {{TYPE_PREFIX}}3(-{{ONE}}, {{ZERO}}, {{ZERO}}), right);   // Right
+            planes[4] = new Plane{{TEMPLATE_SUFFIX}}(new {{TYPE_PREFIX}}3({{ZERO}}, -{{ONE}}, {{ZERO}}), top);     // Top
+            planes[5] = new Plane{{TEMPLATE_SUFFIX}}(new {{TYPE_PREFIX}}3({{ZERO}}, {{ONE}}, {{ZERO}}), -bottom);  // Bottom
             
             return new {{CLASS_NAME}}(planes);
         }
@@ -448,7 +448,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         {
             for (int i = 0; i < 6; i++)
             {
-                Planes[i] = new Plane{{TYPE_PREFIX}}(Planes[i].Normal, Planes[i].D - amount);
+                Planes[i] = new Plane{{TEMPLATE_SUFFIX}}(Planes[i].Normal, Planes[i].D - amount);
             }
         }
         

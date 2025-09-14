@@ -194,7 +194,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Intersects({{CLASS_NAME}} other)
         {
-            return Intersection{{TYPE_PREFIX}}.AABBAABBOverlap(Min, Max, other.Min, other.Max);
+            return Intersection{{TEMPLATE_SUFFIX}}.AABBAABBOverlap(Min, Max, other.Min, other.Max);
         }
 
         /// <summary>
@@ -203,9 +203,9 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// <param name="sphere">The sphere to test.</param>
         /// <returns>True if the AABB intersects the sphere.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Intersects(Sphere{{TYPE_PREFIX}} sphere)
+        public bool Intersects(Sphere{{TEMPLATE_SUFFIX}} sphere)
         {
-            return Intersection{{TYPE_PREFIX}}.SphereAABBOverlap(sphere.Center, sphere.Radius, Min, Max);
+            return Intersection{{TEMPLATE_SUFFIX}}.SphereAABBOverlap(sphere.Center, sphere.Radius, Min, Max);
         }
 
         /// <summary>
@@ -217,7 +217,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         public {{TYPE_PREFIX}}3 ClosestPointTo({{TYPE_PREFIX}}3 point)
         {
             {{TYPE_PREFIX}}3 closestPoint;
-            Intersection{{TYPE_PREFIX}}.ClosestPointOnAABBToPoint(point, Min, Max, out closestPoint);
+            Intersection{{TEMPLATE_SUFFIX}}.ClosestPointOnAABBToPoint(point, Min, Max, out closestPoint);
             return closestPoint;
         }
 
@@ -548,7 +548,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
        /// <param name="sphere">The sphere to create an AABB from.</param>
        /// <returns>The AABB that tightly bounds the sphere.</returns>
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-       public static {{CLASS_NAME}} FromSphere(Sphere{{TYPE_PREFIX}} sphere)
+       public static {{CLASS_NAME}} FromSphere(Sphere{{TEMPLATE_SUFFIX}} sphere)
        {
            {{TYPE_PREFIX}}3 radiusVector = new {{TYPE_PREFIX}}3(sphere.Radius, sphere.Radius, sphere.Radius);
            return new {{CLASS_NAME}}(sphere.Center - radiusVector, sphere.Center + radiusVector);

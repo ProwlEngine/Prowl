@@ -189,9 +189,9 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         /// </summary>
         /// <returns>The plane containing the triangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Plane{{TYPE_PREFIX}} GetPlane()
+        public Plane{{TEMPLATE_SUFFIX}} GetPlane()
         {
-            return Plane{{TYPE_PREFIX}}.FromNormalAndPoint(NormalizedNormal, V0);
+            return Plane{{TEMPLATE_SUFFIX}}.FromNormalAndPoint(NormalizedNormal, V0);
         }
 
         /// <summary>
@@ -395,7 +395,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IntersectsWith({{CLASS_NAME}} other)
         {
-            return Intersection{{TYPE_PREFIX}}.TriangleTriangle(V0, V1, V2, other.V0, other.V1, other.V2);
+            return Intersection{{TEMPLATE_SUFFIX}}.TriangleTriangle(V0, V1, V2, other.V0, other.V1, other.V2);
         }
 
         /// <summary>

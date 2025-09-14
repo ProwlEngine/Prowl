@@ -94,15 +94,17 @@ class SourceGenerator
     {
         public string TypeName { get; }
         public string TypePrefix { get; }
+        public string TemplateSuffix { get; }
         public string ZeroValue { get; }
         public string OneValue { get; }
         public string TwoValue { get; }
         public string EpsilonValue { get; }
 
-        public TemplateTypeMapping(string typeName, string typePrefix, string zeroValue, string oneValue, string twoValue, string epsilonValue)
+        public TemplateTypeMapping(string typeName, string typePrefix, string templateSuffix, string zeroValue, string oneValue, string twoValue, string epsilonValue)
         {
             TypeName = typeName;
             TypePrefix = typePrefix;
+            TemplateSuffix = templateSuffix;
             ZeroValue = zeroValue;
             OneValue = oneValue;
             TwoValue = twoValue;
@@ -223,12 +225,12 @@ class SourceGenerator
 
     private static readonly Dictionary<string, TemplateTypeMapping> s_typeMappings = new()
     {
-        ["float"] = new TemplateTypeMapping("float", "Float", "0f", "1f", "2f", "float.Epsilon"),
-        ["double"] = new TemplateTypeMapping("double", "Double", "0.0", "1.0", "2.0", "double.Epsilon"),
-        ["int"] = new TemplateTypeMapping("int", "Int", "0", "1", "2", "1"),
-        ["byte"] = new TemplateTypeMapping("byte", "Byte", "(byte)0", "(byte)1", "(byte)2", "(byte)1"),
-        ["uint"] = new TemplateTypeMapping("uint", "UInt", "0u", "1u", "2u", "1u"),
-        ["ulong"] = new TemplateTypeMapping("ulong", "ULong", "0ul", "1ul", "2ul", "1ul")
+        ["float"] = new TemplateTypeMapping("float", "Float", "", "0f", "1f", "2f", "float.Epsilon"),
+        ["double"] = new TemplateTypeMapping("double", "Double", "D", "0.0", "1.0", "2.0", "double.Epsilon"),
+        ["int"] = new TemplateTypeMapping("int", "Int", "Int", "0", "1", "2", "1"),
+        ["byte"] = new TemplateTypeMapping("byte", "Byte", "Byte", "(byte)0", "(byte)1", "(byte)2", "(byte)1"),
+        ["uint"] = new TemplateTypeMapping("uint", "UInt", "UInt", "0u", "1u", "2u", "1u"),
+        ["ulong"] = new TemplateTypeMapping("ulong", "ULong", "ULong", "0ul", "1ul", "2ul", "1ul")
     };
 
     private const int MAX_OUTPUT_SWIZZLE_DIMENSION = 4;
@@ -2516,7 +2518,7 @@ class SourceGenerator
                 if (s_typeMappings.TryGetValue(typeName, out var typeMapping))
                 {
                     string generatedContent = ProcessTemplate(templateContent, typeMapping, namespaceSuffix, templateName);
-                    string outputFileName = $"{templateName}{typeMapping.TypePrefix}.cs";
+                    string outputFileName = $"{templateName}{typeMapping.TemplateSuffix}.cs";
                     string outputPath = Path.Combine(outputDir, outputFileName);
 
                     Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
@@ -2599,7 +2601,7 @@ class SourceGenerator
         // Replace template placeholders
         result = result.Replace("{{TYPE}}", typeMapping.TypeName);
         result = result.Replace("{{TYPE_PREFIX}}", typeMapping.TypePrefix);
-        result = result.Replace("{{CLASS_NAME}}", $"{templateName}{typeMapping.TypePrefix}");
+        result = result.Replace("{{CLASS_NAME}}", $"{templateName}{typeMapping.TemplateSuffix}");
         result = result.Replace("{{ZERO}}", typeMapping.ZeroValue);
         result = result.Replace("{{ONE}}", typeMapping.OneValue);
         result = result.Replace("{{TWO}}", typeMapping.TwoValue);
@@ -2611,6 +2613,9 @@ class SourceGenerator
         result = result.Replace("{{TYPE_PREFIX}}3", $"{typeMapping.TypePrefix}3");
         result = result.Replace("{{TYPE_PREFIX}}4", $"{typeMapping.TypePrefix}4");
         result = result.Replace("{{TYPE_PREFIX}}4x4", $"{typeMapping.TypePrefix}4x4");
+
+        // Replace template type references (other generated template types)
+        result = result.Replace("{{TEMPLATE_SUFFIX}}", typeMapping.TemplateSuffix);
 
         // Remove template header line
         var lines = result.Split('\n');
