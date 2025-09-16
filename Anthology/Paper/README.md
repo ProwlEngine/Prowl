@@ -8,17 +8,9 @@
 [![Discord](https://img.shields.io/discord/1151582593519722668?logo=discord
 )](https://discord.gg/BqnJ9Rn4sn)
 
-> [!IMPORTANT]
-> Paper is a very new library. While an earlier iteration is actively used within the Prowl Game Engine, this specific library hasn't yet established a track record of reliability in production environments.
-
-### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
-# <p align="center">An Immediate-Mode UI Library</p>
-## <p align="center">📚 [View the Official Documentation](https://prowl.gitbook.io/prowl.paper) 📚</p>
-
-
 <span id="readme-top"></span>
 
-### <p align="center">Table of Contents</p>
+## <p>Table of Contents</p>
 1. [About The Project](#-about-the-project-)
 2. [Documentation](#-documentation-)
 2. [Features](#-features-)
@@ -35,6 +27,8 @@
 8. [License](#-license-)
 
 # <span align="center">📝 About The Project 📝
+
+### <p align="center">📚 [View the Official Documentation](https://prowl.gitbook.io/prowl.paper) 📚</p>
 
 Paper is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** immediate-mode UI library built for the Prowl Game Engine. It provides a lightweight, flexible way to create highly reactive user interfaces with minimal effort.
 
@@ -76,6 +70,9 @@ For a complete guide, tutorials, and API reference, please visit the **[Official
     - Cross-Platform! Windows, Linux & Mac!
     - Immediate Mode Architecture
     - 100% C#!
+    - Markdown Parsing & Rendering Support
+    - Layer System
+    - Keyboard Navigation
     - Highly Portable
         - Very easy to integrate
         - OpenTK Example
