@@ -2154,7 +2154,7 @@ namespace Prowl.PaperUI
             {
                 // Single-line horizontal scrolling only
                 var fontSize = (double)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
-                var letterSpacing = (double)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
+                var letterSpacing = (double)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
                 var cursorPos = GetCursorPositionFromIndex(state.Value, settings.Font, fontSize, letterSpacing, state.CursorPosition);
                 
                 double visibleWidth = _handle.Data.LayoutWidth;
