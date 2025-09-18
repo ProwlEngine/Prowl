@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.Themes.Origami.Button;
+using Prowl.PaperUI.Themes.Origami.Divider;
 
 namespace Prowl.PaperUI.Themes.Origami;
 
@@ -53,6 +54,17 @@ public static class Origami
     public static ButtonBuilder Button(string id, [CallerLineNumber] int intID = 0)
     {
         return new ButtonBuilder(Paper, id, intID);
+    }
+
+    /// <summary>
+    /// Creates a new Divider builder.
+    /// </summary>
+    /// <param name="id">Unique identifier for the divider</param>
+    /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+    /// <returns>A DividerBuilder for configuring the divider</returns>
+    public static DividerBuilder Divider(string id, [CallerLineNumber] int intID = 0)
+    {
+        return new DividerBuilder(Paper, id, intID);
     }
 
 }
