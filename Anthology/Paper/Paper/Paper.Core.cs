@@ -544,20 +544,21 @@ namespace Prowl.PaperUI
         /// Creates a generic layout container.
         /// </summary>
         /// <param name="stringID">String identifier for the element</param>
-        /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+        /// <param name="intID">Integer identifier useful for when creating elements in loops</param>
+        /// <param name="lineID">Line number based identifier (auto-provided as Source Line Number)</param>
         /// <returns>A builder for configuring the element</returns>
-        public ElementBuilder Box(string stringID, [CallerLineNumber] int intID = 0)
+        public ElementBuilder Box(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
             ArgumentNullException.ThrowIfNull(stringID);
 
             ulong storageHash = 0;
             if(_IDStack.Count > 0)
-                storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID);
+                storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID, lineID);
             else
-                storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, stringID, intID);
+                storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, stringID, intID, lineID);
 
             if (_createdElements.Contains(storageHash))
-                throw new Exception("Element already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + " Parent: " + CurrentParent.Data.ID + "\nPlease use a different ID.");
+                throw new Exception($"Element already exists with this ID: {stringID}:{intID}:{lineID} = {storageHash} Parent: {CurrentParent.Data.ID}\nPlease use a different ID.");
 
             var handle = CreateElement(storageHash);
             var builder = new ElementBuilder(this, handle);
@@ -571,14 +572,14 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a row layout container (horizontal layout).
         /// </summary>
-        public ElementBuilder Row(string stringID, [CallerLineNumber] int intID = 0)
-            => Box(stringID, intID).LayoutType(LayoutType.Row);
+        public ElementBuilder Row(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
+            => Box(stringID, intID, lineID).LayoutType(LayoutType.Row);
 
         /// <summary>
         /// Creates a column layout container (vertical layout).
         /// </summary>
-        public ElementBuilder Column(string stringID, [CallerLineNumber] int intID = 0)
-            => Box(stringID, intID).LayoutType(LayoutType.Column);
+        public ElementBuilder Column(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
+            => Box(stringID, intID, lineID).LayoutType(LayoutType.Column);
 
         /// <summary>
         /// Moves the current parent element to the root of the hierarchy.
