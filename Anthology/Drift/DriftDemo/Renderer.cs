@@ -17,6 +17,17 @@ namespace DriftDemo
             _center = new Vector2f(window.Size.X / 2f, window.Size.Y / 2f);
         }
 
+        private Color GetColor(int bodyId)
+        {
+            Random rand = new Random(bodyId);
+
+            int r = (rand.Next(200) + 55);
+            int g = (rand.Next(200) + 55);
+            int b = (rand.Next(200) + 55);
+
+            return new Color((byte)r, (byte)g, (byte)b);
+        }
+
         private Vector2f WorldToScreen(Vector2 worldPos)
         {
             return new Vector2f(
@@ -33,47 +44,47 @@ namespace DriftDemo
             }
 
             // draw contacts
-            foreach (var contactSolver in space.Contacts)
-            {
-                foreach (var contact in contactSolver.Contacts)
-                {
-                    var pos = WorldToScreen(contact.Position);
-                    var nor = WorldToScreen(contact.NormalTowardTwo);
-                    var depth = contact.Depth * _pixelsPerMeter;
+            //foreach (var contactSolver in space.Contacts)
+            //{
+            //    foreach (var contact in contactSolver.Contacts)
+            //    {
+            //        var pos = WorldToScreen(contact.Position);
+            //        var nor = WorldToScreen(contact.NormalTowardTwo);
+            //        var depth = contact.Depth * _pixelsPerMeter;
+            //
+            //        var circle = new CircleShape(3)
+            //        {
+            //            Position = new Vector2f(pos.X - 3, pos.Y - 3),
+            //            FillColor = Color.Red
+            //        };
+            //
+            //        _window.Draw(circle);
+            //
+            //        var line = new Vertex[]
+            //        {
+            //            new Vertex(pos, Color.Yellow),
+            //            new Vertex(new Vector2f(pos.X + contact.NormalTowardTwo.X * depth, pos.Y - contact.NormalTowardTwo.Y * depth), Color.Yellow)
+            //        };
+            //        _window.Draw(line, PrimitiveType.Lines);
+            //    }
+            //}
 
-                    var circle = new CircleShape(3)
-                    {
-                        Position = new Vector2f(pos.X - 3, pos.Y - 3),
-                        FillColor = Color.Red
-                    };
-
-                    _window.Draw(circle);
-
-                    var line = new Vertex[]
-                    {
-                        new Vertex(pos, Color.Yellow),
-                        new Vertex(new Vector2f(pos.X + contact.NormalTowardTwo.X * depth, pos.Y - contact.NormalTowardTwo.Y * depth), Color.Yellow)
-                    };
-                    _window.Draw(line, PrimitiveType.Lines);
-                }
-            }
-
-            // Draw Bounds
-            foreach (var body in space.Bodies)
-            {
-                if (body == null) continue;
-                var b = body.Bounds;
-                var topLeft = WorldToScreen(new Vector2(b.Mins.X, b.Maxs.Y));
-                var size = new Vector2f((b.Maxs.X - b.Mins.X) * _pixelsPerMeter, (b.Maxs.Y - b.Mins.Y) * _pixelsPerMeter);
-                var rect = new RectangleShape(size)
-                {
-                    Position = topLeft,
-                    FillColor = Color.Transparent,
-                    OutlineColor = Color.Blue,
-                    OutlineThickness = 1
-                };
-                _window.Draw(rect);
-            }
+            //// Draw Bounds
+            //foreach (var body in space.Bodies)
+            //{
+            //    if (body == null) continue;
+            //    var b = body.Bounds;
+            //    var topLeft = WorldToScreen(new Vector2(b.Mins.X, b.Maxs.Y));
+            //    var size = new Vector2f((b.Maxs.X - b.Mins.X) * _pixelsPerMeter, (b.Maxs.Y - b.Mins.Y) * _pixelsPerMeter);
+            //    var rect = new RectangleShape(size)
+            //    {
+            //        Position = topLeft,
+            //        FillColor = Color.Transparent,
+            //        OutlineColor = Color.Blue,
+            //        OutlineThickness = 1
+            //    };
+            //    _window.Draw(rect);
+            //}
 
             // Draw joints with just lines
             foreach (var joint in space.Joints)
@@ -92,13 +103,16 @@ namespace DriftDemo
 
         private void DrawBody(Body body)
         {
-            var color = body.Type switch
+            Color color;
+
+            if (body.Type == Body.BodyType.Static)
             {
-                Body.BodyType.Static => new Color(128, 128, 128),
-                Body.BodyType.Dynamic => Color.White,
-                Body.BodyType.Kinetic => Color.Green,
-                _ => Color.Red
-            };
+                color = new Color(150, 150, 150);
+            }
+            else
+            {
+                color = GetColor(body.Id);
+            }
 
             foreach (var shape in body.Shapes)
             {
@@ -132,14 +146,12 @@ namespace DriftDemo
             if (circleShape == null)
             {
                 circleShape = new CircleShape();
-                circleShape.SetPointCount(6);
-                circleShape.OutlineThickness = 1;
+                //circleShape.SetPointCount(12);
             }
             if(radius != circleShape.Radius)
                 circleShape.Radius = radius;
             circleShape.Position = new Vector2f(center.X - radius, center.Y - radius);
-            circleShape.FillColor = isAwake ? Color.Transparent : new Color(255, 255, 255, 25);
-            circleShape.OutlineColor = color;
+            circleShape.FillColor = color;
 
             _window.Draw(circleShape);
         }
@@ -155,13 +167,12 @@ namespace DriftDemo
                 shape.SetPoint((uint)i, screenPos);
             }
 
-            shape.FillColor = isAwake ? Color.Transparent : new Color(255, 255, 255, 25);
-            shape.OutlineColor = color;
-            shape.OutlineThickness = 1;
+            shape.FillColor = color;
 
             _window.Draw(shape);
 
-            // Draw Plane Normals
+            // draw plane normals
+            /*
             for (int i = 0; i < poly.TransformedVerts.Count; i++)
             {
                 var a = poly.TransformedVerts[i];
@@ -170,6 +181,7 @@ namespace DriftDemo
                 var normalEnd = mid + poly.TransformedPlanes[i].Normal * 0.25f; // Scale normal for visibility
                 DrawLine(mid, normalEnd, Color.Red);
             }
+            */
         }
 
         private void DrawLine(Vector2 start, Vector2 end, Color color)
@@ -186,37 +198,61 @@ namespace DriftDemo
 
         private void DrawSegment(ShapeSegment segment, Color color, bool isAwake)
         {
-            var a = WorldToScreen(segment.TransformedA);
-            var b = WorldToScreen(segment.TransformedB);
-
-            var line = new Vertex[]
-            {
-                new Vertex(a, color),
-                new Vertex(b, color)
-            };
-
-            _window.Draw(line, PrimitiveType.Lines);
-
-            // Draw circles at endpoints to show radius
             if (segment.Radius > 0)
             {
                 var radius = segment.Radius * _pixelsPerMeter;
+                var a = WorldToScreen(segment.TransformedA);
+                var b = WorldToScreen(segment.TransformedB);
+
+                // Draw filled circles at endpoints
                 var circleA = new CircleShape(radius)
                 {
                     Position = new Vector2f(a.X - radius, a.Y - radius),
-                    FillColor = isAwake ? Color.Transparent : new Color(255, 255, 255, 25),
-                    OutlineColor = color,
-                    OutlineThickness = 1
+                    FillColor = color,
                 };
                 var circleB = new CircleShape(radius)
                 {
                     Position = new Vector2f(b.X - radius, b.Y - radius),
-                    FillColor = isAwake ? Color.Transparent : new Color(255, 255, 255, 25),
-                    OutlineColor = color,
-                    OutlineThickness = 1
+                    FillColor = color,
                 };
                 _window.Draw(circleA);
                 _window.Draw(circleB);
+
+                // Draw filled rectangle between the circles to complete the capsule
+                var direction = new Vector2f(b.X - a.X, b.Y - a.Y);
+                var length = MathF.Sqrt(direction.X * direction.X + direction.Y * direction.Y);
+                if (length > 0)
+                {
+                    direction.X /= length;
+                    direction.Y /= length;
+
+                    var perpendicular = new Vector2f(-direction.Y, direction.X);
+                    var p1 = new Vector2f(a.X + perpendicular.X * radius, a.Y + perpendicular.Y * radius);
+                    var p2 = new Vector2f(a.X - perpendicular.X * radius, a.Y - perpendicular.Y * radius);
+                    var p3 = new Vector2f(b.X - perpendicular.X * radius, b.Y - perpendicular.Y * radius);
+                    var p4 = new Vector2f(b.X + perpendicular.X * radius, b.Y + perpendicular.Y * radius);
+
+                    var quad = new Vertex[]
+                    {
+                        new Vertex(p1, color),
+                        new Vertex(p2, color),
+                        new Vertex(p3, color),
+                        new Vertex(p4, color)
+                    };
+                    _window.Draw(quad, PrimitiveType.Quads);
+                }
+            }
+            else
+            {
+                // For thin segments, draw as a thick line
+                var a = WorldToScreen(segment.TransformedA);
+                var b = WorldToScreen(segment.TransformedB);
+                var thickLine = new Vertex[]
+                {
+                    new Vertex(a, color),
+                    new Vertex(b, color)
+                };
+                _window.Draw(thickLine, PrimitiveType.Lines);
             }
         }
     }

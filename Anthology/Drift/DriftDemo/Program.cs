@@ -99,7 +99,7 @@ namespace DriftDemo
                 accumulator += deltaTime;
                 while (accumulator >= fixedDt)
                 {
-                    _space.Step((float)fixedDt, 8, 4, true);
+                    _space.Step((float)fixedDt, 32, 32, true);
                     accumulator -= fixedDt;
                 }
 
