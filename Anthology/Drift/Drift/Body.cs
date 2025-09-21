@@ -329,7 +329,7 @@
             return 0.5f * (Mass * vsq + Inertia * wsq);
         }
 
-        public bool IsCollidable(Body other)
+        public bool CanCollideWith(Body other)
         {
             if (this == other) return false;
             if (!IsDynamic() && !other.IsDynamic()) return false;

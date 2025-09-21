@@ -157,7 +157,7 @@
                         if (!body1.Bounds.Intersects(body2.Bounds)) continue;
 
                         if (body1.IsStatic() && body2.IsStatic()) continue;
-                        if (!body1.IsCollidable(body2)) continue;
+                        if (!body1.CanCollideWith(body2)) continue;
 
                         foreach (var shape1 in body1.Shapes)
                         {
