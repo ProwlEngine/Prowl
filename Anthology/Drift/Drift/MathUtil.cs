@@ -94,22 +94,10 @@ namespace Prowl.Drift
 
 
     //-----------------------------------
-    // Mat2
+    // Mat2x2 Helper
     //-----------------------------------
-    public struct Mat2
+    public static class Mat2x2
     {
-        public float M11, M12, M21, M22;
-
-        public Mat2(float m11, float m12, float m21, float m22)
-        { M11 = m11; M12 = m12; M21 = m21; M22 = m22; }
-
-        public Vec2 Solve(Vec2 b)
-        {
-            float det = M11 * M22 - M12 * M21;
-            if (det != 0) det = 1 / det;
-            return new Vec2(det * (M22 * b.X - M12 * b.Y),
-                            det * (M11 * b.Y - M21 * b.X));
-        }
     }
 
     //-----------------------------------
@@ -267,5 +255,13 @@ namespace Prowl.Drift
 
         public static float Clamp(float v, float min, float max) =>
             v < min ? min : (v > max ? max : v);
+
+        public static Vec2 Solve(float m11, float m12, float m21, float m22, Vec2 b)
+        {
+            float det = m11 * m22 - m12 * m21;
+            if (det != 0) det = 1 / det;
+            return new Vec2(det * (m22 * b.X - m12 * b.Y),
+                            det * (m11 * b.Y - m21 * b.X));
+        }
     }
 }

@@ -6,7 +6,7 @@ namespace Drift.Joints
     public class MouseJoint : Joint
     {
         private Vec2 _r2;
-        private Mat2 _emInv;
+        private float _k11, _k12, _k22;
         private Vec2 _lambdaAcc = Vec2.Zero;
 
         private float _gamma;
@@ -46,10 +46,9 @@ namespace Drift.Joints
             float r2x = _r2.X, r2y = _r2.Y;
             float i2Inv = b2.InertiaInv;
 
-            float k11 = b2.MassInv + r2y * r2y * i2Inv + _gamma;
-            float k12 = -r2x * r2y * i2Inv;
-            float k22 = b2.MassInv + r2x * r2x * i2Inv + _gamma;
-            _emInv = new Mat2(k11, k12, k12, k22);
+            _k11 = b2.MassInv + r2y * r2y * i2Inv + _gamma;
+            _k12 = -r2x * r2y * i2Inv;
+            _k22 = b2.MassInv + r2x * r2x * i2Inv + _gamma;
 
             var c = b2.Position + _r2 - Body1.Position;
             _betaC = c * beta;
@@ -73,7 +72,7 @@ namespace Drift.Joints
 
             var cdot = b2.LinearVelocity + Vec2.Perp(_r2) * b2.AngularVelocity;
             var soft = _betaC + _lambdaAcc * _gamma;
-            var lambda = _emInv.Solve((cdot + soft).Neg());
+            var lambda = MathUtil.Solve(_k11, _k12, _k12, _k22, Vec2.Neg(cdot + soft));
 
             var old = _lambdaAcc;
             _lambdaAcc += lambda;

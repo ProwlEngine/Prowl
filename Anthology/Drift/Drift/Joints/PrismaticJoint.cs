@@ -12,7 +12,7 @@ namespace Drift.Joints
         private Vec2 _n;
         private float _s1, _s2;
 
-        private Mat2 _emInv;
+        private float _k11, _k12, _k22;
         private Vec2 _lambdaAcc = Vec2.Zero;
 
         public PrismaticJoint(Body b1, Body b2, Vec2 anchor1, Vec2 anchor2)
@@ -55,11 +55,9 @@ namespace Drift.Joints
             _s1 = Vec2.Cross(_r1d, _n);
             _s2 = Vec2.Cross(_r2, _n);
 
-            float k11 = Body1.MassInv + Body2.MassInv + Body1.InertiaInv * _s1 * _s1 + Body2.InertiaInv * _s2 * _s2;
-            float k12 = Body1.InertiaInv * _s1 + Body2.InertiaInv * _s2;
-            float k22 = Body1.InertiaInv + Body2.InertiaInv;
-
-            _emInv = new Mat2(k11, k12, k12, k22);
+            _k11 = Body1.MassInv + Body2.MassInv + Body1.InertiaInv * _s1 * _s1 + Body2.InertiaInv * _s2 * _s2;
+            _k12 = Body1.InertiaInv * _s1 + Body2.InertiaInv * _s2;
+            _k22 = Body1.InertiaInv + Body2.InertiaInv;
 
             if (warmStarting)
             {
@@ -82,7 +80,7 @@ namespace Drift.Joints
             float cdot1 = Vec2.Dot(_n, Body2.LinearVelocity - Body1.LinearVelocity) + _s2 * Body2.AngularVelocity - _s1 * Body1.AngularVelocity;
             float cdot2 = Body2.AngularVelocity - Body1.AngularVelocity;
 
-            var lambda = _emInv.Solve(new Vec2(-cdot1, -cdot2));
+            var lambda = MathUtil.Solve(_k11, _k12, _k12, _k22, new Vec2(-cdot1, -cdot2));
             _lambdaAcc += lambda;
 
             var impulse = _n * lambda.X;
@@ -120,8 +118,7 @@ namespace Drift.Joints
             float k12 = Body1.InertiaInv * s1 + Body2.InertiaInv * s2;
             float k22 = Body1.InertiaInv + Body2.InertiaInv;
 
-            var emInv = new Mat2(k11, k12, k12, k22);
-            var lambdaDt = emInv.Solve(correction.Neg());
+            var lambdaDt = MathUtil.Solve(k11, k12, k12, k22, Vec2.Neg(correction));
 
             var impulseDt = n * lambdaDt.X;
 

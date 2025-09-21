@@ -249,8 +249,7 @@ namespace Drift.Joints
                 float k12 = -r1.X * r1y_i - r2.X * r2y_i;
                 float k22 = sumMinv + r1.X * r1.X * Body1.InertiaInv + r2.X * r2.X * Body2.InertiaInv;
 
-                var emInv = new Mat2(k11, k12, k12, k22);
-                var lambdaDt = emInv.Solve(correction.Neg());
+                var lambdaDt = MathUtil.Solve(k11, k12, k12, k22, Vec2.Neg(correction));
 
                 Body1.Position -= lambdaDt * Body1.MassInv;
                 Body1.Angle -= Vec2.Cross(r1, lambdaDt) * Body1.InertiaInv;
