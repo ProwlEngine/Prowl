@@ -1,14 +1,16 @@
-﻿namespace Prowl.Drift
+﻿using System.Numerics;
+
+namespace Prowl.Drift
 {
     public class Contact
     {
         public int Hash;
 
         // Contact point
-        public Vec2 Position;
+        public Vector2 Position;
 
         // Contact normal (toward shape2)
-        public Vec2 NormalTowardTwo;
+        public Vector2 NormalTowardTwo;
 
         // Penetration depth (d < 0)
         public float Depth;
@@ -18,15 +20,15 @@
         public float LambdaTAcc = 0;
 
         // Solver scratch values
-        public Vec2 R1, R2;          // world-space offsets
-        public Vec2 R1Local, R2Local; // local offsets
+        public Vector2 R1, R2;          // world-space offsets
+        public Vector2 R1Local, R2Local; // local offsets
         public float Emn, Emt;
         public float Bounce;
 
-        public Contact(Vec2 p, Vec2 n, float d, int hash)
+        public Contact(Vector2 p, Vector2 n, float d, int hash)
         {
             Position = p;
-            NormalTowardTwo = Vec2.Normalize(n);
+            NormalTowardTwo = Vector2.Normalize(n);
             Depth = d;
             Hash = hash;
         }

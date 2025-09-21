@@ -1,6 +1,7 @@
 using Prowl.Drift;
 using SFML.Graphics;
 using SFML.System;
+using System.Numerics;
 
 namespace DriftDemo
 {
@@ -16,7 +17,7 @@ namespace DriftDemo
             _center = new Vector2f(window.Size.X / 2f, window.Size.Y / 2f);
         }
 
-        private Vector2f WorldToScreen(Vec2 worldPos)
+        private Vector2f WorldToScreen(Vector2 worldPos)
         {
             return new Vector2f(
                 _center.X + worldPos.X * _pixelsPerMeter,
@@ -62,7 +63,7 @@ namespace DriftDemo
             {
                 if (body == null) continue;
                 var b = body.Bounds;
-                var topLeft = WorldToScreen(new Vec2(b.Mins.X, b.Maxs.Y));
+                var topLeft = WorldToScreen(new Vector2(b.Mins.X, b.Maxs.Y));
                 var size = new Vector2f((b.Maxs.X - b.Mins.X) * _pixelsPerMeter, (b.Maxs.Y - b.Mins.Y) * _pixelsPerMeter);
                 var rect = new RectangleShape(size)
                 {
@@ -171,7 +172,7 @@ namespace DriftDemo
             }
         }
 
-        private void DrawLine(Vec2 start, Vec2 end, Color color)
+        private void DrawLine(Vector2 start, Vector2 end, Color color)
         {
             var a = WorldToScreen(start);
             var b = WorldToScreen(end);

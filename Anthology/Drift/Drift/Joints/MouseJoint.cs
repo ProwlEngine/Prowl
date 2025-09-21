@@ -1,23 +1,24 @@
 ﻿using Prowl.Drift;
 using System;
+using System.Numerics;
 
 namespace Drift.Joints
 {
     public class MouseJoint : Joint
     {
-        private Vec2 _r2;
+        private Vector2 _r2;
         private float _k11, _k12, _k22;
-        private Vec2 _lambdaAcc = Vec2.Zero;
+        private Vector2 _lambdaAcc = Vector2.Zero;
 
         private float _gamma;
-        private Vec2 _betaC;
+        private Vector2 _betaC;
 
         private float _frequencyHz = 5f;
         private float _dampingRatio = 0.9f;
 
         private float _maxImpulse;
 
-        public MouseJoint(Body mouseBody, Body body, Vec2 anchor)
+        public MouseJoint(Body mouseBody, Body body, Vector2 anchor)
             : base(JointType.Mouse, mouseBody, body, true)
         {
             Anchor1 = Body1.InverseTransformPoint(anchor);
@@ -58,11 +59,11 @@ namespace Drift.Joints
             if (warmStarting)
             {
                 b2.LinearVelocity += _lambdaAcc * b2.MassInv;
-                b2.AngularVelocity += Vec2.Cross(_r2, _lambdaAcc) * b2.InertiaInv;
+                b2.AngularVelocity += MathUtil.Cross(_r2, _lambdaAcc) * b2.InertiaInv;
             }
             else
             {
-                _lambdaAcc = Vec2.Zero;
+                _lambdaAcc = Vector2.Zero;
             }
         }
 
@@ -70,9 +71,9 @@ namespace Drift.Joints
         {
             var b2 = Body2;
 
-            var cdot = b2.LinearVelocity + Vec2.Perp(_r2) * b2.AngularVelocity;
+            var cdot = b2.LinearVelocity + MathUtil.Perp(_r2) * b2.AngularVelocity;
             var soft = _betaC + _lambdaAcc * _gamma;
-            var lambda = MathUtil.Solve(_k11, _k12, _k12, _k22, Vec2.Neg(cdot + soft));
+            var lambda = MathUtil.Solve(_k11, _k12, _k12, _k22, -(cdot + soft));
 
             var old = _lambdaAcc;
             _lambdaAcc += lambda;
@@ -83,12 +84,12 @@ namespace Drift.Joints
             lambda = _lambdaAcc - old;
 
             b2.LinearVelocity += lambda * b2.MassInv;
-            b2.AngularVelocity += Vec2.Cross(_r2, lambda) * b2.InertiaInv;
+            b2.AngularVelocity += MathUtil.Cross(_r2, lambda) * b2.InertiaInv;
         }
 
         public override bool SolvePositionConstraints() => true;
 
-        public override Vec2 GetReactionForce(float dtInv) => _lambdaAcc * dtInv;
+        public override Vector2 GetReactionForce(float dtInv) => _lambdaAcc * dtInv;
         public override float GetReactionTorque(float dtInv) => 0;
     }
 }

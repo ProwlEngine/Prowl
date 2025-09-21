@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace Prowl.Drift
 {
@@ -13,7 +14,7 @@ namespace Prowl.Drift
             _cellSize = cellSize;
         }
 
-        private (int, int) GetCellCoord(Vec2 pos)
+        private (int, int) GetCellCoord(Vector2 pos)
         {
             int x = (int)MathF.Floor(pos.X / _cellSize);
             int y = (int)MathF.Floor(pos.Y / _cellSize);

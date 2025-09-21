@@ -1,5 +1,6 @@
 using Prowl.Drift;
 using Drift.Joints;
+using System.Numerics;
 
 namespace DriftDemo
 {
@@ -14,7 +15,7 @@ namespace DriftDemo
             _space = space;
 
             // Create static body for ground
-            var staticBody = new Body(Body.BodyType.Static, Vec2.Zero);
+            var staticBody = new Body(Body.BodyType.Static, Vector2.Zero);
             staticBody.AddShape(ShapePoly.CreateBox(0, 0.2f, 20.48f, 0.4f));
             space.AddBody(staticBody);
 
@@ -30,7 +31,7 @@ namespace DriftDemo
                     shape.Elasticity = 0.0f;
                     shape.Friction = 0.5f;
                     shape.Density = 1;
-                    bodies[i] = new Body(Body.BodyType.Dynamic, new Vec2(i * 0.8f, 10));
+                    bodies[i] = new Body(Body.BodyType.Dynamic, new Vector2(i * 0.8f, 10));
                     bodies[i].AddShape(shape);
                     // Set collision categories (simulate collision filtering)
                     // bodies[i].CategoryBits = 0x0002;
@@ -42,7 +43,7 @@ namespace DriftDemo
                     shape.Elasticity = 0.0f;
                     shape.Friction = 0.5f;
                     shape.Density = 1;
-                    bodies[i] = new Body(Body.BodyType.Dynamic, new Vec2(0.4f + i * 0.8f, 10));
+                    bodies[i] = new Body(Body.BodyType.Dynamic, new Vector2(0.4f + i * 0.8f, 10));
                     bodies[i].AddShape(shape);
                     // Set collision categories (simulate collision filtering)
                     // bodies[i].CategoryBits = 0x0001;
@@ -55,21 +56,21 @@ namespace DriftDemo
                 if (i == 0)
                 {
                     // Connect first segment to static body
-                    var joint = new RevoluteJoint(staticBody, bodies[i], new Vec2(0, 10));
+                    var joint = new RevoluteJoint(staticBody, bodies[i], new Vector2(0, 10));
                     joint.CollideConnected = false;
                     space.AddJoint(joint);
                 }
                 else
                 {
                     // Connect to previous segment
-                    var joint = new RevoluteJoint(bodies[i - 1], bodies[i], new Vec2(i * 0.8f, 10));
+                    var joint = new RevoluteJoint(bodies[i - 1], bodies[i], new Vector2(i * 0.8f, 10));
                     joint.CollideConnected = false;
                     space.AddJoint(joint);
                 }
             }
 
             // Add rope joint as length constraint
-            var ropeJoint = new RopeJoint(staticBody, bodies[9], new Vec2(0, 10), new Vec2(9 * 0.8f, 10));
+            var ropeJoint = new RopeJoint(staticBody, bodies[9], new Vector2(0, 10), new Vector2(9 * 0.8f, 10));
             ropeJoint.CollideConnected = false;
             space.AddJoint(ropeJoint);
         }

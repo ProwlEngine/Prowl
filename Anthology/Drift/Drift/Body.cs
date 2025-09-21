@@ -1,4 +1,6 @@
-﻿namespace Prowl.Drift
+﻿using System.Numerics;
+
+namespace Prowl.Drift
 {
     public class Body
     {
@@ -17,10 +19,10 @@
         public BodyType Type { get; private set; }
 
         // Transform & state
-        public Vec2 Centroid;           // local center of mass
-        public Vec2 Position;           // world position of centroid
-        public Vec2 LinearVelocity;     // linear velocity
-        public Vec2 AccumulatedForce;   // accumulated force
+        public Vector2 Centroid;           // local center of mass
+        public Vector2 Position;           // world position of centroid
+        public Vector2 LinearVelocity;     // linear velocity
+        public Vector2 AccumulatedForce;   // accumulated force
         public float Angle;             // orientation (angle)
         public float AngularVelocity;   // angular velocity
         public float AccumulatedTorque; // accumulated torque
@@ -44,17 +46,17 @@
         public float Inertia { get; private set; }
         public float InertiaInv { get; private set; }
 
-        public Body(BodyType type, Vec2 pos, float angle = 0)
+        public Body(BodyType type, Vector2 pos, float angle = 0)
         {
             Id = _idCounter++;
 
             Type = type;
 
-            Centroid = Vec2.Zero;
+            Centroid = Vector2.Zero;
             // pos is world origin; centroid starts at 0 so this equals pos
             Position = pos;// + RotatePoint(Centroid);
-            LinearVelocity = Vec2.Zero;
-            AccumulatedForce = Vec2.Zero;
+            LinearVelocity = Vector2.Zero;
+            AccumulatedForce = Vector2.Zero;
 
             Angle = angle;
             AngularVelocity = 0;
@@ -81,8 +83,8 @@
         {
             if (type == Type) return;
 
-            AccumulatedForce = Vec2.Zero;
-            LinearVelocity = Vec2.Zero;
+            AccumulatedForce = Vector2.Zero;
+            LinearVelocity = Vector2.Zero;
             AccumulatedTorque = 0;
             AngularVelocity = 0;
             Type = type;
@@ -121,7 +123,7 @@
         /// </summary>
         /// <param name="v">The point to transform.</param>
         /// <returns>The transformed point.</returns>
-        public Vec2 TransformPoint(Vec2 localPoint)
+        public Vector2 TransformPoint(Vector2 localPoint)
         {
             float cos = MathF.Cos(Angle);
             float sin = MathF.Sin(Angle);
@@ -129,7 +131,7 @@
             float lx = localPoint.X - Centroid.X;
             float ly = localPoint.Y - Centroid.Y;
 
-            return new Vec2(
+            return new Vector2(
                 Position.X + (lx * cos - ly * sin),
                 Position.Y + (lx * sin + ly * cos)
             );
@@ -140,11 +142,11 @@
         /// </summary>
         /// <param name="v">The vector to rotate.</param>
         /// <returns>The rotated vector.</returns>
-        public Vec2 RotatePoint(Vec2 localPoint)
+        public Vector2 RotatePoint(Vector2 localPoint)
         {
             float cos = MathF.Cos(Angle);
             float sin = MathF.Sin(Angle);
-            return new Vec2(localPoint.X * cos - localPoint.Y * sin, localPoint.X * sin + localPoint.Y * cos);
+            return new Vector2(localPoint.X * cos - localPoint.Y * sin, localPoint.X * sin + localPoint.Y * cos);
         }
 
         /// <summary>
@@ -154,7 +156,7 @@
         /// <param name="v">The point to untransform.</param>
         /// <returns>The untransformed point.</returns>
 
-        public Vec2 InverseTransformPoint(Vec2 worldPoint)
+        public Vector2 InverseTransformPoint(Vector2 worldPoint)
         {
             float cos = MathF.Cos(Angle);
             float sin = MathF.Sin(Angle);
@@ -162,7 +164,7 @@
             float dx = worldPoint.X - Position.X;
             float dy = worldPoint.Y - Position.Y;
 
-            return new Vec2(
+            return new Vector2(
                 dx * cos + dy * sin + Centroid.X,
                -dx * sin + dy * cos + Centroid.Y
             );
@@ -173,11 +175,11 @@
         /// </summary>
         /// <param name="v">The vector to unrotate.</param>
         /// <returns>The unrotated vector.</returns>
-        public Vec2 InverseRotatePoint(Vec2 worldVector)
+        public Vector2 InverseRotatePoint(Vector2 worldVector)
         {
             float cos = MathF.Cos(Angle);
             float sin = MathF.Sin(Angle);
-            return new Vec2(worldVector.X * cos + worldVector.Y * sin, -worldVector.X * sin + worldVector.Y * cos);
+            return new Vector2(worldVector.X * cos + worldVector.Y * sin, -worldVector.X * sin + worldVector.Y * cos);
         }
 
         public void SetFixedRotation(bool flag, bool recalculateMass = true)
@@ -190,9 +192,9 @@
         public void RecalculateMass()
         {
             // Save current origin so we can keep it fixed through the centroid change.
-            Vec2 origin = Position - RotatePoint(Centroid);
+            Vector2 origin = Position - RotatePoint(Centroid);
 
-            Centroid = Vec2.Zero;
+            Centroid = Vector2.Zero;
             Mass = 0;
             MassInv = 0;
             Inertia = 0;
@@ -206,7 +208,7 @@
                 return;
             }
 
-            Vec2 totalMassCentroid = Vec2.Zero;
+            Vector2 totalMassCentroid = Vector2.Zero;
             float totalMass = 0;
             float totalInertia = 0;
 
@@ -216,16 +218,17 @@
                 float mass = shape.Area() * shape.Density;
                 float inertia = shape.Inertia(mass);
 
-                totalMassCentroid.Mad(centroid, mass);
+                //totalMassCentroid.Mad(centroid, mass);
+                totalMassCentroid += centroid * mass;
                 totalMass += mass;
                 totalInertia += inertia;
             }
 
-            Centroid = totalMass > 0 ? totalMassCentroid / totalMass : Vec2.Zero;
+            Centroid = totalMass > 0 ? totalMassCentroid / totalMass : Vector2.Zero;
             SetMass(totalMass);
 
             if (!FixedRotation)
-                SetInertia(totalInertia - totalMass * Vec2.Dot(Centroid, Centroid));
+                SetInertia(totalInertia - totalMass * Vector2.Dot(Centroid, Centroid));
 
             var oldP = Position;
 
@@ -233,7 +236,9 @@
             Position = origin + RotatePoint(Centroid);
 
             // v_com' = v_com + ω × (Δr), with Δr = (Position - oldP) in world
-            LinearVelocity.Mad(Vec2.Perp(Position - oldP), AngularVelocity);
+            //LinearVelocity.Mad(MathUtil.Perp(Position - oldP), AngularVelocity);
+            Vector2 perp = new Vector2(-(Position.Y - oldP.Y), Position.X - oldP.X);
+            LinearVelocity += perp * AngularVelocity;
         }
 
         public void ResetJointAnchors()
@@ -258,7 +263,7 @@
             }
         }
 
-        public void UpdateVelocity(Vec2 gravity, float dt, float damping)
+        public void UpdateVelocity(Vector2 gravity, float dt, float damping)
         {
             LinearVelocity += (gravity + AccumulatedForce * MassInv) * dt;
             AngularVelocity += AccumulatedTorque * InertiaInv * dt;
@@ -269,7 +274,7 @@
             LinearVelocity *= linFactor;
             AngularVelocity *= angFactor;
 
-            AccumulatedForce = Vec2.Zero;
+            AccumulatedForce = Vector2.Zero;
             AccumulatedTorque = 0;
         }
 
@@ -281,19 +286,19 @@
 
         public void ResetForce()
         {
-            AccumulatedForce = Vec2.Zero;
+            AccumulatedForce = Vector2.Zero;
             AccumulatedTorque = 0;
         }
 
-        public void ApplyForce(Vec2 force, Vec2 p)
+        public void ApplyForce(Vector2 force, Vector2 p)
         {
             if (!IsDynamic()) return;
 
             AccumulatedForce += force;
-            AccumulatedTorque += Vec2.Cross(p - Position, force);
+            AccumulatedTorque += MathUtil.Cross(p - Position, force);
         }
 
-        public void ApplyForceToCenter(Vec2 force)
+        public void ApplyForceToCenter(Vector2 force)
         {
             if (!IsDynamic()) return;
 
@@ -307,12 +312,12 @@
             AccumulatedTorque += torque;
         }
 
-        public void ApplyLinearImpulse(Vec2 impulse, Vec2 p)
+        public void ApplyLinearImpulse(Vector2 impulse, Vector2 p)
         {
             if (!IsDynamic()) return;
 
             LinearVelocity += impulse * MassInv;
-            AngularVelocity += Vec2.Cross(p - Position, impulse) * InertiaInv;
+            AngularVelocity += MathUtil.Cross(p - Position, impulse) * InertiaInv;
         }
 
         public void ApplyAngularImpulse(float impulse)
@@ -324,7 +329,7 @@
 
         public float KineticEnergy()
         {
-            float vsq = Vec2.Dot(LinearVelocity, LinearVelocity);
+            float vsq = Vector2.Dot(LinearVelocity, LinearVelocity);
             float wsq = AngularVelocity * AngularVelocity;
             return 0.5f * (Mass * vsq + Inertia * wsq);
         }

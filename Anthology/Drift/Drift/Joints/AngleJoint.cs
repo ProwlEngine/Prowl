@@ -1,5 +1,6 @@
 ﻿using Prowl.Drift;
 using System;
+using System.Numerics;
 
 namespace Drift.Joints
 {
@@ -12,14 +13,14 @@ namespace Drift.Joints
         public AngleJoint(Body body1, Body body2)
             : base(JointType.Angle, body1, body2, true)
         {
-            Anchor1 = Vec2.Zero;
-            Anchor2 = Vec2.Zero;
+            Anchor1 = Vector2.Zero;
+            Anchor2 = Vector2.Zero;
             _refAngle = body2.Angle - body1.Angle;
             _lambdaAcc = 0;
         }
 
-        public override void SetWorldAnchor1(Vec2 anchor1) => Anchor1 = Vec2.Zero;
-        public override void SetWorldAnchor2(Vec2 anchor2) => Anchor2 = Vec2.Zero;
+        public override void SetWorldAnchor1(Vector2 anchor1) => Anchor1 = Vector2.Zero;
+        public override void SetWorldAnchor2(Vector2 anchor2) => Anchor2 = Vector2.Zero;
 
         public override void InitSolver(float dt, bool warmStarting)
         {
@@ -59,7 +60,7 @@ namespace Drift.Joints
             return Math.Abs(c) < ANGULAR_SLOP;
         }
 
-        public override Vec2 GetReactionForce(float dtInv) => Vec2.Zero;
+        public override Vector2 GetReactionForce(float dtInv) => Vector2.Zero;
         public override float GetReactionTorque(float dtInv) => _lambdaAcc * dtInv;
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Numerics;
 
 namespace Prowl.Drift
 {
@@ -30,8 +31,8 @@ namespace Prowl.Drift
         public bool Breakable { get; set; }
 
         // Anchors in local coordinates
-        protected Vec2 Anchor1;
-        protected Vec2 Anchor2;
+        protected Vector2 Anchor1;
+        protected Vector2 Anchor2;
 
         protected Joint(JointType type, Body body1, Body body2, bool collideConnected)
         {
@@ -42,18 +43,18 @@ namespace Prowl.Drift
             CollideConnected = collideConnected;
         }
 
-        public virtual Vec2 GetWorldAnchor1() => Body1.TransformPoint(Anchor1);
-        public virtual Vec2 GetWorldAnchor2() => Body2.TransformPoint(Anchor2);
+        public virtual Vector2 GetWorldAnchor1() => Body1.TransformPoint(Anchor1);
+        public virtual Vector2 GetWorldAnchor2() => Body2.TransformPoint(Anchor2);
 
-        public virtual void SetWorldAnchor1(Vec2 anchor1) => Anchor1 = Body1.InverseTransformPoint(anchor1);
-        public virtual void SetWorldAnchor2(Vec2 anchor2) => Anchor2 = Body2.InverseTransformPoint(anchor2);
+        public virtual void SetWorldAnchor1(Vector2 anchor1) => Anchor1 = Body1.InverseTransformPoint(anchor1);
+        public virtual void SetWorldAnchor2(Vector2 anchor2) => Anchor2 = Body2.InverseTransformPoint(anchor2);
 
         // Solver interface
         public abstract void InitSolver(float dt, bool warmStarting);
         public abstract void SolveVelocityConstraints();
         public abstract bool SolvePositionConstraints();
 
-        public abstract Vec2 GetReactionForce(float dtInv);
+        public abstract Vector2 GetReactionForce(float dtInv);
         public abstract float GetReactionTorque(float dtInv);
 
         // Tolerances

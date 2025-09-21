@@ -1,4 +1,6 @@
-﻿namespace Prowl.Drift
+﻿using System.Numerics;
+
+namespace Prowl.Drift
 {
     public class Space
     {
@@ -13,7 +15,7 @@
         public IReadOnlyList<ContactSolver> Contacts => _contactSolvers.AsReadOnly();   
         public IReadOnlyList<Joint> Joints => _joints.AsReadOnly();
 
-        public Vec2 Gravity { get; set; } = new Vec2(0, 0);
+        public Vector2 Gravity { get; set; } = new Vector2(0, 0);
         public float Damping { get; set; }
 
         private const float BroadPhaseCellSize = 1f; // You can tweak this value
@@ -248,7 +250,7 @@
             return false;
         }
 
-        public Body FindBodyByPoint(Vec2 point)
+        public Body FindBodyByPoint(Vector2 point)
         {
             foreach (var body in _bodies)
             {

@@ -1,5 +1,6 @@
 ﻿using Prowl.Drift;
 using System;
+using System.Numerics;
 
 namespace Drift.Joints
 {
@@ -7,9 +8,9 @@ namespace Drift.Joints
     {
         private float _maxDistance;
         private float _distance;
-        private Vec2 _u;
+        private Vector2 _u;
 
-        private Vec2 _r1, _r2;
+        private Vector2 _r1, _r2;
         private float _s1, _s2;
 
         private float _em;
@@ -17,24 +18,24 @@ namespace Drift.Joints
 
         private float _cdt;
 
-        public RopeJoint(Body b1, Body b2, Vec2 anchor1, Vec2 anchor2)
+        public RopeJoint(Body b1, Body b2, Vector2 anchor1, Vector2 anchor2)
             : base(JointType.Rope, b1, b2, true)
         {
             Anchor1 = Body1.InverseTransformPoint(anchor1);
             Anchor2 = Body2.InverseTransformPoint(anchor2);
-            _maxDistance = Vec2.Distance(anchor1, anchor2);
+            _maxDistance = Vector2.Distance(anchor1, anchor2);
         }
 
-        public override void SetWorldAnchor1(Vec2 a1)
+        public override void SetWorldAnchor1(Vector2 a1)
         {
             Anchor1 = Body1.InverseTransformPoint(a1);
-            _maxDistance = Vec2.Distance(a1, GetWorldAnchor2());
+            _maxDistance = Vector2.Distance(a1, GetWorldAnchor2());
         }
 
-        public override void SetWorldAnchor2(Vec2 a2)
+        public override void SetWorldAnchor2(Vector2 a2)
         {
             Anchor2 = Body2.InverseTransformPoint(a2);
-            _maxDistance = Vec2.Distance(a2, GetWorldAnchor1());
+            _maxDistance = Vector2.Distance(a2, GetWorldAnchor1());
         }
 
         public override void InitSolver(float dt, bool warmStarting)
@@ -55,10 +56,10 @@ namespace Drift.Joints
                 _cdt = c / dt;
             }
 
-            _u = _distance > LINEAR_SLOP ? d / _distance : Vec2.Zero;
+            _u = _distance > LINEAR_SLOP ? d / _distance : Vector2.Zero;
 
-            _s1 = Vec2.Cross(_r1, _u);
-            _s2 = Vec2.Cross(_r2, _u);
+            _s1 = MathUtil.Cross(_r1, _u);
+            _s2 = MathUtil.Cross(_r2, _u);
 
             float emInv = Body1.MassInv + Body2.MassInv + Body1.InertiaInv * _s1 * _s1 + Body2.InertiaInv * _s2 * _s2;
             _em = emInv == 0 ? 0 : 1f / emInv;
@@ -81,7 +82,7 @@ namespace Drift.Joints
 
         public override void SolveVelocityConstraints()
         {
-            float cdot = Vec2.Dot(_u, Body2.LinearVelocity - Body1.LinearVelocity) + _s2 * Body2.AngularVelocity - _s1 * Body1.AngularVelocity;
+            float cdot = Vector2.Dot(_u, Body2.LinearVelocity - Body1.LinearVelocity) + _s2 * Body2.AngularVelocity - _s1 * Body1.AngularVelocity;
             float lambda = -_em * (cdot + _cdt);
 
             float old = _lambdaAcc;
@@ -99,8 +100,8 @@ namespace Drift.Joints
 
         public override bool SolvePositionConstraints()
         {
-            var r1 = Vec2.Rotate(Anchor1 - Body1.Centroid, Body1.Angle);
-            var r2 = Vec2.Rotate(Anchor2 - Body2.Centroid, Body2.Angle);
+            var r1 = MathUtil.Rotate(Anchor1 - Body1.Centroid, Body1.Angle);
+            var r2 = MathUtil.Rotate(Anchor2 - Body2.Centroid, Body2.Angle);
 
             var d = Body2.Position + r2 - (Body1.Position + r1);
             float dist = d.Length();
@@ -109,8 +110,8 @@ namespace Drift.Joints
             float c = dist - _maxDistance;
             float correction = MathUtil.Clamp(c, 0, MAX_LINEAR_CORRECTION);
 
-            float s1 = Vec2.Cross(r1, u);
-            float s2 = Vec2.Cross(r2, u);
+            float s1 = MathUtil.Cross(r1, u);
+            float s2 = MathUtil.Cross(r2, u);
             float emInv = Body1.MassInv + Body2.MassInv + Body1.InertiaInv * s1 * s1 + Body2.InertiaInv * s2 * s2;
             float lambdaDt = emInv == 0 ? 0 : -correction / emInv;
 
@@ -125,7 +126,7 @@ namespace Drift.Joints
             return c < LINEAR_SLOP;
         }
 
-        public override Vec2 GetReactionForce(float dtInv) => _u * (_lambdaAcc * dtInv);
+        public override Vector2 GetReactionForce(float dtInv) => _u * (_lambdaAcc * dtInv);
         public override float GetReactionTorque(float dtInv) => 0;
     }
 }

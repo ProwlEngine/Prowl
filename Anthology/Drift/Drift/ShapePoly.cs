@@ -1,28 +1,30 @@
-﻿namespace Prowl.Drift
+﻿using System.Numerics;
+
+namespace Prowl.Drift
 {
     public class ShapePoly : Shape
     {
-        public struct Plane(Vec2 normal, float distance)
+        public struct Plane(Vector2 normal, float distance)
         {
-            public Vec2 Normal = normal;
+            public Vector2 Normal = normal;
             public float Distance = distance;
         }
 
-        public List<Vec2> Verts { get; } = new();
+        public List<Vector2> Verts { get; } = new();
         public List<Plane> Planes { get; } = new();
 
-        public List<Vec2> TransformedVerts { get; } = new();
+        public List<Vector2> TransformedVerts { get; } = new();
         public List<Plane> TransformedPlanes { get; } = new();
 
         public bool Convex { get; private set; } = true;
 
-        public ShapePoly(IEnumerable<Vec2> verts) : base(TypePoly)
+        public ShapePoly(IEnumerable<Vector2> verts) : base(TypePoly)
         {
             foreach (var v in verts)
             {
                 Verts.Add(v);
                 TransformedVerts.Add(v);
-                TransformedPlanes.Add(new Plane(Vec2.Zero, 0));
+                TransformedPlanes.Add(new Plane(Vector2.Zero, 0));
             }
             FinishVerts();
         }
@@ -43,11 +45,11 @@
             {
                 var a = Verts[i];
                 var b = Verts[(i + 1) % Verts.Count];
-                var n = Vec2.Normalize(Vec2.Perp(a - b));
+                var n = Vector2.Normalize(MathUtil.Perp(a - b));
 
-                Planes.Add(new Plane(n, Vec2.Dot(n, a)));
+                Planes.Add(new Plane(n, Vector2.Dot(n, a)));
                 TransformedVerts[i] = Verts[i];
-                TransformedPlanes.Add(new Plane(Vec2.Zero, 0));
+                TransformedPlanes.Add(new Plane(Vector2.Zero, 0));
             }
 
             for (int i = 0; i < Verts.Count; i++)
@@ -55,13 +57,13 @@
                 var b = Verts[(i + 2) % Verts.Count];
                 var n = Planes[i].Normal;
                 var d = Planes[i].Distance;
-                if (Vec2.Dot(n, b) - d > 0) Convex = false;
+                if (Vector2.Dot(n, b) - d > 0) Convex = false;
             }
         }
 
         public override Shape Duplicate() => new ShapePoly(Verts);
 
-        public override void Recenter(Vec2 c)
+        public override void Recenter(Vector2 c)
         {
             for (int i = 0; i < Verts.Count; i++)
                 Verts[i] -= c;
@@ -69,9 +71,9 @@
 
         public override float Area() => Geometry.AreaForPoly(Verts);
 
-        public override Vec2 Centroid() => Geometry.CentroidForPoly(Verts);
+        public override Vector2 Centroid() => Geometry.CentroidForPoly(Verts);
 
-        public override float Inertia(float mass) => Geometry.InertiaForPoly(mass, Verts, Vec2.Zero);
+        public override float Inertia(float mass) => Geometry.InertiaForPoly(mass, Verts, Vector2.Zero);
 
         public override void CacheData(Body body)
         {
@@ -92,34 +94,34 @@
             {
                 var a = TransformedVerts[i];
                 var b = TransformedVerts[(i + 1) % numVerts];
-                var n = Vec2.Normalize(Vec2.Perp(a - b));
-                TransformedPlanes[i] = new Plane(n, Vec2.Dot(n, a));
+                var n = Vector2.Normalize(MathUtil.Perp(a - b));
+                TransformedPlanes[i] = new Plane(n, Vector2.Dot(n, a));
                 Bounds.AddPoint(a);
             }
         }
 
-        public override bool PointQuery(Vec2 p) =>
+        public override bool PointQuery(Vector2 p) =>
             Bounds.ContainsPoint(p) && ContainsPoint(p);
 
-        public bool ContainsPoint(Vec2 p)
+        public bool ContainsPoint(Vector2 p)
         {
             foreach (var plane in TransformedPlanes)
-                if (Vec2.Dot(plane.Normal, p) - plane.Distance > 0)
+                if (Vector2.Dot(plane.Normal, p) - plane.Distance > 0)
                     return false;
             return true;
         }
 
-        public bool ContainsPointPartial(Vec2 p, Vec2 n)
+        public bool ContainsPointPartial(Vector2 p, Vector2 n)
         {
             foreach (var plane in TransformedPlanes)
             {
-                if (Vec2.Dot(plane.Normal, n) < 0.0001f) continue;
-                if (Vec2.Dot(plane.Normal, p) - plane.Distance > 0) return false;
+                if (Vector2.Dot(plane.Normal, n) < 0.0001f) continue;
+                if (Vector2.Dot(plane.Normal, p) - plane.Distance > 0) return false;
             }
             return true;
         }
 
-        public override int FindVertexByPoint(Vec2 p, float minDist)
+        public override int FindVertexByPoint(Vector2 p, float minDist)
         {
             float dsq = minDist * minDist;
             for (int i = 0; i < TransformedVerts.Count; i++)
@@ -128,7 +130,7 @@
             return -1;
         }
 
-        public int FindEdgeByPoint(Vec2 p, float minDist)
+        public int FindEdgeByPoint(Vector2 p, float minDist)
         {
             float dsq = minDist * minDist;
             int numVerts = TransformedVerts.Count;
@@ -139,9 +141,9 @@
                 var v2 = TransformedVerts[(i + 1) % numVerts];
                 var n = TransformedPlanes[i].Normal;
 
-                float dtv1 = Vec2.Cross(v1, n);
-                float dtv2 = Vec2.Cross(v2, n);
-                float dt = Vec2.Cross(p, n);
+                float dtv1 = MathUtil.Cross(v1, n);
+                float dtv2 = MathUtil.Cross(v2, n);
+                float dt = MathUtil.Cross(p, n);
 
                 if (dt > dtv1)
                 {
@@ -153,18 +155,18 @@
                 }
                 else
                 {
-                    float dist = Vec2.Dot(n, p) - Vec2.Dot(n, v1);
+                    float dist = Vector2.Dot(n, p) - Vector2.Dot(n, v1);
                     if (dist * dist < dsq) return i;
                 }
             }
             return -1;
         }
 
-        public override float DistanceOnPlane(Vec2 n, float d)
+        public override float DistanceOnPlane(Vector2 n, float d)
         {
             float min = float.MaxValue;
             foreach (var v in TransformedVerts)
-                min = MathF.Min(min, Vec2.Dot(n, v));
+                min = MathF.Min(min, Vector2.Dot(n, v));
             return min - d;
         }
 
@@ -172,12 +174,12 @@
         {
             float hw = width * 0.5f;
             float hh = height * 0.5f;
-            var verts = new Vec2[]
+            var verts = new Vector2[]
             {
-                new Vec2(-hw + localX, +hh + localY),
-                new Vec2(-hw + localX, -hh + localY),
-                new Vec2(+hw + localX, -hh + localY),
-                new Vec2(+hw + localX, +hh + localY)
+                new Vector2(-hw + localX, +hh + localY),
+                new Vector2(-hw + localX, -hh + localY),
+                new Vector2(+hw + localX, -hh + localY),
+                new Vector2(+hw + localX, +hh + localY)
             };
             return new ShapePoly(verts);
         }

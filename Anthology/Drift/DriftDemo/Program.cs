@@ -4,6 +4,7 @@ using SFML.Window;
 using SFML.System;
 using Drift.Joints;
 using System.Diagnostics;
+using System.Numerics;
 
 namespace DriftDemo
 {
@@ -59,11 +60,11 @@ namespace DriftDemo
 
             // Initialize physics
             _space = new Space();
-            _space.Gravity = new Vec2(0, -10f);
+            _space.Gravity = new Vector2(0, -10f);
             _space.Damping = 0f;
 
             // Create mouse body for interaction
-            _mouseBody = new Body(Body.BodyType.Kinetic, Vec2.Zero);
+            _mouseBody = new Body(Body.BodyType.Kinetic, Vector2.Zero);
             _space.AddBody(_mouseBody);
 
             // Initialize renderer
@@ -193,7 +194,7 @@ namespace DriftDemo
             _space.Clear();
 
             // Re-create mouse body for interaction
-            _mouseBody = new Body(Body.BodyType.Kinetic, Vec2.Zero);
+            _mouseBody = new Body(Body.BodyType.Kinetic, Vector2.Zero);
             _space.AddBody(_mouseBody);
 
             // Initialize demo
@@ -202,9 +203,9 @@ namespace DriftDemo
             Console.WriteLine($"Loaded demo: {_demos[index].Name}");
         }
 
-        private static Vec2 ScreenToWorld(Vector2i screenPos)
+        private static Vector2 ScreenToWorld(Vector2i screenPos)
         {
-            if (_window == null) return Vec2.Zero;
+            if (_window == null) return Vector2.Zero;
 
             // Convert screen coordinates to world coordinates
             // Invert the WorldToScreen transformation from Renderer.cs
@@ -213,7 +214,7 @@ namespace DriftDemo
 
             float worldX = (screenPos.X - center.X) / pixelsPerMeter;
             float worldY = (center.Y + _window.Size.Y * 0.5f - screenPos.Y) / pixelsPerMeter;
-            return new Vec2(worldX, worldY);
+            return new Vector2(worldX, worldY);
         }
 
         private static void OnMousePressed(object? sender, MouseButtonEventArgs e)
@@ -228,7 +229,7 @@ namespace DriftDemo
             }
 
             // Convert mouse position to world coordinates
-            Vec2 worldPos = ScreenToWorld(new Vector2i(e.X, e.Y));
+            Vector2 worldPos = ScreenToWorld(new Vector2i(e.X, e.Y));
 
             // Find body at mouse position
             Body? targetBody = _space.FindBodyByPoint(worldPos);
@@ -261,7 +262,7 @@ namespace DriftDemo
             if (_space == null || _mouseBody == null || _mouseJoint == null) return;
 
             // Update mouse body position
-            Vec2 worldPos = ScreenToWorld(new Vector2i(e.X, e.Y));
+            Vector2 worldPos = ScreenToWorld(new Vector2i(e.X, e.Y));
             _mouseBody.Position = worldPos;
         }
     }

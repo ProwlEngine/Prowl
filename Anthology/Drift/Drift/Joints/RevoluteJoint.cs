@@ -6,7 +6,7 @@ namespace Drift.Joints
 {
     public class RevoluteJoint : Joint
     {
-        private Vec2 _r1, _r2;
+        private Vector2 _r1, _r2;
         private float _em11, _em12, _em13, _em22, _em23, _em33;
         private float _em2; // Angular effective mass
 
@@ -27,7 +27,7 @@ namespace Drift.Joints
         private float _maxMotorTorque;
         private float _maxMotorImpulse;
 
-        public RevoluteJoint(Body b1, Body b2, Vec2 anchor)
+        public RevoluteJoint(Body b1, Body b2, Vector2 anchor)
             : base(JointType.Revolute, b1, b2, false)
         {
             Anchor1 = Body1.InverseTransformPoint(anchor);
@@ -103,14 +103,14 @@ namespace Drift.Joints
 
             if (warmStarting)
             {
-                var lambdaXY = new Vec2(_lambdaAcc.X, _lambdaAcc.Y);
+                var lambdaXY = new Vector2(_lambdaAcc.X, _lambdaAcc.Y);
                 float lambdaZ = _lambdaAcc.Z + _motorLambdaAcc;
 
                 Body1.LinearVelocity -= lambdaXY * Body1.MassInv;
-                Body1.AngularVelocity -= (Vec2.Cross(_r1, lambdaXY) + lambdaZ) * Body1.InertiaInv;
+                Body1.AngularVelocity -= (MathUtil.Cross(_r1, lambdaXY) + lambdaZ) * Body1.InertiaInv;
 
                 Body2.LinearVelocity += lambdaXY * Body2.MassInv;
-                Body2.AngularVelocity += (Vec2.Cross(_r2, lambdaXY) + lambdaZ) * Body2.InertiaInv;
+                Body2.AngularVelocity += (MathUtil.Cross(_r2, lambdaXY) + lambdaZ) * Body2.InertiaInv;
             }
             else
             {
@@ -138,8 +138,8 @@ namespace Drift.Joints
             // Limits active
             if (_limitEnabled && _limitState != LIMIT_STATE_INACTIVE)
             {
-                var v1 = Body1.LinearVelocity + Vec2.Perp(_r1) * Body1.AngularVelocity;
-                var v2 = Body2.LinearVelocity + Vec2.Perp(_r2) * Body2.AngularVelocity;
+                var v1 = Body1.LinearVelocity + MathUtil.Perp(_r1) * Body1.AngularVelocity;
+                var v2 = Body2.LinearVelocity + MathUtil.Perp(_r2) * Body2.AngularVelocity;
                 var cdot1 = v2 - v1;
                 float cdot2 = Body2.AngularVelocity - Body1.AngularVelocity;
                 var cdot = new Vector3(cdot1.X, cdot1.Y, cdot2);
@@ -158,8 +158,8 @@ namespace Drift.Joints
 
                     if (lowerLimited || upperLimited)
                     {
-                        var rhs = cdot1 + new Vec2(_em13, _em23) * newZ;
-                        var reduced = MathUtil.Solve(_em11, _em12, _em12, _em22, Vec2.Neg(rhs));
+                        var rhs = cdot1 + new Vector2(_em13, _em23) * newZ;
+                        var reduced = MathUtil.Solve(_em11, _em12, _em12, _em22, -rhs);
                         lambda.X = reduced.X;
                         lambda.Y = reduced.Y;
                         lambda.Z = -_lambdaAcc.Z;
@@ -174,29 +174,29 @@ namespace Drift.Joints
                     }
                 }
 
-                var lambdaXY = new Vec2(lambda.X, lambda.Y);
+                var lambdaXY = new Vector2(lambda.X, lambda.Y);
 
                 Body1.LinearVelocity -= lambdaXY * Body1.MassInv;
-                Body1.AngularVelocity -= (Vec2.Cross(_r1, lambdaXY) + lambda.Z) * Body1.InertiaInv;
+                Body1.AngularVelocity -= (MathUtil.Cross(_r1, lambdaXY) + lambda.Z) * Body1.InertiaInv;
 
                 Body2.LinearVelocity += lambdaXY * Body2.MassInv;
-                Body2.AngularVelocity += (Vec2.Cross(_r2, lambdaXY) + lambda.Z) * Body2.InertiaInv;
+                Body2.AngularVelocity += (MathUtil.Cross(_r2, lambdaXY) + lambda.Z) * Body2.InertiaInv;
             }
             else
             {
-                var v1 = Body1.LinearVelocity + Vec2.Perp(_r1) * Body1.AngularVelocity;
-                var v2 = Body2.LinearVelocity + Vec2.Perp(_r2) * Body2.AngularVelocity;
+                var v1 = Body1.LinearVelocity + MathUtil.Perp(_r1) * Body1.AngularVelocity;
+                var v2 = Body2.LinearVelocity + MathUtil.Perp(_r2) * Body2.AngularVelocity;
                 var cdot = v2 - v1;
 
-                var lambda = MathUtil.Solve(_em11, _em12, _em12, _em22, Vec2.Neg(cdot));
+                var lambda = MathUtil.Solve(_em11, _em12, _em12, _em22, -cdot);
 
                 _lambdaAcc += new Vector3(lambda.X, lambda.Y, 0);
 
                 Body1.LinearVelocity -= lambda * Body1.MassInv;
-                Body1.AngularVelocity -= Vec2.Cross(_r1, lambda) * Body1.InertiaInv;
+                Body1.AngularVelocity -= MathUtil.Cross(_r1, lambda) * Body1.InertiaInv;
 
                 Body2.LinearVelocity += lambda * Body2.MassInv;
-                Body2.AngularVelocity += Vec2.Cross(_r2, lambda) * Body2.InertiaInv;
+                Body2.AngularVelocity += MathUtil.Cross(_r2, lambda) * Body2.InertiaInv;
             }
         }
 
@@ -236,11 +236,11 @@ namespace Drift.Joints
             }
 
             {
-                var r1 = Vec2.Rotate(Anchor1 - Body1.Centroid, Body1.Angle);
-                var r2 = Vec2.Rotate(Anchor2 - Body2.Centroid, Body2.Angle);
+                var r1 = MathUtil.Rotate(Anchor1 - Body1.Centroid, Body1.Angle);
+                var r2 = MathUtil.Rotate(Anchor2 - Body2.Centroid, Body2.Angle);
 
                 var c = Body2.Position + r2 - (Body1.Position + r1);
-                var correction = Vec2.Truncate(c, MAX_LINEAR_CORRECTION);
+                var correction = MathUtil.Truncate(c, MAX_LINEAR_CORRECTION);
                 positionError = correction.Length();
 
                 float sumMinv = Body1.MassInv + Body2.MassInv;
@@ -250,21 +250,21 @@ namespace Drift.Joints
                 float k12 = -r1.X * r1y_i - r2.X * r2y_i;
                 float k22 = sumMinv + r1.X * r1.X * Body1.InertiaInv + r2.X * r2.X * Body2.InertiaInv;
 
-                var lambdaDt = MathUtil.Solve(k11, k12, k12, k22, Vec2.Neg(correction));
+                var lambdaDt = MathUtil.Solve(k11, k12, k12, k22, -correction);
 
                 Body1.Position -= lambdaDt * Body1.MassInv;
-                Body1.Angle -= Vec2.Cross(r1, lambdaDt) * Body1.InertiaInv;
+                Body1.Angle -= MathUtil.Cross(r1, lambdaDt) * Body1.InertiaInv;
 
                 Body2.Position += lambdaDt * Body2.MassInv;
-                Body2.Angle += Vec2.Cross(r2, lambdaDt) * Body2.InertiaInv;
+                Body2.Angle += MathUtil.Cross(r2, lambdaDt) * Body2.InertiaInv;
 
                 return positionError < LINEAR_SLOP && angularError < ANGULAR_SLOP;
             }
         }
 
-        public override Vec2 GetReactionForce(float dtInv)
+        public override Vector2 GetReactionForce(float dtInv)
         {
-            return new Vec2(_lambdaAcc.X, _lambdaAcc.Y) * dtInv;
+            return new Vector2(_lambdaAcc.X, _lambdaAcc.Y) * dtInv;
         }
 
         public override float GetReactionTorque(float dtInv)

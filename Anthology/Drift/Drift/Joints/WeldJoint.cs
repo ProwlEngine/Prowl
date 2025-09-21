@@ -6,8 +6,8 @@ namespace Drift.Joints
 {
     public class WeldJoint : Joint
     {
-        private Vec2 anchor1, anchor2;
-        private Vec2 r1, r2;
+        private Vector2 anchor1, anchor2;
+        private Vector2 r1, r2;
         private float gamma, beta_c;
         private Vector3 lambdaAcc;
         private float em11, em12, em13, em22, em23, em33;
@@ -16,7 +16,7 @@ namespace Drift.Joints
         public float DampingRatio { get; private set; }
         public float MaxImpulse { get; private set; }
 
-        public WeldJoint(Body body1, Body body2, Vec2 anchor)
+        public WeldJoint(Body body1, Body body2, Vector2 anchor)
             : base(JointType.Weld, body1, body2, false)
         {
             anchor1 = body1.InverseTransformPoint(anchor);
@@ -82,14 +82,16 @@ namespace Drift.Joints
 
             if (warmStarting)
             {
-                var lambdaXY = new Vec2(lambdaAcc.X, lambdaAcc.Y);
+                var lambdaXY = new Vector2(lambdaAcc.X, lambdaAcc.Y);
                 float lambdaZ = lambdaAcc.Z;
 
-                b1.LinearVelocity.Mad(lambdaXY, -b1.MassInv);
-                b1.AngularVelocity -= (Vec2.Cross(r1, lambdaXY) + lambdaZ) * b1.InertiaInv;
+                //b1.LinearVelocity.Mad(lambdaXY, -b1.MassInv);
+                b1.LinearVelocity = MathUtil.Mad(b1.LinearVelocity, lambdaXY, -b1.MassInv);
+                b1.AngularVelocity -= (MathUtil.Cross(r1, lambdaXY) + lambdaZ) * b1.InertiaInv;
 
-                b2.LinearVelocity.Mad(lambdaXY, b2.MassInv);
-                b2.AngularVelocity += (Vec2.Cross(r2, lambdaXY) + lambdaZ) * b2.InertiaInv;
+                //b2.LinearVelocity.Mad(lambdaXY, b2.MassInv);
+                b2.LinearVelocity = MathUtil.Mad(b2.LinearVelocity, lambdaXY, b2.MassInv);
+                b2.AngularVelocity += (MathUtil.Cross(r2, lambdaXY) + lambdaZ) * b2.InertiaInv;
             }
             else
             {
@@ -110,25 +112,27 @@ namespace Drift.Joints
                 b1.AngularVelocity -= lambdaZ * b1.InertiaInv;
                 b2.AngularVelocity += lambdaZ * b2.InertiaInv;
 
-                var v1 = b1.LinearVelocity + Vec2.Perp(r1) * b1.AngularVelocity;
-                var v2 = b2.LinearVelocity + Vec2.Perp(r2) * b2.AngularVelocity;
+                var v1 = b1.LinearVelocity + MathUtil.Perp(r1) * b1.AngularVelocity;
+                var v2 = b2.LinearVelocity + MathUtil.Perp(r2) * b2.AngularVelocity;
                 var cdot1 = v2 - v1;
-                var lambdaXY = MathUtil.Solve(em11, em12, em12, em22, Vec2.Neg(cdot1));
+                var lambdaXY = MathUtil.Solve(em11, em12, em12, em22, -cdot1);
 
                 lambdaAcc.X += lambdaXY.X;
                 lambdaAcc.Y += lambdaXY.Y;
                 lambdaAcc.Z += lambdaZ;
 
-                b1.LinearVelocity.Mad(lambdaXY, -b1.MassInv);
-                b1.AngularVelocity -= Vec2.Cross(r1, lambdaXY) * b1.InertiaInv;
+                //b1.LinearVelocity.Mad(lambdaXY, -b1.MassInv);
+                b1.LinearVelocity = MathUtil.Mad(b1.LinearVelocity, lambdaXY, -b1.MassInv);
+                b1.AngularVelocity -= MathUtil.Cross(r1, lambdaXY) * b1.InertiaInv;
 
-                b2.LinearVelocity.Mad(lambdaXY, b2.MassInv);
-                b2.AngularVelocity += Vec2.Cross(r2, lambdaXY) * b2.InertiaInv;
+                //b2.LinearVelocity.Mad(lambdaXY, b2.MassInv);
+                b2.LinearVelocity = MathUtil.Mad(b2.LinearVelocity, lambdaXY, b2.MassInv);
+                b2.AngularVelocity += MathUtil.Cross(r2, lambdaXY) * b2.InertiaInv;
             }
             else
             {
-                var v1 = b1.LinearVelocity + Vec2.Perp(r1) * b1.AngularVelocity;
-                var v2 = b2.LinearVelocity + Vec2.Perp(r2) * b2.AngularVelocity;
+                var v1 = b1.LinearVelocity + MathUtil.Perp(r1) * b1.AngularVelocity;
+                var v2 = b2.LinearVelocity + MathUtil.Perp(r2) * b2.AngularVelocity;
                 var cdot1 = v2 - v1;
                 float cdot2 = b2.AngularVelocity - b1.AngularVelocity;
                 var cdot = new Vector3(cdot1.X, cdot1.Y, cdot2);
@@ -136,13 +140,15 @@ namespace Drift.Joints
                 var lambda = MathUtil.Solve3x3(em11, em12, em13, em12, em22, em23, em13, em23, em33, -cdot);
                 lambdaAcc += lambda;
 
-                var lambdaXY = new Vec2(lambda.X, lambda.Y);
+                var lambdaXY = new Vector2(lambda.X, lambda.Y);
 
-                b1.LinearVelocity.Mad(lambdaXY, -b1.MassInv);
-                b1.AngularVelocity -= (Vec2.Cross(r1, lambdaXY) + lambda.Z) * b1.InertiaInv;
+                //b1.LinearVelocity.Mad(lambdaXY, -b1.MassInv);
+                b1.LinearVelocity = MathUtil.Mad(b1.LinearVelocity, lambdaXY, -b1.MassInv);
+                b1.AngularVelocity -= (MathUtil.Cross(r1, lambdaXY) + lambda.Z) * b1.InertiaInv;
 
-                b2.LinearVelocity.Mad(lambdaXY, b2.MassInv);
-                b2.AngularVelocity += (Vec2.Cross(r2, lambdaXY) + lambda.Z) * b2.InertiaInv;
+                //b2.LinearVelocity.Mad(lambdaXY, b2.MassInv);
+                b2.LinearVelocity = MathUtil.Mad(b2.LinearVelocity, lambdaXY, b2.MassInv);
+                b2.AngularVelocity += (MathUtil.Cross(r2, lambdaXY) + lambda.Z) * b2.InertiaInv;
             }
         }
 
@@ -151,8 +157,8 @@ namespace Drift.Joints
             var b1 = Body1;
             var b2 = Body2;
 
-            var r1 = Vec2.Rotate(anchor1 - b1.Centroid, b1.Angle);
-            var r2 = Vec2.Rotate(anchor2 - b2.Centroid, b2.Angle);
+            var r1 = MathUtil.Rotate(anchor1 - b1.Centroid, b1.Angle);
+            var r2 = MathUtil.Rotate(anchor2 - b2.Centroid, b2.Angle);
 
             float sumMinv = b1.MassInv + b2.MassInv;
             float r1x_i = r1.X * b1.InertiaInv;
@@ -173,37 +179,41 @@ namespace Drift.Joints
 
             if (FrequencyHz > 0)
             {
-                var correction = Vec2.Truncate(c1, Joint.MAX_LINEAR_CORRECTION);
-                var lambdaDtXY = MathUtil.Solve(k11, k12, k12, k22, Vec2.Neg(correction));
+                var correction = MathUtil.Truncate(c1, Joint.MAX_LINEAR_CORRECTION);
+                var lambdaDtXY = MathUtil.Solve(k11, k12, k12, k22, -correction);
 
-                b1.Position.Mad(lambdaDtXY, -b1.MassInv);
-                b1.Angle -= Vec2.Cross(r1, lambdaDtXY) * b1.InertiaInv;
+                //b1.Position.Mad(lambdaDtXY, -b1.MassInv);
+                b1.Position = MathUtil.Mad(b1.Position, lambdaDtXY, -b1.MassInv);
+                b1.Angle -= MathUtil.Cross(r1, lambdaDtXY) * b1.InertiaInv;
 
-                b2.Position.Mad(lambdaDtXY, b2.MassInv);
-                b2.Angle += Vec2.Cross(r2, lambdaDtXY) * b2.InertiaInv;
+                //b2.Position.Mad(lambdaDtXY, b2.MassInv);
+                b2.Position = MathUtil.Mad(b2.Position, lambdaDtXY, b2.MassInv);
+                b2.Angle += MathUtil.Cross(r2, lambdaDtXY) * b2.InertiaInv;
             }
             else
             {
                 var correction = new Vector3(
-                    Vec2.Truncate(c1, Joint.MAX_LINEAR_CORRECTION).X,
-                    Vec2.Truncate(c1, Joint.MAX_LINEAR_CORRECTION).Y,
+                    MathUtil.Truncate(c1, Joint.MAX_LINEAR_CORRECTION).X,
+                    MathUtil.Truncate(c1, Joint.MAX_LINEAR_CORRECTION).Y,
                     Math.Clamp(c2, -Joint.MAX_ANGULAR_CORRECTION, Joint.MAX_ANGULAR_CORRECTION)
                 );
 
                 var lambdaDt = MathUtil.Solve3x3(k11, k12, k13, k12, k22, k23, k13, k23, k33, -correction);
-                var lambdaDtXY = new Vec2(lambdaDt.X, lambdaDt.Y);
+                var lambdaDtXY = new Vector2(lambdaDt.X, lambdaDt.Y);
 
-                b1.Position.Mad(lambdaDtXY, -b1.MassInv);
-                b1.Angle -= (Vec2.Cross(r1, lambdaDtXY) + lambdaDt.Z) * b1.InertiaInv;
+                //b1.Position.Mad(lambdaDtXY, -b1.MassInv);
+                b1.Position = MathUtil.Mad(b1.Position, lambdaDtXY, -b1.MassInv);
+                b1.Angle -= (MathUtil.Cross(r1, lambdaDtXY) + lambdaDt.Z) * b1.InertiaInv;
 
-                b2.Position.Mad(lambdaDtXY, b2.MassInv);
-                b2.Angle += (Vec2.Cross(r2, lambdaDtXY) + lambdaDt.Z) * b2.InertiaInv;
+                //b2.Position.Mad(lambdaDtXY, b2.MassInv);
+                b2.Position = MathUtil.Mad(b2.Position, lambdaDtXY, b2.MassInv);
+                b2.Angle += (MathUtil.Cross(r2, lambdaDtXY) + lambdaDt.Z) * b2.InertiaInv;
             }
 
             return c1.Length() < Joint.LINEAR_SLOP && Math.Abs(c2) <= Joint.ANGULAR_SLOP;
         }
 
-        public override Vec2 GetReactionForce(float invDt) => new Vec2(lambdaAcc.X, lambdaAcc.Y) * invDt;
+        public override Vector2 GetReactionForce(float invDt) => new Vector2(lambdaAcc.X, lambdaAcc.Y) * invDt;
         public override float GetReactionTorque(float invDt) => lambdaAcc.Z * invDt;
     }
 }

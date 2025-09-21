@@ -1,4 +1,5 @@
 using Prowl.Drift;
+using System.Numerics;
 
 namespace DriftDemo
 {
@@ -14,7 +15,7 @@ namespace DriftDemo
             _space = space;
 
             // Create static body for boundaries
-            var staticBody = new Body(Body.BodyType.Static, Vec2.Zero);
+            var staticBody = new Body(Body.BodyType.Static, Vector2.Zero);
             staticBody.AddShape(ShapePoly.CreateBox(0, 0.2f, 20.48f, 0.4f));
             staticBody.AddShape(ShapePoly.CreateBox(0, 15.16f, 20.48f, 0.4f));
             staticBody.AddShape(ShapePoly.CreateBox(-10.04f, 7.68f, 0.4f, 14.56f));
@@ -24,7 +25,7 @@ namespace DriftDemo
             // Create random circles
             for (int i = 0; i < 25; i++)
             {
-                var pos = new Vec2(
+                var pos = new Vector2(
                     (float)(_random.NextDouble() * 20 - 10),
                     (float)(0.5 + _random.NextDouble() * 14)
                 );

@@ -1,4 +1,6 @@
-﻿namespace Prowl.Drift
+﻿using System.Numerics;
+
+namespace Prowl.Drift
 {
     public abstract class Shape
     {
@@ -26,13 +28,13 @@
         }
 
         public abstract Shape Duplicate();
-        public abstract void Recenter(Vec2 c);
+        public abstract void Recenter(Vector2 c);
         public abstract float Area();
-        public abstract Vec2 Centroid();
+        public abstract Vector2 Centroid();
         public abstract float Inertia(float mass);
         public abstract void CacheData(Body body);
-        public abstract bool PointQuery(Vec2 p);
-        public abstract int FindVertexByPoint(Vec2 p, float minDist);
-        public abstract float DistanceOnPlane(Vec2 n, float d);
+        public abstract bool PointQuery(Vector2 p);
+        public abstract int FindVertexByPoint(Vector2 p, float minDist);
+        public abstract float DistanceOnPlane(Vector2 n, float d);
     }
 }
