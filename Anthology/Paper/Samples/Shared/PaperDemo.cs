@@ -210,19 +210,19 @@ namespace Shared
                     int index = i;
                     bool isSelected = selectedTabIndex == index;
 
-                    using (Gui.Box($"MenuItemContainer_{i}")
+                    using (Gui.Box("MenuItemContainer", i)
                         .Style("menu-item")
                         .StyleIf(isSelected, "menu-item-selected")
                         .OnClick((rect) => selectedTabIndex = index)
                         .Clip()
                         .Enter())
                     {
-                        Gui.Box($"MenuItemIcon_{i}")
+                        Gui.Box("MenuItemIcon", i)
                             .Width(55)
                             .Height(50)
                             .Text(menuIcons[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter).FontSize(19);
 
-                        Gui.Box($"MenuItem_{i}")
+                        Gui.Box("MenuItem", i)
                             .Width(100)
                             .PositionType(PositionType.SelfDirected)
                             .Left(50 + 15)
@@ -297,7 +297,7 @@ namespace Shared
                     Color tabColor = isSelected ? Themes.primaryColor : Themes.lightTextColor;
                     double tabWidth = 1.0f / tabNames.Length;
 
-                    using (Gui.Box($"Tab_{i}")
+                    using (Gui.Box("Tab", i)
                         .Width(Gui.Stretch(tabWidth))
                         .Style("tab")
                         .Text(tabNames[i], Fonts.arial).TextColor(tabColor).Alignment(TextAlignment.MiddleCenter).FontSize(26)
@@ -307,7 +307,7 @@ namespace Shared
                         // Show indicator line for selected tab
                         if (isSelected)
                         {
-                            Gui.Box($"TabIndicator_{i}")
+                            Gui.Box("TabIndicator", i)
                                 .Height(4)
                                 .BackgroundColor(Themes.primaryColor)
                                 .Rounded(2);
@@ -329,7 +329,7 @@ namespace Shared
 
                 for (int i = 0; i < 4; i++)
                 {
-                    using (Gui.Box($"StatCard_{i}")
+                    using (Gui.Box("StatCard", i)
                         .Width(Gui.Stretch(0.25f))
                         .Style("stat-card")
                         .Hovered
@@ -339,7 +339,7 @@ namespace Shared
                         .Enter())
                     {
                         // Card icon with conditional styling based on parent hover
-                        Gui.Box($"StatIcon_{i}")
+                        Gui.Box("StatIcon", i)
                             .Size(40)
                             .BackgroundColor(Color.FromArgb(150, Themes.colorPalette[i % Themes.colorPalette.Length]))
                             .Rounded(8)
@@ -350,15 +350,15 @@ namespace Shared
                             .Margin(15, 0, 15, 0)
                             .IsNotInteractable();
 
-                        using (Gui.Column($"StatContent_{i}")
+                        using (Gui.Column("StatContent", i)
                             .Margin(10, 15, 15, 15)
                             .Enter())
                         {
-                            Gui.Box($"StatLabel_{i}")
+                            Gui.Box("StatLabel", i)
                                 .Height(Gui.Pixels(25))
                                 .Text(statNames[i], Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19);
 
-                            Gui.Box($"StatValue_{i}")
+                            Gui.Box("StatValue", i)
                                 .Text(statValues[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(32);
                         }
                     }
@@ -564,13 +564,13 @@ namespace Shared
 
                         for (int i = 0; i < activities.Length; i++)
                         {
-                            using (Gui.Row($"Activity_{i}")
+                            using (Gui.Row("Activity", i)
                                 .Height(70)
                                 .Margin(15, 15, i == 0 ? 5 : 0, 5)
                                 .Enter())
                             {
                                 // Activity icon
-                                using (Gui.Box($"ActivityIcon_{i}")
+                                using (Gui.Box("ActivityIcon", i)
                                     .Width(40)
                                     .Height(40)
                                     .Rounded(8)
@@ -580,17 +580,17 @@ namespace Shared
                                     .Enter()) { }
 
                                 // Activity content
-                                using (Gui.Column($"ActivityContent_{i}")
+                                using (Gui.Column("ActivityContent", i)
                                     .Margin(10, 0, 0, 0)
                                     .Enter())
                                 {
-                                    using (Gui.Box($"ActivityText_{i}")
+                                    using (Gui.Box("ActivityText", i)
                                         .Height(Gui.Pixels(20))
                                         .Margin(0, 0, 15, 0)
                                         .Text(activities[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                         .Enter()) { }
 
-                                    using (Gui.Box($"ActivityTime_{i}")
+                                    using (Gui.Box("ActivityTime", i)
                                         .Height(Gui.Pixels(20))
                                         .Text(timestamps[i], Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                         .Enter()) { }
@@ -600,7 +600,7 @@ namespace Shared
                             // Add separator except for the last item
                             if (i < activities.Length - 1)
                             {
-                                Gui.Box($"Separator_{i}").Style("seperator");
+                                Gui.Box("Separator", i).Style("seperator");
                             }
                         }
                     }
@@ -702,7 +702,7 @@ namespace Shared
                                 // Custom icon for each card
                                 string icon = Icons.GetRandomIcon(i);
 
-                                using (Gui.Box($"Card_{i}")
+                                using (Gui.Box("Card", i)
                                     .Height(70)
                                     .Margin(10, 10, 5, 5)
                                     .BackgroundColor(Color.FromArgb(230, itemColor))
@@ -716,7 +716,7 @@ namespace Shared
                                         .Enter())
                                     {
                                         // Icon
-                                        using (Gui.Box($"CardIcon_{i}")
+                                        using (Gui.Box("CardIcon", i)
                                             .Width(50)
                                             .Height(50)
                                             .Rounded(25)
@@ -725,16 +725,16 @@ namespace Shared
                                             .Enter()) { }
 
                                         // Content
-                                        using (Gui.Column($"CardTextColumn_{i}")
+                                        using (Gui.Column("CardTextColumn", i)
                                             .Margin(10, 0, 0, 0)
                                             .Enter())
                                         {
-                                            using (Gui.Box($"CardTitle_{i}")
+                                            using (Gui.Box("CardTitle", i)
                                                 .Height(25)
                                                 .Text($"Item {i}", Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26)
                                                 .Enter()) { }
 
-                                            using (Gui.Box($"CardDescription_{i}")
+                                            using (Gui.Box("CardDescription", i)
                                                 .Text("Interactive card with animations", Fonts.arial).TextColor(Color.FromArgb(200, Themes.textColor)).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                                 .Enter()) { }
                                         }
@@ -813,16 +813,16 @@ namespace Shared
 
                         for (int i = 0; i < statLabels.Length; i++)
                         {
-                            using (Gui.Column($"Stat_{i}")
+                            using (Gui.Column("Stat", i)
                                 .Width(Gui.Stretch(1.0f / statLabels.Length))
                                 .Enter())
                             {
-                                using (Gui.Box($"StatValue_{i}")
+                                using (Gui.Box("StatValue", i)
                                     .Height(40)
                                     .Text(statValues[i], Fonts.arial).TextColor(Themes.primaryColor).Alignment(TextAlignment.MiddleCenter).FontSize(32)
                                     .Enter()) { }
 
-                                using (Gui.Box($"StatLabel_{i}")
+                                using (Gui.Box("StatLabel", i)
                                     .Height(30)
                                     .Text(statLabels[i], Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                                     .Enter()) { }
@@ -840,16 +840,16 @@ namespace Shared
 
                         for (int i = 0; i < contactLabels.Length; i++)
                         {
-                            using (Gui.Row($"ContactRow_{i}")
+                            using (Gui.Row("ContactRow", i)
                                 .Height(50)
                                 .Enter())
                             {
-                                using (Gui.Box($"ContactLabel_{i}")
+                                using (Gui.Box("ContactLabel", i)
                                     .Width(100)
                                     .Text(contactLabels[i] + ":", Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                     .Enter()) { }
 
-                                using (Gui.Box($"ContactValue_{i}")
+                                using (Gui.Box("ContactValue", i)
                                     .Text(contactValues[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                     .Enter()) { }
                             }
@@ -957,19 +957,19 @@ namespace Shared
                         {
                             for (int i = 0; i < skills.Length; i++)
                             {
-                                using (Gui.Column($"Skill_{i}")
+                                using (Gui.Column("Skill", i)
                                     .Height(Gui.Stretch(1.0f / skills.Length))
                                     .Margin(0, 0, i == 0 ? 0 : 10, 0)
                                     .Enter())
                                 {
                                     // Skill label
-                                    using (Gui.Box($"SkillLabel_{i}")
+                                    using (Gui.Box("SkillLabel", i)
                                         .Height(25)
                                         .Text(skills[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                         .Enter()) { }
 
                                     // Skill bar
-                                    using (Gui.Row($"SkillBarBg_{i}")
+                                    using (Gui.Row("SkillBarBg", i)
                                         .Height(15)
                                         .BackgroundColor(Color.FromArgb(30, 0, 0, 0))
                                         //.Style(BoxStyle.SolidRounded(Color.FromArgb(30, 0, 0, 0), 7.5f))
@@ -978,14 +978,14 @@ namespace Shared
                                         // Animate the skill level with time
                                         double animatedLevel = skillLevels[i];
 
-                                        using (Gui.Box($"SkillBarFg_{i}")
+                                        using (Gui.Box("SkillBarFg", i)
                                             .Width(Gui.Percent(animatedLevel * 100f))
                                             .BackgroundColor(Themes.colorPalette[i % Themes.colorPalette.Length])
                                             //.Style(BoxStyle.SolidRoundedWithBorder(colorPalette[i % colorPalette.Length], primaryColor, 7.5f, 2))
                                             .Enter()) { }
 
                                         // Percentage label
-                                        using (Gui.Box($"SkillPercent_{i}")
+                                        using (Gui.Box("SkillPercent", i)
                                             .Width(40)
                                             .Text($"{animatedLevel * 100:F0}%", Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.Right).FontSize(19)
                                             .Enter()) { }
@@ -1054,13 +1054,13 @@ namespace Shared
 
                     for (int i = 0; i < options.Length; i++)
                     {
-                        using (Gui.Row($"Setting_{i}")
+                        using (Gui.Row("Setting", i)
                             .Height(60)
                             .Margin(20, 20, i == 0 ? 0 : 5, 5)
                             .Enter())
                         {
                             // Option label
-                            Gui.Box($"SettingLabel_{i}")
+                            Gui.Box("SettingLabel", i)
                                 .Text(options[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26);
 
                             bool isOn = toggleState[i];
@@ -1071,7 +1071,7 @@ namespace Shared
                         // Add separator except for the last item
                         if (i < options.Length - 1)
                         {
-                            Gui.Box($"Separator_{i}").Style("separator");
+                            Gui.Box("Separator", i).Style("separator");
                         }
                     }
 
