@@ -4,12 +4,6 @@ using System.Numerics;
 
 namespace Prowl.Drift
 {
-    public struct Plane(Vec2 normal, float distance)
-    {
-        public Vec2 Normal = normal;
-        public float Distance = distance;
-    }
-
     public struct Vec2(float x, float y)
     {
         public float X = x;

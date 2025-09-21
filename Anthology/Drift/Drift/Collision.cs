@@ -240,7 +240,7 @@
             return contacts.Count;
         }
 
-        private static (float Dist, int Index) FindMSA(ShapePoly poly, List<Plane> planes, int num)
+        private static (float Dist, int Index) FindMSA(ShapePoly poly, List<ShapePoly.Plane> planes, int num)
         {
             float minDist = float.NegativeInfinity;
             int minIdx = -1;

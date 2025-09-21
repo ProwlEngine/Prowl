@@ -2,6 +2,12 @@
 {
     public class ShapePoly : Shape
     {
+        public struct Plane(Vec2 normal, float distance)
+        {
+            public Vec2 Normal = normal;
+            public float Distance = distance;
+        }
+
         public List<Vec2> Verts { get; } = new();
         public List<Plane> Planes { get; } = new();
 
