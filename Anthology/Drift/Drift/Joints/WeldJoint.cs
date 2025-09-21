@@ -10,7 +10,7 @@ namespace Drift.Joints
         private Vec2 r1, r2;
         private float gamma, beta_c;
         private Vector3 lambdaAcc;
-        private Mat3 emInv;
+        private float em11, em12, em13, em22, em23, em33;
 
         public float FrequencyHz { get; private set; }
         public float DampingRatio { get; private set; }
@@ -55,7 +55,8 @@ namespace Drift.Joints
             float k23 = r1x_i + r2x_i;
             float k33 = b1.InertiaInv + b2.InertiaInv;
 
-            emInv = new Mat3(k11, k12, k13, k12, k22, k23, k13, k23, k33);
+            em11 = k11; em12 = k12; em13 = k13;
+            em22 = k22; em23 = k23; em33 = k33;
 
             if (FrequencyHz > 0)
             {
@@ -71,7 +72,7 @@ namespace Drift.Joints
                 float pc = b2.Angle - b1.Angle;
                 beta_c = beta * pc;
 
-                emInv.M33 += gamma;
+                em33 += gamma;
             }
             else
             {
@@ -104,7 +105,7 @@ namespace Drift.Joints
             if (FrequencyHz > 0)
             {
                 float cdot2 = b2.AngularVelocity - b1.AngularVelocity;
-                float lambdaZ = -(cdot2 + beta_c + gamma * lambdaAcc.Z) / emInv.M33;
+                float lambdaZ = -(cdot2 + beta_c + gamma * lambdaAcc.Z) / em33;
 
                 b1.AngularVelocity -= lambdaZ * b1.InertiaInv;
                 b2.AngularVelocity += lambdaZ * b2.InertiaInv;
@@ -112,7 +113,7 @@ namespace Drift.Joints
                 var v1 = b1.LinearVelocity + Vec2.Perp(r1) * b1.AngularVelocity;
                 var v2 = b2.LinearVelocity + Vec2.Perp(r2) * b2.AngularVelocity;
                 var cdot1 = v2 - v1;
-                var lambdaXY = emInv.Solve2x2(cdot1.Neg());
+                var lambdaXY = MathUtil.Solve(em11, em12, em12, em22, Vec2.Neg(cdot1));
 
                 lambdaAcc.X += lambdaXY.X;
                 lambdaAcc.Y += lambdaXY.Y;
@@ -132,7 +133,7 @@ namespace Drift.Joints
                 float cdot2 = b2.AngularVelocity - b1.AngularVelocity;
                 var cdot = new Vector3(cdot1.X, cdot1.Y, cdot2);
 
-                var lambda = emInv.Solve(-cdot);
+                var lambda = MathUtil.Solve3x3(em11, em12, em13, em12, em22, em23, em13, em23, em33, -cdot);
                 lambdaAcc += lambda;
 
                 var lambdaXY = new Vec2(lambda.X, lambda.Y);
@@ -166,7 +167,6 @@ namespace Drift.Joints
             float k23 = r1x_i + r2x_i;
             float k33 = b1.InertiaInv + b2.InertiaInv;
 
-            var emInv = new Mat3(k11, k12, k13, k12, k22, k23, k13, k23, k33);
 
             var c1 = b2.Position + r2 - (b1.Position + r1);
             var c2 = b2.Angle - b1.Angle;
@@ -174,7 +174,7 @@ namespace Drift.Joints
             if (FrequencyHz > 0)
             {
                 var correction = Vec2.Truncate(c1, Joint.MAX_LINEAR_CORRECTION);
-                var lambdaDtXY = emInv.Solve2x2(correction.Neg());
+                var lambdaDtXY = MathUtil.Solve(k11, k12, k12, k22, Vec2.Neg(correction));
 
                 b1.Position.Mad(lambdaDtXY, -b1.MassInv);
                 b1.Angle -= Vec2.Cross(r1, lambdaDtXY) * b1.InertiaInv;
@@ -190,7 +190,7 @@ namespace Drift.Joints
                     Math.Clamp(c2, -Joint.MAX_ANGULAR_CORRECTION, Joint.MAX_ANGULAR_CORRECTION)
                 );
 
-                var lambdaDt = emInv.Solve(-correction);
+                var lambdaDt = MathUtil.Solve3x3(k11, k12, k13, k12, k22, k23, k13, k23, k33, -correction);
                 var lambdaDtXY = new Vec2(lambdaDt.X, lambdaDt.Y);
 
                 b1.Position.Mad(lambdaDtXY, -b1.MassInv);

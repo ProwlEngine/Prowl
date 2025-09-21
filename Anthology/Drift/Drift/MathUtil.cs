@@ -92,63 +92,6 @@ namespace Prowl.Drift
         public override int GetHashCode() => HashCode.Combine(X, Y);
     }
 
-
-    //-----------------------------------
-    // Mat2x2 Helper
-    //-----------------------------------
-    public static class Mat2x2
-    {
-    }
-
-    //-----------------------------------
-    // Mat3
-    //-----------------------------------
-    public struct Mat3
-    {
-        public float M11, M12, M13;
-        public float M21, M22, M23;
-        public float M31, M32, M33;
-
-        public Mat3(float m11, float m12, float m13,
-                    float m21, float m22, float m23,
-                    float m31, float m32, float m33)
-        {
-            M11 = m11; M12 = m12; M13 = m13;
-            M21 = m21; M22 = m22; M23 = m23;
-            M31 = m31; M32 = m32; M33 = m33;
-        }
-
-        public Vec2 Solve2x2(Vec2 b)
-        {
-            float det = M11 * M22 - M12 * M21;
-            if (det != 0) det = 1 / det;
-            return new Vec2(det * (M22 * b.X - M12 * b.Y),
-                            det * (M11 * b.Y - M21 * b.X));
-        }
-
-        public Vector3 Solve(Vector3 b)
-        {
-            float det2_11 = M22 * M33 - M23 * M32;
-            float det2_12 = M23 * M31 - M21 * M33;
-            float det2_13 = M21 * M32 - M22 * M31;
-
-            float det = M11 * det2_11 + M12 * det2_12 + M13 * det2_13;
-            if (det != 0) det = 1 / det;
-
-            float det2_21 = M13 * M32 - M12 * M33;
-            float det2_22 = M11 * M33 - M13 * M31;
-            float det2_23 = M12 * M31 - M11 * M32;
-            float det2_31 = M12 * M23 - M13 * M22;
-            float det2_32 = M13 * M21 - M11 * M23;
-            float det2_33 = M11 * M22 - M12 * M21;
-
-            return new Vector3(
-                det * (det2_11 * b.X + det2_12 * b.Y + det2_13 * b.Z),
-                det * (det2_21 * b.X + det2_22 * b.Y + det2_23 * b.Z),
-                det * (det2_31 * b.X + det2_32 * b.Y + det2_33 * b.Z));
-        }
-    }
-
     //-----------------------------------
     // Transform
     //-----------------------------------
@@ -262,6 +205,30 @@ namespace Prowl.Drift
             if (det != 0) det = 1 / det;
             return new Vec2(det * (m22 * b.X - m12 * b.Y),
                             det * (m11 * b.Y - m21 * b.X));
+        }
+
+        public static Vector3 Solve3x3(float m11, float m12, float m13,
+                                       float m21, float m22, float m23,
+                                       float m31, float m32, float m33, Vector3 b)
+        {
+            float det2_11 = m22 * m33 - m23 * m32;
+            float det2_12 = m23 * m31 - m21 * m33;
+            float det2_13 = m21 * m32 - m22 * m31;
+
+            float det = m11 * det2_11 + m12 * det2_12 + m13 * det2_13;
+            if (det != 0) det = 1 / det;
+
+            float det2_21 = m13 * m32 - m12 * m33;
+            float det2_22 = m11 * m33 - m13 * m31;
+            float det2_23 = m12 * m31 - m11 * m32;
+            float det2_31 = m12 * m23 - m13 * m22;
+            float det2_32 = m13 * m21 - m11 * m23;
+            float det2_33 = m11 * m22 - m12 * m21;
+
+            return new Vector3(
+                det * (det2_11 * b.X + det2_12 * b.Y + det2_13 * b.Z),
+                det * (det2_21 * b.X + det2_22 * b.Y + det2_23 * b.Z),
+                det * (det2_31 * b.X + det2_32 * b.Y + det2_33 * b.Z));
         }
     }
 }

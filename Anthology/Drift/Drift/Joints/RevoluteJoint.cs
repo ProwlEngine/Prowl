@@ -7,7 +7,7 @@ namespace Drift.Joints
     public class RevoluteJoint : Joint
     {
         private Vec2 _r1, _r2;
-        private Mat3 _emInv;
+        private float _em11, _em12, _em13, _em22, _em23, _em33;
         private float _em2; // Angular effective mass
 
         private Vector3 _lambdaAcc = Vector3.Zero;
@@ -97,7 +97,8 @@ namespace Drift.Joints
 
             float k33 = Body1.InertiaInv + Body2.InertiaInv;
 
-            _emInv = new Mat3(k11, k12, k13, k12, k22, k23, k13, k23, k33);
+            _em11 = k11; _em12 = k12; _em13 = k13;
+            _em22 = k22; _em23 = k23; _em33 = k33;
             _em2 = k33 != 0 ? 1f / k33 : 0;
 
             if (warmStarting)
@@ -143,7 +144,7 @@ namespace Drift.Joints
                 float cdot2 = Body2.AngularVelocity - Body1.AngularVelocity;
                 var cdot = new Vector3(cdot1.X, cdot1.Y, cdot2);
 
-                var lambda = _emInv.Solve(-cdot);
+                var lambda = MathUtil.Solve3x3(_em11, _em12, _em13, _em12, _em22, _em23, _em13, _em23, _em33, -cdot);
 
                 if (_limitState == LIMIT_STATE_EQUAL_LIMITS)
                 {
@@ -157,8 +158,8 @@ namespace Drift.Joints
 
                     if (lowerLimited || upperLimited)
                     {
-                        var rhs = cdot1 + new Vec2(_emInv.M13, _emInv.M23) * newZ;
-                        var reduced = _emInv.Solve2x2(rhs.Neg());
+                        var rhs = cdot1 + new Vec2(_em13, _em23) * newZ;
+                        var reduced = MathUtil.Solve(_em11, _em12, _em12, _em22, Vec2.Neg(rhs));
                         lambda.X = reduced.X;
                         lambda.Y = reduced.Y;
                         lambda.Z = -_lambdaAcc.Z;
@@ -187,7 +188,7 @@ namespace Drift.Joints
                 var v2 = Body2.LinearVelocity + Vec2.Perp(_r2) * Body2.AngularVelocity;
                 var cdot = v2 - v1;
 
-                var lambda = _emInv.Solve2x2(cdot.Neg());
+                var lambda = MathUtil.Solve(_em11, _em12, _em12, _em22, Vec2.Neg(cdot));
 
                 _lambdaAcc += new Vector3(lambda.X, lambda.Y, 0);
 
