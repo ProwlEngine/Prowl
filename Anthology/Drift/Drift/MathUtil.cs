@@ -29,8 +29,6 @@ namespace Prowl.Drift
 
         public float Length() => MathF.Sqrt(X * X + Y * Y);
 
-        public float Dot(Vec2 v) => X * v.X + Y * v.Y;
-
         // ===== Static methods =====
 
         public static Vec2 Mad(Vec2 v1, Vec2 v2, float s) => new Vec2(v1.X + v2.X * s, v1.Y + v2.Y * s);
@@ -84,66 +82,6 @@ namespace Prowl.Drift
 
         public override bool Equals(object obj) => obj is Vec2 v && this == v;
         public override int GetHashCode() => HashCode.Combine(X, Y);
-    }
-
-    //-----------------------------------
-    // Transform
-    //-----------------------------------
-    public struct Transform
-    {
-        public Vec2 T;   // position
-        public float C;  // cos(angle)
-        public float S;  // sin(angle)
-
-        public Transform(Vec2 pos, float angle)
-        {
-            T = pos.Duplicate();
-            C = MathF.Cos(angle);
-            S = MathF.Sin(angle);
-        }
-
-        public Transform Set(Vec2 pos, float angle)
-        {
-            T.Copy(pos);
-            C = MathF.Cos(angle);
-            S = MathF.Sin(angle);
-            return this;
-        }
-
-        public Transform SetRotation(float angle)
-        {
-            C = MathF.Cos(angle);
-            S = MathF.Sin(angle);
-            return this;
-        }
-
-        public Transform SetPosition(Vec2 p)
-        {
-            T.Copy(p);
-            return this;
-        }
-
-        public Vec2 Rotate(Vec2 v)
-        {
-            return new Vec2(v.X * C - v.Y * S, v.X * S + v.Y * C);
-        }
-
-        public Vec2 Unrotate(Vec2 v)
-        {
-            return new Vec2(v.X * C + v.Y * S, -v.X * S + v.Y * C);
-        }
-
-        public Vec2 TransformPoint(Vec2 v)
-        {
-            return new Vec2(v.X * C - v.Y * S + T.X, v.X * S + v.Y * C + T.Y);
-        }
-
-        public Vec2 UntransformPoint(Vec2 v)
-        {
-            float px = v.X - T.X;
-            float py = v.Y - T.Y;
-            return new Vec2(px * C + py * S, -px * S + py * C);
-        }
     }
 
     //-----------------------------------

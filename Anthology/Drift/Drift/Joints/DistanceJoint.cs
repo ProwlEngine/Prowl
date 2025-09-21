@@ -20,8 +20,8 @@ namespace Prowl.Drift
         public DistanceJoint(Body body1, Body body2, Vec2 anchor1, Vec2 anchor2)
             : base(JointType.Distance, body1, body2, true)
         {
-            Anchor1 = Body1.GetLocalPoint(anchor1);
-            Anchor2 = Body2.GetLocalPoint(anchor2);
+            Anchor1 = Body1.InverseTransformPoint(anchor1);
+            Anchor2 = Body2.InverseTransformPoint(anchor2);
             _restLength = Vec2.Distance(anchor1, anchor2);
             _lambdaAcc = 0;
         }
@@ -31,20 +31,20 @@ namespace Prowl.Drift
 
         public override void SetWorldAnchor1(Vec2 anchor1)
         {
-            Anchor1 = Body1.GetLocalPoint(anchor1);
+            Anchor1 = Body1.InverseTransformPoint(anchor1);
             _restLength = Vec2.Distance(anchor1, GetWorldAnchor2());
         }
 
         public override void SetWorldAnchor2(Vec2 anchor2)
         {
-            Anchor2 = Body2.GetLocalPoint(anchor2);
+            Anchor2 = Body2.InverseTransformPoint(anchor2);
             _restLength = Vec2.Distance(anchor2, GetWorldAnchor1());
         }
 
         public override void InitSolver(float dt, bool warmStarting)
         {
-            _r1 = Body1.Transform.Rotate(Anchor1 - Body1.Centroid);
-            _r2 = Body2.Transform.Rotate(Anchor2 - Body2.Centroid);
+            _r1 = Body1.RotatePoint(Anchor1 - Body1.Centroid);
+            _r2 = Body2.RotatePoint(Anchor2 - Body2.Centroid);
 
             Vec2 d = (Body2.Position + _r2) - (Body1.Position + _r1);
             float dist = d.Length();

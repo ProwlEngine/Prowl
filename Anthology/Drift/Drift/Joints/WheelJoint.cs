@@ -26,13 +26,13 @@ namespace Drift.Joints
         public WheelJoint(Body body1, Body body2, Vec2 a1, Vec2 a2)
             : base(JointType.Wheel, body1, body2, true)
         {
-            anchor1 = body1.GetLocalPoint(a1);
-            anchor2 = body2.GetLocalPoint(a2);
+            anchor1 = body1.InverseTransformPoint(a1);
+            anchor2 = body2.InverseTransformPoint(a2);
 
             var d = a2 - a1;
             RestLength = d.Length();
 
-            uLocal = body1.GetLocalVector(Vec2.Normalize(d));
+            uLocal = body1.InverseRotatePoint(Vec2.Normalize(d));
             nLocal = Vec2.Perp(uLocal);
 
             lambdaAcc = 0;
@@ -53,8 +53,8 @@ namespace Drift.Joints
             var b1 = Body1;
             var b2 = Body2;
 
-            r1 = b1.Transform.Rotate(anchor1 - b1.Centroid);
-            r2 = b2.Transform.Rotate(anchor2 - b2.Centroid);
+            r1 = b1.RotatePoint(anchor1 - b1.Centroid);
+            r2 = b2.RotatePoint(anchor2 - b2.Centroid);
 
             var p1 = b1.Position + r1;
             var p2 = b2.Position + r2;

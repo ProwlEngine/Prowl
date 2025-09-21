@@ -42,11 +42,11 @@ namespace Prowl.Drift
             CollideConnected = collideConnected;
         }
 
-        public virtual Vec2 GetWorldAnchor1() => Body1.GetWorldPoint(Anchor1);
-        public virtual Vec2 GetWorldAnchor2() => Body2.GetWorldPoint(Anchor2);
+        public virtual Vec2 GetWorldAnchor1() => Body1.TransformPoint(Anchor1);
+        public virtual Vec2 GetWorldAnchor2() => Body2.TransformPoint(Anchor2);
 
-        public virtual void SetWorldAnchor1(Vec2 anchor1) => Anchor1 = Body1.GetLocalPoint(anchor1);
-        public virtual void SetWorldAnchor2(Vec2 anchor2) => Anchor2 = Body2.GetLocalPoint(anchor2);
+        public virtual void SetWorldAnchor1(Vec2 anchor1) => Anchor1 = Body1.InverseTransformPoint(anchor1);
+        public virtual void SetWorldAnchor2(Vec2 anchor2) => Anchor2 = Body2.InverseTransformPoint(anchor2);
 
         // Solver interface
         public abstract void InitSolver(float dt, bool warmStarting);

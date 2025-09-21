@@ -17,7 +17,6 @@
         public BodyType Type { get; private set; }
 
         // Transform & state
-        public Transform Transform;
         public Vec2 Centroid;           // local center of mass
         public Vec2 Position;           // world position of centroid
         public Vec2 LinearVelocity;     // linear velocity
@@ -50,10 +49,10 @@
             Id = _idCounter++;
 
             Type = type;
-            Transform = new Transform(pos, angle);
 
             Centroid = Vec2.Zero;
-            Position = new Vec2(pos.X, pos.Y);
+            // pos is world origin; centroid starts at 0 so this equals pos
+            Position = pos;// + RotatePoint(Centroid);
             LinearVelocity = Vec2.Zero;
             AccumulatedForce = Vec2.Zero;
 
@@ -67,7 +66,7 @@
 
         public Body Duplicate()
         {
-            var body = new Body(Type, Transform.T, Angle);
+            var body = new Body(Type, Position - RotatePoint(Centroid), Angle);
             foreach (var shape in Shapes)
                 body.AddShape(shape.Duplicate(), false);
             body.RecalculateMass();
@@ -116,23 +115,70 @@
             InertiaInv = inertia > 0 ? 1 / inertia : 0;
         }
 
-        public void SetTransform(Vec2 pos, float angle)
+        /// <summary>
+        /// Transforms a point by applying both rotation and translation.
+        /// Equivalent to rotating the point and then translating by T.
+        /// </summary>
+        /// <param name="v">The point to transform.</param>
+        /// <returns>The transformed point.</returns>
+        public Vec2 TransformPoint(Vec2 localPoint)
         {
-            Transform.Set(pos, angle);
-            Position = Transform.TransformPoint(Centroid);
-            Angle = angle;
+            float cos = MathF.Cos(Angle);
+            float sin = MathF.Sin(Angle);
+
+            float lx = localPoint.X - Centroid.X;
+            float ly = localPoint.Y - Centroid.Y;
+
+            return new Vec2(
+                Position.X + (lx * cos - ly * sin),
+                Position.Y + (lx * sin + ly * cos)
+            );
+        }
+        
+        /// <summary>
+        /// Rotates a vector by this transform's rotation (without translation).
+        /// </summary>
+        /// <param name="v">The vector to rotate.</param>
+        /// <returns>The rotated vector.</returns>
+        public Vec2 RotatePoint(Vec2 localPoint)
+        {
+            float cos = MathF.Cos(Angle);
+            float sin = MathF.Sin(Angle);
+            return new Vec2(localPoint.X * cos - localPoint.Y * sin, localPoint.X * sin + localPoint.Y * cos);
         }
 
-        public void SyncTransform()
+        /// <summary>
+        /// Applies the inverse transformation to a point.
+        /// Equivalent to translating by -T and then applying inverse rotation.
+        /// </summary>
+        /// <param name="v">The point to untransform.</param>
+        /// <returns>The untransformed point.</returns>
+
+        public Vec2 InverseTransformPoint(Vec2 worldPoint)
         {
-            Transform.SetRotation(Angle);
-            Transform.SetPosition(Position - Transform.Rotate(Centroid));
+            float cos = MathF.Cos(Angle);
+            float sin = MathF.Sin(Angle);
+
+            float dx = worldPoint.X - Position.X;
+            float dy = worldPoint.Y - Position.Y;
+
+            return new Vec2(
+                dx * cos + dy * sin + Centroid.X,
+               -dx * sin + dy * cos + Centroid.Y
+            );
         }
 
-        public Vec2 GetWorldPoint(Vec2 p) => Transform.TransformPoint(p);
-        public Vec2 GetWorldVector(Vec2 v) => Transform.Rotate(v);
-        public Vec2 GetLocalPoint(Vec2 p) => Transform.UntransformPoint(p);
-        public Vec2 GetLocalVector(Vec2 v) => Transform.Unrotate(v);
+        /// <summary>
+        /// Applies the inverse rotation of this transform to a vector (without translation).
+        /// </summary>
+        /// <param name="v">The vector to unrotate.</param>
+        /// <returns>The unrotated vector.</returns>
+        public Vec2 InverseRotatePoint(Vec2 worldVector)
+        {
+            float cos = MathF.Cos(Angle);
+            float sin = MathF.Sin(Angle);
+            return new Vec2(worldVector.X * cos + worldVector.Y * sin, -worldVector.X * sin + worldVector.Y * cos);
+        }
 
         public void SetFixedRotation(bool flag, bool recalculateMass = true)
         {
@@ -143,6 +189,9 @@
 
         public void RecalculateMass()
         {
+            // Save current origin so we can keep it fixed through the centroid change.
+            Vec2 origin = Position - RotatePoint(Centroid);
+
             Centroid = Vec2.Zero;
             Mass = 0;
             MassInv = 0;
@@ -151,7 +200,9 @@
 
             if (!IsDynamic())
             {
-                Position = Transform.TransformPoint(Centroid);
+                // For static/kinetic bodies we don't recompute mass/inertia,
+                // but keep internal consistency: Position stays as world centroid.
+                Position = origin + RotatePoint(Centroid);
                 return;
             }
 
@@ -170,14 +221,18 @@
                 totalInertia += inertia;
             }
 
-            Centroid = totalMassCentroid / totalMass;
+            Centroid = totalMass > 0 ? totalMassCentroid / totalMass : Vec2.Zero;
             SetMass(totalMass);
 
             if (!FixedRotation)
                 SetInertia(totalInertia - totalMass * Vec2.Dot(Centroid, Centroid));
 
             var oldP = Position;
-            Position = Transform.TransformPoint(Centroid);
+
+            // Keep world origin fixed, update Position to new world centroid
+            Position = origin + RotatePoint(Centroid);
+
+            // v_com' = v_com + ω × (Δr), with Δr = (Position - oldP) in world
             LinearVelocity.Mad(Vec2.Perp(Position - oldP), AngularVelocity);
         }
 
@@ -198,7 +253,7 @@
             Bounds.Clear();
             foreach (var shape in Shapes)
             {
-                shape.CacheData(Transform);
+                shape.CacheData(this);
                 Bounds.AddBounds(shape.Bounds);
             }
         }

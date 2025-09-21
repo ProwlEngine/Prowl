@@ -118,9 +118,6 @@
             bool positionSolved = PositionSolver(posIterations);
 
             foreach (var body in _bodies)
-                body?.SyncTransform();
-
-            foreach (var body in _bodies)
             {
                 if (body.IsDynamic())
                     body.CacheData();

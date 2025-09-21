@@ -53,8 +53,8 @@
             {
                 con.R1 = con.Position - b1.Position;
                 con.R2 = con.Position - b2.Position;
-                con.R1Local = b1.Transform.Unrotate(con.R1);
-                con.R2Local = b2.Transform.Unrotate(con.R2);
+                con.R1Local = b1.InverseRotatePoint(con.R1);
+                con.R2Local = b2.InverseRotatePoint(con.R2);
 
                 var n = con.NormalTowardTwo;
                 var t = Vec2.Perp(n);

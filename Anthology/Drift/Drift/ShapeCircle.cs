@@ -16,19 +16,15 @@
 
         public override void Recenter(Vec2 c) => LocalCenter -= c;
 
-        public override void Transform(Transform xf) => LocalCenter = xf.TransformPoint(LocalCenter);
-
-        public override void Untransform(Transform xf) => LocalCenter = xf.UntransformPoint(LocalCenter);
-
         public override float Area() => MathF.PI * (Radius * Radius);
 
         public override Vec2 Centroid() => LocalCenter;
 
         public override float Inertia(float mass) => Geometry.InertiaForCircle(mass, LocalCenter, Radius, 0);
 
-        public override void CacheData(Transform xf)
+        public override void CacheData(Body body)
         {
-            TransformedCenter = xf.TransformPoint(LocalCenter);
+            TransformedCenter = body.TransformPoint(LocalCenter);
             Bounds = new Bounds(new(TransformedCenter.X - Radius, TransformedCenter.Y - Radius), new Vec2(TransformedCenter.X + Radius, TransformedCenter.Y + Radius));
             //Bounds.Mins.Set(TransformedCenter.X - Radius, TransformedCenter.Y - Radius);
             //Bounds.Maxs.Set(TransformedCenter.X + Radius, TransformedCenter.Y + Radius);

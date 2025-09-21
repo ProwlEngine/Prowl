@@ -27,12 +27,10 @@
 
         public abstract Shape Duplicate();
         public abstract void Recenter(Vec2 c);
-        public abstract void Transform(Transform xf);
-        public abstract void Untransform(Transform xf);
         public abstract float Area();
         public abstract Vec2 Centroid();
         public abstract float Inertia(float mass);
-        public abstract void CacheData(Transform xf);
+        public abstract void CacheData(Body body);
         public abstract bool PointQuery(Vec2 p);
         public abstract int FindVertexByPoint(Vec2 p, float minDist);
         public abstract float DistanceOnPlane(Vec2 n, float d);

@@ -22,28 +22,16 @@
 
         public override void Recenter(Vec2 c) { A -= c; B -= c; }
 
-        public override void Transform(Transform xf)
-        {
-            A = xf.TransformPoint(A);
-            B = xf.TransformPoint(B);
-        }
-
-        public override void Untransform(Transform xf)
-        {
-            A = xf.UntransformPoint(A);
-            B = xf.UntransformPoint(B);
-        }
-
         public override float Area() => Geometry.AreaForSegment(A, B, Radius);
 
         public override Vec2 Centroid() => Geometry.CentroidForSegment(A, B);
 
         public override float Inertia(float mass) => Geometry.InertiaForSegment(mass, A, B);
 
-        public override void CacheData(Transform xf)
+        public override void CacheData(Body body)
         {
-            TransformedA = xf.TransformPoint(A);
-            TransformedB = xf.TransformPoint(B);
+            TransformedA = body.TransformPoint(A);
+            TransformedB = body.TransformPoint(B);
             TransformedNormal = Vec2.Normalize(Vec2.Perp(TransformedB - TransformedA));
 
             float l = MathF.Min(TransformedA.X, TransformedB.X);

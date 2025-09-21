@@ -20,8 +20,8 @@ namespace Drift.Joints
         public MouseJoint(Body mouseBody, Body body, Vec2 anchor)
             : base(JointType.Mouse, mouseBody, body, true)
         {
-            Anchor1 = Body1.GetLocalPoint(anchor);
-            Anchor2 = Body2.GetLocalPoint(anchor);
+            Anchor1 = Body1.InverseTransformPoint(anchor);
+            Anchor2 = Body2.InverseTransformPoint(anchor);
         }
 
         public void SetSpringFrequencyHz(float hz) => _frequencyHz = hz;
@@ -41,7 +41,7 @@ namespace Drift.Joints
             _gamma = _gamma == 0 ? 0 : 1f / _gamma;
             float beta = dt * k * _gamma;
 
-            _r2 = b2.Transform.Rotate(Anchor2 - b2.Centroid);
+            _r2 = b2.RotatePoint(Anchor2 - b2.Centroid);
 
             float r2x = _r2.X, r2y = _r2.Y;
             float i2Inv = b2.InertiaInv;

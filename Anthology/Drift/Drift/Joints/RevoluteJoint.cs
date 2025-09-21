@@ -30,8 +30,8 @@ namespace Drift.Joints
         public RevoluteJoint(Body b1, Body b2, Vec2 anchor)
             : base(JointType.Revolute, b1, b2, false)
         {
-            Anchor1 = Body1.GetLocalPoint(anchor);
-            Anchor2 = Body2.GetLocalPoint(anchor);
+            Anchor1 = Body1.InverseTransformPoint(anchor);
+            Anchor2 = Body2.InverseTransformPoint(anchor);
             _refAngle = b2.Angle - b1.Angle;
         }
 
@@ -78,8 +78,8 @@ namespace Drift.Joints
                 _limitState = LIMIT_STATE_INACTIVE;
             }
 
-            _r1 = Body1.Transform.Rotate(Anchor1 - Body1.Centroid);
-            _r2 = Body2.Transform.Rotate(Anchor2 - Body2.Centroid);
+            _r1 = Body1.RotatePoint(Anchor1 - Body1.Centroid);
+            _r2 = Body2.RotatePoint(Anchor2 - Body2.Centroid);
 
             float sumMinv = Body1.MassInv + Body2.MassInv;
 

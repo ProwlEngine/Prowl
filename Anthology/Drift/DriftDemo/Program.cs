@@ -236,7 +236,6 @@ namespace DriftDemo
             {
                 // Update mouse body position
                 _mouseBody.Position = worldPos;
-                _mouseBody.SyncTransform();
 
                 // Create mouse joint
                 _mouseJoint = new MouseJoint(_mouseBody, targetBody, worldPos);
@@ -264,7 +263,6 @@ namespace DriftDemo
             // Update mouse body position
             Vec2 worldPos = ScreenToWorld(new Vector2i(e.X, e.Y));
             _mouseBody.Position = worldPos;
-            _mouseBody.SyncTransform();
         }
     }
 }

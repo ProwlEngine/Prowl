@@ -20,27 +20,27 @@ namespace Drift.Joints
         public RopeJoint(Body b1, Body b2, Vec2 anchor1, Vec2 anchor2)
             : base(JointType.Rope, b1, b2, true)
         {
-            Anchor1 = Body1.GetLocalPoint(anchor1);
-            Anchor2 = Body2.GetLocalPoint(anchor2);
+            Anchor1 = Body1.InverseTransformPoint(anchor1);
+            Anchor2 = Body2.InverseTransformPoint(anchor2);
             _maxDistance = Vec2.Distance(anchor1, anchor2);
         }
 
         public override void SetWorldAnchor1(Vec2 a1)
         {
-            Anchor1 = Body1.GetLocalPoint(a1);
+            Anchor1 = Body1.InverseTransformPoint(a1);
             _maxDistance = Vec2.Distance(a1, GetWorldAnchor2());
         }
 
         public override void SetWorldAnchor2(Vec2 a2)
         {
-            Anchor2 = Body2.GetLocalPoint(a2);
+            Anchor2 = Body2.InverseTransformPoint(a2);
             _maxDistance = Vec2.Distance(a2, GetWorldAnchor1());
         }
 
         public override void InitSolver(float dt, bool warmStarting)
         {
-            _r1 = Body1.Transform.Rotate(Anchor1 - Body1.Centroid);
-            _r2 = Body2.Transform.Rotate(Anchor2 - Body2.Centroid);
+            _r1 = Body1.RotatePoint(Anchor1 - Body1.Centroid);
+            _r2 = Body2.RotatePoint(Anchor2 - Body2.Centroid);
 
             var d = Body2.Position + _r2 - (Body1.Position + _r1);
             _distance = d.Length();

@@ -18,32 +18,32 @@ namespace Drift.Joints
         public PrismaticJoint(Body b1, Body b2, Vec2 anchor1, Vec2 anchor2)
             : base(JointType.Prismatic, b1, b2, true)
         {
-            Anchor1 = Body1.GetLocalPoint(anchor1);
-            Anchor2 = Body2.GetLocalPoint(anchor2);
+            Anchor1 = Body1.InverseTransformPoint(anchor1);
+            Anchor2 = Body2.InverseTransformPoint(anchor2);
 
             var d = anchor2 - anchor1;
-            _nLocal = Body1.GetLocalVector(Vec2.Normalize(Vec2.Perp(d)));
+            _nLocal = Body1.InverseRotatePoint(Vec2.Normalize(Vec2.Perp(d)));
             _da = b2.Angle - b1.Angle;
         }
 
         public override void SetWorldAnchor1(Vec2 a1)
         {
-            Anchor1 = Body1.GetLocalPoint(a1);
+            Anchor1 = Body1.InverseTransformPoint(a1);
             var d = GetWorldAnchor2() - a1;
-            _nLocal = Body1.GetLocalVector(Vec2.Normalize(Vec2.Perp(d)));
+            _nLocal = Body1.InverseRotatePoint(Vec2.Normalize(Vec2.Perp(d)));
         }
 
         public override void SetWorldAnchor2(Vec2 a2)
         {
-            Anchor2 = Body2.GetLocalPoint(a2);
+            Anchor2 = Body2.InverseTransformPoint(a2);
             var d = a2 - GetWorldAnchor1();
-            _nLocal = Body1.GetLocalVector(Vec2.Normalize(Vec2.Perp(d)));
+            _nLocal = Body1.InverseRotatePoint(Vec2.Normalize(Vec2.Perp(d)));
         }
 
         public override void InitSolver(float dt, bool warmStarting)
         {
-            _r1 = Body1.Transform.Rotate(Anchor1 - Body1.Centroid);
-            _r2 = Body2.Transform.Rotate(Anchor2 - Body2.Centroid);
+            _r1 = Body1.RotatePoint(Anchor1 - Body1.Centroid);
+            _r2 = Body2.RotatePoint(Anchor2 - Body2.Centroid);
 
             var p1 = Body1.Position + _r1;
             var p2 = Body2.Position + _r2;

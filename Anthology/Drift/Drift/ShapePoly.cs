@@ -67,32 +67,20 @@
                 Verts[i] -= c;
         }
 
-        public override void Transform(Transform xf)
-        {
-            for (int i = 0; i < Verts.Count; i++)
-                Verts[i] = xf.TransformPoint(Verts[i]);
-        }
-
-        public override void Untransform(Transform xf)
-        {
-            for (int i = 0; i < Verts.Count; i++)
-                Verts[i] = xf.UntransformPoint(Verts[i]);
-        }
-
         public override float Area() => Geometry.AreaForPoly(Verts);
 
         public override Vec2 Centroid() => Geometry.CentroidForPoly(Verts);
 
         public override float Inertia(float mass) => Geometry.InertiaForPoly(mass, Verts, Vec2.Zero);
 
-        public override void CacheData(Transform xf)
+        public override void CacheData(Body body)
         {
             Bounds.Clear();
             int numVerts = Verts.Count;
             if (numVerts == 0) return;
 
             for (int i = 0; i < numVerts; i++)
-                TransformedVerts[i] = xf.TransformPoint(Verts[i]);
+                TransformedVerts[i] = body.TransformPoint(Verts[i]);
 
             if (numVerts < 2)
             {

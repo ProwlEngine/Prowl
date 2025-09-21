@@ -19,8 +19,8 @@ namespace Drift.Joints
         public WeldJoint(Body body1, Body body2, Vec2 anchor)
             : base(JointType.Weld, body1, body2, false)
         {
-            anchor1 = body1.GetLocalPoint(anchor);
-            anchor2 = body2.GetLocalPoint(anchor);
+            anchor1 = body1.InverseTransformPoint(anchor);
+            anchor2 = body2.InverseTransformPoint(anchor);
 
             FrequencyHz = 0;
             DampingRatio = 0;
@@ -39,8 +39,8 @@ namespace Drift.Joints
 
             MaxImpulse = MaxForce * dt;
 
-            r1 = b1.Transform.Rotate(anchor1 - b1.Centroid);
-            r2 = b2.Transform.Rotate(anchor2 - b2.Centroid);
+            r1 = b1.RotatePoint(anchor1 - b1.Centroid);
+            r2 = b2.RotatePoint(anchor2 - b2.Centroid);
 
             float sumMinv = b1.MassInv + b2.MassInv;
             float r1x_i = r1.X * b1.InertiaInv;
