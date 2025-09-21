@@ -395,7 +395,7 @@ namespace Shared
                             string[] periods = { "Day", "Week", "Month", "Year" };
                             foreach (var period in periods)
                             {
-                                using (Gui.Box($"Period_{period}")
+                                using (Gui.Box("Period", period.GetHashCode())
                                     .Width(60)
                                     .Height(30)
                                     .Rounded(8)
@@ -886,7 +886,7 @@ namespace Shared
                             string[] days = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
                             foreach (var day in days)
                             {
-                                using (Gui.Box($"Day_{day}")
+                                using (Gui.Box("Day", day.GetHashCode())
                                     .Text(day, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                                     .Enter()) { }
                             }
@@ -1065,7 +1065,7 @@ namespace Shared
 
                             bool isOn = toggleState[i];
                             int index = i;
-                            Switch.Primary($"Switch{index}", toggleState[index]).OnClick((_) => toggleState[index] = !toggleState[index]);
+                            Switch.Primary("Switch", toggleState[index], index).OnClick((_) => toggleState[index] = !toggleState[index]);
                         }
 
                         // Add separator except for the last item
@@ -1144,7 +1144,7 @@ namespace Shared
                 {
                     foreach (var link in links)
                     {
-                        using (Gui.Box($"Link_{link}")
+                        using (Gui.Box("Link", link.GetHashCode())
                             .Width(Gui.Stretch(1f / links.Length))
                             .Text(link, Fonts.arial).TextColor(Themes.primaryColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                             .OnClick((rect) => Console.WriteLine($"Link {link} clicked"))

@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -381,19 +382,19 @@ namespace Shared
                 .Transition(GuiProp.Left, 0.25, Easing.CubicInOut));
         }
 
-        public static ElementBuilder Primary(string id, bool isOn)
+        public static ElementBuilder Primary(string stringID, bool isOn, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
             // Toggle switch - much simpler with styles!
             // bool isOn = toggleState[i];
             // int index = i;
 
             ElementBuilder builder;
-            using ((builder = PaperDemo.Gui.Box("shadcs-switch-" + id)
+            using ((builder = PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Style("toggle")
                 .StyleIf(isOn, "toggle-on")
                 .StyleIf(!isOn, "toggle-off")).Enter())
-            { 
-                PaperDemo.Gui.Box($"ToggleDot{id}")
+            {
+                PaperDemo.Gui.Box("ToggleDot")
                     .Style("toggle-dot")
                     .Left(PaperDemo.Gui.Pixels(isOn ? 32 : 4));
             }
