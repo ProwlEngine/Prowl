@@ -185,7 +185,7 @@ namespace Prowl.Drift
         public void SetFixedRotation(bool flag, bool recalculateMass = true)
         {
             FixedRotation = flag;
-            if(true)
+            if(recalculateMass)
                 RecalculateMass();
         }
 
