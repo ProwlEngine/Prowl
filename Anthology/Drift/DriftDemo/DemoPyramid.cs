@@ -18,7 +18,6 @@ namespace DriftDemo
             staticBody.AddShape(ShapePoly.CreateBox(0, 15.16f, 20.48f, 0.4f));
             staticBody.AddShape(ShapePoly.CreateBox(-10.04f, 7.68f, 0.4f, 14.56f));
             staticBody.AddShape(ShapePoly.CreateBox(10.04f, 7.68f, 0.4f, 14.56f));
-            staticBody.ResetMassData();
             space.AddBody(staticBody);
 
             // Create pyramid of boxes
@@ -33,7 +32,6 @@ namespace DriftDemo
                     shape.Friction = 1.0f;
                     shape.Density = 1;
                     body.AddShape(shape);
-                    body.ResetMassData();
                     space.AddBody(body);
                 }
             }
@@ -46,7 +44,6 @@ namespace DriftDemo
             ballShape.Friction = 1.0f;
             ballShape.Density = 2;
             ballBody.AddShape(ballShape);
-            ballBody.ResetMassData();
             space.AddBody(ballBody);
             */
         }
@@ -67,7 +64,6 @@ namespace DriftDemo
                 ballShape.Friction = 1.0f;
                 ballShape.Density = 2;
                 ballBody.AddShape(ballShape);
-                ballBody.ResetMassData();
                 _space.AddBody(ballBody);
             }
         }

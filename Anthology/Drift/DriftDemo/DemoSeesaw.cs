@@ -17,7 +17,6 @@ namespace DriftDemo
             staticBody.AddShape(ShapePoly.CreateBox(0, 0.2f, 20.48f, 0.4f));  // Ground
             staticBody.AddShape(ShapePoly.CreateBox(-10.04f, 7.68f, 0.4f, 14.56f));  // Left wall
             staticBody.AddShape(ShapePoly.CreateBox(10.04f, 7.68f, 0.4f, 14.56f));   // Right wall
-            staticBody.ResetMassData();
             space.AddBody(staticBody);
 
             // Create support block for seesaw
@@ -27,7 +26,6 @@ namespace DriftDemo
             supportShape.Friction = 1.0f;
             supportShape.Density = 2;
             supportBody.AddShape(supportShape);
-            supportBody.ResetMassData();
             space.AddBody(supportBody);
 
             // Create seesaw plank
@@ -37,7 +35,6 @@ namespace DriftDemo
             seesawShape.Friction = 0.7f;
             seesawShape.Density = 1.2f;
             seesawBody.AddShape(seesawShape);
-            seesawBody.ResetMassData();
             space.AddBody(seesawBody);
 
             // Create stack of boxes on left side
@@ -51,7 +48,6 @@ namespace DriftDemo
                     shape.Friction = 0.8f;
                     shape.Density = 1;
                     body.AddShape(shape);
-                    body.ResetMassData();
                     space.AddBody(body);
                 }
             }
@@ -71,7 +67,6 @@ namespace DriftDemo
             fallShape.Friction = 1.0f;
             fallShape.Density = 2;
             fallBody.AddShape(fallShape);
-            fallBody.ResetMassData();
             space.AddBody(fallBody);
         }
 

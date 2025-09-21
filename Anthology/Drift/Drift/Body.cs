@@ -69,8 +69,8 @@
         {
             var body = new Body(Type, Transform.T, Angle);
             foreach (var shape in Shapes)
-                body.AddShape(shape.Duplicate());
-            body.ResetMassData();
+                body.AddShape(shape.Duplicate(), false);
+            body.RecalculateMass();
             return body;
         }
 
@@ -89,10 +89,13 @@
             Type = type;
         }
 
-        public void AddShape(Shape shape)
+        public void AddShape(Shape shape, bool recalculateMass = true)
         {
             shape.Body = this;
             Shapes.Add(shape);
+
+            if (recalculateMass)
+                RecalculateMass();
         }
 
         public void RemoveShape(Shape shape)
@@ -131,13 +134,14 @@
         public Vec2 GetLocalPoint(Vec2 p) => Transform.UntransformPoint(p);
         public Vec2 GetLocalVector(Vec2 v) => Transform.Unrotate(v);
 
-        public void SetFixedRotation(bool flag)
+        public void SetFixedRotation(bool flag, bool recalculateMass = true)
         {
             FixedRotation = flag;
-            ResetMassData();
+            if(true)
+                RecalculateMass();
         }
 
-        public void ResetMassData()
+        public void RecalculateMass()
         {
             Centroid = Vec2.Zero;
             Mass = 0;

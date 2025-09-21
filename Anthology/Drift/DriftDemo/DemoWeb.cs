@@ -15,7 +15,6 @@ namespace DriftDemo
 
             // Create static body (no visible boundaries in this demo)
             var staticBody = new Body(Body.BodyType.Static, Vec2.Zero);
-            staticBody.ResetMassData();
             space.AddBody(staticBody);
 
             // Create four corner bodies for the web
@@ -25,7 +24,6 @@ namespace DriftDemo
             shape1.Friction = 1.0f;
             shape1.Density = 1;
             body1.AddShape(shape1);
-            body1.ResetMassData();
             space.AddBody(body1);
 
             var body2 = new Body(Body.BodyType.Dynamic, new Vec2(-1.4f, 6.2f));
@@ -34,7 +32,6 @@ namespace DriftDemo
             shape2.Friction = 1.0f;
             shape2.Density = 1;
             body2.AddShape(shape2);
-            body2.ResetMassData();
             space.AddBody(body2);
 
             var body3 = new Body(Body.BodyType.Dynamic, new Vec2(1.4f, 9));
@@ -43,7 +40,6 @@ namespace DriftDemo
             shape3.Friction = 1.0f;
             shape3.Density = 1;
             body3.AddShape(shape3);
-            body3.ResetMassData();
             space.AddBody(body3);
 
             var body4 = new Body(Body.BodyType.Dynamic, new Vec2(1.4f, 6.2f));
@@ -52,7 +48,6 @@ namespace DriftDemo
             shape4.Friction = 1.0f;
             shape4.Density = 1;
             body4.AddShape(shape4);
-            body4.ResetMassData();
             space.AddBody(body4);
 
             // Create web structure using distance joints (springs)

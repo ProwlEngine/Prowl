@@ -16,7 +16,6 @@ namespace DriftDemo
             // Create static body for ground
             var staticBody = new Body(Body.BodyType.Static, Vec2.Zero);
             staticBody.AddShape(ShapePoly.CreateBox(0, 0.2f, 20.48f, 0.4f));
-            staticBody.ResetMassData();
             space.AddBody(staticBody);
 
             var bodies = new Body[10];
@@ -50,7 +49,6 @@ namespace DriftDemo
                     // bodies[i].MaskBits = 0xFFFF & ~0x0002;
                 }
 
-                bodies[i].ResetMassData();
                 space.AddBody(bodies[i]);
 
                 // Create joints to connect rope segments

@@ -19,7 +19,6 @@ namespace DriftDemo
             staticBody.AddShape(ShapePoly.CreateBox(0, 15.16f, 20.48f, 0.4f)); // Ceiling
             staticBody.AddShape(ShapePoly.CreateBox(-10.04f, 7.68f, 0.4f, 14.56f)); // Left wall
             staticBody.AddShape(ShapePoly.CreateBox(10.04f, 7.68f, 0.4f, 14.56f));  // Right wall
-            staticBody.ResetMassData();
             space.AddBody(staticBody);
 
             // Create crank mechanism parts
@@ -31,7 +30,6 @@ namespace DriftDemo
             shape1.Friction = 1.0f;
             shape1.Density = 10;
             body1.AddShape(shape1);
-            body1.ResetMassData();
             space.AddBody(body1);
 
             // Body2 - Connecting rod
@@ -41,7 +39,6 @@ namespace DriftDemo
             shape2.Friction = 1.0f;
             shape2.Density = 10;
             body2.AddShape(shape2);
-            body2.ResetMassData();
             space.AddBody(body2);
 
             // Body3 - Horizontal beam (piston)
@@ -51,7 +48,6 @@ namespace DriftDemo
             shape3.Friction = 1.0f;
             shape3.Density = 10;
             body3.AddShape(shape3);
-            body3.ResetMassData();
             space.AddBody(body3);
 
             // Create joints for the crank mechanism
@@ -86,7 +82,6 @@ namespace DriftDemo
             boxShape1.Friction = 1.0f;
             boxShape1.Density = 1;
             box1.AddShape(boxShape1);
-            box1.ResetMassData();
             space.AddBody(box1);
 
             var box2 = new Body(Body.BodyType.Dynamic, new Vec2(0, 6));
@@ -95,7 +90,6 @@ namespace DriftDemo
             boxShape2.Friction = 1.0f;
             boxShape2.Density = 1;
             box2.AddShape(boxShape2);
-            box2.ResetMassData();
             space.AddBody(box2);
 
             var box3 = new Body(Body.BodyType.Dynamic, new Vec2(0.64f, 6));
@@ -104,7 +98,6 @@ namespace DriftDemo
             boxShape3.Friction = 1.0f;
             boxShape3.Density = 1;
             box3.AddShape(boxShape3);
-            box3.ResetMassData();
             space.AddBody(box3);
         }
 

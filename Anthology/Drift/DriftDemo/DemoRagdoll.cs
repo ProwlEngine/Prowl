@@ -19,7 +19,6 @@ namespace DriftDemo
             staticBody.AddShape(ShapePoly.CreateBox(0, 15.16f, 20.48f, 0.4f)); // Ceiling
             staticBody.AddShape(ShapePoly.CreateBox(-10.04f, 7.68f, 0.4f, 14.56f)); // Left wall
             staticBody.AddShape(ShapePoly.CreateBox(10.04f, 7.68f, 0.4f, 14.56f));  // Right wall
-            staticBody.ResetMassData();
             space.AddBody(staticBody);
 
             // Head
@@ -29,7 +28,6 @@ namespace DriftDemo
             headShape.Friction = 0.8f;
             headShape.Density = 5;
             bodyHead.AddShape(headShape);
-            bodyHead.ResetMassData();
             space.AddBody(bodyHead);
 
             // Spine1 (upper torso)
@@ -48,7 +46,6 @@ namespace DriftDemo
             spine1Shape.Friction = 0.8f;
             spine1Shape.Density = 4;
             bodySpine1.AddShape(spine1Shape);
-            bodySpine1.ResetMassData();
             space.AddBody(bodySpine1);
 
             // Spine2 (lower torso)
@@ -65,7 +62,6 @@ namespace DriftDemo
             spine2Shape.Friction = 0.8f;
             spine2Shape.Density = 4;
             bodySpine2.AddShape(spine2Shape);
-            bodySpine2.ResetMassData();
             space.AddBody(bodySpine2);
 
             // Pelvis
@@ -84,7 +80,6 @@ namespace DriftDemo
             pelvisShape.Friction = 0.8f;
             pelvisShape.Density = 4;
             bodyPelvis.AddShape(pelvisShape);
-            bodyPelvis.ResetMassData();
             space.AddBody(bodyPelvis);
 
             // Left Arm1 (upper arm)
@@ -94,7 +89,6 @@ namespace DriftDemo
             larm1Shape.Friction = 0.8f;
             larm1Shape.Density = 3;
             bodyLArm1.AddShape(larm1Shape);
-            bodyLArm1.ResetMassData();
             space.AddBody(bodyLArm1);
 
             // Left Arm2 (forearm)
@@ -104,7 +98,6 @@ namespace DriftDemo
             larm2Shape.Friction = 0.8f;
             larm2Shape.Density = 3;
             bodyLArm2.AddShape(larm2Shape);
-            bodyLArm2.ResetMassData();
             space.AddBody(bodyLArm2);
 
             // Right Arm1 (upper arm)
@@ -114,7 +107,6 @@ namespace DriftDemo
             rarm1Shape.Friction = 0.8f;
             rarm1Shape.Density = 3;
             bodyRArm1.AddShape(rarm1Shape);
-            bodyRArm1.ResetMassData();
             space.AddBody(bodyRArm1);
 
             // Right Arm2 (forearm)
@@ -124,7 +116,6 @@ namespace DriftDemo
             rarm2Shape.Friction = 0.8f;
             rarm2Shape.Density = 3;
             bodyRArm2.AddShape(rarm2Shape);
-            bodyRArm2.ResetMassData();
             space.AddBody(bodyRArm2);
 
             // Left Leg1 (thigh)
@@ -134,7 +125,6 @@ namespace DriftDemo
             lleg1Shape.Friction = 0.8f;
             lleg1Shape.Density = 3;
             bodyLLeg1.AddShape(lleg1Shape);
-            bodyLLeg1.ResetMassData();
             space.AddBody(bodyLLeg1);
 
             // Left Leg2 (shin)
@@ -144,7 +134,6 @@ namespace DriftDemo
             lleg2Shape.Friction = 0.8f;
             lleg2Shape.Density = 3;
             bodyLLeg2.AddShape(lleg2Shape);
-            bodyLLeg2.ResetMassData();
             space.AddBody(bodyLLeg2);
 
             // Right Leg1 (thigh)
@@ -154,7 +143,6 @@ namespace DriftDemo
             rleg1Shape.Friction = 0.8f;
             rleg1Shape.Density = 3;
             bodyRLeg1.AddShape(rleg1Shape);
-            bodyRLeg1.ResetMassData();
             space.AddBody(bodyRLeg1);
 
             // Right Leg2 (shin)
@@ -164,7 +152,6 @@ namespace DriftDemo
             rleg2Shape.Friction = 0.8f;
             rleg2Shape.Density = 3;
             bodyRLeg2.AddShape(rleg2Shape);
-            bodyRLeg2.ResetMassData();
             space.AddBody(bodyRLeg2);
 
             // Create joints with limits

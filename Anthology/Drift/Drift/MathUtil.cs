@@ -3,7 +3,6 @@ using System.Collections.Generic;
 
 namespace Prowl.Drift
 {
-
     public struct Plane(Vec2 normal, float distance)
     {
         public Vec2 Normal = normal;

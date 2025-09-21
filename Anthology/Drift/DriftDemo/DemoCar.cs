@@ -42,7 +42,6 @@ namespace DriftDemo
             };
             staticBody.AddShape(new ShapePoly(rightRampVerts));
 
-            staticBody.ResetMassData();
             space.AddBody(staticBody);
 
             // Create bridge
@@ -55,7 +54,6 @@ namespace DriftDemo
                 shape.Friction = 0.8f;
                 shape.Density = 20;
                 body.AddShape(shape);
-                body.ResetMassData();
                 space.AddBody(body);
 
                 if (i == 0)
@@ -99,7 +97,6 @@ namespace DriftDemo
             carShape.Friction = 1.0f;
             carShape.Density = 6;
             carBody.AddShape(carShape);
-            carBody.ResetMassData();
             space.AddBody(carBody);
 
             // Create wheel 1 (rear)
@@ -109,7 +106,6 @@ namespace DriftDemo
             wheel1Shape.Friction = 0.97f;
             wheel1Shape.Density = 0.8f;
             wheel1Body.AddShape(wheel1Shape);
-            wheel1Body.ResetMassData();
             space.AddBody(wheel1Body);
 
             var wheelJoint1 = new WheelJoint(carBody, wheel1Body, new Vec2(-8.5f, 5), new Vec2(-8.5f, 4.9f));
@@ -125,7 +121,6 @@ namespace DriftDemo
             wheel2Shape.Friction = 0.97f;
             wheel2Shape.Density = 0.8f;
             wheel2Body.AddShape(wheel2Shape);
-            wheel2Body.ResetMassData();
             space.AddBody(wheel2Body);
 
             var wheelJoint2 = new WheelJoint(carBody, wheel2Body, new Vec2(-7.5f, 5), new Vec2(-7.5f, 4.9f));
@@ -144,7 +139,6 @@ namespace DriftDemo
                 antennaShape.Friction = 1.0f;
                 antennaShape.Density = 0.5f;
                 antennaBodies[i].AddShape(antennaShape);
-                antennaBodies[i].ResetMassData();
                 space.AddBody(antennaBodies[i]);
 
                 if (i == 0)

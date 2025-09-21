@@ -18,7 +18,6 @@ namespace DriftDemo
             staticBody.AddShape(ShapePoly.CreateBox(0, 15.16f, 20.48f, 0.4f));
             staticBody.AddShape(ShapePoly.CreateBox(-10.04f, 7.68f, 0.4f, 14.56f));
             staticBody.AddShape(ShapePoly.CreateBox(10.04f, 7.68f, 0.4f, 14.56f));
-            staticBody.ResetMassData();
             space.AddBody(staticBody);
 
             // Create bouncing balls with different restitution values
@@ -30,7 +29,6 @@ namespace DriftDemo
                 shape.Friction = 1.0f;     // Friction
                 shape.Density = 1;
                 body.AddShape(shape);
-                body.ResetMassData();
                 space.AddBody(body);
             }
         }
