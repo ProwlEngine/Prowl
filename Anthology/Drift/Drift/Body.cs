@@ -14,7 +14,7 @@ namespace Prowl.Drift
         private static int _idCounter = 0;
 
         public readonly int Id;
-        public Space Space { get; internal set; }
+        public Space? Space { get; internal set; }
 
         public BodyType Type { get; private set; }
 
@@ -102,7 +102,7 @@ namespace Prowl.Drift
         public void RemoveShape(Shape shape)
         {
             if (Shapes.Remove(shape))
-                shape.Body = null;
+                shape.Body = null!;
         }
 
         private void SetMass(float mass)
@@ -218,7 +218,6 @@ namespace Prowl.Drift
                 float mass = shape.Area() * shape.Density;
                 float inertia = shape.Inertia(mass);
 
-                //totalMassCentroid.Mad(centroid, mass);
                 totalMassCentroid += centroid * mass;
                 totalMass += mass;
                 totalInertia += inertia;
@@ -236,7 +235,6 @@ namespace Prowl.Drift
             Position = origin + RotatePoint(Centroid);
 
             // v_com' = v_com + ω × (Δr), with Δr = (Position - oldP) in world
-            //LinearVelocity.Mad(MathUtil.Perp(Position - oldP), AngularVelocity);
             Vector2 perp = new Vector2(-(Position.Y - oldP.Y), Position.X - oldP.X);
             LinearVelocity += perp * AngularVelocity;
         }

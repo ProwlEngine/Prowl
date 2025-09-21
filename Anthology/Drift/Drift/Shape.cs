@@ -9,7 +9,7 @@ namespace Prowl.Drift
         public readonly int Id;
         public readonly int Type;
 
-        public Body Body { get; internal set; }
+        public Body Body { get; internal set; } = null!;
 
         public float Elasticity = 0.0f;  // e
         public float Friction = 1.0f;    // u

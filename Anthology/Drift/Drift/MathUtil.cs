@@ -3,9 +3,6 @@
 namespace Prowl.Drift
 {
 
-    //-----------------------------------
-    // MathUtils
-    //-----------------------------------
     public static class MathUtil
     {
         public const float Deg2Rad = MathF.PI / 180f;

@@ -85,11 +85,9 @@ namespace Drift.Joints
                 var lambdaXY = new Vector2(lambdaAcc.X, lambdaAcc.Y);
                 float lambdaZ = lambdaAcc.Z;
 
-                //b1.LinearVelocity.Mad(lambdaXY, -b1.MassInv);
                 b1.LinearVelocity = MathUtil.Mad(b1.LinearVelocity, lambdaXY, -b1.MassInv);
                 b1.AngularVelocity -= (MathUtil.Cross(r1, lambdaXY) + lambdaZ) * b1.InertiaInv;
 
-                //b2.LinearVelocity.Mad(lambdaXY, b2.MassInv);
                 b2.LinearVelocity = MathUtil.Mad(b2.LinearVelocity, lambdaXY, b2.MassInv);
                 b2.AngularVelocity += (MathUtil.Cross(r2, lambdaXY) + lambdaZ) * b2.InertiaInv;
             }
@@ -121,11 +119,9 @@ namespace Drift.Joints
                 lambdaAcc.Y += lambdaXY.Y;
                 lambdaAcc.Z += lambdaZ;
 
-                //b1.LinearVelocity.Mad(lambdaXY, -b1.MassInv);
                 b1.LinearVelocity = MathUtil.Mad(b1.LinearVelocity, lambdaXY, -b1.MassInv);
                 b1.AngularVelocity -= MathUtil.Cross(r1, lambdaXY) * b1.InertiaInv;
 
-                //b2.LinearVelocity.Mad(lambdaXY, b2.MassInv);
                 b2.LinearVelocity = MathUtil.Mad(b2.LinearVelocity, lambdaXY, b2.MassInv);
                 b2.AngularVelocity += MathUtil.Cross(r2, lambdaXY) * b2.InertiaInv;
             }
@@ -142,11 +138,9 @@ namespace Drift.Joints
 
                 var lambdaXY = new Vector2(lambda.X, lambda.Y);
 
-                //b1.LinearVelocity.Mad(lambdaXY, -b1.MassInv);
                 b1.LinearVelocity = MathUtil.Mad(b1.LinearVelocity, lambdaXY, -b1.MassInv);
                 b1.AngularVelocity -= (MathUtil.Cross(r1, lambdaXY) + lambda.Z) * b1.InertiaInv;
 
-                //b2.LinearVelocity.Mad(lambdaXY, b2.MassInv);
                 b2.LinearVelocity = MathUtil.Mad(b2.LinearVelocity, lambdaXY, b2.MassInv);
                 b2.AngularVelocity += (MathUtil.Cross(r2, lambdaXY) + lambda.Z) * b2.InertiaInv;
             }
@@ -182,11 +176,9 @@ namespace Drift.Joints
                 var correction = MathUtil.Truncate(c1, Joint.MAX_LINEAR_CORRECTION);
                 var lambdaDtXY = MathUtil.Solve(k11, k12, k12, k22, -correction);
 
-                //b1.Position.Mad(lambdaDtXY, -b1.MassInv);
                 b1.Position = MathUtil.Mad(b1.Position, lambdaDtXY, -b1.MassInv);
                 b1.Angle -= MathUtil.Cross(r1, lambdaDtXY) * b1.InertiaInv;
 
-                //b2.Position.Mad(lambdaDtXY, b2.MassInv);
                 b2.Position = MathUtil.Mad(b2.Position, lambdaDtXY, b2.MassInv);
                 b2.Angle += MathUtil.Cross(r2, lambdaDtXY) * b2.InertiaInv;
             }
@@ -201,11 +193,9 @@ namespace Drift.Joints
                 var lambdaDt = MathUtil.Solve3x3(k11, k12, k13, k12, k22, k23, k13, k23, k33, -correction);
                 var lambdaDtXY = new Vector2(lambdaDt.X, lambdaDt.Y);
 
-                //b1.Position.Mad(lambdaDtXY, -b1.MassInv);
                 b1.Position = MathUtil.Mad(b1.Position, lambdaDtXY, -b1.MassInv);
                 b1.Angle -= (MathUtil.Cross(r1, lambdaDtXY) + lambdaDt.Z) * b1.InertiaInv;
 
-                //b2.Position.Mad(lambdaDtXY, b2.MassInv);
                 b2.Position = MathUtil.Mad(b2.Position, lambdaDtXY, b2.MassInv);
                 b2.Angle += (MathUtil.Cross(r2, lambdaDtXY) + lambdaDt.Z) * b2.InertiaInv;
             }

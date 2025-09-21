@@ -14,7 +14,6 @@ namespace Prowl.Drift
 
             float dist = MathF.Sqrt(distSq);
             Vector2 p = c1 + t * (0.5f + (r1 - r2) * 0.5f / (dist == 0 ? 0.01f : dist));
-            //Vec2 p = Vec2.Mad(c1, t, 0.5f + (r1 - r2) * 0.5f / dist);
             Vector2 n = dist != 0 ? t / dist : Vector2.Zero;
             float d = dist - rmax;
 
@@ -92,7 +91,6 @@ namespace Prowl.Drift
                 return CircleToCircleInternal(circ.TransformedCenter, circ.Radius, bVert, 0, contacts);
 
             contacts.Add(new Contact(MathUtil.Mad(circ.TransformedCenter, n, -(circ.Radius + minDist * 0.5f)), -n, minDist, 0));
-            //contacts.Add(new Contact(Vec2.Mad(circ.TransformedCenter, n, -(circ.Radius + minDist * 0.5f)), n, minDist, 0));
             return 1;
         }
 

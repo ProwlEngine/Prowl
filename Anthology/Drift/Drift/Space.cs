@@ -250,7 +250,7 @@ namespace Prowl.Drift
             return false;
         }
 
-        public Body FindBodyByPoint(Vector2 point)
+        public Body? FindBodyByPoint(Vector2 point)
         {
             foreach (var body in _bodies)
             {

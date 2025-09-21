@@ -39,7 +39,7 @@ namespace Prowl.Drift
                     }
                 }
             }
-            //ContactArr = newContacts; 
+ 
             Contacts.Clear();
             Contacts.AddRange(newContacts);
 
@@ -149,11 +149,9 @@ namespace Prowl.Drift
                 // Apply the final impulses
                 var impulse = new Vector2(lambdaN * n.X - lambdaT * n.Y, lambdaT * n.X + lambdaN * n.Y);
 
-                //b1.LinearVelocity.Mad(impulse, -m1Inv);
                 b1.LinearVelocity = MathUtil.Mad(b1.LinearVelocity, impulse, -m1Inv);
                 b1.AngularVelocity -= MathUtil.Cross(r1, impulse) * i1Inv;
 
-                //b2.LinearVelocity.Mad(impulse, m2Inv);
                 b2.LinearVelocity = MathUtil.Mad(b2.LinearVelocity, impulse, m2Inv);
                 b2.AngularVelocity += MathUtil.Cross(r2, impulse) * i2Inv;
             }

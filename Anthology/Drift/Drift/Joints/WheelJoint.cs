@@ -125,11 +125,9 @@ namespace Drift.Joints
                     angularImpulse2 += su2 * springLambdaAcc;
                 }
 
-                //b1.LinearVelocity.Mad(linearImpulse, -b1.MassInv);
                 b1.LinearVelocity = MathUtil.Mad(b1.LinearVelocity, linearImpulse, -b1.MassInv);
                 b1.AngularVelocity -= angularImpulse1 * b1.InertiaInv;
 
-                //b2.LinearVelocity.Mad(linearImpulse, b2.MassInv);
                 b2.LinearVelocity = MathUtil.Mad(b2.LinearVelocity, linearImpulse, b2.MassInv);
                 b2.AngularVelocity += angularImpulse2 * b2.InertiaInv;
             }
@@ -154,11 +152,9 @@ namespace Drift.Joints
                 springLambdaAcc += lambda;
 
                 var impulse = u * lambda;
-                //b1.LinearVelocity.Mad(impulse, -b1.MassInv);
                 b1.LinearVelocity = MathUtil.Mad(b1.LinearVelocity, impulse, -b1.MassInv);
                 b1.AngularVelocity -= su1 * lambda * b1.InertiaInv;
 
-                //b2.LinearVelocity.Mad(impulse, b2.MassInv);
                 b2.LinearVelocity = MathUtil.Mad(b2.LinearVelocity, impulse, b2.MassInv);
                 b2.AngularVelocity += su2 * lambda * b2.InertiaInv;
             }
@@ -182,11 +178,9 @@ namespace Drift.Joints
                 lambdaAcc += lambda;
 
                 var impulse = n * lambda;
-                //b1.LinearVelocity.Mad(impulse, -b1.MassInv);
                 b1.LinearVelocity = MathUtil.Mad(b1.LinearVelocity, impulse, -b1.MassInv);
                 b1.AngularVelocity -= sn1 * lambda * b1.InertiaInv;
 
-                //b2.LinearVelocity.Mad(impulse, b2.MassInv);
                 b2.LinearVelocity = MathUtil.Mad(b2.LinearVelocity, impulse, b2.MassInv);
                 b2.AngularVelocity += sn2 * lambda * b2.InertiaInv;
             }
@@ -216,11 +210,9 @@ namespace Drift.Joints
             float lambdaDt = kInv * -correction;
 
             var impulseDt = n * lambdaDt;
-            //b1.Position.Mad(impulseDt, -b1.MassInv);
             b1.Position = MathUtil.Mad(b1.Position, impulseDt, -b1.MassInv);
             b1.Angle -= s1 * lambdaDt * b1.InertiaInv;
 
-            //b2.Position.Mad(impulseDt, b2.MassInv);
             b2.Position = MathUtil.Mad(b2.Position, impulseDt, b2.MassInv);
             b2.Angle += s2 * lambdaDt * b2.InertiaInv;
 
