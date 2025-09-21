@@ -1027,7 +1027,7 @@ namespace Shared
                         Color itemTextColor = isSelected ? Themes.primaryColor : Themes.textColor;
                         var index = i;
 
-                        Button.Outline($"SettingsCat_{i}", $"  {categories[i]}")
+                        Button.Outline("SettingsCat", $"  {categories[i]}", i)
                             .Margin(10, 10, 5, 5)
                             // .StyleIf(isSelected, "period-button-selected")
                             .OnClick((rect) => { Console.WriteLine($"Category {categories[index]} clicked"); });
