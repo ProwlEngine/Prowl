@@ -1,5 +1,6 @@
 ﻿using Prowl.Drift;
 using System;
+using System.Numerics;
 
 namespace Drift.Joints
 {
@@ -8,7 +9,7 @@ namespace Drift.Joints
         private Vec2 anchor1, anchor2;
         private Vec2 r1, r2;
         private float gamma, beta_c;
-        private Vec3 lambdaAcc;
+        private Vector3 lambdaAcc;
         private Mat3 emInv;
 
         public float FrequencyHz { get; private set; }
@@ -25,7 +26,7 @@ namespace Drift.Joints
             DampingRatio = 0;
             gamma = 0;
             beta_c = 0;
-            lambdaAcc = new Vec3(0, 0, 0);
+            lambdaAcc = new Vector3(0, 0, 0);
         }
 
         public void SetSpringFrequencyHz(float frequencyHz) => FrequencyHz = frequencyHz;
@@ -91,7 +92,7 @@ namespace Drift.Joints
             }
             else
             {
-                lambdaAcc.Set(0, 0, 0);
+                lambdaAcc = new Vector3(0, 0, 0);
             }
         }
 
@@ -129,10 +130,10 @@ namespace Drift.Joints
                 var v2 = b2.LinearVelocity + Vec2.Perp(r2) * b2.AngularVelocity;
                 var cdot1 = v2 - v1;
                 float cdot2 = b2.AngularVelocity - b1.AngularVelocity;
-                var cdot = new Vec3(cdot1.X, cdot1.Y, cdot2);
+                var cdot = new Vector3(cdot1.X, cdot1.Y, cdot2);
 
-                var lambda = emInv.Solve(cdot.Neg());
-                lambdaAcc.AddSelf(lambda);
+                var lambda = emInv.Solve(-cdot);
+                lambdaAcc += lambda;
 
                 var lambdaXY = new Vec2(lambda.X, lambda.Y);
 
@@ -183,13 +184,13 @@ namespace Drift.Joints
             }
             else
             {
-                var correction = new Vec3(
+                var correction = new Vector3(
                     Vec2.Truncate(c1, Joint.MAX_LINEAR_CORRECTION).X,
                     Vec2.Truncate(c1, Joint.MAX_LINEAR_CORRECTION).Y,
                     Math.Clamp(c2, -Joint.MAX_ANGULAR_CORRECTION, Joint.MAX_ANGULAR_CORRECTION)
                 );
 
-                var lambdaDt = emInv.Solve(correction.Neg());
+                var lambdaDt = emInv.Solve(-correction);
                 var lambdaDtXY = new Vec2(lambdaDt.X, lambdaDt.Y);
 
                 b1.Position.Mad(lambdaDtXY, -b1.MassInv);
@@ -202,7 +203,7 @@ namespace Drift.Joints
             return c1.Length() < Joint.LINEAR_SLOP && Math.Abs(c2) <= Joint.ANGULAR_SLOP;
         }
 
-        public override Vec2 GetReactionForce(float invDt) => lambdaAcc.ToVec2() * invDt;
+        public override Vec2 GetReactionForce(float invDt) => new Vec2(lambdaAcc.X, lambdaAcc.Y) * invDt;
         public override float GetReactionTorque(float invDt) => lambdaAcc.Z * invDt;
     }
 }

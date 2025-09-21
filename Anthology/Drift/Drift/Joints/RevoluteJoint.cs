@@ -1,5 +1,6 @@
 ﻿using Prowl.Drift;
 using System;
+using System.Numerics;
 
 namespace Drift.Joints
 {
@@ -9,7 +10,7 @@ namespace Drift.Joints
         private Mat3 _emInv;
         private float _em2; // Angular effective mass
 
-        private Vec3 _lambdaAcc = Vec3.Zero;
+        private Vector3 _lambdaAcc = Vector3.Zero;
         private float _motorLambdaAcc;
 
         private float _refAngle;
@@ -112,7 +113,7 @@ namespace Drift.Joints
             }
             else
             {
-                _lambdaAcc = Vec3.Zero;
+                _lambdaAcc = Vector3.Zero;
                 _motorLambdaAcc = 0;
             }
         }
@@ -140,9 +141,9 @@ namespace Drift.Joints
                 var v2 = Body2.LinearVelocity + Vec2.Perp(_r2) * Body2.AngularVelocity;
                 var cdot1 = v2 - v1;
                 float cdot2 = Body2.AngularVelocity - Body1.AngularVelocity;
-                var cdot = new Vec3(cdot1.X, cdot1.Y, cdot2);
+                var cdot = new Vector3(cdot1.X, cdot1.Y, cdot2);
 
-                var lambda = _emInv.Solve(cdot.Neg());
+                var lambda = _emInv.Solve(-cdot);
 
                 if (_limitState == LIMIT_STATE_EQUAL_LIMITS)
                 {
@@ -188,7 +189,7 @@ namespace Drift.Joints
 
                 var lambda = _emInv.Solve2x2(cdot.Neg());
 
-                _lambdaAcc += new Vec3(lambda.X, lambda.Y, 0);
+                _lambdaAcc += new Vector3(lambda.X, lambda.Y, 0);
 
                 Body1.LinearVelocity -= lambda * Body1.MassInv;
                 Body1.AngularVelocity -= Vec2.Cross(_r1, lambda) * Body1.InertiaInv;

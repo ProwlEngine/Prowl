@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace Prowl.Drift
 {
@@ -91,33 +92,6 @@ namespace Prowl.Drift
         public override int GetHashCode() => HashCode.Combine(X, Y);
     }
 
-    //-----------------------------------
-    // Vec3
-    //-----------------------------------
-    public struct Vec3
-    {
-        public float X, Y, Z;
-
-        public Vec3(float x, float y, float z) { X = x; Y = y; Z = z; }
-
-        public static readonly Vec3 Zero = new(0, 0, 0);
-
-        public void Set(float x, float y, float z) { X = x; Y = y; Z = z; }
-
-        public void AddSelf(Vec3 v) { X += v.X; Y += v.Y; Z += v.Z; }
-
-        public Vec3 Neg() => new(-X, -Y, -Z);
-
-        public Vec2 ToVec2() => new(X, Y);
-
-        // Operators
-        public static Vec3 operator +(Vec3 a, Vec3 b) => new(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
-        public static bool operator ==(Vec3 a, Vec3 b) => a.X == b.X && a.Y == b.Y && a.Z == b.Z;
-        public static bool operator !=(Vec3 a, Vec3 b) => !(a == b);
-
-        public override bool Equals(object obj) => obj is Vec3 v && this == v;
-        public override int GetHashCode() => HashCode.Combine(X, Y, Z);
-    }
 
     //-----------------------------------
     // Mat2
@@ -164,7 +138,7 @@ namespace Prowl.Drift
                             det * (M11 * b.Y - M21 * b.X));
         }
 
-        public Vec3 Solve(Vec3 b)
+        public Vector3 Solve(Vector3 b)
         {
             float det2_11 = M22 * M33 - M23 * M32;
             float det2_12 = M23 * M31 - M21 * M33;
@@ -180,7 +154,7 @@ namespace Prowl.Drift
             float det2_32 = M13 * M21 - M11 * M23;
             float det2_33 = M11 * M22 - M12 * M21;
 
-            return new Vec3(
+            return new Vector3(
                 det * (det2_11 * b.X + det2_12 * b.Y + det2_13 * b.Z),
                 det * (det2_21 * b.X + det2_22 * b.Y + det2_23 * b.Z),
                 det * (det2_31 * b.X + det2_32 * b.Y + det2_33 * b.Z));
