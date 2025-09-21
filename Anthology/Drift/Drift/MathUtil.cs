@@ -15,15 +15,7 @@ namespace Prowl.Drift
 
         public Vec2 Set(float x, float y) { X = x; Y = y; return this; }
 
-        public Vec2 Copy(Vec2 v) { X = v.X; Y = v.Y; return this; }
-
-        public Vec2 Duplicate() => new Vec2(X, Y);
-
-        public Vec2 Scale(float s) { X *= s; Y *= s; return this; }
-
         public Vec2 Mad(Vec2 v, float s) { X += v.X * s; Y += v.Y * s; return this; }
-
-        public Vec2 Neg() { X = -X; Y = -Y; return this; }
 
         public float LengthSquared() => X * X + Y * Y;
 
@@ -61,13 +53,13 @@ namespace Prowl.Drift
 
         public static Vec2 Truncate(Vec2 v, float length)
         {
-            var ret = v.Duplicate();
             float lengthSq = v.X * v.X + v.Y * v.Y;
             if (lengthSq > length * length)
             {
-                ret.Scale(length / MathF.Sqrt(lengthSq));
+                var s = length / MathF.Sqrt(lengthSq);
+                return new Vec2(v.X * s, v.Y * s);
             }
-            return ret;
+            return v;
         }
 
         // ===== Operators =====
