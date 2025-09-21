@@ -1,4 +1,4 @@
-using Physics2D;
+using Prowl.Drift;
 using SFML.Graphics;
 using SFML.System;
 
@@ -105,7 +105,7 @@ namespace DriftDemo
             }
         }
 
-        private void DrawShape(Physics2D.Shape shape, Color color, bool isAwake)
+        private void DrawShape(Prowl.Drift.Shape shape, Color color, bool isAwake)
         {
             switch (shape)
             {
@@ -121,20 +121,26 @@ namespace DriftDemo
             }
         }
 
+        static CircleShape circleShape;
+
         private void DrawCircle(ShapeCircle circle, Color color, bool isAwake)
         {
             var center = WorldToScreen(circle.TransformedCenter);
             var radius = circle.Radius * _pixelsPerMeter;
 
-            var shape = new CircleShape(radius)
+            if (circleShape == null)
             {
-                Position = new Vector2f(center.X - radius, center.Y - radius),
-                FillColor = isAwake ? Color.Transparent : new Color(255, 255, 255, 25),
-                OutlineColor = color,
-                OutlineThickness = 1
-            };
+                circleShape = new CircleShape();
+                circleShape.SetPointCount(6);
+                circleShape.OutlineThickness = 1;
+            }
+            if(radius != circleShape.Radius)
+                circleShape.Radius = radius;
+            circleShape.Position = new Vector2f(center.X - radius, center.Y - radius);
+            circleShape.FillColor = isAwake ? Color.Transparent : new Color(255, 255, 255, 25);
+            circleShape.OutlineColor = color;
 
-            _window.Draw(shape);
+            _window.Draw(circleShape);
         }
 
         private void DrawPoly(ShapePoly poly, Color color, bool isAwake)

@@ -1,4 +1,4 @@
-﻿namespace Physics2D
+﻿namespace Prowl.Drift
 {
     public class ShapeCircle : Shape
     {
@@ -20,7 +20,7 @@
 
         public override void Untransform(Transform xf) => LocalCenter = xf.UntransformPoint(LocalCenter);
 
-        public override float Area() => Geometry.AreaForCircle(Radius, 0);
+        public override float Area() => MathF.PI * (Radius * Radius);
 
         public override Vec2 Centroid() => LocalCenter;
 

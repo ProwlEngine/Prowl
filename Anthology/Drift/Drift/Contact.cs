@@ -1,4 +1,4 @@
-﻿namespace Physics2D
+﻿namespace Prowl.Drift
 {
     public class Contact
     {
@@ -14,8 +14,8 @@
         public float Depth;
 
         // Accumulated impulses
-        public float LambdaNAcc;
-        public float LambdaTAcc;
+        public float LambdaNAcc = 0;
+        public float LambdaTAcc = 0;
 
         // Solver scratch values
         public Vec2 R1, R2;          // world-space offsets
@@ -29,8 +29,6 @@
             NormalTowardTwo = Vec2.Normalize(n);
             Depth = d;
             Hash = hash;
-            LambdaNAcc = 0;
-            LambdaTAcc = 0;
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace Physics2D
+﻿namespace Prowl.Drift
 {
     public static class Collision
     {

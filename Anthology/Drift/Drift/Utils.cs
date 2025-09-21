@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Physics2D
+namespace Prowl.Drift
 {
     public static class Geometry
     {
@@ -70,57 +70,5 @@ namespace Physics2D
             return (mass * sum1) / (6 * sum2);
         }
 
-        public static float InertiaForBox(float mass, float w, float h) =>
-            mass * (w * w + h * h) / 12f;
-
-        // Convex hull using Gift Wrapping algorithm
-        public static List<Vec2> CreateConvexHull(List<Vec2> points)
-        {
-            int i0 = 0;
-            float x0 = points[0].X;
-            for (int i = 1; i < points.Count; i++)
-            {
-                float x = points[i].X;
-                if (x > x0 || (x == x0 && points[i].Y < points[i0].Y))
-                {
-                    i0 = i;
-                    x0 = x;
-                }
-            }
-
-            int n = points.Count;
-            var hull = new List<int>();
-            int ih = i0;
-
-            while (true)
-            {
-                hull.Add(ih);
-
-                int ie = 0;
-                for (int j = 1; j < n; j++)
-                {
-                    if (ie == ih)
-                    {
-                        ie = j;
-                        continue;
-                    }
-
-                    Vec2 r = points[ie] - points[hull[^1]];
-                    Vec2 v = points[j] - points[hull[^1]];
-                    float c = Vec2.Cross(r, v);
-
-                    if (c < 0 || (c == 0 && v.LengthSquared() > r.LengthSquared()))
-                        ie = j;
-                }
-
-                ih = ie;
-                if (ie == i0) break;
-            }
-
-            var newPoints = new List<Vec2>();
-            foreach (int idx in hull)
-                newPoints.Add(points[idx]);
-            return newPoints;
-        }
     }
 }

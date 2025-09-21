@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Physics2D
+namespace Prowl.Drift
 {
 
     public struct Plane(Vec2 normal, float distance)

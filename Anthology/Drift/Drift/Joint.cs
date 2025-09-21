@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Physics2D
+namespace Prowl.Drift
 {
     public enum JointType
     {

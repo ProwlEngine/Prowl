@@ -1,4 +1,4 @@
-﻿namespace Physics2D
+﻿namespace Prowl.Drift
 {
     public class Space
     {
@@ -15,6 +15,9 @@
 
         public Vec2 Gravity { get; set; } = new Vec2(0, 0);
         public float Damping { get; set; }
+
+        private const float BroadPhaseCellSize = 1f; // You can tweak this value
+        private readonly SpatialHash<Body> _spatialHash = new(BroadPhaseCellSize);
 
         public void Clear()
         {
@@ -126,55 +129,71 @@
 
         private void GetOrCreateContactSolvers()
         {
-            var validHashes = new HashSet<ulong>();
+            // BroadPhase: Build spatial hash
+            _spatialHash.Clear();
+            foreach (var body in _bodies)
+            {
+                _spatialHash.Insert(body, body.Bounds);
+            }
 
+            var validHashes = new HashSet<ulong>();
             _contactSolvers.Clear();
 
+            // Use spatial hash broadphase
+            var checkedPairs = new HashSet<(int, int)>();
             for (int i = 0; i < _bodies.Count; i++)
             {
                 var body1 = _bodies[i];
 
-                for (int j = i + 1; j < _bodies.Count; j++)
+                foreach (var cell in _spatialHash.GetPotentialPairs(body1.Bounds))
                 {
-                    var body2 = _bodies[j];
-
-                    // We have to do the bounds check regardless, and since most bodies are dynamic and can interact, doing this first is best
-                    if (!body1.Bounds.Intersects(body2.Bounds)) continue;
-
-                    if (body1.IsStatic() && body2.IsStatic()) continue;
-                    if (!body1.IsCollidable(body2)) continue;
-
-                    foreach (var shape1 in body1.Shapes)
+                    foreach (var body2 in cell)
                     {
-                        foreach (var shape2 in body2.Shapes)
+                        if (body1 == body2) continue;
+                        int idA = body1.Id, idB = body2.Id;
+                        if (idA > idB) (idA, idB) = (idB, idA);
+                        var pair = (idA, idB);
+                        if (checkedPairs.Contains(pair)) continue;
+                        checkedPairs.Add(pair);
+
+                        // Narrow Phase
+                        if (!body1.Bounds.Intersects(body2.Bounds)) continue;
+
+                        if (body1.IsStatic() && body2.IsStatic()) continue;
+                        if (!body1.IsCollidable(body2)) continue;
+
+                        foreach (var shape1 in body1.Shapes)
                         {
-                            var shapeA = shape1;
-                            var shapeB = shape2;
-                            if (shapeA.Type > shapeB.Type)
-                                (shapeB, shapeA) = (shapeA, shapeB);
-
-                            List<Contact> contacts = new List<Contact>(); 
-                            var contactCount = Collision.Collide(shapeA, shapeB, contacts);
-                            if (contactCount == 0) continue;
-
-                            int idA = shapeA.Id, idB = shapeB.Id;
-                            if (idA > idB) (idA, idB) = (idB, idA); // Not sure if this is really needed?
-                            ulong hash = ((ulong)idA << 32) | (uint)idB;
-
-                            validHashes.Add(hash);
-
-                            if (_contactSolverMap.TryGetValue(hash, out var existing))
+                            foreach (var shape2 in body2.Shapes)
                             {
-                                existing.Update(contacts);
-                                _contactSolvers.Add(existing);
-                            }
-                            else
-                            {
-                                float e = MathF.Max(shapeA.Elasticity, shapeB.Elasticity);
-                                float f = MathF.Sqrt(shapeA.Friction * shapeB.Friction);
-                                var solver = new ContactSolver(shapeA, shapeB, contacts, e, f);
-                                _contactSolvers.Add(solver);
-                                _contactSolverMap[hash] = solver;
+                                var shapeA = shape1;
+                                var shapeB = shape2;
+                                if (shapeA.Type > shapeB.Type)
+                                    (shapeB, shapeA) = (shapeA, shapeB);
+
+                                List<Contact> contacts = new List<Contact>();
+                                var contactCount = Collision.Collide(shapeA, shapeB, contacts);
+                                if (contactCount == 0) continue;
+
+                                int sidA = shapeA.Id, sidB = shapeB.Id;
+                                if (sidA > sidB) (sidA, sidB) = (sidB, sidA);
+                                ulong hash = ((ulong)sidA << 32) | (uint)sidB;
+
+                                validHashes.Add(hash);
+
+                                if (_contactSolverMap.TryGetValue(hash, out var existing))
+                                {
+                                    existing.Update(contacts);
+                                    _contactSolvers.Add(existing);
+                                }
+                                else
+                                {
+                                    float e = MathF.Max(shapeA.Elasticity, shapeB.Elasticity);
+                                    float f = MathF.Sqrt(shapeA.Friction * shapeB.Friction);
+                                    var solver = new ContactSolver(shapeA, shapeB, contacts, e, f);
+                                    _contactSolvers.Add(solver);
+                                    _contactSolverMap[hash] = solver;
+                                }
                             }
                         }
                     }

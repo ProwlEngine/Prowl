@@ -1,4 +1,4 @@
-﻿namespace Physics2D
+﻿namespace Prowl.Drift
 {
     public class ShapePoly : Shape
     {
