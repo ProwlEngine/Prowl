@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
 
 using Prowl.Quill;
 using Prowl.Vector;
@@ -240,12 +241,14 @@ public static class SpinnerUtil
     /// Helper method to create a spinner element that can be used in layouts.
     /// </summary>
     /// <param name="paper">Paper UI instance</param>
-    /// <param name="id">Unique identifier for the spinner element</param>
+    /// <param name="stringID">String identifier for the element</param>
     /// <param name="config">Spinner configuration</param>
+    /// <param name="intID">Integer identifier useful for when creating elements in loops</param>
+    /// <param name="lineID">Line number based identifier (auto-provided as Source Line Number)</param>
     /// <returns>ElementBuilder with spinner animation</returns>
-    public static ElementBuilder CreateSpinnerElement(Paper paper, string id, SpinnerConfig config)
+    public static ElementBuilder CreateSpinnerElement(Paper paper, string stringID, SpinnerConfig config, int intID = 0, [CallerLineNumber] int lineID = 0)
     {
-        return paper.Box($"spinner-{id}")
+        return paper.Box(stringID, intID, lineID)
             .Width(config.Size)
             .Height(config.Size)
             .OnPostLayout((handle, rect) => {
@@ -257,14 +260,16 @@ public static class SpinnerUtil
     /// Helper method to create a themed spinner element.
     /// </summary>
     /// <param name="paper">Paper UI instance</param>
-    /// <param name="id">Unique identifier for the spinner element</param>
+    /// <param name="stringID">String identifier for the element</param>
     /// <param name="theme">Origami theme</param>
     /// <param name="size">Size variant</param>
+    /// <param name="intID">Integer identifier useful for when creating elements in loops</param>
+    /// <param name="lineID">Line number based identifier (auto-provided as Source Line Number)</param>
     /// <returns>ElementBuilder with themed spinner animation</returns>
-    public static ElementBuilder CreateThemedSpinnerElement(Paper paper, string id, OrigamiTheme theme, OrigamiSize size = OrigamiSize.Medium)
+    public static ElementBuilder CreateThemedSpinnerElement(Paper paper, string stringID, OrigamiTheme theme, OrigamiSize size = OrigamiSize.Medium, int intID = 0, [CallerLineNumber] int lineID = 0)
     {
         var spinnerSize = GetSpinnerSize(size);
-        return paper.Box($"spinner-{id}")
+        return paper.Box(stringID, intID, lineID)
             .Width(spinnerSize)
             .Height(spinnerSize)
             .OnPostLayout((handle, rect) => {
