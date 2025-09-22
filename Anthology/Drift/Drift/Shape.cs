@@ -36,5 +36,6 @@ namespace Prowl.Drift
         public abstract bool PointQuery(Vector2 p);
         public abstract int FindVertexByPoint(Vector2 p, float minDist);
         public abstract float DistanceOnPlane(Vector2 n, float d);
+        public abstract RaycastHit Raycast(Ray ray);
     }
 }

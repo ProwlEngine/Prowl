@@ -136,7 +136,7 @@ namespace DriftDemo
             }
         }
 
-        static CircleShape circleShape;
+        static CircleShape? circleShape;
 
         private void DrawCircle(ShapeCircle circle, Color color, bool isAwake)
         {
@@ -194,6 +194,33 @@ namespace DriftDemo
                 new Vertex(b, color)
             };
             _window.Draw(line, PrimitiveType.Lines);
+        }
+
+        public void DrawRay(Ray ray, Color color)
+        {
+            var end = ray.GetPoint(ray.MaxDistance);
+            DrawLine(ray.Origin, end, color);
+        }
+
+        public void DrawRaycastHit(RaycastHit hit, Color color)
+        {
+            if (!hit.Hit) return;
+
+            // Draw the ray line up to hit point
+            DrawLine(hit.Point - hit.Normal * 0.1f, hit.Point, color);
+
+            // Draw hit point
+            var hitPoint = WorldToScreen(hit.Point);
+            var hitCircle = new CircleShape(4)
+            {
+                Position = new Vector2f(hitPoint.X - 4, hitPoint.Y - 4),
+                FillColor = color
+            };
+            _window.Draw(hitCircle);
+
+            // Draw normal
+            var normalEnd = hit.Point + hit.Normal * 0.5f;
+            DrawLine(hit.Point, normalEnd, color);
         }
 
         private void DrawSegment(ShapeSegment segment, Color color, bool isAwake)

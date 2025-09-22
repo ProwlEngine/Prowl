@@ -176,6 +176,55 @@ namespace Prowl.Drift
             return min - d;
         }
 
+        public override RaycastHit Raycast(Ray ray)
+        {
+            if (!Bounds.IntersectsRay(ray.Origin, ray.Direction, ray.MaxDistance))
+                return RaycastHit.Miss;
+
+            float nearestDistance = float.MaxValue;
+            Vector2 nearestNormal = Vector2.Zero;
+            bool hit = false;
+
+            for (int i = 0; i < TransformedVerts.Count; i++)
+            {
+                Vector2 v1 = TransformedVerts[i];
+                Vector2 v2 = TransformedVerts[(i + 1) % TransformedVerts.Count];
+
+                Vector2 edge = v2 - v1;
+                if (edge.LengthSquared() < 0.0001f) continue;
+
+                // Use the precomputed plane normal from TransformedPlanes
+                Vector2 normal = TransformedPlanes[i].Normal;
+
+                float denominator = Vector2.Dot(ray.Direction, normal);
+                if (MathF.Abs(denominator) < 0.0001f) continue;
+
+                // Only consider faces facing towards the ray (dot product < 0)
+                if (denominator > 0) continue;
+
+                float t = (TransformedPlanes[i].Distance - Vector2.Dot(ray.Origin, normal)) / denominator;
+                if (t < 0 || t > ray.MaxDistance) continue;
+
+                Vector2 intersection = ray.Origin + ray.Direction * t;
+
+                // Check if intersection point is on the edge
+                float edgeParam = Vector2.Dot(intersection - v1, edge) / Vector2.Dot(edge, edge);
+                if (edgeParam < 0 || edgeParam > 1) continue;
+
+                if (t < nearestDistance)
+                {
+                    nearestDistance = t;
+                    nearestNormal = normal;
+                    hit = true;
+                }
+            }
+
+            if (!hit) return RaycastHit.Miss;
+
+            Vector2 hitPoint = ray.GetPoint(nearestDistance);
+            return new RaycastHit(true, nearestDistance, hitPoint, nearestNormal, Body, this);
+        }
+
         public static ShapePoly CreateBox(float localX, float localY, float width, float height)
         {
             float hw = width * 0.5f;

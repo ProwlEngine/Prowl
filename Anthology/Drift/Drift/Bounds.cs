@@ -34,5 +34,40 @@ namespace Prowl.Drift
 
         public bool ContainsPoint(Vector2 p) =>
             p.X >= Mins.X && p.X <= Maxs.X && p.Y >= Mins.Y && p.Y <= Maxs.Y;
+
+        public bool IntersectsRay(Vector2 origin, Vector2 direction, float maxDistance)
+        {
+            float tmin = 0;
+            float tmax = maxDistance;
+
+            for (int i = 0; i < 2; i++)
+            {
+                float t1, t2;
+                float rayComponent = i == 0 ? direction.X : direction.Y;
+                float originComponent = i == 0 ? origin.X : origin.Y;
+                float minComponent = i == 0 ? Mins.X : Mins.Y;
+                float maxComponent = i == 0 ? Maxs.X : Maxs.Y;
+
+                if (MathF.Abs(rayComponent) < 0.0001f)
+                {
+                    if (originComponent < minComponent || originComponent > maxComponent)
+                        return false;
+                }
+                else
+                {
+                    t1 = (minComponent - originComponent) / rayComponent;
+                    t2 = (maxComponent - originComponent) / rayComponent;
+
+                    if (t1 > t2) (t1, t2) = (t2, t1);
+
+                    tmin = MathF.Max(tmin, t1);
+                    tmax = MathF.Min(tmax, t2);
+
+                    if (tmin > tmax) return false;
+                }
+            }
+
+            return tmin <= maxDistance;
+        }
     }
 }

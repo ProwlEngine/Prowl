@@ -41,5 +41,28 @@ namespace Prowl.Drift
         }
 
         public override float DistanceOnPlane(Vector2 n, float d) => Vector2.Dot(n, TransformedCenter) - Radius - d;
+
+        public override RaycastHit Raycast(Ray ray)
+        {
+            Vector2 toCenter = TransformedCenter - ray.Origin;
+            float projectedLength = Vector2.Dot(toCenter, ray.Direction);
+
+            if (projectedLength < 0) return RaycastHit.Miss;
+
+            Vector2 closestPoint = ray.Origin + ray.Direction * projectedLength;
+            float distanceToCenter = (TransformedCenter - closestPoint).Length();
+
+            if (distanceToCenter > Radius) return RaycastHit.Miss;
+
+            float halfChord = MathF.Sqrt(Radius * Radius - distanceToCenter * distanceToCenter);
+            float distance = projectedLength - halfChord;
+
+            if (distance < 0 || distance > ray.MaxDistance) return RaycastHit.Miss;
+
+            Vector2 hitPoint = ray.GetPoint(distance);
+            Vector2 normal = Vector2.Normalize(hitPoint - TransformedCenter);
+
+            return new RaycastHit(true, distance, hitPoint, normal, Body, this);
+        }
     }
 }

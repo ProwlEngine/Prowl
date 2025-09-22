@@ -21,6 +21,19 @@ namespace DriftDemo
         private static Body? _mouseBody;
         private static MouseJoint? _mouseJoint;
 
+        // Raycast tracking for visualization
+        private static List<(Ray ray, RaycastHit hit)> _frameRaycasts = new();
+
+        public static void RegisterRaycast(Ray ray, RaycastHit hit)
+        {
+            _frameRaycasts.Add((ray, hit));
+        }
+
+        public static void ClearFrameRaycasts()
+        {
+            _frameRaycasts.Clear();
+        }
+
         static void Main()
         {
             // Initialize window
@@ -81,6 +94,7 @@ namespace DriftDemo
             _demos.Add(new DemoRagdoll());
             _demos.Add(new DemoCrank());
             _demos.Add(new DemoWeb());
+            _demos.Add(new DemoRaycast());
 
             // Start first demo
             LoadDemo(_currentDemo);
@@ -103,6 +117,8 @@ namespace DriftDemo
                     accumulator -= fixedDt;
                 }
 
+                // Clear previous frame's raycasts
+                ClearFrameRaycasts();
 
                 // Run demo frame
                 _demos[_currentDemo].RunFrame();
@@ -112,6 +128,19 @@ namespace DriftDemo
                 _window.Clear(Color.Black);
 
                 _renderer.DrawSpace(_space);
+
+                // Draw all registered raycasts from this frame
+                foreach (var (ray, hit) in _frameRaycasts)
+                {
+                    // Draw the ray
+                    _renderer.DrawRay(ray, Color.Green);
+
+                    // Draw the hit if there was one
+                    if (hit.Hit)
+                    {
+                        _renderer.DrawRaycastHit(hit, Color.Red);
+                    }
+                }
 
                 // Draw UI
                 if (_titleText != null)
@@ -139,6 +168,15 @@ namespace DriftDemo
 
                 if (_instructionText != null)
                 {
+                    // Update instruction text based on current demo
+                    if (_demos[_currentDemo] is DemoRaycast)
+                    {
+                        _instructionText.DisplayedString = "LEFT/RIGHT: change demos | R: reset | WASD: move character | QE: rotate raycast | SPACE: shoot raycast | ESC: quit";
+                    }
+                    else
+                    {
+                        _instructionText.DisplayedString = "LEFT/RIGHT: change demos | R: reset | SPACE: demo action | LEFT CLICK+DRAG: move objects | ESC: quit";
+                    }
                     _window.Draw(_instructionText);
                 }
 

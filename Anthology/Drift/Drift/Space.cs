@@ -264,5 +264,58 @@ namespace Prowl.Drift
             }
             return null;
         }
+
+        public RaycastHit Raycast(Ray ray, Body? ignoreBody = null)
+        {
+            RaycastHit closestHit = RaycastHit.Miss;
+            float closestDistance = float.MaxValue;
+
+            foreach (var body in _bodies)
+            {
+                if (body == ignoreBody) continue;
+                if (!body.Bounds.IntersectsRay(ray.Origin, ray.Direction, ray.MaxDistance)) continue;
+
+                foreach (var shape in body.Shapes)
+                {
+                    var hit = shape.Raycast(ray);
+                    if (hit.Hit && hit.Distance < closestDistance)
+                    {
+                        bool startingInside = shape.PointQuery(ray.Origin);
+                        if (startingInside && ignoreBody == null) continue;
+
+                        closestDistance = hit.Distance;
+                        closestHit = hit;
+                    }
+                }
+            }
+
+            return closestHit;
+        }
+
+        public List<RaycastHit> RaycastAll(Ray ray, Body? ignoreBody = null)
+        {
+            var hits = new List<RaycastHit>();
+
+            foreach (var body in _bodies)
+            {
+                if (body == ignoreBody) continue;
+                if (!body.Bounds.IntersectsRay(ray.Origin, ray.Direction, ray.MaxDistance)) continue;
+
+                foreach (var shape in body.Shapes)
+                {
+                    var hit = shape.Raycast(ray);
+                    if (hit.Hit)
+                    {
+                        bool startingInside = shape.PointQuery(ray.Origin);
+                        if (startingInside && ignoreBody == null) continue;
+
+                        hits.Add(hit);
+                    }
+                }
+            }
+
+            hits.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+            return hits;
+        }
     }
 }
