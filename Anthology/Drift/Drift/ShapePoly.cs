@@ -4,10 +4,16 @@ namespace Prowl.Drift
 {
     public class ShapePoly : Shape
     {
-        public struct Plane(Vector2 normal, float distance)
+        public struct Plane
         {
-            public Vector2 Normal = normal;
-            public float Distance = distance;
+            public Vector2 Normal;
+            public float Distance;
+
+            public Plane(Vector2 normal, float distance)
+            {
+                Normal = normal;
+                Distance = distance;
+            }
         }
 
         public List<Vector2> Verts { get; } = new();
