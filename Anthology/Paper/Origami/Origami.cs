@@ -1,7 +1,4 @@
-using System.Drawing;
 using System.Runtime.CompilerServices;
-
-using Prowl.PaperUI;
 using Prowl.PaperUI.Themes.Origami.Button;
 using Prowl.PaperUI.Themes.Origami.Divider;
 
@@ -48,23 +45,25 @@ public static class Origami
     /// <summary>
     /// Creates a new Button builder.
     /// </summary>
-    /// <param name="id">Unique identifier for the button</param>
-    /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+    /// <param name="stringID">String identifier for the element</param>
+    /// <param name="intID">Integer identifier useful for when creating elements in loops</param>
+    /// <param name="lineID">Line number based identifier (auto-provided as Source Line Number)</param>
     /// <returns>A ButtonBuilder for configuring the button</returns>
-    public static ButtonBuilder Button(string id, [CallerLineNumber] int intID = 0)
+    public static ButtonBuilder Button(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
     {
-        return new ButtonBuilder(Paper, id, intID);
+        return new ButtonBuilder(Paper, stringID, intID, lineID);
     }
 
     /// <summary>
     /// Creates a new Divider builder.
     /// </summary>
-    /// <param name="id">Unique identifier for the divider</param>
-    /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+    /// <param name="stringID">String identifier for the element</param>
+    /// <param name="intID">Integer identifier useful for when creating elements in loops</param>
+    /// <param name="lineID">Line number based identifier (auto-provided as Source Line Number)</param>
     /// <returns>A DividerBuilder for configuring the divider</returns>
-    public static DividerBuilder Divider(string id, [CallerLineNumber] int intID = 0)
+    public static DividerBuilder Divider(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
     {
-        return new DividerBuilder(Paper, id, intID);
+        return new DividerBuilder(Paper, stringID, intID, lineID);
     }
 
 }

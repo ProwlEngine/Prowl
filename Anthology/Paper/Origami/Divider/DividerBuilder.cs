@@ -1,4 +1,6 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
+
 using Prowl.PaperUI.LayoutEngine;
 
 namespace Prowl.PaperUI.Themes.Origami.Divider;
@@ -10,8 +12,9 @@ namespace Prowl.PaperUI.Themes.Origami.Divider;
 public class DividerBuilder
 {
     private readonly Paper _paper;
-    private readonly string _id;
+    private readonly string _stringId;
     private readonly int _intId;
+    private readonly int _lineId;
     private OrigamiColor _color = OrigamiColor.Primary;
     private int _thickness = 1;
     private bool _isVertical = false;
@@ -20,12 +23,15 @@ public class DividerBuilder
     /// Initializes a new DividerBuilder with the specified Paper instance and unique identifier.
     /// </summary>
     /// <param name="paper">The Paper UI instance</param>
-    /// <param name="id">Unique identifier for this divider</param>
-    internal DividerBuilder(Paper paper, string id, int intID)
+    /// <param name="stringID">String identifier for the element</param>
+    /// <param name="intID">Integer identifier useful for when creating elements in loops</param>
+    /// <param name="lineID">Line number based identifier (auto-provided as Source Line Number)</param>
+    internal DividerBuilder(Paper paper, string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
     {
         _paper = paper ?? throw new ArgumentNullException(nameof(paper));
-        _id = id ?? throw new ArgumentNullException(nameof(id));
+        _stringId = _stringId ?? throw new ArgumentNullException(nameof(_stringId));
         _intId = intID;
+        _lineId = lineID;
     }
 
     #region Style Configuration
@@ -82,7 +88,7 @@ public class DividerBuilder
             dividerColor = theme.GetColor(_color).Base;
         }
 
-        var divider = _paper.Box($"origami-divider-{_id}", _intId)
+        var divider = _paper.Box(_stringId, _intId, _lineId)
             .BackgroundColor(dividerColor)
             .IsNotInteractable()
             .IsNotFocusable();
