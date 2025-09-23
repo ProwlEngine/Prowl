@@ -551,18 +551,13 @@ namespace Prowl.PaperUI
         {
             ArgumentNullException.ThrowIfNull(stringID);
 
-            ulong storageHash = 0;
-            if(_IDStack.Count > 0)
-                storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID, lineID);
-            else
-                storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, stringID, intID, lineID);
+            ulong storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID, lineID);
 
-            if (_createdElements.Contains(storageHash))
+            if (!_createdElements.Add(storageHash))
                 throw new Exception($"Element already exists with this ID: {stringID}:{intID}:{lineID} = {storageHash} Parent: {CurrentParent.Data.ID}\nPlease use a different ID.");
 
             var handle = CreateElement(storageHash);
             var builder = new ElementBuilder(this, handle);
-            _createdElements.Add(storageHash);
 
             AddChild(ref handle);
 
@@ -643,7 +638,7 @@ namespace Prowl.PaperUI
         /// </summary>
         public void PushID(ulong id)
         {
-            _IDStack.Push(id);
+            _IDStack.Push((ulong)HashCode.Combine(id, _IDStack.Peek()));
         }
 
         /// <summary>
