@@ -16,16 +16,16 @@ public class IdTests
     {
         var paper = new Paper(new Renderer(), 1, 1, new FontAtlasSettings());
 
-        // This test explicitly provides the intID so that the ID stack can be tested independently
+        // This test explicitly provides the intID and lineID so that the ID stack can be tested independently
         paper.BeginFrame(0);
         {
             paper.PushID(id);
             {
-                paper.Box("Element", 0);
+                paper.Box("Element", 0, 0);
 
                 paper.PushID(id);
                 {
-                    paper.Box("Element", 0);
+                    paper.Box("Element", 0, 0);
                 }
                 paper.PopID();
             }
