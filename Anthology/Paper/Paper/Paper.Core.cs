@@ -642,7 +642,10 @@ namespace Prowl.PaperUI
         /// </summary>
         public void PushID(ulong id)
         {
-            _IDStack.Push(id);
+            if (_IDStack.Count > 0)
+                _IDStack.Push((ulong)HashCode.Combine(id, _IDStack.Peek()));
+            else
+                _IDStack.Push(id);
         }
 
         /// <summary>
