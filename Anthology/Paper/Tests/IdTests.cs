@@ -12,7 +12,7 @@ public class IdTests
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
-    public void PushID_PreventsException_WhenDuplicateIdsAreAdded(ulong id)
+    public void PushID_PreventsException_WhenDuplicateIdsAreAdded(int id)
     {
         var paper = new Paper(new Renderer(), 1, 1, new FontAtlasSettings());
 

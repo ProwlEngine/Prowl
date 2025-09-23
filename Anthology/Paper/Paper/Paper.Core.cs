@@ -17,10 +17,10 @@ namespace Prowl.PaperUI
         // Layout and hierarchy management
         private ElementHandle _rootElementHandle;
         internal Stack<ElementHandle> _elementStack = new Stack<ElementHandle>();
-        private readonly Stack<ulong> _IDStack = new();
-        private readonly HashSet<ulong> _createdElements = [];
+        private readonly Stack<int> _IDStack = new();
+        private readonly HashSet<int> _createdElements = [];
 
-        private readonly Dictionary<ulong, Hashtable> _storage = [];
+        private readonly Dictionary<int, Hashtable> _storage = [];
 
         // Rendering context
         private Canvas _canvas;
@@ -534,7 +534,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="id">The ID to search for</param>
         /// <returns>The found element or null if not found</returns>
-        public ElementHandle FindElementByID(ulong id)
+        public ElementHandle FindElementByID(int id)
         {
             var handle = FindElementHandleByID(id);
             return handle;
@@ -551,7 +551,7 @@ namespace Prowl.PaperUI
         {
             ArgumentNullException.ThrowIfNull(stringID);
 
-            ulong storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID, lineID);
+            int storageHash = HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID, lineID);
 
             if (!_createdElements.Add(storageHash))
                 throw new Exception($"Element already exists with this ID: {stringID}:{intID}:{lineID} = {storageHash} Parent: {CurrentParent.Data.ID}\nPlease use a different ID.");
@@ -636,9 +636,9 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Pushes an ID onto the ID stack to create a new scope.
         /// </summary>
-        public void PushID(ulong id)
+        public void PushID(int id)
         {
-            _IDStack.Push((ulong)HashCode.Combine(id, _IDStack.Peek()));
+            _IDStack.Push(HashCode.Combine(id, _IDStack.Peek()));
         }
 
         /// <summary>

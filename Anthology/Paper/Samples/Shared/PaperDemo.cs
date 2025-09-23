@@ -51,7 +51,7 @@ namespace Shared
                 // A stupid simple way to benchmark the performance of the UI (Adds the entire ui multiple times)
                 for (int i = 0; i < 1; i++)
                 {
-                    Gui.PushID((ulong)i);
+                    Gui.PushID(i);
                     // Top navigation bar
                     RenderTopNavBar();
 
