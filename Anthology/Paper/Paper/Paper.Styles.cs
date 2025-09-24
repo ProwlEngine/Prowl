@@ -754,7 +754,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// A dictionary to keep track of active styles for each element.
         /// </summary>
-        Dictionary<ulong, ElementStyle> _activeStyles = new();
+        Dictionary<int, ElementStyle> _activeStyles = new();
 
         /// <summary>
         /// Update the styles for all active elements.
@@ -763,7 +763,7 @@ namespace Prowl.PaperUI
         /// <param name="element">The root element to start updating from.</param>
         private void UpdateStyles(double deltaTime, ElementHandle element)
         {
-            ulong id = element.Data.ID;
+            int id = element.Data.ID;
             if (_activeStyles.TryGetValue(id, out var style))
             {
                 // Update the style properties
@@ -789,7 +789,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Set a style property value (no transition).
         /// </summary>
-        internal void SetStyleProperty(ulong elementID, GuiProp property, object value)
+        internal void SetStyleProperty(int elementID, GuiProp property, object value)
         {
             if (!_activeStyles.TryGetValue(elementID, out var style))
             {
@@ -805,7 +805,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Configure a transition for a property.
         /// </summary>
-        internal void SetTransitionConfig(ulong elementID, GuiProp property, double duration, Func<double, double>? easing = null)
+        internal void SetTransitionConfig(int elementID, GuiProp property, double duration, Func<double, double>? easing = null)
         {
             if (!_activeStyles.TryGetValue(elementID, out var style))
             {
@@ -821,10 +821,10 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Clean up styles at the end of a frame.
         /// </summary>
-        private void EndOfFrameCleanupStyles(HashSet<ulong> createdElements)
+        private void EndOfFrameCleanupStyles(HashSet<int> createdElements)
         {
             // Clean up any elements that haven't been accessed this frame
-            List<ulong> elementsToRemove = new List<ulong>();
+            List<int> elementsToRemove = new List<int>();
             foreach (var kvp in _activeStyles)
             {
                 if (!createdElements.Contains(kvp.Key))

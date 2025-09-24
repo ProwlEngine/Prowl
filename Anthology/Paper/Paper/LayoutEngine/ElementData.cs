@@ -7,7 +7,7 @@ namespace Prowl.PaperUI.LayoutEngine
 {
     public struct ElementData
     {
-        public ulong ID;
+        public int ID;
 
         // Events
         public bool IsFocusable;
@@ -43,13 +43,13 @@ namespace Prowl.PaperUI.LayoutEngine
         // Hierarchy
         public int ParentIndex;
         public List<int> ChildIndices;
-        
+
         // Interaction hooking - whether this element inherits parent's interaction state
         public bool IsHookedToParent;
-        
+
         // Interaction hooking - whether this element has hooked children (optimization flag)
         public bool IsAHookedParent;
-        
+
         // Tab navigation - element's position in tab order (-1 means not focusable via tab)
         public int TabIndex;
 
@@ -96,7 +96,7 @@ namespace Prowl.PaperUI.LayoutEngine
 
         public readonly Rect LayoutRect => new Rect(X, Y, LayoutWidth, LayoutHeight);
 
-        public static ElementData Create(ulong id)
+        public static ElementData Create(int id)
         {
             return new ElementData
             {
