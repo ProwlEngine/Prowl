@@ -636,6 +636,14 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Pushes an ID onto the ID stack to create a new scope.
         /// </summary>
+        public void PushID(string id)
+        {
+            PushID(id.GetHashCode());
+        }
+
+        /// <summary>
+        /// Pushes an ID onto the ID stack to create a new scope.
+        /// </summary>
         public void PushID(int id)
         {
             _IDStack.Push(HashCode.Combine(id, _IDStack.Peek()));
