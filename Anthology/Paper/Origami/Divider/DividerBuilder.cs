@@ -29,7 +29,7 @@ public class DividerBuilder
     internal DividerBuilder(Paper paper, string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
     {
         _paper = paper ?? throw new ArgumentNullException(nameof(paper));
-        _stringId = _stringId ?? throw new ArgumentNullException(nameof(_stringId));
+        _stringId = stringID ?? throw new ArgumentNullException(nameof(_stringId));
         _intId = intID;
         _lineId = lineID;
     }
