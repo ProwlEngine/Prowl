@@ -18,7 +18,7 @@ namespace Prowl.PaperUI
             return ref _elements[index];
         }
 
-        public ElementHandle CreateElement(ulong id)
+        public ElementHandle CreateElement(int id)
         {
             int index;
             ElementData elementData = ElementData.Create(id);
@@ -97,7 +97,7 @@ namespace Prowl.PaperUI
         }
 
         // Helper method to find element by ID
-        public ElementHandle FindElementHandleByID(ulong id)
+        public ElementHandle FindElementHandleByID(int id)
         {
             for (int i = 0; i < _elementCount; i++)
             {
@@ -116,13 +116,13 @@ namespace Prowl.PaperUI
                     continue;
 
                 ref var element = ref _elements[i];
-                
+
                 // Validate parent-child relationships
                 if (element.ParentIndex != -1)
                 {
                     if (element.ParentIndex < 0 || element.ParentIndex >= _elementCount)
                         throw new InvalidOperationException($"Element {i} has invalid parent index {element.ParentIndex}");
-                    
+
                     ref var parent = ref _elements[element.ParentIndex];
                     if (!parent.ChildIndices.Contains(i))
                         throw new InvalidOperationException($"Element {i} claims parent {element.ParentIndex} but parent doesn't list it as child");
@@ -132,7 +132,7 @@ namespace Prowl.PaperUI
                 {
                     if (childIndex < 0 || childIndex >= _elementCount)
                         throw new InvalidOperationException($"Element {i} has invalid child index {childIndex}");
-                    
+
                     ref var child = ref _elements[childIndex];
                     if (child.ParentIndex != i)
                         throw new InvalidOperationException($"Element {i} claims child {childIndex} but child doesn't reference it as parent");

@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -99,37 +100,37 @@ namespace Shared
                 .Register();
         }
 
-        public static ElementBuilder Primary(string id, string text = "")
+        public static ElementBuilder Primary(string stringID, string text = "", int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            return PaperDemo.Gui.Box("shadcs-button-" + id)
+            return PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Text(text, Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-button-primary");
         }
 
-        public static ElementBuilder Secondary(string id, string text = "")
+        public static ElementBuilder Secondary(string stringID, string text = "", int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            return PaperDemo.Gui.Box("shadcs-button-" + id)
+            return PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Text(text, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-button-secondary");
         }
 
-        public static ElementBuilder Outline(string id, string text = "")
+        public static ElementBuilder Outline(string stringID, string text = "", int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            return PaperDemo.Gui.Box("shadcs-button-" + id)
+            return PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Text(text, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-button-outline");
         }
 
-        public static ElementBuilder IconPrimary(string id, string text = "")
+        public static ElementBuilder IconPrimary(string stringID, string text = "", int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            return PaperDemo.Gui.Box("shadcs-button-" + id)
+            return PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Text(text, Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-icon-button-primary");
         }
 
-        public static ElementBuilder IconSecondary(string id, string text = "")
+        public static ElementBuilder IconSecondary(string stringID, string text = "", int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            return PaperDemo.Gui.Box("shadcs-button-" + id)
+            return PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Text(text, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter)
                 .Style("shadcs-icon-button-secondary");
         }
@@ -157,9 +158,9 @@ namespace Shared
                 .Register();
         }
 
-        public static ElementBuilder Secondary(string id, string value, Action<string> onChange = null, string placeholder = "")
+        public static ElementBuilder Secondary(string stringID, string value, Action<string> onChange = null, string placeholder = "", int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            ElementBuilder parent = PaperDemo.Gui.Box("shadcs-input-" + id).Style("shadcs-text-field-secondary").TabIndex(0);
+            ElementBuilder parent = PaperDemo.Gui.Box(stringID, intID, lineID).Style("shadcs-text-field-secondary").TabIndex(0);
             using (parent.Enter())
             {
                 PaperDemo.Gui.Box("area")
@@ -203,9 +204,9 @@ namespace Shared
                 .Register();
         }
 
-        public static ElementBuilder Secondary(string id, string value, Action<string> onChange = null, string placeholder = "")
+        public static ElementBuilder Secondary(string stringID, string value, Action<string> onChange = null, string placeholder = "", int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            ElementBuilder parent = PaperDemo.Gui.Box("shadcs-textarea-" + id).Style("shadcs-text-area-secondary").TabIndex(1);
+            ElementBuilder parent = PaperDemo.Gui.Box(stringID, intID, lineID).Style("shadcs-text-area-secondary").TabIndex(1);
             using (parent.Enter())
             {
                 PaperDemo.Gui.Box("area")
@@ -223,10 +224,9 @@ namespace Shared
 
     public static class Slider
     {
-
-        public static ElementBuilder Primary(string id, double sliderValue, Action<double> onChange)
+        public static ElementBuilder Primary(string stringID, double sliderValue, Action<double> onChange, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            var parent = PaperDemo.Gui.Box("shadcs-slider-" + id)
+            var parent = PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Height(20)
                 .Rounded(10)
                 .BackgroundColor(Themes.backgroundColor)
@@ -304,9 +304,9 @@ namespace Shared
             // }
         }
 
-        public static ElementBuilder Secondary(string id, double sliderValue, Action<double> onChange)
+        public static ElementBuilder Secondary(string stringID, double sliderValue, Action<double> onChange, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            var parent = PaperDemo.Gui.Box("shadcs-slider-" + id)
+            var parent = PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Height(20)
                 .Rounded(10)
                 .BackgroundColor(Themes.backgroundColor)
@@ -381,19 +381,19 @@ namespace Shared
                 .Transition(GuiProp.Left, 0.25, Easing.CubicInOut));
         }
 
-        public static ElementBuilder Primary(string id, bool isOn)
+        public static ElementBuilder Primary(string stringID, bool isOn, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
             // Toggle switch - much simpler with styles!
             // bool isOn = toggleState[i];
             // int index = i;
 
             ElementBuilder builder;
-            using ((builder = PaperDemo.Gui.Box("shadcs-switch-" + id)
+            using ((builder = PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Style("toggle")
                 .StyleIf(isOn, "toggle-on")
                 .StyleIf(!isOn, "toggle-off")).Enter())
-            { 
-                PaperDemo.Gui.Box($"ToggleDot{id}")
+            {
+                PaperDemo.Gui.Box("ToggleDot")
                     .Style("toggle-dot")
                     .Left(PaperDemo.Gui.Pixels(isOn ? 32 : 4));
             }
@@ -403,11 +403,11 @@ namespace Shared
 
     public static class PieChart
     {
-        public static ElementBuilder Primary(string id, double[] values, double startAngle)
+        public static ElementBuilder Primary(string stringID, double[] values, double startAngle, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
             // "Analysis" mock content
             ElementBuilder builder;
-            using ((builder = PaperDemo.Gui.Box("shadcs-piechart-" + id)
+            using ((builder = PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Margin(20)).Enter())
             {
 

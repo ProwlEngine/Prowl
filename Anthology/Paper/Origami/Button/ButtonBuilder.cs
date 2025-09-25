@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
 
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
@@ -13,8 +14,9 @@ namespace Prowl.PaperUI.Themes.Origami.Button;
 public class ButtonBuilder
 {
     private readonly Paper _paper;
-    private readonly string _id;
+    private readonly string _stringId;
     private readonly int _intId;
+    private readonly int _lineId;
     private string _text = string.Empty;
     private string _icon = string.Empty;
     private FontFile? _font;
@@ -36,12 +38,15 @@ public class ButtonBuilder
     /// Initializes a new ButtonBuilder with the specified Paper instance and unique identifier.
     /// </summary>
     /// <param name="paper">The Paper UI instance</param>
-    /// <param name="id">Unique identifier for this button</param>
-    internal ButtonBuilder(Paper paper, string id, int intID)
+    /// <param name="stringID">String identifier for the element</param>
+    /// <param name="intID">Integer identifier useful for when creating elements in loops</param>
+    /// <param name="lineID">Line number based identifier (auto-provided as Source Line Number)</param>
+    internal ButtonBuilder(Paper paper, string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
     {
         _paper = paper ?? throw new ArgumentNullException(nameof(paper));
-        _id = id ?? throw new ArgumentNullException(nameof(id));
+        _stringId = stringID ?? throw new ArgumentNullException(nameof(stringID));
         _intId = intID;
+        _lineId = lineID;
     }
 
     #region Content Configuration
@@ -239,7 +244,7 @@ public class ButtonBuilder
         var theme = Origami.Theme;
 
         // Create the button element
-        var button = _paper.Box($"origami-btn-{_id}", _intId)
+        var button = _paper.Box(_stringId, _intId, _lineId)
             .LayoutType(LayoutType.Row)
             .Transition(GuiProp.BackgroundColor, 0.2)
             .Transition(GuiProp.ScaleX, 0.1)
@@ -417,7 +422,7 @@ public class ButtonBuilder
         {
             if (_isIconOnly)
             {
-                _paper.Box($"origami-btn-icon-{_id}")
+                _paper.Box("origami-btn-icon")
                     .IsNotInteractable().IsNotFocusable()
                     .Text(_icon, _iconFont ?? throw new InvalidOperationException("Font is required for button with icon"))
                     .TextColor(textColor)
@@ -426,7 +431,7 @@ public class ButtonBuilder
             }
             else
             {
-                _paper.Box($"origami-btn-icon-{_id}")
+                _paper.Box("origami-btn-icon")
                     .IsNotInteractable().IsNotFocusable()
                     .MinWidth(fontSize)
                     .Width(UnitValue.Auto)
@@ -440,7 +445,7 @@ public class ButtonBuilder
 
         if (hasText)
         {
-            _paper.Box($"origami-btn-text-{_id}")
+            _paper.Box("origami-btn-text")
                 .IsNotInteractable() .IsNotFocusable()
                 .MinWidth(UnitValue.Auto)
                 .Width(UnitValue.StretchOne)
@@ -458,7 +463,7 @@ public class ButtonBuilder
     private ElementBuilder AddSpinnerElement(OrigamiTheme theme, Color textColor)
     {
         var spinnerSize = theme.GetFontSize(_size);// SpinnerUtil.GetSpinnerSize(_size);
-        return _paper.Box($"origami-btn-spinner-{_id}")
+        return _paper.Box("origami-btn-spinner")
             .IsNotInteractable().IsNotFocusable()
             .Size(spinnerSize)
             .OnPostLayout((handle, rect) => {
