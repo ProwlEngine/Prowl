@@ -1000,7 +1000,12 @@ namespace Shared
 
         private static void RenderSettingsTab()
         {
-            OrigamiExample.ShowExample(Gui, Fonts.arial);
+            using (Gui.Column("Content")
+                .SetScroll(Scroll.ScrollY)
+                .Enter())
+            {
+                OrigamiExample.ShowExample(Gui, Fonts.arial);
+            }
 
             //TextArea.Secondary("SearchTextField", searchText, newValue => searchText = newValue, "Search...")
             //    .Margin(0, 15, 15, 0);

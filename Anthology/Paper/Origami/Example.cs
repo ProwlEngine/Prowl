@@ -21,7 +21,7 @@ public static class OrigamiExample
         Origami.Initialize(paper);
         
         // 2. Create a UI layout with Origami components
-        using (paper.Column("origami-example").Enter())
+        using (paper.Column("origami-example").Height(paper.Auto).Enter())
         {
             // Title
             paper.Box("example-title")
@@ -238,6 +238,217 @@ public static class OrigamiExample
                 .IsDisabled(true)
                 .Build()
                 .Margin(0, 0, 10, 0);
+
+            // Divider Section
+            paper.Box("spacer8").Height(20);
+
+            // Divider title
+            paper.Box("divider-title")
+                .Text("Divider Examples", font)
+                .FontSize(24)
+                .Height(60)
+                .TextColor(Origami.Theme.Foreground.Base)
+                .Alignment(Prowl.PaperUI.TextAlignment.MiddleCenter);
+
+            paper.Box("spacer9").Height(10);
+
+            // Horizontal dividers
+            paper.Box("horizontal-dividers-label")
+                .Text("Horizontal Dividers", font)
+                .FontSize(16)
+                .Height(30)
+                .TextColor(Origami.Theme.Foreground.Base)
+                .Alignment(Prowl.PaperUI.TextAlignment.MiddleLeft);
+
+            // Basic horizontal divider
+            Origami.Divider("basic-divider").Build().Margin(0, 0, 5, 5);
+
+            // Thick horizontal divider
+            Origami.Divider("thick-divider")
+                .Thickness(4)
+                .Color(OrigamiColor.Primary)
+                .Build().Margin(0, 0, 5, 5);
+
+            // Colored horizontal divider
+            Origami.Divider("colored-divider")
+                .Thickness(2)
+                .Color(OrigamiColor.Success)
+                .Build().Margin(0, 0, 5, 5);
+
+            paper.Box("spacer10").Height(10);
+
+            // Vertical dividers
+            paper.Box("vertical-dividers-label")
+                .Text("Vertical Dividers", font)
+                .FontSize(16)
+                .Height(30)
+                .TextColor(Origami.Theme.Foreground.Base)
+                .Alignment(Prowl.PaperUI.TextAlignment.MiddleLeft);
+
+            using (paper.Row("vertical-dividers-row").Height(100).Enter())
+            {
+                paper.Box("text1").Text("Content", font).Width(paper.Auto).TextColor(Origami.Theme.Foreground.Base).Alignment(Prowl.PaperUI.TextAlignment.MiddleCenter).Margin(10, 0, 0, 0);
+
+                // Basic vertical divider
+                Origami.Divider("vertical-divider1")
+                    .Vertical()
+                    .Build().Margin(10, 10, 0, 0);
+
+                paper.Box("text2").Text("More", font).Width(paper.Auto).TextColor(Origami.Theme.Foreground.Base).Alignment(Prowl.PaperUI.TextAlignment.MiddleCenter).Margin(10, 0, 0, 0);
+
+                // Thick colored vertical divider
+                Origami.Divider("vertical-divider2")
+                    .Vertical()
+                    .Thickness(4)
+                    .Color(OrigamiColor.Warning)
+                    .Build().Margin(10, 10, 0, 0);
+
+                paper.Box("text3").Text("Content", font).Width(paper.Auto).TextColor(Origami.Theme.Foreground.Base).Alignment(Prowl.PaperUI.TextAlignment.MiddleCenter).Margin(10, 0, 0, 0);
+            }
+
+            // Switch Section
+            paper.Box("spacer11").Height(20);
+
+            // Switch title
+            paper.Box("switch-title")
+                .Text("Switch Examples", font)
+                .FontSize(24)
+                .Height(60)
+                .TextColor(Origami.Theme.Foreground.Base)
+                .Alignment(Prowl.PaperUI.TextAlignment.MiddleCenter);
+
+            paper.Box("spacer12").Height(10);
+
+            using (paper.Row("basic-switches").Height(paper.Auto).Enter())
+            {
+                // Basic switch - off
+                Origami.Switch("basic-switch-off")
+                    .Label("Basic Switch (Off)", font)
+                    .IsOn(false)
+                    .OnChange(value => Console.WriteLine($"Basic switch changed to: {value}"))
+                    .Build().Margin(0, 0, 10, 0);
+
+                // Basic switch - on
+                Origami.Switch("basic-switch-on")
+                    .Label("Basic Switch (On)", font)
+                    .IsOn(true)
+                    .OnChange(value => Console.WriteLine($"Basic switch changed to: {value}"))
+                    .Build().Margin(0, 0, 10, 0);
+            }
+
+            paper.Box("spacer13").Height(10);
+
+            using (paper.Row("switch-sizes").Height(paper.Auto).Enter())
+            {
+                // Small switch
+                Origami.Switch("small-switch")
+                    .Label("Small", font)
+                    .Size(OrigamiSize.Small)
+                    .IsOn(true)
+                    .Build().Margin(0, paper.Stretch());
+
+                // Medium switch
+                Origami.Switch("medium-switch")
+                    .Label("Medium", font)
+                    .Size(OrigamiSize.Medium)
+                    .IsOn(true)
+                    .Build().Margin(0, paper.Stretch());
+
+                // Large switch
+                Origami.Switch("large-switch")
+                    .Label("Large", font)
+                    .Size(OrigamiSize.Large)
+                    .IsOn(true)
+                    .Build().Margin(0, paper.Stretch());
+            }
+
+            paper.Box("spacer14").Height(10);
+
+            using (paper.Row("switch-colors").Height(paper.Auto).Enter())
+            {
+                // Primary switch
+                Origami.Switch("primary-switch")
+                    .Label("Primary", font)
+                    .Color(OrigamiColor.Primary)
+                    .IsOn(true)
+                    .Build().Margin(0, 0, 8, 0);
+
+                // Secondary switch
+                Origami.Switch("secondary-switch")
+                    .Label("Secondary", font)
+                    .Color(OrigamiColor.Secondary)
+                    .IsOn(true)
+                    .Build().Margin(0, 0, 8, 0);
+
+                // Success switch
+                Origami.Switch("success-switch")
+                    .Label("Success", font)
+                    .Color(OrigamiColor.Success)
+                    .IsOn(true)
+                    .Build().Margin(0, 0, 8, 0);
+
+                // Warning switch
+                Origami.Switch("warning-switch")
+                    .Label("Warning", font)
+                    .Color(OrigamiColor.Warning)
+                    .IsOn(true)
+                    .Build().Margin(0, 0, 8, 0);
+
+                // Danger switch
+                Origami.Switch("danger-switch")
+                    .Label("Danger", font)
+                    .Color(OrigamiColor.Danger)
+                    .IsOn(true)
+                    .Build().Margin(0, 0, 8, 0);
+            }
+
+            paper.Box("spacer15").Height(10);
+
+            using (paper.Row("switch-icons").Height(paper.Auto).Enter())
+            {
+                // Switch with track icons
+                Origami.Switch("track-icons-switch")
+                    .Label("Track Icons", font)
+                    .Icons("✓", "✗", font)
+                    .IsOn(true)
+                    .Build().Margin(0, 0, 10, 0);
+
+                // Switch with thumb icon
+                Origami.Switch("thumb-icon-switch")
+                    .Label("Thumb Icon", font)
+                    .ThumbIcon("⚙", font)
+                    .Color(OrigamiColor.Success)
+                    .IsOn(false)
+                    .Build().Margin(0, 0, 10, 0);
+
+                // Switch with both icons
+                Origami.Switch("both-icons-switch")
+                    .Label("Both Icons", font)
+                    .Icons("✓", "✗", font)
+                    .ThumbIcon("●", font)
+                    .Color(OrigamiColor.Warning)
+                    .IsOn(true)
+                    .Build().Margin(0, 0, 10, 0);
+            }
+
+            paper.Box("spacer16").Height(10);
+
+            using (paper.Row("switch-states").Height(paper.Auto).Enter())
+            {
+                // Disabled switch
+                Origami.Switch("disabled-switch")
+                    .Label("Disabled Switch", font)
+                    .IsOn(true)
+                    .IsDisabled(true)
+                    .Build().Margin(0, 0, 10, 0);
+
+                // Read-only switch
+                Origami.Switch("readonly-switch")
+                    .Label("Read-Only Switch", font)
+                    .IsOn(true)
+                    .IsReadOnly(true)
+                    .Build().Margin(0, 0, 10, 0);
+            }
         }
     }
 

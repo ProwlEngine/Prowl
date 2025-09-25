@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using Prowl.PaperUI;
 using Prowl.PaperUI.Themes.Origami.Button;
 using Prowl.PaperUI.Themes.Origami.Divider;
+using Prowl.PaperUI.Themes.Origami.Switch;
 
 namespace Prowl.PaperUI.Themes.Origami;
 
@@ -65,6 +66,17 @@ public static class Origami
     public static DividerBuilder Divider(string id, [CallerLineNumber] int intID = 0)
     {
         return new DividerBuilder(Paper, id, intID);
+    }
+
+    /// <summary>
+    /// Creates a new Switch builder.
+    /// </summary>
+    /// <param name="id">Unique identifier for the switch</param>
+    /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+    /// <returns>A SwitchBuilder for configuring the switch</returns>
+    public static SwitchBuilder Switch(string id, [CallerLineNumber] int intID = 0)
+    {
+        return new SwitchBuilder(Paper, id, intID);
     }
 
 }
