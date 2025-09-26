@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Prowl.PaperUI.Themes.Origami.Button;
+using Prowl.PaperUI.Themes.Origami.Checkbox;
 using Prowl.PaperUI.Themes.Origami.Divider;
 using Prowl.PaperUI.Themes.Origami.Switch;
 
@@ -76,6 +77,18 @@ public static class Origami
     public static SwitchBuilder Switch(string id, [CallerLineNumber] int intID = 0)
     {
         return new SwitchBuilder(Paper, id, intID);
+    }
+
+    /// <summary>
+    /// Creates a new Checkbox builder.
+    /// </summary>
+    /// <param name="stringID">String identifier for the element</param>
+    /// <param name="intID">Integer identifier useful for when creating elements in loops</param>
+    /// <param name="lineID">Line number based identifier (auto-provided as Source Line Number)</param>
+    /// <returns>A CheckboxBuilder for configuring the checkbox</returns>
+    public static CheckboxBuilder Checkbox(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
+    {
+        return new CheckboxBuilder(Paper, stringID, intID, lineID);
     }
 
 }
