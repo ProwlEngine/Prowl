@@ -199,24 +199,26 @@ namespace Prowl.Quill
 
         private TextRenderer _scribeRenderer;
 
-        private double _devicePixelRatio = 1.0f;
         private double _pixelWidth = 1.0f;
         private double _pixelHalf = 0.5f;
 
+        private double _scale = 1.0f;
+
         private IMarkdownImageProvider? _markdownImageProvider = null;
 
-        public double DevicePixelRatio
+        public double Scale
         {
-            get => _devicePixelRatio;
+            get => _scale;
             set
             {
                 if (value <= 0)
-                    throw new ArgumentOutOfRangeException(nameof(value), "Device pixel ratio must be greater than zero.");
-                _devicePixelRatio = value;
-                _pixelWidth = 1.0f / value;
-                _pixelHalf = _pixelWidth * 0.5f;
+                    throw new ArgumentOutOfRangeException(nameof(value), "Scale must be greater than zero.");
+                _scale = value;
+                UpdatePixelCalculations();
             }
         }
+
+        public double PixelFraction => 1.0 / _scale;
 
         public TextRenderer Text => _scribeRenderer;
 
@@ -227,7 +229,48 @@ namespace Prowl.Quill
 
             _renderer = renderer;
             _scribeRenderer = new TextRenderer(this, fontAtlasSettings);
+            UpdatePixelCalculations();
             Clear();
+        }
+
+        /// <summary>
+        /// Converts a physical/backing pixel width into the canvas' logical unit space.
+        /// </summary>
+        /// <remarks>
+        /// This method is useful when you have a window or framebuffer width measured in
+        /// device pixels (for example the size reported by the OS or graphics API) and
+        /// you need the equivalent size in the canvas' unit space so layout and clipping
+        /// remain consistent when the canvas is scaled or the system DPI changes.
+        ///
+        /// The conversion divides the provided <paramref name="baseWidth"/> by the
+        /// current <see cref="Scale"/>. Use the
+        /// returned logical width when placing or sizing content so it stays inside the
+        /// visible canvas area even under DPI scaling or when the canvas is zoomed.
+        /// </remarks>
+        /// <param name="baseWidth">Width in device pixels (window/backing buffer pixels).</param>
+        /// <returns>Width in canvas logical units.</returns>
+        public int GetLogicalWidth(int baseWidth) => (int)(baseWidth / _scale);
+
+        /// <summary>
+        /// Converts a physical/backing pixel height into the canvas' logical unit space.
+        /// </summary>
+        /// <remarks>
+        /// This method is the vertical counterpart to <see cref="GetLogicalWidth(int)"/>.
+        /// Provide a height value measured in device pixels and it will be converted by
+        /// dividing by the current <see cref="Scale"/>.
+        ///
+        /// Use the returned logical height for layout, clipping (scissor) calculations
+        /// and positioning to ensure content remains correctly sized and contained when
+        /// DPI scaling or an application scale factor is applied.
+        /// </remarks>
+        /// <param name="baseHeight">Height in device pixels (window/backing buffer pixels).</param>
+        /// <returns>Height in canvas logical units.</returns>
+        public int GetLogicalHeight(int baseHeight) => (int)(baseHeight / _scale);
+
+        private void UpdatePixelCalculations()
+        {
+            _pixelWidth = 1.0f / _scale;
+            _pixelHalf = _pixelWidth * 0.5f;
         }
 
         public void Clear()
@@ -387,9 +430,10 @@ namespace Prowl.Quill
         {
             w = Math.Max(0.0, w);
             h = Math.Max(0.0, h);
+            // Work in unit space - conversion to pixels happens in TransformPoint
             _state.scissor = Transform2D.CreateTranslation(x + w * 0.5, y + h * 0.5) * _state.transform;
-            _state.scissorExtent.x = w * 0.5;
-            _state.scissorExtent.y = h * 0.5;
+            _state.scissorExtent.x = (w * 0.5) * _scale;
+            _state.scissorExtent.y = (h * 0.5) * _scale;
         }
 
         /// <summary>
@@ -413,7 +457,7 @@ namespace Prowl.Quill
             var tex = ex * Math.Abs(pxform.A) + ey * Math.Abs(pxform.C);
             var tey = ex * Math.Abs(pxform.B) + ey * Math.Abs(pxform.D);
 
-            // Find the intersection
+            // Find the intersection - work in unit space
             var rect = IntersectionOfRects(pxform.E - tex, pxform.F - tey, tex * 2, tey * 2, x, y, w, h);
             Scissor(rect.x, rect.y, rect.width, rect.height);
         }
@@ -452,7 +496,12 @@ namespace Prowl.Quill
         public void TransformBy(Transform2D t) => _state.transform.Premultiply(ref t);
         public void ResetTransform() => _state.transform = Transform2D.Identity;
         public void CurrentTransform(Transform2D xform) => _state.transform = xform;
-        public Vector2 TransformPoint(Vector2 point) => _state.transform.TransformPoint(point);
+        public Vector2 TransformPoint(Vector2 unitPoint)
+        {
+            // Apply transform in unit space, then convert to pixels
+            Vector2 transformedUnitPoint = _state.transform.TransformPoint(unitPoint);
+            return transformedUnitPoint * _scale;
+        }
 
         public Transform2D GetTransform() => _state.transform;
 
@@ -1149,11 +1198,15 @@ namespace Prowl.Quill
                 dashPattern = new List<double>(_state.strokeDashPattern);
                 for (int i = 0; i < dashPattern.Count; i++)
                 {
-                    dashPattern[i] *= _state.strokeScale; // Scale the dash pattern by stroke scale
+                    // Convert dash pattern from units to pixels
+                    dashPattern[i] = (dashPattern[i] * _state.strokeScale) * _scale;
                 }
             }
 
-            var triangles = PolylineMesher.Create(subPath.Points, _state.strokeWidth * _state.strokeScale, _pixelWidth, _state.strokeColor, _state.strokeJoint, _state.miterLimit, false, _state.strokeStartCap, _state.strokeEndCap, dashPattern, _state.strokeDashOffset * _state.strokeScale);
+            // Convert stroke width and dash offset from units to pixels
+            double pixelStrokeWidth = (_state.strokeWidth * _state.strokeScale) * _scale;
+            double pixelDashOffset = (_state.strokeDashOffset * _state.strokeScale) * _scale;
+            var triangles = PolylineMesher.Create(subPath.Points, pixelStrokeWidth, _pixelWidth, _state.strokeColor, _state.strokeJoint, _state.miterLimit, false, _state.strokeStartCap, _state.strokeEndCap, dashPattern, pixelDashOffset);
 
 
             // Store the starting index to reference _vertices
@@ -1398,10 +1451,13 @@ namespace Prowl.Quill
                 return;
 
             // Center it so it scales and sits properly with AA
-            x -= _pixelHalf;
-            y -= _pixelHalf;
-            width += _pixelWidth;
-            height += _pixelWidth;
+            // Convert pixel adjustments to unit space since coordinates are in units
+            double unitPixelHalf = _pixelHalf / _scale;
+            double unitPixelWidth = _pixelWidth / _scale;
+            x -= unitPixelHalf;
+            y -= unitPixelHalf;
+            width += unitPixelWidth;
+            height += unitPixelWidth;
 
             // Apply transform to the four corners of the rectangle
             Vector2 topLeft = TransformPoint(new Vector2(x, y));
@@ -1486,10 +1542,13 @@ namespace Prowl.Quill
             blRadii = Math.Min(blRadii, maxRadius);
 
             // Adjust for proper AA
-            x -= _pixelHalf;
-            y -= _pixelHalf;
-            width += _pixelWidth;
-            height += _pixelWidth;
+            // Convert pixel adjustments to unit space since coordinates are in units
+            double unitPixelHalf = _pixelHalf / _scale;
+            double unitPixelWidth = _pixelWidth / _scale;
+            x -= unitPixelHalf;
+            y -= unitPixelHalf;
+            width += unitPixelWidth;
+            height += unitPixelWidth;
 
             // Calculate segment counts for each corner based on radius size
             int tlSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * tlRadii / 2 / _state.roundingMinDistance));
@@ -1621,7 +1680,8 @@ namespace Prowl.Quill
                 return;
 
             // Center it so it scales and sits properly with AA
-            radius += _pixelHalf;
+            // Convert pixel adjustments to unit space since coordinates are in units
+            radius += _pixelHalf / _scale;
 
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
@@ -1751,19 +1811,25 @@ namespace Prowl.Quill
 
         public void AddFallbackFont(FontFile font) => _scribeRenderer.FontEngine.AddFallbackFont(font);
         public IEnumerable<FontFile> EnumerateSystemFonts() => _scribeRenderer.FontEngine.EnumerateSystemFonts();
-        public Vector2 MeasureText(string text, double pixelSize, FontFile font, double letterSpacing = 0f) => _scribeRenderer.FontEngine.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
+        public Vector2 MeasureText(string text, double pixelSize, FontFile font, double letterSpacing = 0f)
+        {
+            double actualPixelSize = pixelSize;// * _scale; // This is preferrable, but we also need a way to scale Scribes output quads down accordingly
+            Vector2 pixelResult = _scribeRenderer.FontEngine.MeasureText(text, (float)actualPixelSize, font, (float)letterSpacing);
+            return pixelResult / _scale;
+        }
         public Vector2 MeasureText(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.MeasureText(text, settings);
 
         public void DrawText(string text, double x, double y, FontColor color, double pixelSize, FontFile font, double letterSpacing = 0f, Vector2? origin = null)
         {
             Vector2 position = new Vector2(x, y);
+            double actualPixelSize = pixelSize;// * _scale; // This is preferrable, but we also need a way to scale Scribes output quads down accordingly
             if (origin.HasValue)
             {
-                var textSize = _scribeRenderer.FontEngine.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
+                var textSize = _scribeRenderer.FontEngine.MeasureText(text, (float)actualPixelSize, font, (float)letterSpacing);
                 position.x -= textSize.X * origin.Value.x;
                 position.y -= textSize.Y * origin.Value.y;
             }
-            _scribeRenderer.FontEngine.DrawText(text, position, color, (float)pixelSize, font, (float)letterSpacing);
+            _scribeRenderer.FontEngine.DrawText(text, position, color, (float)actualPixelSize, font, (float)letterSpacing);
         }
 
         public void DrawText(string text, double x, double y, FontColor color, TextLayoutSettings settings, Vector2? origin = null)
@@ -1827,7 +1893,9 @@ namespace Prowl.Quill
 
         public void DrawMarkdown(QuillMarkdown markdown, Vector2 position)
         {
-            MarkdownLayoutEngine.Render(markdown.List, _scribeRenderer.FontEngine, _scribeRenderer, position, markdown.Settings);
+            // Convert units to pixels for position
+            Vector2 pixelPosition = position * _scale;
+            MarkdownLayoutEngine.Render(markdown.List, _scribeRenderer.FontEngine, _scribeRenderer, pixelPosition, markdown.Settings);
         }
 
         public bool GetMarkdownLinkAt(QuillMarkdown markdown, Vector2 renderOffset, Vector2 point, bool useScissor, out string href)
@@ -1857,7 +1925,10 @@ namespace Prowl.Quill
             }
 
 
-            return MarkdownLayoutEngine.TryGetLinkAt(markdown.List, point, renderOffset, out href);
+            // Convert units to pixels for point and render offset
+            Vector2 pixelPoint = point * _scale;
+            Vector2 pixelRenderOffset = renderOffset * _scale;
+            return MarkdownLayoutEngine.TryGetLinkAt(markdown.List, pixelPoint, pixelRenderOffset, out href);
         }
 
         #endregion
