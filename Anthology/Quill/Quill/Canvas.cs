@@ -70,7 +70,7 @@ namespace Prowl.Quill
         public byte b;
         public byte a;
 
-        public Vertex(Vector2 position, Vector2 UV, Color color)
+        public Vertex(in Vector2 position, in Vector2 UV, in Color color)
         {
             x = (float)position.x;
             y = (float)position.y;
@@ -97,7 +97,7 @@ namespace Prowl.Quill
         public double CornerRadii;
         public double Feather;
 
-        internal bool EqualsOther(Brush gradient)
+        internal bool EqualsOther(in Brush gradient)
         {
             return Type == gradient.Type &&
                    Color1 == gradient.Color1 &&
@@ -496,7 +496,7 @@ namespace Prowl.Quill
         public void TransformBy(Transform2D t) => _state.transform.Premultiply(ref t);
         public void ResetTransform() => _state.transform = Transform2D.Identity;
         public void CurrentTransform(Transform2D xform) => _state.transform = xform;
-        public Vector2 TransformPoint(Vector2 unitPoint)
+        public Vector2 TransformPoint(in Vector2 unitPoint)
         {
             // Apply transform in unit space, then convert to pixels
             Vector2 transformedUnitPoint = _state.transform.TransformPoint(unitPoint);
