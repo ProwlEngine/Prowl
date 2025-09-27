@@ -78,7 +78,7 @@ namespace Prowl.Quill
                 var c = vertices[indices[i + 2]];
 
                 // Transform vertices through the current transform matrix
-                int index = _canvas.Vertices.Count;
+                uint index = (uint)_canvas.Vertices.Count;
                 var vertA = new Vertex(_canvas.TransformPoint(new Vector2(a.Position.X, a.Position.Y)), a.TextureCoordinate, ToColor(a.Color));
                 var vertB = new Vertex(_canvas.TransformPoint(new Vector2(b.Position.X, b.Position.Y)), b.TextureCoordinate, ToColor(b.Color));
                 var vertC = new Vertex(_canvas.TransformPoint(new Vector2(c.Position.X, c.Position.Y)), c.TextureCoordinate, ToColor(c.Color));
