@@ -525,9 +525,10 @@ namespace Prowl.Quill
             // Premultiply
             if (vertex.a != 255)
             {
-                vertex.r = (byte)(vertex.r * (vertex.a / 255f));
-                vertex.g = (byte)(vertex.g * (vertex.a / 255f));
-                vertex.b = (byte)(vertex.b * (vertex.a / 255f));
+                var alpha = vertex.a / 255f;
+                vertex.r = (byte)(vertex.r * alpha);
+                vertex.g = (byte)(vertex.g * alpha);
+                vertex.b = (byte)(vertex.b * alpha);          
             }
 
 
