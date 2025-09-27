@@ -1,6 +1,7 @@
 ﻿// SilkWindow.cs - Simplified
 using Common;
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
@@ -16,7 +17,8 @@ namespace SilkExample
         private GL _gl;
         private IInputContext _input;
         private Canvas _canvas;
-        private CanvasDemo _demo;
+        private List<IDemo> _demos;
+        private int _currentDemoIndex;
         private SilkNetRenderer _renderer;
 
         // View properties
@@ -27,8 +29,8 @@ namespace SilkExample
         // Resources
         private TextureSilk _whiteTexture;
         private TextureSilk _demoTexture;
-        private FontInfo _mainFont;
-        private FontInfo _decorativeFont;
+        private FontFile RobotoFont;
+        private FontFile AlamakFont;
         
         // Input tracking
         private bool _isDragging = false;
@@ -66,25 +68,31 @@ namespace SilkExample
             _canvas = new Canvas(_renderer, new FontAtlasSettings());
 
             // Load fonts
-            _mainFont = _canvas.AddFont("Fonts/Roboto.ttf");
-            _decorativeFont = _canvas.AddFont("Fonts/Alamak.ttf");
+            RobotoFont = new FontFile("Fonts/Roboto.ttf");
+            AlamakFont = new FontFile("Fonts/Alamak.ttf");
 
-            // Initialize demo
-            _demo = new CanvasDemo(
-                _canvas, 
-                (int)_window.Size.X, 
-                (int)_window.Size.Y, 
-                _demoTexture, 
-                _mainFont, 
-                _decorativeFont
-            );
+            // Initialize demos
+            _demos = new List<IDemo>
+            {
+                new CanvasDemo(_canvas, (int)_window.Size.X, (int)_window.Size.Y, _demoTexture, RobotoFont, AlamakFont),
+                new SVGDemo(_canvas, (int)_window.Size.X, (int)_window.Size.Y),
+                new BenchmarkScene(_canvas, RobotoFont, (int)_window.Size.X, (int)_window.Size.Y),
+            };
         }
 
         private void SetupInputHandlers()
         {
             // Set up keyboard handlers
-            _input.Keyboards[0].KeyDown += (keyboard, key, scancode) => {
+            var keyboard = _input.Keyboards[0];
+            keyboard.KeyDown += (kb, key, scancode) => {
                 if (key == Key.Escape) _window.Close();
+                if (key == Key.Left)
+                    _currentDemoIndex = _currentDemoIndex - 1 < 0 ? _demos.Count - 1 : _currentDemoIndex - 1;
+                if (key == Key.Right)
+                    _currentDemoIndex = _currentDemoIndex + 1 == _demos.Count ? 0 : _currentDemoIndex + 1;
+                if (key == Key.Space)
+                    if (_demos[_currentDemoIndex] is SVGDemo svgDemo)
+                        svgDemo.ParseSVG();
             };
 
             // Set up mouse handlers
@@ -123,7 +131,7 @@ namespace SilkExample
             _canvas.Clear();
             
             // Render demo content
-            _demo.RenderFrame(deltaTime, _viewOffset, _zoom, _rotation);
+            _demos[_currentDemoIndex].RenderFrame(deltaTime, _viewOffset, _zoom, _rotation);
             
             // Draw canvas to screen
             _canvas.Render();

@@ -1,6 +1,7 @@
 ﻿// SFMLWindow.cs
 using Common;
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
 using SFML.Graphics;
@@ -20,7 +21,8 @@ namespace SFMLExample
         
         // Canvas and demo
         private Canvas _canvas;
-        private CanvasDemo _demo;
+        private List<IDemo> _demos;
+        private int _currentDemoIndex;
         
         // Camera/view properties
         private Vector2 _offset = Vector2.zero;
@@ -32,12 +34,17 @@ namespace SFMLExample
         private TextureSFML _demoTexture;
         
         // Fonts
-        private FontInfo RobotoFont;
-        private FontInfo AlamakFont;
+        private FontFile RobotoFont;
+        private FontFile AlamakFont;
         
         // Input tracking
         private Vector2i _lastMousePos;
         private Clock _clock = new Clock();
+
+        // Key state tracking for demo switching
+        private bool _leftKeyPressed = false;
+        private bool _rightKeyPressed = false;
+        private bool _spaceKeyPressed = false;
         
         public SFMLWindow(uint width, uint height, string title)
         {
@@ -86,11 +93,16 @@ namespace SFMLExample
             _canvas = new Canvas(_renderer, new FontAtlasSettings());
 
             // Load fonts
-            _canvas.AddFont("Fonts/Roboto.ttf");
-            _canvas.AddFont("Fonts/Alamak.ttf");
-            
-            // Initialize demo
-            _demo = new CanvasDemo(_canvas, (int)_window.Size.X, (int)_window.Size.Y, _demoTexture, RobotoFont, AlamakFont);
+            RobotoFont = new FontFile("Fonts/Roboto.ttf");
+            AlamakFont = new FontFile("Fonts/Alamak.ttf");
+
+            // Initialize demos
+            _demos = new List<IDemo>
+            {
+                new CanvasDemo(_canvas, (int)_window.Size.X, (int)_window.Size.Y, _demoTexture, RobotoFont, AlamakFont),
+                new SVGDemo(_canvas, (int)_window.Size.X, (int)_window.Size.Y),
+                new BenchmarkScene(_canvas, RobotoFont, (int)_window.Size.X, (int)_window.Size.Y),
+            };
         }
         
         private void OnResize(object sender, SizeEventArgs e)
@@ -128,7 +140,7 @@ namespace SFMLExample
                 _canvas.Clear();
                 
                 // Let demo render to canvas
-                _demo.RenderFrame(deltaTime, _offset, _zoom, _rotation);
+                _demos[_currentDemoIndex].RenderFrame(deltaTime, _offset, _zoom, _rotation);
                 
                 // Draw using SFML
                 _window.Clear(Color.Black);
@@ -142,7 +154,7 @@ namespace SFMLExample
             // Close on Escape
             if (Keyboard.IsKeyPressed(Keyboard.Key.Escape))
                 _window.Close();
-            
+
             // Rotate with Q/E keys
             float deltaTime = 1.0f / 60.0f; // Approximate if not available
             if (Keyboard.IsKeyPressed(Keyboard.Key.Q))
@@ -150,6 +162,22 @@ namespace SFMLExample
             if (Keyboard.IsKeyPressed(Keyboard.Key.E))
                 _rotation -= 10.0 * deltaTime;
 
+            // Demo switching with Left/Right keys (with key release detection)
+            bool leftKeyCurrentlyPressed = Keyboard.IsKeyPressed(Keyboard.Key.Left);
+            bool rightKeyCurrentlyPressed = Keyboard.IsKeyPressed(Keyboard.Key.Right);
+            bool spaceKeyCurrentlyPressed = Keyboard.IsKeyPressed(Keyboard.Key.Space);
+
+            if (leftKeyCurrentlyPressed && !_leftKeyPressed)
+                _currentDemoIndex = _currentDemoIndex - 1 < 0 ? _demos.Count - 1 : _currentDemoIndex - 1;
+            if (rightKeyCurrentlyPressed && !_rightKeyPressed)
+                _currentDemoIndex = _currentDemoIndex + 1 == _demos.Count ? 0 : _currentDemoIndex + 1;
+            if (spaceKeyCurrentlyPressed && !_spaceKeyPressed)
+                if (_demos[_currentDemoIndex] is SVGDemo svgDemo)
+                    svgDemo.ParseSVG();
+
+            _leftKeyPressed = leftKeyCurrentlyPressed;
+            _rightKeyPressed = rightKeyCurrentlyPressed;
+            _spaceKeyPressed = spaceKeyCurrentlyPressed;
 
             Vector2i currentPos = Mouse.GetPosition(_window);
             if (Mouse.IsButtonPressed(Mouse.Button.Left))
