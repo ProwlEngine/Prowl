@@ -284,6 +284,7 @@ void main()
         Rlgl.SetTexture(0);
 
         EndShaderMode();
+        EndBlendMode();
     }
 
     static System.Numerics.Vector4 ToVec4(System.Drawing.Color color) => new System.Numerics.Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
