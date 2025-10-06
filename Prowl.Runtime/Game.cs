@@ -28,9 +28,7 @@ public abstract class Game
     public static IAssetProvider AssetProvider { get; private set; }
 
     private TimeData time = new TimeData();
-    private TimeData fixedTime = new TimeData();
     private double fixedTimeAccumulator = 0.0;
-    private const double FixedTimeStep = 1.0 / 60.0; // 60 FPS fixed timestep
 
     public void Run(string title, int width, int height, IAssetProvider assetProvider)
     {
@@ -65,7 +63,7 @@ public abstract class Game
             {
                 FixedUpdate();
 
-                fixedTimeAccumulator -= FixedTimeStep;
+                fixedTimeAccumulator -= Time.fixedDeltaTime;
             }
 
             Update();
