@@ -91,7 +91,7 @@ namespace Prowl.Runtime.AssetImporting
 
         private PostProcessSteps GetPostProcessSteps(ModelImporterSettings settings)
         {
-            var steps = PostProcessSteps.LimitBoneWeights | PostProcessSteps.GenerateUVCoords;
+            var steps = PostProcessSteps.LimitBoneWeights | PostProcessSteps.GenerateUVCoords | PostProcessSteps.RemoveRedundantMaterials;
             steps |= PostProcessSteps.Triangulate;
             if (settings.GenerateNormals && settings.GenerateSmoothNormals) steps |= PostProcessSteps.GenerateSmoothNormals;
             else if (settings.GenerateNormals) steps |= PostProcessSteps.GenerateNormals;
