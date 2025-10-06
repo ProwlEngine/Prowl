@@ -20,13 +20,13 @@ namespace Prowl.Runtime.Resources
         /// <summary>
         /// Loads a model from a file (.obj, .fbx, .gltf, etc.)
         /// </summary>
-        public static Model LoadFromFile(string filePath)
+        public static Model LoadFromFile(string filePath, AssetImporting.ModelImporterSettings? settings = null)
         {
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"Model file not found: {filePath}");
 
             var importer = new AssetImporting.ModelImporter();
-            var model = importer.Import(new FileInfo(filePath));
+            var model = importer.Import(new FileInfo(filePath), settings);
             model.AssetPath = filePath;
             return model;
         }
@@ -34,10 +34,10 @@ namespace Prowl.Runtime.Resources
         /// <summary>
         /// Loads a model from a stream
         /// </summary>
-        public static Model LoadFromStream(Stream stream, string virtualPath)
+        public static Model LoadFromStream(Stream stream, string virtualPath, AssetImporting.ModelImporterSettings? settings = null)
         {
             var importer = new AssetImporting.ModelImporter();
-            var model = importer.Import(stream, virtualPath);
+            var model = importer.Import(stream, virtualPath, settings);
             model.AssetPath = virtualPath;
             return model;
         }

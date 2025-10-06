@@ -41,59 +41,41 @@ namespace Prowl.Runtime.AssetImporting
             throw new Exception(reason);
         }
 
-        public Model Import(FileInfo assetPath) =>
-            ImportFromFile(assetPath.FullName, assetPath.Directory, assetPath.Extension);
+        public Model Import(FileInfo assetPath, ModelImporterSettings? settings = null) =>
+            ImportFromFile(assetPath.FullName, assetPath.Directory, assetPath.Extension, settings);
 
-        public Model Import(Stream stream, string virtualPath) =>
-            ImportFromStream(stream, virtualPath, null, Path.GetExtension(virtualPath));
+        public Model Import(Stream stream, string virtualPath, ModelImporterSettings? settings = null) =>
+            ImportFromStream(stream, virtualPath, null, Path.GetExtension(virtualPath), settings);
 
-        private Model ImportFromFile(string filePath, DirectoryInfo? parentDir, string extension)
+        private Model ImportFromFile(string filePath, DirectoryInfo? parentDir, string extension, ModelImporterSettings? settings = null)
         {
-            ModelImporterSettings settings = new ModelImporterSettings();
-
-            // Only try to load settings file if we have a parent directory
-            if (parentDir != null)
-            {
-                FileInfo settingsFile = new FileInfo(Path.Combine(parentDir.FullName, Path.GetFileName(filePath) + ".importsettings"));
-                if (settingsFile.Exists)
-                {
-                    try
-                    {
-                        EchoObject echo = EchoObject.ReadFromString(settingsFile.FullName);
-                        settings = Serializer.Deserialize<ModelImporterSettings>(echo);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"Failed to read model import settings from {settingsFile.FullName}: {ex.Message}");
-                    }
-                }
-            }
+            // new settings if null
+            settings ??= new ModelImporterSettings();
 
             using (var importer = new AssimpContext())
             {
                 importer.SetConfig(new Assimp.Configs.VertexBoneWeightLimitConfig(4));
-                var steps = GetPostProcessSteps(settings);
+                var steps = GetPostProcessSteps(settings.Value);
                 var scene = importer.ImportFile(filePath, steps);
                 if (scene == null) Failed("Assimp returned null object.");
 
                 if (!scene.HasMeshes) Failed("Model has no Meshes.");
 
-                double scale = GetScale(settings, extension);
+                double scale = GetScale(settings.Value, extension);
 
-                return BuildModel(scene, filePath, parentDir, scale, settings);
+                return BuildModel(scene, filePath, parentDir, scale, settings.Value);
             }
         }
 
-        private Model ImportFromStream(Stream stream, string virtualPath, DirectoryInfo? parentDir, string extension)
+        private Model ImportFromStream(Stream stream, string virtualPath, DirectoryInfo? parentDir, string extension, ModelImporterSettings? settings = null)
         {
-            ModelImporterSettings settings = new ModelImporterSettings();
-
-            // Note: No settings file loading for embedded resources
+            // Use provided settings or defaults (no settings file loading for streams)
+            settings ??= new ModelImporterSettings();
 
             using (var importer = new AssimpContext())
             {
                 importer.SetConfig(new Assimp.Configs.VertexBoneWeightLimitConfig(4));
-                var steps = GetPostProcessSteps(settings);
+                var steps = GetPostProcessSteps(settings.Value);
 
                 // Use ImportFileFromStream for embedded resources
                 var scene = importer.ImportFileFromStream(stream, steps, Path.GetExtension(virtualPath));
@@ -101,9 +83,9 @@ namespace Prowl.Runtime.AssetImporting
 
                 if (!scene.HasMeshes) Failed("Model has no Meshes.");
 
-                double scale = GetScale(settings, extension);
+                double scale = GetScale(settings.Value, extension);
 
-                return BuildModel(scene, virtualPath, parentDir, scale, settings);
+                return BuildModel(scene, virtualPath, parentDir, scale, settings.Value);
             }
         }
 
