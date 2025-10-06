@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
@@ -73,22 +74,6 @@ public class Camera : MonoBehaviour
 
     [SerializeIgnore]
     public DepthTextureMode DepthTextureMode = DepthTextureMode.None;
-
-    private static WeakReference<Camera> s_mainCamera = new(null);
-    public static Camera? Main
-    {
-        get
-        {
-            if (s_mainCamera.TryGetTarget(out Camera? camera) && camera != null)
-                return camera;
-
-            camera = GameObject.FindGameObjectWithTag("Main Camera")?.GetComponent<Camera>() ?? GameObject.FindObjectsOfType<Camera>().FirstOrDefault();
-            if(camera != null)
-                s_mainCamera.SetTarget(camera);
-            return camera;
-        }
-        internal set => s_mainCamera.SetTarget(value);
-    }
 
     private float _aspect;
     private bool _customAspect;

@@ -217,7 +217,7 @@ public sealed class WheelCollider : MonoBehaviour
         
         Vector3 groundFwd = Vector3.Cross(groundLeft, groundUp);
         
-        Vector3 wheelCenterVel = Body.Velocity + Vector3.Cross(Body.AngularVelocity, Vector3.Transform(this.Transform.localPosition, Body.Transform.rotation));
+        Vector3 wheelCenterVel = Body.LinearVelocity + Vector3.Cross(Body.AngularVelocity, Vector3.Transform(this.Transform.localPosition, Body.Transform.rotation));
 
         // rimVel=(wxr)*v
         Vector3 rimVel = _angularVelocity * Vector3.Cross(wheelLeft, groundPos - worldPos);
@@ -225,7 +225,7 @@ public sealed class WheelCollider : MonoBehaviour
 
         if (worldBody == null) throw new Exception("world Body is null.");
 
-        Vector3 worldVel = worldBody.Velocity + Vector3.Cross(worldBody.AngularVelocity, groundPos - worldBody.Transform.position);
+        Vector3 worldVel = worldBody.LinearVelocity + Vector3.Cross(worldBody.AngularVelocity, groundPos - worldBody.Transform.position);
 
         wheelPointVel -= worldVel;
 

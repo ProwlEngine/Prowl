@@ -223,23 +223,23 @@ public class NavMeshSurface : MonoBehaviour
 
     #region Debug
 
-    private void AddAllSceneStatics()
+    public void AddAllSceneStatics()
     {
         if (useStaticGeometry)
         {
             staticGeometry.Clear();
-            foreach (var sBody in FindObjectsOfType<Rigidbody3D>())
+            foreach (var sBody in this.GameObject.Scene.FindObjectsOfType<Rigidbody3D>())
             {
-                if (SceneManagement.SceneManager.Has(sBody.GameObject))
+                if (Scene != null && Scene.AllObjects.Contains(sBody.GameObject))
                     staticGeometry.Add(sBody);
             }
         }
         else
         {
             meshGeometry.Clear();
-            foreach (var mRend in FindObjectsOfType<ModelRenderer>())
+            foreach (var mRend in this.GameObject.Scene.FindObjectsOfType<ModelRenderer>())
             {
-                if (SceneManagement.SceneManager.Has(mRend.GameObject))
+                if (Scene != null && Scene.AllObjects.Contains(mRend.GameObject))
                     meshGeometry.Add(mRend);
             }
         }
@@ -274,7 +274,7 @@ public class NavMeshSurface : MonoBehaviour
         }
     }
 
-    public override void DrawGizmosSelected()
+    public override void DrawGizmos()
     {
         if (navMesh == null) return;
 

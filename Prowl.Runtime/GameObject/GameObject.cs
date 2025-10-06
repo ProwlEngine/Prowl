@@ -8,7 +8,6 @@ using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
-using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Runtime;
 
@@ -261,26 +260,26 @@ public class GameObject : EngineObject, ISerializable
     public bool CompareTag(string otherTag) => TagLayerManager.GetTag(tagIndex).Equals(otherTag, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Finds a GameObject by name.
+    /// Finds a GameObject by name in the same scene.
     /// </summary>
     /// <param name="otherName">The name of the GameObject to find.</param>
     /// <param name="ignoreCase">If true, the search is case-insensitive.</param>
     /// <returns>The first GameObject with the given name, or null if not found.</returns>
-    public static GameObject Find(string otherName, bool ignoreCase = false) => SceneManager.Scene.AllObjects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+    public GameObject Find(string otherName, bool ignoreCase = false) => this.Scene.AllObjects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
 
     /// <summary>
-    /// Finds a GameObject with the specified tag.
+    /// Finds a GameObject with the specified tag in the same scene.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>The first GameObject with the given tag, or null if not found.</returns>
-    public static GameObject FindGameObjectWithTag(string otherTag) => SceneManager.Scene.AllObjects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag));
+    public GameObject FindGameObjectWithTag(string otherTag) => this.Scene.AllObjects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag));
 
     /// <summary>
-    /// Finds all GameObjects with the specified tag.
+    /// Finds all GameObjects with the specified tag in the same scene.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>An array of GameObjects with the given tag.</returns>
-    public static GameObject[] FindGameObjectsWithTag(string otherTag) => SceneManager.Scene.AllObjects.Where(gameObject => gameObject.CompareTag(otherTag)).ToArray();
+    public GameObject[] FindGameObjectsWithTag(string otherTag) => this.Scene.AllObjects.Where(gameObject => gameObject.CompareTag(otherTag)).ToArray();
 
 
     /// <summary>
@@ -856,7 +855,7 @@ public class GameObject : EngineObject, ISerializable
     public override void OnDispose()
     {
         for (int i = children.Count - 1; i >= 0; i--)
-            children[i].DestroyImmediate();
+            children[i].Destroy();
 
         for (int i = _components.Count - 1; i >= 0; i--)
         {
@@ -864,7 +863,7 @@ public class GameObject : EngineObject, ISerializable
             if (component.IsDestroyed) continue;
             if (component.EnabledInHierarchy) component.Do(component.OnDisable);
             if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
-            component.DestroyImmediate();
+            component.Destroy();
         }
         _components.Clear();
 

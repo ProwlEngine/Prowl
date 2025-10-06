@@ -8,7 +8,7 @@ using Echo.Logging;
 
 using Prowl.Echo;
 using Prowl.Runtime.Audio;
-using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
@@ -28,6 +28,9 @@ public abstract class Game
     public static IAssetProvider AssetProvider { get; private set; }
 
     private TimeData time = new TimeData();
+    private TimeData fixedTime = new TimeData();
+    private double fixedTimeAccumulator = 0.0;
+    private const double FixedTimeStep = 1.0 / 60.0; // 60 FPS fixed timestep
 
     public void Run(string title, int width, int height, IAssetProvider assetProvider)
     {
@@ -55,9 +58,17 @@ public abstract class Game
             Time.TimeStack.Clear();
             Time.TimeStack.Push(time);
 
-            Update();
+            // Fixed update loop
+            fixedTimeAccumulator += delta;
+            int count = 0;
+            while (fixedTimeAccumulator >= Time.fixedDeltaTime && count++ < 10)
+            {
+                FixedUpdate();
 
-            SceneManager.Update();
+                fixedTimeAccumulator -= FixedTimeStep;
+            }
+
+            Update();
 
             Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {1.0 / Time.deltaTime}";
         };
@@ -68,8 +79,6 @@ public abstract class Game
             Graphics.StartFrame();
 
             Render();
-
-            SceneManager.Draw();
 
             PostRender();
 
@@ -110,6 +119,7 @@ public abstract class Game
     }
 
     public virtual void Initialize() { }
+    public virtual void FixedUpdate() { }
     public virtual void Update() { }
     public virtual void PostUpdate() { }
     public virtual void Render() { }

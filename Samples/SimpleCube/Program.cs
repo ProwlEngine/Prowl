@@ -4,7 +4,6 @@
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
-using Prowl.Runtime.SceneManagement;
 
 using Silk.NET.Input;
 
@@ -21,20 +20,36 @@ internal class Program
 public sealed class MyGame : Game
 {
     private GameObject cameraGO;
+    private Scene scene;
 
     public override void Initialize()
     {
-        SceneManager.InstantiateNewScene(out var camera, out var sun);
-        cameraGO = camera.GameObject;
+        scene = new Scene();
+
+        // Create directional light
+        GameObject lightGO = new("Directional Light");
+        var light = lightGO.AddComponent<DirectionalLight>();
+        lightGO.Transform.localEulerAngles = new Vector3(-80, 5, 0);
+        scene.Add(lightGO);
+
+        // Create camera
+        GameObject cam = new("Main Camera");
+        cam.tag = "Main Camera";
+        cam.Transform.position = new(0, 0, -10);
+        var camera = cam.AddComponent<Camera>();
+        camera.Depth = -1;
+        camera.HDR = true;
+        cameraGO = cam;
 
         camera.Effects = new List<ImageEffect>()
         {
-                new ScreenSpaceReflectionEffect(),
-                new KawaseBloomEffect(),
-                new BokehDepthOfFieldEffect(),
-                new TonemapperEffect(),
-            };
+            new ScreenSpaceReflectionEffect(),
+            new KawaseBloomEffect(),
+            new BokehDepthOfFieldEffect(),
+            new TonemapperEffect(),
+        };
 
+        scene.Add(cam);
 
         Mesh cube = Mesh.CreateCube(Vector3.one);
         Material mat = new Material(Shader.Find("$Assets/Defaults/Standard.shader"));
@@ -44,11 +59,24 @@ public sealed class MyGame : Game
         mr.Mesh = cube;
         mr.Material = mat;
 
-        SceneManager.Scene.Add(cubeGO);
+        scene.Add(cubeGO);
+    }
+
+    public override void FixedUpdate()
+    {
+        scene.FixedUpdate();
+    }
+
+    public override void Render()
+    {
+        scene.RenderScene();
     }
 
     public override void Update()
     {
+        scene.Update();
+
+
         Vector2 movement = Vector2.zero;
         if (Input.GetKey(Key.W)) movement += Vector2.up;
         if (Input.GetKey(Key.S)) movement += Vector2.down;

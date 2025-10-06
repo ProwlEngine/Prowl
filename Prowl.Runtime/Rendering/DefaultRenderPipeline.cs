@@ -91,7 +91,7 @@ namespace Prowl.Runtime.Rendering
             // Check if history buffer needs to be recreated due to size change
             if (history != null && (source.Width != history.Width || source.Height != history.Height))
             {
-                history.DestroyLater();
+                history.Destroy();
                 history = null;
             }
 
@@ -136,7 +136,7 @@ namespace Prowl.Runtime.Rendering
             {
                 if (pingPongBuffers[i] == null || pingPongBuffers[i].Width != width || pingPongBuffers[i].Height != height)
                 {
-                    pingPongBuffers[i]?.DestroyLater();
+                    pingPongBuffers[i]?.Destroy();
                     pingPongBuffers[i] = new RenderTexture(width, height, false, [destination.MainTexture.ImageFormat]);
                 }
             }
@@ -202,7 +202,7 @@ namespace Prowl.Runtime.Rendering
             if (downsampledRT == null || downsampledRT.Width != width || downsampledRT.Height != height)
             {
                 if (downsampledRT != null)
-                    downsampledRT.DestroyLater();
+                    downsampledRT.Destroy();
 
                 downsampledRT = new RenderTexture(width, height, false, [source.MainTexture.ImageFormat]);
             }

@@ -1,7 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Runtime.Rendering;
 
 namespace Prowl.Runtime.Resources
 {
@@ -134,6 +136,47 @@ namespace Prowl.Runtime.Resources
             }
         }
 
+        public T?[] FindObjectsOfType<T>() where T : EngineObject
+        {
+            List<T> objects = [];
+            foreach (GameObject go in AllObjects)
+            {
+                if (go is T t)
+                    objects.Add(t);
+
+                foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
+                    if (comp is T t2)
+                        objects.Add(t2);
+            }
+            return objects.ToArray();
+        }
+
+        public T? FindObjectByID<T>(int id) where T : EngineObject
+        {
+            foreach (GameObject go in AllObjects)
+            {
+                if (go.InstanceID == id)
+                    return go as T;
+                foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
+                    if (comp.InstanceID == id)
+                        return comp as T;
+            }
+            return null;
+        }
+
+        public T? FindObjectByIdentifier<T>(Guid identifier) where T : EngineObject
+        {
+            foreach (GameObject go in AllObjects)
+            {
+                if (go.Identifier == identifier)
+                    return go as T;
+                foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
+                    if (comp.Identifier == identifier)
+                        return comp as T;
+            }
+            return null;
+        }
+
         /// <summary> Unregisters all GameObjects. </summary>
         public void Clear()
         {
@@ -177,6 +220,89 @@ namespace Prowl.Runtime.Resources
         {
             foreach (GameObject obj in serializeObj)
                 Add(obj);
+        }
+
+        /// <summary>
+        /// Updates all active GameObjects and their components in this scene.
+        /// Calls PreUpdate, Physics.Update, Update, UpdateCoroutines, LateUpdate, and EndOfFrameCoroutines.
+        /// </summary>
+        public void Update()
+        {
+            List<GameObject> activeGOs = ActiveObjects.ToList();
+            foreach (GameObject go in activeGOs)
+                go.PreUpdate();
+
+            Physics.Update();
+
+            ForeachComponent(activeGOs, (x) =>
+            {
+                x.Do(x.UpdateCoroutines);
+                x.Do(x.Update);
+            });
+
+            ForeachComponent(activeGOs, (x) => x.Do(x.LateUpdate));
+            ForeachComponent(activeGOs, (x) => x.Do(x.UpdateEndOfFrameCoroutines));
+        }
+
+        /// <summary>
+        /// Executes physics update on all active GameObjects and their components.
+        /// Calls FixedUpdate and UpdateFixedUpdateCoroutines.
+        /// </summary>
+        public void FixedUpdate()
+        {
+            List<GameObject> activeGOs = ActiveObjects.ToList();
+            ForeachComponent(activeGOs, (x) =>
+            {
+                x.Do(x.FixedUpdate);
+                x.Do(x.UpdateFixedUpdateCoroutines);
+            });
+        }
+
+        /// <summary>
+        /// Renders all cameras in this scene, sorted by depth.
+        /// </summary>
+        /// <param name="target">Optional render target to render into</param>
+        /// <returns>True if any cameras were rendered, false otherwise</returns>
+        public bool RenderScene(RenderTexture? target = null)
+        {
+            var Cameras = ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
+
+            Cameras.Sort((a, b) => a.Depth.CompareTo(b.Depth));
+
+            if (Cameras.Count == 0)
+                return false;
+
+            foreach (Camera? cam in Cameras)
+            {
+                RenderPipeline pipeline = cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
+
+                // If we have a target and the Camera doesnt, draw into the target
+                if (target != null && cam.Target == null)
+                {
+                    cam.Target = target;
+                    pipeline.Render(cam, new());
+                    cam.Target = null;
+                }
+                else
+                {
+                    // Have no target or the camera has its own target
+                    pipeline.Render(cam, new());
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Helper method to iterate over all MonoBehaviour components in a collection of GameObjects
+        /// and execute an action on each enabled component.
+        /// </summary>
+        public void ForeachComponent(IEnumerable<GameObject> objs, Action<MonoBehaviour> action)
+        {
+            foreach (var go in objs)
+                foreach (var comp in go.GetComponents(typeof(MonoBehaviour)))
+                    if (comp.EnabledInHierarchy)
+                        action.Invoke(comp);
         }
     }
 }

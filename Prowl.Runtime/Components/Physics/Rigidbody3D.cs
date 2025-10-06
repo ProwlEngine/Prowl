@@ -123,7 +123,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// <summary>
     /// Gets or sets the Linear Velocity of this Rigidbody3D.
     /// </summary>
-    public Vector3 Velocity
+    public Vector3 LinearVelocity
     {
         get => new(_body.Velocity.X, _body.Velocity.Y, _body.Velocity.Z);
         set => _body.Velocity = new(value.x, value.y, value.z);
@@ -185,7 +185,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         Transform.rotation = new Quaternion(_body.Orientation.X, _body.Orientation.Y, _body.Orientation.Z, _body.Orientation.W);
     }
 
-    public override void DrawGizmosSelected()
+    public override void DrawGizmos()
     {
         if (_body == null || _body.Handle.IsZero) return;
 

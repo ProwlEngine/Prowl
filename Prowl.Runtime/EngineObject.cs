@@ -13,7 +13,6 @@ namespace Prowl.Runtime;
 
 public abstract class EngineObject
 {
-    private static readonly ConcurrentStack<EngineObject> s_destroyed = new();
     private static int s_nextID = 1;
 
     protected int _instanceID;
@@ -42,70 +41,12 @@ public abstract class EngineObject
 
     public virtual void OnValidate() { }
 
-    public static T?[] FindObjectsOfType<T>() where T : EngineObject
-    {
-        List<T> objects = [];
-        foreach (GameObject go in SceneManagement.SceneManager.Current.Res!.AllObjects)
-        {
-            if (go is T t)
-                objects.Add(t);
-
-            foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
-                if (comp is T t2)
-                    objects.Add(t2);
-        }
-        return objects.ToArray();
-    }
-
-    public static T? FindObjectByID<T>(int id) where T : EngineObject
-    {
-        foreach (GameObject go in SceneManagement.SceneManager.Current.Res!.AllObjects)
-        {
-            if (go.InstanceID == id)
-                return go as T;
-            foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
-                if (comp.InstanceID == id)
-                    return comp as T;
-        }
-        return null;
-    }
-
-    public static T? FindObjectByIdentifier<T>(Guid identifier) where T : EngineObject
-    {
-        foreach (GameObject go in SceneManagement.SceneManager.Current.Res!.AllObjects)
-        {
-            if (go.Identifier == identifier)
-                return go as T;
-            foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
-                if (comp.Identifier == identifier)
-                    return comp as T;
-        }
-        return null;
-    }
-
-    public void DestroyLater()
-    {
-        if (IsDestroyed) return;
-        IsDestroyed = true;
-        s_destroyed.Push(this);
-    }
-
-    public void DestroyImmediate()
+    public void Destroy()
     {
         if (IsDestroyed) return;
         IsDestroyed = true;
         OnDispose();
     }
-
-    public static void HandleDestroyed()
-    {
-        while (s_destroyed.TryPop(out EngineObject? obj))
-        {
-            if (!obj.IsDestroyed) throw new Exception(obj.Name + " is not destroyed yet exists in the destroyed stack, this should not happen.");
-            obj.OnDispose();
-        }
-    }
-
 
     public virtual void OnDispose() { }
 

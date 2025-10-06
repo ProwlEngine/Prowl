@@ -196,7 +196,7 @@ namespace Prowl.Runtime.Resources
             }
 
             foreach (var renderTexture in disposableTextures)
-                renderTexture.DestroyLater();
+                renderTexture.Destroy();
         }
 
         #endregion

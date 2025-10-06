@@ -9,7 +9,6 @@ using Jitter2.Collision;
 using Jitter2.Collision.Shapes;
 using Jitter2.LinearMath;
 
-using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
@@ -168,23 +167,14 @@ public static class Physics
 
     public static void Update()
     {
-        timer += Time.deltaTime;
-        int count = 0;
-        while (timer >= Time.fixedDeltaTime && count++ < 10)
-        {
-            SceneManager.PhysicsUpdate();
+        // Use World once to ensure its created
+        World.SolverIterations = (SolverIterations, RelaxIterations);
+        _world.SubstepCount = Substep;
+        _world.AllowDeactivation = AllowSleep;
 
-            // Use World once to ensure its created
-            World.SolverIterations = (SolverIterations, RelaxIterations);
-            _world.SubstepCount = Substep;
-            _world.AllowDeactivation = AllowSleep;
+        _world.Gravity = new JVector(Gravity.x, Gravity.y, Gravity.z);
 
-            _world.Gravity = new JVector(Gravity.x, Gravity.y, Gravity.z);
-
-            _world.Step(Time.fixedDeltaTime, UseMultithreading);
-
-            timer -= Time.fixedDeltaTime;
-        }
+        _world.Step(Time.fixedDeltaTime, UseMultithreading);
     }
 
     /// <summary>

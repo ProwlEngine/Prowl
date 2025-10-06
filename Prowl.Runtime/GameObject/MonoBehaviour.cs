@@ -6,8 +6,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 
-using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Utils;
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
 
@@ -228,7 +226,6 @@ public abstract class MonoBehaviour : EngineObject
     /// <returns>True if the MonoBehaviour can be destroyed, false otherwise.</returns>
     internal bool CanDestroy()
     {
-#warning "Need to apply this to Component Deletion in Inspector, to make sure not to delete dependant Components"
         if (_go.IsComponentRequired(this, out Type dependentType))
         {
             Debug.LogError("Can't remove " + GetType().Name + " because " + dependentType.Name + " depends on it");
@@ -281,22 +278,12 @@ public abstract class MonoBehaviour : EngineObject
     /// </summary>
     public virtual void DrawGizmos() { }
 
-    /// <summary>
-    /// Called for rendering and handling GUI gizmos when the object is selected.
-    /// </summary>
-    public virtual void DrawGizmosSelected() { }
-
     ///// <summary>
     ///// Called for drawing and handling interaction with Runtime/Ingame UI
     ///// Executed on any camera with the GUILayer component
     ///// </summary>
     ///// <param name="gui"></param>
     //public virtual void OnGUI(Gui gui) { }
-
-    /// <summary>
-    /// Called when a new level is loaded.
-    /// </summary>
-    public virtual void OnLevelWasLoaded() { }
 
     /// <summary>
     /// Called when the MonoBehaviour will be destroyed.
