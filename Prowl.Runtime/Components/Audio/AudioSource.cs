@@ -7,7 +7,7 @@ namespace Prowl.Runtime;
 
 public sealed class AudioSource : MonoBehaviour
 {
-    public AssetRef<AudioClip> Clip;
+    public AudioClip Clip;
     public bool PlayOnAwake = true;
     public bool Looping = false;
     public float Volume = 1f;
@@ -22,13 +22,13 @@ public sealed class AudioSource : MonoBehaviour
 
     public void Play()
     {
-        if (Clip.IsAvailable)
+        if (Clip != null)
             _source.Play(_buffer);
     }
 
     public void Stop()
     {
-        if (Clip.IsAvailable)
+        if (Clip != null)
             _source?.Stop();
     }
 
@@ -44,8 +44,8 @@ public sealed class AudioSource : MonoBehaviour
         _source.Gain = Volume;
         _source.Looping = Looping;
         _source.MaxDistance = MaxDistance;
-        if (Clip.IsAvailable)
-            _buffer = AudioSystem.GetAudioBuffer(Clip.Res!);
+        if (Clip != null)
+            _buffer = AudioSystem.GetAudioBuffer(Clip);
         if (PlayOnAwake)
             Play();
     }
@@ -61,8 +61,8 @@ public sealed class AudioSource : MonoBehaviour
             //_lastVersion = GameObject.transform.version;
         }
 
-        if (Clip.IsAvailable)
-            _buffer = AudioSystem.GetAudioBuffer(Clip.Res!);
+        if (Clip != null)
+            _buffer = AudioSystem.GetAudioBuffer(Clip);
 
         if (_looping != Looping)
         {

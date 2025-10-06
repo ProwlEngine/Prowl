@@ -17,7 +17,7 @@ namespace Prowl.Runtime.Rendering.Shaders
         public Vector4 Value;
         public Matrix4x4 MatrixValue;
 
-        public AssetRef<Texture2D> Texture2DValue;
+        public Texture2D Texture2DValue;
 
         public ShaderProperty() { }
 
@@ -103,16 +103,16 @@ namespace Prowl.Runtime.Rendering.Shaders
         public static implicit operator Matrix4x4(ShaderProperty value)
             => value.MatrixValue;
 
-        public ShaderProperty(AssetRef<Texture2D> value)
+        public ShaderProperty(Texture2D value)
         {
             Texture2DValue = value;
             PropertyType = ShaderPropertyType.Texture2D;
         }
 
-        public static implicit operator ShaderProperty(AssetRef<Texture2D> value)
+        public static implicit operator ShaderProperty(Texture2D value)
             => new ShaderProperty(value);
 
-        public static implicit operator AssetRef<Texture2D>(ShaderProperty value)
+        public static implicit operator Texture2D(ShaderProperty value)
             => value.Texture2DValue;
     }
 }

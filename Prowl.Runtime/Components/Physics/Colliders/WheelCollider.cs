@@ -5,8 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Runtime.Physics;
-
 namespace Prowl.Runtime;
 
 // Based on the Jitter2 Demo Raycast Car

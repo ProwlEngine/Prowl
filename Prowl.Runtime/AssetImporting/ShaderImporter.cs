@@ -28,16 +28,12 @@ namespace Prowl.Runtime.AssetImporting
         {
             try
             {
-                if (Game.AssetProvider is not BasicAssetProvider provider)
-                    return null;
-
-                string assetPath = "$" + includePath;
-                if (!Game.AssetProvider.HasAsset(assetPath))
-                    return null;
-
-                using var stream = provider.GetEmbeddedResourceStream(includePath);
-                using var reader = new StreamReader(stream);
-                return reader.ReadToEnd();
+                // Try to convert include path to DefaultShaderInclude enum
+                if (Shader.TryGetDefaultInclude(includePath, out var includeEnum))
+                {
+                    return Shader.LoadDefaultInclude(includeEnum);
+                }
+                return null;
             }
             catch
             {

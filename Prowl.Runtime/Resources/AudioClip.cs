@@ -37,6 +37,24 @@ public sealed class AudioClip : EngineObject
         };
     }
 
+    /// <summary>
+    /// Loads an audio clip from a file (.wav, .mp3, .ogg)
+    /// TODO: Implement actual audio file loading
+    /// </summary>
+    public static AudioClip LoadFromFile(string filePath)
+    {
+        throw new NotImplementedException("Audio loading from files is not yet implemented. Use AudioClip.Create() to create clips manually.");
+    }
+
+    /// <summary>
+    /// Loads an audio clip from a stream
+    /// TODO: Implement actual audio stream loading
+    /// </summary>
+    public static AudioClip LoadFromStream(System.IO.Stream stream, string virtualPath)
+    {
+        throw new NotImplementedException("Audio loading from streams is not yet implemented. Use AudioClip.Create() to create clips manually.");
+    }
+
     public static BufferAudioFormat MapFormat(int numChannels, int bitsPerSample) => bitsPerSample switch
     {
         8  => numChannels == 1 ? BufferAudioFormat.Mono8 : BufferAudioFormat.Stereo8,

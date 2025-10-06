@@ -13,7 +13,7 @@ internal class Program
 {
     static void Main(string[] args)
     {
-        new MyGame().Run("Demo", 1280, 720, new BasicAssetProvider());
+        new MyGame().Run("Demo", 1280, 720);
     }
 }
 
@@ -52,7 +52,7 @@ public sealed class MyGame : Game
         scene.Add(cam);
 
         Mesh cube = Mesh.CreateCube(Vector3.one);
-        Material mat = new Material(Shader.Find("$Assets/Defaults/Standard.shader"));
+        Material mat = new Material(Shader.LoadDefault(DefaultShader.Standard));
 
         GameObject cubeGO = new GameObject("Cube");
         var mr = cubeGO.AddComponent<MeshRenderer>();

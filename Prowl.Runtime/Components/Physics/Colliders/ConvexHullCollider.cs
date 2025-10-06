@@ -14,9 +14,9 @@ namespace Prowl.Runtime;
 
 public sealed class ConvexHullCollider : Collider
 {
-    [SerializeField] private AssetRef<Mesh> mesh;
+    [SerializeField] private Mesh mesh;
 
-    public AssetRef<Mesh> Mesh
+    public Mesh Mesh
     {
         get => mesh;
         set
@@ -28,7 +28,7 @@ public sealed class ConvexHullCollider : Collider
 
     public override RigidBodyShape[] CreateShapes()
     {
-        if (mesh.IsAvailable == false)
+        if (mesh == null)
         {
             Awake(); // Trigger awake to grab the mesh from a renderer
             if (mesh == null)
@@ -38,12 +38,12 @@ public sealed class ConvexHullCollider : Collider
 
         List<JTriangle> triangles = new();
 
-        return [new ConvexHullShape(ToTriangleList(mesh.Res))];
+        return [new ConvexHullShape(ToTriangleList(mesh))];
     }
 
     public override void Awake()
     {
-        if(mesh.IsAvailable == false)
+        if(mesh == null)
         {
             MeshRenderer? renderer2 = GetComponent<MeshRenderer>();
             if (renderer2 != null)

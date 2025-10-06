@@ -9,8 +9,8 @@ namespace Prowl.Runtime;
 public class Animation : MonoBehaviour
 {
 
-    public List<AssetRef<AnimationClip>> Clips = [];
-    public AssetRef<AnimationClip> DefaultClip;
+    public List<AnimationClip> Clips = [];
+    public AnimationClip DefaultClip;
     public bool PlayAutomatically = true;
     public double Speed = 1.0;
 
@@ -22,17 +22,17 @@ public class Animation : MonoBehaviour
     public override void OnEnable()
     {
         // Assign DefaultClip to the first clip if it's not set
-        if (!DefaultClip.IsAvailable && Clips.Count > 0)
+        if (DefaultClip == null && Clips.Count > 0)
             DefaultClip = Clips[0];
 
         foreach (var clip in Clips)
-            if (clip.IsAvailable)
-                AddClip(clip.Res!);
-        if (DefaultClip.IsAvailable)
+            if (clip != null)
+                AddClip(clip);
+        if (DefaultClip != null)
         {
-            AddClip(DefaultClip.Res!);
+            AddClip(DefaultClip);
             if (PlayAutomatically)
-                Play(DefaultClip.Res!.Name);
+                Play(DefaultClip.Name);
         }
     }
 

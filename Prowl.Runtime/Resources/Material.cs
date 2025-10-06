@@ -24,13 +24,13 @@ namespace Prowl.Runtime.Resources
 
         public static Material CreateDefaultMaterial()
         {
-            return new Material(Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/Standard.shader"));
+            return new Material(Shader.LoadDefault(DefaultShader.Standard));
         }
 
         [SerializeField]
-        private AssetRef<Shader> _shader;
+        private Shader _shader;
 
-        public AssetRef<Shader> Shader {
+        public Shader Shader {
             get => _shader;
             set => SetShader(value);
         }
@@ -48,9 +48,9 @@ namespace Prowl.Runtime.Resources
             _localKeywords = new();
         }
 
-        public Material(AssetRef<Shader> shader, PropertyState? properties = null, Dictionary<string, bool>? keywords = null) : base("New Material")
+        public Material(Shader shader, PropertyState? properties = null, Dictionary<string, bool>? keywords = null) : base("New Material")
         {
-            if (shader.Res == null)
+            if (shader == null)
                 throw new ArgumentNullException(nameof(shader));
 
             _properties = new();
@@ -70,7 +70,7 @@ namespace Prowl.Runtime.Resources
         public void SetFloat(string name, float value) => _properties.SetFloat(name, value);
         public void SetInt(string name, int value) => _properties.SetInt(name, value);
         public void SetMatrix(string name, Matrix4x4 value) => _properties.SetMatrix(name, value);
-        public void SetTexture(string name, AssetRef<Texture2D> value) => _properties.SetTexture(name, value);
+        public void SetTexture(string name, Texture2D value) => _properties.SetTexture(name, value);
 
         #region Global Properties
 
@@ -81,7 +81,7 @@ namespace Prowl.Runtime.Resources
         public static void SetGlobalFloat(string name, float value) => PropertyState.SetGlobalFloat(name, value);
         public static void SetGlobalInt(string name, int value) => PropertyState.SetGlobalInt(name, value);
         public static void SetGlobalMatrix(string name, Matrix4x4 value) => PropertyState.SetGlobalMatrix(name, value);
-        public static void SetGlobalTexture(string name, AssetRef<Texture2D> value) => PropertyState.SetGlobalTexture(name, value);
+        public static void SetGlobalTexture(string name, Texture2D value) => PropertyState.SetGlobalTexture(name, value);
 
         #endregion
 
@@ -90,7 +90,7 @@ namespace Prowl.Runtime.Resources
             switch (property.PropertyType)
             {
                 case ShaderPropertyType.Texture2D:
-                    _properties.SetTexture(property.Name, property.Texture2DValue.Res);
+                    _properties.SetTexture(property.Name, property.Texture2DValue);
                     break;
 
                 case ShaderPropertyType.Float:
@@ -120,13 +120,16 @@ namespace Prowl.Runtime.Resources
         }
 
 
-        internal void SetShader(AssetRef<Shader> shader)
+        internal void SetShader(Shader shader)
         {
+            if (shader == null)
+                throw new ArgumentNullException(nameof(shader));
+
             if (shader == _shader)
                 return;
 
             _shader = shader;
-            foreach(var prop in shader.Res!.Properties)
+            foreach(var prop in shader.Properties)
                 UpdatePropertyState(prop);
         }
 

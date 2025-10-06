@@ -12,13 +12,13 @@ namespace Prowl.Runtime.Resources
     /// </summary>
     public sealed class Texture2D : Texture, ISerializable
     {
-        public static AssetRef<Texture2D> White => new AssetRef<Texture2D>("$Assets/Defaults/default_white.png");
-        public static AssetRef<Texture2D> Gray => new AssetRef<Texture2D>("$Assets/Defaults/default_gray18.png");
-        public static AssetRef<Texture2D> Normal => new AssetRef<Texture2D>("$Assets/Defaults/default_normal.png");
-        public static AssetRef<Texture2D> Emission => new AssetRef<Texture2D>("$Assets/Defaults/default_emission.png");
-        public static AssetRef<Texture2D> Surface => new AssetRef<Texture2D>("$Assets/Defaults/default_surface.png");
-        public static AssetRef<Texture2D> Grid => new AssetRef<Texture2D>("$Assets/Defaults/grid.png");
-        public static AssetRef<Texture2D> Noise => new AssetRef<Texture2D>("$Assets/Defaults/noise.png");
+        public static Texture2D White => Texture2D.LoadDefault(DefaultTexture.White);
+        public static Texture2D Gray => Texture2D.LoadDefault(DefaultTexture.Gray18);
+        public static Texture2D Normal => Texture2D.LoadDefault(DefaultTexture.Normal);
+        public static Texture2D Emission => Texture2D.LoadDefault(DefaultTexture.Emission);
+        public static Texture2D Surface => Texture2D.LoadDefault(DefaultTexture.Surface);
+        public static Texture2D Grid => Texture2D.LoadDefault(DefaultTexture.Grid);
+        public static Texture2D Noise => Texture2D.LoadDefault(DefaultTexture.Noise);
 
         /// <summary>The width of this <see cref="Texture2D"/>.</summary>
         public uint Width { get; private set; }
@@ -317,6 +317,49 @@ namespace Prowl.Runtime.Resources
             return FromImage(image, generateMipmaps);
         }
 
+        /// <summary>
+        /// Loads a texture from a file path (alias for FromFile for consistency)
+        /// </summary>
+        public static Texture2D LoadFromFile(string filePath, bool generateMipmaps = false)
+        {
+            var texture = FromFile(filePath, generateMipmaps);
+            texture.AssetPath = filePath;
+            return texture;
+        }
+
+        /// <summary>
+        /// Loads a texture from a stream (alias for FromStream for consistency)
+        /// </summary>
+        public static Texture2D LoadFromStream(Stream stream, bool generateMipmaps = false)
+        {
+            return FromStream(stream, generateMipmaps);
+        }
+
+        /// <summary>
+        /// Loads a default embedded texture
+        /// </summary>
+        public static Texture2D LoadDefault(DefaultTexture texture)
+        {
+            string fileName = texture switch
+            {
+                DefaultTexture.White => "default_white.png",
+                DefaultTexture.Gray18 => "default_gray18.png",
+                DefaultTexture.Normal => "default_normal.png",
+                DefaultTexture.Surface => "default_surface.png",
+                DefaultTexture.Emission => "default_emission.png",
+                DefaultTexture.Grid => "grid.png",
+                DefaultTexture.Noise => "noise.png",
+                _ => throw new ArgumentException($"Unknown default texture: {texture}")
+            };
+
+            string resourcePath = $"Assets/Defaults/{fileName}";
+            using (var stream = EmbeddedResources.GetStream(resourcePath))
+            {
+                var result = FromStream(stream, false);
+                result.AssetPath = $"$Default:{texture}";
+                return result;
+            }
+        }
 
         internal const string ImageNotContiguousError = "To load/save an image, it's backing memory must be contiguous. Consider using smaller image sizes or changing your ImageSharp memory allocation settings to allow larger buffers.";
 

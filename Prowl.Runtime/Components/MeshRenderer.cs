@@ -8,13 +8,13 @@ namespace Prowl.Runtime;
 
 public class MeshRenderer : MonoBehaviour
 {
-    public AssetRef<Mesh> Mesh;
-    public AssetRef<Material> Material;
+    public Mesh Mesh;
+    public Material Material;
     public Color mainColor = Color.white;
 
     public override void Update()
     {
-        if (Mesh.IsAvailable && Material.IsAvailable)
+        if (Mesh != null && Material != null)
         {
             PropertyState properties = new PropertyState();
             properties.SetInt("_ObjectID", InstanceID);

@@ -25,14 +25,11 @@ public class EchoLogger : IEchoLogger
 
 public abstract class Game
 {
-    public static IAssetProvider AssetProvider { get; private set; }
-
     private TimeData time = new TimeData();
     private double fixedTimeAccumulator = 0.0;
 
-    public void Run(string title, int width, int height, IAssetProvider assetProvider)
+    public void Run(string title, int width, int height)
     {
-        AssetProvider = assetProvider ?? throw new Exception("AssetProvider cannot be null");
 
         Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, false);
 

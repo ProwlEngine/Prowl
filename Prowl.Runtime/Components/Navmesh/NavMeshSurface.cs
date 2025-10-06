@@ -334,12 +334,12 @@ public class NavMeshSurface : MonoBehaviour
         {
             foreach (var mRend in meshGeometry)
             {
-                if (mRend.EnabledInHierarchy && mRend.Model.IsAvailable && GeometryLayers.HasLayer(mRend.GameObject.layerIndex))
+                if (mRend.EnabledInHierarchy && mRend.Model != null && GeometryLayers.HasLayer(mRend.GameObject.layerIndex))
                 {
-                    foreach(var mesh in mRend.Model.Res.Meshes)
-                        if(mesh.Mesh.IsAvailable)
+                    foreach(var mesh in mRend.Model.Meshes)
+                        if(mesh.Mesh != null)
                         {
-                            colliderData.shapeData.AddRange(mesh.Mesh.Res);
+                            colliderData.shapeData.AddRange(mesh.Mesh);
                             colliderData.transformsOut.Add(mRend.Transform);
                         }
 

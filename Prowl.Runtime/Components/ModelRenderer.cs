@@ -8,14 +8,14 @@ namespace Prowl.Runtime;
 
 public class ModelRenderer : MonoBehaviour
 {
-    public AssetRef<Model> Model;
+    public Model Model;
     public Color mainColor = Color.white;
 
     public override void Update()
     {
-        if (Model.IsAvailable)
+        if (Model != null)
         {
-            RenderModelNode(Model.Res.RootNode, Transform.localToWorldMatrix);
+            RenderModelNode(Model.RootNode, Transform.localToWorldMatrix);
         }
     }
 
@@ -31,9 +31,9 @@ public class ModelRenderer : MonoBehaviour
         // Render all meshes on this node
         foreach (var meshIndex in node.MeshIndices)
         {
-            var modelMesh = Model.Res.Meshes[meshIndex];
+            var modelMesh = Model.Meshes[meshIndex];
 
-            if (modelMesh.Material.IsAvailable)
+            if (modelMesh.Material != null)
             {
                 PropertyState properties = new PropertyState();
                 properties.SetInt("_ObjectID", InstanceID);
@@ -58,10 +58,10 @@ public class ModelRenderer : MonoBehaviour
     {
         distance = double.MaxValue;
 
-        if (!Model.IsAvailable)
+        if (Model == null)
             return false;
 
-        return RaycastModelNode(Model.Res.RootNode, Transform.localToWorldMatrix, ray, ref distance);
+        return RaycastModelNode(Model.RootNode, Transform.localToWorldMatrix, ray, ref distance);
     }
 
     private bool RaycastModelNode(ModelNode node, Matrix4x4 parentMatrix, Ray ray, ref double closestDistance)
@@ -78,12 +78,12 @@ public class ModelRenderer : MonoBehaviour
         // Test all meshes on this node
         foreach (var meshIndex in node.MeshIndices)
         {
-            var modelMesh = Model.Res.Meshes[meshIndex];
+            var modelMesh = Model.Meshes[meshIndex];
 
-            if (!modelMesh.Mesh.IsAvailable)
+            if (modelMesh.Mesh == null)
                 continue;
 
-            var mesh = modelMesh.Mesh.Res;
+            var mesh = modelMesh.Mesh;
 
             // Transform ray to this mesh's local space
             Matrix4x4.Invert(nodeWorldMatrix, out var worldToLocalMatrix);

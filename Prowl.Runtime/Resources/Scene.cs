@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Echo;
-using Prowl.Runtime.Physics;
 using Prowl.Runtime.Rendering;
 
 namespace Prowl.Runtime.Resources
@@ -279,7 +278,7 @@ namespace Prowl.Runtime.Resources
 
             foreach (Camera? cam in Cameras)
             {
-                RenderPipeline pipeline = cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
+                RenderPipeline pipeline = cam.Pipeline ?? DefaultRenderPipeline.Default;
 
                 // If we have a target and the Camera doesnt, draw into the target
                 if (target != null && cam.Target == null)

@@ -14,9 +14,9 @@ namespace Prowl.Runtime;
 
 public sealed class MeshCollider : Collider
 {
-    [SerializeField] private AssetRef<Mesh> mesh;
+    [SerializeField] private Mesh mesh;
 
-    public AssetRef<Mesh> Mesh
+    public Mesh Mesh
     {
         get => mesh;
         set
@@ -28,7 +28,7 @@ public sealed class MeshCollider : Collider
 
     public override RigidBodyShape[] CreateShapes()
     {
-        if (mesh.IsAvailable == false)
+        if (mesh == null)
         {
             Awake(); // Trigger awake to grab the mesh from a renderer
             if (mesh == null)
@@ -36,7 +36,7 @@ public sealed class MeshCollider : Collider
             return null;
         }
 
-        List<JTriangle> triangles = ToTriangleList(mesh.Res);
+        List<JTriangle> triangles = ToTriangleList(mesh);
         TriangleMesh triangleMesh = new(triangles);
 
         TriangleShape[] shapes = new TriangleShape[triangles.Count];
@@ -48,7 +48,7 @@ public sealed class MeshCollider : Collider
 
     public override void Awake()
     {
-        if(mesh.IsAvailable == false)
+        if(mesh == null)
         {
             MeshRenderer? renderer2 = GetComponent<MeshRenderer>();
             if (renderer2 != null)

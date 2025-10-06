@@ -16,13 +16,13 @@ namespace Prowl.Runtime;
 
 public class MeshRenderable : IRenderable
 {
-    private AssetRef<Mesh> _mesh;
-    private AssetRef<Material> _material;
+    private Mesh _mesh;
+    private Material _material;
     private Matrix4x4 _transform;
     private int _layerIndex;
     private PropertyState _properties;
 
-    public MeshRenderable(AssetRef<Mesh> mesh, AssetRef<Material> material, Matrix4x4 matrix, int layerIndex, PropertyState? propertyBlock = null)
+    public MeshRenderable(Mesh mesh, Material material, Matrix4x4 matrix, int layerIndex, PropertyState? propertyBlock = null)
     {
         _mesh = mesh;
         _material = material;
@@ -31,12 +31,12 @@ public class MeshRenderable : IRenderable
         _properties = propertyBlock ?? new();
     }
 
-    public Material GetMaterial() => _material.Res;
+    public Material GetMaterial() => _material;
     public int GetLayer() => _layerIndex;
 
     public void GetRenderingData(out PropertyState properties, out Mesh drawData, out Matrix4x4 model)
     {
-        drawData = _mesh.Res;
+        drawData = _mesh;
         properties = _properties;
         model = _transform;
     }
@@ -45,7 +45,7 @@ public class MeshRenderable : IRenderable
     {
         isRenderable = true;
         //bounds = Bounds.CreateFromMinMax(new Vector3(999999), new Vector3(999999));
-        bounds = _mesh.Res.bounds.Transform(_transform);
+        bounds = _mesh.bounds.Transform(_transform);
     }
 }
 
@@ -62,17 +62,17 @@ public static class Graphics
     public static Vector2 ScreenSize => new Vector2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
     public static Rect ScreenRect => new Rect(0, 0, Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
 
-    private static AssetRef<Shader>? s_blitShader;
+    private static Shader? s_blitShader;
     private static Material? s_blitMaterial;
     public static Material BlitMaterial
     {
         get
         {
             if (s_blitShader == null)
-                s_blitShader = Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/Blit.shader");
+                s_blitShader = Shader.LoadDefault(DefaultShader.Blit);
 
             if (s_blitMaterial == null)
-                s_blitMaterial = new Material(s_blitShader.Value);
+                s_blitMaterial = new Material(s_blitShader);
 
             return s_blitMaterial;
         }
@@ -131,7 +131,7 @@ public static class Graphics
         mat.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
         mat.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
 
-        var pass = mat.Shader.Res.GetPass(passIndex);
+        var pass = mat.Shader.GetPass(passIndex);
 
         if (!pass.TryGetVariantProgram(mat._localKeywords, out var variant))
             throw new Exception($"Failed to set shader pass {pass.Name}. No variant found for the current keyword state.");

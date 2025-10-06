@@ -720,7 +720,7 @@ public static class ShaderParser
     }
 
 
-    private static AssetRef<Texture2D> Texture2DParse(string texture)
+    private static Texture2D Texture2DParse(string texture)
     {
         return texture switch {
             "white" => Texture2D.White,

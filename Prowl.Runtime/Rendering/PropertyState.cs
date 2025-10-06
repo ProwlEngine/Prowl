@@ -18,7 +18,7 @@ namespace Prowl.Runtime.Rendering
         [SerializeField] private Dictionary<string, int> ints = new();
         [SerializeField] private Dictionary<string, Matrix4x4> matrices = new();
         [SerializeField] private Dictionary<string, System.Numerics.Matrix4x4[]> matrixArr = new();
-        [SerializeField] private Dictionary<string, AssetRef<Texture2D>> textures = new();
+        [SerializeField] private Dictionary<string, Texture2D> textures = new();
         [SerializeField] private Dictionary<string, GraphicsBuffer> buffers = new();
         [SerializeField] private Dictionary<string, uint> bufferBindings = new();
 
@@ -52,7 +52,6 @@ namespace Prowl.Runtime.Rendering
         public void SetMatrix(string name, Matrix4x4 value) => matrices[name] = value;
         public void SetMatrices(string name, Matrix4x4[] value) => matrixArr[name] = value.Select(x => x.ToFloat()).ToArray();
         public void SetTexture(string name, Texture2D value) => textures[name] = value;
-        public void SetTexture(string name, AssetRef<Texture2D> value) => textures[name] = value;
         public void SetBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
         {
             buffers[name] = value;
@@ -67,7 +66,7 @@ namespace Prowl.Runtime.Rendering
         public float GetFloat(string name) => floats.TryGetValue(name, out float value) ? value : 0;
         public int GetInt(string name) => ints.TryGetValue(name, out int value) ? value : 0;
         public Matrix4x4 GetMatrix(string name) => matrices.TryGetValue(name, out Matrix4x4 value) ? value : Matrix4x4.Identity;
-        public AssetRef<Texture2D>? GetTexture(string name) => textures.TryGetValue(name, out AssetRef<Texture2D> value) ? value : null;
+        public Texture2D? GetTexture(string name) => textures.TryGetValue(name, out Texture2D value) ? value : null;
         public GraphicsBuffer GetBuffer(string name) => buffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
         public uint GetBufferBinding(string name) => bufferBindings.TryGetValue(name, out uint value) ? value : 0;
 
@@ -150,9 +149,9 @@ namespace Prowl.Runtime.Rendering
             foreach (var item in mpb.textures)
             {
                 var tex = item.Value;
-                if (tex.IsAvailable)
+                if (tex != null)
                 {
-                    Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Res!.Handle);
+                    Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                     texSlot++;
                 }
             }
@@ -188,9 +187,9 @@ namespace Prowl.Runtime.Rendering
             foreach (var item in globalTextures)
             {
                 var tex = item.Value;
-                if (tex.IsAvailable)
+                if (tex != null)
                 {
-                    Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Res!.Handle);
+                    Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                     texSlot++;
                 }
             }
@@ -208,7 +207,7 @@ namespace Prowl.Runtime.Rendering
         private static Dictionary<string, int> globalInts = new();
         private static Dictionary<string, Matrix4x4> globalMatrices = new();
         private static Dictionary<string, System.Numerics.Matrix4x4[]> globalMatrixArr = new();
-        private static Dictionary<string, AssetRef<Texture2D>> globalTextures = new();
+        private static Dictionary<string, Texture2D> globalTextures = new();
         private static Dictionary<string, GraphicsBuffer> globalBuffers = new();
         private static Dictionary<string, uint> globalBufferBindings = new();
 
@@ -222,7 +221,6 @@ namespace Prowl.Runtime.Rendering
         public static void SetGlobalMatrix(string name, Matrix4x4 value) => globalMatrices[name] = value;
         public static void SetGlobalMatrices(string name, Matrix4x4[] value) => globalMatrixArr[name] = value.Select(x => x.ToFloat()).Cast<System.Numerics.Matrix4x4>().ToArray();
         public static void SetGlobalTexture(string name, Texture2D value) => globalTextures[name] = value;
-        public static void SetGlobalTexture(string name, AssetRef<Texture2D> value) => globalTextures[name] = value;
         public static void SetGlobalBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
         {
             globalBuffers[name] = value;
@@ -237,7 +235,7 @@ namespace Prowl.Runtime.Rendering
         public static float GetGlobalFloat(string name) => globalFloats.TryGetValue(name, out float value) ? value : 0;
         public static int GetGlobalInt(string name) => globalInts.TryGetValue(name, out int value) ? value : 0;
         public static Matrix4x4 GetGlobalMatrix(string name) => globalMatrices.TryGetValue(name, out Matrix4x4 value) ? value : Matrix4x4.Identity;
-        public static AssetRef<Texture2D>? GetGlobalTexture(string name) => globalTextures.TryGetValue(name, out AssetRef<Texture2D> value) ? value : null;
+        public static Texture2D? GetGlobalTexture(string name) => globalTextures.TryGetValue(name, out Texture2D value) ? value : null;
         public static GraphicsBuffer GetGlobalBuffer(string name) => globalBuffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
         public static uint GetGlobalBufferBinding(string name) => globalBufferBindings.TryGetValue(name, out uint value) ? value : 0;
 

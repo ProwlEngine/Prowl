@@ -65,8 +65,8 @@ public class Camera : MonoBehaviour
     //public Rect Viewrect = new(0, 0, 1, 1); // Not Implemented
     public int Depth = -1;
 
-    public AssetRef<RenderPipeline> Pipeline;
-    public AssetRef<RenderTexture> Target;
+    public RenderPipeline? Pipeline;
+    public RenderTexture? Target;
     public bool HDR = false;
     public float RenderScale = 1.0f;
 
@@ -124,7 +124,7 @@ public class Camera : MonoBehaviour
 
     public void Render(in RenderingData? data = null)
     {
-        RenderPipeline pipeline = Pipeline.Res ?? DefaultRenderPipeline.Default;
+        RenderPipeline pipeline = Pipeline ?? DefaultRenderPipeline.Default;
         pipeline.Render(this, data ?? new());
     }
 
@@ -141,8 +141,8 @@ public class Camera : MonoBehaviour
         // Since Scene Updating is guranteed to execute before rendering, we can setup camera data for this frame here
         RenderTexture? camTarget = null;
 
-        if (Target.IsAvailable)
-            camTarget = Target.Res;
+        if (Target != null)
+            camTarget = Target;
 
         int width = camTarget?.Width ?? Window.InternalWindow.FramebufferSize.X;
         int height = camTarget?.Height ?? Window.InternalWindow.FramebufferSize.Y;

@@ -103,15 +103,16 @@ namespace Prowl.Runtime.Rendering.Shaders
             {
                 Debug.LogError($"Failed to compile shader pass of {Name}. Exception: {e.Message}");
 
-                var fallbackShader = Resources.Shader.Find(_fallbackAsset);
-                if (fallbackShader.IsAvailable)
+                // Use the Invalid shader as fallback
+                var fallbackShader = Resources.Shader.LoadDefault(Resources.DefaultShader.Invalid);
+                if (fallbackShader != null)
                 {
-                    if (!fallbackShader.Res!.GetPass(0).TryGetVariantProgram(null, out variant))
+                    if (!fallbackShader.GetPass(0).TryGetVariantProgram(null, out variant))
                         throw new Exception($"Failed to compile shader pass of {Name}. Fallback shader also failed to compile.");
                 }
                 else
                 {
-                    throw new Exception($"Failed to compile shader pass of {Name}. Fallback shader is null or empty.");
+                    throw new Exception($"Failed to compile shader pass of {Name}. Fallback shader is null.");
                 }
             }
 

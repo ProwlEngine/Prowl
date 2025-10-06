@@ -8,7 +8,6 @@ using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
 using Prowl.Echo;
-using Prowl.Runtime.Physics;
 
 namespace Prowl.Runtime;
 

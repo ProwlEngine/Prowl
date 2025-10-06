@@ -173,11 +173,11 @@ namespace Prowl.Runtime.AssetImporting
             return model;
         }
 
-        private void LoadMaterials(Assimp.Scene? scene, DirectoryInfo? parentDir, List<AssetRef<Material>> mats)
+        private void LoadMaterials(Assimp.Scene? scene, DirectoryInfo? parentDir, List<Material> mats)
         {
             foreach (var m in scene.Materials)
             {
-                Material mat = new Material(Shader.Find("$Assets/Defaults/Standard.shader"));
+                Material mat = new Material(Shader.LoadDefault(DefaultShader.Standard));
                 string? name = m.HasName ? m.Name : null;
 
                 // Albedo
@@ -206,10 +206,10 @@ namespace Prowl.Runtime.AssetImporting
                     if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_MainTex", file, mat);
                     else
-                        mat.SetTexture("_MainTex", new AssetRef<Texture2D>("$Assets/Defaults/grid.png"));
+                        mat.SetTexture("_MainTex", Texture2D.LoadDefault(DefaultTexture.Grid));
                 }
                 else
-                    mat.SetTexture("_MainTex", new AssetRef<Texture2D>("$Assets/Defaults/grid.png"));
+                    mat.SetTexture("_MainTex", Texture2D.LoadDefault(DefaultTexture.Grid));
 
                 // Normal Texture
                 if (m.HasTextureNormal)
@@ -218,10 +218,10 @@ namespace Prowl.Runtime.AssetImporting
                     if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_NormalTex", file, mat);
                     else
-                        mat.SetTexture("_NormalTex", new AssetRef<Texture2D>("$Assets/Defaults/default_normal.png"));
+                        mat.SetTexture("_NormalTex", Texture2D.LoadDefault(DefaultTexture.Normal));
                 }
                 else
-                    mat.SetTexture("_NormalTex", new AssetRef<Texture2D>("$Assets/Defaults/default_normal.png"));
+                    mat.SetTexture("_NormalTex", Texture2D.LoadDefault(DefaultTexture.Normal));
 
                 //AO, Roughness, Metallic Texture Attempt 1
                 if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface))
@@ -230,10 +230,10 @@ namespace Prowl.Runtime.AssetImporting
                     if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_SurfaceTex", file, mat);
                     else
-                        mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("$Assets/Defaults/default_surface.png"));
+                        mat.SetTexture("_SurfaceTex", Texture2D.LoadDefault(DefaultTexture.Surface));
                 }
                 else
-                    mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("$Assets/Defaults/default_surface.png"));
+                    mat.SetTexture("_SurfaceTex", Texture2D.LoadDefault(DefaultTexture.Surface));
 
                 //AO, Roughness, Metallic Texture Attempt 2
                 if (m.HasTextureSpecular)
@@ -242,10 +242,10 @@ namespace Prowl.Runtime.AssetImporting
                     if (FindTextureFromPath(m.TextureSpecular.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_SurfaceTex", file, mat);
                     else
-                        mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("$Assets/Defaults/default_surface.png"));
+                        mat.SetTexture("_SurfaceTex", Texture2D.LoadDefault(DefaultTexture.Surface));
                 }
                 else
-                    mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("$Assets/Defaults/default_surface.png"));
+                    mat.SetTexture("_SurfaceTex", Texture2D.LoadDefault(DefaultTexture.Surface));
 
                 // Emissive Texture
                 if (m.HasTextureEmissive)
@@ -257,10 +257,10 @@ namespace Prowl.Runtime.AssetImporting
                         LoadTextureIntoMesh("_EmissionTex", file, mat);
                     }
                     else
-                        mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>("$Assets/Defaults/default_emission.png"));
+                        mat.SetTexture("_EmissionTex", Texture2D.LoadDefault(DefaultTexture.Emission));
                 }
                 else
-                    mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>("$Assets/Defaults/default_emission.png"));
+                    mat.SetTexture("_EmissionTex", Texture2D.LoadDefault(DefaultTexture.Emission));
 
                 name ??= "StandardMat";
                 mat.Name = name;
@@ -268,7 +268,7 @@ namespace Prowl.Runtime.AssetImporting
             }
         }
 
-        private void LoadMeshes(string assetPath, ModelImporterSettings settings, Assimp.Scene? scene, double scale, List<AssetRef<Material>> mats, List<ModelMesh> meshMats)
+        private void LoadMeshes(string assetPath, ModelImporterSettings settings, Assimp.Scene? scene, double scale, List<Material> mats, List<ModelMesh> meshMats)
         {
             foreach (var m in scene.Meshes)
             {
@@ -566,7 +566,7 @@ namespace Prowl.Runtime.AssetImporting
 
         private static void LoadTextureIntoMesh(string name, FileInfo file, Material mat)
         {
-            mat.SetTexture(name, new AssetRef<Texture2D>(file.FullName));
+            mat.SetTexture(name, Texture2D.LoadFromFile(file.FullName));
         }
     }
 }
