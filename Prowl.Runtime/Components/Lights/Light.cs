@@ -21,7 +21,7 @@ public abstract class Light : MonoBehaviour, IRenderableLight
 
     public override void Update()
     {
-        RenderPipeline.AddLight(this);
+        GameObject.Scene.PushLight(this);
     }
 
     public virtual int GetLayer() => this.GameObject.layerIndex;

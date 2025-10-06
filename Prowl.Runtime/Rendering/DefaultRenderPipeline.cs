@@ -464,7 +464,7 @@ namespace Prowl.Runtime.Rendering
             // 0. Setup variables, and prepare the camera
             bool isHDR = camera.HDR;
             (List<ImageEffect> all, List<ImageEffect> opaqueEffects, List<ImageEffect> finalEffects) = GatherImageEffects(camera);
-            IReadOnlyList<IRenderableLight> lights = GetLights();
+            IReadOnlyList<IRenderableLight> lights = camera.GameObject.Scene.Lights;
             Vector3 sunDirection = GetSunDirection(lights);
             RenderTexture target = camera.UpdateRenderData();
 
@@ -480,7 +480,8 @@ namespace Prowl.Runtime.Rendering
 
             // =======================================================
             // 3. Cull Renderables based on Snapshot data
-            HashSet<int> culledRenderableIndices = [];// CullRenderables(css.worldFrustum);
+            IReadOnlyList<IRenderable> renderables = camera.GameObject.Scene.Renderables;
+            HashSet<int> culledRenderableIndices = [];// CullRenderables(renderables, css.worldFrustum);
 
             // =======================================================
             // 4. Pre Render
@@ -489,7 +490,7 @@ namespace Prowl.Runtime.Rendering
 
             // =======================================================
             // 5. Setup Lighting and Shadows
-            SetupLightingAndShadows(css, lights);
+            SetupLightingAndShadows(css, lights, renderables);
 
             // 5.1 Re-Assign camera matrices (The Lighting can modify these)
             AssignCameraMatrices(css.view, css.projection);
@@ -504,7 +505,7 @@ namespace Prowl.Runtime.Rendering
             Graphics.Device.Clear(1.0f, 1.0f, 1.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
 
             // Draw depth for all visible objects
-            DrawRenderables("RenderOrder", "DepthOnly", css.cameraPosition, culledRenderableIndices, false);
+            DrawRenderables(renderables, "RenderOrder", "DepthOnly", css.cameraPosition, culledRenderableIndices, false);
 
             // =======================================================
             // 6.1. Set the depth texture for use in post-processing
@@ -531,7 +532,7 @@ namespace Prowl.Runtime.Rendering
             Graphics.Device.BindFramebuffer(forwardBuffer.frameBuffer);
             Graphics.Device.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Color | ClearFlags.Stencil); // Dont clear Depth
 
-            DrawRenderables("RenderOrder", "Opaque", css.cameraPosition, culledRenderableIndices, true);
+            DrawRenderables(renderables, "RenderOrder", "Opaque", css.cameraPosition, culledRenderableIndices, true);
 
             // 8.1 Set the Motion Vectors Texture for use in post-processing
             PropertyState.SetGlobalTexture("_CameraMotionVectorsTexture", forwardBuffer.InternalTextures[1]);
@@ -554,7 +555,7 @@ namespace Prowl.Runtime.Rendering
                 DrawImageEffects(forwardBuffer, opaqueEffects, ref isHDR);
 
             // 11. Transparent geometry
-            DrawRenderables("RenderOrder", "Transparent", css.cameraPosition, culledRenderableIndices, false);
+            DrawRenderables(renderables, "RenderOrder", "Transparent", css.cameraPosition, culledRenderableIndices, false);
 
             // 12. Apply final post-processing effects
             if (finalEffects.Count > 0)
@@ -585,10 +586,9 @@ namespace Prowl.Runtime.Rendering
             Graphics.Device.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
         }
 
-        private static HashSet<int> CullRenderables(BoundingFrustum? worldFrustum, LayerMask cullingMask)
+        private static HashSet<int> CullRenderables(IReadOnlyList<IRenderable> renderables, BoundingFrustum? worldFrustum, LayerMask cullingMask)
         {
             HashSet<int> culledRenderableIndices = [];
-            var renderables = GetRenderables();
             for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
             {
                 IRenderable renderable = renderables[renderIndex];
@@ -608,12 +608,12 @@ namespace Prowl.Runtime.Rendering
             return culledRenderableIndices;
         }
 
-        private static void SetupLightingAndShadows(CameraSnapshot css, IReadOnlyList<IRenderableLight> lights)
+        private static void SetupLightingAndShadows(CameraSnapshot css, IReadOnlyList<IRenderableLight> lights, IReadOnlyList<IRenderable> renderables)
         {
             ShadowAtlas.TryInitialize();
             ShadowAtlas.Clear();
 
-            CreateLightBuffer(css.cameraPosition, css.cullingMask, lights);
+            CreateLightBuffer(css.cameraPosition, css.cullingMask, lights, renderables);
 
             if (ShadowMap != null)
                 PropertyState.SetGlobalTexture("_ShadowAtlas", ShadowMap.InternalDepth);
@@ -622,7 +622,7 @@ namespace Prowl.Runtime.Rendering
             PropertyState.SetGlobalVector("prowl_ShadowAtlasSize", new Vector2(ShadowAtlas.GetSize(), ShadowAtlas.GetSize()));
         }
         
-        private static void CreateLightBuffer(Vector3 cameraPosition, LayerMask cullingMask, IReadOnlyList<IRenderableLight> lights)
+        private static void CreateLightBuffer(Vector3 cameraPosition, LayerMask cullingMask, IReadOnlyList<IRenderableLight> lights, IReadOnlyList<IRenderable> renderables)
         {
             Graphics.Device.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
             Graphics.Device.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
@@ -707,9 +707,9 @@ namespace Prowl.Runtime.Rendering
                         if (CAMERA_RELATIVE)
                             view.Translation = Vector3.zero;
 
-                        HashSet<int> culledRenderableIndices = [];// CullRenderables(frustum);
+                        HashSet<int> culledRenderableIndices = [];// CullRenderables(renderables, frustum);
                         AssignCameraMatrices(view, proj);
-                        DrawRenderables("LightMode", "ShadowCaster", light.GetLightPosition(), culledRenderableIndices, false);
+                        DrawRenderables(renderables, "LightMode", "ShadowCaster", light.GetLightPosition(), culledRenderableIndices, false);
                     }
                     else
                     {
@@ -924,11 +924,9 @@ namespace Prowl.Runtime.Rendering
             }
         }
 
-        private static void DrawRenderables(string tag, string tagValue, Vector3 cameraPosition, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices)
+        private static void DrawRenderables(IReadOnlyList<IRenderable> renderables, string tag, string tagValue, Vector3 cameraPosition, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices)
         {
             bool hasRenderOrder = !string.IsNullOrWhiteSpace(tag);
-
-            var renderables = GetRenderables();
             for(int renderIndex=0; renderIndex < renderables.Count; renderIndex++)
             {
                 if (culledRenderableIndices?.Contains(renderIndex) ?? false)

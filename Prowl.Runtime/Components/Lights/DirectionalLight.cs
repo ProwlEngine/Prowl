@@ -21,7 +21,7 @@ public class DirectionalLight : Light
 
     public override void Update()
     {
-        RenderPipeline.AddLight(this);
+        GameObject.Scene.PushLight(this);
         Debug.DrawArrow(Transform.position, -Transform.forward, Color.yellow);
         Debug.DrawWireCircle(Transform.position, Transform.forward, 0.5f, Color.yellow);
     }

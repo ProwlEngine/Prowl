@@ -44,48 +44,6 @@ namespace Prowl.Runtime.Rendering
 
     public abstract class RenderPipeline : EngineObject
     {
-        private static readonly List<IRenderable> s_renderables = [];
-        public static int RenderableCount => s_renderables.Count;
-        
-        private static readonly List<IRenderableLight> s_lights = [];
-        
-        
-        public static void AddRenderable(IRenderable renderable)
-        {
-            s_renderables.Add(renderable);
-        }
-        
-        
-        public static void AddLight(IRenderableLight light)
-        {
-            s_lights.Add(light);
-        }
-
-        public static void ClearRenderables()
-        {
-            s_renderables.Clear(); // Clear renderables
-
-            s_lights.Clear(); // Clear lights
-        }
-
-        public static IRenderable GetRenderable(int index)
-        {
-            return s_renderables[index];
-        }
-        
-        
-        public static IReadOnlyList<IRenderable> GetRenderables()
-        {
-            return s_renderables;
-        }
-        
-        
-        public static IReadOnlyList<IRenderableLight> GetLights()
-        {
-            return s_lights;
-        }
-        
-        
         public abstract void Render(Camera camera, in RenderingData data);
     }
 }

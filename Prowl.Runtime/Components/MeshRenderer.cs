@@ -18,7 +18,7 @@ public class MeshRenderer : MonoBehaviour
         {
             PropertyState properties = new PropertyState();
             properties.SetInt("_ObjectID", InstanceID);
-            RenderPipeline.AddRenderable(new MeshRenderable(
+            GameObject.Scene.PushRenderable(new MeshRenderable(
                 Mesh,
                 Material,
                 Transform.localToWorldMatrix,

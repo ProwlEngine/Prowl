@@ -168,7 +168,6 @@ public static class Graphics
 
     public static void EndFrame()
     {
-        RenderPipeline.ClearRenderables();
         RenderTexture.UpdatePool();
     }
 

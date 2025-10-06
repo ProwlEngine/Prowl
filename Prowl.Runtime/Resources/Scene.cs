@@ -19,6 +19,16 @@ namespace Prowl.Runtime.Resources
 
         public PhysicsWorld Physics => _physics;
 
+        // Rendering tracking - cleared each frame before Update, populated during Update
+        [SerializeIgnore]
+        private readonly List<IRenderable> _renderables = [];
+        [SerializeIgnore]
+        private readonly List<IRenderableLight> _lights = [];
+
+        public int RenderableCount => _renderables.Count;
+        public IReadOnlyList<IRenderable> Renderables => _renderables;
+        public IReadOnlyList<IRenderableLight> Lights => _lights;
+
         public struct FogParams
         {
             public enum FogMode
@@ -96,6 +106,31 @@ namespace Prowl.Runtime.Resources
         /// </summary>
         public Scene()
         {
+        }
+
+        /// <summary>
+        /// Adds a renderable to the scene's render list. Called by components during Update.
+        /// </summary>
+        public void PushRenderable(IRenderable renderable)
+        {
+            _renderables.Add(renderable);
+        }
+
+        /// <summary>
+        /// Adds a light to the scene's light list. Called by light components during Update.
+        /// </summary>
+        public void PushLight(IRenderableLight light)
+        {
+            _lights.Add(light);
+        }
+
+        /// <summary>
+        /// Clears the renderable and light tracking lists. Called at the start of each Update.
+        /// </summary>
+        private void ClearRenderTracking()
+        {
+            _renderables.Clear();
+            _lights.Clear();
         }
 
         /// <summary>
@@ -232,6 +267,9 @@ namespace Prowl.Runtime.Resources
         /// </summary>
         public void Update()
         {
+            // Clear render tracking at the start of each update
+            ClearRenderTracking();
+
             List<GameObject> activeGOs = ActiveObjects.ToList();
             foreach (GameObject go in activeGOs)
                 go.PreUpdate();
