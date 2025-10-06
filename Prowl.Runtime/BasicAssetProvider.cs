@@ -14,12 +14,11 @@ namespace Prowl.Runtime
         // Dictionary to store cached assets with their paths as keys
         private readonly Dictionary<string, EngineObject> _assetCache = new Dictionary<string, EngineObject>();
 
-        // Optional assembly to search for embedded resources
         private readonly Assembly? _embeddedResourceAssembly;
 
-        public BasicAssetProvider(Assembly? embeddedResourceAssembly = null)
+        public BasicAssetProvider()
         {
-            _embeddedResourceAssembly = embeddedResourceAssembly;
+            _embeddedResourceAssembly = Assembly.GetExecutingAssembly();
         }
 
         public bool HasAsset(string relativeAssetPath)

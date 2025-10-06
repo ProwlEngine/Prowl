@@ -37,7 +37,7 @@ public sealed class MyGame : Game
 
 
         Mesh cube = Mesh.CreateCube(Vector3.one);
-        Material mat = new Material(Shader.Find("Assets/Defaults/Standard.shader"));
+        Material mat = new Material(Shader.Find("$Assets/Defaults/Standard.shader"));
 
         GameObject cubeGO = new GameObject("Cube");
         var mr = cubeGO.AddComponent<MeshRenderer>();

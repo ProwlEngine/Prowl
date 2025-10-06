@@ -183,7 +183,7 @@ namespace Prowl.Runtime.AssetImporting
         {
             foreach (var m in scene.Materials)
             {
-                Material mat = new Material(Shader.Find("Assets/Defaults/Standard.shader"));
+                Material mat = new Material(Shader.Find("$Assets/Defaults/Standard.shader"));
                 string? name = m.HasName ? m.Name : null;
 
                 // Albedo
@@ -212,10 +212,10 @@ namespace Prowl.Runtime.AssetImporting
                     if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_MainTex", file, mat);
                     else
-                        mat.SetTexture("_MainTex", new AssetRef<Texture2D>("Assets/Defaults/grid.png"));
+                        mat.SetTexture("_MainTex", new AssetRef<Texture2D>("$Assets/Defaults/grid.png"));
                 }
                 else
-                    mat.SetTexture("_MainTex", new AssetRef<Texture2D>("Assets/Defaults/grid.png"));
+                    mat.SetTexture("_MainTex", new AssetRef<Texture2D>("$Assets/Defaults/grid.png"));
 
                 // Normal Texture
                 if (m.HasTextureNormal)
@@ -224,10 +224,10 @@ namespace Prowl.Runtime.AssetImporting
                     if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_NormalTex", file, mat);
                     else
-                        mat.SetTexture("_NormalTex", new AssetRef<Texture2D>("Assets/Defaults/default_normal.png"));
+                        mat.SetTexture("_NormalTex", new AssetRef<Texture2D>("$Assets/Defaults/default_normal.png"));
                 }
                 else
-                    mat.SetTexture("_NormalTex", new AssetRef<Texture2D>("Assets/Defaults/default_normal.png"));
+                    mat.SetTexture("_NormalTex", new AssetRef<Texture2D>("$Assets/Defaults/default_normal.png"));
 
                 //AO, Roughness, Metallic Texture Attempt 1
                 if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface))
@@ -236,10 +236,10 @@ namespace Prowl.Runtime.AssetImporting
                     if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_SurfaceTex", file, mat);
                     else
-                        mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("Assets/Defaults/default_surface.png"));
+                        mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("$Assets/Defaults/default_surface.png"));
                 }
                 else
-                    mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("Assets/Defaults/default_surface.png"));
+                    mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("$Assets/Defaults/default_surface.png"));
 
                 //AO, Roughness, Metallic Texture Attempt 2
                 if (m.HasTextureSpecular)
@@ -248,10 +248,10 @@ namespace Prowl.Runtime.AssetImporting
                     if (FindTextureFromPath(m.TextureSpecular.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_SurfaceTex", file, mat);
                     else
-                        mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("Assets/Defaults/default_surface.png"));
+                        mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("$Assets/Defaults/default_surface.png"));
                 }
                 else
-                    mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("Assets/Defaults/default_surface.png"));
+                    mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>("$Assets/Defaults/default_surface.png"));
 
                 // Emissive Texture
                 if (m.HasTextureEmissive)
@@ -263,10 +263,10 @@ namespace Prowl.Runtime.AssetImporting
                         LoadTextureIntoMesh("_EmissionTex", file, mat);
                     }
                     else
-                        mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>("Assets/Defaults/default_emission.png"));
+                        mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>("$Assets/Defaults/default_emission.png"));
                 }
                 else
-                    mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>("Assets/Defaults/default_emission.png"));
+                    mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>("$Assets/Defaults/default_emission.png"));
 
                 name ??= "StandardMat";
                 mat.Name = name;

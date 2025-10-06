@@ -28,7 +28,7 @@ namespace Prowl.Runtime.Rendering
 
         public override void OnRenderImage(RenderTexture source, RenderTexture destination)
         {
-            mat ??= new Material(Game.AssetProvider.LoadAsset<Shader>("Assets/Defaults/Tonemapper.shader"));
+            mat ??= new Material(Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/Tonemapper.shader"));
             mat.SetFloat("Contrast", Contrast);
             mat.SetFloat("Saturation", Saturation);
             Graphics.Blit(source, destination, mat, 0);
@@ -99,7 +99,7 @@ namespace Prowl.Runtime.Rendering
             history ??= new RenderTexture(source.Width, source.Height, false, [TextureImageFormat.Float4]);
 
             // Create material if it doesn't exist
-            mat ??= new Material(Game.AssetProvider.LoadAsset<Shader>("Assets/Defaults/TAA.shader"));
+            mat ??= new Material(Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/TAA.shader"));
 
             // Set up textures for the shader
             mat.SetTexture("gColor", source.MainTexture);
@@ -126,7 +126,7 @@ namespace Prowl.Runtime.Rendering
         public override void OnRenderImage(RenderTexture source, RenderTexture destination)
         {
             // Create material if it doesn't exist
-            bloomMaterial ??= new Material(Game.AssetProvider.LoadAsset<Shader>("Assets/Defaults/Bloom.shader"));
+            bloomMaterial ??= new Material(Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/Bloom.shader"));
 
             int width = source.Width / 4;
             int height = source.Height / 4;
@@ -193,7 +193,7 @@ namespace Prowl.Runtime.Rendering
 
         public override void OnRenderImage(RenderTexture source, RenderTexture destination)
         {
-            mat ??= new Material(Game.AssetProvider.LoadAsset<Shader>("Assets/Defaults/BokehDoF.shader"));
+            mat ??= new Material(Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/BokehDoF.shader"));
 
             int width = (int)(source.Width * DownsampleFactor);
             int height = (int)(source.Height * DownsampleFactor);
@@ -238,7 +238,7 @@ namespace Prowl.Runtime.Rendering
 
         public override void OnRenderImage(RenderTexture source, RenderTexture destination)
         {
-            mat ??= new Material(Game.AssetProvider.LoadAsset<Shader>("Assets/Defaults/SSR.shader"));
+            mat ??= new Material(Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/SSR.shader"));
             
             // Set uniforms
             mat.SetInt("_RayStepCount", RayStepCount);
@@ -289,13 +289,13 @@ namespace Prowl.Runtime.Rendering
         private static void ValidateDefaults()
         {
             s_quadMesh ??= Mesh.GetFullscreenQuad();
-            s_defaultMaterial ??= new Material(Game.AssetProvider.LoadAsset<Shader>("Assets/Defaults/Standard.shader"));
-            s_skybox ??= new Material(Game.AssetProvider.LoadAsset<Shader>("Assets/Defaults/ProceduralSkybox.shader"));
-            s_gizmo ??= new Material(Game.AssetProvider.LoadAsset<Shader>("Assets/Defaults/Gizmos.shader"));
+            s_defaultMaterial ??= new Material(Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/Standard.shader"));
+            s_skybox ??= new Material(Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/ProceduralSkybox.shader"));
+            s_gizmo ??= new Material(Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/Gizmos.shader"));
 
             if (s_skyDome == null)
             {
-                AssetRef<Model> skyDomeModel = Game.AssetProvider.LoadAsset<Model>("Assets/Defaults/SkyDome.obj");
+                AssetRef<Model> skyDomeModel = Game.AssetProvider.LoadAsset<Model>("$Assets/Defaults/SkyDome.obj");
                 if(skyDomeModel.IsAvailable == false)
                     throw new Exception("SkyDome model not found. Please ensure the model is included in the project.");
                 s_skyDome = skyDomeModel.Res.Meshes[0].Mesh.Res!;

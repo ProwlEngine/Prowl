@@ -24,7 +24,7 @@ namespace Prowl.Runtime.Resources
 
         public static Material CreateDefaultMaterial()
         {
-            return new Material(Game.AssetProvider.LoadAsset<Shader>("Assets/Defaults/Standard.shader"));
+            return new Material(Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/Standard.shader"));
         }
 
         [SerializeField]

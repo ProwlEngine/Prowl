@@ -69,7 +69,7 @@ public static class Graphics
         get
         {
             if (s_blitShader == null)
-                s_blitShader = Game.AssetProvider.LoadAsset<Shader>("Assets/Defaults/Blit.shader");
+                s_blitShader = Game.AssetProvider.LoadAsset<Shader>("$Assets/Defaults/Blit.shader");
 
             if (s_blitMaterial == null)
                 s_blitMaterial = new Material(s_blitShader.Value);

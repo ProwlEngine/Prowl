@@ -37,9 +37,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Assets\Defaults\**">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
+    <EmbeddedResource Include="Assets\Defaults\**" />
   </ItemGroup>
 
 </Project>

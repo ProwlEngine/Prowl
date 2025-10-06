@@ -12,13 +12,13 @@ namespace Prowl.Runtime.Resources
     /// </summary>
     public sealed class Texture2D : Texture, ISerializable
     {
-        public static AssetRef<Texture2D> White => new AssetRef<Texture2D>("Assets/Defaults/default_white.png");
-        public static AssetRef<Texture2D> Gray => new AssetRef<Texture2D>("Assets/Defaults/default_gray18.png");
-        public static AssetRef<Texture2D> Normal => new AssetRef<Texture2D>("Assets/Defaults/default_normal.png");
-        public static AssetRef<Texture2D> Emission => new AssetRef<Texture2D>("Assets/Defaults/default_emission.png");
-        public static AssetRef<Texture2D> Surface => new AssetRef<Texture2D>("Assets/Defaults/default_surface.png");
-        public static AssetRef<Texture2D> Grid => new AssetRef<Texture2D>("Assets/Defaults/grid.png");
-        public static AssetRef<Texture2D> Noise => new AssetRef<Texture2D>("Assets/Defaults/noise.png");
+        public static AssetRef<Texture2D> White => new AssetRef<Texture2D>("$Assets/Defaults/default_white.png");
+        public static AssetRef<Texture2D> Gray => new AssetRef<Texture2D>("$Assets/Defaults/default_gray18.png");
+        public static AssetRef<Texture2D> Normal => new AssetRef<Texture2D>("$Assets/Defaults/default_normal.png");
+        public static AssetRef<Texture2D> Emission => new AssetRef<Texture2D>("$Assets/Defaults/default_emission.png");
+        public static AssetRef<Texture2D> Surface => new AssetRef<Texture2D>("$Assets/Defaults/default_surface.png");
+        public static AssetRef<Texture2D> Grid => new AssetRef<Texture2D>("$Assets/Defaults/grid.png");
+        public static AssetRef<Texture2D> Noise => new AssetRef<Texture2D>("$Assets/Defaults/noise.png");
 
         /// <summary>The width of this <see cref="Texture2D"/>.</summary>
         public uint Width { get; private set; }
