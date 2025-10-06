@@ -206,6 +206,7 @@ public abstract class MonoBehaviour : EngineObject
 
     /// <summary>
     /// Updates the enabled state based on changes in the hierarchy.
+    /// OnEnable/OnDisable are only called if the GameObject is in a Scene.
     /// </summary>
     internal void HierarchyStateChanged()
     {
@@ -213,10 +214,15 @@ public abstract class MonoBehaviour : EngineObject
         if (newState != _enabledInHierarchy)
         {
             _enabledInHierarchy = newState;
-            if (newState)
-                Do(OnEnable);
-            else
-                Do(OnDisable);
+
+            // Only call OnEnable/OnDisable if we're in a Scene
+            if (_go.Scene != null)
+            {
+                if (newState)
+                    OnEnable();
+                else
+                    OnDisable();
+            }
         }
     }
 
@@ -244,12 +250,26 @@ public abstract class MonoBehaviour : EngineObject
     public virtual void Awake() { }
 
     /// <summary>
+    /// Called when the GameObject is added to a Scene.
+    /// This happens before OnEnable and only once per scene add.
+    /// </summary>
+    public virtual void OnAddedToScene() { }
+
+    /// <summary>
+    /// Called when the GameObject is removed from a Scene.
+    /// This happens after OnDisable and only once per scene remove.
+    /// </summary>
+    public virtual void OnRemovedFromScene() { }
+
+    /// <summary>
     /// Called when the object becomes enabled and active.
+    /// Only called when the GameObject is in a Scene and enabled.
     /// </summary>
     public virtual void OnEnable() { }
 
     /// <summary>
     /// Called when the object becomes disabled or inactive.
+    /// Only called when the GameObject was in a Scene and becomes disabled.
     /// </summary>
     public virtual void OnDisable() { }
 
@@ -292,15 +312,13 @@ public abstract class MonoBehaviour : EngineObject
 
     /// <summary>
     /// Internal method to handle the Awake lifecycle event.
+    /// OnEnable is now called separately when added to Scene.
     /// </summary>
     internal void InternalAwake()
     {
         if (HasAwoken) return;
         HasAwoken = true;
         Awake();
-
-        if (EnabledInHierarchy)
-            Do(OnEnable);
     }
 
     /// <summary>
@@ -311,22 +329,6 @@ public abstract class MonoBehaviour : EngineObject
         if (HasStarted) return;
         HasStarted = true;
         Start();
-    }
-
-    /// <summary>
-    /// Executes the specified action, considering the ExecuteAlways attribute.
-    /// </summary>
-    /// <param name="action">The action to execute.</param>
-    internal void Do(Action action)
-    {
-        try
-        {
-            action();
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"Error: {e.Message} \n StackTrace: {e.StackTrace}");
-        }
     }
 
     public override void OnDispose()

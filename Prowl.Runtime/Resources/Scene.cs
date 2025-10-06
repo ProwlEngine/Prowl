@@ -160,6 +160,22 @@ namespace Prowl.Runtime.Resources
             if (_allObj.Add(obj))
             {
                 obj.Scene = this;
+
+                // Call OnAddedToScene for all components
+                foreach (var component in obj.GetComponents<MonoBehaviour>())
+                {
+                    component.OnAddedToScene();
+                }
+
+                // Call OnEnable for enabled components
+                if (obj.enabledInHierarchy)
+                {
+                    foreach (var component in obj.GetComponents<MonoBehaviour>())
+                    {
+                        if (component.Enabled)
+                            component.OnEnable();
+                    }
+                }
             }
             foreach (GameObject child in obj.children)
                 AddObject(child);
@@ -169,8 +185,25 @@ namespace Prowl.Runtime.Resources
         {
             foreach (GameObject child in obj.children)
                 RemoveObject(child);
+
             if (_allObj.Remove(obj))
             {
+                // Call OnDisable for currently enabled components
+                if (obj.enabledInHierarchy)
+                {
+                    foreach (var component in obj.GetComponents<MonoBehaviour>())
+                    {
+                        if (component.Enabled && component.EnabledInHierarchy)
+                            component.OnDisable();
+                    }
+                }
+
+                // Call OnRemovedFromScene for all components
+                foreach (var component in obj.GetComponents<MonoBehaviour>())
+                {
+                    component.OnRemovedFromScene();
+                }
+
                 obj.Scene = null;
             }
         }
@@ -276,12 +309,12 @@ namespace Prowl.Runtime.Resources
 
             ForeachComponent(activeGOs, (x) =>
             {
-                x.Do(x.UpdateCoroutines);
-                x.Do(x.Update);
+                x.UpdateCoroutines();
+                x.Update();
             });
 
-            ForeachComponent(activeGOs, (x) => x.Do(x.LateUpdate));
-            ForeachComponent(activeGOs, (x) => x.Do(x.UpdateEndOfFrameCoroutines));
+            ForeachComponent(activeGOs, (x) => x.LateUpdate());
+            ForeachComponent(activeGOs, (x) => x.UpdateEndOfFrameCoroutines());
         }
 
         /// <summary>
@@ -295,8 +328,8 @@ namespace Prowl.Runtime.Resources
             List<GameObject> activeGOs = ActiveObjects.ToList();
             ForeachComponent(activeGOs, (x) =>
             {
-                x.Do(x.FixedUpdate);
-                x.Do(x.UpdateFixedUpdateCoroutines);
+                x.FixedUpdate();
+                x.UpdateFixedUpdateCoroutines();
             });
         }
 
