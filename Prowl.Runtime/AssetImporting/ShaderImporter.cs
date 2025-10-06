@@ -25,7 +25,36 @@ namespace Prowl.Runtime.AssetImporting
                 shaderScript = reader.ReadToEnd();
             }
 
-            if(ShaderParser.ParseShader(virtualPath, shaderScript, out var shader))
+            // Create an include resolver that loads from embedded resources
+            // Note: virtualPath doesn't have $ prefix - it was stripped by BasicAssetProvider
+            string? IncludeResolver(string includePath)
+            {
+                try
+                {
+                    var provider = Game.AssetProvider as BasicAssetProvider;
+                    if (provider == null)
+                        return null;
+
+                    // includePath is like "Assets/Defaults/Fragment.glsl" (no $ prefix)
+                    // We need to check with $ prefix for HasAsset
+                    string assetPath = "$" + includePath;
+                    if (!Game.AssetProvider.HasAsset(assetPath))
+                        return null;
+
+                    // GetEmbeddedResourceStream expects path without $
+                    using (var includeStream = provider.GetEmbeddedResourceStream(includePath))
+                    using (var reader = new StreamReader(includeStream))
+                    {
+                        return reader.ReadToEnd();
+                    }
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            if(ShaderParser.ParseShader(virtualPath, shaderScript, IncludeResolver, out var shader))
                 return shader;
 
             throw new Exception($"Failed to parse shader {virtualPath}. Please check the syntax and try again.");

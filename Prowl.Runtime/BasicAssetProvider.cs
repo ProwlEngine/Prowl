@@ -204,7 +204,7 @@ namespace Prowl.Runtime
         /// <summary>
         /// Gets a stream for an embedded resource.
         /// </summary>
-        private Stream GetEmbeddedResourceStream(string resourcePath)
+        public Stream GetEmbeddedResourceStream(string resourcePath)
         {
             if (_embeddedResourceAssembly == null)
                 throw new InvalidOperationException("No embedded resource assembly was provided to BasicAssetProvider.");
