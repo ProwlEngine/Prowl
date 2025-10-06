@@ -10,6 +10,7 @@ namespace Prowl.Runtime.Resources
         public ModelNode RootNode { get; set; }
         public List<Material> Materials { get; set; } = new();
         public List<ModelMesh> Meshes { get; set; } = new();
+        public List<AnimationClip> Animations { get; set; } = new();
         public float UnitScale { get; set; } = 1.0f;
 
         public Model(string name)

@@ -130,10 +130,10 @@ namespace Prowl.Runtime.AssetImporting
             if (scene.HasMeshes)
                 LoadMeshes(assetPath, settings, scene, scale, model.Materials, model.Meshes);
 
-            //// Animations
-            //List<AssetRef<AnimationClip>> anims = [];
-            //if (scene.HasAnimations)
-            //    anims = LoadAnimations(ctx, scene, scale);
+            // Animations
+            List<AnimationClip> anims = [];
+            if (scene.HasAnimations)
+                LoadAnimations(scene, scale, model.Animations);
 
             //if (CullEmpty)
             //{
@@ -431,100 +431,97 @@ namespace Prowl.Runtime.AssetImporting
             return modelNode;
         }
 
-        //private static List<AssetRef<AnimationClip>> LoadAnimations(SerializedAsset ctx, Assimp.Scene? scene, double scale)
-        //{
-        //    List<AssetRef<AnimationClip>> anims = [];
-        //    foreach (var anim in scene.Animations)
-        //    {
-        //        // Create Animation
-        //        AnimationClip animation = new AnimationClip();
-        //        animation.Name = anim.Name;
-        //        animation.Duration = anim.DurationInTicks / (anim.TicksPerSecond != 0 ? anim.TicksPerSecond : 25.0);
-        //        animation.TicksPerSecond = anim.TicksPerSecond;
-        //        animation.DurationInTicks = anim.DurationInTicks;
-        //
-        //        foreach (var channel in anim.NodeAnimationChannels)
-        //        {
-        //            Assimp.Node boneNode = scene.RootNode.FindNode(channel.NodeName);
-        //
-        //            var animBone = new AnimBone();
-        //            animBone.BoneName = boneNode.Name;
-        //
-        //            // construct full path from RootNode to this bone
-        //            // RootNode -> Parent -> Parent -> ... -> Parent -> Bone
-        //            Assimp.Node target = boneNode;
-        //            string path = target.Name;
-        //            //while (target.Parent != null)
-        //            //{
-        //            //    target = target.Parent;
-        //            //    path = target.Name + "/" + path;
-        //            //    if (target.Name == scene.RootNode.Name) // TODO: Can we just do reference comparison here instead of string comparison?
-        //            //        break;
-        //            //}
-        //
-        //            if (channel.HasPositionKeys)
-        //            {
-        //                var xCurve = new AnimationCurve();
-        //                var yCurve = new AnimationCurve();
-        //                var zCurve = new AnimationCurve();
-        //                foreach (var posKey in channel.PositionKeys)
-        //                {
-        //                    double time = (posKey.Time / anim.DurationInTicks) * animation.Duration;
-        //                    xCurve.Keys.Add(new(time, posKey.Value.X * scale));
-        //                    yCurve.Keys.Add(new(time, posKey.Value.Y * scale));
-        //                    zCurve.Keys.Add(new(time, posKey.Value.Z * scale));
-        //                }
-        //                animBone.PosX = xCurve;
-        //                animBone.PosY = yCurve;
-        //                animBone.PosZ = zCurve;
-        //            }
-        //
-        //            if (channel.HasRotationKeys)
-        //            {
-        //                var xCurve = new AnimationCurve();
-        //                var yCurve = new AnimationCurve();
-        //                var zCurve = new AnimationCurve();
-        //                var wCurve = new AnimationCurve();
-        //                foreach (var rotKey in channel.RotationKeys)
-        //                {
-        //                    double time = (rotKey.Time / anim.DurationInTicks) * animation.Duration;
-        //                    xCurve.Keys.Add(new(time, rotKey.Value.X));
-        //                    yCurve.Keys.Add(new(time, rotKey.Value.Y));
-        //                    zCurve.Keys.Add(new(time, rotKey.Value.Z));
-        //                    wCurve.Keys.Add(new(time, rotKey.Value.W));
-        //                }
-        //                animBone.RotX = xCurve;
-        //                animBone.RotY = yCurve;
-        //                animBone.RotZ = zCurve;
-        //                animBone.RotW = wCurve;
-        //            }
-        //
-        //            if (channel.HasScalingKeys)
-        //            {
-        //                var xCurve = new AnimationCurve();
-        //                var yCurve = new AnimationCurve();
-        //                var zCurve = new AnimationCurve();
-        //                foreach (var scaleKey in channel.ScalingKeys)
-        //                {
-        //                    double time = (scaleKey.Time / anim.DurationInTicks) * animation.Duration;
-        //                    xCurve.Keys.Add(new(time, scaleKey.Value.X));
-        //                    yCurve.Keys.Add(new(time, scaleKey.Value.Y));
-        //                    zCurve.Keys.Add(new(time, scaleKey.Value.Z));
-        //                }
-        //                animBone.ScaleX = xCurve;
-        //                animBone.ScaleY = yCurve;
-        //                animBone.ScaleZ = zCurve;
-        //            }
-        //
-        //            animation.AddBone(animBone);
-        //        }
-        //
-        //        animation.EnsureQuaternionContinuity();
-        //        anims.Add(ctx.AddSubObject(animation));
-        //    }
-        //
-        //    return anims;
-        //}
+        private static void LoadAnimations(Assimp.Scene? scene, double scale, List<AnimationClip> animations)
+        {
+            foreach (var anim in scene.Animations)
+            {
+                // Create Animation
+                AnimationClip animation = new AnimationClip();
+                animation.Name = anim.Name;
+                animation.Duration = anim.DurationInTicks / (anim.TicksPerSecond != 0 ? anim.TicksPerSecond : 25.0);
+                animation.TicksPerSecond = anim.TicksPerSecond;
+                animation.DurationInTicks = anim.DurationInTicks;
+        
+                foreach (var channel in anim.NodeAnimationChannels)
+                {
+                    Assimp.Node boneNode = scene.RootNode.FindNode(channel.NodeName);
+        
+                    var animBone = new AnimationClip.AnimBone();
+                    animBone.BoneName = boneNode.Name;
+        
+                    // construct full path from RootNode to this bone
+                    // RootNode -> Parent -> Parent -> ... -> Parent -> Bone
+                    Assimp.Node target = boneNode;
+                    string path = target.Name;
+                    //while (target.Parent != null)
+                    //{
+                    //    target = target.Parent;
+                    //    path = target.Name + "/" + path;
+                    //    if (target.Name == scene.RootNode.Name) // TODO: Can we just do reference comparison here instead of string comparison?
+                    //        break;
+                    //}
+        
+                    if (channel.HasPositionKeys)
+                    {
+                        var xCurve = new AnimationCurve();
+                        var yCurve = new AnimationCurve();
+                        var zCurve = new AnimationCurve();
+                        foreach (var posKey in channel.PositionKeys)
+                        {
+                            double time = (posKey.Time / anim.DurationInTicks) * animation.Duration;
+                            xCurve.Keys.Add(new(time, posKey.Value.X * scale));
+                            yCurve.Keys.Add(new(time, posKey.Value.Y * scale));
+                            zCurve.Keys.Add(new(time, posKey.Value.Z * scale));
+                        }
+                        animBone.PosX = xCurve;
+                        animBone.PosY = yCurve;
+                        animBone.PosZ = zCurve;
+                    }
+        
+                    if (channel.HasRotationKeys)
+                    {
+                        var xCurve = new AnimationCurve();
+                        var yCurve = new AnimationCurve();
+                        var zCurve = new AnimationCurve();
+                        var wCurve = new AnimationCurve();
+                        foreach (var rotKey in channel.RotationKeys)
+                        {
+                            double time = (rotKey.Time / anim.DurationInTicks) * animation.Duration;
+                            xCurve.Keys.Add(new(time, rotKey.Value.X));
+                            yCurve.Keys.Add(new(time, rotKey.Value.Y));
+                            zCurve.Keys.Add(new(time, rotKey.Value.Z));
+                            wCurve.Keys.Add(new(time, rotKey.Value.W));
+                        }
+                        animBone.RotX = xCurve;
+                        animBone.RotY = yCurve;
+                        animBone.RotZ = zCurve;
+                        animBone.RotW = wCurve;
+                    }
+        
+                    if (channel.HasScalingKeys)
+                    {
+                        var xCurve = new AnimationCurve();
+                        var yCurve = new AnimationCurve();
+                        var zCurve = new AnimationCurve();
+                        foreach (var scaleKey in channel.ScalingKeys)
+                        {
+                            double time = (scaleKey.Time / anim.DurationInTicks) * animation.Duration;
+                            xCurve.Keys.Add(new(time, scaleKey.Value.X));
+                            yCurve.Keys.Add(new(time, scaleKey.Value.Y));
+                            zCurve.Keys.Add(new(time, scaleKey.Value.Z));
+                        }
+                        animBone.ScaleX = xCurve;
+                        animBone.ScaleY = yCurve;
+                        animBone.ScaleZ = zCurve;
+                    }
+        
+                    animation.AddBone(animBone);
+                }
+        
+                animation.EnsureQuaternionContinuity();
+                animations.Add(animation);
+            }
+        }
 
         private bool FindTextureFromPath(string filePath, DirectoryInfo parentDir, out FileInfo file)
         {
