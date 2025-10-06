@@ -33,13 +33,12 @@ public sealed class MyGame : Game
         scene.Add(lightGO);
 
         // Create camera
-        GameObject cam = new("Main Camera");
-        cam.tag = "Main Camera";
-        cam.Transform.position = new(0, 0, -10);
-        var camera = cam.AddComponent<Camera>();
+        cameraGO = new("Main Camera");
+        cameraGO.tag = "Main Camera";
+        cameraGO.Transform.position = new(0, 0, -10);
+        var camera = cameraGO.AddComponent<Camera>();
         camera.Depth = -1;
         camera.HDR = true;
-        cameraGO = cam;
 
         camera.Effects = new List<ImageEffect>()
         {
@@ -49,7 +48,7 @@ public sealed class MyGame : Game
             new TonemapperEffect(),
         };
 
-        scene.Add(cam);
+        scene.Add(cameraGO);
 
         Mesh cube = Mesh.CreateCube(Vector3.one);
         Material mat = new Material(Shader.LoadDefault(DefaultShader.Standard));
@@ -76,7 +75,6 @@ public sealed class MyGame : Game
     {
         scene.Update();
 
-
         Vector2 movement = Vector2.zero;
         if (Input.GetKey(Key.W)) movement += Vector2.up;
         if (Input.GetKey(Key.S)) movement += Vector2.down;
@@ -100,6 +98,5 @@ public sealed class MyGame : Game
             Vector2 delta = Input.MouseDelta;
             cameraGO.Transform.localEulerAngles += new Vector3(delta.y, delta.x, 0) * 0.1f;
         }
-
     }
 }

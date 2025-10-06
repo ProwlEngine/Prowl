@@ -44,6 +44,9 @@ public sealed class PhysicsDemo : Game
 
         camera.Effects = new List<ImageEffect>()
         {
+            new ScreenSpaceReflectionEffect(),
+            new KawaseBloomEffect(),
+            new BokehDepthOfFieldEffect(),
             new TonemapperEffect(),
         };
 
