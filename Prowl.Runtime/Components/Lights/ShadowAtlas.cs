@@ -3,9 +3,8 @@
 
 using System;
 
-using Veldrid;
-
 using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
@@ -23,11 +22,7 @@ public static class ShadowAtlas
         maxShadowSize = 256;
         if (atlas != null) return;
 
-        bool supports8k = false;
-        if (Graphics.Device.GetPixelFormatSupport(PixelFormat.R32_Float, TextureType.Texture2D, TextureUsage.RenderTarget, out var properties))
-        {
-            supports8k = properties.MaxWidth >= 8192 && properties.MaxHeight >= 8192;
-        }
+        bool supports8k = Graphics.MaxTextureSize >= 8192;
 
         size = supports8k ? 8192 : 4096;
         tileSize = 32;
@@ -40,7 +35,7 @@ public static class ShadowAtlas
         freeTiles = tileCount * tileCount;
         tiles = new int?[tileCount, tileCount];
 
-        atlas ??= new RenderTexture((uint)size, (uint)size, [PixelFormat.R32_Float], PixelFormat.D16_UNorm, true);
+        atlas ??= new RenderTexture(size, size, true, []);
     }
 
     public static int GetAtlasWidth() => tileCount;

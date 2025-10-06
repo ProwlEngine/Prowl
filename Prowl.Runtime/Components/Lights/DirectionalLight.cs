@@ -1,13 +1,10 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Icons;
-using Prowl.Runtime.Rendering.Pipelines;
+using Prowl.Runtime.Rendering;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Directional Light")]
-[ExecuteAlways]
 public class DirectionalLight : Light
 {
     public enum Resolution : int
@@ -20,55 +17,43 @@ public class DirectionalLight : Light
 
     public Resolution shadowResolution = Resolution._1024;
 
-    [Range(8, 32, true)]
-    public int qualitySamples = 32;
-    [Range(8, 32, true)]
-    public int blockerSamples = 16;
-    [Range(10, 512)]
     public float shadowDistance = 50f;
-    [Range(0.001f, 4f, true)]
-    public float shadowRadius = 1f;
 
     public override void Update()
     {
         RenderPipeline.AddLight(this);
+        Debug.DrawArrow(Transform.position, -Transform.forward, Color.yellow);
+        Debug.DrawWireCircle(Transform.position, Transform.forward, 0.5f, Color.yellow);
     }
+
 
     public override LightType GetLightType() => LightType.Directional;
     public override void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection)
     {
-        Vector3 forward = Transform.forward;
-        projection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, -shadowDistance, shadowDistance);
-        projection = Graphics.GetGPUProjectionMatrix(projection);
-        view = Matrix4x4.CreateLookTo(Transform.position, forward, Transform.up);
+        Vector3 forward = -Transform.forward;
+        projection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0.1f, shadowDistance);
+        view = Matrix4x4.CreateLookTo(Transform.position - (forward * shadowDistance * 0.5), forward, Transform.up);
     }
 
-    public override GPULight GetGPULight(int res, bool cameraRelative, Vector3 cameraPosition)
+    public void UploadToGPU(bool cameraRelative, Vector3 cameraPosition, int atlasX, int atlasY, int atlasWidth)
     {
-        Vector3 forward = Transform.forward;
-        Matrix4x4 proj = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, -shadowDistance, shadowDistance);
-        proj = Graphics.GetGPUProjectionMatrix(proj);
-        Matrix4x4 view;
-        Vector3 lightPos;
+        PropertyState.SetGlobalVector($"_Sun.direction", Transform.forward);
+        PropertyState.SetGlobalVector($"_Sun.color", new Vector3(color.r, color.g, color.b));
+        PropertyState.SetGlobalFloat($"_Sun.intensity", intensity);
+
+        GetShadowMatrix(out var view, out var proj);
 
         if (cameraRelative)
-        {
-            view = Matrix4x4.CreateLookTo(Transform.position - cameraPosition, forward, Transform.up);
-        }
-        else
-        {
-            view = Matrix4x4.CreateLookTo(Transform.position, forward, Transform.up);
-        }
+            view.Translation -= cameraPosition;
 
-        return new GPULight
-        {
-            PositionType = new Vector4(0, blockerSamples, 0, 0),
-            DirectionRange = new Vector4(GameObject.Transform.forward, shadowDistance),
-            Color = color.GetUInt(),
-            Intensity = intensity,
-            SpotData = new Vector2(0, 0),
-            ShadowData = new Vector4(shadowRadius, qualitySamples, shadowBias, shadowNormalBias),
-            ShadowMatrix = (view * proj).ToFloat()
-        };
+        PropertyState.SetGlobalMatrix($"_Sun.shadowMatrix", (view * proj));
+        PropertyState.SetGlobalFloat($"_Sun.shadowBias", shadowBias);
+        PropertyState.SetGlobalFloat($"_Sun.shadowNormalBias", shadowNormalBias);
+        PropertyState.SetGlobalFloat($"_Sun.shadowStrength", shadowStrength);
+        PropertyState.SetGlobalFloat($"_Sun.shadowDistance", shadowDistance);
+
+        PropertyState.SetGlobalFloat($"_Sun.atlasX", atlasX);
+        PropertyState.SetGlobalFloat($"_Sun.atlasY", atlasY);
+        PropertyState.SetGlobalFloat($"_Sun.atlasWidth", atlasWidth);
     }
 }

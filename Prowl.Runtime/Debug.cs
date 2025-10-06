@@ -8,9 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 
-using Veldrid;
-
-using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
@@ -587,13 +585,13 @@ public class GizmoBuilder
         {
             _wire ??= new()
             {
-                Topology = PrimitiveTopology.LineList,
+                MeshTopology = GraphicsBackend.Primitives.Topology.Lines,
                 IndexFormat = IndexFormat.UInt16,
             };
 
             _wire.Vertices = [.. _wireData.s_vertices];
             _wire.Colors = [.. _wireData.s_colors];
-            _wire.Indices16 = _wireData.s_indices.Select(i => (ushort)i).ToArray();
+            _wire.Indices = _wireData.s_indices.Select(i => (uint)i).ToArray();
 
             if (cameraRelative)
             {
@@ -614,7 +612,7 @@ public class GizmoBuilder
         {
             _solid ??= new()
             {
-                Topology = PrimitiveTopology.TriangleList,
+                MeshTopology = GraphicsBackend.Primitives.Topology.Triangles, 
                 IndexFormat = IndexFormat.UInt16,
             };
 
@@ -633,7 +631,7 @@ public class GizmoBuilder
 
             _solid.Colors = [.. _solidData.s_colors];
             _solid.UV = [.. _solidData.s_uvs];
-            _solid.Indices16 = _solidData.s_indices.Select(i => (ushort)i).ToArray();
+            _solid.Indices = _solidData.s_indices.Select(i => (uint)i).ToArray();
         }
 
         return (

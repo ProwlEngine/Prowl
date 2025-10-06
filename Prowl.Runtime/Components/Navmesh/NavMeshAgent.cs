@@ -11,7 +11,6 @@ namespace Prowl.Runtime;
 
 public class NavMeshAgent : MonoBehaviour
 {
-    [ShowInInspector]
     public NavMeshSurface Surface
     {
         get => surface;
@@ -24,7 +23,7 @@ public class NavMeshAgent : MonoBehaviour
     }
 
 
-    [SerializeField, HideInInspector] private NavMeshSurface surface;
+    [SerializeField] private NavMeshSurface surface;
 
 
     public float radius = 0.5f;

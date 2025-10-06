@@ -20,53 +20,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="EmbeddedResources\**\*.*" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="EmbeddedResources\*.*" />
-
-        <!--
-        <EmbeddedResource Include="EmbeddedResources/GUI/GLSL/gui-vertex.glsl" LogicalName="gui-vertex.glsl" />
-        <EmbeddedResource Include="EmbeddedResources/GUI/GLSL/gui-vertex-linear.glsl" LogicalName="gui-vertex-linear.glsl" />
-        <EmbeddedResource Include="EmbeddedResources/GUI/GLSL/gui-frag.glsl" LogicalName="gui-frag.glsl" />
-
-        <EmbeddedResource Include="EmbeddedResources/GUI/GLSLES/gui-vertex.glsles" LogicalName="gui-vertex.glsles" />
-        <EmbeddedResource Include="EmbeddedResources/GUI/GLSLES/gui-vertex-linear.glsles" LogicalName="gui-vertex-linear.glsles" />
-        <EmbeddedResource Include="EmbeddedResources/GUI/GLSLES/gui-frag.glsles" LogicalName="gui-frag.glsles" />
-
-        <EmbeddedResource Include="EmbeddedResources/GUI/HLSL/gui-vertex.hlsl" LogicalName="gui-vertex.hlsl" />
-        <EmbeddedResource Include="EmbeddedResources/GUI/HLSL/gui-vertex-linear.hlsl" LogicalName="gui-vertex-linear.hlsl" />
-        <EmbeddedResource Include="EmbeddedResources/GUI/HLSL/gui-frag.hlsl" LogicalName="gui-frag.hlsl" />
-
-        <EmbeddedResource Include="EmbeddedResources/GUI/SPIR-V/gui-vertex.spv" LogicalName="gui-vertex.spv" />
-        <EmbeddedResource Include="EmbeddedResources/GUI/SPIR-V/gui-vertex-linear.spv" LogicalName="gui-vertex-linear.spv" />
-        <EmbeddedResource Include="EmbeddedResources/GUI/SPIR-V/gui-frag.spv" LogicalName="gui-frag.spv" />
-
-        <EmbeddedResource Include="EmbeddedResources/GUI/Metal/gui-vertex.metal" LogicalName="gui-vertex.metal" />
-        <EmbeddedResource Include="EmbeddedResources/GUI/Metal/gui-vertex-linear.metal" LogicalName="gui-vertex-linear.metal" />
-        <EmbeddedResource Include="EmbeddedResources/GUI/Metal/gui-frag.metal" LogicalName="gui-frag.metal" />
-        -->
-
-    <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-vertex.*">
-      <LogicalName>%(Filename)%(Extension)</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-vertex-linear.*">
-      <LogicalName>%(Filename)%(Extension)</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-frag.*">
-      <LogicalName>%(Filename)%(Extension)</LogicalName>
-    </EmbeddedResource>
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
     <PackageReference Include="Jitter2.Double" Version="2.4.8-alpha" />
+    <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
+    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.6.0" />
     <PackageReference Include="Prowl.Echo" Version="1.7.0" />
-    <PackageReference Include="Silk.NET.OpenAL" Version="2.22.0" />
-    <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
-    <PackageReference Include="SoftCircuits.OrderedDictionary" Version="3.2.0" />
-    <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
+    <PackageReference Include="Silk.NET" Version="2.22.0" />
+    <!-- <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" /> -->
   </ItemGroup>
 
   <ItemGroup>
@@ -74,10 +34,12 @@
     <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Detour\DotRecast.Detour.csproj" />
     <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast.Toolset\DotRecast.Recast.Toolset.csproj" />
     <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast\DotRecast.Recast.csproj" />
+  </ItemGroup>
 
-    <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
-    <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid.SDL2\Veldrid.SDL2.csproj" />
-    <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj" />
+  <ItemGroup>
+    <None Update="Assets\Defaults\**">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

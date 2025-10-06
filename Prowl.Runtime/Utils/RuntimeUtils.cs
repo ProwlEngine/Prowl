@@ -45,7 +45,6 @@ public static class RuntimeUtils
     private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
     private static readonly Dictionary<Type, int> s_executionOrderCache = [];
 
-    [OnAssemblyUnload]
     public static void ClearCache()
     {
         s_deepCopyByAssignmentCache.Clear();

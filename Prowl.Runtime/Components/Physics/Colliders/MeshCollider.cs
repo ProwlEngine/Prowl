@@ -7,13 +7,11 @@ using System.Linq;
 using Jitter2.Collision.Shapes;
 using Jitter2.LinearMath;
 
-using Prowl.Icons;
 using Prowl.Echo;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Mesh Collider")]
-[ExecuteAlways]
 public sealed class MeshCollider : Collider
 {
     [SerializeField] private AssetRef<Mesh> mesh;
@@ -52,10 +50,14 @@ public sealed class MeshCollider : Collider
     {
         if(mesh.IsAvailable == false)
         {
-            MeshRenderer? renderer = GetComponent<MeshRenderer>();
-            if (renderer != null)
+            MeshRenderer? renderer2 = GetComponent<MeshRenderer>();
+            if (renderer2 != null)
             {
-                mesh = renderer.Mesh;
+                mesh = renderer2.Mesh;
+            }
+            else
+            {
+                Debug.LogWarning("ConvexHullCollider could not find a MeshRenderer to get the mesh from.");
             }
         }
     }
@@ -63,16 +65,7 @@ public sealed class MeshCollider : Collider
     public List<JTriangle> ToTriangleList(Mesh mesh)
     {
         var vertices = mesh.Vertices;
-        int[] indices;
-
-        if (mesh.IndexFormat == Veldrid.IndexFormat.UInt16)
-        {
-            indices = mesh.Indices16.Select(i => (int)i).ToArray();
-        }
-        else
-        {
-            indices = mesh.Indices32.Select(i => (int)i).ToArray();
-        }
+        int[] indices = mesh.Indices.Select(i => (int)i).ToArray();
 
         List<JTriangle> triangles = new();
 

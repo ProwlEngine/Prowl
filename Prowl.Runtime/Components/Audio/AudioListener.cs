@@ -1,12 +1,10 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Icons;
 using Prowl.Runtime.Audio;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.Music}  Audio/{FontAwesome6.Microphone}  Audio Listener")]
 public class AudioListener : MonoBehaviour
 {
     private uint _lastVersion;

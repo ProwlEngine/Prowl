@@ -1,48 +1,29 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Icons;
-
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Pipelines;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
-
-[ExecuteAlways]
-[AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
-public class MeshRenderer : MonoBehaviour, IRenderable
+public class MeshRenderer : MonoBehaviour
 {
     public AssetRef<Mesh> Mesh;
     public AssetRef<Material> Material;
-
-    public PropertyState Properties;
+    public Color mainColor = Color.white;
 
     public override void Update()
     {
-        if (!Mesh.IsAvailable) return;
-        if (!Material.IsAvailable) return;
-
-        Properties ??= new();
-
-        Properties.SetInt("_ObjectID", InstanceID);
-
-        RenderPipeline.AddRenderable(this);
-    }
-
-    public Material GetMaterial() => Material.Res;
-    public int GetLayer() => GameObject.layerIndex;
-
-    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
-    {
-        drawData = Mesh.Res;
-        properties = Properties;
-        model = Transform.localToWorldMatrix;
-    }
-
-    public void GetCullingData(out bool isRenderable, out Bounds bounds)
-    {
-        isRenderable = _enabledInHierarchy;
-        bounds = Mesh.Res.bounds.Transform(Transform.localToWorldMatrix);
+        if (Mesh.IsAvailable && Material.IsAvailable)
+        {
+            PropertyState properties = new PropertyState();
+            properties.SetInt("_ObjectID", InstanceID);
+            RenderPipeline.AddRenderable(new MeshRenderable(
+                Mesh,
+                Material,
+                Transform.localToWorldMatrix,
+                this.GameObject.layerIndex,
+                properties));
+        }
     }
 }

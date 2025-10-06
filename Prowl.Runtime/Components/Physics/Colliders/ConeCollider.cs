@@ -3,12 +3,10 @@
 
 using Jitter2.Collision.Shapes;
 
-using Prowl.Icons;
 using Prowl.Echo;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Cone Collider")]
 public sealed class ConeCollider : Collider
 {
     [SerializeField] private float radius = 0.5f;

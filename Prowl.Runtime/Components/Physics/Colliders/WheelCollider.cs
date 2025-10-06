@@ -5,13 +5,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Icons;
-
 namespace Prowl.Runtime;
 
 // Based on the Jitter2 Demo Raycast Car
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/Experimental/{FontAwesome6.Circle}  Wheel Collider")]
 [ExecutionOrder(-1000)]
 public sealed class WheelCollider : MonoBehaviour
 {
@@ -317,7 +314,6 @@ public sealed class WheelCollider : MonoBehaviour
         }
     }
 
-    [GUIButton("Auto-Assign Spring, Inertia, Damping")]
     public void AdjustWheelValues()
     {
         if (Body == null)

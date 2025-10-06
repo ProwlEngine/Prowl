@@ -5,14 +5,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices.Marshalling;
 
-using Prowl.Runtime.Cloning;
-using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utils;
-
-using SoftCircuits.Collections;
 using Prowl.Echo;
+using Prowl.Runtime.Resources;
+using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Runtime;
 
@@ -20,8 +16,7 @@ namespace Prowl.Runtime;
 /// The Base Class for all Object/Entities in a Scene.
 /// Holds a collection of Components that contain the logic for this Object/Entity
 /// </summary>
-[CloneBehavior(CloneBehavior.Reference)]
-public class GameObject : EngineObject, ISerializable, ICloneExplicit
+public class GameObject : EngineObject, ISerializable
 {
     #region Private Fields/Properties
 
@@ -34,16 +29,12 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     private bool _enabled = true;
     private bool _enabledInHierarchy = true;
-    [SerializeField]
-    // DONT RENAME, GameObjectEditor finds this field by name "prefabLink" Doesn't use NameOf since its private
-    private PrefabLink prefabLink = null;
 
     // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
     private GameObject? _parent;
 
     [SerializeField]
-    // DONT RENAME, GameObjectEditor finds this field by name "_transform" Doesn't use NameOf since its private
     private Transform _transform = new();
 
     [SerializeIgnore]
@@ -104,31 +95,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     public int childCount => children.Count;
 
-    /// <summary>
-    /// The <see cref="PrefabLink"/> that connects this object to a <see cref="Prefab"/>.
-    /// </summary>
-    public PrefabLink PrefabLink
-    {
-        get => prefabLink;
-        internal set => prefabLink = value;
-    }
-
-    /// <summary>
-    /// The <see cref="PrefabLink"/> that connects this object or one or its parent GameObjects to a <see cref="Prefab"/>.
-    /// </summary>
-    /// <remarks>
-    /// This does not necessarily mean that this GameObject will be affected by the PrefabLink, since it might not be part of
-    /// the linked Prefab. It simply indicates the returned PrefabLink's potential to adjust this GameObject when being applied.
-    /// </remarks>
-    public PrefabLink AffectedByPrefabLink
-    {
-        get
-        {
-            if (prefabLink != null) return prefabLink;
-            else if (parent != null) return parent.AffectedByPrefabLink;
-            else return null;
-        }
-    }
 
     /// <summary>
     /// The GameObjects parent <see cref="Prowl.Runtime.Scene"/>. Each GameObject can belong to
@@ -269,24 +235,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <param name="name">The name of the gameobject.</param>
     public GameObject(string name = "New GameObject") : base(name) { }
 
-    /// <summary>
-    /// Creates a GameObject based on a specific <see cref="Prowl.Runtime.Prefab"/>.
-    /// </summary>
-    /// <param name="prefab">The Prefab that will be applied to this GameObject.</param>
-    /// <seealso cref="Prowl.Runtime.Prefab"/>
-    public GameObject(AssetRef<Prefab> prefab)
-    {
-        if (!prefab.IsAvailable) return;
-        if (Application.IsEditor == false)
-        {
-            prefab.Res.CopyTo(this);
-        }
-        else
-        {
-            PrefabUtility.LinkToPrefab(this, prefab);
-            PrefabLink.Apply();
-        }
-    }
 
     #endregion
 
@@ -902,86 +850,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         });
     }
 
-    private static GameObject Internal_Instantiate(GameObject obj)
-    {
-        if (obj.IsDestroyed) throw new Exception(obj.Name + " has been destroyed.");
-        GameObject newObj = obj.Clone();
-        newObj.AssetID = Guid.Empty;
-        return newObj;
-    }
-
-    /// <summary>
-    /// Instantiates a new GameObject from the original and adds it to the scene.
-    /// </summary>
-    /// <param name="original">The original GameObject to clone.</param>
-    /// <returns>A new instance of the GameObject.</returns>
-    public static GameObject Instantiate(GameObject original)
-    {
-        var clone = Internal_Instantiate(original);
-        SceneManager.Scene.Add(clone);
-        return clone;
-    }
-
-    /// <inheritdoc cref="Instantiate(GameObject)"/>
-    public static GameObject Instantiate(AssetRef<Prefab> original)
-    {
-        if (!original.IsAvailable) return null;
-        GameObject clone = original.Res.Instantiate();
-        SceneManager.Scene.Add(clone);
-        return clone;
-    }
-
-    /// <summary>
-    /// Instantiates a new GameObject from the original with the specified parent and adds it to the scene.
-    /// </summary>
-    /// <param name="original">The original GameObject to clone.</param>
-    /// <param name="parent">The parent GameObject for the new instance.</param>
-    /// <returns>A new instance of the GameObject.</returns>
-    public static GameObject Instantiate(GameObject original, GameObject? parent)
-    {
-        GameObject clone = Internal_Instantiate(original);
-        clone.SetParent(parent);
-        return clone;
-    }
-
-    /// <inheritdoc cref="Instantiate(GameObject)"/>
-    public static GameObject Instantiate(AssetRef<Prefab> original, GameObject? parent)
-    {
-        if (!original.IsAvailable) return null;
-        GameObject clone = original.Res.Instantiate();
-        clone.SetParent(parent);
-        SceneManager.Scene.Add(clone);
-        return clone;
-    }
-
-    /// <summary>
-    /// Instantiates a new GameObject from the original with the specified position, rotation, parent, and adds it to the scene.
-    /// </summary>
-    /// <param name="original">The original GameObject to clone.</param>
-    /// <param name="position">The position for the new instance.</param>
-    /// <param name="rotation">The rotation for the new instance.</param>
-    /// <param name="parent">The parent GameObject for the new instance.</param>
-    /// <returns>A new instance of the GameObject.</returns>
-    public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent)
-    {
-        GameObject clone = Internal_Instantiate(original);
-        clone.Transform.position = position;
-        clone.Transform.rotation = rotation;
-        clone.SetParent(parent, true);
-        return clone;
-    }
-
-    /// <inheritdoc cref="Instantiate(GameObject)"/>
-    public static GameObject Instantiate(AssetRef<Prefab> original, GameObject? parent, Vector3 position, Quaternion rotation)
-    {
-        if (!original.IsAvailable) return null;
-        GameObject clone = original.Res.Instantiate();
-        clone.Transform.position = position;
-        clone.Transform.rotation = rotation;
-        clone.SetParent(parent, true);
-        return clone;
-    }
-
     /// <summary>
     /// Disposes of the GameObject and its components.
     /// </summary>
@@ -1072,7 +940,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <returns>A SerializedProperty containing the GameObject's data.</returns>
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        compoundTag.Add("Name", new EchoObject(Name));
+        SerializeHeader(compoundTag);
 
         compoundTag.Add("Identifier", new EchoObject(_identifier.ToString()));
         compoundTag.Add("Static", new EchoObject((byte)(_static ? 1 : 0)));
@@ -1086,14 +954,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         compoundTag.Add("HideFlags", new EchoObject((int)hideFlags));
 
         compoundTag.Add("Transform", Serializer.Serialize(_transform, ctx));
-        compoundTag.Add("PrefabLink", Serializer.Serialize(prefabLink, ctx));
-
-        if (AssetID != Guid.Empty)
-        {
-            compoundTag.Add("AssetID", new EchoObject(AssetID.ToString()));
-            if (FileID != 0)
-                compoundTag.Add("FileID", new EchoObject(FileID));
-        }
 
         EchoObject components = EchoObject.NewList();
         foreach (MonoBehaviour comp in _components)
@@ -1113,7 +973,8 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <param name="ctx">The serialization context.</param>
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        Name = value["Name"].StringValue;
+        DeserializeHeader(value);
+
         if (Guid.TryParse(value["Identifier"]?.StringValue ?? "", out var identifier))
             _identifier = identifier;
         _static = value["Static"]?.ByteValue == 1;
@@ -1125,17 +986,6 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
         _transform.gameObject = this;
-        if (value.TryGet("PrefabLink", out EchoObject? link))
-        {
-            prefabLink = Serializer.Deserialize<PrefabLink>(link, ctx);
-            if (prefabLink != null)
-                prefabLink.Obj = this;
-        }
-
-        if (value.TryGet("AssetID", out EchoObject? guid))
-            AssetID = Guid.Parse(guid.StringValue);
-        if (value.TryGet("FileID", out EchoObject? fileID))
-            FileID = fileID.UShortValue;
 
         EchoObject children = value["Children"];
         this.children = [];
@@ -1206,159 +1056,5 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                 }
             }
         }
-    }
-
-    /// <summary>
-    /// Creates a deep copy of this GameObject.
-    /// </summary>
-    /// <returns>A reference to a newly created deep copy of this GameObject.</returns>
-    public new GameObject Clone()
-    {
-        return this.DeepClone();
-    }
-
-    /// <summary>
-    /// Deep-copies this GameObject's data to the specified target GameObject.
-    /// </summary>
-    /// <param name="target">The target GameObject to copy to.</param>
-    public void CopyTo(GameObject target)
-    {
-        this.DeepCopyTo(target);
-    }
-
-    void ICloneExplicit.SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
-    {
-        GameObject target = targetObj as GameObject;
-        bool isPrefabApply = setup.Context is ApplyPrefabContext;
-
-        // We don't destroy anything when Applying a prefab
-        // Since the user could have added new components or children those should stay
-        // 15/11/2024 - For now we destroy everything when applying a prefab
-        // This is to ensure the editor acts reliably and consistently
-        // Otherwise theres some weird edge cases like for example:
-        // 1. Create prefab with a child
-        // 2. Spawn in twice
-        // 3. In one instance delete the child and apply
-        // The other instance will not delete the child but will disconnect it from the prefab
-        // GameObject & Component adding/removing should be VarMods, so they can be re-applied
-        // after everything has been reset
-        //if (!isPrefabApply || ApplyPrefabContext.IsRevert)
-        {
-            // Destroy all Components in the target GameObject
-            for (int i = target._components.Count - 1; i >= 0; i--)
-            {
-                var targetsIdentifier = target._components[i].Identifier;
-                // If we dont have that identifier then we can delete it
-                if (GetComponentByIdentifier(targetsIdentifier) == null)
-                    target._components.ElementAt(i).DestroyImmediate();
-            }
-
-            // Destroy all child objects in the target GameObject
-            if (target.children != null)
-            {
-                for (int i = target.children.Count - 1; i >= 0; i--)
-                {
-                    var targetsIdentifier = target.children[i].Identifier;
-                    var ourGO = FindChildByIdentifier(targetsIdentifier, false);
-
-                    // If we dont have that identifier then we can delete it
-                    if (ourGO == null)
-                        target.children[i].DestroyImmediate();
-                }
-            }
-        }
-
-        // Create missing Components in the target GameObject and link components to target
-        foreach (MonoBehaviour myComp in _components)
-        {
-            var targetComp = target.GetComponentByIdentifier(myComp.Identifier);
-            if (targetComp == null)
-                targetComp = target.AddComponent(myComp.GetType());
-
-            int? index = myComp.GetSiblingIndex();
-            if (index.HasValue && index != targetComp.GetSiblingIndex())
-                targetComp.SetSiblingIndex(index.Value);
-
-            setup.HandleObject(myComp, targetComp, CloneBehavior.ChildObject);
-        }
-
-        // Create missing child objects in the target GameObject
-        if (children != null)
-        {
-            for (int i = 0; i < children.Count; i++)
-            {
-                GameObject targetChild = target.FindChildByIdentifier(children[i].Identifier, false);
-                if(targetChild == null)
-                {
-                    targetChild = new GameObject();
-                    targetChild._identifier = children[i]._identifier;
-                    targetChild.SetParent(target);
-                }
-
-                int? index = children[i].GetSiblingIndex();
-                if (index.HasValue && index != targetChild.GetSiblingIndex())
-                    targetChild.SetSiblingIndex(index.Value);
-
-                setup.HandleObject(children[i], targetChild, CloneBehavior.ChildObject);
-            }
-        }
-
-        // Handle referenced and child objects
-        setup.HandleObject(_transform, target._transform, CloneBehavior.ChildObject);
-        setup.HandleObject(_scene, target._scene, CloneBehavior.Reference);
-        setup.HandleObject(prefabLink, target.prefabLink);
-    }
-
-    void ICloneExplicit.CopyDataTo(object targetObj, ICloneOperation operation)
-    {
-        GameObject target = targetObj as GameObject;
-
-        // InstanceID is special and should not be copied
-        // Its a value guranteed to be unique to each instance of an EngineObject
-        //target._instanceID = _instanceID;
-
-        // Copy plain old data
-        target.Name = Name;
-        if (!operation.Context.PreserveIdentity)
-            target._identifier = _identifier;
-        target._static = _static;
-        target._enabled = _enabled;
-        target._enabledInHierarchy = _enabledInHierarchy;
-        target.tagIndex = tagIndex;
-        target.layerIndex = layerIndex;
-        target.hideFlags = hideFlags;
-
-        target.AssetID = AssetID;
-        target.FileID = FileID;
-
-        operation.HandleObject<Transform>(_transform);
-
-        // Copy Components from source to target
-        for (int i = 0; i < _components.Count; i++)
-        {
-            operation.HandleObject<MonoBehaviour>(_components.ElementAt(i));
-        }
-
-        // Copy child objects from source to target
-        if (children != null)
-        {
-            for (int i = 0; i < children.Count; i++)
-            {
-                operation.HandleObject<GameObject>(children[i]);
-            }
-        }
-
-        // Copy the objects parent scene as a weak reference, i.e.
-        // by assignment, and only when the the scene is itself part of the
-        // copied object graph. That way, cloning a GameObject but not its
-        // scene will result in a clone that doesn't reference a parent scene.
-        Scene targetScene = operation.GetWeakTarget(Scene);
-        if (targetScene != null)
-        {
-            target.Scene = targetScene;
-        }
-
-        // Copy the objects prefab link
-        operation.HandleObject(prefabLink, ref target.prefabLink, true);
     }
 }

@@ -6,11 +6,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 
-using Prowl.Runtime.Cloning;
-using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Utils;
 using Prowl.Echo;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
@@ -18,17 +17,14 @@ namespace Prowl.Runtime;
 /// Represents the base class for all scripts that attach to GameObjects in the Prowl Game Engine.
 /// MonoBehaviour provides lifecycle methods and coroutine functionality for game object behaviors.
 /// </summary>
-[CloneBehavior(CloneBehavior.ChildObject)]
 public abstract class MonoBehaviour : EngineObject
 {
-    private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
-
-    [SerializeField, HideInInspector, CloneField(CloneFieldFlags.IdentityRelevant)]
+    [SerializeField]
     private Guid _identifier = Guid.NewGuid();
 
-    [SerializeField, HideInInspector]
+    [SerializeField]
     protected internal bool _enabled = true;
-    [SerializeField, HideInInspector]
+    [SerializeField]
     protected internal bool _enabledInHierarchy = true;
 
     private Dictionary<string, Coroutine> _coroutines = new();
@@ -40,14 +36,13 @@ public abstract class MonoBehaviour : EngineObject
     /// <summary>
     /// Gets or sets the hide flags for this MonoBehaviour.
     /// </summary>
-    [HideInInspector]
     public HideFlags hideFlags;
 
-    [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
+    [SerializeIgnore]
     private bool _executeAlways = false;
-    [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
+    [SerializeIgnore]
     private bool _hasAwoken = false;
-    [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
+    [SerializeIgnore]
     private bool _hasStarted = false;
 
     /// <summary>
@@ -291,39 +286,17 @@ public abstract class MonoBehaviour : EngineObject
     /// </summary>
     public virtual void DrawGizmosSelected() { }
 
-    /// <summary>
-    /// Called for drawing and handling interaction with Runtime/Ingame UI
-    /// Executed on any camera with the GUILayer component
-    /// </summary>
-    /// <param name="gui"></param>
-    public virtual void OnGUI(Gui gui) { }
+    ///// <summary>
+    ///// Called for drawing and handling interaction with Runtime/Ingame UI
+    ///// Executed on any camera with the GUILayer component
+    ///// </summary>
+    ///// <param name="gui"></param>
+    //public virtual void OnGUI(Gui gui) { }
 
     /// <summary>
     /// Called when a new level is loaded.
     /// </summary>
     public virtual void OnLevelWasLoaded() { }
-
-    /// <summary>
-    /// Called when the camera (On this gameobject) has rendered the scene.
-    /// <see cref="ImageEffectOpaqueAttribute"/> can be used to specify the order of execution.
-    /// <see cref="ImageEffectAllowedInSceneViewAttribute"/> can be used to specify if the effect should be rendered in the Scene View.
-    /// </summary>
-    public virtual void OnRenderImage(RenderTexture src, RenderTexture dest) { }
-
-    /// <summary>
-    /// Called right before the camera starts rendering.
-    /// </summary>
-    public virtual void OnPreCull(Camera camera) { }
-
-    /// <summary>
-    /// Called right before the camera starts rendering the scene.
-    /// </summary>
-    public virtual void OnPreRender(Camera camera) { }
-
-    /// <summary>
-    /// Called after the camera has finished rendering the scene.
-    /// </summary>
-    public virtual void OnPostRender(Camera camera) { }
 
     /// <summary>
     /// Called when the MonoBehaviour will be destroyed.
@@ -359,31 +332,15 @@ public abstract class MonoBehaviour : EngineObject
     /// <param name="action">The action to execute.</param>
     internal void Do(Action action)
     {
-        bool always;
-        if (CachedExecuteAlways.TryGetValue(GetType(), out bool value))
-            always = value;
-        else
-        {
-            always = GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
-            CachedExecuteAlways[GetType()] = always;
-        }
-
         try
         {
-            if (Application.IsPlaying || always)
-                action();
+            action();
         }
         catch (Exception e)
         {
             Debug.LogError($"Error: {e.Message} \n StackTrace: {e.StackTrace}");
         }
     }
-
-    /// <summary>
-    /// Clears the cached ExecuteAlways attributes when the assembly is unloaded.
-    /// </summary>
-    [OnAssemblyUnload]
-    public static void ClearCache() => CachedExecuteAlways.Clear();
 
     public override void OnDispose()
     {
@@ -586,64 +543,6 @@ public abstract class MonoBehaviour : EngineObject
     /// <param name="methodName">The name of the method to call.</param>
     /// <param name="objs">Optional parameters to pass to the method.</param>
     public void SendMessage(string methodName, params object[] objs) => GameObject.SendMessage(methodName, objs);
-
-    /// <summary>
-    /// Creates a deep copy of this Component.
-    /// </summary>
-    /// <returns>A reference to a newly created deep copy of this Component.</returns>
-    public MonoBehaviour Clone()
-    {
-        return this.DeepClone();
-    }
-    /// <summary>
-    /// Deep-copies this Components data to the specified target Component. If source and 
-    /// target Component Type do not match, the operation will fail.
-    /// </summary>
-    /// <param name="target">The target Component to copy to.</param>
-    public void CopyTo(MonoBehaviour target)
-    {
-        this.DeepCopyTo(target);
-    }
-
-    public override void SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
-    {
-        MonoBehaviour target = targetObj as MonoBehaviour;
-        this.OnSetupCloneTargets(targetObj, setup);
-    }
-
-    public override void CopyDataTo(object targetObj, ICloneOperation operation)
-    {
-        MonoBehaviour target = targetObj as MonoBehaviour;
-        if (!operation.Context.PreserveIdentity)
-            target._identifier = _identifier;
-        target._enabled = _enabled;
-        target._enabledInHierarchy = _enabledInHierarchy;
-        this.OnCopyDataTo(targetObj, operation);
-    }
-
-    /// <summary>
-    /// This method prepares the <see cref="CopyTo"/> operation for custom Component Types.
-    /// It uses reflection to prepare the cloning operation automatically, but you can implement
-    /// this method in order to handle certain fields and cases manually. See <see cref="ICloneExplicit.SetupCloneTargets"/>
-    /// for a more thorough explanation.
-    /// </summary>
-    protected virtual void OnSetupCloneTargets(object target, ICloneTargetSetup setup)
-    {
-        setup.HandleObject(this, target);
-    }
-
-    /// <summary>
-    /// This method performs the <see cref="CopyTo"/> operation for custom Component Types.
-    /// It uses reflection to perform the cloning operation automatically, but you can implement
-    /// this method in order to handle certain fields and cases manually. See <see cref="ICloneExplicit.CopyDataTo"/>
-    /// for a more thorough explanation.
-    /// </summary>
-    /// <param name="target">The target Component where this Components data is copied to.</param>
-    /// <param name="operation"></param>
-    protected virtual void OnCopyDataTo(object target, ICloneOperation operation)
-    {
-        operation.HandleObject(this, target);
-    }
 
     #endregion
 }

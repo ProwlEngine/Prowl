@@ -7,8 +7,7 @@ namespace Prowl.Runtime;
 
 public interface IAssetRef
 {
-    Guid AssetID { get; set; }
-    ushort FileID { get; set; }
+    string AssetPath { get; set; }
     string Name { get; }
     bool IsAvailable { get; }
     bool IsRuntimeResource { get; }

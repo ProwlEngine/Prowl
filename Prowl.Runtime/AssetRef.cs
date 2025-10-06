@@ -4,7 +4,6 @@
 using System;
 
 using Prowl.Echo;
-using Prowl.Runtime.Cloning;
 
 namespace Prowl.Runtime;
 
@@ -13,12 +12,13 @@ namespace Prowl.Runtime;
 
 public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 {
-    [CloneBehavior(CloneBehavior.Reference), CloneField(CloneFieldFlags.DontSkip)]
     private T? instance;
-    [CloneField(CloneFieldFlags.DontSkip)]
-    private Guid assetID = Guid.Empty;
-    [CloneField(CloneFieldFlags.DontSkip)]
-    private ushort fileID = 0;
+    private string _assetPath = string.Empty;
+    private string assetPath
+    {
+        get { return _assetPath ??= string.Empty; }
+        set { _assetPath = value ?? string.Empty; }
+    }
 
     /// <summary>
     /// The actual <see cref="EngineObject"/>. If currently unavailable, it is loaded and then returned.
@@ -34,8 +34,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         }
         set
         {
-            assetID = value == null ? Guid.Empty : value.AssetID;
-            fileID = value == null ? (ushort)0 : value.FileID;
+            assetPath = value == null ? string.Empty : value.AssetPath;
             instance = value;
         }
     }
@@ -52,26 +51,16 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     /// <summary>
     /// The path where to look for the Resource, if it is currently unavailable.
     /// </summary>
-    public Guid AssetID
+    public string AssetPath
     {
-        get { return assetID; }
+        get { return assetPath; }
         set
         {
-            assetID = value;
-            if (instance != null && instance.AssetID != value)
+            assetPath = value;
+            if (instance != null && instance.AssetPath != value)
                 instance = null;
         }
     }
-
-    /// <summary>
-    /// The Asset index inside the asset file. 0 is the Main Asset
-    /// </summary>
-    public ushort FileID
-    {
-        get => fileID;
-        set => fileID = value;
-    }
-
 
     /// <summary>
     /// Returns whether this content reference has been explicitly set to null.
@@ -80,7 +69,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     {
         get
         {
-            return instance == null && assetID == Guid.Empty;
+            return instance == null && string.IsNullOrEmpty(assetPath);
         }
     }
 
@@ -105,7 +94,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         get
         {
             if (instance != null && !instance.IsDestroyed) return true;
-            return Application.AssetProvider.HasAsset(assetID);
+            return Game.AssetProvider.HasAsset(assetPath);
         }
     }
 
@@ -114,7 +103,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     /// </summary>
     public bool IsRuntimeResource
     {
-        get { return instance != null && assetID == Guid.Empty; }
+        get { return instance != null && string.IsNullOrEmpty(assetPath); }
     }
 
     public string Name
@@ -129,37 +118,23 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     public Type InstanceType => typeof(T);
 
     /// <summary>
-    /// Creates a ContentRef pointing to the <see cref="EngineObject"/> at the specified id / using
+    /// Creates a AssetRef pointing to the <see cref="EngineObject"/> at the specified id / using 
     /// the specified alias.
     /// </summary>
     /// <param name="id"></param>
-    public AssetRef(Guid id)
+    public AssetRef(string id)
     {
         instance = null;
-        assetID = id;
-        FileID = 0;
-    }
-
-    /// <summary>
-    /// Creates a ContentRef pointing to the <see cref="EngineObject"/> at the specified id / using
-    /// the specified alias.
-    /// </summary>
-    /// <param name="id"></param>
-    public AssetRef(Guid id, ushort fileId)
-    {
-        instance = null;
-        assetID = id;
-        fileID = fileId;
+        assetPath = id;
     }
     /// <summary>
-    /// Creates a ContentRef pointing to the specified <see cref="EngineObject"/>.
+    /// Creates a AssetRef pointing to the specified <see cref="EngineObject"/>.
     /// </summary>
     /// <param name="res">The Resource to reference.</param>
-    public AssetRef(T? res)
+    public AssetRef(T res)
     {
         instance = res;
-        assetID = res != null ? res.AssetID : Guid.Empty;
-        fileID = res != null ? res.FileID : (ushort)0;
+        assetPath = res != null ? res.AssetPath : string.Empty;
     }
 
     public object? GetInstance()
@@ -196,10 +171,10 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 
     private void RetrieveInstance()
     {
-        if (assetID != Guid.Empty)
-            instance = (T)Application.AssetProvider.LoadAsset<T>(assetID, fileID);
-        else if (instance != null && instance.AssetID != Guid.Empty)
-            instance = (T)Application.AssetProvider.LoadAsset<T>(instance.AssetID, instance.FileID);
+        if (!string.IsNullOrEmpty(assetPath))
+            instance = Game.AssetProvider.LoadAsset<T>(assetPath);
+        else if (instance != null && instance.AssetPath != string.Empty)
+            instance = Game.AssetProvider.LoadAsset<T>(instance.AssetPath);
         else
             instance = null;
     }
@@ -231,7 +206,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 
     public override int GetHashCode()
     {
-        if (assetID != Guid.Empty) return assetID.GetHashCode() + fileID.GetHashCode();
+        if (assetPath != string.Empty) return assetPath.GetHashCode();
         else if (instance != null) return instance.GetHashCode();
         else return 0;
     }
@@ -268,7 +243,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         //    return first.assetID == second.assetID;
 
         // Completely identical
-        if (first.instance == second.instance && first.assetID == second.assetID)
+        if (first.instance == second.instance && first.assetPath == second.assetPath)
             return true;
         // Same instances
         else if (first.instance != null && second.instance != null)
@@ -279,9 +254,9 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         // Path comparison
         else
         {
-            Guid? firstPath = first.instance != null ? first.instance.AssetID : first.assetID;
-            Guid? secondPath = second.instance != null ? second.instance.AssetID : second.assetID;
-            return firstPath == secondPath && first.fileID == second.fileID;
+            string? firstPath = first.instance != null ? first.instance.AssetPath : first.assetPath;
+            string? secondPath = second.instance != null ? second.instance.AssetPath : second.assetPath;
+            return firstPath == secondPath;
         }
     }
     /// <summary>
@@ -294,23 +269,17 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         return !(first == second);
     }
 
-
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        compoundTag.Add("AssetID", new EchoObject(assetID.ToString()));
-        if (assetID != Guid.Empty)
-            ctx.AddDependency(assetID);
-        if (fileID != 0)
-            compoundTag.Add("FileID", new EchoObject(fileID));
+        compoundTag.Add("AssetID", new EchoObject(assetPath.ToString()));
         if (IsRuntimeResource)
-            compoundTag.Add("Instance", Serializer.Serialize(typeof(T), instance, ctx));
+            compoundTag.Add("Instance", Serializer.Serialize(instance, ctx));
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        assetID = Guid.Parse(value["AssetID"].StringValue);
-        fileID = value.TryGet("FileID", out EchoObject fileTag) ? fileTag.UShortValue : (ushort)0;
-        if (assetID == Guid.Empty && value.TryGet("Instance", out EchoObject tag))
+        assetPath = value["AssetID"].StringValue;
+        if (value.TryGet("Instance", out EchoObject tag))
             instance = Serializer.Deserialize<T?>(tag, ctx);
     }
 }

@@ -7,13 +7,10 @@ using Jitter2;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
-using Prowl.Icons;
 using Prowl.Echo;
-using Prowl.Runtime.Cloning;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Cubes}  Rigidbody3D")]
 public sealed class Rigidbody3D : MonoBehaviour
 {
     public class RigidBodyUserData
@@ -29,10 +26,10 @@ public sealed class Rigidbody3D : MonoBehaviour
    [SerializeField] private bool isSpeculative;
    [SerializeField] private bool useGravity = true;
    [SerializeField] private double mass = 1;
-   //[SerializeField, Range(0, 1)] private double drag = 0.0f;
-   //[SerializeField, Range(0, 1)] private double angularDrag = 0.0f;
-   [SerializeField, Range(0, 1)] private double friction = 0.2f;
-   [SerializeField, Range(0, 1)] private double restitution = 0;
+   //[SerializeField] private double drag = 0.0f;
+   //[SerializeField] private double angularDrag = 0.0f;
+   [SerializeField] private double friction = 0.2f;
+   [SerializeField] private double restitution = 0;
     //public Vector3Int translationConstraints = Vector3Int.one;
     //public Vector3Int rotationConstraints = Vector3Int.one;
 
@@ -150,7 +147,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         set => _body.Torque = new JVector(value.x, value.y, value.z);
     }
 
-    [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
+    [SerializeIgnore]
     internal RigidBody _body;
 
     public RigidBody CreateBody(World world)
@@ -190,7 +187,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void DrawGizmosSelected()
     {
-        if (_body == null || _body.Handle.IsZero || !Application.IsEditor) return;
+        if (_body == null || _body.Handle.IsZero) return;
 
         _body.DebugDraw(JitterGizmosDrawer.Instance);
     }
@@ -241,7 +238,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     internal void UpdateTransform(RigidBody rb)
     {
-        if (PhysicsSetting.Instance.AutoSyncTransforms)
+        if (Physics.AutoSyncTransforms)
         {
             rb.Position = new JVector(Transform.position.x, Transform.position.y, Transform.position.z);
             rb.Orientation = new JQuaternion(Transform.rotation.x, Transform.rotation.y, Transform.rotation.z, Transform.rotation.w);

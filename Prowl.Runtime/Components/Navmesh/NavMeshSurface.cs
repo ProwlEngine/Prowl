@@ -15,6 +15,8 @@ using DotRecast.Recast.Toolset;
 using DotRecast.Recast.Toolset.Builder;
 using DotRecast.Recast.Toolset.Geom;
 
+using Prowl.Runtime.Resources;
+
 namespace Prowl.Runtime;
 
 public class NavMeshSurface : MonoBehaviour
@@ -24,11 +26,9 @@ public class NavMeshSurface : MonoBehaviour
     public bool useStaticGeometry = true;
     public LayerMask GeometryLayers;
 
-    [ShowIf("useStaticGeometry")]
     public List<Rigidbody3D> staticGeometry = new();
 
-    [ShowIf("useStaticGeometry", true)]
-    public List<MeshRenderer> meshGeometry = new();
+    public List<ModelRenderer> meshGeometry = new();
 
     public BuildSettings navSettings = new();
 
@@ -50,7 +50,7 @@ public class NavMeshSurface : MonoBehaviour
 
     private bool ready = false;
 
-    [HideInInspector] public DtNavMesh navMesh;
+    public DtNavMesh navMesh;
     private DtNavMeshQuery _query;
 
 
@@ -114,13 +114,13 @@ public class NavMeshSurface : MonoBehaviour
             {
                 var shape = input.shapeData[i];
                 verts.EnsureCapacity(verts.Count + shape.Vertices.Length);
-                indices.EnsureCapacity(indices.Count + shape.Indices16.Length);
+                indices.EnsureCapacity(indices.Count + shape.Indices.Length);
 
-                for (int j = 0; j < shape.Indices16.Length; j += 3)
+                for (int j = 0; j < shape.Indices.Length; j += 3)
                 {
-                    indices.Add(verts.Count + shape.Indices16[j + 0]);
-                    indices.Add(verts.Count + shape.Indices16[j + 1]);
-                    indices.Add(verts.Count + shape.Indices16[j + 2]);
+                    indices.Add(verts.Count + (int)shape.Indices[j + 0]);
+                    indices.Add(verts.Count + (int)shape.Indices[j + 1]);
+                    indices.Add(verts.Count + (int)shape.Indices[j + 2]);
                 }
 
                 var transform = input.transformsOut[i];
@@ -223,7 +223,6 @@ public class NavMeshSurface : MonoBehaviour
 
     #region Debug
 
-    [GUIButton("Add All Geometry")]
     private void AddAllSceneStatics()
     {
         if (useStaticGeometry)
@@ -238,7 +237,7 @@ public class NavMeshSurface : MonoBehaviour
         else
         {
             meshGeometry.Clear();
-            foreach (var mRend in FindObjectsOfType<MeshRenderer>())
+            foreach (var mRend in FindObjectsOfType<ModelRenderer>())
             {
                 if (SceneManagement.SceneManager.Has(mRend.GameObject))
                     meshGeometry.Add(mRend);
@@ -319,7 +318,6 @@ public class NavMeshSurface : MonoBehaviour
 
     #region Public API
 
-    [GUIButton("Rebuild")]
     public void RebuildNavMesh()
     {
         var colliderData = new SceneMeshData();
@@ -336,10 +334,15 @@ public class NavMeshSurface : MonoBehaviour
         {
             foreach (var mRend in meshGeometry)
             {
-                if (mRend.EnabledInHierarchy && mRend.Mesh.IsAvailable && GeometryLayers.HasLayer(mRend.GameObject.layerIndex))
+                if (mRend.EnabledInHierarchy && mRend.Model.IsAvailable && GeometryLayers.HasLayer(mRend.GameObject.layerIndex))
                 {
-                    colliderData.shapeData.Add(mRend.Mesh.Res!);
-                    colliderData.transformsOut.Add(mRend.Transform);
+                    foreach(var mesh in mRend.Model.Res.Meshes)
+                        if(mesh.Mesh.IsAvailable)
+                        {
+                            colliderData.shapeData.AddRange(mesh.Mesh.Res);
+                            colliderData.transformsOut.Add(mRend.Transform);
+                        }
+
                 }
             }
         }

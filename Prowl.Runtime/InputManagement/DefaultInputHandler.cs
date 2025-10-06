@@ -3,53 +3,31 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 
-using Veldrid;
-using Veldrid.Sdl2;
+using Silk.NET.Input;
 
 namespace Prowl.Runtime;
 
 public class DefaultInputHandler : IInputHandler, IDisposable
 {
-    public static readonly Key[] KeyValues = Enum.GetValues<Key>();
-    public static readonly MouseButton[] MouseValues = Enum.GetValues<MouseButton>();
+    public IInputContext Context { get; internal set; }
 
-    private enum InputState
+    public IReadOnlyList<IKeyboard> Keyboards => Context.Keyboards;
+    public IReadOnlyList<IMouse> Mice => Context.Mice;
+    public IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
+
+    public string Clipboard
     {
-        Pressed,
-        Released,
-        Unset
+        get => Context.Keyboards[0].ClipboardText;
+        set
+        {
+            Context.Keyboards[0].ClipboardText = value;
+        }
     }
 
-    private readonly Dictionary<Key, InputState> keyState = new();
-    private readonly Dictionary<Key, InputState> newKeyState = new();
-
-    private readonly Dictionary<MouseButton, InputState> buttonState = new();
-    private readonly Dictionary<MouseButton, InputState> newButtonState = new();
 
     private Vector2Int _currentMousePos;
     private Vector2Int _prevMousePos;
-
-
-    private bool _receivedDeltaEvent = false;
-    private float _mouseWheelDelta;
-    public float MouseWheelDelta => _mouseWheelDelta;
-
-    public bool CursorVisible { get; set; } = true;
-    public bool CursorLocked { get; set; } = false;
-
-    public bool Locked { get; private set; }
-    public bool Hidden => !Screen.InternalWindow.CursorVisible;
-
-    public virtual IReadOnlyList<char> InputString { get; set; }
-
-
-    public virtual string Clipboard
-    {
-        get => Sdl2Native.SDL_GetClipboardText();
-        set => Sdl2Native.SDL_SetClipboardText(value);
-    }
 
     public Vector2Int PrevMousePosition => _prevMousePos;
     public Vector2Int MousePosition
@@ -59,178 +37,132 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         {
             _prevMousePos = value;
             _currentMousePos = value;
-
-            if (!Locked)
-                SetActualMousePosition(value);
+            Mice[0].Position = (Vector2)value;
         }
     }
+    public Vector2 MouseDelta => _currentMousePos - _prevMousePos;
+    public float MouseWheelDelta => Mice[0].ScrollWheels[0].Y;
 
-    public Vector2 MouseDelta => MousePosition - PrevMousePosition;
-    public event Action<Key, bool> OnKeyEvent;
-    public event Action<MouseButton, double, double, bool, bool> OnMouseEvent;
+    private Dictionary<Silk.NET.Input.Key, bool> wasKeyPressed = new Dictionary<Silk.NET.Input.Key, bool>();
+    private Dictionary<Silk.NET.Input.Key, bool> isKeyPressed = new Dictionary<Silk.NET.Input.Key, bool>();
+    private Dictionary<Silk.NET.Input.MouseButton, bool> wasMousePressed = new Dictionary<Silk.NET.Input.MouseButton, bool>();
+    private Dictionary<Silk.NET.Input.MouseButton, bool> isMousePressed = new Dictionary<Silk.NET.Input.MouseButton, bool>();
 
-    public bool IsAnyKeyDown => CanUpdateState() && newKeyState.Count > 0;
+    private Queue<char> pressedChars { get; set; } = new();
 
+    public event Action<Silk.NET.Input.Key, bool> OnKeyEvent;
+    public event Action<Silk.NET.Input.MouseButton, double, double, bool, bool> OnMouseEvent;
 
-    public DefaultInputHandler()
+    public bool IsAnyKeyDown => isKeyPressed.ContainsValue(true);
+
+    public DefaultInputHandler(IInputContext context)
     {
-        var snapshot = Screen.LatestInputSnapshot;
+        Context = context;
+        _prevMousePos = (Vector2Int)(Vector2)Mice[0].Position;
+        _currentMousePos = (Vector2Int)(Vector2)Mice[0].Position;
 
-        InputString = [];
-
-        Screen.InternalWindow.MouseWheel += (mouseWheelEvent) =>
+        // initialize key states
+        foreach (Silk.NET.Input.Key key in Enum.GetValues(typeof(Silk.NET.Input.Key)))
         {
-            _receivedDeltaEvent = true;
-            _mouseWheelDelta = mouseWheelEvent.WheelDelta.Y;
-        };
-
-        _prevMousePos = GetActualMousePosition(snapshot);
-        _currentMousePos = _prevMousePos;
-
-        foreach (Key key in KeyValues)
-        {
-            keyState[key] = InputState.Released;
-            newKeyState[key] = InputState.Unset;
-        }
-
-        foreach (MouseButton button in MouseValues)
-        {
-            buttonState[button] = InputState.Released;
-            newButtonState[button] = InputState.Unset;
-        }
-
-        UpdateKeyStates(snapshot);
-    }
-
-    public void EarlyUpdate()
-    {
-        var snapshot = Screen.LatestInputSnapshot;
-
-        if (!_receivedDeltaEvent || !CanUpdateState())
-            _mouseWheelDelta = 0.0f;
-
-        if (_receivedDeltaEvent)
-            _receivedDeltaEvent = false;
-
-        UpdateCursorState(snapshot);
-        UpdateKeyStates(snapshot);
-
-        if (CanUpdateState() && _prevMousePos != _currentMousePos)
-        {
-            OnMouseEvent?.Invoke(MouseButton.Left, MousePosition.x, MousePosition.y, false, true);
-        }
-    }
-
-    protected virtual Vector2Int GetActualMousePosition(InputSnapshot snapshot) =>
-        new Vector2Int((int)snapshot.MousePosition.X, (int)snapshot.MousePosition.Y);
-
-    protected virtual void SetActualMousePosition(Vector2Int pos) =>
-        Screen.InternalWindow.SetMousePosition(new Vector2(pos.x, pos.y));
-
-    protected virtual bool WantsCursorRelease(Vector2Int mouse) =>
-        GetKey(Key.Escape) || !Screen.InternalWindow.Focused || !Screen.ScreenRect.Contains(mouse);
-
-    protected virtual bool CanUpdateState() => true;
-
-    // Update cursor locking and position
-    private void UpdateCursorState(InputSnapshot snapshot)
-    {
-        Vector2Int mousePosition = GetActualMousePosition(snapshot);
-
-        if (WantsCursorRelease(mousePosition) && (Locked || !Screen.InternalWindow.CursorVisible))
-        {
-            Screen.InternalWindow.CursorVisible = true;
-            Locked = false;
-
-            SetActualMousePosition(_currentMousePos);
-        }
-        else if (GetMouseButton(MouseButton.Left)) // If the user (likely) wants to return to the window, re-apply locking and visibility state.
-        {
-            Screen.InternalWindow.CursorVisible = CursorVisible;
-            Locked = CursorLocked;
-        }
-
-        if (!Locked)
-        {
-            _prevMousePos = _currentMousePos;
-            _currentMousePos = mousePosition;
-
-            return;
-        }
-
-        Vector2Int center = Screen.Position + (Screen.Size / new Vector2Int(2, 2));
-        Vector2Int centerDelta = mousePosition - center;
-
-        Screen.InternalWindow.SetMousePosition(new Vector2(center.x, center.y));
-
-        _prevMousePos = _currentMousePos;
-        _currentMousePos += centerDelta;
-    }
-
-    // Update the state of each key
-    private void UpdateKeyStates(InputSnapshot snapshot)
-    {
-        foreach (var pair in newKeyState)
-            newKeyState[pair.Key] = InputState.Unset;
-
-        foreach (var pair in newButtonState)
-            newButtonState[pair.Key] = InputState.Unset;
-
-        List<char> inputString = new();
-
-        Span<char> chars = stackalloc char[4];
-
-        foreach (var rune in snapshot.InputEvents)
-        {
-            if (!Rune.IsControl(rune))
+            if (key != Silk.NET.Input.Key.Unknown)
             {
-                rune.EncodeToUtf16(chars);
-                inputString.Add(chars[0]);
+                wasKeyPressed[key] = false;
+                isKeyPressed[key] = false;
             }
         }
 
-        // TODO : Current SDL fork exposes useful options we should implement for KeyEvents, such as modifiers, virtual keys, repeats, timestamps, and more.
-        foreach (var keyEvent in snapshot.KeyEvents)
+        foreach (Silk.NET.Input.MouseButton button in Enum.GetValues(typeof(Silk.NET.Input.MouseButton)))
         {
-            Key key = (Key)keyEvent.Physical;
-            InputState state = keyEvent.Down ? InputState.Pressed : InputState.Released;
-
-            if (keyState[key] == state)
-                continue;
-
-            newKeyState[key] = state;
-            keyState[key] = state;
-
-            if (CanUpdateState())
-                OnKeyEvent?.Invoke(key, keyEvent.Down);
+            if (button != Silk.NET.Input.MouseButton.Unknown)
+            {
+                wasMousePressed[button] = false;
+                isMousePressed[button] = false;
+            }
         }
 
-        InputString = inputString;
+        foreach (var keyboard in Keyboards)
+            keyboard.KeyChar += (keyboard, c) => pressedChars.Enqueue(c);
 
-        foreach (var mouseEvent in snapshot.MouseEvents)
+        UpdateKeyStates();
+    }
+
+    internal void LateUpdate()
+    {
+        _prevMousePos = _currentMousePos;
+        _currentMousePos = (Vector2Int)(Vector2)Mice[0].Position;
+        if (!_prevMousePos.Equals(_currentMousePos))
         {
-            MouseButton button = (MouseButton)mouseEvent.MouseButton;
-            InputState state = mouseEvent.Down ? InputState.Pressed : InputState.Released;
+            if (isMousePressed[Silk.NET.Input.MouseButton.Left])
+                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Left, MousePosition.x, MousePosition.y, false, true);
+            else if (isMousePressed[Silk.NET.Input.MouseButton.Right])
+                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Right, MousePosition.x, MousePosition.y, false, true);
+            else if (isMousePressed[Silk.NET.Input.MouseButton.Middle])
+                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Middle, MousePosition.x, MousePosition.y, false, true);
+            else
+                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Unknown, MousePosition.x, MousePosition.y, false, true);
+        }
+        UpdateKeyStates();
+    }
 
-            if (buttonState[button] == state)
-                continue;
+    // Update the state of each key
+    private void UpdateKeyStates()
+    {
+        foreach (Silk.NET.Input.Key key in Enum.GetValues(typeof(Silk.NET.Input.Key)))
+        {
+            if (key != Silk.NET.Input.Key.Unknown)
+            {
+                wasKeyPressed[key] = isKeyPressed[key];
+                isKeyPressed[key] = false;
+                foreach (var keyboard in Keyboards)
+                    if (keyboard.IsKeyPressed(key))
+                    {
+                        isKeyPressed[key] = true;
+                        break;
+                    }
 
-            newButtonState[button] = state;
-            buttonState[button] = state;
+                if (wasKeyPressed[key] != isKeyPressed[key])
+                    OnKeyEvent?.Invoke(key, isKeyPressed[key]);
+            }
+        }
 
-            if (CanUpdateState())
-                OnMouseEvent?.Invoke(button, MousePosition.x, MousePosition.y, mouseEvent.Down, false);
+        foreach (Silk.NET.Input.MouseButton button in Enum.GetValues(typeof(Silk.NET.Input.MouseButton)))
+        {
+            if (button != Silk.NET.Input.MouseButton.Unknown)
+            {
+                wasMousePressed[button] = isMousePressed[button];
+                isMousePressed[button] = false;
+                foreach (var mouse in Mice)
+                    if (mouse.IsButtonPressed(button))
+                    {
+                        isMousePressed[button] = true;
+                        break;
+                    }
+                if (wasMousePressed[button] != isMousePressed[button])
+                    OnMouseEvent?.Invoke(button, MousePosition.x, MousePosition.y, isMousePressed[button], false);
+            }
         }
     }
 
+    public char? GetPressedChar()
+    {
+        if (pressedChars.TryDequeue(out char c))
+            return c;
+        return null;
+    }
 
-    public bool GetKey(Key key) => CanUpdateState() && keyState[key] == InputState.Pressed;
-    public bool GetKeyDown(Key key) => CanUpdateState() && newKeyState[key] == InputState.Pressed;
-    public bool GetKeyUp(Key key) => CanUpdateState() && newKeyState[key] == InputState.Released;
+    public bool GetKey(Silk.NET.Input.Key key) => isKeyPressed[key];
 
-    public bool GetMouseButton(MouseButton button) => CanUpdateState() && buttonState[button] == InputState.Pressed;
-    public bool GetMouseButtonDown(MouseButton button) => CanUpdateState() && newButtonState[button] == InputState.Released;
-    public bool GetMouseButtonUp(MouseButton button) => CanUpdateState() && newButtonState[button] == InputState.Released;
+    public bool GetKeyDown(Silk.NET.Input.Key key) => isKeyPressed[key] && !wasKeyPressed[key];
 
-    public void Dispose() { }
+    public bool GetKeyUp(Silk.NET.Input.Key key) => !isKeyPressed[key] && wasKeyPressed[key];
+
+    public bool GetMouseButton(int button) => isMousePressed[(Silk.NET.Input.MouseButton)button];
+
+    public bool GetMouseButtonDown(int button) => isMousePressed[(Silk.NET.Input.MouseButton)button] && !wasMousePressed[(Silk.NET.Input.MouseButton)button];
+
+    public bool GetMouseButtonUp(int button) => !isMousePressed[(Silk.NET.Input.MouseButton)button] && wasMousePressed[(Silk.NET.Input.MouseButton)button];
+
+    public void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Disabled;
+
+    public void Dispose() => Context.Dispose();
 }

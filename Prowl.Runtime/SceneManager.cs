@@ -5,10 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Pipelines;
-using Prowl.Runtime.Utils;
 using Prowl.Echo;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime.SceneManagement;
 
@@ -18,68 +17,27 @@ public static class SceneManager
 
     public static Scene Scene => Current.Res!;
 
-    private static EchoObject? StoredScene;
-    private static Guid StoredSceneID;
-
-    public static void Initialize()
-    {
-    }
-
-    public static void StoreScene()
-    {
-        Debug.If(StoredScene != null, "Scene is already stored.");
-        StoredScene = Serializer.Serialize(Current.Res!);
-        StoredSceneID = Current.AssetID;
-    }
-
-    public static void RestoreScene()
-    {
-        Debug.IfNull(StoredScene, "Scene is not stored.");
-        Clear();
-        Scene? deserialized = Serializer.Deserialize<Scene>(StoredScene);
-        Debug.IfNull(deserialized, "Scene could not be restored! Deserialized object is null.");
-        deserialized.AssetID = StoredSceneID;
-        Current = deserialized;
-        Current.Res!.HandlePrefabs();
-
-        OnSceneLoadAttribute.Invoke();
-    }
-
-    public static void ClearStoredScene()
-    {
-        Debug.IfNull(StoredScene, "Scene is not stored.");
-        StoredScene = null;
-    }
-
-    public static void InstantiateNewScene()
+    public static void InstantiateNewScene(out Camera camera, out DirectionalLight light)
     {
         SceneManager.Clear();
 
         GameObject go = new("Directional Light");
-        go.AddComponent<DirectionalLight>(); // Will auto add Transform as DirectionLight requires it
-        go.Transform.localEulerAngles = new System.Numerics.Vector3(130, 45, 0);
+        light = go.AddComponent<DirectionalLight>();
+        go.Transform.localEulerAngles = new Vector3(-80, 5, 0);
         Current.Res!.Add(go);
 
         GameObject cam = new("Main Camera");
         cam.tag = "Main Camera";
         cam.Transform.position = new(0, 0, -10);
-        Camera camComp = cam.AddComponent<Camera>();
-        camComp.Depth = -1;
-        camComp.HDR = true;
-
-        cam.AddComponent<MotionBlurEffect>();
-        cam.AddComponent<KawaseBloomEffect>();
-        cam.AddComponent<ToneMapperEffect>();
+        camera = cam.AddComponent<Camera>();
+        camera.Depth = -1;
+        camera.HDR = true;
 
         Current.Res!.Add(cam);
-
-        OnSceneLoadAttribute.Invoke();
     }
 
-    [OnAssemblyUnload]
     public static void Clear()
     {
-        OnSceneUnloadAttribute.Invoke();
         if (Current.Res != null)
         {
             Camera.Main = null; // Clear the main camera so it will re-find itself and be updated
@@ -100,8 +58,7 @@ public static class SceneManager
         foreach (GameObject go in activeGOs)
             go.PreUpdate();
 
-        if (Application.IsPlaying)
-            Physics.Update();
+        Physics.Update();
 
         ForeachComponent(activeGOs, (x) =>
         {
@@ -165,8 +122,6 @@ public static class SceneManager
     {
         Clear();
         Current = scene;
-        Scene.HandlePrefabs();
-        OnSceneLoadAttribute.Invoke();
         IEnumerable<GameObject> activeGOs = Scene.ActiveObjects;
         ForeachComponent(activeGOs, (x) => x.Do(x.OnLevelWasLoaded));
     }
@@ -176,8 +131,6 @@ public static class SceneManager
         if (scene.IsAvailable == false) throw new Exception("Scene is not available.");
         Clear();
         Current = scene.Res;
-        Scene.HandlePrefabs();
-        OnSceneLoadAttribute.Invoke();
         IEnumerable<GameObject> activeGOs = Scene.ActiveObjects;
         ForeachComponent(activeGOs, (x) => x.Do(x.OnLevelWasLoaded));
     }

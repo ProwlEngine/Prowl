@@ -4,11 +4,8 @@
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Icons;
-
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.PersonRunning}  Animation/{FontAwesome6.PersonRunning}  Animation")]
 public class Animation : MonoBehaviour
 {
 

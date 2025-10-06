@@ -3,13 +3,11 @@
 
 using System;
 
-using Prowl.Runtime.Cloning;
 using Prowl.Echo;
 
 namespace Prowl.Runtime;
 
-[Cloning.ManuallyCloned()]
-public class Transform : ICloneExplicit
+public class Transform
 {
     #region Properties
 
@@ -421,20 +419,4 @@ public class Transform : ICloneExplicit
 
     static double InverseSafe(double f) => MathD.Abs(f) > double.Epsilon ? 1.0F / f : 0.0F;
     static Vector3 InverseSafe(Vector3 v) => new Vector3(InverseSafe(v.x), InverseSafe(v.y), InverseSafe(v.z));
-    public void SetupCloneTargets(object target, ICloneTargetSetup setup)
-    {
-        setup.HandleObject(this, target);
-    }
-    public void CopyDataTo(object targetObj, ICloneOperation operation)
-    {
-        operation.HandleObject(this, targetObj);
-
-        Transform target = targetObj as Transform;
-
-        target.gameObject = gameObject;
-
-        target.position = position;
-        target.rotation = rotation;
-        target.localScale = localScale;
-    }
 }

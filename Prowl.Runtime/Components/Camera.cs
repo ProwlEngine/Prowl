@@ -2,14 +2,26 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Icons;
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Pipelines;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
+
+public abstract class ImageEffect
+{
+    public virtual bool IsOpaqueEffect { get; } = false;
+    public virtual bool TransformsToLDR { get; } = false;
+
+    public virtual void OnRenderImage(RenderTexture source, RenderTexture destination) { }
+
+    public virtual void OnPostRender(Camera camera) { }
+    public virtual void OnPreCull(Camera camera) { }
+    public virtual void OnPreRender(Camera camera) { }
+}
 
 public enum CameraClearFlags
 {
@@ -34,9 +46,10 @@ public enum DepthTextureMode
     MotionVectors = 4, // _CameraMotionVectorsTexture
 }
 
-[AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Camera}  Camera")]
 public class Camera : MonoBehaviour
 {
+    public List<ImageEffect> Effects = new();
+
     public CameraClearFlags ClearFlags = CameraClearFlags.Skybox;
     public Color ClearColor = new(0f, 0f, 0f, 1f);
     public LayerMask CullingMask = LayerMask.Everything;
@@ -44,8 +57,8 @@ public class Camera : MonoBehaviour
     public enum ProjectionType { Perspective, Orthographic }
     public ProjectionType projectionType = ProjectionType.Perspective;
 
-    [ShowIf(nameof(IsOrthographic), true)] public float FieldOfView = 60f;
-    [ShowIf(nameof(IsOrthographic))] public float OrthographicSize = 0.5f;
+    public float FieldOfView = 60f;
+    public float OrthographicSize = 0.5f;
     public float NearClipPlane = 0.01f;
     public float FarClipPlane = 1000f;
     //public Rect Viewrect = new(0, 0, 1, 1); // Not Implemented
@@ -54,12 +67,11 @@ public class Camera : MonoBehaviour
     public AssetRef<RenderPipeline> Pipeline;
     public AssetRef<RenderTexture> Target;
     public bool HDR = false;
-    [Range(0, 2, true)]
     public float RenderScale = 1.0f;
 
     public bool IsOrthographic => projectionType == ProjectionType.Orthographic;
 
-    [HideInInspector, SerializeIgnore]
+    [SerializeIgnore]
     public DepthTextureMode DepthTextureMode = DepthTextureMode.None;
 
     private static WeakReference<Camera> s_mainCamera = new(null);
@@ -81,7 +93,6 @@ public class Camera : MonoBehaviour
     private float _aspect;
     private bool _customAspect;
     private Matrix4x4 _projectionMatrix;
-    private Matrix4x4 _nonJitteredProjectionMatrix;
     private bool _customProjectionMatrix;
 
     private Matrix4x4 _previousViewMatrix;
@@ -112,24 +123,14 @@ public class Camera : MonoBehaviour
         }
     }
 
-    public Matrix4x4 NonJitteredProjectionMatrix
-    {
-        get => _nonJitteredProjectionMatrix;
-        set
-        {
-            _nonJitteredProjectionMatrix = value;
-            _customProjectionMatrix = true;
-        }
-    }
-
-    public bool UseJitteredProjectionMatrixForTransparentRendering { get; set; }
-
     public Matrix4x4 ViewMatrix { get; private set; }
     public Matrix4x4 OriginViewMatrix { get; private set; }
 
     public Matrix4x4 PreviousViewMatrix => _previousViewMatrix;
     public Matrix4x4 PreviousProjectionMatrix => _previousProjectionMatrix;
     public Matrix4x4 PreviousViewProjectionMatrix => _previousViewProjectionMatrix;
+
+    public Camera() : base() { }
 
     public override void OnEnable()
     {
@@ -142,7 +143,7 @@ public class Camera : MonoBehaviour
         pipeline.Render(this, data ?? new());
     }
 
-    public Veldrid.Framebuffer UpdateRenderData()
+    public RenderTexture? UpdateRenderData()
     {
         if (!_firstFrame)
         {
@@ -153,22 +154,24 @@ public class Camera : MonoBehaviour
         _firstFrame = false;
 
         // Since Scene Updating is guranteed to execute before rendering, we can setup camera data for this frame here
-        Veldrid.Framebuffer camTarget = Graphics.ScreenTarget;
+        RenderTexture? camTarget = null;
 
-        if (Target.Res != null)
-            camTarget = Target.Res.Framebuffer;
+        if (Target.IsAvailable)
+            camTarget = Target.Res;
+
+        int width = camTarget?.Width ?? Window.InternalWindow.FramebufferSize.X;
+        int height = camTarget?.Height ?? Window.InternalWindow.FramebufferSize.Y;
 
         float renderScale = Math.Clamp(RenderScale, 0.1f, 2.0f);
-        PixelWidth = (uint)Math.Max(1, (int)(camTarget.Width * renderScale));
-        PixelHeight = (uint)Math.Max(1, (int)(camTarget.Height * renderScale));
+        PixelWidth = (uint)Math.Max(1, (int)(width * renderScale));
+        PixelHeight = (uint)Math.Max(1, (int)(height * renderScale));
 
         if (!_customAspect)
             _aspect = PixelWidth / (float)PixelHeight;
 
         if (!_customProjectionMatrix)
         {
-            _projectionMatrix = GetProjectionMatrix(_aspect, true);
-            _nonJitteredProjectionMatrix = _projectionMatrix;
+            _projectionMatrix = GetProjectionMatrix(_aspect);
         }
 
         ViewMatrix = Matrix4x4.CreateLookTo(Transform.position, Transform.forward, Transform.up);
@@ -185,7 +188,7 @@ public class Camera : MonoBehaviour
 
     public void ResetProjectionMatrix()
     {
-        _projectionMatrix = _nonJitteredProjectionMatrix;
+        _projectionMatrix = GetProjectionMatrix(_aspect);
         _customProjectionMatrix = false;
     }
 
@@ -194,12 +197,12 @@ public class Camera : MonoBehaviour
         _firstFrame = true;
     }
 
-    public Ray ScreenPointToRay(Vector2 screenPoint, Vector2 screenScale)
+    public Ray ScreenPointToRay(Vector2 screenPoint, Vector2 screenSize)
     {
         // Normalize screen coordinates to [-1, 1]
         Vector2 ndc = new Vector2(
-            (screenPoint.x / screenScale.x) * 2.0f - 1.0f,
-            1.0f - (screenPoint.y / screenScale.y) * 2.0f
+            (screenPoint.x / screenSize.x) * 2.0f - 1.0f,
+            1.0f - (screenPoint.y / screenSize.y) * 2.0f
         );
 
         // Create the near and far points in NDC
@@ -207,7 +210,7 @@ public class Camera : MonoBehaviour
         Vector4 farPointNDC = new Vector4(ndc.x, ndc.y, 1.0f, 1.0f);
 
         // Calculate the inverse view-projection matrix
-        double aspect = screenScale.x / screenScale.y;
+        double aspect = screenSize.x / screenSize.y;
         Matrix4x4 viewProjectionMatrix = GetViewMatrix() * GetProjectionMatrix((float)aspect);
         Matrix4x4.Invert(viewProjectionMatrix, out Matrix4x4 inverseViewProjectionMatrix);
 
@@ -233,7 +236,7 @@ public class Camera : MonoBehaviour
         return Matrix4x4.CreateLookTo(position, Transform.forward, Transform.up);
     }
 
-    private Matrix4x4 GetProjectionMatrix(float aspect, bool accomodateGPUCoordinateSystem = false)
+    private Matrix4x4 GetProjectionMatrix(float aspect)
     {
         Matrix4x4 proj;
 
@@ -241,9 +244,6 @@ public class Camera : MonoBehaviour
             proj = Matrix4x4.CreateOrthographic(OrthographicSize, OrthographicSize, NearClipPlane, FarClipPlane);
         else
             proj = Matrix4x4.CreatePerspectiveFieldOfView(FieldOfView.ToRad(), aspect, NearClipPlane, FarClipPlane);
-
-        if (accomodateGPUCoordinateSystem)
-            proj = Graphics.GetGPUProjectionMatrix(proj);
 
         return proj;
     }

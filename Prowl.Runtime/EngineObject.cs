@@ -8,35 +8,23 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 
 using Prowl.Echo;
-using Prowl.Runtime.Cloning;
 
 namespace Prowl.Runtime;
 
-[CloneBehavior(CloneBehavior.Reference)]
-public abstract class EngineObject : ICloneExplicit
+public abstract class EngineObject
 {
     private static readonly ConcurrentStack<EngineObject> s_destroyed = new();
     private static int s_nextID = 1;
 
-    [CloneField(CloneFieldFlags.IdentityRelevant)]
     protected int _instanceID;
     public int InstanceID => _instanceID;
 
     // Asset path if we have one
-    [HideInInspector]
-    [CloneField(CloneFieldFlags.Skip)]
-    public Guid AssetID = Guid.Empty;
+    public string AssetPath = string.Empty;
 
-    // Asset path if we have one
-    [HideInInspector]
-    [CloneField(CloneFieldFlags.Skip)]
-    public ushort FileID = 0;
-
-    [HideInInspector]
     public string Name;
 
-    [HideInInspector, SerializeIgnore]
-    [CloneField(CloneFieldFlags.Skip)]
+    [SerializeIgnore]
     public bool IsDestroyed = false;
 
     public EngineObject() : this(null) { }
@@ -95,45 +83,6 @@ public abstract class EngineObject : ICloneExplicit
         return null;
     }
 
-    /// <summary>
-    /// Creates a deep copy of this EngineObject.
-    /// </summary>
-    public EngineObject Clone() => this.DeepClone();
-    /// <summary>
-    /// Deep-copies this EngineObject to the specified target EngineObject. The target EngineObject's Type must
-    /// match this EngineObject's Type.
-    /// </summary>
-    /// <param name="target">The target EngineObject to copy this EngineObject's data to</param>
-    public void CopyTo(EngineObject target) => this.DeepCopyTo(target);
-
-    public virtual void SetupCloneTargets(object target, ICloneTargetSetup setup)
-    {
-        setup.HandleObject(this, target);
-        OnSetupCloneTargets(target, setup);
-    }
-    public virtual void CopyDataTo(object target, ICloneOperation operation)
-    {
-        operation.HandleObject(this, target);
-        OnCopyDataTo(target, operation);
-    }
-
-    /// <summary>
-    /// This method prepares the <see cref="CopyTo"/> operation for custom EngineObject Types.
-    /// It uses reflection to prepare the cloning operation automatically, but you can implement
-    /// this method in order to handle certain fields and cases manually. See <see cref="ICloneExplicit.SetupCloneTargets"/>
-    /// for a more thorough explanation.
-    /// </summary>
-    protected virtual void OnSetupCloneTargets(object target, ICloneTargetSetup setup) { }
-
-    /// <summary>
-    /// This method performs the <see cref="CopyTo"/> operation for custom EngineObject Types.
-    /// It uses reflection to perform the cloning operation automatically, but you can implement
-    /// this method in order to handle certain fields and cases manually. See <see cref="ICloneExplicit.CopyDataTo"/>
-    /// for a more thorough explanation.
-    /// </summary>
-    /// <param name="target">The target EngineObject where this EngineObjects data is copied to.</param>
-    protected virtual void OnCopyDataTo(object target, ICloneOperation operation) { }
-
     public void DestroyLater()
     {
         if (IsDestroyed) return;
@@ -180,29 +129,13 @@ public abstract class EngineObject : ICloneExplicit
     protected void SerializeHeader(EchoObject compound)
     {
         compound.Add("Name", new(Name));
-
-        if (AssetID != Guid.Empty)
-        {
-            compound.Add("AssetID", new EchoObject(AssetID.ToString()));
-
-            if (FileID != 0)
-                compound.Add("FileID", new EchoObject(FileID));
-        }
+        compound.Add("AssetPath", new(AssetPath));
     }
 
     protected void DeserializeHeader(EchoObject value)
     {
-        Name = value.Get("Name")?.StringValue;
-
-        if (value.TryGet("AssetID", out EchoObject? assetIDTag))
-        {
-            AssetID = Guid.Parse(assetIDTag.StringValue);
-
-            if (value.TryGet("FileID", out var fileIDTag))
-                FileID = fileIDTag.UShortValue;
-            else
-                FileID = 0;
-        }
+        Name = value.Get("Name")?.StringValue ?? string.Empty;
+        AssetPath = value.Get("AssetPath")?.StringValue ?? string.Empty;
     }
 }
 

@@ -14,25 +14,6 @@ using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
 
-[FilePath("PhysicsSettings.projsetting", FilePathAttribute.Location.Setting)]
-public class PhysicsSetting : ScriptableSingleton<PhysicsSetting>
-{
-    public Vector3 Gravity = new Vector3(0, -9.81f, 0);
-    [Range(1, 16)]
-    public int SolverIterations = 6;
-    [Range(0, 16)]
-    public int RelaxIterations = 4;
-    [Range(1, 16)]
-    public int Substep = 1;
-    [Range(5, 120)]
-    public int TargetFrameRate = 50;
-    public bool AllowSleep = true;
-    public bool UseMultithreading = true;
-    public bool AutoSyncTransforms = true;
-
-    public Boolean32Matrix s_collisionMatrix = new(true);
-}
-
 public class JitterGizmosDrawer : IDebugDrawer
 {
     static JitterGizmosDrawer m_Instance;
@@ -169,7 +150,17 @@ public static class Physics
 
     private static double timer = 0;
 
-    [OnAssemblyLoad, OnAssemblyUnload, OnSceneLoad, OnSceneUnload, OnPlaymodeChanged]
+    public static Vector3 Gravity = new Vector3(0, -9.81f, 0);
+    public static int SolverIterations = 6;
+    public static int RelaxIterations = 4;
+    public static int Substep = 1;
+    public static int TargetFrameRate = 50;
+    public static bool AllowSleep = true;
+    public static bool UseMultithreading = true;
+    public static bool AutoSyncTransforms = true;
+
+    public static Boolean32Matrix s_collisionMatrix = new(true);
+
     public static void Clear()
     {
         _world?.Clear();
@@ -184,13 +175,13 @@ public static class Physics
             SceneManager.PhysicsUpdate();
 
             // Use World once to ensure its created
-            World.SolverIterations = (PhysicsSetting.Instance.SolverIterations, PhysicsSetting.Instance.RelaxIterations);
-            _world.SubstepCount = PhysicsSetting.Instance.Substep;
-            _world.AllowDeactivation = PhysicsSetting.Instance.AllowSleep;
+            World.SolverIterations = (SolverIterations, RelaxIterations);
+            _world.SubstepCount = Substep;
+            _world.AllowDeactivation = AllowSleep;
 
-            _world.Gravity = new JVector(PhysicsSetting.Instance.Gravity.x, PhysicsSetting.Instance.Gravity.y, PhysicsSetting.Instance.Gravity.z);
+            _world.Gravity = new JVector(Gravity.x, Gravity.y, Gravity.z);
 
-            _world.Step(Time.fixedDeltaTime, PhysicsSetting.Instance.UseMultithreading);
+            _world.Step(Time.fixedDeltaTime, UseMultithreading);
 
             timer -= Time.fixedDeltaTime;
         }
@@ -201,7 +192,7 @@ public static class Physics
     /// </summary>
     public static void SetLayerCollision(int layer1Index, int layer2Index, bool shouldCollide)
     {
-        PhysicsSetting.Instance.s_collisionMatrix.SetSymmetric(layer1Index, layer2Index, shouldCollide);
+        s_collisionMatrix.SetSymmetric(layer1Index, layer2Index, shouldCollide);
     }
 
     /// <summary>
@@ -209,7 +200,7 @@ public static class Physics
     /// </summary>
     public static void EnsureSymmetric()
     {
-        PhysicsSetting.Instance.s_collisionMatrix.MakeSymmetric();
+        s_collisionMatrix.MakeSymmetric();
     }
 
     /// <summary>
@@ -217,9 +208,9 @@ public static class Physics
     /// </summary>
     public static void SetLayerCollisions(int layer, bool shouldCollide)
     {
-        PhysicsSetting.Instance.s_collisionMatrix.SetRow(layer, shouldCollide);
+        s_collisionMatrix.SetRow(layer, shouldCollide);
         // Make sure to maintain symmetry
-        PhysicsSetting.Instance.s_collisionMatrix.SetColumn(layer, shouldCollide);
+        s_collisionMatrix.SetColumn(layer, shouldCollide);
     }
 
     /// <summary>
@@ -227,7 +218,7 @@ public static class Physics
     /// </summary>
     public static bool GetLayerCollision(int layer1, int layer2)
     {
-        return PhysicsSetting.Instance.s_collisionMatrix[layer1, layer2];
+        return s_collisionMatrix[layer1, layer2];
     }
 
     /// <summary>
@@ -235,7 +226,7 @@ public static class Physics
     /// </summary>
     public static bool[] GetLayerCollisions(int layer)
     {
-        return PhysicsSetting.Instance.s_collisionMatrix.GetRow(layer);
+        return s_collisionMatrix.GetRow(layer);
     }
 
     /// <summary>
@@ -243,7 +234,7 @@ public static class Physics
     /// </summary>
     public static void SetAllCollisions(bool shouldCollide)
     {
-        PhysicsSetting.Instance.s_collisionMatrix.SetAll(shouldCollide);
+        s_collisionMatrix.SetAll(shouldCollide);
     }
 
     /// <summary>
