@@ -43,87 +43,140 @@ namespace Prowl.Runtime.AssetImporting
 
         public Model Import(FileInfo assetPath)
         {
+            return ImportFromFile(assetPath.FullName, assetPath.Directory, assetPath.Extension);
+        }
+
+        public Model Import(Stream stream, string virtualPath)
+        {
+            string extension = Path.GetExtension(virtualPath);
+            // For streams, we don't have a real directory, so we'll use null and handle texture loading differently
+            return ImportFromStream(stream, virtualPath, null, extension);
+        }
+
+        private Model ImportFromFile(string filePath, DirectoryInfo? parentDir, string extension)
+        {
             ModelImporterSettings settings = new ModelImporterSettings();
-            // Load settings file if one exists
-            FileInfo settingsFile = new FileInfo(Path.Combine(assetPath.DirectoryName ?? string.Empty, assetPath.Name + ".importsettings"));
-            if (settingsFile.Exists)
+
+            // Only try to load settings file if we have a parent directory
+            if (parentDir != null)
             {
-                try
+                FileInfo settingsFile = new FileInfo(Path.Combine(parentDir.FullName, Path.GetFileName(filePath) + ".importsettings"));
+                if (settingsFile.Exists)
                 {
-                    EchoObject echo = EchoObject.ReadFromString(settingsFile.FullName);
-                    settings = Serializer.Deserialize<ModelImporterSettings>(echo);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Failed to read model import settings from {settingsFile.FullName}: {ex.Message}");
+                    try
+                    {
+                        EchoObject echo = EchoObject.ReadFromString(settingsFile.FullName);
+                        settings = Serializer.Deserialize<ModelImporterSettings>(echo);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"Failed to read model import settings from {settingsFile.FullName}: {ex.Message}");
+                    }
                 }
             }
 
             using (var importer = new AssimpContext())
             {
                 importer.SetConfig(new Assimp.Configs.VertexBoneWeightLimitConfig(4));
-                var steps = PostProcessSteps.LimitBoneWeights | PostProcessSteps.GenerateUVCoords;
-                steps |= PostProcessSteps.Triangulate;
-                if (settings.GenerateNormals && settings.GenerateSmoothNormals) steps |= PostProcessSteps.GenerateSmoothNormals;
-                else if (settings.GenerateNormals) steps |= PostProcessSteps.GenerateNormals;
-                if (settings.CalculateTangentSpace) steps |= PostProcessSteps.CalculateTangentSpace;
-                if (settings.MakeLeftHanded) steps |= PostProcessSteps.MakeLeftHanded;
-                if (settings.FlipUVs) steps |= PostProcessSteps.FlipUVs;
-                if (settings.OptimizeGraph) steps |= PostProcessSteps.OptimizeGraph;
-                if (settings.OptimizeMeshes) steps |= PostProcessSteps.OptimizeMeshes;
-                if (settings.FlipWindingOrder) steps |= PostProcessSteps.FlipWindingOrder;
-                if (settings.WeldVertices) steps |= PostProcessSteps.JoinIdenticalVertices;
-                if (settings.GlobalScale) steps |= PostProcessSteps.GlobalScale;
-                var scene = importer.ImportFile(assetPath.FullName, steps);
+                var steps = GetPostProcessSteps(settings);
+                var scene = importer.ImportFile(filePath, steps);
                 if (scene == null) Failed("Assimp returned null object.");
-
-                DirectoryInfo? parentDir = assetPath.Directory;
 
                 if (!scene.HasMeshes) Failed("Model has no Meshes.");
 
-                double scale = settings.UnitScale;
+                double scale = GetScale(settings, extension);
 
-                // FBX's are usually in cm, so scale them to meters
-                if (assetPath.Extension.Equals(".fbx", StringComparison.OrdinalIgnoreCase))
-                    scale *= 0.01;
-
-                var model = new Model(Path.GetFileNameWithoutExtension(assetPath.Name));
-                model.UnitScale = settings.UnitScale;
-
-                // Build the model structure
-                model.RootNode = BuildModelNode(scene.RootNode, scale);
-
-                // Load materials and meshes into the model
-                if (scene.HasMaterials)
-                    LoadMaterials(scene, parentDir, model.Materials);
-
-                if (scene.HasMeshes)
-                    LoadMeshes(assetPath, settings, scene, scale, model.Materials, model.Meshes);
-
-                //// Animations
-                //List<AssetRef<AnimationClip>> anims = [];
-                //if (scene.HasAnimations)
-                //    anims = LoadAnimations(ctx, scene, scale);
-
-                //if (CullEmpty)
-                //{
-                //    // Remove Empty GameObjects
-                //    List<(MeshRenderer, Node)> GOsToRemove = [];
-                //    foreach (var go in GOs)
-                //    {
-                //        if (go.Item1.GetEntitiesInChildren<MeshRenderer>().Count(x => x.Mesh.IsAvailable) == 0)
-                //            GOsToRemove.Add(go);
-                //    }
-                //    foreach (var go in GOsToRemove)
-                //    {
-                //        if (!go.Item1.IsDestroyed)
-                //            go.Item1.DestroyImmediate();
-                //        GOs.Remove(go);
-                //    }
-                //}
-
-                return model;
+                return BuildModel(scene, filePath, parentDir, scale, settings);
             }
+        }
+
+        private Model ImportFromStream(Stream stream, string virtualPath, DirectoryInfo? parentDir, string extension)
+        {
+            ModelImporterSettings settings = new ModelImporterSettings();
+
+            // Note: No settings file loading for embedded resources
+
+            using (var importer = new AssimpContext())
+            {
+                importer.SetConfig(new Assimp.Configs.VertexBoneWeightLimitConfig(4));
+                var steps = GetPostProcessSteps(settings);
+
+                // Use ImportFileFromStream for embedded resources
+                var scene = importer.ImportFileFromStream(stream, steps, Path.GetExtension(virtualPath));
+                if (scene == null) Failed("Assimp returned null object.");
+
+                if (!scene.HasMeshes) Failed("Model has no Meshes.");
+
+                double scale = GetScale(settings, extension);
+
+                return BuildModel(scene, virtualPath, parentDir, scale, settings);
+            }
+        }
+
+        private PostProcessSteps GetPostProcessSteps(ModelImporterSettings settings)
+        {
+            var steps = PostProcessSteps.LimitBoneWeights | PostProcessSteps.GenerateUVCoords;
+            steps |= PostProcessSteps.Triangulate;
+            if (settings.GenerateNormals && settings.GenerateSmoothNormals) steps |= PostProcessSteps.GenerateSmoothNormals;
+            else if (settings.GenerateNormals) steps |= PostProcessSteps.GenerateNormals;
+            if (settings.CalculateTangentSpace) steps |= PostProcessSteps.CalculateTangentSpace;
+            if (settings.MakeLeftHanded) steps |= PostProcessSteps.MakeLeftHanded;
+            if (settings.FlipUVs) steps |= PostProcessSteps.FlipUVs;
+            if (settings.OptimizeGraph) steps |= PostProcessSteps.OptimizeGraph;
+            if (settings.OptimizeMeshes) steps |= PostProcessSteps.OptimizeMeshes;
+            if (settings.FlipWindingOrder) steps |= PostProcessSteps.FlipWindingOrder;
+            if (settings.WeldVertices) steps |= PostProcessSteps.JoinIdenticalVertices;
+            if (settings.GlobalScale) steps |= PostProcessSteps.GlobalScale;
+            return steps;
+        }
+
+        private double GetScale(ModelImporterSettings settings, string extension)
+        {
+            double scale = settings.UnitScale;
+            // FBX's are usually in cm, so scale them to meters
+            if (extension.Equals(".fbx", StringComparison.OrdinalIgnoreCase))
+                scale *= 0.01;
+            return scale;
+        }
+
+        private Model BuildModel(Assimp.Scene scene, string assetPath, DirectoryInfo? parentDir, double scale, ModelImporterSettings settings)
+        {
+            var model = new Model(Path.GetFileNameWithoutExtension(assetPath));
+            model.UnitScale = settings.UnitScale;
+
+            // Build the model structure
+            model.RootNode = BuildModelNode(scene.RootNode, scale);
+
+            // Load materials and meshes into the model
+            if (scene.HasMaterials)
+                LoadMaterials(scene, parentDir, model.Materials);
+
+            if (scene.HasMeshes)
+                LoadMeshes(assetPath, settings, scene, scale, model.Materials, model.Meshes);
+
+            //// Animations
+            //List<AssetRef<AnimationClip>> anims = [];
+            //if (scene.HasAnimations)
+            //    anims = LoadAnimations(ctx, scene, scale);
+
+            //if (CullEmpty)
+            //{
+            //    // Remove Empty GameObjects
+            //    List<(MeshRenderer, Node)> GOsToRemove = [];
+            //    foreach (var go in GOs)
+            //    {
+            //        if (go.Item1.GetEntitiesInChildren<MeshRenderer>().Count(x => x.Mesh.IsAvailable) == 0)
+            //            GOsToRemove.Add(go);
+            //    }
+            //    foreach (var go in GOsToRemove)
+            //    {
+            //        if (!go.Item1.IsDestroyed)
+            //            go.Item1.DestroyImmediate();
+            //        GOs.Remove(go);
+            //    }
+            //}
+
+            return model;
         }
 
         private void LoadMaterials(Assimp.Scene? scene, DirectoryInfo? parentDir, List<AssetRef<Material>> mats)
@@ -221,13 +274,13 @@ namespace Prowl.Runtime.AssetImporting
             }
         }
 
-        private void LoadMeshes(FileInfo assetPath, ModelImporterSettings settings, Assimp.Scene? scene, double scale, List<AssetRef<Material>> mats, List<ModelMesh> meshMats)
+        private void LoadMeshes(string assetPath, ModelImporterSettings settings, Assimp.Scene? scene, double scale, List<AssetRef<Material>> mats, List<ModelMesh> meshMats)
         {
             foreach (var m in scene.Meshes)
             {
                 if (m.PrimitiveType != PrimitiveType.Triangle)
                 {
-                    Debug.Log($"{assetPath.Name} 's mesh '{m.Name}' is not of Triangle Primitive, Skipping...");
+                    Debug.Log($"{Path.GetFileName(assetPath)} 's mesh '{m.Name}' is not of Triangle Primitive, Skipping...");
                     continue;
                 }
 
