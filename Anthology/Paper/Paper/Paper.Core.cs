@@ -246,6 +246,7 @@ namespace Prowl.PaperUI
 
             // Draw box shadow before background
             var rounded = (Vector4)data._elementStyle.GetValue(GuiProp.Rounded);
+            bool hasRounding = rounded.x > 0 || rounded.y > 0 || rounded.z > 0 || rounded.w > 0;
             var boxShadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
             if (boxShadow.IsVisible)
             {
@@ -309,14 +310,26 @@ namespace Prowl.PaperUI
                         _canvas.SetBoxBrush(bcx, bcy, bw, bh, brad, bfeather, gradient.Color1, gradient.Color2);
                         break;
                 }
-                _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, Color.White);
+                if (hasRounding)
+                {
+                    _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, Color.White);
+                }
+                else
+                {
+                    _canvas.RectFilled(rect.x, rect.y, rect.width, rect.height, Color.White);
+                }
                 _canvas.ClearBrush();
             }
             else
             {
                 var backgroundColor = (Color)data._elementStyle.GetValue(GuiProp.BackgroundColor);
                 if (backgroundColor.A > 0)
-                    _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, backgroundColor);
+                {
+                    if (hasRounding)
+                        _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, backgroundColor);
+                    else
+                        _canvas.RectFilled(rect.x, rect.y, rect.width, rect.height, backgroundColor);
+                }
             }
 
             // Draw border if needed
@@ -325,7 +338,10 @@ namespace Prowl.PaperUI
             if (borderWidth > 0.0f && borderColor.A > 0)
             {
                 _canvas.BeginPath();
-                _canvas.RoundedRect(rect.x-1, rect.y-1, rect.width+1, rect.height+1, rounded.x, rounded.y, rounded.z, rounded.w);
+                if(hasRounding)
+                    _canvas.RoundedRect(rect.x-1, rect.y-1, rect.width+1, rect.height+1, rounded.x, rounded.y, rounded.z, rounded.w);
+                else
+                    _canvas.Rect(rect.x-1, rect.y-1, rect.width+1, rect.height+1);
                 _canvas.SetStrokeColor(borderColor);
                 _canvas.SetStrokeWidth(borderWidth);
                 _canvas.Stroke();
