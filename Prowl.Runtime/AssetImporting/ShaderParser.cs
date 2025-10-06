@@ -61,10 +61,8 @@ public static class ShaderParser
         );
     }
 
-    public static bool ParseShader(string sourceFilePath, string input, out Shader? shader)
-    {
-        return ParseShader(sourceFilePath, input, null, out shader);
-    }
+    public static bool ParseShader(string sourceFilePath, string input, out Shader? shader) =>
+        ParseShader(sourceFilePath, input, null, out shader);
 
     public static bool ParseShader(string sourceFilePath, string input, Func<string, string?>? includeResolver, out Shader? shader)
     {
@@ -141,44 +139,44 @@ public static class ShaderParser
 
             string ImportReplacer(Match match)
             {
-                var relativePath = match.Groups[1].Value + ".glsl";
-                string includeContent;
+                string relativePath = match.Groups[1].Value + ".glsl";
+                string? includeContent = includeResolver != null
+                    ? ResolveWithCustomResolver(relativePath)
+                    : ResolveFromFileSystem(relativePath);
 
-                // Use custom include resolver if provided (for embedded resources)
-                if (includeResolver != null)
+                if (includeContent == null)
+                    return string.Empty;
+
+                // Recursively handle nested imports
+                return _preprocessorIncludeRegex.Replace($"\n{RemoveBom(includeContent)}\n", ImportReplacer);
+            }
+
+            string? ResolveWithCustomResolver(string relativePath)
+            {
+                string? resolvedPath = ResolveEmbeddedIncludePath(sourceFilePath, relativePath);
+                if (resolvedPath == null)
                 {
-                    // When using a custom resolver, sourceFilePath doesn't have $ prefix (BasicAssetProvider strips it)
-                    string? resolvedIncludePath = ResolveEmbeddedIncludePath(sourceFilePath, relativePath);
-
-                    if (resolvedIncludePath == null)
-                    {
-                        LogCompilationError(sourceFilePath, "Failed to Import Shader. Include not found: " + relativePath, parsedPass.Line, 0);
-                        return string.Empty;
-                    }
-
-                    includeContent = includeResolver(resolvedIncludePath);
-                    if (includeContent == null)
-                    {
-                        LogCompilationError(sourceFilePath, "Failed to Import Shader. Include not found: " + resolvedIncludePath, parsedPass.Line, 0);
-                        return string.Empty;
-                    }
-                }
-                else
-                {
-                    // Default file system behavior
-                    var combined = Path.Combine(new FileInfo(sourceFilePath).Directory!.FullName, relativePath);
-                    string absolutePath = Path.GetFullPath(combined);
-                    if (!File.Exists(absolutePath))
-                    {
-                        LogCompilationError(sourceFilePath, "Failed to Import Shader. Include not found: " + absolutePath, parsedPass.Line, 0);
-                        return string.Empty;
-                    }
-                    includeContent = File.ReadAllText(absolutePath);
+                    LogCompilationError(sourceFilePath, $"Failed to Import Shader. Include not found: {relativePath}", parsedPass.Line, 0);
+                    return null;
                 }
 
-                // Recursively handle Imports
-                var includeScript = _preprocessorIncludeRegex.Replace("\n" + RemoveBom(includeContent) + "\n", ImportReplacer);
-                return includeScript;
+                string? content = includeResolver!(resolvedPath);
+                if (content == null)
+                    LogCompilationError(sourceFilePath, $"Failed to Import Shader. Include not found: {resolvedPath}", parsedPass.Line, 0);
+
+                return content;
+            }
+
+            string? ResolveFromFileSystem(string relativePath)
+            {
+                string absolutePath = Path.GetFullPath(Path.Combine(new FileInfo(sourceFilePath).Directory!.FullName, relativePath));
+                if (!File.Exists(absolutePath))
+                {
+                    LogCompilationError(sourceFilePath, $"Failed to Import Shader. Include not found: {absolutePath}", parsedPass.Line, 0);
+                    return null;
+                }
+
+                return File.ReadAllText(absolutePath);
             }
 
             vertexShader = _preprocessorIncludeRegex.Replace(vertexShader, ImportReplacer);
@@ -770,26 +768,8 @@ public static class ShaderParser
 
     private static string? ResolveEmbeddedIncludePath(string sourceFilePath, string relativePath)
     {
-        // sourceFilePath is like "Assets/Defaults/MyShader.shader" (no $ - BasicAssetProvider strips it)
-        // relativePath is like "Fragment.glsl" or "Common/Lighting.glsl"
-        // Result should be "Assets/Defaults/Fragment.glsl" or "Assets/Defaults/Common/Lighting.glsl"
-
-        // Get the directory of the source shader
         string sourceDir = Path.GetDirectoryName(sourceFilePath) ?? "";
-
-        // Combine and normalize path separators
-        string combinedPath = Path.Combine(sourceDir, relativePath).Replace('\\', '/');
-
-        // Return without $ prefix - ShaderImporter will add it when checking HasAsset
-        return combinedPath;
-    }
-
-    private static string? ResolveFileIncludePath(string sourceFilePath, string relativePath)
-    {
-        // Standard file system path resolution
-        var combined = Path.Combine(new FileInfo(sourceFilePath).Directory!.FullName, relativePath);
-        string absolutePath = Path.GetFullPath(combined);
-        return File.Exists(absolutePath) ? absolutePath : null;
+        return Path.Combine(sourceDir, relativePath).Replace('\\', '/');
     }
 
     internal class ParseException : Exception

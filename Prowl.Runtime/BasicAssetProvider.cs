@@ -23,18 +23,13 @@ namespace Prowl.Runtime
 
         public bool HasAsset(string relativeAssetPath)
         {
-            // First check if the asset is in cache
             if (_assetCache.ContainsKey(relativeAssetPath))
                 return true;
 
-            // Check if this is an embedded resource (prefixed with '$')
             if (relativeAssetPath.StartsWith("$"))
-            {
                 return TryGetEmbeddedResourceName(relativeAssetPath.Substring(1), out _);
-            }
 
-            // If not in cache, check if the asset exists in the specified path
-            return System.IO.File.Exists(relativeAssetPath);
+            return File.Exists(relativeAssetPath);
         }
 
         public T? LoadAsset<T>(string assetPath) where T : EngineObject
@@ -50,131 +45,111 @@ namespace Prowl.Runtime
                 _assetCache.Remove(assetPath);
             }
 
-            if (HasAsset(assetPath) == false)
-            {
-                // Asset not found
+            if (!HasAsset(assetPath))
                 throw new FileNotFoundException($"Asset '{assetPath}' not found.");
-            }
 
             // Check if this is an embedded resource
             bool isEmbeddedResource = assetPath.StartsWith("$");
             string actualPath = isEmbeddedResource ? assetPath.Substring(1) : assetPath;
 
-            // Get extension
-            string extension = System.IO.Path.GetExtension(actualPath);
-            // Check if the asset is a supported type
-            string[] supportedTypes = {
-                ".png", ".bmp", ".tga", ".jpg", ".gif", ".psd", ".dds", ".hdr", // Textures
-                ".obj", ".fbx", ".gltf", // Models
-                ".wav", ".mp3", ".ogg", // Audio
-                ".shader", // Shaders
-                ".mat", // Materials
-                ".mesh", // Mesh
+            string extension = Path.GetExtension(actualPath).ToLower();
+
+            // Validate supported asset types
+            string[] supportedTypes = { ".png", ".bmp", ".tga", ".jpg", ".gif", ".psd", ".dds", ".hdr",
+                                        ".obj", ".fbx", ".gltf", ".wav", ".mp3", ".ogg",
+                                        ".shader", ".mat", ".mesh" };
+
+            if (!supportedTypes.Contains(extension))
+                throw new NotSupportedException($"Asset type '{extension}' is not supported.");
+
+            // Load asset based on extension
+            T? asset = extension switch
+            {
+                ".png" or ".bmp" or ".tga" or ".jpg" or ".gif" or ".psd" or ".dds" or ".hdr" => LoadTexture<T>(isEmbeddedResource, actualPath, assetPath),
+                ".obj" or ".fbx" or ".gltf" => LoadModel<T>(isEmbeddedResource, actualPath, assetPath),
+                ".shader" => LoadShader<T>(isEmbeddedResource, actualPath, assetPath),
+                ".mat" or ".mesh" => LoadSerializedAsset<T>(isEmbeddedResource, actualPath, assetPath),
+                ".wav" or ".mp3" or ".ogg" => HandleAudio<T>(assetPath),
+                _ => throw new NotSupportedException($"Asset type '{extension}' is not supported.")
             };
 
-            if (!supportedTypes.Contains(extension.ToLower()))
-            {
-                // Asset type not supported
-                throw new NotSupportedException($"Asset type '{extension}' is not supported.");
-            }
-
-            T? asset = null;
-
-            if (extension == ".png" || extension == ".bmp" || extension == ".tga" || extension == ".jpg" || extension == ".gif" || extension == ".psd" || extension == ".dds" || extension == ".hdr")
-            {
-                // Load texture
-                if (isEmbeddedResource)
-                {
-                    using (Stream stream = GetEmbeddedResourceStream(actualPath))
-                        asset = Prowl.Runtime.Resources.Texture2D.FromStream(stream, true) as T;
-                }
-                else
-                {
-                    asset = Prowl.Runtime.Resources.Texture2D.FromFile(assetPath, true) as T;
-                }
-                if (asset != null)
-                    asset.AssetPath = assetPath;
-            }
-            else if (extension == ".obj" || extension == ".fbx" || extension == ".gltf")
-            {
-                // Load model
-                if (isEmbeddedResource)
-                {
-                    using (Stream stream = GetEmbeddedResourceStream(actualPath))
-                        asset = new ModelImporter().Import(stream, actualPath) as T;
-                }
-                else
-                {
-                    asset = new ModelImporter().Import(new FileInfo(assetPath)) as T;
-                }
-                if (asset != null)
-                    asset.AssetPath = assetPath;
-            }
-            else if (extension == ".wav" || extension == ".mp3" || extension == ".ogg")
-            {
-                Debug.LogWarning($"Audio loading is not implemented yet. Asset: {assetPath}");
-            }
-            else if (extension == ".shader")
-            {
-                if (isEmbeddedResource)
-                {
-                    using (Stream stream = GetEmbeddedResourceStream(actualPath))
-                        asset = new ShaderImporter().Import(stream, actualPath) as T;
-                }
-                else
-                {
-                    asset = new ShaderImporter().Import(new FileInfo(assetPath)) as T;
-                }
-                if (asset != null)
-                    asset.AssetPath = assetPath;
-            }
-            else if (extension == ".mat" || extension == ".mesh")
-            {
-                string assetString;
-                if (isEmbeddedResource)
-                {
-                    using (Stream stream = GetEmbeddedResourceStream(actualPath))
-                    using (StreamReader reader = new StreamReader(stream))
-                        assetString = reader.ReadToEnd();
-                }
-                else
-                {
-                    assetString = System.IO.File.ReadAllText(assetPath);
-                }
-                var echo = EchoObject.ReadFromString(assetString);
-                asset = Serializer.Deserialize<T>(echo);
-                if (asset != null)
-                    asset.AssetPath = assetPath;
-            }
-            else
-            {
-                throw new NotSupportedException($"Asset type '{extension}' is not supported, (But Valid Extension?).");
-            }
-
-            // Cache the asset if it was loaded successfully
             if (asset != null)
                 _assetCache[assetPath] = asset;
 
             return asset;
         }
 
-        // Method to clear the cache
-        public void ClearCache()
+        private T? LoadTexture<T>(bool isEmbedded, string actualPath, string assetPath) where T : EngineObject
         {
-            _assetCache.Clear();
+            T? asset = isEmbedded
+                ? LoadFromEmbedded(actualPath, stream => Resources.Texture2D.FromStream(stream, true) as T)
+                : Resources.Texture2D.FromFile(assetPath, true) as T;
+
+            if (asset != null)
+                asset.AssetPath = assetPath;
+
+            return asset;
         }
 
-        // Method to remove a specific asset from the cache
-        public void RemoveFromCache(string assetPath)
+        private T? LoadModel<T>(bool isEmbedded, string actualPath, string assetPath) where T : EngineObject
         {
-            if (_assetCache.ContainsKey(assetPath))
-                _assetCache.Remove(assetPath);
+            T? asset = isEmbedded
+                ? LoadFromEmbedded(actualPath, stream => new ModelImporter().Import(stream, actualPath) as T)
+                : new ModelImporter().Import(new FileInfo(assetPath)) as T;
+
+            if (asset != null)
+                asset.AssetPath = assetPath;
+
+            return asset;
         }
 
-        /// <summary>
-        /// Tries to find an embedded resource by path, converting path separators to dots.
-        /// Example: "Assets/Textures/icon.png" -> "YourAssembly.Assets.Textures.icon.png"
-        /// </summary>
+        private T? LoadShader<T>(bool isEmbedded, string actualPath, string assetPath) where T : EngineObject
+        {
+            T? asset = isEmbedded
+                ? LoadFromEmbedded(actualPath, stream => new ShaderImporter().Import(stream, actualPath) as T)
+                : new ShaderImporter().Import(new FileInfo(assetPath)) as T;
+
+            if (asset != null)
+                asset.AssetPath = assetPath;
+
+            return asset;
+        }
+
+        private T? LoadSerializedAsset<T>(bool isEmbedded, string actualPath, string assetPath) where T : EngineObject
+        {
+            string content = isEmbedded
+                ? LoadFromEmbedded(actualPath, stream =>
+                {
+                    using var reader = new StreamReader(stream);
+                    return reader.ReadToEnd();
+                })
+                : File.ReadAllText(assetPath);
+
+            var echo = EchoObject.ReadFromString(content);
+            T? asset = Serializer.Deserialize<T>(echo);
+
+            if (asset != null)
+                asset.AssetPath = assetPath;
+
+            return asset;
+        }
+
+        private T? HandleAudio<T>(string assetPath) where T : EngineObject
+        {
+            Debug.LogWarning($"Audio loading is not implemented yet. Asset: {assetPath}");
+            return null;
+        }
+
+        private TResult LoadFromEmbedded<TResult>(string resourcePath, Func<Stream, TResult> loader)
+        {
+            using var stream = GetEmbeddedResourceStream(resourcePath);
+            return loader(stream);
+        }
+
+        public void ClearCache() => _assetCache.Clear();
+
+        public void RemoveFromCache(string assetPath) => _assetCache.Remove(assetPath);
+
         private bool TryGetEmbeddedResourceName(string resourcePath, out string? resourceName)
         {
             resourceName = null;
@@ -182,41 +157,26 @@ namespace Prowl.Runtime
             if (_embeddedResourceAssembly == null)
                 return false;
 
-            // Convert path separators to dots for embedded resource naming
             string normalizedPath = resourcePath.Replace('/', '.').Replace('\\', '.');
-
-            // Get all embedded resource names from the assembly
             string[] resourceNames = _embeddedResourceAssembly.GetManifestResourceNames();
 
-            // Try to find exact match (with assembly prefix)
-            resourceName = resourceNames.FirstOrDefault(r => r.EndsWith(normalizedPath, StringComparison.OrdinalIgnoreCase));
-
-            if (resourceName != null)
-                return true;
-
-            // Try to find match by just the filename
-            string fileName = System.IO.Path.GetFileName(resourcePath);
-            resourceName = resourceNames.FirstOrDefault(r => r.EndsWith(fileName, StringComparison.OrdinalIgnoreCase));
+            // Try exact match first, then filename match
+            resourceName = resourceNames.FirstOrDefault(r => r.EndsWith(normalizedPath, StringComparison.OrdinalIgnoreCase))
+                        ?? resourceNames.FirstOrDefault(r => r.EndsWith(Path.GetFileName(resourcePath), StringComparison.OrdinalIgnoreCase));
 
             return resourceName != null;
         }
 
-        /// <summary>
-        /// Gets a stream for an embedded resource.
-        /// </summary>
         public Stream GetEmbeddedResourceStream(string resourcePath)
         {
             if (_embeddedResourceAssembly == null)
-                throw new InvalidOperationException("No embedded resource assembly was provided to BasicAssetProvider.");
+                throw new InvalidOperationException("No embedded resource assembly configured.");
 
             if (!TryGetEmbeddedResourceName(resourcePath, out string? resourceName) || resourceName == null)
-                throw new FileNotFoundException($"Embedded resource '{resourcePath}' not found in assembly '{_embeddedResourceAssembly.FullName}'.");
+                throw new FileNotFoundException($"Embedded resource '{resourcePath}' not found.");
 
-            Stream? stream = _embeddedResourceAssembly.GetManifestResourceStream(resourceName);
-            if (stream == null)
-                throw new FileNotFoundException($"Failed to load embedded resource '{resourceName}' from assembly.");
-
-            return stream;
+            return _embeddedResourceAssembly.GetManifestResourceStream(resourceName)
+                ?? throw new FileNotFoundException($"Failed to load embedded resource '{resourceName}'.");
         }
     }
 }

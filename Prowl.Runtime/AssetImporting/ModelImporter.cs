@@ -35,23 +35,17 @@ namespace Prowl.Runtime.AssetImporting
 
     public class ModelImporter
     {
-        void Failed(string reason)
+        private void Failed(string reason)
         {
-            Debug.LogError("Failed to Import Model. Reason: " + reason);
+            Debug.LogError($"Failed to Import Model: {reason}");
             throw new Exception(reason);
         }
 
-        public Model Import(FileInfo assetPath)
-        {
-            return ImportFromFile(assetPath.FullName, assetPath.Directory, assetPath.Extension);
-        }
+        public Model Import(FileInfo assetPath) =>
+            ImportFromFile(assetPath.FullName, assetPath.Directory, assetPath.Extension);
 
-        public Model Import(Stream stream, string virtualPath)
-        {
-            string extension = Path.GetExtension(virtualPath);
-            // For streams, we don't have a real directory, so we'll use null and handle texture loading differently
-            return ImportFromStream(stream, virtualPath, null, extension);
-        }
+        public Model Import(Stream stream, string virtualPath) =>
+            ImportFromStream(stream, virtualPath, null, Path.GetExtension(virtualPath));
 
         private Model ImportFromFile(string filePath, DirectoryInfo? parentDir, string extension)
         {
