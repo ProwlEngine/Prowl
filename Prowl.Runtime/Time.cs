@@ -59,7 +59,7 @@ public static class Time
 
     public static double deltaTime => CurrentTime.deltaTime;
     public static float deltaTimeF => (float)deltaTime;
-    public static double fixedDeltaTime => 1.0 / (Physics.TargetFrameRate);
+    public static double fixedDeltaTime => 1.0 / 60.0; // 60 FPS fixed timestep
     public static double time => CurrentTime.time;
 
     public static double smoothUnscaledDeltaTime => CurrentTime.smoothUnscaledDeltaTime;

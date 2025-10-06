@@ -8,6 +8,7 @@ using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
 using Prowl.Echo;
+using Prowl.Runtime.Physics;
 
 namespace Prowl.Runtime;
 
@@ -169,8 +170,10 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void OnValidate()
     {
+        if (GameObject?.Scene == null) return;
+
         if (_body == null || _body.Handle.IsZero)
-            _body = Physics.World.CreateRigidBody();
+            _body = GameObject.Scene.Physics.World.CreateRigidBody();
 
         UpdateProperties(_body);
         UpdateShapes(_body);
@@ -194,15 +197,18 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void OnEnable()
     {
+        if (GameObject?.Scene == null) return;
+
         if (_body == null || _body.Handle.IsZero)
         {
-            CreateBody(Physics.World);
+            CreateBody(GameObject.Scene.Physics.World);
         }
     }
 
     public override void OnDisable()
     {
-        if (_body != null && !_body.Handle.IsZero) Physics.World?.Remove(_body);
+        if (GameObject?.Scene == null) return;
+        if (_body != null && !_body.Handle.IsZero) GameObject.Scene.Physics.World?.Remove(_body);
     }
 
     internal void UpdateProperties(RigidBody rb)
@@ -238,7 +244,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     internal void UpdateTransform(RigidBody rb)
     {
-        if (Physics.AutoSyncTransforms)
+        if (GameObject?.Scene?.Physics.AutoSyncTransforms ?? true)
         {
             rb.Position = new JVector(Transform.position.x, Transform.position.y, Transform.position.z);
             rb.Orientation = new JQuaternion(Transform.rotation.x, Transform.rotation.y, Transform.rotation.z, Transform.rotation.w);

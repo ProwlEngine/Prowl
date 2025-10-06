@@ -562,7 +562,7 @@ namespace Prowl.Runtime.Rendering
 
 
             //if (data.DisplayGizmo)
-            RenderGizmos(css);
+                RenderGizmos(css);
 
             // 13. Blit the Result to the camera's Target whether thats the Screen or a RenderTexture
             bool clearColor = camera.ClearFlags == CameraClearFlags.ColorOnly || camera.ClearFlags == CameraClearFlags.DepthColor;

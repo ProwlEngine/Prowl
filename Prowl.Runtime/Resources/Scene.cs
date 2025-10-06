@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Runtime.Physics;
 using Prowl.Runtime.Rendering;
 
 namespace Prowl.Runtime.Resources
@@ -14,6 +15,10 @@ namespace Prowl.Runtime.Resources
 
         [SerializeIgnore]
         private HashSet<GameObject> _allObj = new HashSet<GameObject>(ReferenceEqualityComparer.Instance);
+
+        private PhysicsWorld _physics = new PhysicsWorld();
+
+        public PhysicsWorld Physics => _physics;
 
         public struct FogParams
         {
@@ -224,15 +229,13 @@ namespace Prowl.Runtime.Resources
 
         /// <summary>
         /// Updates all active GameObjects and their components in this scene.
-        /// Calls PreUpdate, Physics.Update, Update, UpdateCoroutines, LateUpdate, and EndOfFrameCoroutines.
+        /// Calls PreUpdate, Update, UpdateCoroutines, LateUpdate, and EndOfFrameCoroutines.
         /// </summary>
         public void Update()
         {
             List<GameObject> activeGOs = ActiveObjects.ToList();
             foreach (GameObject go in activeGOs)
                 go.PreUpdate();
-
-            Physics.Update();
 
             ForeachComponent(activeGOs, (x) =>
             {
@@ -246,10 +249,12 @@ namespace Prowl.Runtime.Resources
 
         /// <summary>
         /// Executes physics update on all active GameObjects and their components.
-        /// Calls FixedUpdate and UpdateFixedUpdateCoroutines.
+        /// Calls Physics.Update, FixedUpdate and UpdateFixedUpdateCoroutines.
         /// </summary>
         public void FixedUpdate()
         {
+            Physics.Update();
+
             List<GameObject> activeGOs = ActiveObjects.ToList();
             ForeachComponent(activeGOs, (x) =>
             {

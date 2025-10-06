@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Runtime.Physics;
+
 namespace Prowl.Runtime;
 
 // Based on the Jitter2 Demo Raycast Car
@@ -159,7 +161,8 @@ public sealed class WheelCollider : MonoBehaviour
             Vector3 newOrigin = wheelRayOrigin + distFwd * wheelFwd + zOffset * wheelUp;
 
             _debugRayStart.Add(newOrigin);
-            bool result = Physics.Raycast(newOrigin, wheelRayDelta, out RaycastHit hitInfo, rayLen, LayerMask.Everything);
+            RaycastHit hitInfo = default;
+            bool result = GameObject.Scene != null && GameObject.Scene.Physics.Raycast(newOrigin, wheelRayDelta, out hitInfo, rayLen, LayerMask.Everything);
 
             //Vector3 minBox = worldPos - new Vector3(Radius);
             //Vector3 maxBox = worldPos + new Vector3(Radius);
@@ -333,7 +336,7 @@ public sealed class WheelCollider : MonoBehaviour
         double wheelMass = Body.Mass * 0.03;
 
         Inertia = 0.5 * (Radius * Radius) * wheelMass;
-        Spring = mass * Physics.World.Gravity.Length() / (SuspensionTravel * springFrac);
+        Spring = mass * (GameObject.Scene?.Physics.Gravity.magnitude ?? 9.81) / (SuspensionTravel * springFrac);
         Damping = 2.0 * Math.Sqrt(Spring * Body.Mass) * 0.25 * dampingFrac;
     }
 }
