@@ -8,10 +8,11 @@ using Prowl.Runtime;
 using Prowl.Runtime.Audio;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
+using NVorbis;
 
 namespace Prowl.Editor.Assets.Importers;
 
-[Importer("FileIcon.png", typeof(AudioClip), ".wav")]
+[Importer("FileIcon.png", typeof(AudioClip), ".wav", ".wave", ".ogg")]
 public class AudioClipImporter : ScriptedImporter
 {
     public override void Import(SerializedAsset ctx, FileInfo assetPath)
@@ -20,9 +21,54 @@ public class AudioClipImporter : ScriptedImporter
         {
             ".wav" => LoadWav(assetPath),
             ".wave" => LoadWav(assetPath),
+            ".ogg" => LoadOgg(assetPath),
+            ".oga" => LoadOgg(assetPath),
             _ => throw new InvalidOperationException("Unsupported audio format: " + assetPath.Extension.ToLower()),
         });
     }
+
+    private static AudioClip LoadOgg(FileInfo file)
+    {
+        // Decode Ogg Vorbis to interleaved 16-bit PCM (little-endian) using NVorbis
+        using var fs = file.OpenRead();
+        using var vorbis = new VorbisReader(fs, false);
+
+        int channels = vorbis.Channels;
+        int sampleRate = vorbis.SampleRate;
+        const short bitsPerSample = 16; // output s16 PCM
+
+        // Converting NVorbis outputs floats of [-1..1] interleaved across channels
+        // to s16 to avoid large allocations.
+        var floatBuf = new float[4096]; // count is "samples"
+        using var ms = new MemoryStream();
+
+        int samplesRead;
+        Span<byte> le = stackalloc byte[2]; // scratch for one s16
+
+        while ((samplesRead = vorbis.ReadSamples(floatBuf, 0, floatBuf.Length)) > 0)
+        {
+            for (int i = 0; i < samplesRead; i++)
+            {
+                // clamp and convert float -> 16-bit signed
+                float f = floatBuf[i];
+                if (f > 1f) f = 1f;
+                else if (f < -1f) f = -1f;
+
+                short s = (short)MathF.Round(f * 32767f);
+
+                // write little-endian
+                System.Buffers.Binary.BinaryPrimitives.WriteInt16LittleEndian(le, s);
+                ms.Write(le);
+            }
+        }
+
+        byte[] audioData = ms.ToArray();
+
+        // Creating the clip just like the WAV path does:
+        AudioClip audioClip = AudioClip.Create(file.Name, audioData, (short)channels, bitsPerSample, sampleRate);
+        return audioClip;
+    }
+
 
     #region Wave Format
 
