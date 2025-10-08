@@ -103,6 +103,48 @@ namespace Prowl.Vector
             }
         }
 
+        public static Quaternion operator *(Quaternion lhs, Quaternion rhs)
+        {
+            return new Quaternion(lhs.W * rhs.X + lhs.X * rhs.W + lhs.Y * rhs.Z - lhs.Z * rhs.Y,
+                                   lhs.W * rhs.Y + lhs.Y * rhs.W + lhs.Z * rhs.X - lhs.X * rhs.Z,
+                                   lhs.W * rhs.Z + lhs.Z * rhs.W + lhs.X * rhs.Y - lhs.Y * rhs.X,
+                                   lhs.W * rhs.W - lhs.X * rhs.X - lhs.Y * rhs.Y - lhs.Z * rhs.Z);
+        }
+
+        public static Float3 operator *(Quaternion rotation, Float3 point)
+        {
+            float num = rotation.X * 2;
+            float num2 = rotation.Y * 2;
+            float num3 = rotation.Z * 2;
+            float num4 = rotation.X * num;
+            float num5 = rotation.Y * num2;
+            float num6 = rotation.Z * num3;
+            float num7 = rotation.X * num2;
+            float num8 = rotation.X * num3;
+            float num9 = rotation.Y * num3;
+            float num10 = rotation.W * num;
+            float num11 = rotation.W * num2;
+            float num12 = rotation.W * num3;
+            Float3 result;
+            result.X = (1f - (num5 + num6)) * point.X + (num7 - num12) * point.Y + (num8 + num11) * point.Z;
+            result.Y = (num7 + num12) * point.X + (1f - (num4 + num6)) * point.Y + (num9 - num10) * point.Z;
+            result.Z = (num8 - num11) * point.X + (num9 + num10) * point.Y + (1f - (num4 + num5)) * point.Z;
+            return result;
+        }
+
+        public static bool operator ==(Quaternion lhs, Quaternion rhs)
+        {
+            if (lhs.X == rhs.X && lhs.Y == rhs.Y && lhs.Z == rhs.Z && lhs.W == rhs.W)
+                return true;
+            else
+                return false;
+        }
+
+        public static bool operator !=(Quaternion lhs, Quaternion rhs)
+        {
+            return !(lhs == rhs);
+        }
+
         /// <summary>
         /// Returns the Euler angle representation of the quaternion in radians.
         /// </summary>
