@@ -342,20 +342,25 @@ namespace Prowl.Vector
         /// <summary>Creates a Left-Handed view matrix.</summary>
         public static Float4x4 CreateLookAt(Float3 eyePosition, Float3 targetPosition, Float3 upVector)
         {
-            Float3 zaxis = Maths.Normalize(targetPosition - eyePosition); // Camera's forward
-            Float3 xaxis = Maths.Normalize(Maths.Cross(upVector, zaxis)); // Camera's right
-            Float3 yaxis = Maths.Cross(zaxis, xaxis);                     // Camera's up
+            // Columns: [ right | up | forward | position ]
+            Float3 f = Maths.Normalize(targetPosition - eyePosition); // camera forward (+Z in camera space)
+            Float3 s = Maths.Normalize(Maths.Cross(upVector, f));     // right  = up × f
+            Float3 u = Maths.Cross(f, s);                             // up     = f × s
 
-            Float4 c0 = new Float4(xaxis.X, yaxis.X, zaxis.X, 0.0f);
-            Float4 c1 = new Float4(xaxis.Y, yaxis.Y, zaxis.Y, 0.0f);
-            Float4 c2 = new Float4(xaxis.Z, yaxis.Z, zaxis.Z, 0.0f);
-            Float4 c3 = new Float4(
-                -Maths.Dot(xaxis, eyePosition),
-                -Maths.Dot(yaxis, eyePosition),
-                -Maths.Dot(zaxis, eyePosition),
-                1.0f
-            );
-            return new Float4x4(c0, c1, c2, c3);
+            Float4x4 m = Float4x4.Identity;
+
+            // Put axes in columns
+            m[0, 0] = s.X; m[1, 0] = s.Y; m[2, 0] = s.Z;  // column 0 = right
+            m[0, 1] = u.X; m[1, 1] = u.Y; m[2, 1] = u.Z;  // column 1 = up
+            m[0, 2] = f.X; m[1, 2] = f.Y; m[2, 2] = f.Z;  // column 2 = forward
+
+            // Translation (position) in last column
+            m[0, 3] = eyePosition.X;
+            m[1, 3] = eyePosition.Y;
+            m[2, 3] = eyePosition.Z;
+
+            // m[3,*] already [0,0,0,1]
+            return m;
         }
 
 
@@ -755,28 +760,25 @@ namespace Prowl.Vector
         /// <summary>Creates a Left-Handed view matrix.</summary>
         public static Double4x4 CreateLookAt(Double3 eyePosition, Double3 targetPosition, Double3 upVector)
         {
-            Double3 zaxis = Maths.Normalize(targetPosition - eyePosition); // Camera's forward
-            Double3 xaxis = Maths.Normalize(Maths.Cross(upVector, zaxis)); // Camera's right
-            Double3 yaxis = Maths.Cross(zaxis, xaxis);                      // Camera's up
+            // Columns: [ right | up | forward | position ]
+            Double3 f = Maths.Normalize(targetPosition - eyePosition); // camera forward (+Z in camera space)
+            Double3 s = Maths.Normalize(Maths.Cross(upVector, f));     // right  = up × f
+            Double3 u = Maths.Cross(f, s);                             // up     = f × s
 
-            Double4 c0 = new Double4(xaxis.X, yaxis.X, zaxis.X, 0.0);
-            Double4 c1 = new Double4(xaxis.Y, yaxis.Y, zaxis.Y, 0.0);
-            Double4 c2 = new Double4(xaxis.Z, yaxis.Z, zaxis.Z, 0.0);
-            Double4 c3 = new Double4(
-                -Maths.Dot(xaxis, eyePosition),
-                -Maths.Dot(yaxis, eyePosition),
-                -Maths.Dot(zaxis, eyePosition),
-                1.0
-            );
-            // This is the transpose of the usual implementation, but since we store column-major
-            // and the constructor takes row-major, it works out. Let's build it column by column
-            // for clarity.
-            return new Double4x4(
-                new Double4(xaxis.X, xaxis.Y, xaxis.Z, -Maths.Dot(xaxis, eyePosition)),
-                new Double4(yaxis.X, yaxis.Y, yaxis.Z, -Maths.Dot(yaxis, eyePosition)),
-                new Double4(zaxis.X, zaxis.Y, zaxis.Z, -Maths.Dot(zaxis, eyePosition)),
-                new Double4(0, 0, 0, 1)
-            );
+            Double4x4 m = Double4x4.Identity;
+
+            // Put axes in columns
+            m[0, 0] = s.X; m[1, 0] = s.Y; m[2, 0] = s.Z;  // column 0 = right
+            m[0, 1] = u.X; m[1, 1] = u.Y; m[2, 1] = u.Z;  // column 1 = up
+            m[0, 2] = f.X; m[1, 2] = f.Y; m[2, 2] = f.Z;  // column 2 = forward
+
+            // Translation (position) in last column
+            m[0, 3] = eyePosition.X;
+            m[1, 3] = eyePosition.Y;
+            m[2, 3] = eyePosition.Z;
+
+            // m[3,*] already [0,0,0,1]
+            return m;
         }
 
 
