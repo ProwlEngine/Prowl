@@ -214,36 +214,6 @@ public class MathsQuaternionTests
     }
 
     [Fact]
-    public void LookRotationSafe_CollinearForwardUp()
-    {
-        var forward = Float3.UnitY;
-        var up = Float3.UnitY; // Collinear
-        // Behavior for collinear depends on implementation, might return Identity or a specific rotation.
-        // The current code has a specific fallback for Z > 0.99999f etc.
-        // if (LengthSquared(right) < Epsilon * Epsilon) // Collinear case
-        //    return forward.Z > 0.99999f ? Quaternion.Identity : (forward.Z < -0.99999f ? RotateY((float)Maths.PI) : AxisAngle(Float3.UnitX, (float)Maths.PI * 0.5f * (forward.Y > 0 ? 1 : -1)));
-
-        // Case 1: forward = (0,0,1), up = (0,0,1) -> right is zero. forward.Z > 0.99.. -> Identity
-        var q1 = Maths.LookRotationSafe(Float3.UnitZ, Float3.UnitZ);
-        TestHelpers.AssertQuaternionEqual(Quaternion.Identity, q1, Tol);
-
-        // Case 2: forward = (0,0,-1), up = (0,0,-1) -> right is zero. forward.Z < -0.99.. -> RotateY(PI)
-        var q2 = Maths.LookRotationSafe(-Float3.UnitZ, -Float3.UnitZ);
-        TestHelpers.AssertQuaternionRotationallyEqual(Maths.RotateY(MathF.PI), q2, Tol);
-
-        // Case 3: forward = (0,1,0), up = (0,1,0) -> right is zero. forward.Y > 0. AxisAngle(UnitX, PI/2)
-        var q3 = Maths.LookRotationSafe(Float3.UnitY, Float3.UnitY);
-        TestHelpers.AssertQuaternionRotationallyEqual(Maths.AxisAngle(Float3.UnitX, MathF.PI * 0.5f), q3, Tol);
-    }
-
-    [Fact]
-    public void LookRotationSafe_ZeroForwardReturnsIdentity()
-    {
-        var q = Maths.LookRotationSafe(Float3.Zero, Float3.UnitY);
-        TestHelpers.AssertQuaternionEqual(Quaternion.Identity, q);
-    }
-
-    [Fact]
     public void Nlerp_InterpolatesAndNormalizes()
     {
         var q1 = Quaternion.Identity;

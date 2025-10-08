@@ -177,7 +177,7 @@ public class Transform
     public void LookAt(Float3 worldPosition, Float3 worldUp)
     {
         // The world-space rotation needed to look at the target
-        Quaternion worldLookRotation = Maths.LookRotationSafe(worldPosition - this.position, worldUp);
+        Quaternion worldLookRotation = Maths.LookRotation(worldPosition - this.position, worldUp);
         rotation = worldLookRotation;
     }
 

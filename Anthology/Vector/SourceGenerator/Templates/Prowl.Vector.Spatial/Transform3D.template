@@ -216,7 +216,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void LookAt({{TYPE_PREFIX}}3 target, {{TYPE_PREFIX}}3 worldUp)
         {
-            rotation = Maths.LookRotationSafe((Float3)(target - position), (Float3)worldUp);
+            rotation = Maths.LookRotation((Float3)(target - position), (Float3)worldUp);
         }
 
         #endregion

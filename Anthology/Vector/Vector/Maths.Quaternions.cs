@@ -284,30 +284,20 @@ namespace Prowl.Vector
             // Ensure forward vector is normalized
             forward = Normalize(forward);
 
-            Float3 right = Normalize(Cross(up, forward));
+            Float3 right = Cross(up, forward);
+
+            // Handle degenerate case when forward and up are parallel
+            if (LengthSquared(right) < EpsilonF)
+            {
+                // use X-axis as right when looking up/down
+                // For looking straight up (0,1,0) or down (0,-1,0), keep right as (1,0,0)
+                right = Float3.UnitX;
+            }
+
+            right = Normalize(right);
             Float3 newUp = Cross(forward, right);
 
             // Create rotation matrix components
-            Float3x3 m = new Float3x3(right, newUp, forward);
-            return FromMatrix(m);
-        }
-
-        /// <summary>Safe version of LookRotation. Returns identity if inputs are invalid.</summary>
-        public static Quaternion LookRotationSafe(Float3 forward, Float3 up)
-        {
-            if (LengthSquared(forward) < EpsilonF || LengthSquared(up) < EpsilonF)
-                return Quaternion.Identity;
-
-            forward = Normalize(forward);
-            Float3 right = Cross(up, forward);
-
-            if (LengthSquared(right) < EpsilonF) // Collinear case
-                return forward.Z > 0.99999f ? Quaternion.Identity : (forward.Z < -0.99999f ? RotateY((float)Maths.PI) : AxisAngle(Float3.UnitX, (float)Maths.PI * 0.5f * (forward.Y > 0 ? 1 : -1)));
-
-
-            right = Normalize(right);
-            Float3 newUp = Cross(forward, right); // newUp is already normalized
-
             Float3x3 m = new Float3x3(right, newUp, forward);
             return FromMatrix(m);
         }
