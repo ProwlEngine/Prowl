@@ -30,8 +30,8 @@ namespace Prowl.Vector
         /// </summary>
         public Float3 eulerAngles
         {
-            get => ToEulerDegrees(EulerOrder.ZXYr);
-            set => this = Maths.FromEulerDegrees(value, EulerOrder.ZXYr);
+            get => ToEulerDegrees();
+            set => this = Maths.FromEulerDegrees(value);
         }
 
         /// <summary>A quaternion representing the identity transform (no rotation).</summary>
@@ -148,18 +148,16 @@ namespace Prowl.Vector
         /// <summary>
         /// Returns the Euler angle representation of the quaternion in radians.
         /// </summary>
-        /// <param name="order">The desired order of Euler angles.</param>
         /// <returns>A Float3 vector of Euler angles in radians.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Float3 ToEuler(EulerOrder order) => Maths.ToEuler(this, order);
+        public Float3 ToEuler() => Maths.ToEuler(this);
 
         /// <summary>
         /// Returns the Euler angle representation of the quaternion in degrees.
         /// </summary>
-        /// <param name="order">The desired order of Euler angles.</param>
         /// <returns>A Float3 vector of Euler angles in degrees.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Float3 ToEulerDegrees(EulerOrder order) => Maths.ToEulerDegrees(this, order);
+        public Float3 ToEulerDegrees() => Maths.ToEulerDegrees(this);
 
         /// <summary>Implicitly converts a Float4 vector to a Quaternion.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

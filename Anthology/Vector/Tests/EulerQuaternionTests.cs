@@ -8,7 +8,7 @@ public class EulerQuaternionTests
     public void FromEuler_RotX90_XYZr()
     {
         var angles = new Float3(TestHelpers.PIOver2, 0, 0);
-        var q = Maths.FromEuler(angles, EulerOrder.XYZr);
+        var q = Maths.FromEuler(angles);
         var expected = Maths.RotateX(TestHelpers.PIOver2);
         TestHelpers.AssertQuaternionRotationallyEqual(expected, q, Tol);
     }
@@ -17,8 +17,8 @@ public class EulerQuaternionTests
     public void EulerRadians_RoundTrip_ZYXr()
     {
         var angles = new Float3(0.1f, -0.2f, 0.3f);
-        var q = Maths.FromEuler(angles, EulerOrder.ZYXr);
-        var recovered = Maths.ToEuler(q, EulerOrder.ZYXr);
+        var q = Maths.FromEuler(angles);
+        var recovered = Maths.ToEuler(q);
         TestHelpers.AssertFloat3Equal(angles, recovered, Tol);
     }
 
@@ -26,7 +26,7 @@ public class EulerQuaternionTests
     public void ToEulerDegrees_RotZ90_XYZr()
     {
         var q = Maths.RotateZ(TestHelpers.PIOver2);
-        var anglesDeg = Maths.ToEulerDegrees(q, EulerOrder.XYZr);
+        var anglesDeg = Maths.ToEulerDegrees(q);
         TestHelpers.AssertFloat3Equal(new Float3(0f, 0f, 90f), anglesDeg, Tol);
     }
 
@@ -37,7 +37,7 @@ public class EulerQuaternionTests
         var q = Quaternion.Identity;
         q.eulerAngles = angles;
         TestHelpers.AssertFloat3Equal(angles, q.eulerAngles, Tol);
-        var expected = Maths.FromEulerDegrees(angles, EulerOrder.ZXYr);
+        var expected = Maths.FromEulerDegrees(angles);
         TestHelpers.AssertQuaternionRotationallyEqual(expected, q, Tol);
     }
 }

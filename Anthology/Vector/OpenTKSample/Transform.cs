@@ -91,8 +91,8 @@ public class Transform
     /// <summary>The world-space rotation of the transform, as euler angles in degrees.</summary>
     public Float3 eulerAngles
     {
-        get => rotation.ToEulerDegrees(EulerOrder.ZYXr);
-        set => rotation = Maths.FromEulerDegrees(value, EulerOrder.ZYXr);
+        get => rotation.ToEulerDegrees();
+        set => rotation = Maths.FromEulerDegrees(value, );
     }
 
     /// <summary>The world-space forward direction of this transform.</summary>
