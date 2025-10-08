@@ -16,7 +16,7 @@ Built for the Prowl Game Engine.</Description>
     <PackageTags>mathematics;3d;3d-math;linear-algebra;vector;matrix;quaternion;geometry;transformation;double-precision;numerical;math-library;spatial;rotation;interpolation</PackageTags>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <Version>2.0.0-preview.3</Version>
+    <Version>2.0.0-preview.5</Version>
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
   </PropertyGroup>
 
