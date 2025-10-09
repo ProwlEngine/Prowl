@@ -156,6 +156,18 @@ namespace Prowl.Vector
             return ans;
         }
 
+        public static Quaternion operator *(Quaternion lhs, float scalar)
+        {
+            Quaternion ans;
+
+            ans.X = lhs.X * scalar;
+            ans.Y = lhs.Y * scalar;
+            ans.Z = lhs.Z * scalar;
+            ans.W = lhs.W * scalar;
+
+            return ans;
+        }
+
         public static Quaternion operator *(Quaternion lhs, Quaternion rhs)
         {
             return new Quaternion(lhs.W * rhs.X + lhs.X * rhs.W + lhs.Y * rhs.Z - lhs.Z * rhs.Y,
