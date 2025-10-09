@@ -374,30 +374,51 @@ namespace Prowl.Vector
         /// <summary>Creates a Left-Handed orthographic projection matrix (Depth [0,1]).</summary>
         public static Float4x4 CreateOrtho(float width, float height, float nearPlane, float farPlane)
         {
-            float halfWidth = width * 0.5f;
-            float halfHeight = height * 0.5f;
-            return CreateOrthoOffCenter(-halfWidth, halfWidth, -halfHeight, halfHeight, nearPlane, farPlane);
+            // This implementation is based on the DirectX Math Library XMMatrixOrthographicLH method
+            // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
+
+            float range = 1.0f / (farPlane - nearPlane);
+
+            Float4x4 result = default;
+
+            result.c0.X = 2.0f / width;
+            result.c0.Y = result.c0.Z = result.c0.W = 0.0f;
+
+            result.c1.Y = 2.0f / height;
+            result.c1.X = result.c1.Z = result.c1.W = 0.0f;
+
+            result.c2.Z = range;
+            result.c2.X = result.c2.Y = result.c2.W = 0.0f;
+
+            result.c3.X = result.c3.Y = 0.0f;
+            result.c3.Z = -range * nearPlane;
+            result.c3.W = 1f;
+
+            return result;
         }
 
         /// <summary>Creates a Left-Handed orthographic projection matrix (Depth [0,1]).</summary>
         public static Float4x4 CreateOrthoOffCenter(float left, float right, float bottom, float top, float nearPlane, float farPlane)
         {
-            float r_l = right - left;
-            float t_b = top - bottom;
-            float f_n = farPlane - nearPlane;
+            // This implementation is based on the DirectX Math Library XMMatrixOrthographicOffCenterLH method
+            // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
 
-            if (r_l == 0 || t_b == 0 || f_n == 0) return Float4x4.Identity;
+            float reciprocalWidth = 1.0f / (right - left);
+            float reciprocalHeight = 1.0f / (top - bottom);
+            float range = 1.0f / (farPlane - nearPlane);
 
-            Float4x4 result = Float4x4.Identity;
-            result.c0.X = 2.0f / r_l;
-            result.c1.Y = 2.0f / t_b;
-            // DirectX style (maps Z to [0,1])
-            result.c2.Z = 1.0f / f_n;
+            Float4x4 result = default;
 
-            result.c3.X = -(right + left) / r_l;
-            result.c3.Y = -(top + bottom) / t_b;
-            result.c3.Z = -nearPlane / f_n;
-            // result.c3.W = 1.0f; // Already set by Identity
+            result.c0 = new Float4(reciprocalWidth + reciprocalWidth, 0, 0, 0);
+            result.c1 = new Float4(0, reciprocalHeight + reciprocalHeight, 0, 0);
+            result.c2 = new Float4(0, 0, range, 0);
+            result.c3 = new Float4(
+                -(left + right) * reciprocalWidth,
+                -(top + bottom) * reciprocalHeight,
+                -range * nearPlane,
+                1
+            );
+
             return result;
         }
 
@@ -803,30 +824,51 @@ namespace Prowl.Vector
         /// <summary>Creates a Left-Handed orthographic projection matrix (Depth [0,1]).</summary>
         public static Double4x4 CreateOrtho(double width, double height, double nearPlane, double farPlane)
         {
-            double halfWidth = width * 0.5;
-            double halfHeight = height * 0.5;
-            return CreateOrthoOffCenter(-halfWidth, halfWidth, -halfHeight, halfHeight, nearPlane, farPlane);
+            // This implementation is based on the DirectX Math Library XMMatrixOrthographicLH method
+            // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
+
+            double range = 1.0 / (farPlane - nearPlane);
+
+            Double4x4 result = default;
+
+            result.c0.X = 2.0 / width;
+            result.c0.Y = result.c0.Z = result.c0.W = 0.0;
+
+            result.c1.Y = 2.0 / height;
+            result.c1.X = result.c1.Z = result.c1.W = 0.0;
+
+            result.c2.Z = range;
+            result.c2.X = result.c2.Y = result.c2.W = 0.0;
+
+            result.c3.X = result.c3.Y = 0.0;
+            result.c3.Z = -range * nearPlane;
+            result.c3.W = 1;
+
+            return result;
         }
 
         /// <summary>Creates a Left-Handed orthographic projection matrix (Depth [0,1]).</summary>
         public static Double4x4 CreateOrthoOffCenter(double left, double right, double bottom, double top, double nearPlane, double farPlane)
         {
-            double r_l = right - left;
-            double t_b = top - bottom;
-            double f_n = farPlane - nearPlane;
+            // This implementation is based on the DirectX Math Library XMMatrixOrthographicOffCenterLH method
+            // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
 
-            if (r_l == 0 || t_b == 0 || f_n == 0) return Double4x4.Identity;
+            double reciprocalWidth = 1.0 / (right - left);
+            double reciprocalHeight = 1.0 / (top - bottom);
+            double range = 1.0 / (farPlane - nearPlane);
 
-            Double4x4 result = Double4x4.Identity;
-            result.c0.X = 2.0 / r_l;
-            result.c1.Y = 2.0 / t_b;
-            // DirectX style (maps Z to [0,1])
-            result.c2.Z = 1.0 / f_n;
+            Double4x4 result = default;
 
-            result.c3.X = -(right + left) / r_l;
-            result.c3.Y = -(top + bottom) / t_b;
-            result.c3.Z = -nearPlane / f_n;
-            // result.c3.W = 1.0; // Already set by Identity
+            result.c0 = new Double4(reciprocalWidth + reciprocalWidth, 0, 0, 0);
+            result.c1 = new Double4(0, reciprocalHeight + reciprocalHeight, 0, 0);
+            result.c2 = new Double4(0, 0, range, 0);
+            result.c3 = new Double4(
+                -(left + right) * reciprocalWidth,
+                -(top + bottom) * reciprocalHeight,
+                -range * nearPlane,
+                1
+            );
+
             return result;
         }
 
