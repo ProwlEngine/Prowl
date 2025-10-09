@@ -328,15 +328,44 @@ namespace Prowl.Vector
         /// Creates a translation, rotation, and scale (TRS) matrix.
         /// Operations are applied in order: scale, then rotate, then translate.
         /// </summary>
-        public static Float4x4 CreateTRS(Float3 translation, Quaternion rotation, Float3 scale)
+        public static Float4x4 CreateTRS(Float3 translation, Quaternion rotation, Float3 scale) => CreateScale(translation) * CreateFromQuaternion(rotation) * CreateTranslation(scale);
+
+        /// <summary>
+        /// Creates a rotation matrix from the given Quaternion rotation value.
+        /// </summary>
+        /// <param name="quaternion">The source Quaternion.</param>
+        /// <returns>The rotation matrix.</returns>
+        public static Float4x4 CreateFromQuaternion(Quaternion quaternion)
         {
-            Float3x3 r = new Float3x3(rotation);
-            return new Float4x4(
-                new Float4(r.c0.X * scale.X, r.c0.Y * scale.X, r.c0.Z * scale.X, 0.0f),
-                new Float4(r.c1.X * scale.Y, r.c1.Y * scale.Y, r.c1.Z * scale.Y, 0.0f),
-                new Float4(r.c2.X * scale.Z, r.c2.Y * scale.Z, r.c2.Z * scale.Z, 0.0f),
-                new Float4(translation.X, translation.Y, translation.Z, 1.0f)
-            );
+            Float4x4 result = default;
+
+            float xx = quaternion.X * quaternion.X;
+            float yy = quaternion.Y * quaternion.Y;
+            float zz = quaternion.Z * quaternion.Z;
+            
+            float xy = quaternion.X * quaternion.Y;
+            float wz = quaternion.Z * quaternion.W;
+            float xz = quaternion.Z * quaternion.X;
+            float wy = quaternion.Y * quaternion.W;
+            float yz = quaternion.Y * quaternion.Z;
+            float wx = quaternion.X * quaternion.W;
+
+            result.c0.X = 1.0f - 2.0f * (yy + zz);
+            result.c0.Y = 2.0f * (xy + wz);
+            result.c0.Z = 2.0f * (xz - wy);
+            result.c0.W = 0.0f;
+            result.c1.X = 2.0f * (xy - wz);
+            result.c1.Y = 1.0f - 2.0f * (zz + xx);
+            result.c1.Z = 2.0f * (yz + wx);
+            result.c1.W = 0.0f;
+            result.c2.X = 2.0f * (xz + wy);
+            result.c2.Y = 2.0f * (yz - wx);
+            result.c2.Z = 1.0f - 2.0f * (yy + xx);
+            result.c2.W = 0.0f;
+
+            result.c3 = new Float4(0.0f, 0.0f, 0.0f, 1.0f);
+
+            return result;
         }
 
         /// <summary> Creates a Left-Handed view matrix from an eye position, a forward direction, and an up vector. </summary>
@@ -778,15 +807,44 @@ namespace Prowl.Vector
         /// Creates a translation, rotation, and scale (TRS) matrix.
         /// Operations are applied in order: scale, then rotate, then translate.
         /// </summary>
-        public static Double4x4 CreateTRS(Double3 translation, Quaternion rotation, Double3 scale)
+        public static Double4x4 CreateTRS(Double3 translation, Quaternion rotation, Double3 scale) => CreateScale(translation) * CreateFromQuaternion(rotation) * CreateTranslation(scale);
+
+        /// <summary>
+        /// Creates a rotation matrix from the given Quaternion rotation value.
+        /// </summary>
+        /// <param name="quaternion">The source Quaternion.</param>
+        /// <returns>The rotation matrix.</returns>
+        public static Double4x4 CreateFromQuaternion(Quaternion quaternion)
         {
-            Double3x3 r = new Double3x3(rotation);
-            return new Double4x4(
-                new Double4(r.c0.X * scale.X, r.c0.Y * scale.X, r.c0.Z * scale.X, 0.0),
-                new Double4(r.c1.X * scale.Y, r.c1.Y * scale.Y, r.c1.Z * scale.Y, 0.0),
-                new Double4(r.c2.X * scale.Z, r.c2.Y * scale.Z, r.c2.Z * scale.Z, 0.0),
-                new Double4(translation.X, translation.Y, translation.Z, 1.0)
-            );
+            Double4x4 result = default;
+
+            double xx = quaternion.X * quaternion.X;
+            double yy = quaternion.Y * quaternion.Y;
+            double zz = quaternion.Z * quaternion.Z;
+            
+            double xy = quaternion.X * quaternion.Y;
+            double wz = quaternion.Z * quaternion.W;
+            double xz = quaternion.Z * quaternion.X;
+            double wy = quaternion.Y * quaternion.W;
+            double yz = quaternion.Y * quaternion.Z;
+            double wx = quaternion.X * quaternion.W;
+
+            result.c0.X = 1.0 - 2.0 * (yy + zz);
+            result.c0.Y = 2.0 * (xy + wz);
+            result.c0.Z = 2.0 * (xz - wy);
+            result.c0.W = 0.0;
+            result.c1.X = 2.0 * (xy - wz);
+            result.c1.Y = 1.0 - 2.0 * (zz + xx);
+            result.c1.Z = 2.0 * (yz + wx);
+            result.c1.W = 0.0;
+            result.c2.X = 2.0 * (xz + wy);
+            result.c2.Y = 2.0 * (yz - wx);
+            result.c2.Z = 1.0 - 2.0 * (yy + xx);
+            result.c2.W = 0.0;
+
+            result.c3 = new Double4(0.0, 0.0, 0.0, 1.0);
+
+            return result;
         }
 
 
