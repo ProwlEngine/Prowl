@@ -44,7 +44,10 @@ class SourceGenerator
         public string GetColumnVectorType() => $"{Prefix}{Rows}"; // e.g., Float4
         public string GetFullBoolMatrixType() => $"{BoolVectorTypeNamePrefix}{Rows}x{Columns}"; // e.g. Bool4x4
         public string GetFullBoolColumnVectorType() => $"{BoolVectorTypeNamePrefix}{Rows}"; // e.g. Bool4
-
+        public bool IsTranslationMatrix()
+        {
+            return (Rows == 3 && Columns == 3) || (Rows == 4 && Columns == 4);
+        }
     }
 
     internal class VectorConfig
@@ -1799,6 +1802,18 @@ class SourceGenerator
 
         // --- Static Properties (Identity, Zero) ---
         GenerateMatrixStaticFields(sb, config);
+
+        // --- Translation Property (Getter, Setter) ---
+        if (config.IsTranslationMatrix())
+        {
+            sb.AppendLine($"\t/// <summary>Gets or sets the translation component of the matrix.</summary>");
+            sb.AppendLine($"\tpublic {columnVectorType} Translation");
+            sb.AppendLine($"\t{{");
+            sb.AppendLine($"\t\t{Inline} get => c{cols - 1};");
+            sb.AppendLine($"\t\t{Inline} set => c{cols - 1} = value;");
+            sb.AppendLine($"\t}}");
+            sb.AppendLine();
+        }
 
         // --- Constructors ---
         GenerateMatrixConstructors(sb, config);
