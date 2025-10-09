@@ -103,6 +103,59 @@ namespace Prowl.Vector
             }
         }
 
+        /// <summary>
+        /// Flips the sign of each component of the quaternion.
+        /// </summary>
+        /// <param name="value">The source Quaternion.</param>
+        /// <returns>The negated Quaternion.</returns>
+        public static Quaternion operator -(Quaternion value)
+        {
+            Quaternion ans;
+
+            ans.X = -value.X;
+            ans.Y = -value.Y;
+            ans.Z = -value.Z;
+            ans.W = -value.W;
+
+            return ans;
+        }
+
+        /// <summary>
+        /// Adds two Quaternions element-by-element.
+        /// </summary>
+        /// <param name="value1">The first source Quaternion.</param>
+        /// <param name="value2">The second source Quaternion.</param>
+        /// <returns>The result of adding the Quaternions.</returns>
+        public static Quaternion operator +(Quaternion value1, Quaternion value2)
+        {
+            Quaternion ans;
+
+            ans.X = value1.X + value2.X;
+            ans.Y = value1.Y + value2.Y;
+            ans.Z = value1.Z + value2.Z;
+            ans.W = value1.W + value2.W;
+
+            return ans;
+        }
+
+        /// <summary>
+        /// Subtracts one Quaternion from another.
+        /// </summary>
+        /// <param name="value1">The first source Quaternion.</param>
+        /// <param name="value2">The second Quaternion, to be subtracted from the first.</param>
+        /// <returns>The result of the subtraction.</returns>
+        public static Quaternion operator -(Quaternion value1, Quaternion value2)
+        {
+            Quaternion ans;
+
+            ans.X = value1.X - value2.X;
+            ans.Y = value1.Y - value2.Y;
+            ans.Z = value1.Z - value2.Z;
+            ans.W = value1.W - value2.W;
+
+            return ans;
+        }
+
         public static Quaternion operator *(Quaternion lhs, Quaternion rhs)
         {
             return new Quaternion(lhs.W * rhs.X + lhs.X * rhs.W + lhs.Y * rhs.Z - lhs.Z * rhs.Y,
