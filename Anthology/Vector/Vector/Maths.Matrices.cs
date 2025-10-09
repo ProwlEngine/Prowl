@@ -404,23 +404,27 @@ namespace Prowl.Vector
         /// <summary>Creates a Left-Handed perspective projection matrix (Depth [0,1]).</summary>
         public static Float4x4 CreatePerspectiveFov(float verticalFovRadians, float aspectRatio, float nearPlane, float farPlane)
         {
-            // Ensure parameters are valid
-            if (nearPlane <= 0.0f || farPlane <= 0.0f || aspectRatio <= 0.0f || verticalFovRadians <= 0.0f || verticalFovRadians >= Maths.PI || nearPlane >= farPlane)
-            {
-                return Float4x4.Identity; // Or throw
-            }
+            // This implementation is based on the DirectX Math Library XMMatrixPerspectiveLH method
+            // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
 
-            float yScale = 1.0f / Maths.Tan(verticalFovRadians * 0.5f);
-            float xScale = yScale / aspectRatio;
+            if(verticalFovRadians <= 0f) throw new ArgumentOutOfRangeException(nameof(verticalFovRadians), "Must be greater than zero.");
+            if(verticalFovRadians >= Maths.PI) throw new ArgumentOutOfRangeException(nameof(verticalFovRadians), "Must be less than Pi.");
 
-            Float4x4 result = Float4x4.Zero;
-            result.c0.X = xScale;
-            result.c1.Y = yScale;
-            // DirectX style (maps Z to [0,1])
-            result.c2.Z = farPlane / (farPlane - nearPlane);
-            result.c2.W = 1.0f; // Puts Z_eye into W_clip
-            result.c3.Z = -nearPlane * farPlane / (farPlane - nearPlane);
-            // result.c3.W is 0.0f from Zero init
+            if (nearPlane <= 0f) throw new ArgumentOutOfRangeException(nameof(nearPlane), "Must be greater than zero.");
+            if(farPlane <= 0f) throw new ArgumentOutOfRangeException(nameof(farPlane), "Must be greater than zero.");
+            if(nearPlane >= farPlane) throw new ArgumentOutOfRangeException(nameof(nearPlane), "Must be less than farPlane.");
+
+            float height = 1.0f / Maths.Tan(verticalFovRadians * 0.5f);
+            float width = height / aspectRatio;
+            float range = float.IsPositiveInfinity(farPlane) ? 1.0f : farPlane / (farPlane - nearPlane);
+
+            Float4x4 result = default;
+
+            result.c0 = new Float4(width, 0, 0, 0);
+            result.c1 = new Float4(0, height, 0, 0);
+            result.c2 = new Float4(0, 0, range, 1.0f);
+            result.c3 = new Float4(0, 0, -range * nearPlane, 0);
+
             return result;
         }
 
@@ -829,23 +833,27 @@ namespace Prowl.Vector
         /// <summary>Creates a Left-Handed perspective projection matrix (Depth [0,1]).</summary>
         public static Double4x4 CreatePerspectiveFov(double verticalFovRadians, double aspectRatio, double nearPlane, double farPlane)
         {
-            // Ensure parameters are valid
-            if (nearPlane <= 0.0 || farPlane <= 0.0 || aspectRatio <= 0.0 || verticalFovRadians <= 0.0 || verticalFovRadians >= Maths.PI || nearPlane >= farPlane)
-            {
-                return Double4x4.Identity; // Or throw
-            }
+            // This implementation is based on the DirectX Math Library XMMatrixPerspectiveLH method
+            // https://github.com/microsoft/DirectXMath/blob/master/Inc/DirectXMathMatrix.inl
 
-            double yScale = 1.0 / Maths.Tan(verticalFovRadians * 0.5);
-            double xScale = yScale / aspectRatio;
+            if (verticalFovRadians <= 0f) throw new ArgumentOutOfRangeException(nameof(verticalFovRadians), "Must be greater than zero.");
+            if (verticalFovRadians >= Maths.PI) throw new ArgumentOutOfRangeException(nameof(verticalFovRadians), "Must be less than Pi.");
 
-            Double4x4 result = Double4x4.Zero;
-            result.c0.X = xScale;
-            result.c1.Y = yScale;
-            // DirectX style (maps Z to [0,1])
-            result.c2.Z = farPlane / (farPlane - nearPlane);
-            result.c2.W = 1.0; // Puts Z_eye into W_clip
-            result.c3.Z = -nearPlane * farPlane / (farPlane - nearPlane);
-            // result.c3.W is 0.0 from Zero init
+            if (nearPlane <= 0f) throw new ArgumentOutOfRangeException(nameof(nearPlane), "Must be greater than zero.");
+            if (farPlane <= 0f) throw new ArgumentOutOfRangeException(nameof(farPlane), "Must be greater than zero.");
+            if (nearPlane >= farPlane) throw new ArgumentOutOfRangeException(nameof(nearPlane), "Must be less than farPlane.");
+
+            double height = 1.0 / Maths.Tan(verticalFovRadians * 0.5);
+            double width = height / aspectRatio;
+            double range = double.IsPositiveInfinity(farPlane) ? 1.0 : farPlane / (farPlane - nearPlane);
+
+            Double4x4 result = default;
+
+            result.c0 = new Double4(width, 0, 0, 0);
+            result.c1 = new Double4(0, height, 0, 0);
+            result.c2 = new Double4(0, 0, range, 1.0f);
+            result.c3 = new Double4(0, 0, -range * nearPlane, 0);
+
             return result;
         }
     }
