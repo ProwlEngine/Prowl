@@ -339,7 +339,14 @@ namespace Prowl.Vector
             );
         }
 
-        /// <summary>Creates a Left-Handed view matrix.</summary>
+        /// <summary> Creates a Left-Handed view matrix from an eye position, a forward direction, and an up vector. </summary>
+        public static Float4x4 CreateLookTo(Float3 eyePosition, Float3 forwardVector, Float3 upVector)
+        {
+            // Simply call CreateLookAt using a target point one unit in the forward direction
+            return CreateLookAt(eyePosition, eyePosition + forwardVector, upVector);
+        }
+
+        /// <summary>Creates a Left-Handed view matrix from an eye position, a forward direction, and an up vector.</summary>
         public static Float4x4 CreateLookAt(Float3 eyePosition, Float3 targetPosition, Float3 upVector)
         {
             // Columns: [ right | up | forward | position ]
@@ -757,6 +764,13 @@ namespace Prowl.Vector
             );
         }
 
+
+        /// <summary> Creates a Left-Handed view matrix from an eye position, a forward direction, and an up vector. </summary>
+        public static Double4x4 CreateLookTo(Double3 eyePosition, Double3 forwardVector, Double3 upVector)
+        {
+            // Simply call CreateLookAt using a target point one unit in the forward direction
+            return CreateLookAt(eyePosition, eyePosition + forwardVector, upVector);
+        }
         /// <summary>Creates a Left-Handed view matrix.</summary>
         public static Double4x4 CreateLookAt(Double3 eyePosition, Double3 targetPosition, Double3 upVector)
         {
