@@ -46,7 +46,8 @@ class SourceGenerator
         public string GetFullBoolColumnVectorType() => $"{BoolVectorTypeNamePrefix}{Rows}"; // e.g. Bool4
         public bool IsTranslationMatrix()
         {
-            return (Rows == 3 && Columns == 3) || (Rows == 4 && Columns == 4);
+            return ((Rows == 3 && Columns == 3) || (Rows == 4 && Columns == 4)) &&
+                (PrimitiveType == "float" || PrimitiveType == "double");
         }
     }
 
