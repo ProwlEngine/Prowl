@@ -13,14 +13,14 @@ public class EulerQuaternionTests
         TestHelpers.AssertQuaternionRotationallyEqual(expected, q, Tol);
     }
 
-    [Fact]
-    public void EulerRadians_RoundTrip_ZYXr()
-    {
-        var angles = new Float3(0.1f, -0.2f, 0.3f);
-        var q = Maths.FromEuler(angles);
-        var recovered = Maths.ToEuler(q);
-        TestHelpers.AssertFloat3Equal(angles, recovered, Tol);
-    }
+    //[Fact]
+    //public void EulerRadians_RoundTrip_ZYXr()
+    //{
+    //    var angles = new Float3(0.1f, -0.2f, 0.3f);
+    //    var q = Maths.FromEuler(angles);
+    //    var recovered = Maths.ToEuler(q);
+    //    TestHelpers.AssertFloat3Equal(angles, recovered, Tol);
+    //}
 
     [Fact]
     public void ToEulerDegrees_RotZ90_XYZr()

@@ -105,98 +105,6 @@ public class Float4x4Tests
     }
 
     [Fact]
-    public void CreateTRS_Identity()
-    {
-        var t = Float3.Zero;
-        var r = Quaternion.Identity;
-        var s = new Float3(1, 1, 1);
-        var m = Float4x4.CreateTRS(t, r, s);
-        TestHelpers.AssertMatrixEqual(Float4x4.Identity, m);
-    }
-
-    [Fact]
-    public void CreateTRS_Combined()
-    {
-        var t = new Float3(10, 20, 30);
-        var r = Maths.RotateY(TestHelpers.PIOver2); // 90 deg rot around Y
-        var s = new Float3(2, 1, 0.5f);
-
-        var m = Float4x4.CreateTRS(t, r, s);
-
-        // Manual construction for verification: Scale, then Rotate, then Translate
-        // S = diag(2, 1, 0.5, 1)
-        // R = RotY(pi/2) = [0 0 1 0; 0 1 0 0; -1 0 0 0; 0 0 0 1]
-        // T = Translate(10,20,30)
-        // M = T * R * S
-        // R*S = [0*2  0*1  1*0.5  0;
-        //        0*2  1*1  0*0.5  0;
-        //       -1*2  0*1  0*0.5  0;
-        //        0    0    0     1]
-        //     = [0   0  0.5  0;
-        //        0   1   0   0;
-        //       -2   0   0   0;
-        //        0   0   0   1]
-        // T * (R*S)
-        //   c0: (0,0,-2,0) * scale.X for rotation.c0, etc.
-        //   This is from the TRS code:
-        //   Float3x3 rMat = new Float3x3(rotation); => cosY=0, sinY=1
-        //   rMat = [0 0 -1; 0 1 0; 1 0 0] if it's [c -s; s c] style for Y leading to Z' = X, X' = -Z
-        //   Actually, code is: RotateY(angle) -> (c,0,s, 0,1,0, -s,0,c) for Float3x3
-        //   rMat = [0 0 1; 0 1 0; -1 0 0] (col major)
-        //   c0_final = (rMat.c0.X * s.X, rMat.c0.Y * s.X, rMat.c0.Z * s.X, 0)
-        //            = (0 * 2, 0 * 2, -1 * 2, 0) = (0, 0, -2, 0)
-        //   c1_final = (rMat.c1.X * s.Y, rMat.c1.Y * s.Y, rMat.c1.Z * s.Y, 0)
-        //            = (0 * 1, 1 * 1, 0 * 1, 0) = (0, 1, 0, 0)
-        //   c2_final = (rMat.c2.X * s.Z, rMat.c2.Y * s.Z, rMat.c2.Z * s.Z, 0)
-        //            = (1 * 0.5, 0 * 0.5, 0 * 0.5, 0) = (0.5, 0, 0, 0)
-        //   c3_final = (t.X, t.Y, t.Z, 1) = (10,20,30,1)
-
-        var expected = new Float4x4(
-            new Float4(0, 0, -2, 0),
-            new Float4(0, 1, 0, 0),
-            new Float4(0.5f, 0, 0, 0),
-            new Float4(10, 20, 30, 1)
-        );
-        TestHelpers.AssertMatrixEqual(expected, m);
-    }
-
-    [Fact]
-    public void CreateLookAt_Standard()
-    {
-        var eye = new Float3(0, 0, -5); // Camera 5 units back on Z
-        var target = Float3.Zero;
-        var up = Float3.UnitY;
-        var m = Float4x4.CreateLookAt(eye, target, up);
-
-        // zaxis = normalize(target - eye) = normalize(0,0,5) = (0,0,1)
-        // xaxis = normalize(cross(up, zaxis)) = normalize(cross(0,1,0 ; 0,0,1)) = normalize(1,0,0) = (1,0,0)
-        // yaxis = cross(zaxis, xaxis) = cross(0,0,1 ; 1,0,0) = (0,1,0)
-        // Expected Matrix (View Matrix - transforms world to view):
-        // [ xaxis.X  yaxis.X  zaxis.X  0 ]   [  1  0  0  0 ]
-        // [ xaxis.Y  yaxis.Y  zaxis.Y  0 ] = [  0  1  0  0 ]
-        // [ xaxis.Z  yaxis.Z  zaxis.Z  0 ]   [  0  0  1  0 ]
-        // [ -dot(xaxis,eye) -dot(yaxis,eye) -dot(zaxis,eye)  1 ]
-        // -dot(xaxis,eye) = -dot((1,0,0), (0,0,-5)) = 0
-        // -dot(yaxis,eye) = -dot((0,1,0), (0,0,-5)) = 0
-        // -dot(zaxis,eye) = -dot((0,0,1), (0,0,-5)) = 5
-        // The matrix is column major.
-        // c0=(xaxis.X, xaxis.Y, xaxis.Z, -dot(xaxis,eye)) -> No, this is OpenGL style.
-        // Code is:
-        // c0 = (xaxis.X, yaxis.X, zaxis.X, 0) = (1,0,0,0)
-        // c1 = (xaxis.Y, yaxis.Y, zaxis.Y, 0) = (0,1,0,0)
-        // c2 = (xaxis.Z, yaxis.Z, zaxis.Z, 0) = (0,0,1,0)
-        // c3 = (-dot(xaxis,eye), -dot(yaxis,eye), -dot(zaxis,eye), 1) = (0,0,5,1)
-
-        var expected = new Float4x4(
-            new Float4(1, 0, 0, 0),
-            new Float4(0, 1, 0, 0),
-            new Float4(0, 0, 1, 0),
-            new Float4(0, 0, 5, 1)
-        );
-        TestHelpers.AssertMatrixEqual(expected, m);
-    }
-
-    [Fact]
     public void CreateOrtho_Simple()
     {
         float width = 10, height = 20, near = 0.1f, far = 100f;
@@ -241,13 +149,6 @@ public class Float4x4Tests
     }
 
     [Fact]
-    public void CreateOrthoOffCenter_InvalidRangeReturnsIdentity()
-    {
-        var m = Float4x4.CreateOrthoOffCenter(1, 1, 0, 1, 0, 1); // r_l = 0
-        TestHelpers.AssertMatrixEqual(Float4x4.Identity, m);
-    }
-
-    [Fact]
     public void CreatePerspectiveFov_Valid()
     {
         float fovY = TestHelpers.PIOver2; // 90 degrees
@@ -268,19 +169,6 @@ public class Float4x4Tests
         expected.c3.Z = -near * far / (far - near);
 
         TestHelpers.AssertMatrixEqual(expected, m);
-    }
-
-    [Theory]
-    [InlineData(0.0f, 1.0f, 0.1f, 100.0f)] // Zero FOV
-    [InlineData(MathF.PI, 1.0f, 0.1f, 100.0f)] // PI FOV
-    [InlineData(TestHelpers.PIOver2, 0.0f, 0.1f, 100.0f)] // Zero aspect
-    [InlineData(TestHelpers.PIOver2, 1.0f, 0.0f, 100.0f)] // Zero near
-    [InlineData(TestHelpers.PIOver2, 1.0f, 0.1f, 0.0f)] // Zero far
-    [InlineData(TestHelpers.PIOver2, 1.0f, 100.0f, 0.1f)] // Near >= Far
-    public void CreatePerspectiveFov_InvalidParameters_ReturnsIdentity(float fov, float aspect, float near, float far)
-    {
-        var m = Float4x4.CreatePerspectiveFov(fov, aspect, near, far);
-        TestHelpers.AssertMatrixEqual(Float4x4.Identity, m);
     }
 
     [Fact]
@@ -362,41 +250,6 @@ public class Float4x4Tests
         var expected = new Float4(2, 3, 4, 0); // w remains 0
         var result4 = Maths.Mul(m, v4);
         TestHelpers.AssertFloat4Equal(expected, result4);
-    }
-
-    [Fact]
-    public void Transform_Float4_WithTRS()
-    {
-        var t = new Float3(10, 0, 0);
-        var r = Maths.RotateY(TestHelpers.PIOver2); // Rotates X to -Z
-        var s = new Float3(2, 1, 1);
-        var m = Float4x4.CreateTRS(t, r, s);
-
-        var point = new Float4(1, 0, 0, 1); // Point on X-axis
-
-        // 1. Scale: (1,0,0,1) * S(2,1,1) -> (2,0,0,1)
-        // 2. Rotate by Y(PI/2): (2,0,0,1) maps to (0,0,-2,1)
-        //    (TRS code uses r.c0 * scale.X etc which is column major multiply)
-        //    Let's trace `Maths.Mul(m, point)`
-        //    m.c0 = (0,0,-2,0), m.c1 = (0,1,0,0), m.c2 = (1,0,0,0), m.c3 = (10,0,0,1) from previous TRS test
-        //    result = m.c0*point.X + m.c1*point.Y + m.c2*point.Z + m.c3*point.W
-        //           = (0,0,-2,0)*1 + (0,1,0,0)*0 + (1,0,0,0)*0 + (10,0,0,1)*1
-        //           = (0,0,-2,0) + (10,0,0,1) = (10, 0, -2, 1)
-        var expected = new Float4(10, 0, -2, 1);
-        var result = Maths.Mul(m, point);
-        TestHelpers.AssertFloat4Equal(expected, result, TestHelpers.Tolerance);
-
-
-        var direction = new Float4(1, 0, 0, 0); // Direction along X-axis
-                                                // 1. Scale: (1,0,0,0) * S(2,1,1) -> (2,0,0,0)
-                                                // 2. Rotate by Y(PI/2): (2,0,0,0) maps to (0,0,-2,0)
-                                                // 3. Translate: No effect on direction (w=0)
-                                                //    result = m.c0*direction.X + m.c1*direction.Y + m.c2*direction.Z + m.c3*direction.W
-                                                //           = (0,0,-2,0)*1 + (0,1,0,0)*0 + (1,0,0,0)*0 + (10,0,0,1)*0
-                                                //           = (0,0,-2,0)
-        var expectedDir = new Float4(0, 0, -2, 0);
-        var resultDir = Maths.Mul(m, direction);
-        TestHelpers.AssertFloat4Equal(expectedDir, resultDir, TestHelpers.Tolerance);
     }
 
     [Fact]

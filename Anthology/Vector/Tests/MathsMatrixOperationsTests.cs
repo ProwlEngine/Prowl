@@ -8,7 +8,7 @@ public class MathsMatrixOperationsTests // For Inverse, Transpose from Maths.cs
         var m = new Float2x2(4, 7, 2, 6); // [4 7; 2 6] -> c0=(4,2), c1=(7,6)
                                           // constructor (m00, m01, m10, m11)
                                           // m00=4, m01=7, m10=2, m11=6
-        var invM = Maths.Inverse(m);
+        var invM = m.Invert();
         // det = 4*6 - 7*2 = 24 - 14 = 10
         // invDet = 0.1
         // Expected: 0.1 * [6 -7; -2 4] = [0.6 -0.7; -0.2 0.4]
@@ -24,7 +24,7 @@ public class MathsMatrixOperationsTests // For Inverse, Transpose from Maths.cs
     public void Inverse_Float3x3_Valid()
     {
         var m = new Float3x3(1, 2, 3, 0, 1, 4, 5, 6, 0);
-        var invM = Maths.Inverse(m);
+        var invM = m.Invert();
         // det = 1*(0-24) - 2*(0-20) + 3*(0-5) = -24 + 40 - 15 = 1
         // Manual cofactor calculation...
         // C00 = -24, C01 = 20, C02 = -5
@@ -44,7 +44,7 @@ public class MathsMatrixOperationsTests // For Inverse, Transpose from Maths.cs
     public void Inverse_Float4x4_Translation()
     {
         var m = Float4x4.CreateTranslation(new Float3(1, 2, 3));
-        var invM = Maths.Inverse(m);
+        var invM = m.Invert();
         var expected = Float4x4.CreateTranslation(new Float3(-1, -2, -3));
         TestHelpers.AssertMatrixEqual(expected, invM);
         TestHelpers.AssertMatrixEqual(Float4x4.Identity, Maths.Mul(m, invM), 0.0001f);

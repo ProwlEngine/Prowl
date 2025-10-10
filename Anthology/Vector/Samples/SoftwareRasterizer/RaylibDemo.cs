@@ -237,7 +237,7 @@ public class RaylibDemo
 
         // Draw rotating cube
         cubeRotation += Raylib.GetFrameTime();
-        var cubeModelMatrix = Float4x4.CreateTranslation(new Float3(-1, 0, 0)) * Float4x4.FromAxisAngle(Maths.Normalize(Float3.One), cubeRotation);
+        var cubeModelMatrix = Maths.Mul(Float4x4.CreateTranslation(new Float3(-1, 0, 0)), Float4x4.FromAxisAngle(Maths.Normalize(Float3.One), cubeRotation));
         DrawMesh(cubeModel, cubeModelMatrix);
 
         // Draw transparent sphere
