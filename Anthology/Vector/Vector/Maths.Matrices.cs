@@ -879,30 +879,42 @@ namespace Prowl.Vector
         /// <summary> Creates a Left-Handed view matrix from an eye position, a forward direction, and an up vector. </summary>
         public static Double4x4 CreateLookTo(Double3 eyePosition, Double3 forwardVector, Double3 upVector)
         {
-            // Simply call CreateLookAt using a target point one unit in the forward direction
-            return CreateLookAt(eyePosition, eyePosition + forwardVector, upVector);
-        }
-        /// <summary>Creates a Left-Handed view matrix.</summary>
-        public static Double4x4 CreateLookAt(Double3 eyePosition, Double3 targetPosition, Double3 upVector)
-        {
-            // Columns: [ right | up | forward | position ]
-            Double3 f = Maths.Normalize(targetPosition - eyePosition); // camera forward (+Z in camera space)
-            Double3 s = Maths.Normalize(Maths.Cross(upVector, f));     // right  = up × f
-            Double3 u = Maths.Cross(f, s);                             // up     = f × s
+            Double3 f = Maths.Normalize(forwardVector);                 // camera forward
+            Double3 s = Maths.Normalize(Maths.Cross(upVector, f));      // right  = up × f
+            Double3 u = Maths.Cross(f, s);                              // up     = f × s
 
             Double4x4 m = Double4x4.Identity;
 
-            // Put axes in columns
-            m[0, 0] = s.X; m[1, 0] = s.Y; m[2, 0] = s.Z;  // column 0 = right
-            m[0, 1] = u.X; m[1, 1] = u.Y; m[2, 1] = u.Z;  // column 1 = up
-            m[0, 2] = f.X; m[1, 2] = f.Y; m[2, 2] = f.Z;  // column 2 = forward
+            m.c0 = new Double4(s.X, u.X, f.X, 0.0);
+            m.c1 = new Double4(s.Y, u.Y, f.Y, 0.0);
+            m.c2 = new Double4(s.Z, u.Z, f.Z, 0.0);
 
-            // Translation (position) in last column
-            m[0, 3] = eyePosition.X;
-            m[1, 3] = eyePosition.Y;
-            m[2, 3] = eyePosition.Z;
+            m.c3.X = -Maths.Dot(s, eyePosition);
+            m.c3.Y = -Maths.Dot(u, eyePosition);
+            m.c3.Z = -Maths.Dot(f, eyePosition);
+            m.c3.W = 1.0;
 
-            // m[3,*] already [0,0,0,1]
+            return m;
+        }
+
+        /// <summary>Creates a Left-Handed view matrix.</summary>
+        public static Double4x4 CreateLookAt(Double3 eyePosition, Double3 targetPosition, Double3 upVector)
+        {
+            Double3 f = Maths.Normalize(targetPosition - eyePosition);  // camera forward
+            Double3 s = Maths.Normalize(Maths.Cross(upVector, f));      // right  = up × f
+            Double3 u = Maths.Cross(f, s);                              // up     = f × s
+
+            Double4x4 m = Double4x4.Identity;
+
+            m.c0 = new Double4(s.X, u.X, f.X, 0.0);
+            m.c1 = new Double4(s.Y, u.Y, f.Y, 0.0);
+            m.c2 = new Double4(s.Z, u.Z, f.Z, 0.0);
+            
+            m.c3.X = -Maths.Dot(s, eyePosition);
+            m.c3.Y = -Maths.Dot(u, eyePosition);
+            m.c3.Z = -Maths.Dot(f, eyePosition);
+            m.c3.W = 1.0;
+
             return m;
         }
 
