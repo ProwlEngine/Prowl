@@ -206,8 +206,8 @@ namespace Prowl.Vector
             float yy = rotation.Y * y;
             float zz = rotation.Z * z;
             float xy = rotation.X * y;
-            float xz = rotation.Y * z;
-            float yz = rotation.Z * z;
+            float xz = rotation.X * z;
+            float yz = rotation.Y * z;
             float wx = rotation.W * x;
             float wy = rotation.W * y;
             float wz = rotation.W * z;
