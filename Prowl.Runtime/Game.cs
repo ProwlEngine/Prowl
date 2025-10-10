@@ -69,7 +69,6 @@ public abstract class Game
         };
 
         Window.Render += (delta) => {
-            Debug.ClearGizmos();
 
             Graphics.StartFrame();
 
@@ -92,6 +91,8 @@ public abstract class Game
             //Paper.EndFrame();
 
             PostGUI();
+
+            Debug.ClearGizmos();
         };
 
         Window.Resize += (size) => {

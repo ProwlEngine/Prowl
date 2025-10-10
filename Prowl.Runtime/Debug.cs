@@ -590,7 +590,7 @@ public class GizmoBuilder
                 IndexFormat = IndexFormat.UInt16,
             };
 
-            _wire.Vertices = [.. _wireData.s_vertices.Cast<Float3>()];
+            _wire.Vertices = [.. _wireData.s_vertices.Select(v => (Float3)v)];
             _wire.Colors = [.. _wireData.s_colors];
             _wire.Indices = _wireData.s_indices.Select(i => (uint)i).ToArray();
 
@@ -604,7 +604,7 @@ public class GizmoBuilder
             }
             else
             {
-                _wire.Vertices = [.. _wireData.s_vertices.Cast<Float3>()];
+                _wire.Vertices = [.. _wireData.s_vertices.Select(v => (Float3)v)];
             }
         }
 
@@ -627,11 +627,11 @@ public class GizmoBuilder
             }
             else
             {
-                _solid.Vertices = [.. _solidData.s_vertices.Cast<Float3>()];
+                _solid.Vertices = [.. _solidData.s_vertices.Select(v => (Float3)v)];
             }
 
             _solid.Colors = [.. _solidData.s_colors];
-            _solid.UV = [.. _solidData.s_uvs.Cast<Float2>()];
+            _solid.UV = [.. _solidData.s_uvs.Select(v => (Float2)v)];
             _solid.Indices = _solidData.s_indices.Select(i => (uint)i).ToArray();
         }
 
