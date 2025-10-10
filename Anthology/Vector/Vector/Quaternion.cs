@@ -168,56 +168,9 @@ namespace Prowl.Vector
             return ans;
         }
 
-        public static Quaternion operator *(Quaternion lhs, Quaternion rhs)
-        {
-            float q1x = lhs.X;
-            float q1y = lhs.Y;
-            float q1z = lhs.Z;
-            float q1w = lhs.W;
-            
-            float q2x = rhs.X;
-            float q2y = rhs.Y;
-            float q2z = rhs.Z;
-            float q2w = rhs.W;
+        public static Quaternion operator *(Quaternion lhs, Quaternion rhs) => Maths.Mul(lhs, rhs);
 
-            // cross(av, bv)
-            float cx = q1y * q2z - q1z * q2y;
-            float cy = q1z * q2x - q1x * q2z;
-            float cz = q1x * q2y - q1y * q2x;
-
-            float dot = q1x * q2x + q1y * q2y + q1z * q2z;
-
-            Quaternion ans = default;
-
-            ans.X = q1x * q2w + q2x * q1w + cx;
-            ans.Y = q1y * q2w + q2y * q1w + cy;
-            ans.Z = q1z * q2w + q2z * q1w + cz;
-            ans.W = q1w * q2w - dot;
-
-            return ans;
-        }
-
-        public static Float3 operator *(Quaternion rotation, Float3 point)
-        {
-            float x = rotation.X * 2.0f;
-            float y = rotation.Y * 2.0f;
-            float z = rotation.Z * 2.0f;
-            float xx = rotation.X * x;
-            float yy = rotation.Y * y;
-            float zz = rotation.Z * z;
-            float xy = rotation.X * y;
-            float xz = rotation.X * z;
-            float yz = rotation.Y * z;
-            float wx = rotation.W * x;
-            float wy = rotation.W * y;
-            float wz = rotation.W * z;
-
-            Float3 res = default;
-            res.X = (1.0f - (yy + zz)) * point.X + (xy - wz) * point.Y + (xz + wy) * point.Z;
-            res.Y = (xy + wz) * point.X + (1.0f - (xx + zz)) * point.Y + (yz - wx) * point.Z;
-            res.Z = (xz - wy) * point.X + (yz + wx) * point.Y + (1.0f - (xx + yy)) * point.Z;
-            return res;
-        }
+        public static Float3 operator *(Quaternion rotation, Float3 point) => Maths.Mul(rotation, point);
 
         public static bool operator ==(Quaternion lhs, Quaternion rhs)
         {
