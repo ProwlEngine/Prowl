@@ -16,7 +16,7 @@ namespace OpenTKSample;
 /// </summary>
 public class Transform
 {
-    private Transform3DFloat _localTransform = Transform3DFloat.Identity;
+    private Transform3D _localTransform = Transform3D.Identity;
 
     private Transform _parent;
     private readonly List<Transform> _children = [];
@@ -88,13 +88,6 @@ public class Transform
         }
     }
 
-    /// <summary>The world-space rotation of the transform, as euler angles in degrees.</summary>
-    public Float3 eulerAngles
-    {
-        get => rotation.ToEulerDegrees();
-        set => rotation = Maths.FromEulerDegrees(value, );
-    }
-
     /// <summary>The world-space forward direction of this transform.</summary>
     public Float3 forward => Maths.Mul(rotation, Float3.UnitZ);
 
@@ -159,7 +152,7 @@ public class Transform
     public Float4x4 localToWorldMatrix => _parent == null ? _localTransform.ToMatrix() : _parent.localToWorldMatrix * _localTransform.ToMatrix();
 
     /// <summary>The matrix that transforms from world space to local space.</summary>
-    public Float4x4 worldToLocalMatrix => Maths.Inverse(localToWorldMatrix);
+    public Float4x4 worldToLocalMatrix => localToWorldMatrix.Invert();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Float3 TransformPoint(Float3 point) => Maths.TransformPoint(point, localToWorldMatrix);
