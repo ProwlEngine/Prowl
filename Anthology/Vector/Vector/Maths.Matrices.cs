@@ -328,7 +328,16 @@ namespace Prowl.Vector
         /// Creates a translation, rotation, and scale (TRS) matrix.
         /// Operations are applied in order: scale, then rotate, then translate.
         /// </summary>
-        public static Float4x4 CreateTRS(Float3 translation, Quaternion rotation, Float3 scale) => CreateScale(translation) * CreateFromQuaternion(rotation) * CreateTranslation(scale);
+        public static Float4x4 CreateTRS(Float3 translation, Quaternion rotation, Float3 scale)
+        {
+            var S = Float4x4.CreateScale(scale);
+            var R = Float4x4.CreateFromQuaternion(rotation);
+            var T = Float4x4.CreateTranslation(translation);
+
+            // Column-vector convention: apply S, then R, then T
+            return Maths.Mul(T, Maths.Mul(R, S));
+            // equivalently: return Maths.Mul(Maths.Mul(T, R), S);
+        }
 
         /// <summary>
         /// Creates a rotation matrix from the given Quaternion rotation value.
@@ -807,7 +816,16 @@ namespace Prowl.Vector
         /// Creates a translation, rotation, and scale (TRS) matrix.
         /// Operations are applied in order: scale, then rotate, then translate.
         /// </summary>
-        public static Double4x4 CreateTRS(Double3 translation, Quaternion rotation, Double3 scale) => CreateScale(translation) * CreateFromQuaternion(rotation) * CreateTranslation(scale);
+        public static Double4x4 CreateTRS(Double3 translation, Quaternion rotation, Double3 scale)
+        {
+            var S = Double4x4.CreateScale(scale);
+            var R = Double4x4.CreateFromQuaternion(rotation);
+            var T = Double4x4.CreateTranslation(translation);
+
+            // Column-vector convention: apply S, then R, then T
+            return Maths.Mul(T, Maths.Mul(R, S));
+            // equivalently: return Maths.Mul(Maths.Mul(T, R), S);
+        }
 
         /// <summary>
         /// Creates a rotation matrix from the given Quaternion rotation value.
