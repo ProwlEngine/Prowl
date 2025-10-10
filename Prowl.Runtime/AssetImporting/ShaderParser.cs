@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Prowl.Runtime.GraphicsBackend.Primitives;
+using Prowl.Vector;
 using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Utils;
 
@@ -396,11 +397,11 @@ public static class ShaderParser
 
             ShaderProperty property = type switch {
                 ShaderPropertyType.Float => 0,
-                ShaderPropertyType.Vector2 => Vector2.zero,
-                ShaderPropertyType.Vector3 => Vector3.zero,
-                ShaderPropertyType.Vector4 => Vector4.zero,
+                ShaderPropertyType.Vector2 => Double2.Zero,
+                ShaderPropertyType.Vector3 => Double3.Zero,
+                ShaderPropertyType.Vector4 => Double4.Zero,
                 ShaderPropertyType.Color => Color.white,
-                ShaderPropertyType.Matrix => Matrix4x4.Identity,
+                ShaderPropertyType.Matrix => Double4x4.Identity,
                 ShaderPropertyType.Texture2D => Texture2D.White,
                 _ => throw new Exception($"Invalid property type") // Should never execute unless EnumParse() breaks.
             };
@@ -425,11 +426,11 @@ public static class ShaderParser
 
             case ShaderPropertyType.Vector2:
                 double[] v2 = VectorParse(tokenizer, 2);
-                return new Vector2(v2[0], v2[1]);
+                return new Double2(v2[0], v2[1]);
 
             case ShaderPropertyType.Vector3:
                 double[] v3 = VectorParse(tokenizer, 3);
-                return new Vector3(v3[0], v3[1], v3[2]);
+                return new Double3(v3[0], v3[1], v3[2]);
 
             case ShaderPropertyType.Color:
                 double[] col = VectorParse(tokenizer, 4);
@@ -437,7 +438,7 @@ public static class ShaderParser
 
             case ShaderPropertyType.Vector4:
                 double[] v4 = VectorParse(tokenizer, 4);
-                return new Vector4(v4[0], v4[1], v4[2], v4[3]);
+                return new Double4(v4[0], v4[1], v4[2], v4[3]);
 
             case ShaderPropertyType.Matrix:
                 throw new ParseException("property", "matrix properties are only assignable programatically and cannot be assigned defaults");

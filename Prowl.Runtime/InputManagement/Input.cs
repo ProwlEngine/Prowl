@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Vector;
+
 using Silk.NET.Input;
 
 namespace Prowl.Runtime;
@@ -26,12 +28,12 @@ public class Input
         remove => Current.OnKeyEvent -= value;
     }
 
-    public static Vector2Int PrevMousePosition => Current.PrevMousePosition;
-    public static Vector2Int MousePosition {
+    public static Int2 PrevMousePosition => Current.PrevMousePosition;
+    public static Int2 MousePosition {
         get => Current.MousePosition;
         set => Current.MousePosition = value;
     }
-    public static Vector2 MouseDelta => Current.MouseDelta;
+    public static Double2 MouseDelta => Current.MouseDelta;
     public static float MouseWheelDelta => Current.MouseWheelDelta;
 
     public static event Action<MouseButton, double, double, bool, bool> OnMouseEvent {

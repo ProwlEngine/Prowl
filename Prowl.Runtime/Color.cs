@@ -4,6 +4,8 @@
 using System;
 using System.Runtime.InteropServices;
 
+using Prowl.Vector;
+
 namespace Prowl.Runtime;
 
 [StructLayout(LayoutKind.Sequential)]
@@ -202,7 +204,7 @@ public struct Color : IEquatable<Color>
 
     public static bool IsGrayscale(Color color)
     {
-        return Mathf.ApproximatelyEquals(color.r, color.g) && Mathf.ApproximatelyEquals(color.g, color.b);
+        return color.r == color.g && color.g == color.b;
     }
 
 
@@ -212,10 +214,10 @@ public struct Color : IEquatable<Color>
 
     public static bool operator ==(Color lhs, Color rhs) => lhs.Equals(rhs);
 
-    public static implicit operator Vector4(Color c) => new(c.r, c.g, c.b, c.a);
+    public static implicit operator Double4(Color c) => new(c.r, c.g, c.b, c.a);
     public static implicit operator System.Numerics.Vector4(Color c) => new(c.r, c.g, c.b, c.a);
 
-    public static implicit operator Color(Vector4 v) => new((float)v.x, (float)v.y, (float)v.z, (float)v.w);
+    public static implicit operator Color(Double4 v) => new((float)v.X, (float)v.Y, (float)v.Z, (float)v.W);
     public static implicit operator Color(System.Numerics.Vector4 v) => new(v.X, v.Y, v.Z, v.W);
 
     public static bool operator !=(Color lhs, Color rhs) => !lhs.Equals(rhs);

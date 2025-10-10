@@ -3,6 +3,8 @@
 
 using System;
 
+using Prowl.Vector;
+
 namespace Prowl.Runtime.Audio;
 
 public delegate void AudioSourcePlaybackCompletedHandler(ActiveAudio source);
@@ -15,8 +17,8 @@ public abstract class ActiveAudio : IDisposable
     public abstract float Pitch { get; set; }
     public abstract float MaxDistance { get; set; }
     public abstract bool Looping { get; set; }
-    public abstract Vector3 Position { get; set; }
-    public abstract Vector3 Direction { get; set; }
+    public abstract Double3 Position { get; set; }
+    public abstract Double3 Direction { get; set; }
     public abstract AudioPositionKind PositionKind { get; set; }
     public abstract void Dispose();
     public abstract void Play(AudioBuffer buffer);

@@ -1,5 +1,6 @@
 ﻿using System;
 
+using Prowl.Vector;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime.Rendering
@@ -42,7 +43,7 @@ namespace Prowl.Runtime.Rendering
 
         public static RenderTexture? GetAtlas() => atlas;
 
-        public static Vector2Int? ReserveTiles(int width, int height, int lightID)
+        public static Int2? ReserveTiles(int width, int height, int lightID)
         {
             int tileWidth = width / tileSize;
             int tileHeight = height / tileSize;
@@ -60,7 +61,7 @@ namespace Prowl.Runtime.Rendering
                         if (found)
                         {
                             ReserveTile(i, j, tileWidth, tileHeight, lightID);
-                            return new Vector2Int(i * tileSize, j * tileSize);
+                            return new Int2(i * tileSize, j * tileSize);
                         }
                     }
 

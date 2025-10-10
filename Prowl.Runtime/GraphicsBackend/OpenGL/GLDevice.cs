@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 
 using Prowl.Runtime.GraphicsBackend.Primitives;
+using Prowl.Vector;
 
 using Silk.NET.Core.Native;
 using Silk.NET.OpenGL;
@@ -329,7 +330,7 @@ namespace Prowl.Runtime.GraphicsBackend.OpenGL
             GL.Uniform1(loc, value);
         }
 
-        public override void SetUniformV2(GraphicsProgram program, string name, Vector2 value)
+        public override void SetUniformV2(GraphicsProgram program, string name, Float2 value)
         {
             int loc = GetUniformLocation(program, name);
             if (loc == -1) return;
@@ -338,7 +339,7 @@ namespace Prowl.Runtime.GraphicsBackend.OpenGL
             GL.Uniform2(loc, value); // Casts to System.Numerics.Vector2
         }
 
-        public override void SetUniformV3(GraphicsProgram program, string name, Vector3 value)
+        public override void SetUniformV3(GraphicsProgram program, string name, Float3 value)
         {
             int loc = GetUniformLocation(program, name);
             if (loc == -1) return;
@@ -347,7 +348,7 @@ namespace Prowl.Runtime.GraphicsBackend.OpenGL
             GL.Uniform3(loc, value); // Casts to System.Numerics.Vector3
         }
 
-        public override void SetUniformV4(GraphicsProgram program, string name, Vector4 value)
+        public override void SetUniformV4(GraphicsProgram program, string name, Float4 value)
         {
             int loc = GetUniformLocation(program, name);
             if (loc == -1) return;

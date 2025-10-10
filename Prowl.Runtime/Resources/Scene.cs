@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Vector;
 using Prowl.Runtime.Rendering;
 
 namespace Prowl.Runtime.Resources
@@ -39,7 +40,7 @@ namespace Prowl.Runtime.Resources
                 ExponentialSquared
             }
             public FogMode Mode = FogMode.ExponentialSquared;
-            public Vector4 Color = new(0.5, 0.5, 0.5, 1.0);
+            public Double4 Color = new(0.5, 0.5, 0.5, 1.0);
             public float Start = 20;
             public float End = 100;
             public float Density = 0.01f;
@@ -64,11 +65,11 @@ namespace Prowl.Runtime.Resources
             public AmbientMode Mode = AmbientMode.Uniform;
 
             // Uniform ambient
-            public Vector4 Color = new(0.2f, 0.2f, 0.2f, 1.0f);
+            public Double4 Color = new(0.2f, 0.2f, 0.2f, 1.0f);
 
             // Hemisphere ambient
-            public Vector4 SkyColor = new(0.3f, 0.3f, 0.4f, 1.0f);
-            public Vector4 GroundColor = new(0.2f, 0.2f, 0.2f, 1.0f);
+            public Double4 SkyColor = new(0.3f, 0.3f, 0.4f, 1.0f);
+            public Double4 GroundColor = new(0.2f, 0.2f, 0.2f, 1.0f);
 
             public bool UseHemisphere => Mode == AmbientMode.Hemisphere;
 

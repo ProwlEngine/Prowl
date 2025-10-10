@@ -4,6 +4,7 @@
 using Jitter2.Collision.Shapes;
 
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
@@ -32,5 +33,5 @@ public sealed class CapsuleCollider : Collider
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new CapsuleShape(MathD.Max(radius, 0.01), MathD.Max(height, 0.01))];
+    public override RigidBodyShape[] CreateShapes() => [new CapsuleShape(Maths.Max(radius, 0.01), Maths.Max(height, 0.01))];
 }

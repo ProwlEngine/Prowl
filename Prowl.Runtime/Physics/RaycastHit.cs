@@ -4,6 +4,8 @@
 using Jitter2.Collision;
 using Jitter2.Collision.Shapes;
 
+using Prowl.Vector;
+
 namespace Prowl.Runtime;
 
 /// <summary>
@@ -24,12 +26,12 @@ public struct RaycastHit
     /// <summary>
     /// The normal of the surface the ray hit.
     /// </summary>
-    public Vector3 normal;
+    public Double3 normal;
 
     /// <summary>
     /// The point in world space where the ray hit the collider.
     /// </summary>
-    public Vector3 point;
+    public Double3 point;
 
     /// <summary>
     /// The Rigidbody3D of the collider that was hit.
@@ -46,7 +48,7 @@ public struct RaycastHit
     /// </summary>
     public Transform transform;
 
-    internal void SetFromJitterResult(DynamicTree.RayCastResult result, Vector3 origin, Vector3 direction)
+    internal void SetFromJitterResult(DynamicTree.RayCastResult result, Double3 origin, Double3 direction)
     {
         shape = result.Entity as RigidBodyShape;
         if(shape == null)
@@ -60,7 +62,7 @@ public struct RaycastHit
         hit = true;
         rigidbody = userData.Rigidbody;
         transform = rigidbody?.GameObject?.Transform;
-        normal = new Vector3(result.Normal.X, result.Normal.Y, result.Normal.Z);
+        normal = new Double3(result.Normal.X, result.Normal.Y, result.Normal.Z);
         distance = result.Lambda;
         point = origin + direction * distance;
     }

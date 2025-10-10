@@ -15,7 +15,9 @@ using DotRecast.Recast.Toolset;
 using DotRecast.Recast.Toolset.Builder;
 using DotRecast.Recast.Toolset.Geom;
 
+using Prowl.Vector;
 using Prowl.Runtime.Resources;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime;
 
@@ -60,8 +62,8 @@ public class NavMeshSurface : MonoBehaviour
     #region Debug
 
     private bool triedDebugData = false;
-    private Bounds debug_bounds;
-    private Vector3[][][] debug_polygons;
+    private AABBD debug_bounds;
+    private Double3[][][] debug_polygons;
 
     private float timer = 0;
 
@@ -108,7 +110,7 @@ public class NavMeshSurface : MonoBehaviour
     {
         try
         {
-            var verts = new List<System.Numerics.Vector3>();
+            var verts = new List<Float3>();
             var indices = new List<int>();
             for (int i = 0; i < input.shapeData.Count; i++)
             {
@@ -126,7 +128,7 @@ public class NavMeshSurface : MonoBehaviour
                 var transform = input.transformsOut[i];
                 for (int l = 0; l < shape.Vertices.Length; l++)
                 {
-                    verts.Add(Transform.InverseTransformPoint(transform.TransformPoint(shape.Vertices[l])));
+                    verts.Add((Float3)Transform.InverseTransformPoint(transform.TransformPoint(shape.Vertices[l])));
                 }
             }
 
@@ -134,7 +136,7 @@ public class NavMeshSurface : MonoBehaviour
             // get a span to that backing array,
             var spanToPoints = CollectionsMarshal.AsSpan(verts);
             // cast the type of span to read it as if it was a series of contiguous floats instead of contiguous vectors
-            var reinterpretedPoints = MemoryMarshal.Cast<System.Numerics.Vector3, float>(spanToPoints);
+            var reinterpretedPoints = MemoryMarshal.Cast<Float3, float>(spanToPoints);
             DemoInputGeomProvider geom = new DemoInputGeomProvider(reinterpretedPoints.ToArray().ToList(), indices);
 
             Debug.Log(geom.GetMeshBoundsMin().ToString());
@@ -249,26 +251,26 @@ public class NavMeshSurface : MonoBehaviour
     private void CacheDebugData()
     {
         navMesh.ComputeBounds(out var min, out var max);
-        debug_bounds = new Bounds() { min = ToV(min), max = ToV(max) };
+        debug_bounds = new AABBD(ToV(min), ToV(max));
 
-        debug_polygons = new Vector3[navMesh.GetTileCount()][][];
+        debug_polygons = new Double3[navMesh.GetTileCount()][][];
         for (int i = 0; i < navMesh.GetTileCount(); i++)
         {
             var tile = navMesh.GetTile(i);
             float[] allverts = tile.data.verts;
-            debug_polygons[i] = new Vector3[tile.data.polys.Length][];
+            debug_polygons[i] = new Double3[tile.data.polys.Length][];
             for (int j = 0; j < tile.data.polys.Length; j++)
             {
                 var poly = tile.data.polys[j];
                 var verts = poly.verts;
 
-                debug_polygons[i][j] = new Vector3[poly.vertCount];
+                debug_polygons[i][j] = new Double3[poly.vertCount];
                 for (int k = 0; k < poly.vertCount; k++)
                 {
                     var v0 = allverts[verts[k] * 3 + 0];
                     var v1 = allverts[verts[k] * 3 + 1];
                     var v2 = allverts[verts[k] * 3 + 2];
-                    debug_polygons[i][j][k] = new Vector3(v0, v1, v2);
+                    debug_polygons[i][j][k] = new Double3(v0, v1, v2);
                 }
             }
         }
@@ -313,8 +315,8 @@ public class NavMeshSurface : MonoBehaviour
 
     #endregion
 
-    private RcVec3f ToRC(Vector3 v) => new((float)v.x, (float)v.y, (float)v.z);
-    private Vector3 ToV(RcVec3f rc) => new(rc.X, rc.Y, rc.Z);
+    private RcVec3f ToRC(Double3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
+    private Double3 ToV(RcVec3f rc) => new(rc.X, rc.Y, rc.Z);
 
     #region Public API
 

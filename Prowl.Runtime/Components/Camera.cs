@@ -3,12 +3,13 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
+using System.Numerics;
 
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime;
 
@@ -77,12 +78,12 @@ public class Camera : MonoBehaviour
 
     private float _aspect;
     private bool _customAspect;
-    private Matrix4x4 _projectionMatrix;
+    private Double4x4 _projectionMatrix;
     private bool _customProjectionMatrix;
 
-    private Matrix4x4 _previousViewMatrix;
-    private Matrix4x4 _previousProjectionMatrix;
-    private Matrix4x4 _previousViewProjectionMatrix;
+    private Double4x4 _previousViewMatrix;
+    private Double4x4 _previousProjectionMatrix;
+    private Double4x4 _previousViewProjectionMatrix;
     private bool _firstFrame = true;
 
     public uint PixelWidth { get; private set; }
@@ -98,7 +99,7 @@ public class Camera : MonoBehaviour
         }
     }
 
-    public Matrix4x4 ProjectionMatrix
+    public Double4x4 ProjectionMatrix
     {
         get => _projectionMatrix;
         set
@@ -108,12 +109,12 @@ public class Camera : MonoBehaviour
         }
     }
 
-    public Matrix4x4 ViewMatrix { get; private set; }
-    public Matrix4x4 OriginViewMatrix { get; private set; }
+    public Double4x4 ViewMatrix { get; private set; }
+    public Double4x4 OriginViewMatrix { get; private set; }
 
-    public Matrix4x4 PreviousViewMatrix => _previousViewMatrix;
-    public Matrix4x4 PreviousProjectionMatrix => _previousProjectionMatrix;
-    public Matrix4x4 PreviousViewProjectionMatrix => _previousViewProjectionMatrix;
+    public Double4x4 PreviousViewMatrix => _previousViewMatrix;
+    public Double4x4 PreviousProjectionMatrix => _previousProjectionMatrix;
+    public Double4x4 PreviousViewProjectionMatrix => _previousViewProjectionMatrix;
 
     public Camera() : base() { }
 
@@ -134,7 +135,7 @@ public class Camera : MonoBehaviour
         {
             _previousViewMatrix = ViewMatrix;
             _previousProjectionMatrix = _projectionMatrix;
-            _previousViewProjectionMatrix = ViewMatrix * _projectionMatrix;
+            _previousViewProjectionMatrix = Maths.Mul(_projectionMatrix, ViewMatrix);
         }
         _firstFrame = false;
 
@@ -159,8 +160,8 @@ public class Camera : MonoBehaviour
             _projectionMatrix = GetProjectionMatrix(_aspect);
         }
 
-        ViewMatrix = Matrix4x4.CreateLookTo(Transform.position, Transform.forward, Transform.up);
-        OriginViewMatrix = Matrix4x4.CreateLookTo(Vector3.zero, Transform.forward, Transform.up);
+        ViewMatrix = Double4x4.CreateLookTo(Transform.position, Transform.forward, Transform.up);
+        OriginViewMatrix = Double4x4.CreateLookTo(Double3.Zero, Transform.forward, Transform.up);
 
         return camTarget;
     }
@@ -182,53 +183,53 @@ public class Camera : MonoBehaviour
         _firstFrame = true;
     }
 
-    public Ray ScreenPointToRay(Vector2 screenPoint, Vector2 screenSize)
+    public RayD ScreenPointToRay(Double2 screenPoint, Double2 screenSize)
     {
         // Normalize screen coordinates to [-1, 1]
-        Vector2 ndc = new Vector2(
-            (screenPoint.x / screenSize.x) * 2.0f - 1.0f,
-            1.0f - (screenPoint.y / screenSize.y) * 2.0f
+        Double2 ndc = new Double2(
+            (screenPoint.X / screenSize.X) * 2.0f - 1.0f,
+            1.0f - (screenPoint.Y / screenSize.Y) * 2.0f
         );
 
         // Create the near and far points in NDC
-        Vector4 nearPointNDC = new Vector4(ndc.x, ndc.y, 0.0f, 1.0f);
-        Vector4 farPointNDC = new Vector4(ndc.x, ndc.y, 1.0f, 1.0f);
+        Double4 nearPointNDC = new(ndc.X, ndc.Y, 0.0f, 1.0f);
+        Double4 farPointNDC = new(ndc.X, ndc.Y, 1.0f, 1.0f);
 
         // Calculate the inverse view-projection matrix
-        double aspect = screenSize.x / screenSize.y;
-        Matrix4x4 viewProjectionMatrix = GetViewMatrix() * GetProjectionMatrix((float)aspect);
-        Matrix4x4.Invert(viewProjectionMatrix, out Matrix4x4 inverseViewProjectionMatrix);
+        double aspect = screenSize.X / screenSize.Y;
+        Double4x4 viewProjectionMatrix = Maths.Mul(GetProjectionMatrix((float)aspect), GetViewMatrix());
+        var inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
 
         // Unproject the near and far points to world space
-        Vector4 nearPointWorld = Vector4.Transform(nearPointNDC, inverseViewProjectionMatrix);
-        Vector4 farPointWorld = Vector4.Transform(farPointNDC, inverseViewProjectionMatrix);
+        Double4 nearPointWorld = Maths.TransformPoint(nearPointNDC, inverseViewProjectionMatrix);
+        Double4 farPointWorld = Maths.TransformPoint(farPointNDC, inverseViewProjectionMatrix);
 
         // Perform perspective divide
-        nearPointWorld /= nearPointWorld.w;
-        farPointWorld /= farPointWorld.w;
+        nearPointWorld /= nearPointWorld.W;
+        farPointWorld /= farPointWorld.W;
 
         // Create the ray
-        Vector3 rayOrigin = new Vector3(nearPointWorld.x, nearPointWorld.y, nearPointWorld.z);
-        Vector3 rayDirection = Vector3.Normalize(new Vector3(farPointWorld.x, farPointWorld.y, farPointWorld.z) - rayOrigin);
+        Double3 rayOrigin = new Double3(nearPointWorld.X, nearPointWorld.Y, nearPointWorld.Z);
+        Double3 rayDirection = Maths.Normalize(new Double3(farPointWorld.X, farPointWorld.Y, farPointWorld.Z) - rayOrigin);
 
-        return new Ray(rayOrigin, rayDirection);
+        return new RayD(rayOrigin, rayDirection);
     }
 
-    public Matrix4x4 GetViewMatrix(bool applyPosition = true)
+    public Double4x4 GetViewMatrix(bool applyPosition = true)
     {
-        Vector3 position = applyPosition ? Transform.position : Vector3.zero;
+        Double3 position = applyPosition ? Transform.position : Double3.Zero;
 
-        return Matrix4x4.CreateLookTo(position, Transform.forward, Transform.up);
+        return Double4x4.CreateLookTo(position, Transform.forward, Transform.up);
     }
 
-    private Matrix4x4 GetProjectionMatrix(float aspect)
+    private Double4x4 GetProjectionMatrix(float aspect)
     {
-        Matrix4x4 proj;
+        Double4x4 proj;
 
         if (projectionType == ProjectionType.Orthographic)
-            proj = Matrix4x4.CreateOrthographic(OrthographicSize, OrthographicSize, NearClipPlane, FarClipPlane);
+            proj = Double4x4.CreateOrtho(OrthographicSize, OrthographicSize, NearClipPlane, FarClipPlane);
         else
-            proj = Matrix4x4.CreatePerspectiveFieldOfView(FieldOfView.ToRad(), aspect, NearClipPlane, FarClipPlane);
+            proj = Double4x4.CreatePerspectiveFov(Maths.ToRadians(FieldOfView), aspect, NearClipPlane, FarClipPlane);
 
         return proj;
     }

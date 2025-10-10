@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Reflection;
 
 using Prowl.Echo;
+using Prowl.Vector;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;

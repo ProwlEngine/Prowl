@@ -2,13 +2,14 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime.Audio;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
 public class AudioListener : MonoBehaviour
 {
     private uint _lastVersion;
-    private Vector3 lastPos;
+    private Double3 lastPos;
 
     public override void OnEnable()
     {

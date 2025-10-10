@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 
+using Prowl.Vector;
+
 namespace Prowl.Runtime.Resources
 {
     public class Model : EngineObject
@@ -73,9 +75,9 @@ namespace Prowl.Runtime.Resources
     public class ModelNode
     {
         public string Name { get; set; }
-        public Vector3 LocalPosition { get; set; }
+        public Double3 LocalPosition { get; set; }
         public Quaternion LocalRotation { get; set; }
-        public Vector3 LocalScale { get; set; } = Vector3.one;
+        public Double3 LocalScale { get; set; } = Double3.One;
         public List<ModelNode> Children { get; set; } = new();
 
         // For single mesh per node

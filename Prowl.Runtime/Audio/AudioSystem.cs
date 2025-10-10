@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.Runtime.Audio.Null;
 using Prowl.Runtime.Audio.OpenAL;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.Audio;
 
@@ -54,7 +55,7 @@ public static class AudioSystem
     private static ActiveAudio CreateSource()
     {
         ActiveAudio source = _engine.CreateAudioSource();
-        source.Position = new Vector3();
+        source.Position = new Double3();
         source.PositionKind = AudioPositionKind.ListenerRelative;
         return source;
     }
@@ -101,7 +102,7 @@ public static class AudioSystem
         return buffer;
     }
 
-    public static void ListenerTransformChanged(Transform t, Vector3 lastPost)
+    public static void ListenerTransformChanged(Transform t, Double3 lastPost)
     {
         _engine.SetListenerPosition(t.position);
         _engine.SetListenerVelocity(t.position - lastPost);
@@ -115,7 +116,7 @@ public static class AudioSystem
 
     public static ActiveAudio PlaySound(AudioBuffer buffer)
     {
-        return PlaySound(buffer, 1.0f, 1.0f, Vector3.zero, AudioPositionKind.ListenerRelative, 32f);
+        return PlaySound(buffer, 1.0f, 1.0f, Double3.Zero, AudioPositionKind.ListenerRelative, 32f);
     }
 
     public static ActiveAudio PlaySound(AudioClip clip, float volume)
@@ -126,16 +127,16 @@ public static class AudioSystem
     public static ActiveAudio PlaySound(AudioClip clip, float volume, float pitch)
     {
         AudioBuffer buffer = GetAudioBuffer(clip);
-        return PlaySound(buffer, volume, pitch, Vector3.zero, AudioPositionKind.ListenerRelative, 32f);
+        return PlaySound(buffer, volume, pitch, Double3.Zero, AudioPositionKind.ListenerRelative, 32f);
     }
 
-    public static ActiveAudio PlaySound(AudioClip clip, float volume, float pitch, Vector3 position, AudioPositionKind positionKind)
+    public static ActiveAudio PlaySound(AudioClip clip, float volume, float pitch, Double3 position, AudioPositionKind positionKind)
     {
         AudioBuffer buffer = GetAudioBuffer(clip);
         return PlaySound(buffer, volume, pitch, position, positionKind, 32f);
     }
 
-    public static ActiveAudio PlaySound(AudioBuffer buffer, float volume, float pitch, Vector3 position, AudioPositionKind positionKind, float maxDistance)
+    public static ActiveAudio PlaySound(AudioBuffer buffer, float volume, float pitch, Double3 position, AudioPositionKind positionKind, float maxDistance)
     {
         ActiveAudio source = GetOrCreateSource();
         source.Gain = volume;

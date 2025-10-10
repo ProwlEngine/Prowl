@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Vector;
 using Prowl.Runtime.Rendering;
 
 namespace Prowl.Runtime;
@@ -28,17 +29,17 @@ public class DirectionalLight : Light
 
 
     public override LightType GetLightType() => LightType.Directional;
-    public override void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection)
+    public override void GetShadowMatrix(out Double4x4 view, out Double4x4 projection)
     {
-        Vector3 forward = -Transform.forward;
-        projection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0.1f, shadowDistance);
-        view = Matrix4x4.CreateLookTo(Transform.position - (forward * shadowDistance * 0.5), forward, Transform.up);
+        Double3 forward = -Transform.forward;
+        projection = Double4x4.CreateOrtho(shadowDistance, shadowDistance, 0.1f, shadowDistance);
+        view = Double4x4.CreateLookTo(Transform.position - (forward * shadowDistance * 0.5), forward, Transform.up);
     }
 
-    public void UploadToGPU(bool cameraRelative, Vector3 cameraPosition, int atlasX, int atlasY, int atlasWidth)
+    public void UploadToGPU(bool cameraRelative, Double3 cameraPosition, int atlasX, int atlasY, int atlasWidth)
     {
         PropertyState.SetGlobalVector($"_Sun.direction", Transform.forward);
-        PropertyState.SetGlobalVector($"_Sun.color", new Vector3(color.r, color.g, color.b));
+        PropertyState.SetGlobalVector($"_Sun.color", new Double3(color.r, color.g, color.b));
         PropertyState.SetGlobalFloat($"_Sun.intensity", intensity);
 
         GetShadowMatrix(out var view, out var proj);
@@ -46,7 +47,7 @@ public class DirectionalLight : Light
         if (cameraRelative)
             view.Translation -= cameraPosition;
 
-        PropertyState.SetGlobalMatrix($"_Sun.shadowMatrix", (view * proj));
+        PropertyState.SetGlobalMatrix($"_Sun.shadowMatrix", Maths.Mul(proj, view));
         PropertyState.SetGlobalFloat($"_Sun.shadowBias", shadowBias);
         PropertyState.SetGlobalFloat($"_Sun.shadowNormalBias", shadowNormalBias);
         PropertyState.SetGlobalFloat($"_Sun.shadowStrength", shadowStrength);

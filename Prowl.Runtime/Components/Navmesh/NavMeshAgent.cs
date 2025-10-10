@@ -6,6 +6,7 @@ using DotRecast.Detour;
 using DotRecast.Detour.Crowd;
 
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
@@ -120,7 +121,7 @@ public class NavMeshAgent : MonoBehaviour
         else
         {
             // calculate position
-            Vector3 pos = surface.Transform.TransformPoint(new(InternalAgent.npos.X, InternalAgent.npos.Y, InternalAgent.npos.Z));
+            Double3 pos = surface.Transform.TransformPoint(new(InternalAgent.npos.X, InternalAgent.npos.Y, InternalAgent.npos.Z));
             Transform.position = pos;
         }
 

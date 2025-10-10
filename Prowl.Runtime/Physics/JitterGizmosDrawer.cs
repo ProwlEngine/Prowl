@@ -4,6 +4,8 @@
 using Jitter2;
 using Jitter2.LinearMath;
 
+using Prowl.Vector;
+
 namespace Prowl.Runtime;
 
 public class JitterGizmosDrawer : IDebugDrawer
@@ -14,40 +16,40 @@ public class JitterGizmosDrawer : IDebugDrawer
 
     public void DrawCube(in JVector p, in JQuaternion ori, in JVector size)
     {
-        Vector3 center = new Vector3(p.X, p.Y, p.Z);
-        Quaternion rotation = new Quaternion(ori.X, ori.Y, ori.Z, ori.W);
-        Vector3 extents = new Vector3(size.X * 0.501f, size.Y * 0.501f, size.Z * 0.501f);
+        Double3 center = new Double3(p.X, p.Y, p.Z);
+        Quaternion rotation = new Quaternion((float)ori.X, (float)ori.Y, (float)ori.Z, (float)ori.W);
+        Double3 extents = new Double3(size.X * 0.501f, size.Y * 0.501f, size.Z * 0.501f);
 
-        Debug.PushMatrix(Matrix4x4.TRS(center, rotation, Vector3.one));
+        Debug.PushMatrix(Double4x4.CreateTRS(center, rotation, Double3.One));
         Debug.DrawCube(center, extents, color);
         Debug.PopMatrix();
     }
 
     public void DrawPoint(in JVector p)
     {
-        Vector3 center = new Vector3(p.X, p.Y, p.Z);
+        Double3 center = new Double3(p.X, p.Y, p.Z);
         Debug.DrawSphere(center, 0.1f, color, 8);
     }
 
     public void DrawSegment(in JVector pA, in JVector pB)
     {
-        Vector3 a = new Vector3(pA.X, pA.Y, pA.Z);
-        Vector3 b = new Vector3(pB.X, pB.Y, pB.Z);
+        Double3 a = new Double3(pA.X, pA.Y, pA.Z);
+        Double3 b = new Double3(pB.X, pB.Y, pB.Z);
         Debug.DrawLine(a, b, color);
     }
 
     public void DrawSphere(in JVector p, in JQuaternion ori, float radius)
     {
-        Vector3 center = new Vector3(p.X, p.Y, p.Z);
-        Quaternion rotation = new Quaternion(ori.X, ori.Y, ori.Z, ori.W);
+        Double3 center = new Double3(p.X, p.Y, p.Z);
+        Quaternion rotation = new Quaternion((float)ori.X, (float)ori.Y, (float)ori.Z, (float)ori.W);
         Debug.DrawWireSphere(center, radius, color);
     }
 
     public void DrawTriangle(in JVector pA, in JVector pB, in JVector pC)
     {
-        Vector3 a = new Vector3(pA.X, pA.Y, pA.Z);
-        Vector3 b = new Vector3(pB.X, pB.Y, pB.Z);
-        Vector3 c = new Vector3(pC.X, pC.Y, pC.Z);
+        Double3 a = new Double3(pA.X, pA.Y, pA.Z);
+        Double3 b = new Double3(pB.X, pB.Y, pB.Z);
+        Double3 c = new Double3(pC.X, pC.Y, pC.Z);
         //Debug.DrawTriangle(a, b, c, color);
         Debug.DrawLine(a, b, color);
         Debug.DrawLine(b, c, color);

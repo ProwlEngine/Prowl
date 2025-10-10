@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
+using Prowl.Vector;
 using Prowl.Runtime.Rendering;
 
 namespace Prowl.Runtime;
@@ -27,8 +28,8 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public virtual int GetLayer() => this.GameObject.layerIndex;
     public virtual int GetLightID() => this.InstanceID;
     public abstract LightType GetLightType();
-    public virtual Vector3 GetLightPosition() => Transform.position;
-    public virtual Vector3 GetLightDirection() => Transform.forward;
+    public virtual Double3 GetLightPosition() => Transform.position;
+    public virtual Double3 GetLightDirection() => Transform.forward;
     public virtual bool DoCastShadows() => castShadows;
-    public abstract void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection);
+    public abstract void GetShadowMatrix(out Double4x4 view, out Double4x4 projection);
 }

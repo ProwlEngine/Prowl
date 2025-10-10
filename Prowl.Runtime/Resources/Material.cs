@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Vector;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Shaders;
 
@@ -64,23 +65,23 @@ namespace Prowl.Runtime.Resources
         public void SetKeyword(string keyword, bool value) => _localKeywords[keyword] = value;
 
         public void SetColor(string name, Color value) => _properties.SetColor(name, value);
-        public void SetVector(string name, Vector2 value) => _properties.SetVector(name, value);
-        public void SetVector(string name, Vector3 value) => _properties.SetVector(name, value);
-        public void SetVector(string name, Vector4 value) => _properties.SetVector(name, value);
+        public void SetVector(string name, Double2 value) => _properties.SetVector(name, value);
+        public void SetVector(string name, Double3 value) => _properties.SetVector(name, value);
+        public void SetVector(string name, Double4 value) => _properties.SetVector(name, value);
         public void SetFloat(string name, float value) => _properties.SetFloat(name, value);
         public void SetInt(string name, int value) => _properties.SetInt(name, value);
-        public void SetMatrix(string name, Matrix4x4 value) => _properties.SetMatrix(name, value);
+        public void SetMatrix(string name, Double4x4 value) => _properties.SetMatrix(name, value);
         public void SetTexture(string name, Texture2D value) => _properties.SetTexture(name, value);
 
         #region Global Properties
 
         public static void SetGlobalColor(string name, Color value) => PropertyState.SetGlobalColor(name, value);
-        public static void SetGlobalVector(string name, Vector2 value) => PropertyState.SetGlobalVector(name, value);
-        public static void SetGlobalVector(string name, Vector3 value) => PropertyState.SetGlobalVector(name, value);
-        public static void SetGlobalVector(string name, Vector4 value) => PropertyState.SetGlobalVector(name, value);
+        public static void SetGlobalVector(string name, Double2 value) => PropertyState.SetGlobalVector(name, value);
+        public static void SetGlobalVector(string name, Double3 value) => PropertyState.SetGlobalVector(name, value);
+        public static void SetGlobalVector(string name, Double4 value) => PropertyState.SetGlobalVector(name, value);
         public static void SetGlobalFloat(string name, float value) => PropertyState.SetGlobalFloat(name, value);
         public static void SetGlobalInt(string name, int value) => PropertyState.SetGlobalInt(name, value);
-        public static void SetGlobalMatrix(string name, Matrix4x4 value) => PropertyState.SetGlobalMatrix(name, value);
+        public static void SetGlobalMatrix(string name, Double4x4 value) => PropertyState.SetGlobalMatrix(name, value);
         public static void SetGlobalTexture(string name, Texture2D value) => PropertyState.SetGlobalTexture(name, value);
 
         #endregion
@@ -98,15 +99,15 @@ namespace Prowl.Runtime.Resources
                     break;
 
                 case ShaderPropertyType.Vector2:
-                    _properties.SetVector(property.Name, (Vector2)property);
+                    _properties.SetVector(property.Name, (Double2)property);
                     break;
 
                 case ShaderPropertyType.Vector3:
-                    _properties.SetVector(property.Name, (Vector3)property);
+                    _properties.SetVector(property.Name, (Double3)property);
                     break;
 
                 case ShaderPropertyType.Vector4:
-                    _properties.SetVector(property.Name, (Vector4)property);
+                    _properties.SetVector(property.Name, (Double4)property);
                     break;
 
                 case ShaderPropertyType.Color:
@@ -114,7 +115,7 @@ namespace Prowl.Runtime.Resources
                     break;
 
                 case ShaderPropertyType.Matrix:
-                    _properties.SetMatrix(property.Name, (Matrix4x4)property);
+                    _properties.SetMatrix(property.Name, (Double4x4)property);
                     break;
             }
         }

@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
@@ -410,11 +411,11 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
         if (Equals(value2, null))
             return Equals(value1, null);
 
-        return (MathD.ApproximatelyEquals(value1.Position, value2.Position))
-               && (MathD.ApproximatelyEquals(value1.Value, value2.Value))
-               && (MathD.ApproximatelyEquals(value1.TangentIn, value2.TangentIn))
-               && (MathD.ApproximatelyEquals(value1.TangentOut, value2.TangentOut))
-               && (value1.Continuity == value2.Continuity);
+        return (value1.Position == value2.Position)
+               && value1.Value == value2.Value
+               && value1.TangentIn == value2.TangentIn
+               && value1.TangentOut == value2.TangentOut
+               && value1.Continuity == value2.Continuity;
     }
 
     #region Inherited Methods
@@ -452,7 +453,7 @@ public class CurveKeyCollection : ICollection<KeyFrame>
             if (index >= _keys.Count)
                 throw new IndexOutOfRangeException();
 
-            if (MathD.ApproximatelyEquals(_keys[index].Position, value.Position))
+            if (_keys[index].Position == value.Position)
                 _keys[index] = value;
             else
             {

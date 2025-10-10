@@ -4,22 +4,23 @@
 using System;
 
 using Prowl.Echo;
+using Prowl.Runtime;
 
-namespace Prowl.Runtime;
+namespace Prowl.Vector;
 
 public class Transform
 {
     #region Properties
 
     #region Position
-    public Vector3 position
+    public Double3 position
     {
         get
         {
             if (_isWorldPosDirty)
             {
                 if (parent != null)
-                    _cachedWorldPosition = parent.localToWorldMatrix.MultiplyPoint(m_LocalPosition);
+                    _cachedWorldPosition = Maths.TransformPoint(m_LocalPosition, parent.localToWorldMatrix);
                 else
                     _cachedWorldPosition = m_LocalPosition;
                 _isWorldPosDirty = false;
@@ -28,11 +29,11 @@ public class Transform
         }
         set
         {
-            Vector3 newPosition = value;
+            Double3 newPosition = value;
             if (parent != null)
                 newPosition = parent.InverseTransformPoint(newPosition);
 
-            if (m_LocalPosition != newPosition)
+            if (!m_LocalPosition.Equals(newPosition))
             {
                 m_LocalPosition = MakeSafe(newPosition);
                 InvalidateTransformCache();
@@ -40,12 +41,12 @@ public class Transform
         }
     }
 
-    public Vector3 localPosition
+    public Double3 localPosition
     {
         get => MakeSafe(m_LocalPosition);
         set
         {
-            if (m_LocalPosition != value)
+            if (!m_LocalPosition.Equals(value))
             {
                 m_LocalPosition = MakeSafe(value);
                 InvalidateTransformCache();
@@ -75,11 +76,11 @@ public class Transform
         }
         set
         {
-            var newVale = Quaternion.identity;
+            var newVale = Quaternion.Identity;
             if (parent != null)
-                newVale = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(parent.rotation) * value));
+                newVale = MakeSafe(Maths.NormalizeSafe(Maths.Inverse(parent.rotation) * value));
             else
-                newVale = MakeSafe(Quaternion.NormalizeSafe(value));
+                newVale = MakeSafe(Maths.NormalizeSafe(value));
             if(localRotation != newVale)
             {
                 localRotation = newVale;
@@ -102,22 +103,22 @@ public class Transform
         }
     }
 
-    public Vector3 eulerAngles
+    public Double3 eulerAngles
     {
         get => MakeSafe(rotation.eulerAngles);
         set
         {
-            rotation = MakeSafe(Quaternion.Euler(value));
+            rotation = MakeSafe(Quaternion.FromEuler((Float3)value));
             InvalidateTransformCache();
         }
     }
 
-    public Vector3 localEulerAngles
+    public Double3 localEulerAngles
     {
         get => MakeSafe(m_LocalRotation.eulerAngles);
         set
         {
-            m_LocalRotation.eulerAngles = MakeSafe(value);
+            m_LocalRotation.eulerAngles = (Float3)MakeSafe(value);
             InvalidateTransformCache();
         }
     }
@@ -125,12 +126,12 @@ public class Transform
 
     #region Scale
 
-    public Vector3 localScale
+    public Double3 localScale
     {
         get => MakeSafe(m_LocalScale);
         set
         {
-            if (m_LocalScale != value)
+            if (!m_LocalScale.Equals(value))
             {
                 m_LocalScale = MakeSafe(value);
                 InvalidateTransformCache();
@@ -138,17 +139,17 @@ public class Transform
         }
     }
 
-    public Vector3 lossyScale
+    public Double3 lossyScale
     {
         get
         {
             if (_isWorldScaleDirty)
             {
-                Vector3 scale = localScale;
+                Double3 scale = localScale;
                 Transform p = parent;
                 while (p != null)
                 {
-                    scale.Scale(p.localScale);
+                    scale = p.localScale * scale;
                     p = p.parent;
                 }
                 _cachedLossyScale = scale;
@@ -160,20 +161,20 @@ public class Transform
 
     #endregion
 
-    public Vector3 right { get => rotation * Vector3.right; }     // TODO: Setter
-    public Vector3 up { get => rotation * Vector3.up; }           // TODO: Setter
-    public Vector3 forward { get => rotation * Vector3.forward; } // TODO: Setter
+    public Double3 right { get => rotation * Float3.UnitX; }     // TODO: Setter
+    public Double3 up { get => rotation * Float3.UnitY; }           // TODO: Setter
+    public Double3 forward { get => rotation * Float3.UnitZ; } // TODO: Setter
 
-    public Matrix4x4 worldToLocalMatrix => localToWorldMatrix.Invert();
+    public Double4x4 worldToLocalMatrix => localToWorldMatrix.Invert();
 
-    public Matrix4x4 localToWorldMatrix
+    public Double4x4 localToWorldMatrix
     {
         get
         {
             if (_isLocalToWorldMatrixDirty)
             {
-                Matrix4x4 t = Matrix4x4.TRS(m_LocalPosition, m_LocalRotation, m_LocalScale);
-                _cachedLocalToWorldMatrix = parent != null ? parent.localToWorldMatrix * t : t;
+                Double4x4 t = Double4x4.CreateTRS(m_LocalPosition, m_LocalRotation, m_LocalScale);
+                _cachedLocalToWorldMatrix = parent != null ? Maths.Mul(parent.localToWorldMatrix, t) : t;
                 _isLocalToWorldMatrixDirty = false;
             }
             return _cachedLocalToWorldMatrix;
@@ -203,17 +204,17 @@ public class Transform
 
     #region Fields
 
-    [SerializeField] Vector3 m_LocalPosition;
-    [SerializeField] Vector3 m_LocalScale = Vector3.one;
-    [SerializeField] Quaternion m_LocalRotation = Quaternion.identity;
+    [SerializeField] Double3 m_LocalPosition;
+    [SerializeField] Double3 m_LocalScale = Double3.One;
+    [SerializeField] Quaternion m_LocalRotation = Quaternion.Identity;
 
     [SerializeIgnore]
     uint _version = 1;
 
-    [SerializeIgnore] private Vector3 _cachedWorldPosition;
+    [SerializeIgnore] private Double3 _cachedWorldPosition;
     [SerializeIgnore] private Quaternion _cachedWorldRotation;
-    [SerializeIgnore] private Vector3 _cachedLossyScale;
-    [SerializeIgnore] private Matrix4x4 _cachedLocalToWorldMatrix;
+    [SerializeIgnore] private Double3 _cachedLossyScale;
+    [SerializeIgnore] private Double4x4 _cachedLocalToWorldMatrix;
     [SerializeIgnore] private bool _isLocalToWorldMatrixDirty = true;
     [SerializeIgnore] private bool _isWorldPosDirty = true;
     [SerializeIgnore] private bool _isWorldRotDirty = true;
@@ -235,7 +236,7 @@ public class Transform
             child.Transform.InvalidateTransformCache();
     }
 
-    public void SetLocalTransform(Vector3 position, Quaternion rotation, Vector3 scale)
+    public void SetLocalTransform(Double3 position, Quaternion rotation, Double3 scale)
     {
         m_LocalPosition = position;
         m_LocalRotation = rotation;
@@ -244,8 +245,8 @@ public class Transform
     }
 
     private double MakeSafe(double v) => double.IsNaN(v) ? 0 : v;
-    private Vector3 MakeSafe(Vector3 v) => new Vector3(MakeSafe(v.x), MakeSafe(v.y), MakeSafe(v.z));
-    private Quaternion MakeSafe(Quaternion v) => new Quaternion(MakeSafe(v.x), MakeSafe(v.y), MakeSafe(v.z), MakeSafe(v.w));
+    private Double3 MakeSafe(Double3 v) => new Double3(MakeSafe(v.X), MakeSafe(v.Y), MakeSafe(v.Z));
+    private Quaternion MakeSafe(Quaternion v) => new Quaternion((float)MakeSafe(v.X), (float)MakeSafe(v.Y), (float)MakeSafe(v.Z), (float)MakeSafe(v.W));
 
     public Transform? Find(string path)
     {
@@ -301,7 +302,7 @@ public class Transform
         return path;
     }
 
-    public void Translate(Vector3 translation, Transform? relativeTo = null)
+    public void Translate(Double3 translation, Transform? relativeTo = null)
     {
         if (relativeTo != null)
             position += relativeTo.TransformDirection(translation);
@@ -309,84 +310,77 @@ public class Transform
             position += translation;
     }
 
-    public void Rotate(Vector3 eulerAngles, bool relativeToSelf = true)
+    public void Rotate(Double3 eulerAngles, bool relativeToSelf = true)
     {
-        Quaternion eulerRot = Quaternion.Euler(eulerAngles.x, eulerAngles.y, eulerAngles.z);
+        Quaternion eulerRot = Quaternion.FromEuler((Float3)eulerAngles);
         if (relativeToSelf)
             localRotation = localRotation * eulerRot;
         else
-            rotation = rotation * (Quaternion.Inverse(rotation) * eulerRot * rotation);
+            rotation = rotation * (Maths.Inverse(rotation) * eulerRot * rotation);
     }
 
-    public void Rotate(Vector3 axis, double angle, bool relativeToSelf = true)
+    public void Rotate(Double3 axis, double angle, bool relativeToSelf = true)
     {
-        RotateAroundInternal(relativeToSelf ? TransformDirection(axis) : axis, angle * MathD.Deg2Rad);
+        RotateAroundInternal(relativeToSelf ? TransformDirection(axis) : axis, angle * Maths.Deg2Rad);
     }
 
-    public void RotateAround(Vector3 point, Vector3 axis, double angle)
+    public void RotateAround(Double3 point, Double3 axis, double angle)
     {
-        Vector3 worldPos = position;
-        Quaternion q = Quaternion.AngleAxis(angle, axis);
-        Vector3 dif = worldPos - point;
-        dif = q * dif;
+        Double3 worldPos = position;
+        Quaternion q = Maths.AxisAngle((Float3)axis, (float)angle);
+        Double3 dif = worldPos - point;
+        dif = q * (Float3)dif;
         worldPos = point + dif;
         position = worldPos;
-        RotateAroundInternal(axis, angle * MathD.Deg2Rad);
+        RotateAroundInternal(axis, angle * Maths.Deg2Rad);
     }
 
-    internal void RotateAroundInternal(Vector3 worldAxis, double rad)
+    internal void RotateAroundInternal(Double3 worldAxis, double rad)
     {
-        Vector3 localAxis = InverseTransformDirection(worldAxis);
-        if (localAxis.sqrMagnitude > double.Epsilon)
+        Double3 localAxis = InverseTransformDirection(worldAxis);
+        if (localAxis.LengthSquared > double.Epsilon)
         {
-            localAxis.Normalize();
-            Quaternion q = Quaternion.AngleAxis(rad, localAxis);
-            m_LocalRotation = Quaternion.NormalizeSafe(m_LocalRotation * q);
+            localAxis = Maths.Normalize(localAxis);
+            Quaternion q = Maths.AxisAngle((Float3)localAxis, (float)rad);
+            m_LocalRotation = Maths.NormalizeSafe(m_LocalRotation * q);
         }
-    }
-
-    public void LookAt(Vector3 worldPosition, Vector3 worldUp)
-    {
-        // Cheat using Matrix4x4.CreateLookAt
-        Matrix4x4 m = Matrix4x4.CreateLookAt(position, worldPosition, worldUp);
-        m_LocalRotation = Quaternion.NormalizeSafe(Quaternion.MatrixToQuaternion(m));
     }
 
 
     #region Transform
 
-    public Vector3 TransformPoint(Vector3 inPosition) => Vector4.Transform(new Vector4(inPosition, 1.0), localToWorldMatrix).xyz;
-    public Vector3 InverseTransformPoint(Vector3 inPosition) => Vector4.Transform(new Vector4(inPosition, 1.0), worldToLocalMatrix).xyz;
-    public Quaternion InverseTransformRotation(Quaternion worldRotation) => Quaternion.Inverse(rotation) * worldRotation;
+    public Double3 TransformPoint(Double3 inPosition) => Maths.TransformPoint(new Double4(inPosition, 1.0), localToWorldMatrix).XYZ;
+    public Double3 InverseTransformPoint(Double3 inPosition) => Maths.TransformPoint(new Double4(inPosition, 1.0), worldToLocalMatrix).XYZ;
+    public Quaternion InverseTransformRotation(Quaternion worldRotation) => Maths.Inverse(rotation) * worldRotation;
 
-    public Vector3 TransformDirection(Vector3 inDirection) => rotation * inDirection;
-    public Vector3 InverseTransformDirection(Vector3 inDirection) => Quaternion.Inverse(rotation) * inDirection;
+    public Double3 TransformDirection(Double3 inDirection) => rotation * (Float3)inDirection;
+    public Double3 InverseTransformDirection(Double3 inDirection) => Maths.Inverse(rotation) * (Float3)inDirection;
 
-    public Vector3 TransformVector(Vector3 inVector)
+    public Double3 TransformVector(Double3 inVector)
     {
-        Vector3 worldVector = inVector;
+        Double3 worldVector = inVector;
 
         Transform cur = this;
         while (cur != null)
         {
-            worldVector.Scale(cur.m_LocalScale);
-            worldVector = cur.m_LocalRotation * worldVector;
+            worldVector = worldVector * cur.m_LocalScale;
+            worldVector = cur.m_LocalRotation * (Float3)worldVector;
 
             cur = cur.parent;
         }
         return worldVector;
     }
-    public Vector3 InverseTransformVector(Vector3 inVector)
+    public Double3 InverseTransformVector(Double3 inVector)
     {
-        Vector3 newVector, localVector;
+        Double3 newVector, localVector;
         if (parent != null)
             localVector = parent.InverseTransformVector(inVector);
         else
             localVector = inVector;
 
-        newVector = Quaternion.Inverse(m_LocalRotation) * localVector;
-        if (m_LocalScale != Vector3.one)
-            newVector.Scale(InverseSafe(m_LocalScale));
+        newVector = Maths.Inverse(m_LocalRotation) * (Float3)localVector;
+        if (!m_LocalScale.Equals(Double3.One))
+            newVector = newVector * InverseSafe(m_LocalScale);
 
         return newVector;
     }
@@ -406,17 +400,17 @@ public class Transform
 
     #endregion
 
-    public Matrix4x4 GetWorldRotationAndScale()
+    public Double4x4 GetWorldRotationAndScale()
     {
-        Matrix4x4 ret = Matrix4x4.TRS(new Vector3(0, 0, 0), m_LocalRotation, m_LocalScale);
+        Double4x4 ret = Double4x4.CreateTRS(new Double3(0, 0, 0), m_LocalRotation, m_LocalScale);
         if (parent != null)
         {
-            Matrix4x4 parentTransform = parent.GetWorldRotationAndScale();
-            ret = parentTransform * ret;
+            Double4x4 parentTransform = parent.GetWorldRotationAndScale();
+            ret = Maths.Mul(parentTransform, ret);
         }
         return ret;
     }
 
-    static double InverseSafe(double f) => MathD.Abs(f) > double.Epsilon ? 1.0F / f : 0.0F;
-    static Vector3 InverseSafe(Vector3 v) => new Vector3(InverseSafe(v.x), InverseSafe(v.y), InverseSafe(v.z));
+    static double InverseSafe(double f) => Maths.Abs(f) > double.Epsilon ? 1.0F / f : 0.0F;
+    static Double3 InverseSafe(Double3 v) => new Double3(InverseSafe(v.X), InverseSafe(v.Y), InverseSafe(v.Z));
 }

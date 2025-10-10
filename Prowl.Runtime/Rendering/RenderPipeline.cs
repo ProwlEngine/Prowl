@@ -1,16 +1,18 @@
 ﻿using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
+using Prowl.Vector;
 using Prowl.Runtime.Resources;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.Rendering
 {
     public struct RenderingData
     {
         public bool DisplayGizmo;
-        public Matrix4x4 GridMatrix;
+        public Double4x4 GridMatrix;
         public Color GridColor;
-        public Vector3 GridSizes;
+        public Double3 GridSizes;
     }
 
     public interface IRenderable
@@ -18,9 +20,9 @@ namespace Prowl.Runtime.Rendering
         public Material GetMaterial();
         public int GetLayer();
 
-        public void GetRenderingData(out PropertyState properties, out Mesh drawData, out Matrix4x4 model);
+        public void GetRenderingData(out PropertyState properties, out Mesh drawData, out Double4x4 model);
 
-        public void GetCullingData(out bool isRenderable, out Bounds bounds);
+        public void GetCullingData(out bool isRenderable, out AABBD bounds);
     }
 
     public enum LightType
@@ -36,10 +38,10 @@ namespace Prowl.Runtime.Rendering
         public int GetLightID();
         public int GetLayer();
         public LightType GetLightType();
-        public Vector3 GetLightPosition();
-        public Vector3 GetLightDirection();
+        public Double3 GetLightPosition();
+        public Double3 GetLightDirection();
         public bool DoCastShadows();
-        public void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection);
+        public void GetShadowMatrix(out Double4x4 view, out Double4x4 projection);
     }
 
     public abstract class RenderPipeline : EngineObject

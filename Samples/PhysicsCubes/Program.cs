@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime;
+using Prowl.Vector;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 
@@ -29,14 +30,14 @@ public sealed class PhysicsDemo : Game
         // Create directional light
         GameObject lightGO = new("Directional Light");
         var light = lightGO.AddComponent<DirectionalLight>();
-        lightGO.Transform.localEulerAngles = new Vector3(-45, 45, 0);
+        lightGO.Transform.localEulerAngles = new Double3(-45, 45, 0);
         scene.Add(lightGO);
 
         // Create camera
         GameObject cam = new("Main Camera");
         cam.tag = "Main Camera";
         cam.Transform.position = new(0, 5, -15);
-        cam.Transform.localEulerAngles = new Vector3(15, 0, 0);
+        cam.Transform.localEulerAngles = new Double3(15, 0, 0);
         var camera = cam.AddComponent<Camera>();
         camera.Depth = -1;
         camera.HDR = true;
@@ -62,15 +63,15 @@ public sealed class PhysicsDemo : Game
         // Create floor (static)
         GameObject floor = new GameObject("Floor");
         var floorRenderer = floor.AddComponent<MeshRenderer>();
-        floorRenderer.Mesh = Mesh.CreateCube(new Vector3(20, 1, 20));
+        floorRenderer.Mesh = Mesh.CreateCube(new Double3(20, 1, 20));
         floorRenderer.Material = floorMaterial;
-        floor.Transform.position = new Vector3(0, -0.5f, 0);
+        floor.Transform.position = new Double3(0, -0.5f, 0);
 
         // Add static rigidbody for floor
         var floorRigidbody = floor.AddComponent<Rigidbody3D>();
         floorRigidbody.IsStatic = true;
         var floorCollider = floor.AddComponent<BoxCollider>();
-        floorCollider.Size = new Vector3(20, 1, 20);
+        floorCollider.Size = new Double3(20, 1, 20);
 
         scene.Add(floor);
 
@@ -80,17 +81,17 @@ public sealed class PhysicsDemo : Game
         {
             GameObject cube = new GameObject($"Cube {i}");
             var cubeRenderer = cube.AddComponent<MeshRenderer>();
-            cubeRenderer.Mesh = Mesh.CreateCube(Vector3.one);
+            cubeRenderer.Mesh = Mesh.CreateCube(Double3.One);
             cubeRenderer.Material = cubeMaterial;
 
             // Random position above the floor
             float x = (float)(random.NextDouble() * 10 - 5);
             float y = 5 + i * 2;
             float z = (float)(random.NextDouble() * 10 - 5);
-            cube.Transform.position = new Vector3(x, y, z);
+            cube.Transform.position = new Double3(x, y, z);
 
             // Random rotation
-            cube.Transform.localEulerAngles = new Vector3(
+            cube.Transform.localEulerAngles = new Double3(
                 (float)(random.NextDouble() * 360),
                 (float)(random.NextDouble() * 360),
                 (float)(random.NextDouble() * 360)
@@ -102,7 +103,7 @@ public sealed class PhysicsDemo : Game
             rigidbody.Mass = 1.0f;
 
             var collider = cube.AddComponent<BoxCollider>();
-            collider.Size = Vector3.one;
+            collider.Size = Double3.One;
 
             scene.Add(cube);
         }
@@ -123,28 +124,28 @@ public sealed class PhysicsDemo : Game
         scene.Update();
 
         // Camera movement
-        Vector2 movement = Vector2.zero;
-        if (Input.GetKey(Key.W)) movement += Vector2.up;
-        if (Input.GetKey(Key.S)) movement += Vector2.down;
-        if (Input.GetKey(Key.A)) movement += Vector2.left;
-        if (Input.GetKey(Key.D)) movement += Vector2.right;
+        Double2 movement = Double2.Zero;
+        if (Input.GetKey(Key.W)) movement += Double2.UnitY;
+        if (Input.GetKey(Key.S)) movement -= Double2.UnitY;
+        if (Input.GetKey(Key.A)) movement -= Double2.UnitX;
+        if (Input.GetKey(Key.D)) movement += Double2.UnitX;
 
         // forward/back
-        cameraGO.Transform.position += cameraGO.Transform.forward * movement.y * 10f * Time.deltaTime;
+        cameraGO.Transform.position += cameraGO.Transform.forward * movement.Y * 10f * Time.deltaTime;
         // left/right
-        cameraGO.Transform.position += cameraGO.Transform.right * movement.x * 10f * Time.deltaTime;
+        cameraGO.Transform.position += cameraGO.Transform.right * movement.X * 10f * Time.deltaTime;
 
         // up/down
         float upDown = 0;
         if (Input.GetKey(Key.E)) upDown += 1;
         if (Input.GetKey(Key.Q)) upDown -= 1;
-        cameraGO.Transform.position += Vector3.up * upDown * 10f * Time.deltaTime;
+        cameraGO.Transform.position += Double3.UnitY * upDown * 10f * Time.deltaTime;
 
         // rotate with mouse
         if (Input.GetMouseButton(1))
         {
-            Vector2 delta = Input.MouseDelta;
-            cameraGO.Transform.localEulerAngles += new Vector3(delta.y, delta.x, 0) * 0.1f;
+            Double2 delta = Input.MouseDelta;
+            cameraGO.Transform.localEulerAngles += new Double3(delta.Y, delta.X, 0) * 0.1f;
         }
 
         // Reset scene with R key

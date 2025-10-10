@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Vector;
+
 using Silk.NET.Input;
 
 namespace Prowl.Runtime;
@@ -12,10 +14,10 @@ public interface IInputHandler
 {
     string Clipboard { get; set; }
     bool IsAnyKeyDown { get; }
-    Vector2 MouseDelta { get; }
-    Vector2Int MousePosition { get; set; }
+    Double2 MouseDelta { get; }
+    Int2 MousePosition { get; set; }
     float MouseWheelDelta { get; }
-    Vector2Int PrevMousePosition { get; }
+    Int2 PrevMousePosition { get; }
 
     event Action<Key, bool> OnKeyEvent;
     event Action<MouseButton, double, double, bool, bool> OnMouseEvent;

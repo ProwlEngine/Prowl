@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime.GraphicsBackend.Primitives;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphicsBackend
 {
@@ -59,13 +60,13 @@ namespace Prowl.Runtime.GraphicsBackend
         public abstract int GetAttribLocation(GraphicsProgram program, string name);
         public abstract void SetUniformF(GraphicsProgram program, string name, float value);
         public abstract void SetUniformI(GraphicsProgram program, string name, int value);
-        public abstract void SetUniformV2(GraphicsProgram program, string name, Vector2 value);
-        public abstract void SetUniformV3(GraphicsProgram program, string name, Vector3 value);
-        public abstract void SetUniformV4(GraphicsProgram program, string name, Vector4 value);
-        public void SetUniformMatrix(GraphicsProgram program, string name, bool transpose, Matrix4x4 matrix)
+        public abstract void SetUniformV2(GraphicsProgram program, string name, Float2 value);
+        public abstract void SetUniformV3(GraphicsProgram program, string name, Float3 value);
+        public abstract void SetUniformV4(GraphicsProgram program, string name, Float4 value);
+        public void SetUniformMatrix(GraphicsProgram program, string name, bool transpose, Float4x4 matrix)
         {
-            var fMat = matrix.ToFloat();
-            SetUniformMatrix(program, name, 1, transpose, in fMat.M11);
+            var fMat = matrix;
+            SetUniformMatrix(program, name, 1, transpose, in fMat.c0.X);
         }
         public void SetUniformMatrix(GraphicsProgram program, string name, bool transpose, in float matrix) => SetUniformMatrix(program, name, 1, transpose, in matrix);
         public abstract void SetUniformMatrix(GraphicsProgram program, string name, uint count, bool transpose, in float matrix);

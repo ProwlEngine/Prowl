@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime;
+using Prowl.Vector;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 
@@ -29,7 +30,7 @@ public sealed class MyGame : Game
         // Create directional light
         GameObject lightGO = new("Directional Light");
         var light = lightGO.AddComponent<DirectionalLight>();
-        lightGO.Transform.localEulerAngles = new Vector3(-80, 5, 0);
+        lightGO.Transform.localEulerAngles = new Double3(-80, 5, 0);
         scene.Add(lightGO);
 
         // Create camera
@@ -50,7 +51,7 @@ public sealed class MyGame : Game
 
         scene.Add(cameraGO);
 
-        Mesh cube = Mesh.CreateCube(Vector3.one);
+        Mesh cube = Mesh.CreateCube(Double3.One);
         Material mat = new Material(Shader.LoadDefault(DefaultShader.Standard));
 
         GameObject cubeGO = new GameObject("Cube");
@@ -75,28 +76,28 @@ public sealed class MyGame : Game
     {
         scene.Update();
 
-        Vector2 movement = Vector2.zero;
-        if (Input.GetKey(Key.W)) movement += Vector2.up;
-        if (Input.GetKey(Key.S)) movement += Vector2.down;
-        if (Input.GetKey(Key.A)) movement += Vector2.left;
-        if (Input.GetKey(Key.D)) movement += Vector2.right;
+        Double2 movement = Double2.Zero;
+        if (Input.GetKey(Key.W)) movement += Double2.UnitY;
+        if (Input.GetKey(Key.S)) movement -= Double2.UnitY;
+        if (Input.GetKey(Key.A)) movement -= Double2.UnitX;
+        if (Input.GetKey(Key.D)) movement += Double2.UnitX;
 
         // forward/back
-        cameraGO.Transform.position += cameraGO.Transform.forward * movement.y * 5f * Time.deltaTime;
+        cameraGO.Transform.position += cameraGO.Transform.forward * movement.Y * 5f * Time.deltaTime;
         // left/right
-        cameraGO.Transform.position += cameraGO.Transform.right * movement.x * 5f * Time.deltaTime;
+        cameraGO.Transform.position += cameraGO.Transform.right * movement.X * 5f * Time.deltaTime;
 
         float upDown = 0;
         if (Input.GetKey(Key.E)) upDown += 1;
         if (Input.GetKey(Key.Q)) upDown -= 1;
         // up/down
-        cameraGO.Transform.position += Vector3.up * upDown * 5f * Time.deltaTime;
+        cameraGO.Transform.position += Double3.UnitY * upDown * 5f * Time.deltaTime;
 
         // rotate with mouse
         if (Input.GetMouseButton(1))
         {
-            Vector2 delta = Input.MouseDelta;
-            cameraGO.Transform.localEulerAngles += new Vector3(delta.y, delta.x, 0) * 0.1f;
+            Double2 delta = Input.MouseDelta;
+            cameraGO.Transform.localEulerAngles += new Double3(-delta.Y, delta.X, 0) * 0.1f;
         }
     }
 }

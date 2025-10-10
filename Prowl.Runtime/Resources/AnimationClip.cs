@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Vector;
 namespace Prowl.Runtime;
 
 public enum AnimationWrapMode
@@ -47,10 +48,10 @@ public sealed class AnimationClip : EngineObject, ISerializable
         {
             // Store the previous quaternion value
             Quaternion prev = new Quaternion(
-                bone.RotX.Keys[0].Value,
-                bone.RotY.Keys[0].Value,
-                bone.RotZ.Keys[0].Value,
-                bone.RotW.Keys[0].Value
+                (float)bone.RotX.Keys[0].Value,
+                (float)bone.RotY.Keys[0].Value,
+                (float)bone.RotZ.Keys[0].Value,
+                (float)bone.RotW.Keys[0].Value
             );
 
             // Iterate through each keyframe starting from the second keyframe
@@ -58,25 +59,25 @@ public sealed class AnimationClip : EngineObject, ISerializable
             {
                 // Get the current quaternion value
                 Quaternion cur = new Quaternion(
-                    bone.RotX.Keys[i].Value,
-                    bone.RotY.Keys[i].Value,
-                    bone.RotZ.Keys[i].Value,
-                    bone.RotW.Keys[i].Value
+                    (float)bone.RotX.Keys[i].Value,
+                    (float)bone.RotY.Keys[i].Value,
+                    (float)bone.RotZ.Keys[i].Value,
+                    (float)bone.RotW.Keys[i].Value
                 );
 
                 // Ensure quaternion continuity between the previous and current quaternions
                 Quaternion midQ = (prev + cur) * 0.5f;
                 Quaternion midQFlipped = (prev + (-cur)) * 0.5f;
 
-                double angle = Quaternion.Angle(prev, midQ);
-                double angleFlipped = Quaternion.Angle(prev, midQFlipped);
+                double angle = Maths.Angle(prev, midQ);
+                double angleFlipped = Maths.Angle(prev, midQFlipped);
                 Quaternion continuous = angleFlipped < angle ? (-cur) : cur;
 
                 // Update the keyframe values with the continuous quaternion
-                bone.RotX.Keys[i].Value = continuous.x;
-                bone.RotY.Keys[i].Value = continuous.y;
-                bone.RotZ.Keys[i].Value = continuous.z;
-                bone.RotW.Keys[i].Value = continuous.w;
+                bone.RotX.Keys[i].Value = continuous.X;
+                bone.RotY.Keys[i].Value = continuous.Y;
+                bone.RotZ.Keys[i].Value = continuous.Z;
+                bone.RotW.Keys[i].Value = continuous.W;
 
                 // Store the current quaternion as the previous quaternion for the next iteration
                 prev = continuous;
@@ -159,14 +160,14 @@ public sealed class AnimationClip : EngineObject, ISerializable
         public AnimationCurve RotX, RotY, RotZ, RotW;
         public AnimationCurve ScaleX, ScaleY, ScaleZ;
 
-        public Vector3 EvaluatePositionAt(double time)
-            => new Vector3(PosX.Evaluate(time), PosY.Evaluate(time), PosZ.Evaluate(time));
+        public Double3 EvaluatePositionAt(double time)
+            => new Double3(PosX.Evaluate(time), PosY.Evaluate(time), PosZ.Evaluate(time));
 
         public Quaternion EvaluateRotationAt(double time)
-            => new Quaternion(RotX.Evaluate(time), RotY.Evaluate(time), RotZ.Evaluate(time), RotW.Evaluate(time));
+            => new Quaternion((float)RotX.Evaluate(time), (float)RotY.Evaluate(time), (float)RotZ.Evaluate(time), (float)RotW.Evaluate(time));
 
-        public Vector3 EvaluateScaleAt(double time)
-            => new Vector3(ScaleX.Evaluate(time), ScaleY.Evaluate(time), ScaleZ.Evaluate(time));
+        public Double3 EvaluateScaleAt(double time)
+            => new Double3(ScaleX.Evaluate(time), ScaleY.Evaluate(time), ScaleZ.Evaluate(time));
     }
 
 

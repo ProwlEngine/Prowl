@@ -4,6 +4,8 @@
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Vector;
+
 namespace Prowl.Runtime;
 
 public class Animation : MonoBehaviour
@@ -63,7 +65,7 @@ public class Animation : MonoBehaviour
             }
 
             // Weight always update even if the state is disabled
-            state.Weight = MathD.MoveTowards(state.Weight, state.TargetWeight, state.MoveWeightSpeed * Time.deltaTimeF);
+            state.Weight = Maths.MoveTowards(state.Weight, state.TargetWeight, state.MoveWeightSpeed * Time.deltaTimeF);
         }
 
         if (_states.Where(s => s.Enabled).Sum(s => s.Weight) <= 0)
@@ -79,9 +81,9 @@ public class Animation : MonoBehaviour
         // Update all transforms
         foreach (var transform in transforms)
         {
-            var position = Vector3.zero;
-            var rotation = Quaternion.identity;
-            var scale = Vector3.one;
+            var position = Double3.Zero;
+            var rotation = Quaternion.Identity;
+            var scale = Double3.One;
 
             if (blendNormalizer > 0)
             {
@@ -96,11 +98,11 @@ public class Animation : MonoBehaviour
 
                     var rot = state.EvaluateRotation(transform, state.Time);
                     if (rot.HasValue)
-                        rotation = Quaternion.Slerp(rotation, rot.Value, (float)normalizedWeight);
+                        rotation = Maths.Slerp(rotation, rot.Value, (float)normalizedWeight);
 
                     var scl = state.EvaluateScale(transform, state.Time);
                     if (scl.HasValue)
-                        scale = Vector3.Lerp(scale, scl.Value, (float)normalizedWeight);
+                        scale = Maths.Lerp(scale, scl.Value, (float)normalizedWeight);
                 }
             }
 
@@ -113,11 +115,11 @@ public class Animation : MonoBehaviour
 
                 var rot = state.EvaluateRotation(transform, state.Time);
                 if (rot.HasValue)
-                    rotation *= Quaternion.Slerp(Quaternion.identity, rot.Value, (float)state.Weight);
+                    rotation *= Maths.Slerp(Quaternion.Identity, rot.Value, (float)state.Weight);
 
                 var scl = state.EvaluateScale(transform, state.Time);
                 if (scl.HasValue)
-                    scale = Vector3.Lerp(scale, scale * scl.Value, (float)state.Weight);
+                    scale = Maths.Lerp(scale, scale * scl.Value, (float)state.Weight);
             }
 
             transform.localPosition = position;
@@ -234,7 +236,7 @@ public class AnimationState
         Clip = clip;
     }
 
-    public Vector3? EvaluatePosition(Transform target, double time)
+    public Double3? EvaluatePosition(Transform target, double time)
     {
         // If MixingTransforms has elements, ensure target is in the list, its like a Whitelist for an animation clip
         if (MixingTransforms.Count > 0)
@@ -262,7 +264,7 @@ public class AnimationState
         return bone?.EvaluateRotationAt(time);
     }
 
-    public Vector3? EvaluateScale(Transform target, double time)
+    public Double3? EvaluateScale(Transform target, double time)
     {
         // If MixingTransforms has elements, ensure target is in the list, its like a Whitelist for an animation clip
         if (MixingTransforms.Count > 0)

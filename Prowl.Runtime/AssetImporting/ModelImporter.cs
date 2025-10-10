@@ -7,6 +7,7 @@ using Assimp;
 
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 using Material = Prowl.Runtime.Resources.Material;
 using Mesh = Prowl.Runtime.Resources.Mesh;
@@ -266,17 +267,17 @@ namespace Prowl.Runtime.AssetImporting
                 int vertexCount = m.VertexCount;
                 mesh.IndexFormat = vertexCount >= ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16;
 
-                System.Numerics.Vector3[] vertices = new System.Numerics.Vector3[vertexCount];
+                Float3[] vertices = new Float3[vertexCount];
                 for (var i = 0; i < vertices.Length; i++)
-                    vertices[i] = new System.Numerics.Vector3(m.Vertices[i].X, m.Vertices[i].Y, m.Vertices[i].Z) * (float)scale;
+                    vertices[i] = new Float3(m.Vertices[i].X, m.Vertices[i].Y, m.Vertices[i].Z) * (float)scale;
                 mesh.Vertices = vertices;
 
                 if (m.HasNormals)
                 {
-                    System.Numerics.Vector3[] normals = new System.Numerics.Vector3[vertexCount];
+                    Float3[] normals = new Float3[vertexCount];
                     for (var i = 0; i < normals.Length; i++)
                     {
-                        normals[i] = new System.Numerics.Vector3(m.Normals[i].X, m.Normals[i].Y, m.Normals[i].Z);
+                        normals[i] = new Float3(m.Normals[i].X, m.Normals[i].Y, m.Normals[i].Z);
                         if (settings.InvertNormals)
                             normals[i] = -normals[i];
                     }
@@ -285,25 +286,25 @@ namespace Prowl.Runtime.AssetImporting
 
                 if (m.HasTangentBasis)
                 {
-                    System.Numerics.Vector3[] tangents = new System.Numerics.Vector3[vertexCount];
+                    Float3[] tangents = new Float3[vertexCount];
                     for (var i = 0; i < tangents.Length; i++)
-                        tangents[i] = new System.Numerics.Vector3(m.Tangents[i].X, m.Tangents[i].Y, m.Tangents[i].Z);
+                        tangents[i] = new Float3(m.Tangents[i].X, m.Tangents[i].Y, m.Tangents[i].Z);
                     mesh.Tangents = tangents;
                 }
 
                 if (m.HasTextureCoords(0))
                 {
-                    System.Numerics.Vector2[] texCoords1 = new System.Numerics.Vector2[vertexCount];
+                    Float2[] texCoords1 = new Float2[vertexCount];
                     for (var i = 0; i < texCoords1.Length; i++)
-                        texCoords1[i] = new System.Numerics.Vector2(m.TextureCoordinateChannels[0][i].X, m.TextureCoordinateChannels[0][i].Y);
+                        texCoords1[i] = new Float2(m.TextureCoordinateChannels[0][i].X, m.TextureCoordinateChannels[0][i].Y);
                     mesh.UV = texCoords1;
                 }
 
                 if (m.HasTextureCoords(1))
                 {
-                    System.Numerics.Vector2[] texCoords2 = new System.Numerics.Vector2[vertexCount];
+                    Float2[] texCoords2 = new Float2[vertexCount];
                     for (var i = 0; i < texCoords2.Length; i++)
-                        texCoords2[i] = new System.Numerics.Vector2(m.TextureCoordinateChannels[1][i].X, m.TextureCoordinateChannels[1][i].Y);
+                        texCoords2[i] = new Float2(m.TextureCoordinateChannels[1][i].X, m.TextureCoordinateChannels[1][i].Y);
                     mesh.UV2 = texCoords2;
                 }
 
@@ -324,15 +325,15 @@ namespace Prowl.Runtime.AssetImporting
 
                 if (m.HasBones)
                 {
-                    mesh.bindPoses = new System.Numerics.Matrix4x4[m.Bones.Count];
-                    mesh.BoneIndices = new System.Numerics.Vector4[vertexCount];
-                    mesh.BoneWeights = new System.Numerics.Vector4[vertexCount];
+                    mesh.bindPoses = new Float4x4[m.Bones.Count];
+                    mesh.BoneIndices = new Float4[vertexCount];
+                    mesh.BoneWeights = new Float4[vertexCount];
                     for (var i = 0; i < m.Bones.Count; i++)
                     {
                         var bone = m.Bones[i];
 
                         var offsetMatrix = bone.OffsetMatrix;
-                        System.Numerics.Matrix4x4 bindPose = new System.Numerics.Matrix4x4(
+                        Float4x4 bindPose = new Float4x4(
                             offsetMatrix.A1, offsetMatrix.B1, offsetMatrix.C1, offsetMatrix.D1,
                             offsetMatrix.A2, offsetMatrix.B2, offsetMatrix.C2, offsetMatrix.D2,
                             offsetMatrix.A3, offsetMatrix.B3, offsetMatrix.C3, offsetMatrix.D3,
@@ -340,7 +341,9 @@ namespace Prowl.Runtime.AssetImporting
                         );
 
                         // Adjust translation by scale
-                        bindPose.Translation *= (float)scale;
+                        //bindPose.Translation *= (float)scale;
+                        var translate = Float4x4.CreateScale((float)scale);
+                        bindPose = translate * bindPose;
 
                         mesh.bindPoses[i] = bindPose;
 
@@ -407,9 +410,9 @@ namespace Prowl.Runtime.AssetImporting
             var t = assimpNode.Transform;
             t.Decompose(out var aSca, out var aRot, out var aPos);
 
-            modelNode.LocalPosition = new Vector3(aPos.X, aPos.Y, aPos.Z) * scale;
+            modelNode.LocalPosition = new Vector.Double3(aPos.X, aPos.Y, aPos.Z) * scale;
             modelNode.LocalRotation = new(aRot.X, aRot.Y, aRot.Z, aRot.W);
-            modelNode.LocalScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
+            modelNode.LocalScale = new Vector.Double3(aSca.X, aSca.Y, aSca.Z);
 
             // Assign mesh indices
             if (assimpNode.HasMeshes)

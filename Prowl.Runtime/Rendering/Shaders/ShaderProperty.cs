@@ -1,4 +1,5 @@
 ﻿using Prowl.Echo;
+using Prowl.Vector;
 
 using Texture2D = Prowl.Runtime.Resources.Texture2D;
 
@@ -14,8 +15,8 @@ namespace Prowl.Runtime.Rendering.Shaders
         [field: SerializeField]
         public ShaderPropertyType PropertyType { get; private set; }
 
-        public Vector4 Value;
-        public Matrix4x4 MatrixValue;
+        public Double4 Value;
+        public Double4x4 MatrixValue;
 
         public Texture2D Texture2DValue;
 
@@ -41,42 +42,42 @@ namespace Prowl.Runtime.Rendering.Shaders
             => new ShaderProperty(value);
 
         public static implicit operator double(ShaderProperty value)
-            => value.Value.x;
+            => value.Value.X;
 
-        public ShaderProperty(Vector2 value)
+        public ShaderProperty(Double2 value)
         {
             Value = new(value);
             PropertyType = ShaderPropertyType.Vector2;
         }
 
-        public static implicit operator ShaderProperty(Vector2 value)
+        public static implicit operator ShaderProperty(Double2 value)
             => new ShaderProperty(value);
 
-        public static implicit operator Vector2(ShaderProperty value)
-            => new Vector2(value.Value.x, value.Value.y);
+        public static implicit operator Double2(ShaderProperty value)
+            => new Double2(value.Value.X, value.Value.Y);
 
-        public ShaderProperty(Vector3 value)
+        public ShaderProperty(Double3 value)
         {
             Value = new(value);
             PropertyType = ShaderPropertyType.Vector3;
         }
 
-        public static implicit operator ShaderProperty(Vector3 value)
+        public static implicit operator ShaderProperty(Double3 value)
             => new ShaderProperty(value);
 
-        public static implicit operator Vector3(ShaderProperty value)
-            => new Vector3(value.Value.x, value.Value.y, value.Value.z);
+        public static implicit operator Double3(ShaderProperty value)
+            => new Double3(value.Value.X, value.Value.Y, value.Value.Z);
 
-        public ShaderProperty(Vector4 value)
+        public ShaderProperty(Double4 value)
         {
             Value = value;
             PropertyType = ShaderPropertyType.Vector4;
         }
 
-        public static implicit operator ShaderProperty(Vector4 value)
+        public static implicit operator ShaderProperty(Double4 value)
             => new ShaderProperty(value);
 
-        public static implicit operator Vector4(ShaderProperty value)
+        public static implicit operator Double4(ShaderProperty value)
             => value.Value;
 
         public ShaderProperty(Color value)
@@ -89,18 +90,18 @@ namespace Prowl.Runtime.Rendering.Shaders
             => new ShaderProperty(value);
 
         public static implicit operator Color(ShaderProperty value)
-            => new Color((float)value.Value.x, (float)value.Value.y, (float)value.Value.z, (float)value.Value.w);
+            => new Color((float)value.Value.X, (float)value.Value.Y, (float)value.Value.Z, (float)value.Value.W);
 
-        public ShaderProperty(Matrix4x4 value)
+        public ShaderProperty(Double4x4 value)
         {
             MatrixValue = value;
             PropertyType = ShaderPropertyType.Matrix;
         }
 
-        public static implicit operator ShaderProperty(Matrix4x4 value)
+        public static implicit operator ShaderProperty(Double4x4 value)
             => new ShaderProperty(value);
 
-        public static implicit operator Matrix4x4(ShaderProperty value)
+        public static implicit operator Double4x4(ShaderProperty value)
             => value.MatrixValue;
 
         public ShaderProperty(Texture2D value)

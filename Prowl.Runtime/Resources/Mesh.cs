@@ -5,6 +5,8 @@ using System.IO;
 using Prowl.Echo;
 using Prowl.Runtime.GraphicsBackend;
 using Prowl.Runtime.GraphicsBackend.Primitives;
+using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 using static Prowl.Runtime.GraphicsBackend.VertexFormat;
 
@@ -25,7 +27,7 @@ namespace Prowl.Runtime.Resources
         public readonly bool isWritable = true;
 
         /// <summary> The bounds of the mesh </summary>
-        public Bounds bounds { get; internal set; }
+        public AABBD bounds { get; internal set; }
 
         /// <summary> The format of the indices for this mesh </summary>
         public IndexFormat IndexFormat {
@@ -63,8 +65,8 @@ namespace Prowl.Runtime.Resources
         /// Getting depends on isReadable.
         /// Note: When setting, if the vertex count is different than previous, it'll reset all other vertex data fields.
         /// </summary>
-        public System.Numerics.Vector3[] Vertices {
-            get => vertices ?? new System.Numerics.Vector3[0];
+        public Float3[] Vertices {
+            get => vertices ?? new Float3[0];
             set {
                 if (isWritable == false)
                     return;
@@ -87,13 +89,13 @@ namespace Prowl.Runtime.Resources
             }
         }
 
-        public System.Numerics.Vector3[] Normals {
-            get => ReadVertexData(normals ?? new System.Numerics.Vector3[0]);
+        public Float3[] Normals {
+            get => ReadVertexData(normals ?? new Float3[0]);
             set => WriteVertexData(ref normals, CopyArray(value), value.Length);
         }
 
-        public System.Numerics.Vector3[] Tangents {
-            get => ReadVertexData(tangents ?? new System.Numerics.Vector3[0]);
+        public Float3[] Tangents {
+            get => ReadVertexData(tangents ?? new Float3[0]);
             set => WriteVertexData(ref tangents, CopyArray(value), value.Length);
         }
 
@@ -107,13 +109,13 @@ namespace Prowl.Runtime.Resources
             set => WriteVertexData(ref colors32, CopyArray(value), value.Length);
         }
 
-        public System.Numerics.Vector2[] UV {
-            get => ReadVertexData(uv ?? new System.Numerics.Vector2[0]);
+        public Float2[] UV {
+            get => ReadVertexData(uv ?? new Float2[0]);
             set => WriteVertexData(ref uv, CopyArray(value), value.Length);
         }
 
-        public System.Numerics.Vector2[] UV2 {
-            get => ReadVertexData(uv2 ?? new System.Numerics.Vector2[0]);
+        public Float2[] UV2 {
+            get => ReadVertexData(uv2 ?? new Float2[0]);
             set => WriteVertexData(ref uv2, CopyArray(value), value.Length);
         }
 
@@ -122,13 +124,13 @@ namespace Prowl.Runtime.Resources
             set => WriteVertexData(ref indices, CopyArray(value), value.Length, false);
         }
 
-        public System.Numerics.Vector4[] BoneIndices {
-            get => ReadVertexData(boneIndices ?? new System.Numerics.Vector4[0]);
+        public Float4[] BoneIndices {
+            get => ReadVertexData(boneIndices ?? new Float4[0]);
             set => WriteVertexData(ref boneIndices, CopyArray(value), value.Length);
         }
 
-        public System.Numerics.Vector4[] BoneWeights {
-            get => ReadVertexData(boneWeights ?? new System.Numerics.Vector4[0]);
+        public Float4[] BoneWeights {
+            get => ReadVertexData(boneWeights ?? new Float4[0]);
             set => WriteVertexData(ref boneWeights, CopyArray(value), value.Length);
         }
 
@@ -149,19 +151,19 @@ namespace Prowl.Runtime.Resources
         public bool HasBoneIndices => (boneIndices?.Length ?? 0) > 0;
         public bool HasBoneWeights => (boneWeights?.Length ?? 0) > 0;
 
-        public System.Numerics.Matrix4x4[]? bindPoses;
+        public Float4x4[]? bindPoses;
 
         bool changed = true;
-        System.Numerics.Vector3[]? vertices;
-        System.Numerics.Vector3[]? normals;
-        System.Numerics.Vector3[]? tangents;
+        Float3[]? vertices;
+        Float3[]? normals;
+        Float3[]? tangents;
         Color[]? colors;
         Color32[]? colors32;
-        System.Numerics.Vector2[]? uv;
-        System.Numerics.Vector2[]? uv2;
+        Float2[]? uv;
+        Float2[]? uv2;
         uint[]? indices;
-        System.Numerics.Vector4[]? boneIndices;
-        System.Numerics.Vector4[]? boneWeights;
+        Float4[]? boneIndices;
+        Float4[]? boneWeights;
 
         IndexFormat indexFormat = IndexFormat.UInt16;
         Topology meshTopology = Topology.Triangles;
@@ -270,19 +272,19 @@ namespace Prowl.Runtime.Resources
                 throw new ArgumentNullException();
 
             var empty = true;
-            var minVec = System.Numerics.Vector3.One * 99999f;
-            var maxVec = System.Numerics.Vector3.One * -99999f;
+            var minVec = Float3.One * 99999f;
+            var maxVec = Float3.One * -99999f;
             foreach (var ptVector in vertices)
             {
-                minVec = Vector3.Min(minVec, ptVector);
-                maxVec = Vector3.Max(maxVec, ptVector);
+                minVec = Maths.Min(minVec, ptVector);
+                maxVec = Maths.Max(maxVec, ptVector);
 
                 empty = false;
             }
             if (empty)
                 throw new ArgumentException();
 
-            bounds = Bounds.CreateFromMinMax(minVec, maxVec);
+            bounds = new AABBD(minVec, maxVec);
         }
 
         public void RecalculateNormals()
@@ -290,7 +292,7 @@ namespace Prowl.Runtime.Resources
             if (vertices == null || vertices.Length < 3) return;
             if (indices == null || indices.Length < 3) return;
 
-            var normals = new System.Numerics.Vector3[vertices.Length];
+            var normals = new Float3[vertices.Length];
 
             for (int i = 0; i < indices.Length; i += 3)
             {
@@ -298,7 +300,7 @@ namespace Prowl.Runtime.Resources
                 uint bi = indices[i + 1];
                 uint ci = indices[i + 2];
 
-                System.Numerics.Vector3 n = System.Numerics.Vector3.Normalize(System.Numerics.Vector3.Cross(
+                Float3 n = Maths.Normalize(Maths.Cross(
                     vertices[bi] - vertices[ai],
                     vertices[ci] - vertices[ai]
                 ));
@@ -310,9 +312,9 @@ namespace Prowl.Runtime.Resources
 
             for (int i = 0; i < vertices.Length; i++)
             {
-                normals[i] = Vector3.Normalize(normals[i]);
+                normals[i] = Maths.Normalize(normals[i]);
                 if (double.IsNaN(normals[i].X) || double.IsNaN(normals[i].Y) || double.IsNaN(normals[i].Z))
-                    normals[i] = Vector3.up;
+                    normals[i] = Float3.UnitY;
             }
 
             Normals = normals;
@@ -324,7 +326,7 @@ namespace Prowl.Runtime.Resources
             if (indices == null || indices.Length < 3) return;
             if (uv == null) return;
 
-            var tangents = new System.Numerics.Vector3[vertices.Length];
+            var tangents = new Float3[vertices.Length];
 
             for (int i = 0; i < indices.Length; i += 3)
             {
@@ -332,15 +334,15 @@ namespace Prowl.Runtime.Resources
                 uint bi = indices[i + 1];
                 uint ci = indices[i + 2];
 
-                System.Numerics.Vector3 edge1 = vertices[bi] - vertices[ai];
-                System.Numerics.Vector3 edge2 = vertices[ci] - vertices[ai];
+                Float3 edge1 = vertices[bi] - vertices[ai];
+                Float3 edge2 = vertices[ci] - vertices[ai];
 
-                System.Numerics.Vector2 deltaUV1 = uv[bi] - uv[ai];
-                System.Numerics.Vector2 deltaUV2 = uv[ci] - uv[ai];
+                Float2 deltaUV1 = uv[bi] - uv[ai];
+                Float2 deltaUV2 = uv[ci] - uv[ai];
 
                 float f = 1.0f / (deltaUV1.X * deltaUV2.Y - deltaUV2.X * deltaUV1.Y);
 
-                System.Numerics.Vector3 tangent;
+                Float3 tangent;
                 tangent.X = f * (deltaUV2.Y * edge1.X - deltaUV1.Y * edge2.X);
                 tangent.Y = f * (deltaUV2.Y * edge1.Y - deltaUV1.Y * edge2.Y);
                 tangent.Z = f * (deltaUV2.Y * edge1.Z - deltaUV1.Y * edge2.Z);
@@ -351,7 +353,7 @@ namespace Prowl.Runtime.Resources
             }
 
             for (int i = 0; i < vertices.Length; i++)
-                tangents[i] = Vector3.Normalize(tangents[i]);
+                tangents[i] = Maths.Normalize(tangents[i]);
 
             Tangents = tangents;
         }
@@ -365,11 +367,11 @@ namespace Prowl.Runtime.Resources
         /// <param name="hitDistance">The distance from ray origin to the closest hit point, if any</param>
         /// <param name="hitNormal">The normal vector at the hit point, if any</param>
         /// <returns>True if the ray intersects with the mesh, false otherwise</returns>
-        public bool Raycast(Ray ray, out double hitDistance, out System.Numerics.Vector3 hitNormal)
+        public bool Raycast(RayD ray, out double hitDistance, out Float3 hitNormal)
         {
             // Initialize out parameters
             hitDistance = double.MaxValue;
-            hitNormal = System.Numerics.Vector3.Zero;
+            hitNormal = Float3.Zero;
 
             // Make sure we have vertices and indices
             if (vertices == null || vertices.Length == 0 || indices == null || indices.Length == 0)
@@ -393,17 +395,15 @@ namespace Prowl.Runtime.Resources
                 if (i1 >= vertices.Length || i2 >= vertices.Length || i3 >= vertices.Length)
                     continue;
 
-                System.Numerics.Vector3 v1 = vertices[i1];
-                System.Numerics.Vector3 v2 = vertices[i2];
-                System.Numerics.Vector3 v3 = vertices[i3];
+                Float3 v1 = vertices[i1];
+                Float3 v2 = vertices[i2];
+                Float3 v3 = vertices[i3];
 
                 // Test ray-triangle intersection
-                double? distance = ray.Intersects(v1, v2, v3);
-
-                if (distance.HasValue && distance.Value < hitDistance)
+                if (ray.Intersects(new TriangleD(v1, v2, v3), out var distance, out _, out _) && distance < hitDistance)
                 {
                     hit = true;
-                    hitDistance = distance.Value;
+                    hitDistance = distance;
 
                     // Calculate normal at hit point (using cross product of triangle edges)
                     if (HasNormals)
@@ -414,8 +414,8 @@ namespace Prowl.Runtime.Resources
                     else
                     {
                         // Calculate face normal using cross product
-                        hitNormal = System.Numerics.Vector3.Normalize(
-                            System.Numerics.Vector3.Cross(v2 - v1, v3 - v1)
+                        hitNormal = Maths.Normalize(
+                            Maths.Cross(v2 - v1, v3 - v1)
                         );
                     }
                 }
@@ -430,9 +430,9 @@ namespace Prowl.Runtime.Resources
         /// <param name="ray">The ray to test intersection with</param>
         /// <param name="hitDistance">The distance from ray origin to the hit point, if any</param>
         /// <returns>True if the ray intersects with the mesh, false otherwise</returns>
-        public bool Raycast(Ray ray, out double hitDistance)
+        public bool Raycast(RayD ray, out double hitDistance)
         {
-            System.Numerics.Vector3 hitNormal;
+            Float3 hitNormal;
             var result = Raycast(ray, out hitDistance, out hitNormal);
             return result;
         }
@@ -442,7 +442,7 @@ namespace Prowl.Runtime.Resources
         /// </summary>
         /// <param name="ray">The ray to test intersection with</param>
         /// <returns>True if the ray intersects with the mesh, false otherwise</returns>
-        public bool Raycast(Ray ray)
+        public bool Raycast(RayD ray)
         {
             double hitDistance;
             return Raycast(ray, out hitDistance);
@@ -457,17 +457,17 @@ namespace Prowl.Runtime.Resources
         {
             if (fullScreenQuad != null) return fullScreenQuad;
             Mesh mesh = new Mesh();
-            mesh.vertices = new System.Numerics.Vector3[4];
-            mesh.vertices[0] = new System.Numerics.Vector3(-1, -1, 0);
-            mesh.vertices[1] = new System.Numerics.Vector3(1, -1, 0);
-            mesh.vertices[2] = new System.Numerics.Vector3(-1, 1, 0);
-            mesh.vertices[3] = new System.Numerics.Vector3(1, 1, 0);
+            mesh.vertices = new Float3[4];
+            mesh.vertices[0] = new Float3(-1, -1, 0);
+            mesh.vertices[1] = new Float3(1, -1, 0);
+            mesh.vertices[2] = new Float3(-1, 1, 0);
+            mesh.vertices[3] = new Float3(1, 1, 0);
 
-            mesh.uv = new System.Numerics.Vector2[4];
-            mesh.uv[0] = new System.Numerics.Vector2(0, 0);
-            mesh.uv[1] = new System.Numerics.Vector2(1, 0);
-            mesh.uv[2] = new System.Numerics.Vector2(0, 1);
-            mesh.uv[3] = new System.Numerics.Vector2(1, 1);
+            mesh.uv = new Float2[4];
+            mesh.uv[0] = new Float2(0, 0);
+            mesh.uv[1] = new Float2(1, 0);
+            mesh.uv[2] = new Float2(0, 1);
+            mesh.uv[3] = new Float2(1, 1);
 
             mesh.indices = [0, 2, 1, 2, 3, 1];
 
@@ -479,8 +479,8 @@ namespace Prowl.Runtime.Resources
         {
             Mesh mesh = new Mesh();
 
-            List<System.Numerics.Vector3> vertices = new List<System.Numerics.Vector3>();
-            List<System.Numerics.Vector2> uvs = new List<System.Numerics.Vector2>();
+            List<Float3> vertices = new List<Float3>();
+            List<Float2> uvs = new List<Float2>();
             List<uint> indices = new List<uint>();
 
             for (int i = 0; i <= rings; i++)
@@ -497,8 +497,8 @@ namespace Prowl.Runtime.Resources
                     float y = MathF.Cos(phi);
                     float z = MathF.Sin(phi) * MathF.Sin(theta);
 
-                    vertices.Add(new System.Numerics.Vector3(x, y, z) * radius);
-                    uvs.Add(new System.Numerics.Vector2(u, v));
+                    vertices.Add(new Float3(x, y, z) * radius);
+                    uvs.Add(new Float2(u, v));
                 }
             }
 
@@ -530,14 +530,14 @@ namespace Prowl.Runtime.Resources
             return mesh;
         }
 
-        public static Mesh CreateCube(Vector3 size)
+        public static Mesh CreateCube(Double3 size)
         {
             Mesh mesh = new Mesh();
-            float x = (float)size.x / 2f;
-            float y = (float)size.y / 2f;
-            float z = (float)size.z / 2f;
+            float x = (float)size.X / 2f;
+            float y = (float)size.Y / 2f;
+            float z = (float)size.Z / 2f;
 
-            System.Numerics.Vector3[] vertices =
+            Float3[] vertices =
             {
                 // Front face
                 new(-x, -y, z), new(x, -y, z), new(x, y, z), new(-x, y, z),
@@ -558,7 +558,7 @@ namespace Prowl.Runtime.Resources
                 new(-x, -y, -z), new(x, -y, -z), new(x, -y, z), new(-x, -y, z)
             };
 
-            System.Numerics.Vector2[] uvs =
+            Float2[] uvs =
             {
                 // Front face
                 new(0, 0), new(1, 0), new(1, 1), new(0, 1),
@@ -578,10 +578,10 @@ namespace Prowl.Runtime.Resources
             {
                 0, 1, 2, 0, 2, 3,       // Front face
                 4, 6, 5, 4, 7, 6,       // Back face
-                8, 9, 10, 8, 10, 11,    // Left face
+                8, 10, 9, 8, 11, 10,    // Left face
                 12, 14, 13, 12, 15, 14, // Right face
                 16, 17, 18, 16, 18, 19, // Top face
-                20, 22, 21, 20, 23, 22  // Bottom face
+                20, 21, 22, 20, 22, 23  // Bottom face
             };
 
             mesh.vertices = vertices;
@@ -600,8 +600,8 @@ namespace Prowl.Runtime.Resources
 #warning TODO: Test, This hasent been tested like at all just assumed it will work
             Mesh mesh = new Mesh();
 
-            List<System.Numerics.Vector3> vertices = new List<System.Numerics.Vector3>();
-            List<System.Numerics.Vector2> uvs = new List<System.Numerics.Vector2>();
+            List<Float3> vertices = new List<Float3>();
+            List<Float2> uvs = new List<Float2>();
             List<uint> indices = new List<uint>();
 
             float halfLength = length / 2.0f;
@@ -614,19 +614,19 @@ namespace Prowl.Runtime.Resources
                 float z = radius * MathF.Sin(angle);
 
                 // Top circle
-                vertices.Add(new System.Numerics.Vector3(x, halfLength, z));
-                uvs.Add(new System.Numerics.Vector2((float)i / sliceCount, 1));
+                vertices.Add(new Float3(x, halfLength, z));
+                uvs.Add(new Float2((float)i / sliceCount, 1));
 
                 // Bottom circle
-                vertices.Add(new System.Numerics.Vector3(x, -halfLength, z));
-                uvs.Add(new System.Numerics.Vector2((float)i / sliceCount, 0));
+                vertices.Add(new Float3(x, -halfLength, z));
+                uvs.Add(new Float2((float)i / sliceCount, 0));
             }
 
             // Add the center vertices for the top and bottom circles
-            vertices.Add(new System.Numerics.Vector3(0, halfLength, 0));
-            uvs.Add(new System.Numerics.Vector2(0.5f, 1));
-            vertices.Add(new System.Numerics.Vector3(0, -halfLength, 0));
-            uvs.Add(new System.Numerics.Vector2(0.5f, 0));
+            vertices.Add(new Float3(0, halfLength, 0));
+            uvs.Add(new Float2(0.5f, 1));
+            vertices.Add(new Float3(0, -halfLength, 0));
+            uvs.Add(new Float2(0.5f, 0));
 
             int topCenterIndex = vertices.Count - 2;
             int bottomCenterIndex = vertices.Count - 1;
@@ -684,10 +684,10 @@ namespace Prowl.Runtime.Resources
             return mesh;
         }
 
-        public static Mesh CreateTriangle(Vector3 a, Vector3 b, Vector3 c)
+        public static Mesh CreateTriangle(Float3 a, Float3 b, Float3 c)
         {
             Mesh mesh = new Mesh();
-            mesh.vertices = new System.Numerics.Vector3[] { a, b, c };
+            mesh.vertices = new Float3[] { a, b, c };
             mesh.indices = new uint[] { 0, 1, 2 };
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
@@ -966,25 +966,25 @@ namespace Prowl.Runtime.Resources
                 {
                     foreach (var bindPose in bindPoses)
                     {
-                        writer.Write(bindPose.M11);
-                        writer.Write(bindPose.M12);
-                        writer.Write(bindPose.M13);
-                        writer.Write(bindPose.M14);
+                        writer.Write(bindPose[0, 0]);
+                        writer.Write(bindPose[0, 1]);
+                        writer.Write(bindPose[0, 2]);
+                        writer.Write(bindPose[0, 3]);
 
-                        writer.Write(bindPose.M21);
-                        writer.Write(bindPose.M22);
-                        writer.Write(bindPose.M23);
-                        writer.Write(bindPose.M24);
+                        writer.Write(bindPose[1, 0]);
+                        writer.Write(bindPose[1, 1]);
+                        writer.Write(bindPose[1, 2]);
+                        writer.Write(bindPose[1, 3]);
 
-                        writer.Write(bindPose.M31);
-                        writer.Write(bindPose.M32);
-                        writer.Write(bindPose.M33);
-                        writer.Write(bindPose.M34);
+                        writer.Write(bindPose[2, 0]);
+                        writer.Write(bindPose[2, 1]);
+                        writer.Write(bindPose[2, 2]);
+                        writer.Write(bindPose[2, 3]);
 
-                        writer.Write(bindPose.M41);
-                        writer.Write(bindPose.M42);
-                        writer.Write(bindPose.M43);
-                        writer.Write(bindPose.M44);
+                        writer.Write(bindPose[3, 0]);
+                        writer.Write(bindPose[3, 1]);
+                        writer.Write(bindPose[3, 2]);
+                        writer.Write(bindPose[3, 3]);
                     }
                 }
 
@@ -992,12 +992,12 @@ namespace Prowl.Runtime.Resources
                 compoundTag.Add("MeshData", new EchoObject(memoryStream.ToArray()));
                 compoundTag.Add("MeshType", new EchoObject((int)meshTopology));
                 compoundTag.Add("MeshIndexFormat", new EchoObject((int)indexFormat));
-                compoundTag.Add("BoundsMinX", new EchoObject(bounds.min.x));
-                compoundTag.Add("BoundsMinY", new EchoObject(bounds.min.y));
-                compoundTag.Add("BoundsMinZ", new EchoObject(bounds.min.z));
-                compoundTag.Add("BoundsMaxX", new EchoObject(bounds.max.x));
-                compoundTag.Add("BoundsMaxY", new EchoObject(bounds.max.y));
-                compoundTag.Add("BoundsMaxZ", new EchoObject(bounds.max.z));
+                compoundTag.Add("BoundsMinX", new EchoObject(bounds.Min.X));
+                compoundTag.Add("BoundsMinY", new EchoObject(bounds.Min.Y));
+                compoundTag.Add("BoundsMinZ", new EchoObject(bounds.Min.Z));
+                compoundTag.Add("BoundsMaxX", new EchoObject(bounds.Max.X));
+                compoundTag.Add("BoundsMaxY", new EchoObject(bounds.Max.Y));
+                compoundTag.Add("BoundsMaxZ", new EchoObject(bounds.Max.Z));
             }
         }
 
@@ -1005,9 +1005,9 @@ namespace Prowl.Runtime.Resources
         {
             meshTopology = (Topology)value["MeshType"].IntValue;
             indexFormat = (IndexFormat)value["MeshIndexFormat"].IntValue;
-            bounds = new Bounds(
-                new Vector3(value["BoundsMinX"].DoubleValue, value["BoundsMinY"].DoubleValue, value["BoundsMinZ"].DoubleValue),
-                new Vector3(value["BoundsMaxX"].DoubleValue, value["BoundsMaxY"].DoubleValue, value["BoundsMaxZ"].DoubleValue)
+            bounds = new AABBD(
+                new Double3(value["BoundsMinX"].DoubleValue, value["BoundsMinY"].DoubleValue, value["BoundsMinZ"].DoubleValue),
+                new Double3(value["BoundsMaxX"].DoubleValue, value["BoundsMaxY"].DoubleValue, value["BoundsMaxZ"].DoubleValue)
             );
 
             using (MemoryStream memoryStream = new MemoryStream(value["MeshData"].ByteArrayValue))
@@ -1017,24 +1017,24 @@ namespace Prowl.Runtime.Resources
                 meshTopology = (Topology)reader.ReadByte();
 
                 var vertexCount = reader.ReadInt32();
-                vertices = new System.Numerics.Vector3[vertexCount];
+                vertices = new Float3[vertexCount];
                 for (int i = 0; i < vertexCount; i++)
-                    vertices[i] = new System.Numerics.Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                    vertices[i] = new Float3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
 
                 var normalCount = reader.ReadInt32();
                 if (normalCount > 0)
                 {
-                    normals = new System.Numerics.Vector3[normalCount];
+                    normals = new Float3[normalCount];
                     for (int i = 0; i < normalCount; i++)
-                        normals[i] = new System.Numerics.Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        normals[i] = new Float3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var tangentCount = reader.ReadInt32();
                 if (tangentCount > 0)
                 {
-                    tangents = new System.Numerics.Vector3[tangentCount];
+                    tangents = new Float3[tangentCount];
                     for (int i = 0; i < tangentCount; i++)
-                        tangents[i] = new System.Numerics.Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        tangents[i] = new Float3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var colorCount = reader.ReadInt32();
@@ -1056,17 +1056,17 @@ namespace Prowl.Runtime.Resources
                 var uvCount = reader.ReadInt32();
                 if (uvCount > 0)
                 {
-                    uv = new System.Numerics.Vector2[uvCount];
+                    uv = new Float2[uvCount];
                     for (int i = 0; i < uvCount; i++)
-                        uv[i] = new System.Numerics.Vector2(reader.ReadSingle(), reader.ReadSingle());
+                        uv[i] = new Float2(reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var uv2Count = reader.ReadInt32();
                 if (uv2Count > 0)
                 {
-                    uv2 = new System.Numerics.Vector2[uv2Count];
+                    uv2 = new Float2[uv2Count];
                     for (int i = 0; i < uv2Count; i++)
-                        uv2[i] = new System.Numerics.Vector2(reader.ReadSingle(), reader.ReadSingle());
+                        uv2[i] = new Float2(reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var indexCount = reader.ReadInt32();
@@ -1080,49 +1080,51 @@ namespace Prowl.Runtime.Resources
                 var boneIndexCount = reader.ReadInt32();
                 if (boneIndexCount > 0)
                 {
-                    boneIndices = new System.Numerics.Vector4[boneIndexCount];
+                    boneIndices = new Float4[boneIndexCount];
                     for (int i = 0; i < boneIndexCount; i++)
                     {
                         //boneIndices[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
-                        boneIndices[i] = new System.Numerics.Vector4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        boneIndices[i] = new Float4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                     }
                 }
 
                 var boneWeightCount = reader.ReadInt32();
                 if (boneWeightCount > 0)
                 {
-                    boneWeights = new System.Numerics.Vector4[boneWeightCount];
+                    boneWeights = new Float4[boneWeightCount];
                     for (int i = 0; i < boneWeightCount; i++)
-                        boneWeights[i] = new System.Numerics.Vector4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        boneWeights[i] = new Float4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var bindPosesCount = reader.ReadInt32();
                 if (bindPosesCount > 0)
                 {
-                    bindPoses = new System.Numerics.Matrix4x4[bindPosesCount];
+                    bindPoses = new Float4x4[bindPosesCount];
                     for (int i = 0; i < bindPosesCount; i++)
                     {
-                        bindPoses[i] = new System.Numerics.Matrix4x4() {
-                            M11 = reader.ReadSingle(),
-                            M12 = reader.ReadSingle(),
-                            M13 = reader.ReadSingle(),
-                            M14 = reader.ReadSingle(),
+                        var val = new Float4x4();
 
-                            M21 = reader.ReadSingle(),
-                            M22 = reader.ReadSingle(),
-                            M23 = reader.ReadSingle(),
-                            M24 = reader.ReadSingle(),
+                        val[0, 0] = reader.ReadSingle();
+                        val[0, 1] = reader.ReadSingle();
+                        val[0, 2] = reader.ReadSingle();
+                        val[0, 3] = reader.ReadSingle();
 
-                            M31 = reader.ReadSingle(),
-                            M32 = reader.ReadSingle(),
-                            M33 = reader.ReadSingle(),
-                            M34 = reader.ReadSingle(),
+                        val[1, 0] = reader.ReadSingle();
+                        val[1, 1] = reader.ReadSingle();
+                        val[1, 2] = reader.ReadSingle();
+                        val[1, 3] = reader.ReadSingle();
 
-                            M41 = reader.ReadSingle(),
-                            M42 = reader.ReadSingle(),
-                            M43 = reader.ReadSingle(),
-                            M44 = reader.ReadSingle()
-                        };
+                        val[2, 0] = reader.ReadSingle();
+                        val[2, 1] = reader.ReadSingle();
+                        val[2, 2] = reader.ReadSingle();
+                        val[2, 3] = reader.ReadSingle();
+
+                        val[3, 0] = reader.ReadSingle();
+                        val[3, 1] = reader.ReadSingle();
+                        val[3, 2] = reader.ReadSingle();
+                        val[3, 3] = reader.ReadSingle();
+
+                        bindPoses[i] = val;
                     }
                 }
 

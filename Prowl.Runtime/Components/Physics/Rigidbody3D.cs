@@ -8,6 +8,7 @@ using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
@@ -123,28 +124,28 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// <summary>
     /// Gets or sets the Linear Velocity of this Rigidbody3D.
     /// </summary>
-    public Vector3 LinearVelocity
+    public Double3 LinearVelocity
     {
         get => new(_body.Velocity.X, _body.Velocity.Y, _body.Velocity.Z);
-        set => _body.Velocity = new(value.x, value.y, value.z);
+        set => _body.Velocity = new(value.X, value.Y, value.Z);
     }
 
     /// <summary>
     /// Gets or sets the Angular Velocity of this Rigidbody3D.
     /// </summary>
-    public Vector3 AngularVelocity
+    public Double3 AngularVelocity
     {
         get => new(_body.AngularVelocity.X, _body.AngularVelocity.Y, _body.AngularVelocity.Z);
-        set => _body.AngularVelocity = new(value.x, value.y, value.z);
+        set => _body.AngularVelocity = new(value.X, value.Y, value.Z);
     }
 
     /// <summary>
     /// Gets or sets the Torque of this Rigidbody3D.
     /// </summary>
-    public Vector3 Torque
+    public Double3 Torque
     {
-        get => new Vector3(_body.Torque.X, _body.Torque.Y, _body.Torque.Z);
-        set => _body.Torque = new JVector(value.x, value.y, value.z);
+        get => new Double3(_body.Torque.X, _body.Torque.Y, _body.Torque.Z);
+        set => _body.Torque = new JVector(value.X, value.Y, value.Z);
     }
 
     [SerializeIgnore]
@@ -183,8 +184,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (_body == null || _body.Handle.IsZero) return;
 
-        Transform.position = new Vector3(_body.Position.X, _body.Position.Y, _body.Position.Z);
-        Transform.rotation = new Quaternion(_body.Orientation.X, _body.Orientation.Y, _body.Orientation.Z, _body.Orientation.W);
+        Transform.position = new Double3(_body.Position.X, _body.Position.Y, _body.Position.Z);
+        Transform.rotation = new Quaternion((float)_body.Orientation.X, (float)_body.Orientation.Y, (float)_body.Orientation.Z, (float)_body.Orientation.W);
     }
 
     public override void DrawGizmos()
@@ -245,22 +246,22 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (GameObject?.Scene?.Physics.AutoSyncTransforms ?? true)
         {
-            rb.Position = new JVector(Transform.position.x, Transform.position.y, Transform.position.z);
-            rb.Orientation = new JQuaternion(Transform.rotation.x, Transform.rotation.y, Transform.rotation.z, Transform.rotation.w);
+            rb.Position = new JVector(Transform.position.X, Transform.position.Y, Transform.position.Z);
+            rb.Orientation = new JQuaternion(Transform.rotation.X, Transform.rotation.Y, Transform.rotation.Z, Transform.rotation.W);
         }
     }
 
-    public void AddForce(Vector3 velocity)
+    public void AddForce(Double3 velocity)
     {
-        _body.AddForce(new JVector(velocity.x, velocity.y, velocity.z));
+        _body.AddForce(new JVector(velocity.X, velocity.Y, velocity.Z));
     }
 
-    public void AddForceAtPosition(Vector3 velocity, Vector3 worldPosition)
+    public void AddForceAtPosition(Double3 velocity, Double3 worldPosition)
     {
-        _body.AddForce(new JVector(velocity.x, velocity.y, velocity.z), new JVector(worldPosition.x, worldPosition.y, worldPosition.z));
+        _body.AddForce(new JVector(velocity.X, velocity.Y, velocity.Z), new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z));
     }
 
-    public void AddTorque(Vector3 torque)
+    public void AddTorque(Double3 torque)
     {
         Torque += torque;
     }

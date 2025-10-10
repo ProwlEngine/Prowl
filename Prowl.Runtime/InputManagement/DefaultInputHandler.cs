@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Vector;
+
 using Silk.NET.Input;
 
 namespace Prowl.Runtime;
@@ -26,21 +28,21 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     }
 
 
-    private Vector2Int _currentMousePos;
-    private Vector2Int _prevMousePos;
+    private Int2 _currentMousePos;
+    private Int2 _prevMousePos;
 
-    public Vector2Int PrevMousePosition => _prevMousePos;
-    public Vector2Int MousePosition
+    public Int2 PrevMousePosition => _prevMousePos;
+    public Int2 MousePosition
     {
         get => _currentMousePos;
         set
         {
             _prevMousePos = value;
             _currentMousePos = value;
-            Mice[0].Position = (Vector2)value;
+            Mice[0].Position = (Float2)value;
         }
     }
-    public Vector2 MouseDelta => _currentMousePos - _prevMousePos;
+    public Double2 MouseDelta => _currentMousePos - _prevMousePos;
     public float MouseWheelDelta => Mice[0].ScrollWheels[0].Y;
 
     private Dictionary<Silk.NET.Input.Key, bool> wasKeyPressed = new Dictionary<Silk.NET.Input.Key, bool>();
@@ -58,8 +60,8 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     public DefaultInputHandler(IInputContext context)
     {
         Context = context;
-        _prevMousePos = (Vector2Int)(Vector2)Mice[0].Position;
-        _currentMousePos = (Vector2Int)(Vector2)Mice[0].Position;
+        _prevMousePos = (Int2)(Float2)Mice[0].Position;
+        _currentMousePos = (Int2)(Float2)Mice[0].Position;
 
         // initialize key states
         foreach (Silk.NET.Input.Key key in Enum.GetValues(typeof(Silk.NET.Input.Key)))
@@ -89,17 +91,17 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     internal void LateUpdate()
     {
         _prevMousePos = _currentMousePos;
-        _currentMousePos = (Vector2Int)(Vector2)Mice[0].Position;
+        _currentMousePos = (Int2)(Float2)Mice[0].Position;
         if (!_prevMousePos.Equals(_currentMousePos))
         {
             if (isMousePressed[Silk.NET.Input.MouseButton.Left])
-                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Left, MousePosition.x, MousePosition.y, false, true);
+                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Left, MousePosition.X, MousePosition.Y, false, true);
             else if (isMousePressed[Silk.NET.Input.MouseButton.Right])
-                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Right, MousePosition.x, MousePosition.y, false, true);
+                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Right, MousePosition.X, MousePosition.Y, false, true);
             else if (isMousePressed[Silk.NET.Input.MouseButton.Middle])
-                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Middle, MousePosition.x, MousePosition.y, false, true);
+                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Middle, MousePosition.X, MousePosition.Y, false, true);
             else
-                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Unknown, MousePosition.x, MousePosition.y, false, true);
+                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Unknown, MousePosition.X, MousePosition.Y, false, true);
         }
         UpdateKeyStates();
     }
@@ -138,7 +140,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
                         break;
                     }
                 if (wasMousePressed[button] != isMousePressed[button])
-                    OnMouseEvent?.Invoke(button, MousePosition.x, MousePosition.y, isMousePressed[button], false);
+                    OnMouseEvent?.Invoke(button, MousePosition.X, MousePosition.Y, isMousePressed[button], false);
             }
         }
     }

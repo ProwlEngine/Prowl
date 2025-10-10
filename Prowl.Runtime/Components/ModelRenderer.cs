@@ -1,8 +1,10 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Vector;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime;
 
@@ -19,14 +21,15 @@ public class ModelRenderer : MonoBehaviour
         }
     }
 
-    private void RenderModelNode(ModelNode node, Matrix4x4 parentMatrix)
+    private void RenderModelNode(ModelNode node, Double4x4 parentMatrix)
     {
         // Calculate this node's world matrix
-        var nodeLocalMatrix = Matrix4x4.CreateScale(node.LocalScale) *
-                              Matrix4x4.CreateFromQuaternion(node.LocalRotation) *
-                              Matrix4x4.CreateTranslation(node.LocalPosition);
+        //var nodeLocalMatrix = Double4x4.CreateScale(node.LocalScale) *
+        //                      Double4x4.CreateFromQuaternion(node.LocalRotation) *
+        //                      Double4x4.CreateTranslation(node.LocalPosition);
+        var nodeLocalMatrix = Double4x4.CreateTRS(node.LocalPosition, node.LocalRotation, node.LocalScale);
 
-        var nodeWorldMatrix = nodeLocalMatrix * parentMatrix;
+        var nodeWorldMatrix = Maths.Mul(parentMatrix, nodeLocalMatrix);
 
         // Render all meshes on this node
         foreach (var meshIndex in node.MeshIndices)
@@ -54,7 +57,7 @@ public class ModelRenderer : MonoBehaviour
         }
     }
 
-    public bool Raycast(Ray ray, out double distance)
+    public bool Raycast(RayD ray, out double distance)
     {
         distance = double.MaxValue;
 
@@ -64,16 +67,17 @@ public class ModelRenderer : MonoBehaviour
         return RaycastModelNode(Model.RootNode, Transform.localToWorldMatrix, ray, ref distance);
     }
 
-    private bool RaycastModelNode(ModelNode node, Matrix4x4 parentMatrix, Ray ray, ref double closestDistance)
+    private bool RaycastModelNode(ModelNode node, Double4x4 parentMatrix, RayD ray, ref double closestDistance)
     {
         bool hit = false;
 
         // Calculate this node's world matrix
-        var nodeLocalMatrix = Matrix4x4.CreateScale(node.LocalScale) *
-                              Matrix4x4.CreateFromQuaternion(node.LocalRotation) *
-                              Matrix4x4.CreateTranslation(node.LocalPosition);
+        //var nodeLocalMatrix = Double4x4.CreateScale(node.LocalScale) *
+        //                      Double4x4.CreateFromQuaternion(node.LocalRotation) *
+        //                      Double4x4.CreateTranslation(node.LocalPosition);
+        var nodeLocalMatrix = Double4x4.CreateTRS(node.LocalPosition, node.LocalRotation, node.LocalScale);
 
-        var nodeWorldMatrix = nodeLocalMatrix * parentMatrix;
+        var nodeWorldMatrix = Maths.Mul(parentMatrix, nodeLocalMatrix);
 
         // Test all meshes on this node
         foreach (var meshIndex in node.MeshIndices)
@@ -86,18 +90,18 @@ public class ModelRenderer : MonoBehaviour
             var mesh = modelMesh.Mesh;
 
             // Transform ray to this mesh's local space
-            Matrix4x4.Invert(nodeWorldMatrix, out var worldToLocalMatrix);
+            var worldToLocalMatrix = nodeWorldMatrix.Invert();
 
-            Vector3 localOrigin = Vector3.Transform(ray.origin, worldToLocalMatrix);
-            Vector3 localDirection = Vector3.TransformNormal(ray.direction, worldToLocalMatrix);
-            Ray localRay = new Ray(localOrigin, localDirection);
+            Double3 localOrigin = Maths.TransformPoint(ray.Origin, worldToLocalMatrix);
+            Double3 localDirection = Maths.TransformNormal(ray.Direction, worldToLocalMatrix);
+            RayD localRay = new RayD(localOrigin, localDirection);
 
             if (mesh.Raycast(localRay, out double localDistance))
             {
                 // Calculate world space distance
-                Vector3 localHitPoint = localOrigin + localDirection * localDistance;
-                Vector3 worldHitPoint = Vector3.Transform(localHitPoint, nodeWorldMatrix);
-                double worldDistance = Vector3.Distance(ray.origin, worldHitPoint);
+                Double3 localHitPoint = localOrigin + localDirection * localDistance;
+                Double3 worldHitPoint = Maths.TransformPoint(localHitPoint, nodeWorldMatrix);
+                double worldDistance = Maths.Distance(ray.Origin, worldHitPoint);
 
                 if (worldDistance < closestDistance)
                 {

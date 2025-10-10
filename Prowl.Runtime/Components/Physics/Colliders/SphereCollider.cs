@@ -4,6 +4,7 @@
 using Jitter2.Collision.Shapes;
 
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
@@ -21,5 +22,5 @@ public sealed class SphereCollider : Collider
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new SphereShape(MathD.Max(radius, 0.01))];
+    public override RigidBodyShape[] CreateShapes() => [new SphereShape(Maths.Max(radius, 0.01))];
 }

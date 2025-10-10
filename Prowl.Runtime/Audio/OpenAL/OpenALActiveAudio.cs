@@ -3,6 +3,8 @@
 
 using System;
 
+using Prowl.Vector;
+
 using Silk.NET.OpenAL;
 
 namespace Prowl.Runtime.Audio.OpenAL;
@@ -73,30 +75,30 @@ public class OpenALActiveAudio : ActiveAudio
         }
     }
 
-    public override Vector3 Position
+    public override Double3 Position
     {
         get
         {
             OpenALEngine.al.GetSourceProperty(ID, SourceVector3.Position, out var vec3);
-            return new Vector3(vec3.X, vec3.Y, vec3.Z);
+            return new Double3(vec3.X, vec3.Y, vec3.Z);
         }
         set
         {
-            System.Numerics.Vector3 vec3 = value;
+            System.Numerics.Vector3 vec3 = (Float3)value;
             OpenALEngine.al.SetSourceProperty(ID, SourceVector3.Position, ref vec3);
         }
     }
 
-    public override Vector3 Direction
+    public override Double3 Direction
     {
         get
         {
             OpenALEngine.al.GetSourceProperty(ID, SourceVector3.Direction, out var vec3);
-            return new Vector3(vec3.X, vec3.Y, vec3.Z);
+            return new Double3(vec3.X, vec3.Y, vec3.Z);
         }
         set
         {
-            System.Numerics.Vector3 vec3 = value;
+            System.Numerics.Vector3 vec3 = (Float3)value;
             OpenALEngine.al.SetSourceProperty(ID, SourceVector3.Direction, ref vec3);
         }
     }

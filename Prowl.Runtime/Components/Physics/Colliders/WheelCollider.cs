@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Vector;
+
 namespace Prowl.Runtime;
 
 // Based on the Jitter2 Demo Raycast Car
@@ -33,8 +35,8 @@ public sealed class WheelCollider : MonoBehaviour
     private double _angularVelocityForGrip = 0f;
     private double _torque = 0f;
 
-    private List<Vector3> _debugRayStart = new();
-    private List<Vector3> _debugRayEnd = new();
+    private List<Double3> _debugRayStart = new();
+    private List<Double3> _debugRayEnd = new();
 
     private bool _hasPreStepped = false;
 
@@ -54,7 +56,7 @@ public sealed class WheelCollider : MonoBehaviour
 
     public bool IsGrounded => _grounded;
     public double Displacement => _displacement;
-    public Vector3 WorldPosition => Transform.position + (Transform.up * _displacement);
+    public Double3 WorldPosition => Transform.position + (Transform.up * _displacement);
     public double WheelRotation { get; private set; } = 0.0;
 
     public void AddTorque(double torque)
@@ -117,34 +119,34 @@ public sealed class WheelCollider : MonoBehaviour
         if (Body == null || Body.Enabled == false)
             return;
 
-        Vector3 force = Vector3.zero;
+        Double3 force = Double3.Zero;
         _lastDisplacement = _displacement;
         _displacement = 0.0f;
 
-        Vector3 worldPos = Transform.position;
-        Vector3 worldAxis = Body.Transform.up;
+        Double3 worldPos = Transform.position;
+        Double3 worldAxis = Body.Transform.up;
 
-        Vector3 forward = Body.Transform.forward;
-        Vector3 wheelFwd = Quaternion.AngleAxis((float)SteerAngle, worldAxis) * forward;
+        Double3 forward = Body.Transform.forward;
+        Double3 wheelFwd = Maths.AxisAngle((Float3)worldAxis, (float)SteerAngle) * (Float3)forward;
 
-        Vector3 wheelLeft = Vector3.Cross(worldAxis, wheelFwd);
-        wheelLeft.Normalize();
+        Double3 wheelLeft = Maths.Cross(worldAxis, wheelFwd);
+        wheelLeft = Maths.Normalize(wheelLeft);
 
-        Vector3 wheelUp = Vector3.Cross(wheelFwd, wheelLeft);
+        Double3 wheelUp = Maths.Cross(wheelFwd, wheelLeft);
 
         double rayLen = 2.0 * Radius + SuspensionTravel;
 
-        Vector3 wheelRayEnd = worldPos - Radius * worldAxis;
-        Vector3 wheelRayOrigin = wheelRayEnd + rayLen * worldAxis;
-        Vector3 wheelRayDelta = wheelRayEnd - wheelRayOrigin;
+        Double3 wheelRayEnd = worldPos - Radius * worldAxis;
+        Double3 wheelRayOrigin = wheelRayEnd + rayLen * worldAxis;
+        Double3 wheelRayDelta = wheelRayEnd - wheelRayOrigin;
 
         double deltaFwd = 2.0 * Radius / (NumberOfRays + 1);
         double deltaFwdStart = deltaFwd;
 
         _grounded = false;
 
-        Vector3 groundNormal = Vector3.zero;
-        Vector3 groundPos = Vector3.zero;
+        Double3 groundNormal = Double3.Zero;
+        Double3 groundPos = Double3.Zero;
         Rigidbody3D worldBody = null!;
 
         double deepestFrac = double.MaxValue;
@@ -156,7 +158,7 @@ public sealed class WheelCollider : MonoBehaviour
             double distFwd = deltaFwdStart + i * deltaFwd - Radius;
             double normalizedDist = distFwd / Radius;
             double zOffset = Radius - Math.Sqrt(Math.Max(0, Radius * Radius - distFwd * distFwd));
-            Vector3 newOrigin = wheelRayOrigin + distFwd * wheelFwd + zOffset * wheelUp;
+            Double3 newOrigin = wheelRayOrigin + distFwd * wheelFwd + zOffset * wheelUp;
 
             _debugRayStart.Add(newOrigin);
             RaycastHit hitInfo = default;
@@ -187,7 +189,7 @@ public sealed class WheelCollider : MonoBehaviour
 
         if (!_grounded) return;
 
-        if (groundNormal.sqrMagnitude > 0.0) groundNormal.Normalize();
+        if (groundNormal.LengthSquared > 0.0) groundNormal = Maths.Normalize(groundNormal);
 
         _displacement = (rayLen - deepestFrac);
         _displacement = Math.Clamp(_displacement, 0.0, SuspensionTravel);
@@ -195,7 +197,7 @@ public sealed class WheelCollider : MonoBehaviour
         double displacementForceMag = _displacement * Spring;
 
         // reduce force when suspension is par to ground
-        displacementForceMag *= Vector3.Dot(groundNormal, worldAxis);
+        displacementForceMag *= Maths.Dot(groundNormal, worldAxis);
 
         // apply damping
         double dampingForceMag = _upSpeed * Damping;
@@ -204,29 +206,29 @@ public sealed class WheelCollider : MonoBehaviour
 
         if (totalForceMag < 0.0) totalForceMag = 0.0;
 
-        Vector3 extraForce = totalForceMag * worldAxis;
+        Double3 extraForce = totalForceMag * worldAxis;
 
         force += extraForce;
 
 
 
         // side-slip friction and drive force. Work out wheel- and floor-relative coordinate frame
-        Vector3 groundUp = groundNormal;
-        Vector3 groundLeft = Vector3.Cross(groundNormal, wheelFwd);
+        Double3 groundUp = groundNormal;
+        Double3 groundLeft = Maths.Cross(groundNormal, wheelFwd);
         
-        if (groundLeft.sqrMagnitude > 0.0) groundLeft.Normalize();
+        if (groundLeft.LengthSquared > 0.0) groundLeft = Maths.Normalize(groundLeft);
         
-        Vector3 groundFwd = Vector3.Cross(groundLeft, groundUp);
+        Double3 groundFwd = Maths.Cross(groundLeft, groundUp);
         
-        Vector3 wheelCenterVel = Body.LinearVelocity + Vector3.Cross(Body.AngularVelocity, Vector3.Transform(this.Transform.localPosition, Body.Transform.rotation));
+        Double3 wheelCenterVel = Body.LinearVelocity + Maths.Cross(Body.AngularVelocity, (Body.Transform.rotation * (Float3)this.Transform.localPosition));
 
         // rimVel=(wxr)*v
-        Vector3 rimVel = _angularVelocity * Vector3.Cross(wheelLeft, groundPos - worldPos);
-        Vector3 wheelPointVel = wheelCenterVel + rimVel;
+        Double3 rimVel = _angularVelocity * Maths.Cross(wheelLeft, groundPos - worldPos);
+        Double3 wheelPointVel = wheelCenterVel + rimVel;
 
         if (worldBody == null) throw new Exception("world Body is null.");
 
-        Vector3 worldVel = worldBody.LinearVelocity + Vector3.Cross(worldBody.AngularVelocity, groundPos - worldBody.Transform.position);
+        Double3 worldVel = worldBody.LinearVelocity + Maths.Cross(worldBody.AngularVelocity, groundPos - worldBody.Transform.position);
 
         wheelPointVel -= worldVel;
 
@@ -238,7 +240,7 @@ public sealed class WheelCollider : MonoBehaviour
         double smallVel = 3.0;
         double friction = SideFriction;
         
-        double sideVel = Vector3.Dot(wheelPointVel, groundLeft);
+        double sideVel = Maths.Dot(wheelPointVel, groundLeft);
 
         if (sideVel > slipVel || sideVel < -slipVel)
         {
@@ -297,15 +299,15 @@ public sealed class WheelCollider : MonoBehaviour
 
     public override void DrawGizmos()
     {
-        Vector3 wheelFwd = Quaternion.AngleAxis((float)SteerAngle, Body.Transform.up) * Body.Transform.forward;
-        Vector3 wheelLeft = Vector3.Cross(Body.Transform.up, wheelFwd);
-        wheelLeft.Normalize();
+        Double3 wheelFwd = Maths.AxisAngle((Float3)Body.Transform.up, (float)SteerAngle) * (Float3)Body.Transform.forward;
+        Double3 wheelLeft = Maths.Cross(Body.Transform.up, wheelFwd);
+        wheelLeft = Maths.Normalize(wheelLeft);
 
         // Debug Draw
         Debug.DrawWireCircle(WorldPosition, wheelLeft, Radius, Color.green, 32);
 
         // Draw Wheel Rotation With a Line
-        Vector3 wheelEnd = WorldPosition + ((Quaternion.AngleAxis((float)WheelRotation, wheelLeft) * wheelFwd) * Radius);
+        Double3 wheelEnd = WorldPosition + ((Maths.AxisAngle((Float3)wheelLeft, (float)WheelRotation) * (Float3)wheelFwd) * Radius);
         Debug.DrawLine(WorldPosition, wheelEnd, Color.green);
 
         // Draw Raycasts
@@ -334,7 +336,7 @@ public sealed class WheelCollider : MonoBehaviour
         double wheelMass = Body.Mass * 0.03;
 
         Inertia = 0.5 * (Radius * Radius) * wheelMass;
-        Spring = mass * (GameObject.Scene?.Physics.Gravity.magnitude ?? 9.81) / (SuspensionTravel * springFrac);
+        Spring = mass * (GameObject.Scene?.Physics.Gravity.Length ?? 9.81) / (SuspensionTravel * springFrac);
         Damping = 2.0 * Math.Sqrt(Spring * Body.Mass) * 0.25 * dampingFrac;
     }
 }

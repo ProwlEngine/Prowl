@@ -3,6 +3,7 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Runtime.GraphicsBackend;
+using Prowl.Vector;
 
 using Texture2D = Prowl.Runtime.Resources.Texture2D;
 
@@ -11,13 +12,13 @@ namespace Prowl.Runtime.Rendering
     public partial class PropertyState
     {
         [SerializeField] private Dictionary<string, Color> colors = new();
-        [SerializeField] private Dictionary<string, Vector2> vectors2 = new();
-        [SerializeField] private Dictionary<string, Vector3> vectors3 = new();
-        [SerializeField] private Dictionary<string, Vector4> vectors4 = new();
+        [SerializeField] private Dictionary<string, Float2> vectors2 = new();
+        [SerializeField] private Dictionary<string, Float3> vectors3 = new();
+        [SerializeField] private Dictionary<string, Float4> vectors4 = new();
         [SerializeField] private Dictionary<string, float> floats = new();
         [SerializeField] private Dictionary<string, int> ints = new();
-        [SerializeField] private Dictionary<string, Matrix4x4> matrices = new();
-        [SerializeField] private Dictionary<string, System.Numerics.Matrix4x4[]> matrixArr = new();
+        [SerializeField] private Dictionary<string, Float4x4> matrices = new();
+        [SerializeField] private Dictionary<string, Float4x4[]> matrixArr = new();
         [SerializeField] private Dictionary<string, Texture2D> textures = new();
         [SerializeField] private Dictionary<string, GraphicsBuffer> buffers = new();
         [SerializeField] private Dictionary<string, uint> bufferBindings = new();
@@ -44,13 +45,13 @@ namespace Prowl.Runtime.Rendering
 
         // Setters
         public void SetColor(string name, Color value) => colors[name] = value;
-        public void SetVector(string name, Vector2 value) => vectors2[name] = value;
-        public void SetVector(string name, Vector3 value) => vectors3[name] = value;
-        public void SetVector(string name, Vector4 value) => vectors4[name] = value;
+        public void SetVector(string name, Double2 value) => vectors2[name] = (Float2)value;
+        public void SetVector(string name, Double3 value) => vectors3[name] = (Float3)value;
+        public void SetVector(string name, Double4 value) => vectors4[name] = (Float4)value;
         public void SetFloat(string name, float value) => floats[name] = value;
         public void SetInt(string name, int value) => ints[name] = value;
-        public void SetMatrix(string name, Matrix4x4 value) => matrices[name] = value;
-        public void SetMatrices(string name, Matrix4x4[] value) => matrixArr[name] = value.Select(x => x.ToFloat()).ToArray();
+        public void SetMatrix(string name, Double4x4 value) => matrices[name] = (Float4x4)value;
+        public void SetMatrices(string name, Double4x4[] value) => matrixArr[name] = value.Select(x => (Float4x4)x).ToArray();
         public void SetTexture(string name, Texture2D value) => textures[name] = value;
         public void SetBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
         {
@@ -60,12 +61,12 @@ namespace Prowl.Runtime.Rendering
 
         // Getters
         public Color GetColor(string name) => colors.TryGetValue(name, out Color value) ? value : Color.white;
-        public Vector2 GetVector2(string name) => vectors2.TryGetValue(name, out Vector2 value) ? value : Vector2.zero;
-        public Vector3 GetVector3(string name) => vectors3.TryGetValue(name, out Vector3 value) ? value : Vector3.zero;
-        public Vector4 GetVector4(string name) => vectors4.TryGetValue(name, out Vector4 value) ? value : Vector4.zero;
+        public Double2 GetVector2(string name) => vectors2.TryGetValue(name, out Float2 value) ? value : Double2.Zero;
+        public Double3 GetVector3(string name) => vectors3.TryGetValue(name, out Float3 value) ? value : Double3.Zero;
+        public Double4 GetVector4(string name) => vectors4.TryGetValue(name, out Float4 value) ? value : Double4.Zero;
         public float GetFloat(string name) => floats.TryGetValue(name, out float value) ? value : 0;
         public int GetInt(string name) => ints.TryGetValue(name, out int value) ? value : 0;
-        public Matrix4x4 GetMatrix(string name) => matrices.TryGetValue(name, out Matrix4x4 value) ? value : Matrix4x4.Identity;
+        public Double4x4 GetMatrix(string name) => matrices.TryGetValue(name, out Float4x4 value) ? value : Double4x4.Identity;
         public Texture2D? GetTexture(string name) => textures.TryGetValue(name, out Texture2D value) ? value : null;
         public GraphicsBuffer GetBuffer(string name) => buffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
         public uint GetBufferBinding(string name) => bufferBindings.TryGetValue(name, out uint value) ? value : 0;
@@ -134,13 +135,13 @@ namespace Prowl.Runtime.Rendering
             foreach (var item in mpb.vectors4)
                 Graphics.Device.SetUniformV4(shader, item.Key, item.Value);
             foreach (var item in mpb.colors)
-                Graphics.Device.SetUniformV4(shader, item.Key, new Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
+                Graphics.Device.SetUniformV4(shader, item.Key, new Float4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
 
             foreach (var item in mpb.matrices)
                 Graphics.Device.SetUniformMatrix(shader, item.Key, false, item.Value);
 
             foreach (var item in mpb.matrixArr)
-                Graphics.Device.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].M11);
+                Graphics.Device.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
 
             // Bind uniform buffers
             foreach (var item in mpb.buffers)
@@ -166,16 +167,16 @@ namespace Prowl.Runtime.Rendering
                 Graphics.Device.SetUniformI(shader, item.Key, item.Value);
 
             foreach (var item in globalVectors2)
-                Graphics.Device.SetUniformV2(shader, item.Key, item.Value);
+                Graphics.Device.SetUniformV2(shader, item.Key, (Float2)item.Value);
             foreach (var item in globalVectors3)
-                Graphics.Device.SetUniformV3(shader, item.Key, item.Value);
+                Graphics.Device.SetUniformV3(shader, item.Key, (Float3)item.Value);
             foreach (var item in globalVectors4)
-                Graphics.Device.SetUniformV4(shader, item.Key, item.Value);
+                Graphics.Device.SetUniformV4(shader, item.Key, (Float4)item.Value);
             foreach (var item in globalColors)
-                Graphics.Device.SetUniformV4(shader, item.Key, new Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
+                Graphics.Device.SetUniformV4(shader, item.Key, new Float4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
 
             foreach (var item in globalMatrices)
-                Graphics.Device.SetUniformMatrix(shader, item.Key, false, item.Value);
+                Graphics.Device.SetUniformMatrix(shader, item.Key, false, (Float4x4)item.Value);
 
             foreach (var item in globalMatrixArr)
                 Graphics.Device.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].M11);
@@ -200,12 +201,12 @@ namespace Prowl.Runtime.Rendering
     {
         // Global static dictionaries
         private static Dictionary<string, Color> globalColors = new();
-        private static Dictionary<string, Vector2> globalVectors2 = new();
-        private static Dictionary<string, Vector3> globalVectors3 = new();
-        private static Dictionary<string, Vector4> globalVectors4 = new();
+        private static Dictionary<string, Double2> globalVectors2 = new();
+        private static Dictionary<string, Double3> globalVectors3 = new();
+        private static Dictionary<string, Double4> globalVectors4 = new();
         private static Dictionary<string, float> globalFloats = new();
         private static Dictionary<string, int> globalInts = new();
-        private static Dictionary<string, Matrix4x4> globalMatrices = new();
+        private static Dictionary<string, Double4x4> globalMatrices = new();
         private static Dictionary<string, System.Numerics.Matrix4x4[]> globalMatrixArr = new();
         private static Dictionary<string, Texture2D> globalTextures = new();
         private static Dictionary<string, GraphicsBuffer> globalBuffers = new();
@@ -213,13 +214,13 @@ namespace Prowl.Runtime.Rendering
 
         // Global setters
         public static void SetGlobalColor(string name, Color value) => globalColors[name] = value;
-        public static void SetGlobalVector(string name, Vector2 value) => globalVectors2[name] = value;
-        public static void SetGlobalVector(string name, Vector3 value) => globalVectors3[name] = value;
-        public static void SetGlobalVector(string name, Vector4 value) => globalVectors4[name] = value;
+        public static void SetGlobalVector(string name, Double2 value) => globalVectors2[name] = value;
+        public static void SetGlobalVector(string name, Double3 value) => globalVectors3[name] = value;
+        public static void SetGlobalVector(string name, Double4 value) => globalVectors4[name] = value;
         public static void SetGlobalFloat(string name, float value) => globalFloats[name] = value;
         public static void SetGlobalInt(string name, int value) => globalInts[name] = value;
-        public static void SetGlobalMatrix(string name, Matrix4x4 value) => globalMatrices[name] = value;
-        public static void SetGlobalMatrices(string name, Matrix4x4[] value) => globalMatrixArr[name] = value.Select(x => x.ToFloat()).Cast<System.Numerics.Matrix4x4>().ToArray();
+        public static void SetGlobalMatrix(string name, Double4x4 value) => globalMatrices[name] = value;
+        public static void SetGlobalMatrices(string name, Double4x4[] value) => globalMatrixArr[name] = value.Select(x => (Float4x4)x).Cast<System.Numerics.Matrix4x4>().ToArray();
         public static void SetGlobalTexture(string name, Texture2D value) => globalTextures[name] = value;
         public static void SetGlobalBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
         {
@@ -229,12 +230,12 @@ namespace Prowl.Runtime.Rendering
 
         // Global getters
         public static Color GetGlobalColor(string name) => globalColors.TryGetValue(name, out Color value) ? value : Color.white;
-        public static Vector2 GetGlobalVector2(string name) => globalVectors2.TryGetValue(name, out Vector2 value) ? value : Vector2.zero;
-        public static Vector3 GetGlobalVector3(string name) => globalVectors3.TryGetValue(name, out Vector3 value) ? value : Vector3.zero;
-        public static Vector4 GetGlobalVector4(string name) => globalVectors4.TryGetValue(name, out Vector4 value) ? value : Vector4.zero;
+        public static Double2 GetGlobalVector2(string name) => globalVectors2.TryGetValue(name, out Double2 value) ? value : Double2.Zero;
+        public static Double3 GetGlobalVector3(string name) => globalVectors3.TryGetValue(name, out Double3 value) ? value : Double3.Zero;
+        public static Double4 GetGlobalVector4(string name) => globalVectors4.TryGetValue(name, out Double4 value) ? value : Double4.Zero;
         public static float GetGlobalFloat(string name) => globalFloats.TryGetValue(name, out float value) ? value : 0;
         public static int GetGlobalInt(string name) => globalInts.TryGetValue(name, out int value) ? value : 0;
-        public static Matrix4x4 GetGlobalMatrix(string name) => globalMatrices.TryGetValue(name, out Matrix4x4 value) ? value : Matrix4x4.Identity;
+        public static Double4x4 GetGlobalMatrix(string name) => globalMatrices.TryGetValue(name, out Double4x4 value) ? value : Double4x4.Identity;
         public static Texture2D? GetGlobalTexture(string name) => globalTextures.TryGetValue(name, out Texture2D value) ? value : null;
         public static GraphicsBuffer GetGlobalBuffer(string name) => globalBuffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
         public static uint GetGlobalBufferBinding(string name) => globalBufferBindings.TryGetValue(name, out uint value) ? value : 0;

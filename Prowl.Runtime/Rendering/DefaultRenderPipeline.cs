@@ -8,6 +8,8 @@ using Shader = Prowl.Runtime.Resources.Shader;
 using System.Collections.Generic;
 using System;
 using System.Linq;
+using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 // Room for Optomizations:
 // 1. Uniform Buffer for all Global shared data being rendered in a frame like Camera matrices, Time, etc
@@ -32,84 +34,6 @@ namespace Prowl.Runtime.Rendering
             mat.SetFloat("Contrast", Contrast);
             mat.SetFloat("Saturation", Saturation);
             Graphics.Blit(source, destination, mat, 0);
-        }
-    }
-
-    public sealed class TemporalAntiAliasEffect : ImageEffect
-    {
-        Material mat;
-        Vector2 Jitter;
-        Vector2 PreviousJitter;
-        RenderTexture history;
-
-        readonly static Vector2[] Halton16 =
-        [
-            new Vector2(0.5f, 0.333333f),
-            new Vector2(0.25f, 0.666667f),
-            new Vector2(0.75f, 0.111111f),
-            new Vector2(0.125f, 0.444444f),
-            new Vector2(0.625f, 0.777778f),
-            new Vector2(0.375f, 0.222222f),
-            new Vector2(0.875f, 0.555556f),
-            new Vector2(0.0625f, 0.888889f),
-            new Vector2(0.5625f, 0.037037f),
-            new Vector2(0.3125f, 0.370370f),
-            new Vector2(0.8125f, 0.703704f),
-            new Vector2(0.1875f, 0.148148f),
-            new Vector2(0.6875f, 0.481481f),
-            new Vector2(0.4375f, 0.814815f),
-            new Vector2(0.9375f, 0.259259f),
-            new Vector2(0.03125f, 0.592593f),
-        ];
-
-        public override void OnPreCull(Camera camera)
-        {
-            long n = Time.frameCount % 16;
-            var halton = Halton16[n];
-            PreviousJitter = Jitter;
-            Jitter = new Vector2((halton.x - 0.5f), (halton.y - 0.5f)) * 2.0;
-
-            Jitter /= new Vector2(camera.PixelWidth, camera.PixelHeight);
-            PreviousJitter /= new Vector2(camera.PixelWidth, camera.PixelHeight);
-
-            PropertyState.SetGlobalVector("_CameraJitter", Jitter);
-            PropertyState.SetGlobalVector("_CameraPreviousJitter", PreviousJitter);
-
-            var projection = camera.ProjectionMatrix;
-            projection.M31 += Jitter.x;
-            projection.M32 += Jitter.y;
-            camera.ProjectionMatrix = projection;
-        }
-
-        public override void OnPostRender(Camera camera)
-        {
-            camera.ResetProjectionMatrix();
-        }
-
-        public override void OnRenderImage(RenderTexture source, RenderTexture destination)
-        {
-            // Check if history buffer needs to be recreated due to size change
-            if (history != null && (source.Width != history.Width || source.Height != history.Height))
-            {
-                history.Destroy();
-                history = null;
-            }
-
-            // Create history buffer if it doesn't exist
-            history ??= new RenderTexture(source.Width, source.Height, false, [TextureImageFormat.Float4]);
-
-            // Create material if it doesn't exist
-            mat ??= new Material(Shader.LoadDefault(DefaultShader.TAA));
-
-            // Set up textures for the shader
-            mat.SetTexture("gColor", source.MainTexture);
-            mat.SetTexture("gHistory", history.MainTexture);
-
-            // Apply TAA to the destination texture
-            Graphics.Blit(source, destination, mat, 0);
-
-            // Store current frame as history for the next frame
-            Graphics.Blit(destination, history);
         }
     }
 
@@ -213,18 +137,18 @@ namespace Prowl.Runtime.Rendering
             mat.SetFloat("_Quality", Quality);
             mat.SetFloat("_ManualFocusPoint", ManualFocusPoint);
             mat.SetKeyword("AUTOFOCUS", UseAutoFocus);
-            mat.SetVector("_Resolution", new Vector2(source.Width, source.Height));
+            mat.SetVector("_Resolution", new Double2(source.Width, source.Height));
 
             // Two-pass approach:
 
             // Pass 1: Apply DoF at reduced resolution
-            mat.SetVector("_Resolution", new Vector2(width, height));
+            mat.SetVector("_Resolution", new Double2(width, height));
             Graphics.Blit(source, downsampledRT, mat, 0); // DoFDownsample pass
 
             // Pass 2: Combine original image with blurred result
             mat.SetTexture("_MainTex", source.MainTexture);
             mat.SetTexture("_DownsampledDoF", downsampledRT.MainTexture);
-            mat.SetVector("_Resolution", new Vector2(source.Width, source.Height));
+            mat.SetVector("_Resolution", new Double2(source.Width, source.Height));
             Graphics.Blit(source, destination, mat, 1); // DoFCombine pass
         }
     }
@@ -276,8 +200,8 @@ namespace Prowl.Runtime.Rendering
         public static DefaultRenderPipeline Default { get; } = new();
         public static HashSet<int> S_activeObjectIds { get => s_activeObjectIds; set => s_activeObjectIds = value; }
 
-        private static Matrix4x4 s_prevViewProjMatrix;
-        private static Dictionary<int, Matrix4x4> s_prevModelMatrices = new();
+        private static Double4x4 s_prevViewProjMatrix;
+        private static Dictionary<int, Double4x4> s_prevModelMatrices = new();
         private static HashSet<int> s_activeObjectIds = new();
         private const int CLEANUP_INTERVAL_FRAMES = 120; // Clean up every 120 frames
         private static int s_framesSinceLastCleanup = 0;
@@ -325,13 +249,13 @@ namespace Prowl.Runtime.Rendering
             S_activeObjectIds.Clear();
         }
 
-        private static void TrackModelMatrix(int objectId, Matrix4x4 currentModel)
+        private static void TrackModelMatrix(int objectId, Double4x4 currentModel)
         {
             // Mark this object ID as active this frame
             S_activeObjectIds.Add(objectId);
 
             // Store current model matrix for next frame
-            if (s_prevModelMatrices.TryGetValue(objectId, out Matrix4x4 prevModel))
+            if (s_prevModelMatrices.TryGetValue(objectId, out Double4x4 prevModel))
                 PropertyState.SetGlobalMatrix("prowl_PrevObjectToWorld", prevModel);
             else
                 PropertyState.SetGlobalMatrix("prowl_PrevObjectToWorld", currentModel); // First frame, use current matrix
@@ -375,7 +299,7 @@ namespace Prowl.Runtime.Rendering
             return (all, opaqueEffects, finalEffects);
         }
 
-        private static void SetupGlobalUniforms(CameraSnapshot css, Vector3 sunDirection)
+        private static void SetupGlobalUniforms(CameraSnapshot css, Double3 sunDirection)
         {
             // Set View Rect
             //buffer.SetViewports((int)(camera.Viewrect.x * target.Width), (int)(camera.Viewrect.y * target.Height), (int)(camera.Viewrect.width * target.Width), (int)(camera.Viewrect.height * target.Height), 0, 1000);
@@ -386,26 +310,26 @@ namespace Prowl.Runtime.Rendering
 
             // Setup Default Uniforms for this frame
             // Camera
-            PropertyState.SetGlobalVector("_WorldSpaceCameraPos", CAMERA_RELATIVE ? Vector3.zero : css.cameraPosition);
-            PropertyState.SetGlobalVector("_ProjectionParams", new Vector4(1.0f, css.nearClipPlane, css.farClipPlane, 1.0f / css.farClipPlane));
-            PropertyState.SetGlobalVector("_ScreenParams", new Vector4(css.pixelWidth, css.pixelHeight, 1.0f + 1.0f / css.pixelWidth, 1.0f + 1.0f / css.pixelHeight));
+            PropertyState.SetGlobalVector("_WorldSpaceCameraPos", CAMERA_RELATIVE ? Double3.Zero : css.cameraPosition);
+            PropertyState.SetGlobalVector("_ProjectionParams", new Double4(1.0f, css.nearClipPlane, css.farClipPlane, 1.0f / css.farClipPlane));
+            PropertyState.SetGlobalVector("_ScreenParams", new Double4(css.pixelWidth, css.pixelHeight, 1.0f + 1.0f / css.pixelWidth, 1.0f + 1.0f / css.pixelHeight));
 
             // Time
-            PropertyState.SetGlobalVector("_Time", new Vector4(Time.time / 20, Time.time, Time.time * 2, Time.frameCount));
-            PropertyState.SetGlobalVector("_SinTime", new Vector4(Math.Sin(Time.time / 8), Math.Sin(Time.time / 4), Math.Sin(Time.time / 2), Math.Sin(Time.time)));
-            PropertyState.SetGlobalVector("_CosTime", new Vector4(Math.Cos(Time.time / 8), Math.Cos(Time.time / 4), Math.Cos(Time.time / 2), Math.Cos(Time.time)));
-            PropertyState.SetGlobalVector("prowl_DeltaTime", new Vector4(Time.deltaTime, 1.0f / Time.deltaTime, Time.smoothDeltaTime, 1.0f / Time.smoothDeltaTime));
+            PropertyState.SetGlobalVector("_Time", new Double4(Time.time / 20, Time.time, Time.time * 2, Time.frameCount));
+            PropertyState.SetGlobalVector("_SinTime", new Double4(Math.Sin(Time.time / 8), Math.Sin(Time.time / 4), Math.Sin(Time.time / 2), Math.Sin(Time.time)));
+            PropertyState.SetGlobalVector("_CosTime", new Double4(Math.Cos(Time.time / 8), Math.Cos(Time.time / 4), Math.Cos(Time.time / 2), Math.Cos(Time.time)));
+            PropertyState.SetGlobalVector("prowl_DeltaTime", new Double4(Time.deltaTime, 1.0f / Time.deltaTime, Time.smoothDeltaTime, 1.0f / Time.smoothDeltaTime));
 
             // Fog
             Scene.FogParams fog = css.scene.Fog;
-            Vector4 fogParams;
-            fogParams.x = fog.Density / MathD.Sqrt(0.693147181); // ln(2)
-            fogParams.y = fog.Density / 0.693147181; // ln(2)
-            fogParams.z = -1.0 / (fog.End - fog.Start);
-            fogParams.w = fog.End / (fog.End - fog.Start);
+            Double4 fogParams;
+            fogParams.X = fog.Density / Maths.Sqrt(0.693147181); // ln(2)
+            fogParams.Y = fog.Density / 0.693147181; // ln(2)
+            fogParams.Z = -1.0 / (fog.End - fog.Start);
+            fogParams.W = fog.End / (fog.End - fog.Start);
             PropertyState.SetGlobalVector("prowl_FogColor", fog.Color);
             PropertyState.SetGlobalVector("prowl_FogParams", fogParams);
-            PropertyState.SetGlobalVector("prowl_FogStates", new System.Numerics.Vector3(
+            PropertyState.SetGlobalVector("prowl_FogStates", new Float3(
                 fog.Mode == Scene.FogParams.FogMode.Linear ? 1 : 0,
                 fog.Mode == Scene.FogParams.FogMode.Exponential ? 1 : 0,
                 fog.Mode == Scene.FogParams.FogMode.ExponentialSquared ? 1 : 0
@@ -413,7 +337,7 @@ namespace Prowl.Runtime.Rendering
 
             // Ambient Lighting
             Scene.AmbientLightParams ambient = css.scene.Ambient;
-            PropertyState.SetGlobalVector("prowl_AmbientMode", new Vector2(
+            PropertyState.SetGlobalVector("prowl_AmbientMode", new Double2(
                 ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform ? 1 : 0,
                 ambient.Mode == Scene.AmbientLightParams.AmbientMode.Hemisphere ? 1 : 0
             ));
@@ -423,12 +347,12 @@ namespace Prowl.Runtime.Rendering
             PropertyState.SetGlobalVector("prowl_AmbientGroundColor", ambient.GroundColor);
         }
 
-        private static void AssignCameraMatrices(Matrix4x4 view, Matrix4x4 projection)
+        private static void AssignCameraMatrices(Double4x4 view, Double4x4 projection)
         {
             PropertyState.SetGlobalMatrix("prowl_MatV", view);
             PropertyState.SetGlobalMatrix("prowl_MatIV", view.Invert());
             PropertyState.SetGlobalMatrix("prowl_MatP", projection);
-            PropertyState.SetGlobalMatrix("prowl_MatVP", (view * projection));
+            PropertyState.SetGlobalMatrix("prowl_MatVP", Maths.Mul(projection, view));
         }
 
         #endregion
@@ -439,9 +363,9 @@ namespace Prowl.Runtime.Rendering
         {
             public Scene scene = camera.Scene;
 
-            public Vector3 cameraPosition = camera.Transform.position;
-            public Vector3 cameraUp = camera.Transform.up;
-            public Vector3 cameraForward = camera.Transform.forward;
+            public Double3 cameraPosition = camera.Transform.position;
+            public Double3 cameraUp = camera.Transform.up;
+            public Double3 cameraForward = camera.Transform.forward;
             public LayerMask cullingMask = camera.CullingMask;
             public CameraClearFlags clearFlags = camera.ClearFlags;
             public float nearClipPlane = camera.NearClipPlane;
@@ -449,12 +373,12 @@ namespace Prowl.Runtime.Rendering
             public uint pixelWidth = camera.PixelWidth;
             public uint pixelHeight = camera.PixelHeight;
             public float aspect = camera.Aspect;
-            public Matrix4x4 originView = camera.OriginViewMatrix;
-            public Matrix4x4 view = CAMERA_RELATIVE ? camera.OriginViewMatrix : camera.ViewMatrix;
-            public Matrix4x4 viewInverse = (CAMERA_RELATIVE ? camera.OriginViewMatrix : camera.ViewMatrix).Invert();
-            public Matrix4x4 projection = camera.ProjectionMatrix;
-            public Matrix4x4 previousViewProj = camera.PreviousViewProjectionMatrix;
-            public BoundingFrustum worldFrustum = new(camera.ViewMatrix * camera.ProjectionMatrix);
+            public Double4x4 originView = camera.OriginViewMatrix;
+            public Double4x4 view = CAMERA_RELATIVE ? camera.OriginViewMatrix : camera.ViewMatrix;
+            public Double4x4 viewInverse = (CAMERA_RELATIVE ? camera.OriginViewMatrix : camera.ViewMatrix).Invert();
+            public Double4x4 projection = camera.ProjectionMatrix;
+            public Double4x4 previousViewProj = camera.PreviousViewProjectionMatrix;
+            public FrustrumD worldFrustum = FrustrumD.FromMatrix(Maths.Mul(camera.ProjectionMatrix, camera.ViewMatrix));
             public DepthTextureMode depthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Normals, MotionVectors
         }
 
@@ -465,7 +389,7 @@ namespace Prowl.Runtime.Rendering
             bool isHDR = camera.HDR;
             (List<ImageEffect> all, List<ImageEffect> opaqueEffects, List<ImageEffect> finalEffects) = GatherImageEffects(camera);
             IReadOnlyList<IRenderableLight> lights = camera.GameObject.Scene.Lights;
-            Vector3 sunDirection = GetSunDirection(lights);
+            Double3 sunDirection = GetSunDirection(lights);
             RenderTexture target = camera.UpdateRenderData();
 
             // =======================================================
@@ -586,7 +510,7 @@ namespace Prowl.Runtime.Rendering
             Graphics.Device.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
         }
 
-        private static HashSet<int> CullRenderables(IReadOnlyList<IRenderable> renderables, BoundingFrustum? worldFrustum, LayerMask cullingMask)
+        private static HashSet<int> CullRenderables(IReadOnlyList<IRenderable> renderables, FrustrumD? worldFrustum, LayerMask cullingMask)
         {
             HashSet<int> culledRenderableIndices = [];
             for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
@@ -619,10 +543,10 @@ namespace Prowl.Runtime.Rendering
                 PropertyState.SetGlobalTexture("_ShadowAtlas", ShadowMap.InternalDepth);
             //PropertyState.SetGlobalBuffer("_Lights", LightBuffer, 0);
             //PropertyState.SetGlobalInt("_LightCount", LightCount);
-            PropertyState.SetGlobalVector("prowl_ShadowAtlasSize", new Vector2(ShadowAtlas.GetSize(), ShadowAtlas.GetSize()));
+            PropertyState.SetGlobalVector("prowl_ShadowAtlasSize", new Double2(ShadowAtlas.GetSize(), ShadowAtlas.GetSize()));
         }
         
-        private static void CreateLightBuffer(Vector3 cameraPosition, LayerMask cullingMask, IReadOnlyList<IRenderableLight> lights, IReadOnlyList<IRenderable> renderables)
+        private static void CreateLightBuffer(Double3 cameraPosition, LayerMask cullingMask, IReadOnlyList<IRenderableLight> lights, IReadOnlyList<IRenderable> renderables)
         {
             Graphics.Device.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
             Graphics.Device.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
@@ -641,13 +565,13 @@ namespace Prowl.Runtime.Rendering
                     continue;
 
                 // Calculate resolution based on distance
-                int res = CalculateResolution(Vector3.Distance(cameraPosition, light.GetLightPosition()));
+                int res = CalculateResolution(Maths.Distance(cameraPosition, light.GetLightPosition()));
                 if (light is DirectionalLight dir)
                     res = (int)dir.shadowResolution;
         
                 if (light.DoCastShadows())
                 {
-                    Vector3 oldPos = Vector3.zero;
+                    Double3 oldPos = Double3.Zero;
                     //if (light is DirectionalLight dirLight)
                     //{
                     //    // Create light space transform matrices
@@ -672,8 +596,8 @@ namespace Prowl.Runtime.Rendering
                     //
                     //    // Snap in light space (only X and Y components, Z doesn't matter for directional light)
                     //    Vector3 snappedLightPos = new Vector3(
-                    //        MathD.Round(lightSpacePos.x / texelSize) * texelSize,
-                    //        MathD.Round(lightSpacePos.y / texelSize) * texelSize,
+                    //        Maths.Round(lightSpacePos.x / texelSize) * texelSize,
+                    //        Maths.Round(lightSpacePos.y / texelSize) * texelSize,
                     //        lightSpacePos.z
                     //    );
                     //
@@ -686,26 +610,26 @@ namespace Prowl.Runtime.Rendering
                     //}
         
                     // Find a slot for the shadow map
-                    Vector2Int? slot = ShadowAtlas.ReserveTiles(res, res, light.GetLightID());
+                    Int2? slot = ShadowAtlas.ReserveTiles(res, res, light.GetLightID());
                     
                     int AtlasX, AtlasY, AtlasWidth;
 
                     if (slot != null)
                     {
-                        AtlasX = slot.Value.x;
-                        AtlasY = slot.Value.y;
+                        AtlasX = slot.Value.X;
+                        AtlasY = slot.Value.Y;
                         AtlasWidth = res;
                     
                         // Draw the shadow map
                         ShadowMap = ShadowAtlas.GetAtlas();
                     
-                        Graphics.Device.Viewport(slot.Value.x, slot.Value.y, (uint)res, (uint)res);
+                        Graphics.Device.Viewport(slot.Value.X, slot.Value.Y, (uint)res, (uint)res);
                     
-                        light.GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 proj);
-                    
-                        BoundingFrustum frustum = new(view * proj);
+                        light.GetShadowMatrix(out Double4x4 view, out Double4x4 proj);
+
+                        FrustrumD frustum = FrustrumD.FromMatrix(Maths.Mul(proj, view));
                         if (CAMERA_RELATIVE)
-                            view.Translation = Vector3.zero;
+                            view.Translation = Double3.Zero;
 
                         HashSet<int> culledRenderableIndices = [];// CullRenderables(renderables, frustum);
                         AssignCameraMatrices(view, proj);
@@ -755,30 +679,30 @@ namespace Prowl.Runtime.Rendering
 
         private static int CalculateResolution(double distance)
         {
-            double t = MathD.Clamp(distance / 16f, 0, 1);
+            double t = Maths.Clamp(distance / 16f, 0, 1);
             int tileSize = ShadowAtlas.GetTileSize();
-            int resolution = MathD.RoundToInt(MathD.Lerp(ShadowAtlas.GetMaxShadowSize(), tileSize, t));
+            int resolution = Maths.RoundToInt(Maths.Lerp(ShadowAtlas.GetMaxShadowSize(), tileSize, t));
         
             // Round to nearest multiple of tile size
-            return MathD.Max(tileSize, (resolution / tileSize) * tileSize);
+            return Maths.Max(tileSize, (resolution / tileSize) * tileSize);
         }
         
-        private static Vector3 GetSunDirection(IReadOnlyList<IRenderableLight> lights)
+        private static Double3 GetSunDirection(IReadOnlyList<IRenderableLight> lights)
         {
             if (lights.Count > 0 && lights[0] is IRenderableLight light && light.GetLightType() == LightType.Directional)
                 return light.GetLightDirection();
-            return Vector3.up;
+            return Double3.UnitY;
         }
 
         private static void RenderSkybox(CameraSnapshot css)
         {
-            s_skybox.SetMatrix("prowl_MatVP", (css.originView * css.projection));
+            s_skybox.SetMatrix("prowl_MatVP", Maths.Mul(css.projection, css.originView));
             Graphics.DrawMeshNow(s_skyDome, s_skybox);
         }
 
         private static void RenderGizmos(CameraSnapshot css)
         {
-            Matrix4x4 vp = (css.view * css.projection);
+            Double4x4 vp = Maths.Mul(css.projection, css.view);
             (Mesh? wire, Mesh? solid) = Debug.GetGizmoDrawData(CAMERA_RELATIVE, css.cameraPosition);
             
             if (wire != null || solid != null)
@@ -924,7 +848,7 @@ namespace Prowl.Runtime.Rendering
             }
         }
 
-        private static void DrawRenderables(IReadOnlyList<IRenderable> renderables, string tag, string tagValue, Vector3 cameraPosition, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices)
+        private static void DrawRenderables(IReadOnlyList<IRenderable> renderables, string tag, string tagValue, Double3 cameraPosition, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices)
         {
             bool hasRenderOrder = !string.IsNullOrWhiteSpace(tag);
             for(int renderIndex=0; renderIndex < renderables.Count; renderIndex++)
@@ -946,7 +870,7 @@ namespace Prowl.Runtime.Rendering
                     if (hasRenderOrder && !pass.HasTag(tag, tagValue))
                         continue;
 
-                    renderable.GetRenderingData(out PropertyState properties, out Mesh mesh, out Matrix4x4 model);
+                    renderable.GetRenderingData(out PropertyState properties, out Mesh mesh, out Double4x4 model);
 
                     // Store previous model matrix mainly for motion vectors, however, the user can use it for other things
                     var instanceId = properties.GetInt("_ObjectID");
@@ -968,9 +892,9 @@ namespace Prowl.Runtime.Rendering
             }
         }
 
-        private static bool CullRenderable(IRenderable renderable, BoundingFrustum cameraFrustum)
+        private static bool CullRenderable(IRenderable renderable, FrustrumD cameraFrustum)
         {
-            renderable.GetCullingData(out bool isRenderable, out Bounds bounds);
+            renderable.GetCullingData(out bool isRenderable, out AABBD bounds);
 
             return !isRenderable || !cameraFrustum.Intersects(bounds);
         }

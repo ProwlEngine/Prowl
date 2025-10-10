@@ -1,19 +1,21 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Vector;
+
 namespace Prowl.Runtime.Audio.Null;
 
 public class NullAudioEngine : AudioEngine
 {
-    public override void SetListenerOrientation(Vector3 forward, Vector3 up)
+    public override void SetListenerOrientation(Double3 forward, Double3 up)
     {
     }
 
-    public override void SetListenerVelocity(Vector3 velocity)
+    public override void SetListenerVelocity(Double3 velocity)
     {
     }
 
-    public override void SetListenerPosition(Vector3 position)
+    public override void SetListenerPosition(Double3 position)
     {
     }
 

@@ -3,12 +3,14 @@
 
 using Jitter2.Collision.Shapes;
 
+using Prowl.Vector;
+
 namespace Prowl.Runtime;
 
 public abstract class Collider : MonoBehaviour
 {
-    public Vector3 center;
-    public Vector3 rotation;
+    public Double3 center;
+    public Double3 rotation;
 
     protected Rigidbody3D RigidBody => GetComponentInParent<Rigidbody3D>();
 
@@ -31,51 +33,51 @@ public abstract class Collider : MonoBehaviour
         if (rb == null) return shapes;
 
         // Get the cumulative scale from this object up to (but not including) the rigidbody
-        Vector3 cumulativeScale = Vector3.one;
+        Double3 cumulativeScale = Double3.One;
         Transform current = this.Transform;
         Transform rbTransform = rb.Transform;
 
         while (current != null)
         {
-            cumulativeScale = Vector3.Scale(cumulativeScale, current.localScale);
+            cumulativeScale = Maths.Mul(cumulativeScale, current.localScale);
             current = current.parent;
         }
 
-        cumulativeScale = Vector3.Max(cumulativeScale, Vector3.one * 0.05);
+        cumulativeScale = Maths.Max(cumulativeScale, Double3.One * 0.05);
 
         // Get the local rotation and position in world space
-        Quaternion localRotation = Quaternion.Euler(rotation);
-        Vector3 scaledCenter = Vector3.Scale(this.center, cumulativeScale);
+        Quaternion localRotation = Quaternion.FromEuler((Float3)rotation);
+        Double3 scaledCenter = Maths.Mul(this.center, cumulativeScale);
 
         // Transform local position and rotation to world space
-        Vector3 worldCenter = this.Transform.TransformPoint(scaledCenter);
+        Double3 worldCenter = this.Transform.TransformPoint(scaledCenter);
         Quaternion worldRotation = this.Transform.rotation * localRotation;
 
         // Transform from world space to rigid body's local space
-        Vector3 rbLocalCenter = rb.Transform.InverseTransformPoint(worldCenter);
-        Quaternion rbLocalRotation = Quaternion.Inverse(rb.Transform.rotation) * worldRotation;
+        Double3 rbLocalCenter = rb.Transform.InverseTransformPoint(worldCenter);
+        Quaternion rbLocalRotation = Maths.Inverse(rb.Transform.rotation) * worldRotation;
 
         // Create a scale transform matrix that includes both rotation and scale
-        Matrix4x4 scaleMatrix = Matrix4x4.TRS(Vector3.zero, rbLocalRotation, cumulativeScale);
+        Double4x4 scaleMatrix = Double4x4.CreateTRS(Double3.Zero, rbLocalRotation, cumulativeScale);
 
         // If there's no transformation needed, return the original shape
-        if (rbLocalCenter == Vector3.zero &&
-            cumulativeScale == Vector3.one &&
-            rbLocalRotation == Quaternion.identity)
+        if (rbLocalCenter.Equals(Double3.Zero) &&
+            cumulativeScale.Equals(Double3.One) &&
+            rbLocalRotation == Quaternion.Identity)
             return shapes;
 
         // Convert to Jitter types
         var translation = new Jitter2.LinearMath.JVector(
-            rbLocalCenter.x,
-            rbLocalCenter.y,
-            rbLocalCenter.z
+            rbLocalCenter.X,
+            rbLocalCenter.Y,
+            rbLocalCenter.Z
         );
 
         // Convert combined rotation and scale matrix to JMatrix
         var orientation = new Jitter2.LinearMath.JMatrix(
-            scaleMatrix.M11, scaleMatrix.M12, scaleMatrix.M13,
-            scaleMatrix.M21, scaleMatrix.M22, scaleMatrix.M23,
-            scaleMatrix.M31, scaleMatrix.M32, scaleMatrix.M33
+            scaleMatrix[0, 0], scaleMatrix[0, 1], scaleMatrix[0, 2],
+            scaleMatrix[1, 0], scaleMatrix[1, 1], scaleMatrix[1, 2],
+            scaleMatrix[2, 0], scaleMatrix[2, 1], scaleMatrix[2, 2]
         );
 
         //return new TransformedShape(shape, translation, orientation);

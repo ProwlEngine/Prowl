@@ -3,6 +3,8 @@
 
 using System;
 
+using Prowl.Vector;
+
 using Silk.NET.OpenAL;
 
 namespace Prowl.Runtime.Audio.OpenAL;
@@ -37,28 +39,28 @@ public class OpenALEngine : AudioEngine, IDisposable
         }
     }
 
-    public override void SetListenerPosition(Vector3 position)
+    public override void SetListenerPosition(Double3 position)
     {
-        al.SetListenerProperty(ListenerVector3.Position, (float)position.x, (float)position.y, (float)position.z);
+        al.SetListenerProperty(ListenerVector3.Position, (float)position.X, (float)position.Y, (float)position.Z);
     }
 
-    public override void SetListenerVelocity(Vector3 velocity)
+    public override void SetListenerVelocity(Double3 velocity)
     {
-        al.SetListenerProperty(ListenerVector3.Velocity, (float)velocity.x, (float)velocity.y, (float)velocity.z);
+        al.SetListenerProperty(ListenerVector3.Velocity, (float)velocity.X, (float)velocity.Y, (float)velocity.Z);
     }
 
-    public override void SetListenerOrientation(Vector3 forward, Vector3 up)
+    public override void SetListenerOrientation(Double3 forward, Double3 up)
     {
         unsafe
         {
             float* orientationPtr = stackalloc float[6];
 
-            orientationPtr[0] = (float)forward.x;
-            orientationPtr[1] = (float)forward.y;
-            orientationPtr[2] = (float)forward.z;
-            orientationPtr[3] = (float)up.x;
-            orientationPtr[4] = (float)up.y;
-            orientationPtr[5] = (float)up.z;
+            orientationPtr[0] = (float)forward.X;
+            orientationPtr[1] = (float)forward.Y;
+            orientationPtr[2] = (float)forward.Z;
+            orientationPtr[3] = (float)up.X;
+            orientationPtr[4] = (float)up.Y;
+            orientationPtr[5] = (float)up.Z;
 
             al.SetListenerProperty(ListenerFloatArray.Orientation, orientationPtr);
         }

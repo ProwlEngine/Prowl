@@ -11,6 +11,8 @@ using Prowl.Runtime.GraphicsBackend.OpenGL;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.GraphicsBackend;
 using Prowl.Runtime.GraphicsBackend.Primitives;
+using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime;
 
@@ -18,11 +20,11 @@ public class MeshRenderable : IRenderable
 {
     private Mesh _mesh;
     private Material _material;
-    private Matrix4x4 _transform;
+    private Double4x4 _transform;
     private int _layerIndex;
     private PropertyState _properties;
 
-    public MeshRenderable(Mesh mesh, Material material, Matrix4x4 matrix, int layerIndex, PropertyState? propertyBlock = null)
+    public MeshRenderable(Mesh mesh, Material material, Double4x4 matrix, int layerIndex, PropertyState? propertyBlock = null)
     {
         _mesh = mesh;
         _material = material;
@@ -34,14 +36,14 @@ public class MeshRenderable : IRenderable
     public Material GetMaterial() => _material;
     public int GetLayer() => _layerIndex;
 
-    public void GetRenderingData(out PropertyState properties, out Mesh drawData, out Matrix4x4 model)
+    public void GetRenderingData(out PropertyState properties, out Mesh drawData, out Double4x4 model)
     {
         drawData = _mesh;
         properties = _properties;
         model = _transform;
     }
 
-    public void GetCullingData(out bool isRenderable, out Bounds bounds)
+    public void GetCullingData(out bool isRenderable, out AABBD bounds)
     {
         isRenderable = true;
         //bounds = Bounds.CreateFromMinMax(new Vector3(999999), new Vector3(999999));
@@ -59,8 +61,8 @@ public static class Graphics
     public static int MaxArrayTextureLayers { get; internal set; }
     public static int MaxFramebufferColorAttachments { get; internal set; }
 
-    public static Vector2 ScreenSize => new Vector2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
-    public static Rect ScreenRect => new Rect(0, 0, Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
+    public static Double2 ScreenSize => new Double2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
+    public static RectInt ScreenRect => new RectInt(0, 0, Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
 
     private static Shader? s_blitShader;
     private static Material? s_blitMaterial;

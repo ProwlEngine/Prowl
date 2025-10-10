@@ -9,13 +9,15 @@ using Jitter2.Collision;
 using Jitter2.Collision.Shapes;
 using Jitter2.LinearMath;
 
+using Prowl.Vector;
+
 namespace Prowl.Runtime;
 
 public class PhysicsWorld
 {
     public World World { get; private set; }
 
-    public Vector3 Gravity = new Vector3(0, -9.81f, 0);
+    public Double3 Gravity = new Double3(0, -9.81f, 0);
     public int SolverIterations = 6;
     public int RelaxIterations = 4;
     public int Substep = 1;
@@ -43,7 +45,7 @@ public class PhysicsWorld
         World.SubstepCount = Substep;
         World.AllowDeactivation = AllowSleep;
 
-        World.Gravity = new JVector(Gravity.x, Gravity.y, Gravity.z);
+        World.Gravity = new JVector(Gravity.X, Gravity.Y, Gravity.Z);
 
         World.Step(Time.fixedDeltaTime, UseMultithreading);
     }
@@ -51,11 +53,11 @@ public class PhysicsWorld
     /// <summary>
     /// Casts a ray against all colliders in this physics world.
     /// </summary>
-    public bool Raycast(Vector3 origin, Vector3 direction)
+    public bool Raycast(Double3 origin, Double3 direction)
     {
-        direction = direction.normalized;
-        var jOrigin = new JVector(origin.x, origin.y, origin.z);
-        var jDirection = new JVector(direction.x, direction.y, direction.z);
+        direction = direction.Normalized;
+        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
+        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
 
         return World.DynamicTree.RayCast(jOrigin, jDirection,
             PreFilter, PostFilter,
@@ -65,11 +67,11 @@ public class PhysicsWorld
     /// <summary>
     /// Casts a ray against all colliders and returns detailed information about the hit.
     /// </summary>
-    public bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hitInfo)
+    public bool Raycast(Double3 origin, Double3 direction, out RaycastHit hitInfo)
     {
-        direction = direction.normalized;
-        var jOrigin = new JVector(origin.x, origin.y, origin.z);
-        var jDirection = new JVector(direction.x, direction.y, direction.z);
+        direction = direction.Normalized;
+        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
+        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
 
         hitInfo = new RaycastHit();
         bool hit = World.DynamicTree.RayCast(jOrigin, jDirection,
@@ -93,11 +95,11 @@ public class PhysicsWorld
     /// <summary>
     /// Casts a ray within a maximum distance.
     /// </summary>
-    public bool Raycast(Vector3 origin, Vector3 direction, double maxDistance)
+    public bool Raycast(Double3 origin, Double3 direction, double maxDistance)
     {
-        direction = direction.normalized;
-        var jOrigin = new JVector(origin.x, origin.y, origin.z);
-        var jDirection = new JVector(direction.x, direction.y, direction.z);
+        direction = direction.Normalized;
+        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
+        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
 
         return World.DynamicTree.RayCast(jOrigin, jDirection,
             PreFilter, PostFilter,
@@ -107,11 +109,11 @@ public class PhysicsWorld
     /// <summary>
     /// Casts a ray within a maximum distance and returns detailed information.
     /// </summary>
-    public bool Raycast(Vector3 origin, Vector3 direction, double maxDistance, out RaycastHit hitInfo)
+    public bool Raycast(Double3 origin, Double3 direction, double maxDistance, out RaycastHit hitInfo)
     {
-        direction = direction.normalized;
-        var jOrigin = new JVector(origin.x, origin.y, origin.z);
-        var jDirection = new JVector(direction.x, direction.y, direction.z);
+        direction = direction.Normalized;
+        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
+        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
 
         hitInfo = new RaycastHit();
         bool hit = World.DynamicTree.RayCast(jOrigin, jDirection,
@@ -135,11 +137,11 @@ public class PhysicsWorld
     /// <summary>
     /// Casts a ray with layer mask filtering.
     /// </summary>
-    public bool Raycast(Vector3 origin, Vector3 direction, double maxDistance, LayerMask layerMask)
+    public bool Raycast(Double3 origin, Double3 direction, double maxDistance, LayerMask layerMask)
     {
-        direction = direction.normalized;
-        var jOrigin = new JVector(origin.x, origin.y, origin.z);
-        var jDirection = new JVector(direction.x, direction.y, direction.z);
+        direction = direction.Normalized;
+        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
+        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
 
         return World.DynamicTree.RayCast(jOrigin, jDirection,
             shape => PreFilterWithLayer(shape, layerMask), PostFilter,
@@ -149,11 +151,11 @@ public class PhysicsWorld
     /// <summary>
     /// Casts a ray with layer mask filtering and returns detailed information.
     /// </summary>
-    public bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hitInfo, double maxDistance, LayerMask layerMask)
+    public bool Raycast(Double3 origin, Double3 direction, out RaycastHit hitInfo, double maxDistance, LayerMask layerMask)
     {
-        direction = direction.normalized;
-        var jOrigin = new JVector(origin.x, origin.y, origin.z);
-        var jDirection = new JVector(direction.x, direction.y, direction.z);
+        direction = direction.Normalized;
+        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
+        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
 
         hitInfo = new RaycastHit();
         bool hit = World.DynamicTree.RayCast(jOrigin, jDirection,
