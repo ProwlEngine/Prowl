@@ -2248,26 +2248,6 @@ class SourceGenerator
             sb.AppendLine($"\t\tget => Maths.Determinant(this);");
             sb.AppendLine($"\t}}");
             sb.AppendLine();
-
-            // Inverse property (for floating-point square matrices)
-            if (IsFloatingPoint(componentType))
-            {
-                sb.AppendLine($"\t/// <summary>Gets the inverse of this matrix.</summary>");
-                sb.AppendLine($"\tpublic {structName} Inverse");
-                sb.AppendLine($"\t{{");
-                sb.AppendLine($"\t\t{Inline}");
-                sb.AppendLine($"\t\tget => Maths.Inverse(this);");
-                sb.AppendLine($"\t}}");
-                sb.AppendLine();
-
-                sb.AppendLine($"\t/// <summary>Checks if this matrix is invertible.</summary>");
-                sb.AppendLine($"\tpublic bool IsInvertible");
-                sb.AppendLine($"\t{{");
-                sb.AppendLine($"\t\t{Inline}");
-                sb.AppendLine($"\t\tget => Maths.Abs(Determinant) > {GetEpsilonValue(componentType)};");
-                sb.AppendLine($"\t}}");
-                sb.AppendLine();
-            }
         }
 
         // Get/Set row methods
