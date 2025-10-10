@@ -252,7 +252,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             var transformedPlanes = new Plane{{TEMPLATE_SUFFIX}}[6];
             
             // Transform each plane by the inverse transpose of the matrix
-            {{TYPE_PREFIX}}4x4 invTranspose = Maths.Transpose(Maths.Inverse(matrix));
+            {{TYPE_PREFIX}}4x4 invTranspose = Maths.Transpose(matrix.Invert());
             
             for (int i = 0; i < 6; i++)
             {

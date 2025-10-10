@@ -127,7 +127,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             {{TYPE_PREFIX}}4x4 inverseViewProjectionMatrix;
             try
             {
-                inverseViewProjectionMatrix = Maths.Inverse(viewProjectionMatrix);
+                inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
             }
             catch (ArgumentException ex)
             {
@@ -178,7 +178,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
             {{TYPE_PREFIX}}4x4 inverseViewProjectionMatrix;
             try
             {
-                inverseViewProjectionMatrix = Maths.Inverse(viewProjectionMatrix);
+                inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
             }
             catch (ArgumentException ex)
             {
