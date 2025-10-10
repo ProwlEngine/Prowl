@@ -42,7 +42,12 @@ public class TransformNormalGenerator : MathFunctionGenerator
         sb.AppendLine($"        public static {typeName}2 TransformNormal({typeName}2 normal, {typeName}2x2 matrix)");
         sb.AppendLine("        {");
         sb.AppendLine($"            // For normals, we need to use the inverse transpose of the matrix");
-        sb.AppendLine($"            {typeName}2x2 invTranspose = Transpose(Inverse(matrix));");
+        sb.AppendLine($"            if (!Invert(matrix, out {typeName}2x2 inverse))");
+        sb.AppendLine($"            {{");
+        sb.AppendLine($"                // Matrix is singular, return the original normal");
+        sb.AppendLine($"                return normal;");
+        sb.AppendLine($"            }}");
+        sb.AppendLine($"            {typeName}2x2 invTranspose = Transpose(inverse);");
         sb.AppendLine($"            {typeName}2 transformed = Mul(invTranspose, normal);");
         sb.AppendLine($"            return Normalize(transformed);");
         sb.AppendLine("        }");
@@ -83,7 +88,12 @@ public class TransformNormalGenerator : MathFunctionGenerator
         sb.AppendLine($"        public static {typeName}3 TransformNormal({typeName}3 normal, {typeName}3x3 matrix)");
         sb.AppendLine("        {");
         sb.AppendLine($"            // For normals, we need to use the inverse transpose of the matrix");
-        sb.AppendLine($"            {typeName}3x3 invTranspose = Transpose(Inverse(matrix));");
+        sb.AppendLine($"            if (!Invert(matrix, out {typeName}3x3 inverse))");
+        sb.AppendLine($"            {{");
+        sb.AppendLine($"                // Matrix is singular, return the original normal");
+        sb.AppendLine($"                return normal;");
+        sb.AppendLine($"            }}");
+        sb.AppendLine($"            {typeName}3x3 invTranspose = Transpose(inverse);");
         sb.AppendLine($"            {typeName}3 transformed = Mul(invTranspose, normal);");
         sb.AppendLine($"            return Normalize(transformed);");
         sb.AppendLine("        }");
@@ -214,6 +224,24 @@ public class TransformNormalGenerator : MathFunctionGenerator
             {assertEqualMethod.Replace("{expected}", "0.0" + suffix).Replace("{actual}", "result.X")}
             {assertEqualMethod.Replace("{expected}", "1.0" + suffix).Replace("{actual}", "result.Y")}
         }}");
+
+        // Test singular matrix handling
+        tests.Add($@"        [Fact]
+        public void TransformNormal_{typeName}2_2x2Singular_Test()
+        {{
+            // Test with singular matrix - should return original normal
+            {typeName}2 normal = new {typeName}2(1.0{suffix}, 0.0{suffix});
+            {typeName}2x2 singular = new {typeName}2x2(
+                1.0{suffix}, 2.0{suffix},
+                2.0{suffix}, 4.0{suffix}  // Second column is 2x first (singular)
+            );
+            
+            {typeName}2 result = Maths.TransformNormal(normal, singular);
+            
+            // Should return original normal when matrix is singular
+            {assertEqualMethod.Replace("{expected}", "1.0" + suffix).Replace("{actual}", "result.X")}
+            {assertEqualMethod.Replace("{expected}", "0.0" + suffix).Replace("{actual}", "result.Y")}
+        }}");
     }
 
     private void Generate3DNormalTransformTests(List<string> tests, string type, string typeName, string assertEqualMethod)
@@ -321,6 +349,26 @@ public class TransformNormalGenerator : MathFunctionGenerator
             {assertEqualMethod.Replace("{expected}", "0.0" + suffix).Replace("{actual}", "result.X")}
             {assertEqualMethod.Replace("{expected}", "0.0" + suffix).Replace("{actual}", "result.Y")}
             {assertEqualMethod.Replace("{expected}", "-1.0" + suffix).Replace("{actual}", "result.Z")}
+        }}");
+
+        // Test singular matrix handling
+        tests.Add($@"        [Fact]
+        public void TransformNormal_{typeName}3_3x3Singular_Test()
+        {{
+            // Test with singular matrix - should return original normal
+            {typeName}3 normal = new {typeName}3(0.0{suffix}, 1.0{suffix}, 0.0{suffix});
+            {typeName}3x3 singular = new {typeName}3x3(
+                new {typeName}3(1.0{suffix}, 2.0{suffix}, 3.0{suffix}),
+                new {typeName}3(4.0{suffix}, 5.0{suffix}, 6.0{suffix}),
+                new {typeName}3(5.0{suffix}, 7.0{suffix}, 9.0{suffix})  // Third row is sum of first two (singular)
+            );
+            
+            {typeName}3 result = Maths.TransformNormal(normal, singular);
+            
+            // Should return original normal when matrix is singular
+            {assertEqualMethod.Replace("{expected}", "0.0" + suffix).Replace("{actual}", "result.X")}
+            {assertEqualMethod.Replace("{expected}", "1.0" + suffix).Replace("{actual}", "result.Y")}
+            {assertEqualMethod.Replace("{expected}", "0.0" + suffix).Replace("{actual}", "result.Z")}
         }}");
     }
 
