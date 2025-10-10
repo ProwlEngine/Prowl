@@ -64,6 +64,10 @@ namespace Prowl.Runtime.GraphicsBackend.OpenGL
         {
             if (IsDisposed)
                 return;
+
+            if (boundBuffers[(int)OriginalType] == Handle)
+                boundBuffers[(int)OriginalType] = 0;
+
             IsDisposed = true;
             GLDevice.GL.DeleteBuffer(Handle);
         }
@@ -73,9 +77,14 @@ namespace Prowl.Runtime.GraphicsBackend.OpenGL
             return Handle.ToString();
         }
 
+        private readonly static uint[] boundBuffers = new uint[(int)BufferType.Count];
+
         private void Bind()
         {
+            if (boundBuffers[(int)OriginalType] == Handle)
+                return;
             GLDevice.GL.BindBuffer(Target, Handle);
+            boundBuffers[(int)OriginalType] = Handle;
         }
     }
 }
