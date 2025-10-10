@@ -97,7 +97,7 @@ public sealed class MyGame : Game
         if (Input.GetMouseButton(1))
         {
             Double2 delta = Input.MouseDelta;
-            cameraGO.Transform.localEulerAngles += new Double3(-delta.Y, delta.X, 0) * 0.1f;
+            cameraGO.Transform.localEulerAngles += new Double3(delta.Y, delta.X, 0) * 0.1f;
         }
     }
 }
