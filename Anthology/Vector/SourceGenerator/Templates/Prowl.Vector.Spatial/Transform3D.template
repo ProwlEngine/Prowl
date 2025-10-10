@@ -46,9 +46,9 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         public {{TYPE_PREFIX}}3 eulerAngles
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ({{TYPE_PREFIX}}3)rotation.ToEulerDegrees();
+            get => ({{TYPE_PREFIX}}3)rotation.eulerAngles;
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            set => rotation = Maths.FromEulerDegrees((Float3)value);
+            set => rotation.eulerAngles = (Float3)value;
         }
 
         /// <summary>The forward direction of this transform (+Z axis in local space).</summary>
@@ -181,7 +181,7 @@ namespace Prowl.Vector.{{NAMESPACE_SUFFIX}}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Rotate({{TYPE_PREFIX}}3 eulerAngles, bool relativeToSelf = true)
         {
-            Rotate(Maths.FromEulerDegrees((Float3)eulerAngles), relativeToSelf);
+            Rotate(Quaternion.FromEuler((Float3)eulerAngles), relativeToSelf);
         }
 
         /// <summary>Applies a rotation of angle (in degrees) around an axis.</summary>

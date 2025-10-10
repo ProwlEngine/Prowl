@@ -67,24 +67,34 @@ namespace Prowl.Vector
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Float3x3(Quaternion q)
         {
-            // Standard formula
-            float xx = q.X * q.X; float yy = q.Y * q.Y; float zz = q.Z * q.Z;
-            float xy = q.X * q.Y; float xz = q.X * q.Z; float yz = q.Y * q.Z;
-            float wx = q.W * q.X; float wy = q.W * q.Y; float wz = q.W * q.Z;
+            float x2 = q.X + q.X;
+            float y2 = q.Y + q.Y;
+            float z2 = q.Z + q.Z;
+            float xx = q.X * x2;
+            float yy = q.Y * y2;
+            float zz = q.Z * z2;
+            float xy = q.X * y2;
+            float xz = q.X * z2;
+            float yz = q.Y * z2;
+            float wx = q.W * x2;
+            float wy = q.W * y2;
+            float wz = q.W * z2;
 
-            float m00 = 1.0f - 2.0f * (yy + zz);
-            float m01 = 2.0f * (xy - wz);
-            float m02 = 2.0f * (xz + wy);
+            float m00 = 1.0f - (yy + zz);
+            float m01 = xy + wz;
+            float m02 = xz - wy;
 
-            float m10 = 2.0f * (xy + wz);
-            float m11 = 1.0f - 2.0f * (xx + zz);
-            float m12 = 2.0f * (yz - wx);
+            float m10 = xy - wz;
+            float m11 = 1.0f - (xx + zz);
+            float m12 = yz + wx;
 
-            float m20 = 2.0f * (xz - wy);
-            float m21 = 2.0f * (yz + wx);
-            float m22 = 1.0f - 2.0f * (xx + yy);
+            float m20 = xz + wy;
+            float m21 = yz - wx;
+            float m22 = 1.0f - (xx + yy);
 
-            this = new Float3x3(m00, m01, m02, m10, m11, m12, m20, m21, m22);
+            this = new Float3x3(m00, m01, m02,
+                                m10, m11, m12,
+                                m20, m21, m22);
         }
 
         /// <summary>
@@ -977,141 +987,4 @@ namespace Prowl.Vector
     }
 
     #endregion
-
-    public static partial class Maths
-    {
-        #region Matrix To Euler
-
-        #region Float
-
-        /// <summary>
-        /// Converts a 3x3 rotation matrix to a set of Euler angles (in radians).
-        /// </summary>
-        /// <param name="m">The rotation matrix to convert.</param>
-        /// <returns>A Float3 vector containing the Euler angles (x, y, z) in radians.</returns>
-        public static Float3 ToEuler(Float3x3 m)
-        {
-            Float3 v = new Float3();
-            if (m[1, 2] < 1)
-            {
-                if (m[1, 2] > -1)
-                {
-                    v.X = Maths.Asin(-m[1, 2]);
-                    v.Y = Maths.Atan2(m[0, 2], m[2, 2]);
-                    v.Z = Maths.Atan2(m[1, 0], m[1, 1]);
-                }
-                else
-                {
-                    v.X = (float)Maths.PI * 0.5f;
-                    v.Y = Maths.Atan2(m[0, 1], m[0, 0]);
-                    v.Z = 0;
-                }
-            }
-            else
-            {
-                v.X = (float)(-Maths.PI) * 0.5f;
-                v.Y = Maths.Atan2(-m[0, 1], m[0, 0]);
-                v.Z = 0;
-            }
-
-            for (int i = 0; i < 3; i++)
-            {
-                if (v[i] < 0)
-                {
-                    v[i] += 2 * (float)Math.PI;
-                }
-                else if (v[i] > 2 * Math.PI)
-                {
-                    v[i] -= 2 * (float)Math.PI;
-                }
-            }
-
-            return v;
-        }
-
-        /// <summary>
-        /// Converts a 4x4 matrix to a set of Euler angles (in radians).
-        /// </summary>
-        public static Float3 ToEuler(Float4x4 m) => ToEuler(new Float3x3(m));
-
-        /// <summary>
-        /// Converts a 3x3 rotation matrix to a set of Euler angles (in degrees).
-        /// </summary>
-        public static Float3 ToEulerDegrees(Float3x3 m) => ToDegrees(ToEuler(m));
-
-        /// <summary>
-        /// Converts a 4x4 matrix to a set of Euler angles (in degrees).
-        /// </summary>
-        public static Float3 ToEulerDegrees(Float4x4 m) => ToDegrees(ToEuler(m));
-
-        #endregion
-
-        #region Double
-
-
-
-        /// <summary>
-        /// Converts a 3x3 rotation matrix to a set of Euler angles (in radians).
-        /// </summary>
-        /// <param name="m">The rotation matrix to convert.</param>
-        /// <returns>A Double3 vector containing the Euler angles (x, y, z) in radians.</returns>
-        public static Double3 ToEuler(Double3x3 m)
-        {
-            Double3 v = new Double3();
-            if (m[1, 2] < 1)
-            {
-                if (m[1, 2] > -1)
-                {
-                    v.X = Maths.Asin(-m[1, 2]);
-                    v.Y = Maths.Atan2(m[0, 2], m[2, 2]);
-                    v.Z = Maths.Atan2(m[1, 0], m[1, 1]);
-                }
-                else
-                {
-                    v.X = Maths.PI * 0.5;
-                    v.Y = Maths.Atan2(m[0, 1], m[0, 0]);
-                    v.Z = 0;
-                }
-            }
-            else
-            {
-                v.X = -Maths.PI * 0.5;
-                v.Y = Maths.Atan2(-m[0, 1], m[0, 0]);
-                v.Z = 0;
-            }
-
-            for (int i = 0; i < 3; i++)
-            {
-                if (v[i] < 0)
-                {
-                    v[i] += 2 * Math.PI;
-                }
-                else if (v[i] > 2 * Math.PI)
-                {
-                    v[i] -= 2 * Math.PI;
-                }
-            }
-
-            return v;
-        }
-
-        /// <summary>
-        /// Converts a 4x4 matrix to a set of Euler angles (in radians).
-        /// </summary>
-        public static Double3 ToEuler(Double4x4 m) => ToEuler(new Double3x3(m));
-
-        /// <summary>
-        /// Converts a 3x3 rotation matrix to a set of Euler angles (in degrees).
-        /// </summary>
-        public static Double3 ToEulerDegrees(Double3x3 m) => ToDegrees(ToEuler(m));
-
-        /// <summary>
-        /// Converts a 4x4 matrix to a set of Euler angles (in degrees).
-        /// </summary>
-        public static Double3 ToEulerDegrees(Double4x4 m) => ToDegrees(ToEuler(m));
-
-        #endregion
-
-        #endregion
-    }
 }

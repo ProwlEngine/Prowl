@@ -30,8 +30,8 @@ namespace Prowl.Vector
         /// </summary>
         public Float3 eulerAngles
         {
-            get => ToEulerDegrees();
-            set => this = Maths.FromEulerDegrees(value);
+            get => ToEuler(this);
+            set => this = FromEuler(value);
         }
 
         /// <summary>A quaternion representing the identity transform (no rotation).</summary>
@@ -210,19 +210,101 @@ namespace Prowl.Vector
             return !(lhs == rhs);
         }
 
-        /// <summary>
-        /// Returns the Euler angle representation of the quaternion in radians.
-        /// </summary>
-        /// <returns>A Float3 vector of Euler angles in radians.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Float3 ToEuler() => Maths.ToEuler(this);
 
-        /// <summary>
-        /// Returns the Euler angle representation of the quaternion in degrees.
-        /// </summary>
-        /// <returns>A Float3 vector of Euler angles in degrees.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Float3 ToEulerDegrees() => Maths.ToEulerDegrees(this);
+        public static Quaternion FromEuler(Float3 euler) => FromEuler(euler.X, euler.Y, euler.Z);
+
+        public static Quaternion FromEuler(float x, float y, float z)
+        {
+            float yawOver2 = (float)Maths.Deg2Rad * x * 0.5f;
+            float pitchOver2 = (float)Maths.Deg2Rad * y * 0.5f;
+            float rollOver2 = (float)Maths.Deg2Rad * z * 0.5f;
+
+            float cosYawOver2 = Maths.Cos(yawOver2);
+            float sinYawOver2 = Maths.Sin(yawOver2);
+            float cosPitchOver2 = Maths.Cos(pitchOver2);
+            float sinPitchOver2 = Maths.Sin(pitchOver2);
+            float cosRollOver2 = Maths.Cos(rollOver2);
+            float sinRollOver2 = Maths.Sin(rollOver2);
+
+            Quaternion result = new Quaternion();
+            result.W = cosYawOver2 * cosPitchOver2 * cosRollOver2 + sinYawOver2 * sinPitchOver2 * sinRollOver2;
+            result.X = sinYawOver2 * cosPitchOver2 * cosRollOver2 + cosYawOver2 * sinPitchOver2 * sinRollOver2;
+            result.Y = cosYawOver2 * sinPitchOver2 * cosRollOver2 - sinYawOver2 * cosPitchOver2 * sinRollOver2;
+            result.Z = cosYawOver2 * cosPitchOver2 * sinRollOver2 - sinYawOver2 * sinPitchOver2 * cosRollOver2;
+
+            return result;
+        }
+
+        public static Float3 ToEuler(Quaternion q)
+        {
+            const float epsilon = 1e-6f;
+            float CUTOFF = (1.0f - 2.0f * epsilon) * (1.0f - 2.0f * epsilon);
+
+            Float4 qv = new Float4(q.X, q.Y, q.Z, q.W);
+
+            Float4 d1 = qv * (qv.W * 2.0f);
+            Float4 d2 = new Float4(qv.X * qv.Y * 2.0f, qv.Y * qv.Z * 2.0f, qv.Z * qv.X * 2.0f, qv.W * qv.W * 2.0f);
+            Float4 d3 = new Float4(qv.X * qv.X, qv.Y * qv.Y, qv.Z * qv.Z, qv.W * qv.W);
+
+            Float3 euler = Float3.Zero;
+            float y1 = d2.Y - d1.X;
+
+            if (y1 * y1 < CUTOFF)
+            {
+                float x1 = d2.X + d1.Z;
+                float x2 = d3.Y + d3.W - d3.X - d3.Z;
+                float z1 = d2.Z + d1.Y;
+                float z2 = d3.Z + d3.W - d3.X - d3.Y;
+
+                euler = new Float3(
+                    Maths.Atan2(x1, x2),
+                    -Maths.Asin(y1),
+                    Maths.Atan2(z1, z2)
+                );
+            }
+            else
+            {
+                y1 = Maths.Clamp(y1, -1.0f, 1.0f);
+
+                Float4 abcd = new Float4(d2.Z, d1.Y, d2.Y, d1.X);
+                float x1 = 2.0f * (abcd.X * abcd.W + abcd.Y * abcd.Z);
+
+                Float4 x = new Float4(
+                    abcd.X * abcd.X * -1.0f,
+                    abcd.Y * abcd.Y * 1.0f,
+                    abcd.Z * abcd.Z * -1.0f,
+                    abcd.W * abcd.W * 1.0f
+                );
+
+                float x2 = (x.X + x.Y) + (x.Z + x.W);
+                euler = new Float3(
+                    Maths.Atan2(x1, x2),
+                    -Maths.Asin(y1),
+                    0.0f
+                );
+            }
+
+            // Convert from radians to degrees
+            euler *= (float)Maths.Rad2Deg;
+
+            // Reorder YZX
+            euler = new Float3(euler.Y, euler.Z, euler.X);
+
+            euler.X = NormalizeAngle(euler.X);
+            euler.Y = NormalizeAngle(euler.Y);
+            euler.Z = NormalizeAngle(euler.Z);
+
+            return euler;
+        }
+
+        private static float NormalizeAngle(float angle)
+        {
+            // Unity-style normalization
+            angle %= 360f;
+            if (angle < 0f)
+                angle += 360f;
+            return angle;
+        }
 
         /// <summary>Implicitly converts a Float4 vector to a Quaternion.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
