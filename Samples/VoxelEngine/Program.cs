@@ -26,6 +26,8 @@ public sealed class VoxelGame : Game
     private Scene scene = null!;
     private VoxelWorld world = null!;
 
+    private GameObject spot = null!;
+
     public override void Initialize()
     {
         scene = new Scene();
@@ -47,8 +49,11 @@ public sealed class VoxelGame : Game
         camera.Depth = -1;
         camera.HDR = true;
 
-        var sl = cameraGO.AddComponent<SpotLight>();
-        //sl.
+        spot = new GameObject("Spot Light");    
+        var sl = spot.AddComponent<SpotLight>();
+        sl.range = 50f;
+        sl.intensity = 256f;
+        scene.Add(spot);
 
         camera.Effects = new List<ImageEffect>()
         {
@@ -119,6 +124,12 @@ public sealed class VoxelGame : Game
         {
             var ray = camera.ScreenPointToRay(Input.MousePosition, new Int2(Window.Size.X, Window.Size.Y));
             world.RaycastVoxel(ray, 10f, false);
+        }
+
+        if (Input.GetKey(Key.F))
+        {
+            spot.Transform.position = cameraGO.Transform.position;
+            spot.Transform.rotation = cameraGO.Transform.rotation;
         }
     }
 }
