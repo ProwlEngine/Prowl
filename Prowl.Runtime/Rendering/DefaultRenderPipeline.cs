@@ -640,6 +640,7 @@ namespace Prowl.Runtime.Rendering
                             // Set point light uniforms for shadow rendering
                             PropertyState.SetGlobalVector("_PointLightPosition", pointLight.Transform.position);
                             PropertyState.SetGlobalFloat("_PointLightRange", pointLight.range);
+                            PropertyState.SetGlobalFloat("_PointLightShadowBias", pointLight.shadowBias);
 
                             for (int face = 0; face < 6; face++)
                             {

@@ -264,8 +264,7 @@ Pass "Standard"
 
 			float SamplePointLightShadow(PointLightStruct light)
 			{
-				// Point lights use normalized distance, so bias needs to be scaled differently
-				float BIAS_SCALE = 0.01; // 10x stronger than directional/spot lights
+				float BIAS_SCALE = 0.001;
 				float NORMAL_BIAS_SCALE = 0.05;
 
 				// Check if shadows are enabled for this light
@@ -286,7 +285,6 @@ Pass "Standard"
 				float depth;
 
 				// Select face and calculate UV coordinates
-				// Fixed: Flip X coordinate to correct horizontal mirroring
 				if (absLightToFrag.x >= absLightToFrag.y && absLightToFrag.x >= absLightToFrag.z) {
 					// X-axis dominant
 					if (lightToFrag.x > 0.0) {
@@ -682,15 +680,16 @@ Pass "StandardShadow"
 		Vertex
 		{
             #include "Fragment"
-
-			layout (location = 0) in vec3 vertexPosition;
+            #include "VertexAttributes"
 
 			out vec3 worldPos;
+			out vec3 worldNormal;
 
 			void main()
 			{
 				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
 				worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
+				worldNormal = normalize(mat3(PROWL_MATRIX_M) * vertexNormal);
 			}
 		}
 
@@ -699,21 +698,34 @@ Pass "StandardShadow"
             #include "Fragment"
 
 			in vec3 worldPos;
+			in vec3 worldNormal;
 
 			// Point light shadow uniforms (will be -1 for directional/spot lights)
 			uniform vec3 _PointLightPosition;
 			uniform float _PointLightRange;
+			uniform float _PointLightShadowBias;
 
 			void main()
 			{
 				// Check if we're rendering for a point light (_PointLightRange > 0)
 				if (_PointLightRange > 0.0) {
+					// Calculate direction from fragment to light
+					vec3 lightDir = normalize(_PointLightPosition - worldPos);
+
+					// Calculate slope-scale bias based on surface angle
+					float cosTheta = clamp(dot(worldNormal, lightDir), 0.0, 1.0);
+					float slopeBias = sqrt(1.0 - cosTheta * cosTheta) / cosTheta; // tan(acos(cosTheta))
+
 					// Calculate distance from light and normalize by range
 					float dist = length(worldPos - _PointLightPosition);
 					float normalizedDepth = dist / _PointLightRange;
 
+					// Apply adaptive bias (stronger bias for sharper angles)
+					float bias = _PointLightShadowBias * 0.01 * (1.0 + slopeBias);
+					normalizedDepth += bias;
+
 					// Write normalized depth to gl_FragDepth
-					gl_FragDepth = normalizedDepth;
+					gl_FragDepth = clamp(normalizedDepth, 0.0, 1.0);
 				}
 				// else: use default gl_FragDepth for directional/spot lights
 			}
