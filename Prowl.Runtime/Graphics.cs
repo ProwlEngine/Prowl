@@ -36,7 +36,7 @@ public class MeshRenderable : IRenderable
     public Material GetMaterial() => _material;
     public int GetLayer() => _layerIndex;
 
-    public void GetRenderingData(Double3 cameraPosition, out PropertyState properties, out Mesh drawData, out Double4x4 model)
+    public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh drawData, out Double4x4 model)
     {
         drawData = _mesh;
         properties = _properties;

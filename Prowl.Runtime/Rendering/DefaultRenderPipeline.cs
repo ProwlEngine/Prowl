@@ -199,6 +199,30 @@ namespace Prowl.Runtime.Rendering
         }
     }
 
+    public struct ViewerData
+    {
+        public Double3 Position;
+        public Double3 Forward;
+        public Double3 Up;
+        public Double3 Right;
+
+        public ViewerData(DefaultRenderPipeline.CameraSnapshot css)
+        {
+            Position = css.cameraPosition;
+            Forward = css.cameraForward;
+            Up = css.cameraUp;
+            Right = css.cameraRight;
+        }
+
+        public ViewerData(Double3 position, Double3 forward, Double3 right, Double3 up) : this()
+        {
+            Position = position;
+            Forward = forward;
+            Right = right;
+            Up = up;
+        }
+    }
+
     /// <summary>
     /// Default rendering pipeline implementation that handles standard forward rendering,
     /// post-processing effects, shadows, and debug visualization.
@@ -387,6 +411,7 @@ namespace Prowl.Runtime.Rendering
             public Scene scene = camera.Scene;
 
             public Double3 cameraPosition = camera.Transform.position;
+            public Double3 cameraRight = camera.Transform.right;
             public Double3 cameraUp = camera.Transform.up;
             public Double3 cameraForward = camera.Transform.forward;
             public LayerMask cullingMask = camera.CullingMask;
@@ -452,7 +477,7 @@ namespace Prowl.Runtime.Rendering
             Graphics.Device.Clear(1.0f, 1.0f, 1.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
 
             // Draw depth for all visible objects
-            DrawRenderables(renderables, "RenderOrder", "DepthOnly", css.cameraPosition, culledRenderableIndices, false);
+            DrawRenderables(renderables, "RenderOrder", "DepthOnly", new ViewerData(css), culledRenderableIndices, false);
 
             // =======================================================
             // 6.1. Set the depth texture for use in post-processing
@@ -479,7 +504,7 @@ namespace Prowl.Runtime.Rendering
             Graphics.Device.BindFramebuffer(forwardBuffer.frameBuffer);
             Graphics.Device.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Color | ClearFlags.Stencil); // Dont clear Depth
 
-            DrawRenderables(renderables, "RenderOrder", "Opaque", css.cameraPosition, culledRenderableIndices, true);
+            DrawRenderables(renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, true);
 
             // 8.1 Set the Motion Vectors Texture for use in post-processing
             PropertyState.SetGlobalTexture("_CameraMotionVectorsTexture", forwardBuffer.InternalTextures[1]);
@@ -502,7 +527,7 @@ namespace Prowl.Runtime.Rendering
                 DrawImageEffects(forwardBuffer, opaqueEffects, ref isHDR);
 
             // 11. Transparent geometry
-            DrawRenderables(renderables, "RenderOrder", "Transparent", css.cameraPosition, culledRenderableIndices, false);
+            DrawRenderables(renderables, "RenderOrder", "Transparent", new ViewerData(css), culledRenderableIndices, false);
 
             // 12. Apply final post-processing effects
             if (finalEffects.Count > 0)
@@ -596,6 +621,10 @@ namespace Prowl.Runtime.Rendering
                 if (light is DirectionalLight dir)
                     res = (int)dir.shadowResolution;
 
+                Double3 forward = ((MonoBehaviour)light).Transform.forward;
+                Double3 right = ((MonoBehaviour)light).Transform.right;
+                Double3 up = ((MonoBehaviour)light).Transform.up;
+
                 if (light.DoCastShadows())
                 {
                     Double3 oldPos = Double3.Zero;
@@ -683,7 +712,7 @@ namespace Prowl.Runtime.Rendering
 
                                 HashSet<int> culledRenderableIndices = [];// CullRenderables(renderables, frustum);
                                 AssignCameraMatrices(view, proj);
-                                DrawRenderables(renderables, "LightMode", "ShadowCaster", light.GetLightPosition(), culledRenderableIndices, false);
+                                DrawRenderables(renderables, "LightMode", "ShadowCaster", new ViewerData(light.GetLightPosition(), forward, right, up), culledRenderableIndices, false);
                             }
 
                             // Reset uniforms for non-point lights
@@ -705,7 +734,7 @@ namespace Prowl.Runtime.Rendering
 
                             HashSet<int> culledRenderableIndices = [];// CullRenderables(renderables, frustum);
                             AssignCameraMatrices(view, proj);
-                            DrawRenderables(renderables, "LightMode", "ShadowCaster", light.GetLightPosition(), culledRenderableIndices, false);
+                            DrawRenderables(renderables, "LightMode", "ShadowCaster", new ViewerData(light.GetLightPosition(), forward, right, up), culledRenderableIndices, false);
                         }
                     }
                     else
@@ -945,7 +974,7 @@ namespace Prowl.Runtime.Rendering
             }
         }
 
-        private static void DrawRenderables(IReadOnlyList<IRenderable> renderables, string tag, string tagValue, Double3 cameraPosition, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices)
+        private static void DrawRenderables(IReadOnlyList<IRenderable> renderables, string tag, string tagValue, ViewerData viewer, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices)
         {
             bool hasRenderOrder = !string.IsNullOrWhiteSpace(tag);
             for(int renderIndex=0; renderIndex < renderables.Count; renderIndex++)
@@ -967,7 +996,7 @@ namespace Prowl.Runtime.Rendering
                     if (hasRenderOrder && !pass.HasTag(tag, tagValue))
                         continue;
 
-                    renderable.GetRenderingData(cameraPosition, out PropertyState properties, out Mesh mesh, out Double4x4 model);
+                    renderable.GetRenderingData(viewer, out PropertyState properties, out Mesh mesh, out Double4x4 model);
 
                     // Store previous model matrix mainly for motion vectors, however, the user can use it for other things
                     var instanceId = properties.GetInt("_ObjectID");
@@ -975,7 +1004,7 @@ namespace Prowl.Runtime.Rendering
                         TrackModelMatrix(instanceId, model);
 
                     if (CAMERA_RELATIVE)
-                        model.Translation -= cameraPosition;
+                        model.Translation -= viewer.Position;
 
                     PropertyState.SetGlobalMatrix("prowl_ObjectToWorld", model);
                     PropertyState.SetGlobalMatrix("prowl_WorldToObject", model.Invert());
