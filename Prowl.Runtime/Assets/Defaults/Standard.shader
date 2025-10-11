@@ -236,9 +236,9 @@ Pass "Standard"
                 shadow *= sun.shadowStrength;
                 
                 // Fade out shadows at shadow distance
-                float distanceFade = 1.0 - clamp(length(worldPos) / sun.shadowDistance, 0.0, 1.0);
-                shadow *= distanceFade;
-                
+                //float distanceFade = 1.0 - clamp(length(worldPos) / sun.shadowDistance, 0.0, 1.0);
+                //shadow *= distanceFade;
+
                 return shadow;
 			}
 
