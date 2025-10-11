@@ -1012,7 +1012,7 @@ namespace Prowl.Runtime.Rendering
                     PropertyState.SetGlobalMatrix("prowl_ObjectToWorld", model);
                     PropertyState.SetGlobalMatrix("prowl_WorldToObject", model.Invert());
 
-                    PropertyState.SetGlobalColor("_MainColor", Colors.White);
+                    PropertyState.SetGlobalColor("_MainColor", Color.white);
 
                     material._properties.ApplyOverride(properties);
 

@@ -23,8 +23,8 @@ public class DirectionalLight : Light
     public override void Update()
     {
         GameObject.Scene.PushLight(this);
-        Debug.DrawArrow(Transform.position, -Transform.forward, Colors.Yellow);
-        Debug.DrawWireCircle(Transform.position, Transform.forward, 0.5f, Colors.Yellow);
+        Debug.DrawArrow(Transform.position, -Transform.forward, Color.yellow);
+        Debug.DrawWireCircle(Transform.position, Transform.forward, 0.5f, Color.yellow);
     }
 
 
@@ -39,7 +39,7 @@ public class DirectionalLight : Light
     public void UploadToGPU(bool cameraRelative, Double3 cameraPosition, int atlasX, int atlasY, int atlasWidth)
     {
         PropertyState.SetGlobalVector($"_Sun.direction", Transform.forward);
-        PropertyState.SetGlobalVector($"_Sun.color", new Double3(color.R, color.G, color.B));
+        PropertyState.SetGlobalVector($"_Sun.color", new Double3(color.r, color.g, color.b));
         PropertyState.SetGlobalFloat($"_Sun.intensity", intensity);
 
         GetShadowMatrix(out var view, out var proj);

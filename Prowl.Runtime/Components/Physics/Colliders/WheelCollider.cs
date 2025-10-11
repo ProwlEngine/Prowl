@@ -304,11 +304,11 @@ public sealed class WheelCollider : MonoBehaviour
         wheelLeft = Maths.Normalize(wheelLeft);
 
         // Debug Draw
-        Debug.DrawWireCircle(WorldPosition, wheelLeft, Radius, Colors.Green, 32);
+        Debug.DrawWireCircle(WorldPosition, wheelLeft, Radius, Color.green, 32);
 
         // Draw Wheel Rotation With a Line
         Double3 wheelEnd = WorldPosition + ((Maths.AxisAngle((Float3)wheelLeft, (float)WheelRotation) * (Float3)wheelFwd) * Radius);
-        Debug.DrawLine(WorldPosition, wheelEnd, Colors.Green);
+        Debug.DrawLine(WorldPosition, wheelEnd, Color.green);
 
         // Draw Raycasts
         for (int i = 0; i < _debugRayStart.Count; i++)

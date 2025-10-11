@@ -12,7 +12,7 @@ public class JitterGizmosDrawer : IDebugDrawer
 {
     static JitterGizmosDrawer m_Instance;
     public static JitterGizmosDrawer Instance => m_Instance ??= new();
-    public Float4 color { get; set; } = new Float4(0, 255, 0, 128);
+    public Color color { get; set; } = new Color(0, 255, 0, 128);
 
     public void DrawCube(in JVector p, in JQuaternion ori, in JVector size)
     {

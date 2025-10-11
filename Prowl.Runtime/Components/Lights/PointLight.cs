@@ -84,7 +84,7 @@ public class PointLight : Light
         Double3 position = cameraRelative ? Transform.position - cameraPosition : Transform.position;
 
         PropertyState.SetGlobalVector($"_PointLights[{lightIndex}].position", position);
-        PropertyState.SetGlobalVector($"_PointLights[{lightIndex}].color", new Double3(color.R, color.G, color.B));
+        PropertyState.SetGlobalVector($"_PointLights[{lightIndex}].color", color);
         PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].intensity", intensity);
         PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].range", range);
 

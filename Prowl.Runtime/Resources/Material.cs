@@ -17,7 +17,7 @@ namespace Prowl.Runtime.Resources
             if (s_defaultMaterial == null)
             {
                 s_defaultMaterial = CreateDefaultMaterial();
-                s_defaultMaterial.SetColor("_MainColor", Colors.White);
+                s_defaultMaterial.SetColor("_MainColor", Color.white);
             }
 
             return s_defaultMaterial;
@@ -64,7 +64,7 @@ namespace Prowl.Runtime.Resources
 
         public void SetKeyword(string keyword, bool value) => _localKeywords[keyword] = value;
 
-        public void SetColor(string name, Float4 value) => _properties.SetColor(name, value);
+        public void SetColor(string name, Color value) => _properties.SetColor(name, value);
         public void SetVector(string name, Double2 value) => _properties.SetVector(name, value);
         public void SetVector(string name, Double3 value) => _properties.SetVector(name, value);
         public void SetVector(string name, Double4 value) => _properties.SetVector(name, value);
@@ -75,7 +75,7 @@ namespace Prowl.Runtime.Resources
 
         #region Global Properties
 
-        public static void SetGlobalColor(string name, Float4 value) => PropertyState.SetGlobalColor(name, value);
+        public static void SetGlobalColor(string name, Color value) => PropertyState.SetGlobalColor(name, value);
         public static void SetGlobalVector(string name, Double2 value) => PropertyState.SetGlobalVector(name, value);
         public static void SetGlobalVector(string name, Double3 value) => PropertyState.SetGlobalVector(name, value);
         public static void SetGlobalVector(string name, Double4 value) => PropertyState.SetGlobalVector(name, value);
@@ -111,7 +111,7 @@ namespace Prowl.Runtime.Resources
                     break;
 
                 case ShaderPropertyType.Color:
-                    _properties.SetColor(property.Name, (Float4)property);
+                    _properties.SetColor(property.Name, (Color)property);
                     break;
 
                 case ShaderPropertyType.Matrix:

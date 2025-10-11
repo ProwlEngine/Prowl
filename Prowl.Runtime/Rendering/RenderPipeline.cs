@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Rendering
     {
         public bool DisplayGizmo;
         public Double4x4 GridMatrix;
-        public Float4 GridColor;
+        public Color GridColor;
         public Double3 GridSizes;
     }
 

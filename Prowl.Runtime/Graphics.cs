@@ -86,13 +86,13 @@ public static class Graphics
         mat.SetTexture("_MainTex", source);
         Blit(mat, pass);
     }
-    public static void Blit(RenderTexture source, RenderTexture target, Material? mat = null, int pass = 0, bool clearDepth = false, bool clearColor = false, Float4 color = default)
+    public static void Blit(RenderTexture source, RenderTexture target, Material? mat = null, int pass = 0, bool clearDepth = false, bool clearColor = false, Color color = default)
     {
         mat ??= BlitMaterial;
         mat.SetTexture("_MainTex", source.MainTexture);
         Blit(target, mat, pass, clearDepth, clearColor, color);
     }
-    public static void Blit(RenderTexture target, Material? mat = null, int pass = 0, bool clearDepth = false, bool clearColor = false, Float4 color = default)
+    public static void Blit(RenderTexture target, Material? mat = null, int pass = 0, bool clearDepth = false, bool clearColor = false, Color color = default)
     {
         mat ??= BlitMaterial;
         if (target != null)
@@ -109,7 +109,7 @@ public static class Graphics
             ClearFlags clear = 0;
             if (clearDepth) clear |= ClearFlags.Depth;
             if (clearColor) clear |= ClearFlags.Color;
-            Device.Clear(color.R, color.G, color.B, color.A, clear | ClearFlags.Stencil);
+            Device.Clear(color.r, color.g, color.b, color.a, clear | ClearFlags.Stencil);
         }
         Blit(mat, pass);
     }

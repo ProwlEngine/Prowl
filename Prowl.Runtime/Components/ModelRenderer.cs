@@ -13,7 +13,7 @@ namespace Prowl.Runtime;
 public class ModelRenderer : MonoBehaviour
 {
     public Model Model;
-    public Float4 mainColor = Colors.White;
+    public Color mainColor = Color.white;
 
     // Animation properties
     public AnimationClip CurrentAnimation;

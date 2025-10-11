@@ -46,7 +46,7 @@ public class SpotLight : Light
 
         PropertyState.SetGlobalVector($"_SpotLights[{lightIndex}].position", position);
         PropertyState.SetGlobalVector($"_SpotLights[{lightIndex}].direction", Transform.forward);
-        PropertyState.SetGlobalVector($"_SpotLights[{lightIndex}].color", new Double3(color.R, color.G, color.B));
+        PropertyState.SetGlobalVector($"_SpotLights[{lightIndex}].color", color);
         PropertyState.SetGlobalFloat($"_SpotLights[{lightIndex}].intensity", intensity);
         PropertyState.SetGlobalFloat($"_SpotLights[{lightIndex}].range", range);
         PropertyState.SetGlobalFloat($"_SpotLights[{lightIndex}].innerAngle", (float)Maths.Cos(innerAngle * 0.5f * Maths.Deg2Rad));
