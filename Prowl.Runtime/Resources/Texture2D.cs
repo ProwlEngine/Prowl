@@ -355,7 +355,7 @@ namespace Prowl.Runtime.Resources
             string resourcePath = $"Assets/Defaults/{fileName}";
             using (var stream = EmbeddedResources.GetStream(resourcePath))
             {
-                var result = FromStream(stream, false);
+                var result = FromStream(stream, true);
                 result.AssetPath = $"$Default:{texture}";
                 return result;
             }

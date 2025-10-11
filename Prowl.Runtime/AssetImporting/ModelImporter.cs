@@ -552,7 +552,7 @@ namespace Prowl.Runtime.AssetImporting
 
         private static void LoadTextureIntoMesh(string name, FileInfo file, Material mat)
         {
-            mat.SetTexture(name, Texture2D.LoadFromFile(file.FullName));
+            mat.SetTexture(name, Texture2D.LoadFromFile(file.FullName, true));
         }
     }
 }

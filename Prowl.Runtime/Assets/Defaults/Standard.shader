@@ -95,7 +95,7 @@ Pass "Standard"
             #include "Fragment"
             #include "Lighting"
 
-			//#define USEGENERATEDNORMALS
+			#define USEGENERATEDNORMALS
 
 			layout (location = 0) out vec4 gAlbedo;
 			layout (location = 1) out vec4 gMotionVector;
