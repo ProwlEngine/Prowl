@@ -28,8 +28,8 @@ namespace Prowl.Runtime.Rendering
     public enum LightType
     {
         Directional,
-        //Spot,
-        //Point,
+        Spot,
+        Point,
         //Area
     }
 

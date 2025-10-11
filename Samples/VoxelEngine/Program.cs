@@ -47,6 +47,9 @@ public sealed class VoxelGame : Game
         camera.Depth = -1;
         camera.HDR = true;
 
+        var sl = cameraGO.AddComponent<SpotLight>();
+        //sl.
+
         camera.Effects = new List<ImageEffect>()
         {
             new ScreenSpaceReflectionEffect(),

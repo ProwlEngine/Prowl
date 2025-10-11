@@ -558,6 +558,8 @@ namespace Prowl.Runtime.Rendering
             int width = ShadowAtlas.GetAtlasWidth();
 
             int numDirLights = 0;
+            int spotLightIndex = 0;
+            const int MAX_SPOT_LIGHTS = 8;
 
             foreach (IRenderableLight light in lights)
             {
@@ -649,6 +651,11 @@ namespace Prowl.Runtime.Rendering
                         //dirLight2.Transform.position = oldPos;
                         dirLight2.UploadToGPU(CAMERA_RELATIVE, cameraPosition, AtlasX, AtlasY, AtlasWidth);
                     }
+                    else if (light is SpotLight spotLight && spotLightIndex < MAX_SPOT_LIGHTS)
+                    {
+                        spotLight.UploadToGPU(CAMERA_RELATIVE, cameraPosition, AtlasX, AtlasY, AtlasWidth, spotLightIndex);
+                        spotLightIndex++;
+                    }
                 }
                 else
                 {
@@ -656,8 +663,16 @@ namespace Prowl.Runtime.Rendering
                     {
                         dirL.UploadToGPU(CAMERA_RELATIVE, cameraPosition, -1, -1, 0);
                     }
+                    else if (light is SpotLight spotLight && spotLightIndex < MAX_SPOT_LIGHTS)
+                    {
+                        spotLight.UploadToGPU(CAMERA_RELATIVE, cameraPosition, -1, -1, 0, spotLightIndex);
+                        spotLightIndex++;
+                    }
                 }
             }
+
+            // Set the spot light count
+            PropertyState.SetGlobalInt("_SpotLightCount", spotLightIndex);
         
         
             //unsafe
