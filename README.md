@@ -205,6 +205,7 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 - [Kai Angulo (k0t)](https://github.com/sinnwrig)
 - [Bruno Massa](https://github.com/brmassa)
 - [Mark Saba (ZeppelinGames)](https://github.com/ZeppelinGames)
+- [EJTP (Unified)](https://github.com/EJTP)
 
 ## Dependencies 📦
 
