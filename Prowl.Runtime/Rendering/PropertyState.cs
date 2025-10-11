@@ -116,80 +116,193 @@ namespace Prowl.Runtime.Rendering
         // Modified Apply method to also apply global properties
         public static unsafe void Apply(PropertyState mpb, GraphicsProgram shader)
         {
+            var cache = shader.uniformCache;
             int texSlot = 0;
 
             // Apply global properties first (so instance properties can override them)
-            ApplyGlobals(shader, mpb, ref texSlot);
+            ApplyGlobals(shader, cache, ref texSlot);
 
             // Then apply instance properties
             foreach (var item in mpb.floats)
-                Graphics.Device.SetUniformF(shader, item.Key, item.Value);
+            {
+                if (!cache.floats.TryGetValue(item.Key, out var cachedValue) || cachedValue != item.Value)
+                {
+                    Graphics.Device.SetUniformF(shader, item.Key, item.Value);
+                    cache.floats[item.Key] = item.Value;
+                }
+            }
 
             foreach (var item in mpb.ints)
-                Graphics.Device.SetUniformI(shader, item.Key, item.Value);
+            {
+                if (!cache.ints.TryGetValue(item.Key, out var cachedValue) || cachedValue != item.Value)
+                {
+                    Graphics.Device.SetUniformI(shader, item.Key, item.Value);
+                    cache.ints[item.Key] = item.Value;
+                }
+            }
 
             foreach (var item in mpb.vectors2)
-                Graphics.Device.SetUniformV2(shader, item.Key, item.Value);
+            {
+                if (!cache.vectors2.TryGetValue(item.Key, out var cachedValue) || !cachedValue.Equals(item.Value))
+                {
+                    Graphics.Device.SetUniformV2(shader, item.Key, item.Value);
+                    cache.vectors2[item.Key] = item.Value;
+                }
+            }
+
             foreach (var item in mpb.vectors3)
-                Graphics.Device.SetUniformV3(shader, item.Key, item.Value);
+            {
+                if (!cache.vectors3.TryGetValue(item.Key, out var cachedValue) || !cachedValue.Equals(item.Value))
+                {
+                    Graphics.Device.SetUniformV3(shader, item.Key, item.Value);
+                    cache.vectors3[item.Key] = item.Value;
+                }
+            }
+
             foreach (var item in mpb.vectors4)
-                Graphics.Device.SetUniformV4(shader, item.Key, item.Value);
+            {
+                if (!cache.vectors4.TryGetValue(item.Key, out var cachedValue) || !cachedValue.Equals(item.Value))
+                {
+                    Graphics.Device.SetUniformV4(shader, item.Key, item.Value);
+                    cache.vectors4[item.Key] = item.Value;
+                }
+            }
+
             foreach (var item in mpb.colors)
-                Graphics.Device.SetUniformV4(shader, item.Key, new Float4(item.Value.R, item.Value.G, item.Value.B, item.Value.A));
+            {
+                Float4 colorVec = new Float4(item.Value.R, item.Value.G, item.Value.B, item.Value.A);
+                if (!cache.vectors4.TryGetValue(item.Key, out var cachedValue) || !cachedValue.Equals(colorVec))
+                {
+                    Graphics.Device.SetUniformV4(shader, item.Key, colorVec);
+                    cache.vectors4[item.Key] = colorVec;
+                }
+            }
 
             foreach (var item in mpb.matrices)
-                Graphics.Device.SetUniformMatrix(shader, item.Key, false, item.Value);
+            {
+                if (!cache.matrices.TryGetValue(item.Key, out var cachedValue) || !cachedValue.Equals(item.Value))
+                {
+                    Graphics.Device.SetUniformMatrix(shader, item.Key, false, item.Value);
+                    cache.matrices[item.Key] = item.Value;
+                }
+            }
 
+            // Matrix arrays - always set (comparison would be expensive)
             foreach (var item in mpb.matrixArr)
                 Graphics.Device.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
 
-            // Bind uniform buffers
+            // Bind uniform buffers - check if buffer changed
             foreach (var item in mpb.buffers)
-                Graphics.Device.BindUniformBuffer(shader, item.Key, item.Value);
+            {
+                if (!cache.buffers.TryGetValue(item.Key, out var cachedBuffer) || cachedBuffer != item.Value)
+                {
+                    Graphics.Device.BindUniformBuffer(shader, item.Key, item.Value);
+                    cache.buffers[item.Key] = item.Value;
+                }
+            }
 
             foreach (var item in mpb.textures)
             {
                 var tex = item.Value;
                 if (tex != null)
                 {
+                    // Always set textures - slot assignment must be consistent
                     Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                     texSlot++;
                 }
             }
         }
 
-        private static void ApplyGlobals(GraphicsProgram shader, PropertyState mpb, ref int texSlot)
+        private static void ApplyGlobals(GraphicsProgram shader, GraphicsProgram.UniformCache cache, ref int texSlot)
         {
             foreach (var item in globalFloats)
-                Graphics.Device.SetUniformF(shader, item.Key, item.Value);
+            {
+                if (!cache.floats.TryGetValue(item.Key, out var cachedValue) || cachedValue != item.Value)
+                {
+                    Graphics.Device.SetUniformF(shader, item.Key, item.Value);
+                    cache.floats[item.Key] = item.Value;
+                }
+            }
 
             foreach (var item in globalInts)
-                Graphics.Device.SetUniformI(shader, item.Key, item.Value);
+            {
+                if (!cache.ints.TryGetValue(item.Key, out var cachedValue) || cachedValue != item.Value)
+                {
+                    Graphics.Device.SetUniformI(shader, item.Key, item.Value);
+                    cache.ints[item.Key] = item.Value;
+                }
+            }
 
             foreach (var item in globalVectors2)
-                Graphics.Device.SetUniformV2(shader, item.Key, (Float2)item.Value);
+            {
+                Float2 value = (Float2)item.Value;
+                if (!cache.vectors2.TryGetValue(item.Key, out var cachedValue) || !cachedValue.Equals(value))
+                {
+                    Graphics.Device.SetUniformV2(shader, item.Key, value);
+                    cache.vectors2[item.Key] = value;
+                }
+            }
+
             foreach (var item in globalVectors3)
-                Graphics.Device.SetUniformV3(shader, item.Key, (Float3)item.Value);
+            {
+                Float3 value = (Float3)item.Value;
+                if (!cache.vectors3.TryGetValue(item.Key, out var cachedValue) || !cachedValue.Equals(value))
+                {
+                    Graphics.Device.SetUniformV3(shader, item.Key, value);
+                    cache.vectors3[item.Key] = value;
+                }
+            }
+
             foreach (var item in globalVectors4)
-                Graphics.Device.SetUniformV4(shader, item.Key, (Float4)item.Value);
+            {
+                Float4 value = (Float4)item.Value;
+                if (!cache.vectors4.TryGetValue(item.Key, out var cachedValue) || !cachedValue.Equals(value))
+                {
+                    Graphics.Device.SetUniformV4(shader, item.Key, value);
+                    cache.vectors4[item.Key] = value;
+                }
+            }
+
             foreach (var item in globalColors)
-                Graphics.Device.SetUniformV4(shader, item.Key, new Float4(item.Value.R, item.Value.G, item.Value.B, item.Value.A));
+            {
+                Float4 colorVec = new Float4(item.Value.R, item.Value.G, item.Value.B, item.Value.A);
+                if (!cache.vectors4.TryGetValue(item.Key, out var cachedValue) || !cachedValue.Equals(colorVec))
+                {
+                    Graphics.Device.SetUniformV4(shader, item.Key, colorVec);
+                    cache.vectors4[item.Key] = colorVec;
+                }
+            }
 
             foreach (var item in globalMatrices)
-                Graphics.Device.SetUniformMatrix(shader, item.Key, false, (Float4x4)item.Value);
+            {
+                Float4x4 value = (Float4x4)item.Value;
+                if (!cache.matrices.TryGetValue(item.Key, out var cachedValue) || !cachedValue.Equals(value))
+                {
+                    Graphics.Device.SetUniformMatrix(shader, item.Key, false, value);
+                    cache.matrices[item.Key] = value;
+                }
+            }
 
+            // Matrix arrays - always set (comparison would be expensive)
             foreach (var item in globalMatrixArr)
                 Graphics.Device.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].M11);
 
-            // Bind global uniform buffers
+            // Bind global uniform buffers - check if buffer changed
             foreach (var item in globalBuffers)
-                Graphics.Device.BindUniformBuffer(shader, item.Key, item.Value);
+            {
+                if (!cache.buffers.TryGetValue(item.Key, out var cachedBuffer) || cachedBuffer != item.Value)
+                {
+                    Graphics.Device.BindUniformBuffer(shader, item.Key, item.Value);
+                    cache.buffers[item.Key] = item.Value;
+                }
+            }
 
             foreach (var item in globalTextures)
             {
                 var tex = item.Value;
                 if (tex != null)
                 {
+                    // Always set textures - slot assignment must be consistent
                     Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                     texSlot++;
                 }
