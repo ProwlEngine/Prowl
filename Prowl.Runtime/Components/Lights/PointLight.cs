@@ -96,6 +96,7 @@ public class PointLight : Light
             PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].shadowBias", shadowBias);
             PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].shadowNormalBias", shadowNormalBias);
             PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].shadowStrength", shadowStrength);
+            PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].shadowQuality", (float)shadowQuality);
 
             PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].atlasX", atlasX);
             PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].atlasY", atlasY);

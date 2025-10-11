@@ -16,6 +16,7 @@ struct SunLightStruct {
     float shadowNormalBias;     // Maps to shadowNormalBias
     float shadowStrength; // Maps to shadowStrength
     float shadowDistance; // Maps to shadowDistance
+    float shadowQuality;  // 0 = Hard, 1 = Soft
 
     float atlasX; // AtlasWidth
     float atlasY; // AtlasY,
@@ -34,6 +35,7 @@ struct SpotLightStruct {
     float shadowBias;
     float shadowNormalBias;
     float shadowStrength;
+    float shadowQuality;  // 0 = Hard, 1 = Soft
     float atlasX;
     float atlasY;
     float atlasWidth;
@@ -48,6 +50,7 @@ struct PointLightStruct {
     float shadowBias;
     float shadowNormalBias;
     float shadowStrength;
+    float shadowQuality;  // 0 = Hard, 1 = Soft
     float atlasX;
     float atlasY;
     float atlasWidth;
@@ -127,24 +130,32 @@ float SampleDirectionalShadow(SunLightStruct sun, vec3 worldPos, vec3 worldNorma
     // Get current depth with bias
     float currentDepth = projCoords.z - (sun.shadowBias * BIAS_SCALE);
 
-    // Poisson Disk PCF for smooth soft shadows with fewer samples
-    vec2 texelSize = vec2(1.0) / shadowAtlasSize;
     float shadow = 0.0;
-    float filterRadius = 1.5; // Controls shadow softness
 
-    // Random rotation to reduce banding artifacts
-    float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185; // 2*PI
-    float s = sin(randomRotation);
-    float c = cos(randomRotation);
-    mat2 rotationMatrix = mat2(c, -s, s, c);
+    // Check shadow quality: 0 = Hard, 1 = Soft
+    if (sun.shadowQuality < 0.5) {
+        // Hard shadows - single sample
+        float closestDepth = texture(shadowAtlas, atlasCoords).r;
+        shadow = currentDepth > closestDepth ? 1.0 : 0.0;
+    } else {
+        // Soft shadows - Poisson Disk PCF
+        vec2 texelSize = vec2(1.0) / shadowAtlasSize;
+        float filterRadius = 1.5; // Controls shadow softness
 
-    // Sample using Poisson disk pattern
-    for(int i = 0; i < 16; i++) {
-        vec2 offset = rotationMatrix * poissonDisk[i] * texelSize * filterRadius;
-        float pcfDepth = texture(shadowAtlas, atlasCoords + offset).r;
-        shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
+        // Random rotation to reduce banding artifacts
+        float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185; // 2*PI
+        float s = sin(randomRotation);
+        float c = cos(randomRotation);
+        mat2 rotationMatrix = mat2(c, -s, s, c);
+
+        // Sample using Poisson disk pattern
+        for(int i = 0; i < 16; i++) {
+            vec2 offset = rotationMatrix * poissonDisk[i] * texelSize * filterRadius;
+            float pcfDepth = texture(shadowAtlas, atlasCoords + offset).r;
+            shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
+        }
+        shadow /= 16.0;
     }
-    shadow /= 16.0;
 
     // Apply shadow strength
     shadow *= sun.shadowStrength;
@@ -188,24 +199,32 @@ float SampleSpotLightShadow(SpotLightStruct light, vec3 worldPos, vec3 worldNorm
     // Get current depth with bias
     float currentDepth = projCoords.z - (light.shadowBias * BIAS_SCALE);
 
-    // Poisson Disk PCF for smooth soft shadows
-    vec2 texelSize = vec2(1.0) / shadowAtlasSize;
     float shadow = 0.0;
-    float filterRadius = 1.5; // Controls shadow softness
 
-    // Random rotation to reduce banding artifacts
-    float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185; // 2*PI
-    float s = sin(randomRotation);
-    float c = cos(randomRotation);
-    mat2 rotationMatrix = mat2(c, -s, s, c);
+    // Check shadow quality: 0 = Hard, 1 = Soft
+    if (light.shadowQuality < 0.5) {
+        // Hard shadows - single sample
+        float closestDepth = texture(shadowAtlas, atlasCoords).r;
+        shadow = currentDepth > closestDepth ? 1.0 : 0.0;
+    } else {
+        // Soft shadows - Poisson Disk PCF
+        vec2 texelSize = vec2(1.0) / shadowAtlasSize;
+        float filterRadius = 1.5; // Controls shadow softness
 
-    // Sample using Poisson disk pattern
-    for(int i = 0; i < 16; i++) {
-        vec2 offset = rotationMatrix * poissonDisk[i] * texelSize * filterRadius;
-        float pcfDepth = texture(shadowAtlas, atlasCoords + offset).r;
-        shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
+        // Random rotation to reduce banding artifacts
+        float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185; // 2*PI
+        float s = sin(randomRotation);
+        float c = cos(randomRotation);
+        mat2 rotationMatrix = mat2(c, -s, s, c);
+
+        // Sample using Poisson disk pattern
+        for(int i = 0; i < 16; i++) {
+            vec2 offset = rotationMatrix * poissonDisk[i] * texelSize * filterRadius;
+            float pcfDepth = texture(shadowAtlas, atlasCoords + offset).r;
+            shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
+        }
+        shadow /= 16.0;
     }
-    shadow /= 16.0;
 
     // Apply shadow strength
     shadow *= light.shadowStrength;
@@ -291,24 +310,32 @@ float SamplePointLightShadow(PointLightStruct light, vec3 worldPos, sampler2D sh
     float currentDepth = currentDistance / light.range;
     currentDepth -= (light.shadowBias * BIAS_SCALE);
 
-    // Poisson Disk PCF for smooth soft shadows
-    vec2 texelSize = vec2(1.0) / shadowAtlasSize;
     float shadow = 0.0;
-    float filterRadius = 2.0; // Slightly larger for point lights due to cubemap
 
-    // Random rotation to reduce banding artifacts
-    float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185; // 2*PI
-    float s = sin(randomRotation);
-    float c = cos(randomRotation);
-    mat2 rotationMatrix = mat2(c, -s, s, c);
+    // Check shadow quality: 0 = Hard, 1 = Soft
+    if (light.shadowQuality < 0.5) {
+        // Hard shadows - single sample
+        float closestDepth = texture(shadowAtlas, atlasCoords).r;
+        shadow = currentDepth > closestDepth ? 1.0 : 0.0;
+    } else {
+        // Soft shadows - Poisson Disk PCF
+        vec2 texelSize = vec2(1.0) / shadowAtlasSize;
+        float filterRadius = 2.0; // Slightly larger for point lights due to cubemap
 
-    // Sample using Poisson disk pattern
-    for(int i = 0; i < 16; i++) {
-        vec2 offset = rotationMatrix * poissonDisk[i] * texelSize * filterRadius;
-        float pcfDepth = texture(shadowAtlas, atlasCoords + offset).r;
-        shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
+        // Random rotation to reduce banding artifacts
+        float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185; // 2*PI
+        float s = sin(randomRotation);
+        float c = cos(randomRotation);
+        mat2 rotationMatrix = mat2(c, -s, s, c);
+
+        // Sample using Poisson disk pattern
+        for(int i = 0; i < 16; i++) {
+            vec2 offset = rotationMatrix * poissonDisk[i] * texelSize * filterRadius;
+            float pcfDepth = texture(shadowAtlas, atlasCoords + offset).r;
+            shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
+        }
+        shadow /= 16.0;
     }
-    shadow /= 16.0;
 
     // Apply shadow strength
     shadow *= light.shadowStrength;

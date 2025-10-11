@@ -52,6 +52,7 @@ public class DirectionalLight : Light
         PropertyState.SetGlobalFloat($"_Sun.shadowNormalBias", shadowNormalBias);
         PropertyState.SetGlobalFloat($"_Sun.shadowStrength", shadowStrength);
         PropertyState.SetGlobalFloat($"_Sun.shadowDistance", shadowDistance);
+        PropertyState.SetGlobalFloat($"_Sun.shadowQuality", (float)shadowQuality);
 
         PropertyState.SetGlobalFloat($"_Sun.atlasX", atlasX);
         PropertyState.SetGlobalFloat($"_Sun.atlasY", atlasY);

@@ -63,6 +63,7 @@ public class SpotLight : Light
             PropertyState.SetGlobalFloat($"_SpotLights[{lightIndex}].shadowBias", shadowBias);
             PropertyState.SetGlobalFloat($"_SpotLights[{lightIndex}].shadowNormalBias", shadowNormalBias);
             PropertyState.SetGlobalFloat($"_SpotLights[{lightIndex}].shadowStrength", shadowStrength);
+            PropertyState.SetGlobalFloat($"_SpotLights[{lightIndex}].shadowQuality", (float)shadowQuality);
 
             PropertyState.SetGlobalFloat($"_SpotLights[{lightIndex}].atlasX", atlasX);
             PropertyState.SetGlobalFloat($"_SpotLights[{lightIndex}].atlasY", atlasY);

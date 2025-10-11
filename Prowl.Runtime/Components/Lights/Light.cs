@@ -9,6 +9,12 @@ using Prowl.Runtime.Rendering;
 
 namespace Prowl.Runtime;
 
+public enum ShadowQuality
+{
+    Hard = 0,
+    Soft = 1
+}
+
 public abstract class Light : MonoBehaviour, IRenderableLight
 {
 
@@ -18,6 +24,7 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public float shadowBias = 0.05f;
     public float shadowNormalBias = 1f;
     public bool castShadows = true;
+    public ShadowQuality shadowQuality = ShadowQuality.Hard;
 
 
     public override void Update()
