@@ -23,6 +23,8 @@ public sealed class MyGame : Game
     private GameObject cameraGO;
     private Scene scene;
 
+    private ModelRenderer model;
+
     public override void Initialize()
     {
         scene = new Scene();
@@ -59,7 +61,16 @@ public sealed class MyGame : Game
         mr.Mesh = cube;
         mr.Material = mat;
 
+        cubeGO.Transform.position = new(0, -1, 0);
+        cubeGO.Transform.localScale = new(10, 1, 10);
+
         scene.Add(cubeGO);
+
+        var m = Model.LoadFromFile("Banana Man/scene.gltf");
+        model = new GameObject("Model").AddComponent<ModelRenderer>();
+        model.Model = m;
+        scene.Add(model.GameObject);
+
     }
 
     public override void FixedUpdate()

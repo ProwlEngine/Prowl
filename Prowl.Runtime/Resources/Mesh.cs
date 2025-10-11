@@ -152,6 +152,7 @@ namespace Prowl.Runtime.Resources
         public bool HasBoneWeights => (boneWeights?.Length ?? 0) > 0;
 
         public Float4x4[]? bindPoses;
+        public string[]? boneNames;
 
         bool changed = true;
         Float3[]? vertices;
@@ -988,6 +989,13 @@ namespace Prowl.Runtime.Resources
                     }
                 }
 
+                writer.Write(boneNames?.Length ?? 0);
+                if (boneNames != null)
+                {
+                    foreach (var boneName in boneNames)
+                        writer.Write(boneName);
+                }
+
 
                 compoundTag.Add("MeshData", new EchoObject(memoryStream.ToArray()));
                 compoundTag.Add("MeshType", new EchoObject((int)meshTopology));
@@ -1126,6 +1134,15 @@ namespace Prowl.Runtime.Resources
 
                         bindPoses[i] = val;
                     }
+                }
+
+                // Try to read bone names
+                var boneNamesCount = reader.ReadInt32();
+                if (boneNamesCount > 0)
+                {
+                    boneNames = new string[boneNamesCount];
+                    for (int i = 0; i < boneNamesCount; i++)
+                        boneNames[i] = reader.ReadString();
                 }
 
                 changed = true;

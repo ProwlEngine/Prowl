@@ -41,23 +41,51 @@ Pass "Standard"
 
 			void main()
 			{
-			    gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
+#ifdef SKINNED
+				// Apply skinning transformations
+				vec4 skinnedPos = GetSkinnedPosition(vertexPosition);
+				vec3 skinnedNormal = GetSkinnedNormal(vertexNormal);
+
+				gl_Position = PROWL_MATRIX_MVP * skinnedPos;
 				fogCoord = gl_Position.z;
 				currentPos = gl_Position; // Clip space
-			    texCoord0 = vertexTexCoord0;
-				
+				texCoord0 = vertexTexCoord0;
+
+				// Previous position with current projection (using skinned position)
+				vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * skinnedPos;
+				previousPos = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
+
+				worldPos = (PROWL_MATRIX_M * skinnedPos).xyz;
+
+				vColor = vertexColor;
+
+				vNormal = normalize(mat3(PROWL_MATRIX_M) * skinnedNormal);
+#ifdef HAS_TANGENTS
+				// For skinned meshes, also transform tangents
+				vec3 skinnedTangent = GetSkinnedNormal(vertexTangent.xyz);
+				vTangent = normalize(mat3(PROWL_MATRIX_M) * skinnedTangent);
+				vBitangent = cross(vNormal, vTangent);
+#endif
+#else
+				// Non-skinned rendering (original code)
+				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
+				fogCoord = gl_Position.z;
+				currentPos = gl_Position; // Clip space
+				texCoord0 = vertexTexCoord0;
+
 				// Previous position with current projection
 				vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
 				previousPos = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
 
 				worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
-				
+
 				vColor = vertexColor;
 
 				vNormal = normalize(mat3(PROWL_MATRIX_M) * vertexNormal);
 #ifdef HAS_TANGENTS
 				vTangent = normalize(mat3(PROWL_MATRIX_M) * vertexTangent.xyz);
 				vBitangent = cross(vNormal, vTangent);
+#endif
 #endif
 			}
 		}
@@ -644,16 +672,21 @@ Pass "StandardMotionVector"
     Cull Back
 
 	GLSLPROGRAM
-		
+
 		Vertex
 		{
             #include "Fragment"
+            #include "VertexAttributes"
 
-			layout (location = 0) in vec3 vertexPosition;
-			
 			void main()
 			{
+#ifdef SKINNED
+				// Apply skinning for depth pre-pass
+				vec4 skinnedPos = GetSkinnedPosition(vertexPosition);
+				gl_Position = PROWL_MATRIX_MVP * skinnedPos;
+#else
 				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
+#endif
 			}
 		}
 
@@ -687,9 +720,19 @@ Pass "StandardShadow"
 
 			void main()
 			{
+#ifdef SKINNED
+				// Apply skinning for shadows
+				vec4 skinnedPos = GetSkinnedPosition(vertexPosition);
+				vec3 skinnedNormal = GetSkinnedNormal(vertexNormal);
+
+				gl_Position = PROWL_MATRIX_MVP * skinnedPos;
+				worldPos = (PROWL_MATRIX_M * skinnedPos).xyz;
+				worldNormal = normalize(mat3(PROWL_MATRIX_M) * skinnedNormal);
+#else
 				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
 				worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
 				worldNormal = normalize(mat3(PROWL_MATRIX_M) * vertexNormal);
+#endif
 			}
 		}
 

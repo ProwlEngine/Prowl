@@ -326,11 +326,15 @@ namespace Prowl.Runtime.AssetImporting
                 if (m.HasBones)
                 {
                     mesh.bindPoses = new Float4x4[m.Bones.Count];
+                    mesh.boneNames = new string[m.Bones.Count];
                     mesh.BoneIndices = new Float4[vertexCount];
                     mesh.BoneWeights = new Float4[vertexCount];
                     for (var i = 0; i < m.Bones.Count; i++)
                     {
                         var bone = m.Bones[i];
+
+                        // Store bone name
+                        mesh.boneNames[i] = bone.Name;
 
                         var offsetMatrix = bone.OffsetMatrix;
                         Float4x4 bindPose = new Float4x4(
@@ -341,9 +345,9 @@ namespace Prowl.Runtime.AssetImporting
                         );
 
                         // Adjust translation by scale
-                        //bindPose.Translation *= (float)scale;
-                        var translate = Float4x4.CreateScale((float)scale);
-                        bindPose = translate * bindPose;
+                        bindPose.Translation *= (float)scale;
+                        //var translate = Float4x4.CreateScale((float)scale);
+                        //bindPose = Maths.Mul(translate, bindPose);
 
                         mesh.bindPoses[i] = bindPose;
 

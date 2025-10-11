@@ -132,6 +132,7 @@ public static class Graphics
         mat.SetKeyword("HAS_COLORS", mesh.HasColors || mesh.HasColors32);
         mat.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
         mat.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
+        mat.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
 
         var pass = mat.Shader.GetPass(passIndex);
 
