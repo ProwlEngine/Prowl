@@ -621,10 +621,6 @@ namespace Prowl.Runtime.Rendering
                 if (light is DirectionalLight dir)
                     res = (int)dir.shadowResolution;
 
-                Double3 forward = ((MonoBehaviour)light).Transform.forward;
-                Double3 right = ((MonoBehaviour)light).Transform.right;
-                Double3 up = ((MonoBehaviour)light).Transform.up;
-
                 if (light.DoCastShadows())
                 {
                     Double3 oldPos = Double3.Zero;
@@ -704,7 +700,8 @@ namespace Prowl.Runtime.Rendering
 
                                 Graphics.Device.Viewport(viewportX, viewportY, (uint)res, (uint)res);
 
-                                pointLight.GetShadowMatrixForFace(face, out Double4x4 view, out Double4x4 proj);
+                                pointLight.GetShadowMatrixForFace(face, out Double4x4 view, out Double4x4 proj, out Double3 forward, out Double3 up);
+                                Double3 right = Maths.Cross(forward, up);
 
                                 FrustrumD frustum = FrustrumD.FromMatrix(Maths.Mul(proj, view));
                                 if (CAMERA_RELATIVE)
@@ -720,6 +717,10 @@ namespace Prowl.Runtime.Rendering
                         }
                         else
                         {
+                            Double3 forward = -((MonoBehaviour)light).Transform.forward;
+                            Double3 right = ((MonoBehaviour)light).Transform.right;
+                            Double3 up = ((MonoBehaviour)light).Transform.up;
+
                             // Regular directional/spot light rendering
                             // Set range to -1 to indicate this is not a point light
                             PropertyState.SetGlobalFloat("_PointLightRange", -1.0f);

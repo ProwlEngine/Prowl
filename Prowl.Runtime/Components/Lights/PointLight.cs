@@ -37,13 +37,12 @@ public class PointLight : Light
     }
 
     // Get shadow matrix for a specific cubemap face
-    public void GetShadowMatrixForFace(int faceIndex, out Double4x4 view, out Double4x4 projection)
+    public void GetShadowMatrixForFace(int faceIndex, out Double4x4 view, out Double4x4 projection, out Double3 forward, out Double3 up)
     {
         // 90 degree FOV perspective projection for cubemap faces
         projection = Double4x4.CreatePerspectiveFov(90f * Maths.Deg2Rad, 1.0f, 0.1f, range);
 
         Double3 position = Transform.position;
-        Double3 forward, up;
 
         // Define view matrices for each cubemap face
         // 0: +X, 1: -X, 2: +Y, 3: -Y, 4: +Z, 5: -Z
