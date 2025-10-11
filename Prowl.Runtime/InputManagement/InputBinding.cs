@@ -7,6 +7,19 @@ using System.Collections.Generic;
 namespace Prowl.Runtime;
 
 /// <summary>
+/// Internal state tracker for interaction logic.
+/// </summary>
+internal class InteractionState
+{
+    public bool WasActuated { get; set; }
+    public double PressStartTime { get; set; }
+    public double LastTapTime { get; set; }
+    public int CurrentTapCount { get; set; }
+    public bool HoldTriggered { get; set; }
+    public bool TapCompleted { get; set; }
+}
+
+/// <summary>
 /// Defines what type of input control a binding refers to.
 /// </summary>
 public enum InputBindingType
@@ -55,6 +68,26 @@ public class InputBinding
     /// Optional interaction that determines how this binding triggers the action.
     /// </summary>
     public InputInteractionType Interaction { get; set; } = InputInteractionType.Default;
+
+    /// <summary>
+    /// Duration (in seconds) required for Hold interaction. Default: 0.4s
+    /// </summary>
+    public float HoldDuration { get; set; } = 0.4f;
+
+    /// <summary>
+    /// Number of taps required for MultiTap interaction. Default: 2
+    /// </summary>
+    public int TapCount { get; set; } = 2;
+
+    /// <summary>
+    /// Maximum time window (in seconds) between taps for MultiTap. Default: 0.3s
+    /// </summary>
+    public float TapWindow { get; set; } = 0.3f;
+
+    /// <summary>
+    /// Maximum duration (in seconds) for a Tap to be valid. Default: 0.2s
+    /// </summary>
+    public float MaxTapDuration { get; set; } = 0.2f;
 
     /// <summary>
     /// Optional processors to apply to the input value (e.g., normalize, clamp, invert).

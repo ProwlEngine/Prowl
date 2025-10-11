@@ -60,12 +60,47 @@ public enum InputActionPhase
 
 /// <summary>
 /// Defines how a control must be actuated to trigger an action.
-/// Currently just a placeholder for future interaction features (hold, multi-tap, etc.)
 /// </summary>
 public enum InputInteractionType
 {
     /// <summary>
     /// Default behavior - triggers when control is actuated.
+    /// Performs immediately on press, continues while held.
     /// </summary>
-    Default
+    Default,
+
+    /// <summary>
+    /// Triggers only on the initial press (down).
+    /// Does not continue to perform while held.
+    /// </summary>
+    Press,
+
+    /// <summary>
+    /// Triggers only when the control is released (up).
+    /// </summary>
+    Release,
+
+    /// <summary>
+    /// Requires the control to be held for a specified duration before triggering.
+    /// Performs once after the hold duration is met.
+    /// </summary>
+    Hold,
+
+    /// <summary>
+    /// Requires multiple rapid presses (taps) to trigger.
+    /// Must be pressed N times within a time window.
+    /// </summary>
+    MultiTap,
+
+    /// <summary>
+    /// Triggers on both press and release as separate events.
+    /// Useful for actions that need distinct down/up handling.
+    /// </summary>
+    PressAndRelease,
+
+    /// <summary>
+    /// Triggers only when the control is pressed quickly and released.
+    /// Cancels if held too long.
+    /// </summary>
+    Tap
 }

@@ -19,6 +19,7 @@ public class InputAction
     private InputActionPhase _phase = InputActionPhase.Disabled;
     private double _startTime;
     private List<InputCompositeBinding> _composites = new();
+    private Dictionary<InputBinding, InteractionState> _interactionStates = new();
 
     /// <summary>
     /// The name of this action.
@@ -226,8 +227,8 @@ public class InputAction
 
         _previousValue = _currentValue;
 
-        // Read the current value from bindings
-        object newValue = ReadValueFromBindings(inputHandler);
+        // Read the current value from bindings with interaction logic
+        object newValue = ReadValueFromBindings(inputHandler, currentTime);
 
         // Apply processors
         newValue = ApplyProcessors(newValue);
@@ -270,7 +271,7 @@ public class InputAction
         }
     }
 
-    private object ReadValueFromBindings(IInputHandler inputHandler)
+    private object ReadValueFromBindings(IInputHandler inputHandler, double currentTime)
     {
         // Check composites first - return the first actuated composite
         foreach (var composite in _composites)
@@ -280,15 +281,186 @@ public class InputAction
                 return compositeValue;
         }
 
-        // Then check regular bindings and return the first actuated value
+        // Then check regular bindings with interaction logic
         foreach (var binding in Bindings)
         {
-            object value = ReadBinding(binding, inputHandler);
-            if (IsValueActuated(value))
-                return value;
+            // Ensure interaction state exists for this binding
+            if (!_interactionStates.ContainsKey(binding))
+                _interactionStates[binding] = new InteractionState();
+
+            object rawValue = ReadBinding(binding, inputHandler);
+            bool isActuated = IsValueActuated(rawValue);
+
+            // Evaluate interaction and get the result
+            if (EvaluateInteraction(binding, isActuated, currentTime, out object interactionValue))
+            {
+                return interactionValue;
+            }
         }
 
         return GetDefaultValue();
+    }
+
+    private bool EvaluateInteraction(InputBinding binding, bool isActuated, double currentTime, out object value)
+    {
+        var state = _interactionStates[binding];
+        value = GetDefaultValue();
+
+        switch (binding.Interaction)
+        {
+            case InputInteractionType.Default:
+                // Standard behavior - actuated = trigger
+                if (isActuated)
+                {
+                    value = 1f;
+                    return true;
+                }
+                break;
+
+            case InputInteractionType.Press:
+                // Only trigger on initial press (down)
+                if (isActuated && !state.WasActuated)
+                {
+                    value = 1f;
+                    state.WasActuated = true;
+                    return true;
+                }
+                else if (!isActuated)
+                {
+                    state.WasActuated = false;
+                }
+                break;
+
+            case InputInteractionType.Release:
+                // Only trigger on release (up)
+                if (!isActuated && state.WasActuated)
+                {
+                    value = 1f;
+                    state.WasActuated = false;
+                    return true;
+                }
+                else if (isActuated)
+                {
+                    state.WasActuated = true;
+                }
+                break;
+
+            case InputInteractionType.Hold:
+                // Trigger after being held for specified duration
+                if (isActuated)
+                {
+                    if (!state.WasActuated)
+                    {
+                        // Just pressed
+                        state.PressStartTime = currentTime;
+                        state.HoldTriggered = false;
+                        state.WasActuated = true;
+                    }
+                    else if (!state.HoldTriggered)
+                    {
+                        // Check if hold duration met
+                        double heldDuration = currentTime - state.PressStartTime;
+                        if (heldDuration >= binding.HoldDuration)
+                        {
+                            value = 1f;
+                            state.HoldTriggered = true;
+                            return true;
+                        }
+                    }
+                }
+                else
+                {
+                    state.WasActuated = false;
+                    state.HoldTriggered = false;
+                }
+                break;
+
+            case InputInteractionType.Tap:
+                // Quick press and release
+                if (isActuated)
+                {
+                    if (!state.WasActuated)
+                    {
+                        state.PressStartTime = currentTime;
+                        state.WasActuated = true;
+                        state.TapCompleted = false;
+                    }
+                    else
+                    {
+                        // Check if held too long
+                        double heldDuration = currentTime - state.PressStartTime;
+                        if (heldDuration > binding.MaxTapDuration)
+                        {
+                            state.TapCompleted = true; // Cancel tap
+                        }
+                    }
+                }
+                else if (state.WasActuated && !state.TapCompleted)
+                {
+                    // Released quickly enough
+                    double heldDuration = currentTime - state.PressStartTime;
+                    if (heldDuration <= binding.MaxTapDuration)
+                    {
+                        value = 1f;
+                        state.WasActuated = false;
+                        return true;
+                    }
+                    state.WasActuated = false;
+                }
+                break;
+
+            case InputInteractionType.MultiTap:
+                // Multiple rapid taps
+                if (isActuated && !state.WasActuated)
+                {
+                    // New tap
+                    double timeSinceLastTap = currentTime - state.LastTapTime;
+
+                    if (timeSinceLastTap <= binding.TapWindow)
+                    {
+                        state.CurrentTapCount++;
+                    }
+                    else
+                    {
+                        // Reset if too much time passed
+                        state.CurrentTapCount = 1;
+                    }
+
+                    state.LastTapTime = currentTime;
+                    state.WasActuated = true;
+
+                    // Check if we reached the required tap count
+                    if (state.CurrentTapCount >= binding.TapCount)
+                    {
+                        value = 1f;
+                        state.CurrentTapCount = 0; // Reset
+                        return true;
+                    }
+                }
+                else if (!isActuated)
+                {
+                    state.WasActuated = false;
+                }
+                break;
+
+            case InputInteractionType.PressAndRelease:
+                // Trigger on both press and release
+                if (isActuated && !state.WasActuated)
+                {
+                    value = 1f;
+                    state.WasActuated = true;
+                    return true;
+                }
+                else if (!isActuated && state.WasActuated)
+                {
+                    value = 1f;
+                    state.WasActuated = false;
+                    return true;
+                }
+                break;
+        }
+
+        return false;
     }
 
     private object ReadBinding(InputBinding binding, IInputHandler inputHandler)

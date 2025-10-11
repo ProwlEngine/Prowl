@@ -5,13 +5,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Echo;
+
 namespace Prowl.Runtime;
 
 /// <summary>
 /// A collection of related input actions that can be enabled/disabled as a group.
 /// Example: "PlayerActions", "UIActions", "VehicleActions"
 /// </summary>
-public class InputActionMap
+public class InputActionMap : ISerializable
 {
     private readonly Dictionary<string, InputAction> _actions = new();
 
@@ -132,4 +134,14 @@ public class InputActionMap
     public InputAction this[string name] => GetAction(name);
 
     public override string ToString() => $"{Name} ({_actions.Count} actions)";
+
+    public void Serialize(ref EchoObject compound, SerializationContext ctx)
+    {
+
+    }
+
+    public void Deserialize(EchoObject value, SerializationContext ctx)
+    {
+
+    }
 }
