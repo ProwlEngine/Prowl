@@ -770,7 +770,10 @@ Pass "StandardShadow"
 					// Write normalized depth to gl_FragDepth
 					gl_FragDepth = clamp(normalizedDepth, 0.0, 1.0);
 				}
-				// else: use default gl_FragDepth for directional/spot lights
+				else
+                {
+                    gl_FragDepth = gl_FragCoord.z;
+                }
 			}
 		}
 	ENDGLSL
