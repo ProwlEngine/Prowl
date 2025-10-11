@@ -67,10 +67,10 @@ public sealed class MyGame : Game
         scene.Add(cubeGO);
 
         //var m = Model.LoadFromFile("Banana Man\\scene.gltf");
-        var m = Model.LoadFromFile("glTF-Sponza\\Sponza.gltf");
-        model = new GameObject("Model").AddComponent<ModelRenderer>();
-        model.Model = m;
-        scene.Add(model.GameObject);
+        //var m = Model.LoadFromFile("glTF-Sponza\\Sponza.gltf");
+        //model = new GameObject("Model").AddComponent<ModelRenderer>();
+        //model.Model = m;
+        //scene.Add(model.GameObject);
 
     }
 

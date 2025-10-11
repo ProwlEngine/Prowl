@@ -195,12 +195,9 @@ namespace Prowl.Runtime.Resources
 
             changed = true;
 
-            DeleteGPUBuffers();
-
-            // Reset tracking state
-            lastVertexCount = 0;
-            lastIndexCount = 0;
-            lastVertexLayout = null;
+            // Don't delete GPU buffers - they'll be reused on next Upload()
+            // This is important for frequent regeneration (e.g., voxel engines, procedural meshes)
+            // Buffers are only deleted when the mesh is disposed
         }
 
         public void Upload()
