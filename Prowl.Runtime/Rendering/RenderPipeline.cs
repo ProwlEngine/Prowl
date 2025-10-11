@@ -20,7 +20,7 @@ namespace Prowl.Runtime.Rendering
         public Material GetMaterial();
         public int GetLayer();
 
-        public void GetRenderingData(out PropertyState properties, out Mesh drawData, out Double4x4 model);
+        public void GetRenderingData(Double3 cameraPosition, out PropertyState properties, out Mesh drawData, out Double4x4 model);
 
         public void GetCullingData(out bool isRenderable, out AABBD bounds);
     }

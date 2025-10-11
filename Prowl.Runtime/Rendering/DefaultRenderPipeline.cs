@@ -944,7 +944,7 @@ namespace Prowl.Runtime.Rendering
                     if (hasRenderOrder && !pass.HasTag(tag, tagValue))
                         continue;
 
-                    renderable.GetRenderingData(out PropertyState properties, out Mesh mesh, out Double4x4 model);
+                    renderable.GetRenderingData(cameraPosition, out PropertyState properties, out Mesh mesh, out Double4x4 model);
 
                     // Store previous model matrix mainly for motion vectors, however, the user can use it for other things
                     var instanceId = properties.GetInt("_ObjectID");
