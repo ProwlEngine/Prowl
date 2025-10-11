@@ -717,7 +717,9 @@ namespace Prowl.Runtime.Rendering
                         }
                         else
                         {
-                            Double3 forward = -((MonoBehaviour)light).Transform.forward;
+                            Double3 forward = ((MonoBehaviour)light).Transform.forward;
+                            if(light is DirectionalLight)
+                                forward = -forward; // directional light is inverted atm
                             Double3 right = ((MonoBehaviour)light).Transform.right;
                             Double3 up = ((MonoBehaviour)light).Transform.up;
 
