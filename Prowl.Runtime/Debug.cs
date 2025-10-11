@@ -273,8 +273,8 @@ public class GizmoBuilder
         _wireData.Clear();
         _solidData.Clear();
 
-        _wire?.Clear();
-        _solid?.Clear();
+        //_wire?.Clear();
+        //_solid?.Clear();
 
         _icons.Clear();
 

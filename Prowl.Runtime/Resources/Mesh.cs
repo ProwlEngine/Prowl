@@ -173,6 +173,11 @@ namespace Prowl.Runtime.Resources
         GraphicsBuffer vertexBuffer;
         GraphicsBuffer indexBuffer;
 
+        // Track last uploaded state for buffer reuse optimization
+        private int lastVertexCount = 0;
+        private int lastIndexCount = 0;
+        private VertexFormat lastVertexLayout = null;
+
         public Mesh() { }
 
         public void Clear()
@@ -191,6 +196,11 @@ namespace Prowl.Runtime.Resources
             changed = true;
 
             DeleteGPUBuffers();
+
+            // Reset tracking state
+            lastVertexCount = 0;
+            lastIndexCount = 0;
+            lastVertexLayout = null;
         }
 
         public void Upload()
@@ -199,8 +209,6 @@ namespace Prowl.Runtime.Resources
                 return;
 
             changed = false;
-
-            DeleteGPUBuffers();
 
             if (vertices == null || vertices.Length == 0)
                 throw new InvalidOperationException($"Mesh has no vertices");
@@ -242,8 +250,26 @@ namespace Prowl.Runtime.Resources
             if (vertexBlob == null)
                 return;
 
-            vertexBuffer = Graphics.Device.CreateBuffer(BufferType.VertexBuffer, vertexBlob, false);
+            // Check if we can reuse existing buffers
+            bool canReuseVertexBuffer = vertexBuffer != null && lastVertexCount == vertices.Length && VertexLayoutMatches(lastVertexLayout, layout);
+            bool canReuseIndexBuffer = indexBuffer != null && lastIndexCount == indices.Length;
 
+            // Update or create vertex buffer
+            if (canReuseVertexBuffer)
+            {
+                // Reuse existing buffer - just update the data
+                Graphics.Device.SetBuffer(vertexBuffer, vertexBlob, true);
+            }
+            else
+            {
+                // Need to recreate buffer - size or layout changed
+                vertexBuffer?.Dispose();
+                vertexBuffer = Graphics.Device.CreateBuffer(BufferType.VertexBuffer, vertexBlob, true);
+                lastVertexCount = vertices.Length;
+                lastVertexLayout = layout;
+            }
+
+            // Update or create index buffer
             if (indexFormat == IndexFormat.UInt16)
             {
                 ushort[] data = new ushort[indices.Length];
@@ -253,18 +279,60 @@ namespace Prowl.Runtime.Resources
                         throw new InvalidOperationException($"[Mesh] Invalid value {indices[i]} for 16-bit indices");
                     data[i] = (ushort)indices[i];
                 }
-                indexBuffer = Graphics.Device.CreateBuffer(BufferType.ElementsBuffer, data, false);
+
+                if (canReuseIndexBuffer)
+                {
+                    Graphics.Device.SetBuffer(indexBuffer, data, true);
+                }
+                else
+                {
+                    indexBuffer?.Dispose();
+                    indexBuffer = Graphics.Device.CreateBuffer(BufferType.ElementsBuffer, data, true);
+                    lastIndexCount = indices.Length;
+                }
             }
             else if (indexFormat == IndexFormat.UInt32)
             {
-                indexBuffer = Graphics.Device.CreateBuffer(BufferType.ElementsBuffer, indices, false);
+                if (canReuseIndexBuffer)
+                {
+                    Graphics.Device.SetBuffer(indexBuffer, indices, true);
+                }
+                else
+                {
+                    indexBuffer?.Dispose();
+                    indexBuffer = Graphics.Device.CreateBuffer(BufferType.ElementsBuffer, indices, true);
+                    lastIndexCount = indices.Length;
+                }
             }
 
-            vertexArrayObject = Graphics.Device.CreateVertexArray(layout, vertexBuffer, indexBuffer);
-
-            Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
+            // Only recreate VAO if buffers or layout changed
+            if (!canReuseVertexBuffer || !canReuseIndexBuffer || vertexArrayObject == null)
+            {
+                vertexArrayObject?.Dispose();
+                vertexArrayObject = Graphics.Device.CreateVertexArray(layout, vertexBuffer, indexBuffer);
+                Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
+            }
 
             Graphics.Device.BindVertexArray(null);
+        }
+
+        private bool VertexLayoutMatches(VertexFormat a, VertexFormat b)
+        {
+            if (a == null || b == null) return false;
+            if (a.Size != b.Size) return false;
+            if (a.Elements.Length != b.Elements.Length) return false;
+
+            for (int i = 0; i < a.Elements.Length; i++)
+            {
+                var elemA = a.Elements[i];
+                var elemB = b.Elements[i];
+                if (elemA.Semantic != elemB.Semantic ||
+                    elemA.Type != elemB.Type ||
+                    elemA.Count != elemB.Count)
+                    return false;
+            }
+
+            return true;
         }
 
         public void RecalculateBounds()
