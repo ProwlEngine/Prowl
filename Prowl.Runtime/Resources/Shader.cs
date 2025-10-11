@@ -140,6 +140,7 @@ namespace Prowl.Runtime.Resources
                 DefaultShader.Tonemapper => "Tonemapper.shader",
                 DefaultShader.TAA => "TAA.shader",
                 DefaultShader.SSR => "SSR.shader",
+                DefaultShader.FXAA => "FXAA.shader",
                 DefaultShader.Bloom => "Bloom.shader",
                 DefaultShader.BokehDoF => "BokehDoF.shader",
                 DefaultShader.GBufferCombine => "GBuffercombine.shader",

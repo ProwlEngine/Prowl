@@ -18,6 +18,7 @@ namespace Prowl.Runtime.Resources
         Tonemapper,
         TAA,
         SSR,
+        FXAA,
         Bloom,
         BokehDoF,
         GBufferCombine,

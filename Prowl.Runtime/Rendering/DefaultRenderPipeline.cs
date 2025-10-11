@@ -19,6 +19,29 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.Rendering
 {
+    public sealed class FXAAEffect : ImageEffect
+    {
+        public float EdgeThresholdMax = 0.0625f;  // 0.063 - 0.333 (lower = more AA, slower)
+        public float EdgeThresholdMin = 0.0312f;  // 0.0312 - 0.0833 (trims dark edges)
+        public float SubpixelQuality = 0.75f;     // 0.0 - 1.0 (subpixel AA amount)
+
+        private Material mat;
+
+        public override void OnRenderImage(RenderTexture source, RenderTexture destination)
+        {
+            mat ??= new Material(Shader.LoadDefault(DefaultShader.FXAA));
+
+            // Set shader parameters
+            mat.SetFloat("_EdgeThresholdMax", EdgeThresholdMax);
+            mat.SetFloat("_EdgeThresholdMin", EdgeThresholdMin);
+            mat.SetFloat("_SubpixelQuality", SubpixelQuality);
+            mat.SetVector("_Resolution", new Double2(source.Width, source.Height));
+
+            // Apply FXAA
+            Graphics.Blit(source, destination, mat, 0);
+        }
+    }
+
     public sealed class TonemapperEffect : ImageEffect
     {
         public override bool TransformsToLDR => true;
@@ -163,14 +186,14 @@ namespace Prowl.Runtime.Rendering
         public override void OnRenderImage(RenderTexture source, RenderTexture destination)
         {
             mat ??= new Material(Shader.LoadDefault(DefaultShader.SSR));
-            
+
             // Set uniforms
             mat.SetInt("_RayStepCount", RayStepCount);
             mat.SetFloat("_ScreenEdgeFade", ScreenEdgeFade);
-            
+
             // Set textures
             mat.SetTexture("_MainTex", source.MainTexture);
-            
+
             // Apply effect
             Graphics.Blit(source, destination, mat, 0);
         }
@@ -285,7 +308,7 @@ namespace Prowl.Runtime.Rendering
             var all = new List<ImageEffect>();
             var opaqueEffects = new List<ImageEffect>();
             var finalEffects = new List<ImageEffect>();
-        
+
             foreach (ImageEffect effect in camera.Effects)
             {
                 all.Add(effect);
@@ -295,7 +318,7 @@ namespace Prowl.Runtime.Rendering
                 else
                     finalEffects.Add(effect);
             }
-        
+
             return (all, opaqueEffects, finalEffects);
         }
 
@@ -545,7 +568,7 @@ namespace Prowl.Runtime.Rendering
             //PropertyState.SetGlobalInt("_LightCount", LightCount);
             PropertyState.SetGlobalVector("prowl_ShadowAtlasSize", new Double2(ShadowAtlas.GetSize(), ShadowAtlas.GetSize()));
         }
-        
+
         private static void CreateLightBuffer(Double3 cameraPosition, LayerMask cullingMask, IReadOnlyList<IRenderableLight> lights, IReadOnlyList<IRenderable> renderables)
         {
             Graphics.Device.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
@@ -691,8 +714,8 @@ namespace Prowl.Runtime.Rendering
                         AtlasY = -1;
                         AtlasWidth = 0;
                     }
-                    
-                    
+
+
                     if (light is DirectionalLight dirLight2)
                     {
                         // Return the light to its original position
@@ -732,8 +755,8 @@ namespace Prowl.Runtime.Rendering
             // Set the light counts
             PropertyState.SetGlobalInt("_SpotLightCount", spotLightIndex);
             PropertyState.SetGlobalInt("_PointLightCount", pointLightIndex);
-        
-        
+
+
             //unsafe
             //{
             //    if (LightBuffer == null || gpuLights.Count > LightCount)
@@ -756,11 +779,11 @@ namespace Prowl.Runtime.Rendering
             double t = Maths.Clamp(distance / 48f, 0, 1);
             int tileSize = ShadowAtlas.GetTileSize();
             int resolution = Maths.RoundToInt(Maths.Lerp(ShadowAtlas.GetMaxShadowSize(), tileSize, t));
-        
+
             // Round to nearest multiple of tile size
             return Maths.Max(tileSize, (resolution / tileSize) * tileSize);
         }
-        
+
         private static Double3 GetSunDirection(IReadOnlyList<IRenderableLight> lights)
         {
             if (lights.Count > 0 && lights[0] is IRenderableLight light && light.GetLightType() == LightType.Directional)
@@ -778,7 +801,7 @@ namespace Prowl.Runtime.Rendering
         {
             Double4x4 vp = Maths.Mul(css.projection, css.view);
             (Mesh? wire, Mesh? solid) = Debug.GetGizmoDrawData(CAMERA_RELATIVE, css.cameraPosition);
-            
+
             if (wire != null || solid != null)
             {
                 // The vertices have already been transformed by the gizmo system to be camera relative (if needed) so we just need to draw them
