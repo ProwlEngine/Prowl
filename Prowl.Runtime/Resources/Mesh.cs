@@ -99,13 +99,13 @@ namespace Prowl.Runtime.Resources
             set => WriteVertexData(ref tangents, CopyArray(value), value.Length);
         }
 
-        public Color[] Colors {
-            get => ReadVertexData(colors ?? new Color[0]);
+        public Float4[] Colors {
+            get => ReadVertexData(colors ?? new Float4[0]);
             set => WriteVertexData(ref colors, CopyArray(value), value.Length);
         }
 
-        public Color32[] Colors32 {
-            get => ReadVertexData(colors32 ?? new Color32[0]);
+        public Byte4[] Colors32 {
+            get => ReadVertexData(colors32 ?? new Byte4[0]);
             set => WriteVertexData(ref colors32, CopyArray(value), value.Length);
         }
 
@@ -157,8 +157,8 @@ namespace Prowl.Runtime.Resources
         Float3[]? vertices;
         Float3[]? normals;
         Float3[]? tangents;
-        Color[]? colors;
-        Color32[]? colors32;
+        Float4[]? colors;
+        Byte4[]? colors32;
         Float2[]? uv;
         Float2[]? uv2;
         uint[]? indices;
@@ -801,19 +801,19 @@ namespace Prowl.Runtime.Resources
 
                 if (HasColors)
                 {
-                    Copy(BitConverter.GetBytes(colors[i].r), ref index);
-                    Copy(BitConverter.GetBytes(colors[i].g), ref index);
-                    Copy(BitConverter.GetBytes(colors[i].b), ref index);
-                    Copy(BitConverter.GetBytes(colors[i].a), ref index);
+                    Copy(BitConverter.GetBytes(colors[i].R), ref index);
+                    Copy(BitConverter.GetBytes(colors[i].G), ref index);
+                    Copy(BitConverter.GetBytes(colors[i].B), ref index);
+                    Copy(BitConverter.GetBytes(colors[i].A), ref index);
                 }
                 else if (HasColors32)
                 {
-                    var c = (Color)colors32[i];
+                    var c = (Float4)colors32[i];
 
-                    Copy(BitConverter.GetBytes(c.r), ref index);
-                    Copy(BitConverter.GetBytes(c.g), ref index);
-                    Copy(BitConverter.GetBytes(c.b), ref index);
-                    Copy(BitConverter.GetBytes(c.a), ref index);
+                    Copy(BitConverter.GetBytes(c.R), ref index);
+                    Copy(BitConverter.GetBytes(c.G), ref index);
+                    Copy(BitConverter.GetBytes(c.B), ref index);
+                    Copy(BitConverter.GetBytes(c.A), ref index);
                 }
 
                 if (HasTangents)
@@ -887,10 +887,10 @@ namespace Prowl.Runtime.Resources
                 {
                     foreach (var color in colors)
                     {
-                        writer.Write(color.r);
-                        writer.Write(color.g);
-                        writer.Write(color.b);
-                        writer.Write(color.a);
+                        writer.Write(color.R);
+                        writer.Write(color.G);
+                        writer.Write(color.B);
+                        writer.Write(color.A);
                     }
                 }
 
@@ -899,10 +899,10 @@ namespace Prowl.Runtime.Resources
                 {
                     foreach (var color in colors32)
                     {
-                        writer.Write(color.r);
-                        writer.Write(color.g);
-                        writer.Write(color.b);
-                        writer.Write(color.a);
+                        writer.Write(color.R);
+                        writer.Write(color.G);
+                        writer.Write(color.B);
+                        writer.Write(color.A);
                     }
                 }
 
@@ -1040,17 +1040,17 @@ namespace Prowl.Runtime.Resources
                 var colorCount = reader.ReadInt32();
                 if (colorCount > 0)
                 {
-                    colors = new Color[colorCount];
+                    colors = new Float4[colorCount];
                     for (int i = 0; i < colorCount; i++)
-                        colors[i] = new Color(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        colors[i] = new Float4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var color32Count = reader.ReadInt32();
                 if (color32Count > 0)
                 {
-                    colors32 = new Color32[color32Count];
+                    colors32 = new Byte4[color32Count];
                     for (int i = 0; i < color32Count; i++)
-                        colors32[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
+                        colors32[i] = new Byte4(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
                 }
 
                 var uvCount = reader.ReadInt32();

@@ -53,7 +53,7 @@ public class Camera : MonoBehaviour
     public List<ImageEffect> Effects = new();
 
     public CameraClearFlags ClearFlags = CameraClearFlags.Skybox;
-    public Color ClearColor = new(0f, 0f, 0f, 1f);
+    public Float4 ClearColor = new(0f, 0f, 0f, 1f);
     public LayerMask CullingMask = LayerMask.Everything;
 
     public enum ProjectionType { Perspective, Orthographic }

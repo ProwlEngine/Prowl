@@ -11,7 +11,7 @@ namespace Prowl.Runtime;
 public class ModelRenderer : MonoBehaviour
 {
     public Model Model;
-    public Color mainColor = Color.white;
+    public Float4 mainColor = Colors.White;
 
     public override void Update()
     {

@@ -80,17 +80,17 @@ namespace Prowl.Runtime.Rendering.Shaders
         public static implicit operator Double4(ShaderProperty value)
             => value.Value;
 
-        public ShaderProperty(Color value)
+        public ShaderProperty(Float4 value)
         {
-            Value = new(value.r, value.g, value.b, value.a);
+            Value = new(value.R, value.G, value.B, value.A);
             PropertyType = ShaderPropertyType.Color;
         }
 
-        public static implicit operator ShaderProperty(Color value)
+        public static implicit operator ShaderProperty(Float4 value)
             => new ShaderProperty(value);
 
-        public static implicit operator Color(ShaderProperty value)
-            => new Color((float)value.Value.X, (float)value.Value.Y, (float)value.Value.Z, (float)value.Value.W);
+        public static implicit operator Float4(ShaderProperty value)
+            => new Float4((float)value.Value.X, (float)value.Value.Y, (float)value.Value.Z, (float)value.Value.W);
 
         public ShaderProperty(Double4x4 value)
         {

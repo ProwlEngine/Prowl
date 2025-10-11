@@ -400,7 +400,7 @@ public static class ShaderParser
                 ShaderPropertyType.Vector2 => Double2.Zero,
                 ShaderPropertyType.Vector3 => Double3.Zero,
                 ShaderPropertyType.Vector4 => Double4.Zero,
-                ShaderPropertyType.Color => Color.white,
+                ShaderPropertyType.Color => Colors.White,
                 ShaderPropertyType.Matrix => Double4x4.Identity,
                 ShaderPropertyType.Texture2D => Texture2D.White,
                 _ => throw new Exception($"Invalid property type") // Should never execute unless EnumParse() breaks.
@@ -434,7 +434,7 @@ public static class ShaderParser
 
             case ShaderPropertyType.Color:
                 double[] col = VectorParse(tokenizer, 4);
-                return new Color((float)col[0], (float)col[1], (float)col[2], (float)col[3]);
+                return new Float4((float)col[0], (float)col[1], (float)col[2], (float)col[3]);
 
             case ShaderPropertyType.Vector4:
                 double[] v4 = VectorParse(tokenizer, 4);

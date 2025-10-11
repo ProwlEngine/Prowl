@@ -12,7 +12,7 @@ namespace Prowl.Runtime;
 public abstract class Light : MonoBehaviour, IRenderableLight
 {
 
-    public Color color = Color.white;
+    public Float4 color = Colors.White;
     public float intensity = 8.0f;
     public float shadowStrength = 1.0f;
     public float shadowBias = 0.05f;

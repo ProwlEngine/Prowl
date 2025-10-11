@@ -55,10 +55,10 @@ public sealed class PhysicsDemo : Game
 
         // Create materials
         Material floorMaterial = new Material(Shader.LoadDefault(DefaultShader.Standard));
-        floorMaterial.SetColor("_MainColor", new Color(0.8f, 0.8f, 0.8f, 1.0f));
+        floorMaterial.SetColor("_MainColor", new Float4(0.8f, 0.8f, 0.8f, 1.0f));
 
         Material cubeMaterial = new Material(Shader.LoadDefault(DefaultShader.Standard));
-        cubeMaterial.SetColor("_MainColor", new Color(0.2f, 0.5f, 1.0f, 1.0f));
+        cubeMaterial.SetColor("_MainColor", new Float4(0.2f, 0.5f, 1.0f, 1.0f));
 
         // Create floor (static)
         GameObject floor = new GameObject("Floor");

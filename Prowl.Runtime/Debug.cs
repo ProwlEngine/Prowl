@@ -212,17 +212,17 @@ public static class Debug
         s_gizmoBuilder.PopMatrix();
     }
 
-    public static void DrawLine(Double3 start, Double3 end, Color color) => s_gizmoBuilder.DrawLine(start, end, color);
-    public static void DrawTriangle(Double3 a, Double3 b, Double3 c, Color color) => s_gizmoBuilder.DrawTriangle(a, b, c, color);
-    public static void DrawWireCube(Double3 center, Double3 halfExtents, Color color) => s_gizmoBuilder.DrawWireCube(center, halfExtents, color);
-    public static void DrawCube(Double3 center, Double3 halfExtents, Color color) => s_gizmoBuilder.DrawCube(center, halfExtents, color);
-    public static void DrawWireCircle(Double3 center, Double3 normal, double radius, Color color, int segments = 16) => s_gizmoBuilder.DrawCircle(center, normal, radius, color, segments);
-    public static void DrawWireSphere(Double3 center, double radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireSphere(center, radius, color, segments);
-    public static void DrawSphere(Double3 center, double radius, Color color, int segments = 16) => s_gizmoBuilder.DrawSphere(center, radius, color, segments);
-    public static void DrawWireCone(Double3 start, Double3 direction, double radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireCone(start, direction, radius, color, segments);
-    public static void DrawArrow(Double3 start, Double3 direction, Color color) => s_gizmoBuilder.DrawArrow(start, direction, color);
+    public static void DrawLine(Double3 start, Double3 end, Float4 color) => s_gizmoBuilder.DrawLine(start, end, color);
+    public static void DrawTriangle(Double3 a, Double3 b, Double3 c, Float4 color) => s_gizmoBuilder.DrawTriangle(a, b, c, color);
+    public static void DrawWireCube(Double3 center, Double3 halfExtents, Float4 color) => s_gizmoBuilder.DrawWireCube(center, halfExtents, color);
+    public static void DrawCube(Double3 center, Double3 halfExtents, Float4 color) => s_gizmoBuilder.DrawCube(center, halfExtents, color);
+    public static void DrawWireCircle(Double3 center, Double3 normal, double radius, Float4 color, int segments = 16) => s_gizmoBuilder.DrawCircle(center, normal, radius, color, segments);
+    public static void DrawWireSphere(Double3 center, double radius, Float4 color, int segments = 16) => s_gizmoBuilder.DrawWireSphere(center, radius, color, segments);
+    public static void DrawSphere(Double3 center, double radius, Float4 color, int segments = 16) => s_gizmoBuilder.DrawSphere(center, radius, color, segments);
+    public static void DrawWireCone(Double3 start, Double3 direction, double radius, Float4 color, int segments = 16) => s_gizmoBuilder.DrawWireCone(start, direction, radius, color, segments);
+    public static void DrawArrow(Double3 start, Double3 direction, Float4 color) => s_gizmoBuilder.DrawArrow(start, direction, color);
 
-    public static void DrawIcon(Texture2D icon, Double3 center, double scale, Color color) => s_gizmoBuilder.DrawIcon(icon, center, scale, color);
+    public static void DrawIcon(Texture2D icon, Double3 center, double scale, Float4 color) => s_gizmoBuilder.DrawIcon(icon, center, scale, color);
 
     #endregion
 
@@ -234,7 +234,7 @@ public class GizmoBuilder
     {
         public List<Double3> s_vertices = [];
         public List<Double2> s_uvs = [];
-        public List<Color32> s_colors = [];
+        public List<Float4> s_colors = [];
         public List<int> s_indices = [];
 
         public MeshData()
@@ -260,7 +260,7 @@ public class GizmoBuilder
         public Texture2D texture;
         public Double3 center;
         public double scale;
-        public Color color;
+        public Float4 color;
     }
 
     private List<IconDrawCall> _icons = [];
@@ -281,7 +281,7 @@ public class GizmoBuilder
         _matrix4X4s.Clear();
     }
 
-    private void AddLine(Double3 a, Double3 b, Color color)
+    private void AddLine(Double3 a, Double3 b, Float4 color)
     {
         if (_matrix4X4s.Count > 0)
         {
@@ -301,7 +301,7 @@ public class GizmoBuilder
         _wireData.s_indices.Add(index + 1);
     }
 
-    private void AddTriangle(Double3 a, Double3 b, Double3 c, Double2 a_uv, Double2 b_uv, Double2 c_uv, Color color)
+    private void AddTriangle(Double3 a, Double3 b, Double3 c, Double2 a_uv, Double2 b_uv, Double2 c_uv, Float4 color)
     {
         if (_matrix4X4s.Count > 0)
         {
@@ -340,11 +340,11 @@ public class GizmoBuilder
         _matrix4X4s.Pop();
     }
 
-    public void DrawLine(Double3 start, Double3 end, Color color) => AddLine(start, end, color);
+    public void DrawLine(Double3 start, Double3 end, Float4 color) => AddLine(start, end, color);
 
-    public void DrawTriangle(Double3 a, Double3 b, Double3 c, Color color) => AddTriangle(a, b, c, Double2.Zero, Double2.Zero, Double2.Zero, color);
+    public void DrawTriangle(Double3 a, Double3 b, Double3 c, Float4 color) => AddTriangle(a, b, c, Double2.Zero, Double2.Zero, Double2.Zero, color);
 
-    public void DrawWireCube(Double3 center, Double3 halfExtents, Color color)
+    public void DrawWireCube(Double3 center, Double3 halfExtents, Float4 color)
     {
         Double3[] vertices = [
             new Double3(center.X - halfExtents.X, center.Y - halfExtents.Y, center.Z - halfExtents.Z),
@@ -373,7 +373,7 @@ public class GizmoBuilder
         AddLine(vertices[3], vertices[7], color);
     }
 
-    public void DrawCube(Double3 center, Double3 halfExtents, Color color)
+    public void DrawCube(Double3 center, Double3 halfExtents, Float4 color)
     {
         Double3[] vertices = [
             new Double3(center.X - halfExtents.X, center.Y - halfExtents.Y, center.Z - halfExtents.Z),
@@ -412,7 +412,7 @@ public class GizmoBuilder
         AddTriangle(vertices[0], vertices[5], vertices[1], uvs[0], uvs[2], uvs[3], color);
     }
 
-    public void DrawWireSphere(Double3 center, double radius, Color color, int segments = 16)
+    public void DrawWireSphere(Double3 center, double radius, Float4 color, int segments = 16)
     {
         double step = MathF.PI * 2 / segments;
 
@@ -471,7 +471,7 @@ public class GizmoBuilder
         }
     }
 
-    public void DrawCircle(Double3 center, Double3 normal, double radius, Color color, int segments)
+    public void DrawCircle(Double3 center, Double3 normal, double radius, Float4 color, int segments)
     {
         Double3 u = Maths.Normalize(Maths.Cross(normal, Double3.UnitY));
         Double3 v = Maths.Normalize(Maths.Cross(u, normal));
@@ -486,7 +486,7 @@ public class GizmoBuilder
         }
     }
 
-    public void DrawSphere(Double3 center, double radius, Color color, int segments = 16)
+    public void DrawSphere(Double3 center, double radius, Float4 color, int segments = 16)
     {
         int latitudeSegments = segments;
         int longitudeSegments = segments * 2;
@@ -528,7 +528,7 @@ public class GizmoBuilder
         );
     }
 
-    public void DrawWireCone(Double3 start, Double3 direction, double radius, Color color, int segments = 16)
+    public void DrawWireCone(Double3 start, Double3 direction, double radius, Float4 color, int segments = 16)
     {
         double step = MathF.PI * 2 / segments;
         Double3 tip = start + direction;
@@ -567,7 +567,7 @@ public class GizmoBuilder
         return Maths.Normalize(result);
     }
 
-    public void DrawArrow(Double3 start, Double3 direction, Color color)
+    public void DrawArrow(Double3 start, Double3 direction, Float4 color)
     {
         Double3 axis = Maths.Normalize(direction);
         Double3 end = start + direction;
@@ -577,7 +577,7 @@ public class GizmoBuilder
 
     }
 
-    public void DrawIcon(Texture2D icon, Double3 center, double scale, Color color) => _icons.Add(new IconDrawCall { texture = icon, center = center, scale = scale, color = color });
+    public void DrawIcon(Texture2D icon, Double3 center, double scale, Float4 color) => _icons.Add(new IconDrawCall { texture = icon, center = center, scale = scale, color = color });
 
     public (Mesh? wire, Mesh? solid) UpdateMesh(bool cameraRelative, Double3 cameraPosition)
     {

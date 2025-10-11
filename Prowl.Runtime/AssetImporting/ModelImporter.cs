@@ -165,21 +165,21 @@ namespace Prowl.Runtime.AssetImporting
 
                 // Albedo
                 if (m.HasColorDiffuse)
-                    mat.SetColor("_MainColor", new Color(m.ColorDiffuse.R, m.ColorDiffuse.G, m.ColorDiffuse.B, m.ColorDiffuse.A));
+                    mat.SetColor("_MainColor", new Float4(m.ColorDiffuse.R, m.ColorDiffuse.G, m.ColorDiffuse.B, m.ColorDiffuse.A));
                 else
-                    mat.SetColor("_MainColor", Color.white);
+                    mat.SetColor("_MainColor", Colors.White);
 
                 // Emissive Color
                 if (m.HasColorEmissive)
                 {
                     mat.SetFloat("_EmissionIntensity", 1f);
-                    mat.SetColor("_EmissiveColor", new Color(m.ColorEmissive.R, m.ColorEmissive.G, m.ColorEmissive.B, m.ColorEmissive.A));
+                    mat.SetColor("_EmissiveColor", new Float4(m.ColorEmissive.R, m.ColorEmissive.G, m.ColorEmissive.B, m.ColorEmissive.A));
                 }
                 else
                 {
 
                     mat.SetFloat("_EmissionIntensity", 0f);
-                    mat.SetColor("_EmissiveColor", Color.black);
+                    mat.SetColor("_EmissiveColor", Colors.Black);
                 }
 
                 // Texture
@@ -310,9 +310,9 @@ namespace Prowl.Runtime.AssetImporting
 
                 if (m.HasVertexColors(0))
                 {
-                    Color[] colors = new Color[vertexCount];
+                    Float4[] colors = new Float4[vertexCount];
                     for (var i = 0; i < colors.Length; i++)
-                        colors[i] = new Color(m.VertexColorChannels[0][i].R, m.VertexColorChannels[0][i].G, m.VertexColorChannels[0][i].B, m.VertexColorChannels[0][i].A);
+                        colors[i] = new Float4(m.VertexColorChannels[0][i].R, m.VertexColorChannels[0][i].G, m.VertexColorChannels[0][i].B, m.VertexColorChannels[0][i].A);
                     mesh.Colors = colors;
                 }
 

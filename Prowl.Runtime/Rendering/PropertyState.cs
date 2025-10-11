@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Rendering
 {
     public partial class PropertyState
     {
-        [SerializeField] private Dictionary<string, Color> colors = new();
+        [SerializeField] private Dictionary<string, Float4> colors = new();
         [SerializeField] private Dictionary<string, Float2> vectors2 = new();
         [SerializeField] private Dictionary<string, Float3> vectors3 = new();
         [SerializeField] private Dictionary<string, Float4> vectors4 = new();
@@ -44,7 +44,7 @@ namespace Prowl.Runtime.Rendering
         public bool isEmpty => colors.Count == 0 && vectors4.Count == 0 && vectors3.Count == 0 && vectors2.Count == 0 && floats.Count == 0 && ints.Count == 0 && matrices.Count == 0 && textures.Count == 0;
 
         // Setters
-        public void SetColor(string name, Color value) => colors[name] = value;
+        public void SetColor(string name, Float4 value) => colors[name] = value;
         public void SetVector(string name, Double2 value) => vectors2[name] = (Float2)value;
         public void SetVector(string name, Double3 value) => vectors3[name] = (Float3)value;
         public void SetVector(string name, Double4 value) => vectors4[name] = (Float4)value;
@@ -60,7 +60,7 @@ namespace Prowl.Runtime.Rendering
         }
 
         // Getters
-        public Color GetColor(string name) => colors.TryGetValue(name, out Color value) ? value : Color.white;
+        public Float4 GetColor(string name) => colors.TryGetValue(name, out Float4 value) ? value : Colors.White;
         public Double2 GetVector2(string name) => vectors2.TryGetValue(name, out Float2 value) ? value : Double2.Zero;
         public Double3 GetVector3(string name) => vectors3.TryGetValue(name, out Float3 value) ? value : Double3.Zero;
         public Double4 GetVector4(string name) => vectors4.TryGetValue(name, out Float4 value) ? value : Double4.Zero;
@@ -135,7 +135,7 @@ namespace Prowl.Runtime.Rendering
             foreach (var item in mpb.vectors4)
                 Graphics.Device.SetUniformV4(shader, item.Key, item.Value);
             foreach (var item in mpb.colors)
-                Graphics.Device.SetUniformV4(shader, item.Key, new Float4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
+                Graphics.Device.SetUniformV4(shader, item.Key, new Float4(item.Value.R, item.Value.G, item.Value.B, item.Value.A));
 
             foreach (var item in mpb.matrices)
                 Graphics.Device.SetUniformMatrix(shader, item.Key, false, item.Value);
@@ -173,7 +173,7 @@ namespace Prowl.Runtime.Rendering
             foreach (var item in globalVectors4)
                 Graphics.Device.SetUniformV4(shader, item.Key, (Float4)item.Value);
             foreach (var item in globalColors)
-                Graphics.Device.SetUniformV4(shader, item.Key, new Float4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
+                Graphics.Device.SetUniformV4(shader, item.Key, new Float4(item.Value.R, item.Value.G, item.Value.B, item.Value.A));
 
             foreach (var item in globalMatrices)
                 Graphics.Device.SetUniformMatrix(shader, item.Key, false, (Float4x4)item.Value);
@@ -200,7 +200,7 @@ namespace Prowl.Runtime.Rendering
     public partial class PropertyState
     {
         // Global static dictionaries
-        private static Dictionary<string, Color> globalColors = new();
+        private static Dictionary<string, Float4> globalColors = new();
         private static Dictionary<string, Double2> globalVectors2 = new();
         private static Dictionary<string, Double3> globalVectors3 = new();
         private static Dictionary<string, Double4> globalVectors4 = new();
@@ -213,7 +213,7 @@ namespace Prowl.Runtime.Rendering
         private static Dictionary<string, uint> globalBufferBindings = new();
 
         // Global setters
-        public static void SetGlobalColor(string name, Color value) => globalColors[name] = value;
+        public static void SetGlobalColor(string name, Float4 value) => globalColors[name] = value;
         public static void SetGlobalVector(string name, Double2 value) => globalVectors2[name] = value;
         public static void SetGlobalVector(string name, Double3 value) => globalVectors3[name] = value;
         public static void SetGlobalVector(string name, Double4 value) => globalVectors4[name] = value;
@@ -229,7 +229,7 @@ namespace Prowl.Runtime.Rendering
         }
 
         // Global getters
-        public static Color GetGlobalColor(string name) => globalColors.TryGetValue(name, out Color value) ? value : Color.white;
+        public static Float4 GetGlobalColor(string name) => globalColors.TryGetValue(name, out Float4 value) ? value : Colors.White;
         public static Double2 GetGlobalVector2(string name) => globalVectors2.TryGetValue(name, out Double2 value) ? value : Double2.Zero;
         public static Double3 GetGlobalVector3(string name) => globalVectors3.TryGetValue(name, out Double3 value) ? value : Double3.Zero;
         public static Double4 GetGlobalVector4(string name) => globalVectors4.TryGetValue(name, out Double4 value) ? value : Double4.Zero;
