@@ -21,7 +21,7 @@
 
   <ItemGroup>
     <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
-    <PackageReference Include="Jitter2.Double" Version="2.4.8-alpha" />
+    <PackageReference Include="Jitter2.Double" Version="2.7.2" />
     <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.6.0" />
     <PackageReference Include="Prowl.Echo" Version="1.7.0" />
