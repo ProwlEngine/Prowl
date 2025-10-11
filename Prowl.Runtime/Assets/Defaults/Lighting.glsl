@@ -57,6 +57,45 @@ struct PointLightStruct {
 // Shadow Sampling Functions
 // ------------------------------------------------------------------------------
 
+// Poisson disk sampling pattern for smooth PCF with fewer samples
+const vec2 poissonDisk[16] = vec2[](
+    vec2(-0.94201624, -0.39906216),
+    vec2(0.94558609, -0.76890725),
+    vec2(-0.094184101, -0.92938870),
+    vec2(0.34495938, 0.29387760),
+    vec2(-0.91588581, 0.45771432),
+    vec2(-0.81544232, -0.87912464),
+    vec2(-0.38277543, 0.27676845),
+    vec2(0.97484398, 0.75648379),
+    vec2(0.44323325, -0.97511554),
+    vec2(0.53742981, -0.47373420),
+    vec2(-0.26496911, -0.41893023),
+    vec2(0.79197514, 0.19090188),
+    vec2(-0.24188840, 0.99706507),
+    vec2(-0.81409955, 0.91437590),
+    vec2(0.19984126, 0.78641367),
+    vec2(0.14383161, -0.14100790)
+);
+
+// Vogel disk sampling for procedural smooth distribution
+vec2 VogelDiskSample(int sampleIndex, int samplesCount, float phi) {
+    float GoldenAngle = 2.4; // Golden angle in radians
+
+    float r = sqrt(float(sampleIndex) + 0.5) / sqrt(float(samplesCount));
+    float theta = float(sampleIndex) * GoldenAngle + phi;
+
+    float sine = sin(theta);
+    float cosine = cos(theta);
+
+    return vec2(r * cosine, r * sine);
+}
+
+// Simple hash function for random rotation
+float InterleavedGradientNoise(vec2 position) {
+    vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+    return fract(magic.z * fract(dot(position, magic.xy)));
+}
+
 float SampleDirectionalShadow(SunLightStruct sun, vec3 worldPos, vec3 worldNormal, sampler2D shadowAtlas, vec2 shadowAtlasSize)
 {
     float BIAS_SCALE = 0.001;
@@ -85,28 +124,27 @@ float SampleDirectionalShadow(SunLightStruct sun, vec3 worldPos, vec3 worldNorma
     float atlasSize = shadowAtlasSize.x;
     atlasCoords /= atlasSize;
 
-    // Get depth from shadow map
-    float closestDepth = texture(shadowAtlas, atlasCoords.xy).r;
-
     // Get current depth with bias
     float currentDepth = projCoords.z - (sun.shadowBias * BIAS_SCALE);
 
-    // Check if fragment is in shadow
-    float shadow = currentDepth > closestDepth ? 1.0 : 0.0;
-
-    // PCF (Percentage Closer Filtering) for soft shadows
+    // Poisson Disk PCF for smooth soft shadows with fewer samples
     vec2 texelSize = vec2(1.0) / shadowAtlasSize;
-    float pcfRadius = 1.0;
-    float pcfSamples = 0.0;
-    for(float x = -pcfRadius; x <= pcfRadius; x += 1.0) {
-        for(float y = -pcfRadius; y <= pcfRadius; y += 1.0) {
-            vec2 offset = vec2(x, y) * texelSize;
-            float pcfDepth = texture(shadowAtlas, atlasCoords + offset).r;
-            shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
-            pcfSamples += 1.0;
-        }
+    float shadow = 0.0;
+    float filterRadius = 1.5; // Controls shadow softness
+
+    // Random rotation to reduce banding artifacts
+    float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185; // 2*PI
+    float s = sin(randomRotation);
+    float c = cos(randomRotation);
+    mat2 rotationMatrix = mat2(c, -s, s, c);
+
+    // Sample using Poisson disk pattern
+    for(int i = 0; i < 16; i++) {
+        vec2 offset = rotationMatrix * poissonDisk[i] * texelSize * filterRadius;
+        float pcfDepth = texture(shadowAtlas, atlasCoords + offset).r;
+        shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
     }
-    shadow /= pcfSamples;
+    shadow /= 16.0;
 
     // Apply shadow strength
     shadow *= sun.shadowStrength;
@@ -147,14 +185,27 @@ float SampleSpotLightShadow(SpotLightStruct light, vec3 worldPos, vec3 worldNorm
     float atlasSize = shadowAtlasSize.x;
     atlasCoords /= atlasSize;
 
-    // Get depth from shadow map
-    float closestDepth = texture(shadowAtlas, atlasCoords.xy).r;
-
     // Get current depth with bias
     float currentDepth = projCoords.z - (light.shadowBias * BIAS_SCALE);
 
-    // Check if fragment is in shadow
-    float shadow = currentDepth > closestDepth ? 1.0 : 0.0;
+    // Poisson Disk PCF for smooth soft shadows
+    vec2 texelSize = vec2(1.0) / shadowAtlasSize;
+    float shadow = 0.0;
+    float filterRadius = 1.5; // Controls shadow softness
+
+    // Random rotation to reduce banding artifacts
+    float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185; // 2*PI
+    float s = sin(randomRotation);
+    float c = cos(randomRotation);
+    mat2 rotationMatrix = mat2(c, -s, s, c);
+
+    // Sample using Poisson disk pattern
+    for(int i = 0; i < 16; i++) {
+        vec2 offset = rotationMatrix * poissonDisk[i] * texelSize * filterRadius;
+        float pcfDepth = texture(shadowAtlas, atlasCoords + offset).r;
+        shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
+    }
+    shadow /= 16.0;
 
     // Apply shadow strength
     shadow *= light.shadowStrength;
@@ -235,16 +286,29 @@ float SamplePointLightShadow(PointLightStruct light, vec3 worldPos, sampler2D sh
     float atlasSize = shadowAtlasSize.x;
     atlasCoords /= atlasSize;
 
-    // Get depth from shadow map
-    float closestDepth = texture(shadowAtlas, atlasCoords.xy).r;
-
     // Calculate current depth (distance from light normalized by range)
     float currentDistance = length(lightToFrag);
     float currentDepth = currentDistance / light.range;
     currentDepth -= (light.shadowBias * BIAS_SCALE);
 
-    // Check if fragment is in shadow
-    float shadow = currentDepth > closestDepth ? 1.0 : 0.0;
+    // Poisson Disk PCF for smooth soft shadows
+    vec2 texelSize = vec2(1.0) / shadowAtlasSize;
+    float shadow = 0.0;
+    float filterRadius = 2.0; // Slightly larger for point lights due to cubemap
+
+    // Random rotation to reduce banding artifacts
+    float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185; // 2*PI
+    float s = sin(randomRotation);
+    float c = cos(randomRotation);
+    mat2 rotationMatrix = mat2(c, -s, s, c);
+
+    // Sample using Poisson disk pattern
+    for(int i = 0; i < 16; i++) {
+        vec2 offset = rotationMatrix * poissonDisk[i] * texelSize * filterRadius;
+        float pcfDepth = texture(shadowAtlas, atlasCoords + offset).r;
+        shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
+    }
+    shadow /= 16.0;
 
     // Apply shadow strength
     shadow *= light.shadowStrength;
