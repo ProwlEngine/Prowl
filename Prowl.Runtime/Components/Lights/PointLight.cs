@@ -3,6 +3,7 @@
 
 using Prowl.Vector;
 using Prowl.Runtime.Rendering;
+using System;
 
 namespace Prowl.Runtime;
 
@@ -30,10 +31,53 @@ public class PointLight : Light
 
     public override void GetShadowMatrix(out Double4x4 view, out Double4x4 projection)
     {
-        // Point lights use cubemap shadows, but for now we'll use a simple perspective projection
-        // This is a placeholder - proper point light shadows would require 6 shadow maps (cubemap)
+        // Default implementation - will be overridden by GetShadowMatrixForFace
         projection = Double4x4.CreatePerspectiveFov(90f * Maths.Deg2Rad, 1.0f, 0.1f, range);
         view = Double4x4.CreateLookTo(Transform.position, Transform.forward, Transform.up);
+    }
+
+    // Get shadow matrix for a specific cubemap face
+    public void GetShadowMatrixForFace(int faceIndex, out Double4x4 view, out Double4x4 projection)
+    {
+        // 90 degree FOV perspective projection for cubemap faces
+        projection = Double4x4.CreatePerspectiveFov(90f * Maths.Deg2Rad, 1.0f, 0.1f, range);
+
+        Double3 position = Transform.position;
+        Double3 forward, up;
+
+        // Define view matrices for each cubemap face
+        // 0: +X, 1: -X, 2: +Y, 3: -Y, 4: +Z, 5: -Z
+        switch (faceIndex)
+        {
+            case 0: // Positive X
+                forward = Double3.UnitX;
+                up = -Double3.UnitY;
+                break;
+            case 1: // Negative X
+                forward = -Double3.UnitX;
+                up = -Double3.UnitY;
+                break;
+            case 2: // Positive Y
+                forward = Double3.UnitY;
+                up = Double3.UnitZ;
+                break;
+            case 3: // Negative Y
+                forward = -Double3.UnitY;
+                up = -Double3.UnitZ;
+                break;
+            case 4: // Positive Z
+                forward = Double3.UnitZ;
+                up = -Double3.UnitY;
+                break;
+            case 5: // Negative Z
+                forward = -Double3.UnitZ;
+                up = -Double3.UnitY;
+                break;
+            default:
+                throw new ArgumentException($"Invalid face index: {faceIndex}. Must be 0-5.");
+        }
+
+        view = Double4x4.CreateLookTo(position, forward, up);
     }
 
     public void UploadToGPU(bool cameraRelative, Double3 cameraPosition, int atlasX, int atlasY, int atlasWidth, int lightIndex)
@@ -45,21 +89,17 @@ public class PointLight : Light
         PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].intensity", intensity);
         PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].range", range);
 
-        if (castShadows)
+        if (castShadows && atlasX >= 0)
         {
-            GetShadowMatrix(out var view, out var proj);
-
-            if (cameraRelative)
-                view.Translation -= cameraPosition;
-
-            PropertyState.SetGlobalMatrix($"_PointLights[{lightIndex}].shadowMatrix", Maths.Mul(proj, view));
+            // For point lights, we store the base atlas position
+            // The shader will calculate offsets for each of the 6 faces arranged in a 2x3 grid
             PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].shadowBias", shadowBias);
             PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].shadowNormalBias", shadowNormalBias);
             PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].shadowStrength", shadowStrength);
 
             PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].atlasX", atlasX);
             PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].atlasY", atlasY);
-            PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].atlasWidth", atlasWidth);
+            PropertyState.SetGlobalFloat($"_PointLights[{lightIndex}].atlasWidth", atlasWidth); // Width of a single face
         }
         else
         {

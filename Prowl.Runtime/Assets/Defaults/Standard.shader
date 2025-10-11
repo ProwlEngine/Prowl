@@ -264,7 +264,8 @@ Pass "Standard"
 
 			float SamplePointLightShadow(PointLightStruct light)
 			{
-				float BIAS_SCALE = 0.001;
+				// Point lights use normalized distance, so bias needs to be scaled differently
+				float BIAS_SCALE = 0.01; // 10x stronger than directional/spot lights
 				float NORMAL_BIAS_SCALE = 0.05;
 
 				// Check if shadows are enabled for this light
@@ -272,25 +273,66 @@ Pass "Standard"
 					return 0.0;
 				}
 
-				// Perform perspective divide to get NDC coordinates
-				vec3 worldPosBiased = worldPos + (normalize(vNormal) * light.shadowNormalBias * NORMAL_BIAS_SCALE);
-				vec4 lightSpacePos = light.shadowMatrix * vec4(worldPosBiased, 1.0);
-				vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+				// Get direction from light to fragment
+				vec3 lightToFrag = worldPos - light.position;
+				vec3 absLightToFrag = abs(lightToFrag);
 
-				// Transform to [0,1] range
-				projCoords = projCoords * 0.5 + 0.5;
+				// Determine which cubemap face to use based on the dominant axis
+				int faceIndex;
+				vec3 uvw = lightToFrag;
+				float maxAxis = max(absLightToFrag.x, max(absLightToFrag.y, absLightToFrag.z));
 
-				// Early exit if outside shadow map
-				if (projCoords.z > 1.0 ||
-					projCoords.x < 0.0 || projCoords.x > 1.0 ||
-					projCoords.y < 0.0 || projCoords.y > 1.0) {
-					return 0.0;
+				vec2 uv;
+				float depth;
+
+				// Select face and calculate UV coordinates
+				// Fixed: Flip X coordinate to correct horizontal mirroring
+				if (absLightToFrag.x >= absLightToFrag.y && absLightToFrag.x >= absLightToFrag.z) {
+					// X-axis dominant
+					if (lightToFrag.x > 0.0) {
+						// +X face (index 0, column 0, row 0)
+						uv = vec2(lightToFrag.z, -lightToFrag.y) / absLightToFrag.x;
+						faceIndex = 0;
+					} else {
+						// -X face (index 1, column 1, row 0)
+						uv = vec2(-lightToFrag.z, -lightToFrag.y) / absLightToFrag.x;
+						faceIndex = 1;
+					}
+				} else if (absLightToFrag.y >= absLightToFrag.x && absLightToFrag.y >= absLightToFrag.z) {
+					// Y-axis dominant
+					if (lightToFrag.y > 0.0) {
+						// +Y face (index 2, column 0, row 1)
+						uv = vec2(-lightToFrag.x, lightToFrag.z) / absLightToFrag.y;
+						faceIndex = 2;
+					} else {
+						// -Y face (index 3, column 1, row 1)
+						uv = vec2(-lightToFrag.x, -lightToFrag.z) / absLightToFrag.y;
+						faceIndex = 3;
+					}
+				} else {
+					// Z-axis dominant
+					if (lightToFrag.z > 0.0) {
+						// +Z face (index 4, column 0, row 2)
+						uv = vec2(-lightToFrag.x, -lightToFrag.y) / absLightToFrag.z;
+						faceIndex = 4;
+					} else {
+						// -Z face (index 5, column 1, row 2)
+						uv = vec2(lightToFrag.x, -lightToFrag.y) / absLightToFrag.z;
+						faceIndex = 5;
+					}
 				}
 
-				// Get shadow atlas coordinates
+				// Convert UV from [-1, 1] to [0, 1]
+				uv = uv * 0.5 + 0.5;
+
+				// Calculate face offset in the 2x3 grid
+				int col = faceIndex % 2;
+				int row = faceIndex / 2;
+
+				// Calculate atlas coordinates for this face
 				vec2 atlasCoords;
-				atlasCoords.x = light.atlasX + (projCoords.x * light.atlasWidth);
-				atlasCoords.y = light.atlasY + (projCoords.y * light.atlasWidth);
+				atlasCoords.x = light.atlasX + (col * light.atlasWidth) + (uv.x * light.atlasWidth);
+				atlasCoords.y = light.atlasY + (row * light.atlasWidth) + (uv.y * light.atlasWidth);
 
 				float atlasSize = prowl_ShadowAtlasSize.x;
 				atlasCoords /= atlasSize;
@@ -298,8 +340,10 @@ Pass "Standard"
 				// Get depth from shadow map
 				float closestDepth = texture(_ShadowAtlas, atlasCoords.xy).r;
 
-				// Get current depth with bias
-				float currentDepth = projCoords.z - (light.shadowBias * BIAS_SCALE);
+				// Calculate current depth (distance from light normalized by range)
+				float currentDistance = length(lightToFrag);
+				float currentDepth = currentDistance / light.range;
+				currentDepth -= (light.shadowBias * BIAS_SCALE);
 
 				// Check if fragment is in shadow
 				float shadow = currentDepth > closestDepth ? 1.0 : 0.0;
@@ -634,16 +678,19 @@ Pass "StandardShadow"
     Cull Back
 
 	GLSLPROGRAM
-		
+
 		Vertex
 		{
             #include "Fragment"
 
 			layout (location = 0) in vec3 vertexPosition;
-			
+
+			out vec3 worldPos;
+
 			void main()
 			{
 				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
+				worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
 			}
 		}
 
@@ -651,8 +698,24 @@ Pass "StandardShadow"
 		{
             #include "Fragment"
 
+			in vec3 worldPos;
+
+			// Point light shadow uniforms (will be -1 for directional/spot lights)
+			uniform vec3 _PointLightPosition;
+			uniform float _PointLightRange;
+
 			void main()
 			{
+				// Check if we're rendering for a point light (_PointLightRange > 0)
+				if (_PointLightRange > 0.0) {
+					// Calculate distance from light and normalize by range
+					float dist = length(worldPos - _PointLightPosition);
+					float normalizedDepth = dist / _PointLightRange;
+
+					// Write normalized depth to gl_FragDepth
+					gl_FragDepth = normalizedDepth;
+				}
+				// else: use default gl_FragDepth for directional/spot lights
 			}
 		}
 	ENDGLSL

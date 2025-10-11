@@ -572,7 +572,7 @@ namespace Prowl.Runtime.Rendering
                 int res = CalculateResolution(Maths.Distance(cameraPosition, light.GetLightPosition()));
                 if (light is DirectionalLight dir)
                     res = (int)dir.shadowResolution;
-        
+
                 if (light.DoCastShadows())
                 {
                     Double3 oldPos = Double3.Zero;
@@ -612,10 +612,17 @@ namespace Prowl.Runtime.Rendering
                     //    oldPos = dirLight.Transform.position;
                     //    dirLight.Transform.position = snappedWorldPos;
                     //}
-        
+
                     // Find a slot for the shadow map
-                    Int2? slot = ShadowAtlas.ReserveTiles(res, res, light.GetLightID());
-                    
+                    Int2? slot;
+                    bool isPointLight = light is PointLight;
+
+                    // Point lights need a 2x3 grid for cubemap faces
+                    if (isPointLight)
+                        slot = ShadowAtlas.ReserveCubemapTiles(res, light.GetLightID());
+                    else
+                        slot = ShadowAtlas.ReserveTiles(res, res, light.GetLightID());
+
                     int AtlasX, AtlasY, AtlasWidth;
 
                     if (slot != null)
@@ -623,21 +630,59 @@ namespace Prowl.Runtime.Rendering
                         AtlasX = slot.Value.X;
                         AtlasY = slot.Value.Y;
                         AtlasWidth = res;
-                    
+
                         // Draw the shadow map
                         ShadowMap = ShadowAtlas.GetAtlas();
-                    
-                        Graphics.Device.Viewport(slot.Value.X, slot.Value.Y, (uint)res, (uint)res);
-                    
-                        light.GetShadowMatrix(out Double4x4 view, out Double4x4 proj);
 
-                        FrustrumD frustum = FrustrumD.FromMatrix(Maths.Mul(proj, view));
-                        if (CAMERA_RELATIVE)
-                            view.Translation = Double3.Zero;
+                        // For point lights, render 6 faces
+                        if (isPointLight && light is PointLight pointLight)
+                        {
+                            // Set point light uniforms for shadow rendering
+                            PropertyState.SetGlobalVector("_PointLightPosition", pointLight.Transform.position);
+                            PropertyState.SetGlobalFloat("_PointLightRange", pointLight.range);
 
-                        HashSet<int> culledRenderableIndices = [];// CullRenderables(renderables, frustum);
-                        AssignCameraMatrices(view, proj);
-                        DrawRenderables(renderables, "LightMode", "ShadowCaster", light.GetLightPosition(), culledRenderableIndices, false);
+                            for (int face = 0; face < 6; face++)
+                            {
+                                // Calculate viewport for this face in the 2x3 grid
+                                int col = face % 2;
+                                int row = face / 2;
+                                int viewportX = AtlasX + (col * res);
+                                int viewportY = AtlasY + (row * res);
+
+                                Graphics.Device.Viewport(viewportX, viewportY, (uint)res, (uint)res);
+
+                                pointLight.GetShadowMatrixForFace(face, out Double4x4 view, out Double4x4 proj);
+
+                                FrustrumD frustum = FrustrumD.FromMatrix(Maths.Mul(proj, view));
+                                if (CAMERA_RELATIVE)
+                                    view.Translation = Double3.Zero;
+
+                                HashSet<int> culledRenderableIndices = [];// CullRenderables(renderables, frustum);
+                                AssignCameraMatrices(view, proj);
+                                DrawRenderables(renderables, "LightMode", "ShadowCaster", light.GetLightPosition(), culledRenderableIndices, false);
+                            }
+
+                            // Reset uniforms for non-point lights
+                            PropertyState.SetGlobalFloat("_PointLightRange", -1.0f);
+                        }
+                        else
+                        {
+                            // Regular directional/spot light rendering
+                            // Set range to -1 to indicate this is not a point light
+                            PropertyState.SetGlobalFloat("_PointLightRange", -1.0f);
+
+                            Graphics.Device.Viewport(slot.Value.X, slot.Value.Y, (uint)res, (uint)res);
+
+                            light.GetShadowMatrix(out Double4x4 view, out Double4x4 proj);
+
+                            FrustrumD frustum = FrustrumD.FromMatrix(Maths.Mul(proj, view));
+                            if (CAMERA_RELATIVE)
+                                view.Translation = Double3.Zero;
+
+                            HashSet<int> culledRenderableIndices = [];// CullRenderables(renderables, frustum);
+                            AssignCameraMatrices(view, proj);
+                            DrawRenderables(renderables, "LightMode", "ShadowCaster", light.GetLightPosition(), culledRenderableIndices, false);
+                        }
                     }
                     else
                     {
@@ -707,7 +752,7 @@ namespace Prowl.Runtime.Rendering
 
         private static int CalculateResolution(double distance)
         {
-            double t = Maths.Clamp(distance / 16f, 0, 1);
+            double t = Maths.Clamp(distance / 48f, 0, 1);
             int tileSize = ShadowAtlas.GetTileSize();
             int resolution = Maths.RoundToInt(Maths.Lerp(ShadowAtlas.GetMaxShadowSize(), tileSize, t));
         

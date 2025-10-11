@@ -68,6 +68,20 @@ namespace Prowl.Runtime.Rendering
             return null;
         }
 
+        // Reserve tiles for point light cubemap shadows (2x3 grid layout)
+        // Returns the base position where the 6 faces start
+        public static Int2? ReserveCubemapTiles(int faceSize, int lightID)
+        {
+            // Layout: 2 columns x 3 rows for the 6 cubemap faces
+            // [+X][-X]
+            // [+Y][-Y]
+            // [+Z][-Z]
+            int cubemapWidth = faceSize * 2;  // 2 faces wide
+            int cubemapHeight = faceSize * 3; // 3 faces tall
+
+            return ReserveTiles(cubemapWidth, cubemapHeight, lightID);
+        }
+
         private static void ReserveTile(int x, int y, int width, int height, int lightID)
         {
             if (x < 0 || y < 0 || x + width > tileCount || y + height > tileCount)
