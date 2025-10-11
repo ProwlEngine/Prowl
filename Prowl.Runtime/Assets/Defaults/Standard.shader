@@ -126,11 +126,28 @@ Pass "Standard"
 				float atlasWidth;
 			};
 
+			struct PointLightStruct {
+				vec3 position;
+				vec3 color;
+				float intensity;
+				float range;
+				mat4 shadowMatrix;
+				float shadowBias;
+				float shadowNormalBias;
+				float shadowStrength;
+				float atlasX;
+				float atlasY;
+				float atlasWidth;
+			};
+
 			#define MAX_SPOT_LIGHTS 8
+			#define MAX_POINT_LIGHTS 8
 
 			uniform SunLightStruct _Sun;
 			uniform SpotLightStruct _SpotLights[MAX_SPOT_LIGHTS];
 			uniform int _SpotLightCount;
+			uniform PointLightStruct _PointLights[MAX_POINT_LIGHTS];
+			uniform int _PointLightCount;
 
 			float SampleShadow(SunLightStruct sun)
 			{
@@ -198,6 +215,54 @@ Pass "Standard"
 			}
 
 			float SampleSpotLightShadow(SpotLightStruct light)
+			{
+				float BIAS_SCALE = 0.001;
+				float NORMAL_BIAS_SCALE = 0.05;
+
+				// Check if shadows are enabled for this light
+				if (light.atlasX < 0.0 || light.shadowStrength <= 0.0) {
+					return 0.0;
+				}
+
+				// Perform perspective divide to get NDC coordinates
+				vec3 worldPosBiased = worldPos + (normalize(vNormal) * light.shadowNormalBias * NORMAL_BIAS_SCALE);
+				vec4 lightSpacePos = light.shadowMatrix * vec4(worldPosBiased, 1.0);
+				vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+
+				// Transform to [0,1] range
+				projCoords = projCoords * 0.5 + 0.5;
+
+				// Early exit if outside shadow map
+				if (projCoords.z > 1.0 ||
+					projCoords.x < 0.0 || projCoords.x > 1.0 ||
+					projCoords.y < 0.0 || projCoords.y > 1.0) {
+					return 0.0;
+				}
+
+				// Get shadow atlas coordinates
+				vec2 atlasCoords;
+				atlasCoords.x = light.atlasX + (projCoords.x * light.atlasWidth);
+				atlasCoords.y = light.atlasY + (projCoords.y * light.atlasWidth);
+
+				float atlasSize = prowl_ShadowAtlasSize.x;
+				atlasCoords /= atlasSize;
+
+				// Get depth from shadow map
+				float closestDepth = texture(_ShadowAtlas, atlasCoords.xy).r;
+
+				// Get current depth with bias
+				float currentDepth = projCoords.z - (light.shadowBias * BIAS_SCALE);
+
+				// Check if fragment is in shadow
+				float shadow = currentDepth > closestDepth ? 1.0 : 0.0;
+
+				// Apply shadow strength
+				shadow *= light.shadowStrength;
+
+				return shadow;
+			}
+
+			float SamplePointLightShadow(PointLightStruct light)
 			{
 				float BIAS_SCALE = 0.001;
 				float NORMAL_BIAS_SCALE = 0.05;
@@ -349,6 +414,57 @@ Pass "Standard"
 				return (diffuse + specular) * radiance * NdotL * shadowFactor * ao;
 			}
 
+			vec3 CalculatePointLight(PointLightStruct light, vec3 normal, vec3 albedo, float metallic, float roughness, float ao)
+			{
+				// Calculate direction from surface to light
+				vec3 lightDir = normalize(light.position - worldPos);
+				vec3 viewDir = normalize(-(worldPos - _WorldSpaceCameraPos.xyz));
+				vec3 halfDir = normalize(lightDir + viewDir);
+
+				// Calculate distance attenuation
+				float distance = length(light.position - worldPos);
+				if (distance > light.range) {
+					return vec3(0.0);
+				}
+
+				// Physical distance attenuation (inverse square law with smoothing)
+				float attenuation = clamp(1.0 - pow(distance / light.range, 4.0), 0.0, 1.0);
+				attenuation = (attenuation * attenuation) / (distance * distance + 1.0);
+
+				// Calculate base reflectivity
+				vec3 F0 = vec3(0.04);
+				F0 = mix(F0, albedo, metallic);
+
+				// Calculate light radiance with attenuation
+				vec3 radiance = light.color * light.intensity * attenuation;
+
+				// Cook-Torrance BRDF
+				float NDF = DistributionGGX(normal, halfDir, roughness);
+				float G = GeometrySmith(normal, viewDir, lightDir, roughness);
+				vec3 F = FresnelSchlick(max(dot(halfDir, viewDir), 0.0), F0);
+
+				// Calculate specular and diffuse components
+				vec3 kS = F;
+				vec3 kD = vec3(1.0) - kS;
+				kD *= 1.0 - metallic;
+
+				// Put it all together
+				float NdotL = max(dot(normal, lightDir), 0.0);
+
+				// Specular term
+				vec3 numerator = NDF * G * F;
+				float denominator = 4.0 * max(dot(normal, viewDir), 0.0) * NdotL + 0.0001;
+				vec3 specular = numerator / denominator;
+
+				// Calculate shadow factor
+				float shadow = SamplePointLightShadow(light);
+				float shadowFactor = 1.0 - shadow;
+
+				// Final lighting contribution with shadow
+				vec3 diffuse = kD * albedo / PI;
+				return (diffuse + specular) * radiance * NdotL * shadowFactor * ao;
+			}
+
 
             // Generated Normals implementation
             const float normalThreshold = 0.05;
@@ -458,6 +574,11 @@ Pass "Standard"
 				// Add spot lights
 				for (int i = 0; i < _SpotLightCount && i < MAX_SPOT_LIGHTS; i++) {
 					lighting += CalculateSpotLight(_SpotLights[i], worldNormal, baseColor, metallic, roughness, ao);
+				}
+
+				// Add point lights
+				for (int i = 0; i < _PointLightCount && i < MAX_POINT_LIGHTS; i++) {
+					lighting += CalculatePointLight(_PointLights[i], worldNormal, baseColor, metallic, roughness, ao);
 				}
 
 				// Add emission

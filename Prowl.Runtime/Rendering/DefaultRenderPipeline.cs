@@ -559,7 +559,9 @@ namespace Prowl.Runtime.Rendering
 
             int numDirLights = 0;
             int spotLightIndex = 0;
+            int pointLightIndex = 0;
             const int MAX_SPOT_LIGHTS = 8;
+            const int MAX_POINT_LIGHTS = 8;
 
             foreach (IRenderableLight light in lights)
             {
@@ -656,6 +658,11 @@ namespace Prowl.Runtime.Rendering
                         spotLight.UploadToGPU(CAMERA_RELATIVE, cameraPosition, AtlasX, AtlasY, AtlasWidth, spotLightIndex);
                         spotLightIndex++;
                     }
+                    else if (light is PointLight pointLight && pointLightIndex < MAX_POINT_LIGHTS)
+                    {
+                        pointLight.UploadToGPU(CAMERA_RELATIVE, cameraPosition, AtlasX, AtlasY, AtlasWidth, pointLightIndex);
+                        pointLightIndex++;
+                    }
                 }
                 else
                 {
@@ -668,11 +675,17 @@ namespace Prowl.Runtime.Rendering
                         spotLight.UploadToGPU(CAMERA_RELATIVE, cameraPosition, -1, -1, 0, spotLightIndex);
                         spotLightIndex++;
                     }
+                    else if (light is PointLight pointLight && pointLightIndex < MAX_POINT_LIGHTS)
+                    {
+                        pointLight.UploadToGPU(CAMERA_RELATIVE, cameraPosition, -1, -1, 0, pointLightIndex);
+                        pointLightIndex++;
+                    }
                 }
             }
 
-            // Set the spot light count
+            // Set the light counts
             PropertyState.SetGlobalInt("_SpotLightCount", spotLightIndex);
+            PropertyState.SetGlobalInt("_PointLightCount", pointLightIndex);
         
         
             //unsafe

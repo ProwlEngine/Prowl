@@ -50,7 +50,7 @@ public sealed class VoxelGame : Game
         camera.HDR = true;
 
         spot = new GameObject("Spot Light");    
-        var sl = spot.AddComponent<SpotLight>();
+        var sl = spot.AddComponent<PointLight>();
         sl.range = 50f;
         sl.intensity = 256f;
         scene.Add(spot);
