@@ -1,5 +1,22 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+//
+// SimpleCube Demo - Showcasing Prowl's new Input Action System
+//
+// This demo demonstrates:
+// - Action-based input with multiple input sources
+// - Full keyboard + mouse + gamepad support
+// - Input processing (deadzone, normalization, scaling)
+// - Seamless switching between input methods
+//
+// Controls:
+//   Movement:  WASD / Arrow Keys / Gamepad Left Stick
+//   Look:      Right Mouse + Drag / Gamepad Right Stick
+//   Fly Up:    E / Gamepad A Button
+//   Fly Down:  Q / Gamepad B Button
+//   Sprint:    Left Shift / Gamepad Left Stick Click
+//
 
 using Prowl.Runtime;
 using Prowl.Vector;
@@ -22,12 +39,22 @@ public sealed class MyGame : Game
 {
     private GameObject cameraGO;
     private Scene scene;
-
     private ModelRenderer model;
+
+    // Input Actions
+    private InputActionMap cameraMap = null!;
+    private InputAction moveAction = null!;
+    private InputAction lookAction = null!;
+    private InputAction flyUpAction = null!;
+    private InputAction flyDownAction = null!;
+    private InputAction sprintAction = null!;
 
     public override void Initialize()
     {
         scene = new Scene();
+
+        // Setup Input Actions
+        SetupInputActions();
 
         // Create directional light
         GameObject lightGO = new("Directional Light");
@@ -45,9 +72,9 @@ public sealed class MyGame : Game
 
         camera.Effects = new List<ImageEffect>()
         {
-            new ScreenSpaceReflectionEffect(),
-            new KawaseBloomEffect(),
-            new BokehDepthOfFieldEffect(),
+            //new ScreenSpaceReflectionEffect(),
+            //new KawaseBloomEffect(),
+            //new BokehDepthOfFieldEffect(),
             new TonemapperEffect(),
         };
 
@@ -67,11 +94,81 @@ public sealed class MyGame : Game
         scene.Add(cubeGO);
 
         //var m = Model.LoadFromFile("Banana Man\\scene.gltf");
-        //var m = Model.LoadFromFile("glTF-Sponza\\Sponza.gltf");
-        //model = new GameObject("Model").AddComponent<ModelRenderer>();
-        //model.Model = m;
-        //scene.Add(model.GameObject);
+        var m = Model.LoadFromFile("glTF-Sponza\\Sponza.gltf");
+        model = new GameObject("Model").AddComponent<ModelRenderer>();
+        model.Model = m;
+        scene.Add(model.GameObject);
 
+        Input.SetCursorVisible(false);
+    }
+
+    private void SetupInputActions()
+    {
+        // Create input action map
+        cameraMap = new InputActionMap("Camera");
+
+        // Movement action
+        {
+            moveAction = cameraMap.AddAction("Move", InputActionType.Value);
+            moveAction.ExpectedValueType = typeof(Float2);
+
+            // Add WASD composite
+            var wasdComp = new Vector2CompositeBinding(
+                InputBinding.CreateKeyBinding(KeyCode.W),
+                InputBinding.CreateKeyBinding(KeyCode.S),
+                InputBinding.CreateKeyBinding(KeyCode.A),
+                InputBinding.CreateKeyBinding(KeyCode.D),
+                true // normalize
+            );
+            moveAction.AddBinding(wasdComp);
+
+            // Also add gamepad left stick with deadzone
+            var leftStick = InputBinding.CreateGamepadAxisBinding(0, deviceIndex: 0);
+            leftStick.Processors.Add(new DeadzoneProcessor(0.15f));
+            leftStick.Processors.Add(new NormalizeProcessor());
+            moveAction.AddBinding(leftStick);
+        }
+
+        // Look action
+        {
+            lookAction = cameraMap.AddAction("Look", InputActionType.Value);
+            lookAction.ExpectedValueType = typeof(Float2);
+
+            var mouse = new DualAxisCompositeBinding(InputBinding.CreateMouseAxisBinding(0), InputBinding.CreateMouseAxisBinding(1));
+            mouse.Processors.Add(new ScaleProcessor(0.25f)); // Decreased sensitivity for looking
+            lookAction.AddBinding(mouse);
+
+            // Gamepad right stick for looking with higher sensitivity and deadzone
+            var rightStick = InputBinding.CreateGamepadAxisBinding(1, deviceIndex: 0);
+            rightStick.Processors.Add(new DeadzoneProcessor(0.15f));
+            rightStick.Processors.Add(new ScaleProcessor(3.0f)); // Increase sensitivity for looking
+            lookAction.AddBinding(rightStick);
+        }
+
+        // Fly Up (E key + Gamepad A button)
+        {
+            flyUpAction = cameraMap.AddAction("FlyUp", InputActionType.Button);
+            flyUpAction.AddBinding(KeyCode.E);
+            flyUpAction.AddBinding(GamepadButton.A);
+        }
+
+        // Fly Down (Q key + Gamepad B button)
+        {
+            flyDownAction = cameraMap.AddAction("FlyDown", InputActionType.Button);
+            flyDownAction.AddBinding(KeyCode.Q);
+            flyDownAction.AddBinding(GamepadButton.B);
+        }
+
+        // Sprint (Shift + Gamepad Left Stick Click)
+        {
+            sprintAction = cameraMap.AddAction("Sprint", InputActionType.Button);
+            sprintAction.AddBinding(KeyCode.ShiftLeft);
+            sprintAction.AddBinding(GamepadButton.LeftStick);
+        }
+
+        // Register and enable
+        Input.RegisterActionMap(cameraMap);
+        cameraMap.Enable();
     }
 
     public override void FixedUpdate()
@@ -88,28 +185,32 @@ public sealed class MyGame : Game
     {
         scene.Update();
 
-        Double2 movement = Double2.Zero;
-        if (Input.GetKey(Key.W)) movement += Double2.UnitY;
-        if (Input.GetKey(Key.S)) movement -= Double2.UnitY;
-        if (Input.GetKey(Key.A)) movement -= Double2.UnitX;
-        if (Input.GetKey(Key.D)) movement += Double2.UnitX;
+        // Read movement from action (works with WASD, arrows, and gamepad left stick)
+        Float2 movement = moveAction.ReadValue<Float2>();
 
-        // forward/back
-        cameraGO.Transform.position += cameraGO.Transform.forward * movement.Y * 5f * Time.deltaTime;
-        // left/right
-        cameraGO.Transform.position += cameraGO.Transform.right * movement.X * 5f * Time.deltaTime;
+        // Calculate speed multiplier (sprint makes you move faster)
+        float speedMultiplier = sprintAction.IsPressed() ? 2.5f : 1.0f;
+        float moveSpeed = 5f * speedMultiplier * (float)Time.deltaTime;
 
+        // Apply movement
+        cameraGO.Transform.position += cameraGO.Transform.forward * movement.Y * moveSpeed;
+        cameraGO.Transform.position += cameraGO.Transform.right * movement.X * moveSpeed;
+
+        // Vertical movement (fly up/down)
         float upDown = 0;
-        if (Input.GetKey(Key.E)) upDown += 1;
-        if (Input.GetKey(Key.Q)) upDown -= 1;
-        // up/down
-        cameraGO.Transform.position += Double3.UnitY * upDown * 5f * Time.deltaTime;
+        if (flyUpAction.IsPressed()) upDown += 1;
+        if (flyDownAction.IsPressed()) upDown -= 1;
+        cameraGO.Transform.position += Double3.UnitY * upDown * moveSpeed;
 
-        // rotate with mouse
-        if (Input.GetMouseButton(1))
-        {
-            Double2 delta = Input.MouseDelta;
-            cameraGO.Transform.localEulerAngles += new Double3(delta.Y, delta.X, 0) * 0.1f;
-        }
+        // Look/rotate camera
+        Float2 lookInput = lookAction.ReadValue<Float2>();
+
+        // Apply look rotation from gamepad right stick
+        float lookSpeed = 100f * (float)Time.deltaTime;
+        cameraGO.Transform.localEulerAngles += new Double3(lookInput.Y, lookInput.X, 0) * lookSpeed;
+
+        // Unlock cursor on press Escape
+        if (Input.GetKeyDown(KeyCode.Escape))
+            Input.SetCursorVisible(true);
     }
 }

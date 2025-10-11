@@ -6,8 +6,6 @@ using System.Collections.Generic;
 
 using Prowl.Vector;
 
-using Silk.NET.Input;
-
 namespace Prowl.Runtime;
 
 public interface IInputHandler
@@ -19,15 +17,28 @@ public interface IInputHandler
     float MouseWheelDelta { get; }
     Int2 PrevMousePosition { get; }
 
-    event Action<Key, bool> OnKeyEvent;
+    event Action<KeyCode, bool> OnKeyEvent;
     event Action<MouseButton, double, double, bool, bool> OnMouseEvent;
 
+    // Keyboard methods
     char? GetPressedChar();
-    bool GetKey(Key key);
-    bool GetKeyDown(Key key);
-    bool GetKeyUp(Key key);
+    bool GetKey(KeyCode key);
+    bool GetKeyDown(KeyCode key);
+    bool GetKeyUp(KeyCode key);
+
+    // Mouse methods
     bool GetMouseButton(int button);
     bool GetMouseButtonDown(int button);
     bool GetMouseButtonUp(int button);
     void SetCursorVisible(bool visible, int miceIndex = 0);
+
+    // Gamepad methods
+    int GetGamepadCount();
+    bool IsGamepadConnected(int gamepadIndex);
+    bool GetGamepadButton(int gamepadIndex, GamepadButton button);
+    bool GetGamepadButtonDown(int gamepadIndex, GamepadButton button);
+    bool GetGamepadButtonUp(int gamepadIndex, GamepadButton button);
+    Float2 GetGamepadAxis(int gamepadIndex, int axisIndex);
+    float GetGamepadTrigger(int gamepadIndex, int triggerIndex);
+    void SetGamepadVibration(int gamepadIndex, float leftMotor, float rightMotor);
 }

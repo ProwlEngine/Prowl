@@ -42,18 +42,29 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             Mice[0].Position = (Float2)value;
         }
     }
-    public Double2 MouseDelta => _currentMousePos - _prevMousePos;
+    public Double2 MouseDelta
+    {
+        get
+        {
+            var delta = _currentMousePos - _prevMousePos;
+            return new Double2(delta.X, delta.Y); // Invert Y to match gamepad (up = positive)
+        }
+    }
     public float MouseWheelDelta => Mice[0].ScrollWheels[0].Y;
 
-    private Dictionary<Silk.NET.Input.Key, bool> wasKeyPressed = new Dictionary<Silk.NET.Input.Key, bool>();
-    private Dictionary<Silk.NET.Input.Key, bool> isKeyPressed = new Dictionary<Silk.NET.Input.Key, bool>();
-    private Dictionary<Silk.NET.Input.MouseButton, bool> wasMousePressed = new Dictionary<Silk.NET.Input.MouseButton, bool>();
-    private Dictionary<Silk.NET.Input.MouseButton, bool> isMousePressed = new Dictionary<Silk.NET.Input.MouseButton, bool>();
+    private Dictionary<KeyCode, bool> wasKeyPressed = new Dictionary<KeyCode, bool>();
+    private Dictionary<KeyCode, bool> isKeyPressed = new Dictionary<KeyCode, bool>();
+    private Dictionary<MouseButton, bool> wasMousePressed = new Dictionary<MouseButton, bool>();
+    private Dictionary<MouseButton, bool> isMousePressed = new Dictionary<MouseButton, bool>();
+
+    // Gamepad state tracking (per device)
+    private Dictionary<int, Dictionary<GamepadButton, bool>> wasGamepadButtonPressed = new();
+    private Dictionary<int, Dictionary<GamepadButton, bool>> isGamepadButtonPressed = new();
 
     private Queue<char> pressedChars { get; set; } = new();
 
-    public event Action<Silk.NET.Input.Key, bool> OnKeyEvent;
-    public event Action<Silk.NET.Input.MouseButton, double, double, bool, bool> OnMouseEvent;
+    public event Action<KeyCode, bool> OnKeyEvent;
+    public event Action<MouseButton, double, double, bool, bool> OnMouseEvent;
 
     public bool IsAnyKeyDown => isKeyPressed.ContainsValue(true);
 
@@ -64,22 +75,28 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         _currentMousePos = (Int2)(Float2)Mice[0].Position;
 
         // initialize key states
-        foreach (Silk.NET.Input.Key key in Enum.GetValues(typeof(Silk.NET.Input.Key)))
+        foreach (KeyCode key in Enum.GetValues(typeof(KeyCode)))
         {
-            if (key != Silk.NET.Input.Key.Unknown)
+            if (key != KeyCode.Unknown)
             {
                 wasKeyPressed[key] = false;
                 isKeyPressed[key] = false;
             }
         }
 
-        foreach (Silk.NET.Input.MouseButton button in Enum.GetValues(typeof(Silk.NET.Input.MouseButton)))
+        foreach (MouseButton button in Enum.GetValues(typeof(MouseButton)))
         {
-            if (button != Silk.NET.Input.MouseButton.Unknown)
+            if (button != MouseButton.Unknown)
             {
                 wasMousePressed[button] = false;
                 isMousePressed[button] = false;
             }
+        }
+
+        // Initialize gamepad state for all connected gamepads
+        for (int i = 0; i < Context.Gamepads.Count; i++)
+        {
+            InitializeGamepadState(i);
         }
 
         foreach (var keyboard in Keyboards)
@@ -88,20 +105,35 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         UpdateKeyStates();
     }
 
+    private void InitializeGamepadState(int gamepadIndex)
+    {
+        wasGamepadButtonPressed[gamepadIndex] = new Dictionary<GamepadButton, bool>();
+        isGamepadButtonPressed[gamepadIndex] = new Dictionary<GamepadButton, bool>();
+
+        foreach (GamepadButton button in Enum.GetValues(typeof(GamepadButton)))
+        {
+            if (button != GamepadButton.Unknown)
+            {
+                wasGamepadButtonPressed[gamepadIndex][button] = false;
+                isGamepadButtonPressed[gamepadIndex][button] = false;
+            }
+        }
+    }
+
     internal void LateUpdate()
     {
         _prevMousePos = _currentMousePos;
         _currentMousePos = (Int2)(Float2)Mice[0].Position;
         if (!_prevMousePos.Equals(_currentMousePos))
         {
-            if (isMousePressed[Silk.NET.Input.MouseButton.Left])
-                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Left, MousePosition.X, MousePosition.Y, false, true);
-            else if (isMousePressed[Silk.NET.Input.MouseButton.Right])
-                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Right, MousePosition.X, MousePosition.Y, false, true);
-            else if (isMousePressed[Silk.NET.Input.MouseButton.Middle])
-                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Middle, MousePosition.X, MousePosition.Y, false, true);
+            if (isMousePressed[MouseButton.Left])
+                OnMouseEvent?.Invoke(MouseButton.Left, MousePosition.X, MousePosition.Y, false, true);
+            else if (isMousePressed[MouseButton.Right])
+                OnMouseEvent?.Invoke(MouseButton.Right, MousePosition.X, MousePosition.Y, false, true);
+            else if (isMousePressed[MouseButton.Middle])
+                OnMouseEvent?.Invoke(MouseButton.Middle, MousePosition.X, MousePosition.Y, false, true);
             else
-                OnMouseEvent?.Invoke(Silk.NET.Input.MouseButton.Unknown, MousePosition.X, MousePosition.Y, false, true);
+                OnMouseEvent?.Invoke(MouseButton.Unknown, MousePosition.X, MousePosition.Y, false, true);
         }
         UpdateKeyStates();
     }
@@ -109,14 +141,14 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     // Update the state of each key
     private void UpdateKeyStates()
     {
-        foreach (Silk.NET.Input.Key key in Enum.GetValues(typeof(Silk.NET.Input.Key)))
+        foreach (KeyCode key in Enum.GetValues(typeof(KeyCode)))
         {
-            if (key != Silk.NET.Input.Key.Unknown)
+            if (key != KeyCode.Unknown)
             {
                 wasKeyPressed[key] = isKeyPressed[key];
                 isKeyPressed[key] = false;
                 foreach (var keyboard in Keyboards)
-                    if (keyboard.IsKeyPressed(key))
+                    if (keyboard.IsKeyPressed((Silk.NET.Input.Key)key))
                     {
                         isKeyPressed[key] = true;
                         break;
@@ -127,20 +159,48 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             }
         }
 
-        foreach (Silk.NET.Input.MouseButton button in Enum.GetValues(typeof(Silk.NET.Input.MouseButton)))
+        foreach (MouseButton button in Enum.GetValues(typeof(MouseButton)))
         {
-            if (button != Silk.NET.Input.MouseButton.Unknown)
+            if (button != MouseButton.Unknown)
             {
                 wasMousePressed[button] = isMousePressed[button];
                 isMousePressed[button] = false;
                 foreach (var mouse in Mice)
-                    if (mouse.IsButtonPressed(button))
+                    if (mouse.IsButtonPressed((Silk.NET.Input.MouseButton)button))
                     {
                         isMousePressed[button] = true;
                         break;
                     }
                 if (wasMousePressed[button] != isMousePressed[button])
                     OnMouseEvent?.Invoke(button, MousePosition.X, MousePosition.Y, isMousePressed[button], false);
+            }
+        }
+
+        // Update gamepad button states
+        for (int gamepadIndex = 0; gamepadIndex < Context.Gamepads.Count; gamepadIndex++)
+        {
+            if (!Context.Gamepads[gamepadIndex].IsConnected)
+                continue;
+
+            // Initialize if needed
+            if (!isGamepadButtonPressed.ContainsKey(gamepadIndex))
+                InitializeGamepadState(gamepadIndex);
+
+            var gamepad = Context.Gamepads[gamepadIndex];
+            foreach (GamepadButton button in Enum.GetValues(typeof(GamepadButton)))
+            {
+                if (button != GamepadButton.Unknown)
+                {
+                    wasGamepadButtonPressed[gamepadIndex][button] = isGamepadButtonPressed[gamepadIndex][button];
+                    isGamepadButtonPressed[gamepadIndex][button] = false;
+
+                    // Check if button is pressed
+                    var buttonIndex = (int)button;
+                    if (buttonIndex < gamepad.Buttons.Count && gamepad.Buttons[buttonIndex].Pressed)
+                    {
+                        isGamepadButtonPressed[gamepadIndex][button] = true;
+                    }
+                }
             }
         }
     }
@@ -152,19 +212,88 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         return null;
     }
 
-    public bool GetKey(Silk.NET.Input.Key key) => isKeyPressed[key];
+    public bool GetKey(KeyCode key) => isKeyPressed[key];
 
-    public bool GetKeyDown(Silk.NET.Input.Key key) => isKeyPressed[key] && !wasKeyPressed[key];
+    public bool GetKeyDown(KeyCode key) => isKeyPressed[key] && !wasKeyPressed[key];
 
-    public bool GetKeyUp(Silk.NET.Input.Key key) => !isKeyPressed[key] && wasKeyPressed[key];
+    public bool GetKeyUp(KeyCode key) => !isKeyPressed[key] && wasKeyPressed[key];
 
-    public bool GetMouseButton(int button) => isMousePressed[(Silk.NET.Input.MouseButton)button];
+    public bool GetMouseButton(int button) => isMousePressed[(MouseButton)button];
 
-    public bool GetMouseButtonDown(int button) => isMousePressed[(Silk.NET.Input.MouseButton)button] && !wasMousePressed[(Silk.NET.Input.MouseButton)button];
+    public bool GetMouseButtonDown(int button) => isMousePressed[(MouseButton)button] && !wasMousePressed[(MouseButton)button];
 
-    public bool GetMouseButtonUp(int button) => !isMousePressed[(Silk.NET.Input.MouseButton)button] && wasMousePressed[(Silk.NET.Input.MouseButton)button];
+    public bool GetMouseButtonUp(int button) => !isMousePressed[(MouseButton)button] && wasMousePressed[(MouseButton)button];
 
     public void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Disabled;
+
+    // Gamepad methods implementation
+    public int GetGamepadCount() => Context.Gamepads.Count;
+
+    public bool IsGamepadConnected(int gamepadIndex)
+    {
+        return gamepadIndex >= 0 && gamepadIndex < Context.Gamepads.Count && Context.Gamepads[gamepadIndex].IsConnected;
+    }
+
+    public bool GetGamepadButton(int gamepadIndex, GamepadButton button)
+    {
+        if (!IsGamepadConnected(gamepadIndex) || !isGamepadButtonPressed.ContainsKey(gamepadIndex))
+            return false;
+        return isGamepadButtonPressed[gamepadIndex].GetValueOrDefault(button, false);
+    }
+
+    public bool GetGamepadButtonDown(int gamepadIndex, GamepadButton button)
+    {
+        if (!IsGamepadConnected(gamepadIndex) || !isGamepadButtonPressed.ContainsKey(gamepadIndex))
+            return false;
+        return isGamepadButtonPressed[gamepadIndex].GetValueOrDefault(button, false) &&
+               !wasGamepadButtonPressed[gamepadIndex].GetValueOrDefault(button, false);
+    }
+
+    public bool GetGamepadButtonUp(int gamepadIndex, GamepadButton button)
+    {
+        if (!IsGamepadConnected(gamepadIndex) || !isGamepadButtonPressed.ContainsKey(gamepadIndex))
+            return false;
+        return !isGamepadButtonPressed[gamepadIndex].GetValueOrDefault(button, false) &&
+               wasGamepadButtonPressed[gamepadIndex].GetValueOrDefault(button, false);
+    }
+
+    public Float2 GetGamepadAxis(int gamepadIndex, int axisIndex)
+    {
+        if (!IsGamepadConnected(gamepadIndex))
+            return Float2.Zero;
+
+        var gamepad = Context.Gamepads[gamepadIndex];
+        if (axisIndex < 0 || axisIndex >= gamepad.Thumbsticks.Count)
+            return Float2.Zero;
+
+        var thumbstick = gamepad.Thumbsticks[axisIndex];
+        return new Float2(thumbstick.X, thumbstick.Y); // We flip y to make UP on the stick positive
+    }
+
+    public float GetGamepadTrigger(int gamepadIndex, int triggerIndex)
+    {
+        if (!IsGamepadConnected(gamepadIndex))
+            return 0f;
+
+        var gamepad = Context.Gamepads[gamepadIndex];
+        if (triggerIndex < 0 || triggerIndex >= gamepad.Triggers.Count)
+            return 0f;
+
+        return gamepad.Triggers[triggerIndex].Position;
+    }
+
+    public void SetGamepadVibration(int gamepadIndex, float leftMotor, float rightMotor)
+    {
+        if (!IsGamepadConnected(gamepadIndex))
+            return;
+
+        var gamepad = Context.Gamepads[gamepadIndex];
+        if (gamepad.VibrationMotors.Count >= 2)
+        {
+            gamepad.VibrationMotors[0].Speed = leftMotor;
+            gamepad.VibrationMotors[1].Speed = rightMotor;
+        }
+    }
 
     public void Dispose() => Context.Dispose();
 }

@@ -53,6 +53,8 @@ public abstract class Game
             Time.TimeStack.Clear();
             Time.TimeStack.Push(time);
 
+            Input.UpdateActions(delta);
+
             // Fixed update loop
             fixedTimeAccumulator += delta;
             int count = 0;
