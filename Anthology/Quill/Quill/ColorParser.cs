@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Prowl.Vector;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
+using Color = Prowl.Vector.Color;
 
 namespace Prowl.Quill
 {
@@ -10,27 +12,27 @@ namespace Prowl.Quill
     {
         private static readonly Dictionary<string, Color> NamedColorsMap = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
         {
-            { "black", Color.FromArgb(255, 0, 0, 0) }, // Added Alpha for consistency
-            { "white", Color.FromArgb(255, 255, 255, 255) },
-            { "red", Color.FromArgb(255, 255, 0, 0) },
-            { "green", Color.FromArgb(255, 0, 128, 0) },
-            { "blue", Color.FromArgb(255, 0, 0, 255) },
-            { "yellow", Color.FromArgb(255, 255, 255, 0) },
-            { "purple", Color.FromArgb(255, 128, 0, 128) },
-            { "aqua", Color.FromArgb(255, 0, 255, 255) },
-            { "fuchsia", Color.FromArgb(255, 255, 0, 255) },
-            { "gray", Color.FromArgb(255, 128, 128, 128) },
-            { "grey", Color.FromArgb(255, 128, 128, 128) },
-            { "lime", Color.FromArgb(255, 0, 255, 0) },
-            { "maroon", Color.FromArgb(255, 128, 0, 0) },
-            { "navy", Color.FromArgb(255, 0, 0, 128) },
-            { "olive", Color.FromArgb(255, 128, 128, 0) },
-            { "silver", Color.FromArgb(255, 192, 192, 192) },
-            { "teal", Color.FromArgb(255, 0, 128, 128) },
+            { "black", Color32.FromArgb(255, 0, 0, 0) }, // Added Alpha for consistency
+            { "white", Color32.FromArgb(255, 255, 255, 255) },
+            { "red", Color32.FromArgb(255, 255, 0, 0) },
+            { "green", Color32.FromArgb(255, 0, 128, 0) },
+            { "blue", Color32.FromArgb(255, 0, 0, 255) },
+            { "yellow", Color32.FromArgb(255, 255, 255, 0) },
+            { "purple", Color32.FromArgb(255, 128, 0, 128) },
+            { "aqua", Color32.FromArgb(255, 0, 255, 255) },
+            { "fuchsia", Color32.FromArgb(255, 255, 0, 255) },
+            { "gray", Color32.FromArgb(255, 128, 128, 128) },
+            { "grey", Color32.FromArgb(255, 128, 128, 128) },
+            { "lime", Color32.FromArgb(255, 0, 255, 0) },
+            { "maroon", Color32.FromArgb(255, 128, 0, 0) },
+            { "navy", Color32.FromArgb(255, 0, 0, 128) },
+            { "olive", Color32.FromArgb(255, 128, 128, 0) },
+            { "silver", Color32.FromArgb(255, 192, 192, 192) },
+            { "teal", Color32.FromArgb(255, 0, 128, 128) },
             // Transparent is handled by "none" or rgba(...,0)
         };
 
-        public static Color Parse(string attribute)
+        public static Color32 Parse(string attribute)
         {
             var color = Color.Transparent;
             try
@@ -43,7 +45,7 @@ namespace Prowl.Quill
                         int r = int.Parse(trimmedAttribute.Substring(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
                         int g = int.Parse(trimmedAttribute.Substring(3, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
                         int b = int.Parse(trimmedAttribute.Substring(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-                        color = Color.FromArgb(255, r, g, b);
+                        color = Color32.FromArgb(255, r, g, b);
                     }
                     else if (trimmedAttribute.Length == 4) // #RGB
                     {
@@ -53,7 +55,7 @@ namespace Prowl.Quill
                         int r = int.Parse(rHex, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
                         int g = int.Parse(gHex, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
                         int b = int.Parse(bHex, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-                        color = Color.FromArgb(255, r, g, b);
+                        color = Color32.FromArgb(255, r, g, b);
                     }
                     else
                     {
@@ -70,7 +72,7 @@ namespace Prowl.Quill
                         int r = int.Parse(parts[0], CultureInfo.InvariantCulture);
                         int g = int.Parse(parts[1], CultureInfo.InvariantCulture);
                         int b = int.Parse(parts[2], CultureInfo.InvariantCulture);
-                        color = Color.FromArgb(255, Math.Clamp(r, 0, 255), Math.Clamp(g, 0, 255), Math.Clamp(b, 0, 255));
+                        color = Color32.FromArgb(255, Math.Clamp(r, 0, 255), Math.Clamp(g, 0, 255), Math.Clamp(b, 0, 255));
                     }
                     else
                     {
@@ -89,7 +91,7 @@ namespace Prowl.Quill
                         int b = int.Parse(parts[2], CultureInfo.InvariantCulture);
                         double alphaDouble = double.Parse(parts[3], CultureInfo.InvariantCulture);
                         int a = (int)Math.Round(Math.Clamp(alphaDouble, 0.0, 1.0) * 255.0);
-                        color = Color.FromArgb(a, Math.Clamp(r, 0, 255), Math.Clamp(g, 0, 255), Math.Clamp(b, 0, 255));
+                        color = Color32.FromArgb(a, Math.Clamp(r, 0, 255), Math.Clamp(g, 0, 255), Math.Clamp(b, 0, 255));
                     }
                     else
                     {

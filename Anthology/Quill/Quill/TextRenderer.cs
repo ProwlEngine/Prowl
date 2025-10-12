@@ -1,6 +1,7 @@
 ﻿using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 using System;
 using System.Drawing;
 
@@ -60,7 +61,7 @@ namespace Prowl.Quill
                 rgbaData[i * 4 + 3] = value; // A
             }
 
-            _canvas._renderer.SetTextureData(texture, new IntRect(bounds.X, bounds.Y, bounds.Width, bounds.Height), rgbaData);
+            _canvas._renderer.SetTextureData(texture, new IntRect(bounds.X, bounds.Y, bounds.X + bounds.Width, bounds.Y + bounds.Height), rgbaData);
         }
 
         /// <summary>
@@ -79,9 +80,9 @@ namespace Prowl.Quill
 
                 // Transform vertices through the current transform matrix
                 uint index = (uint)_canvas.Vertices.Count;
-                var vertA = new Vertex(_canvas.TransformPoint(new Vector2(a.Position.X, a.Position.Y)), a.TextureCoordinate, ToColor(a.Color));
-                var vertB = new Vertex(_canvas.TransformPoint(new Vector2(b.Position.X, b.Position.Y)), b.TextureCoordinate, ToColor(b.Color));
-                var vertC = new Vertex(_canvas.TransformPoint(new Vector2(c.Position.X, c.Position.Y)), c.TextureCoordinate, ToColor(c.Color));
+                var vertA = new Vertex(_canvas.TransformPoint(new Double2(a.Position.X, a.Position.Y)), (Double2)(Float2)a.TextureCoordinate, ToColor(a.Color));
+                var vertB = new Vertex(_canvas.TransformPoint(new Double2(b.Position.X, b.Position.Y)), (Double2)(Float2)b.TextureCoordinate, ToColor(b.Color));
+                var vertC = new Vertex(_canvas.TransformPoint(new Double2(c.Position.X, c.Position.Y)), (Double2)(Float2)c.TextureCoordinate, ToColor(c.Color));
 
                 _canvas.AddVertex(vertA);
                 _canvas.AddVertex(vertC);
@@ -93,14 +94,14 @@ namespace Prowl.Quill
             _canvas.SetTexture(null);
         }
 
-        private static FontColor ToFSColor(Color color)
+        private static FontColor ToFSColor(Prowl.Vector.Color32 color)
         {
             return new FontColor(color.R, color.G, color.B, color.A);
         }
 
-        private static Color ToColor(FontColor color)
+        private static Color32 ToColor(FontColor color)
         {
-            return Color.FromArgb(color.A, color.R, color.G, color.B);
+            return Color32.FromArgb(color.A, color.R, color.G, color.B);
         }
     }
 }

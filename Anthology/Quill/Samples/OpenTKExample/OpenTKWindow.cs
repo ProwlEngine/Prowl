@@ -23,7 +23,7 @@ namespace OpenTKExample
         private BenchmarkScene _benchmarkScene;
 
         // Camera/view properties
-        private Vector2 _offset = Vector2.zero;
+        private Double2 _offset = Double2.Zero;
         private double _zoom = 1.0f;
         private double _rotation = 0.0f;
 
@@ -106,8 +106,8 @@ namespace OpenTKExample
             if (mouse.IsButtonDown(MouseButton.Left))
             {
                 var delta = mouse.Delta;
-                _offset.x += delta.X * (1.0 / _zoom);
-                _offset.y += delta.Y * (1.0 / _zoom);
+                _offset.X += delta.X * (1.0 / _zoom);
+                _offset.Y += delta.Y * (1.0 / _zoom);
             }
 
             // Rotate with Q/E keys

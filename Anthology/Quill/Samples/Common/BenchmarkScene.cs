@@ -2,7 +2,9 @@
 using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
+using Prowl.Vector.Spatial;
 using System.Drawing;
+using Color = Prowl.Vector.Color;
 
 namespace Common
 {
@@ -35,7 +37,7 @@ namespace Common
             _height = height;
         }
 
-        public void RenderFrame(double deltaTime, Vector2 offset, double zoom, double rotate)
+        public void RenderFrame(double deltaTime, Double2 offset, double zoom, double rotate)
         {
             _time += deltaTime;
 
@@ -47,7 +49,7 @@ namespace Common
             _canvas.SaveState();
 
             _canvas.TransformBy(Transform2D.CreateTranslation(_width / 2, _height / 2));
-            _canvas.TransformBy(Transform2D.CreateRotate(rotate) * Transform2D.CreateTranslation(offset.x, offset.y) * Transform2D.CreateScale(zoom, zoom));
+            _canvas.TransformBy(Transform2D.CreateTranslation(offset.X, offset.Y) * Transform2D.CreateRotation(rotate) * Transform2D.CreateScale(zoom, zoom));
             _canvas.SetStrokeScale(zoom);
 
             // Run the benchmark
@@ -105,9 +107,9 @@ namespace Common
 
                 _canvas.CurrentTransform(curTransform);
                 _canvas.TransformBy(Transform2D.CreateTranslation(x, y));
-                _canvas.TransformBy(Transform2D.CreateRotate(rotation));
+                _canvas.TransformBy(Transform2D.CreateRotation(rotation));
                 _canvas.TransformBy(Transform2D.CreateScale(scale, scale));
-                _canvas.RectFilled(-width / 2, -height / 2, width, height, Color.FromArgb(180, r, g, b));
+                _canvas.RectFilled(-width / 2, -height / 2, width, height, Color32.FromArgb(180, r, g, b));
             }
 
             double circleColorTimeR = _time * 1.2;
@@ -132,7 +134,7 @@ namespace Common
                 _canvas.CurrentTransform(curTransform);
                 _canvas.TransformBy(Transform2D.CreateTranslation(x, y));
                 _canvas.TransformBy(Transform2D.CreateScale(totalScale, totalScale));
-                _canvas.CircleFilled(0, 0, radius, Color.FromArgb(160, r, g, b));
+                _canvas.CircleFilled(0, 0, radius, Color32.FromArgb(160, r, g, b));
             }
 
             _canvas.RestoreState();
@@ -157,10 +159,10 @@ namespace Common
             double x = _width - overlayWidth - padding;
             double y = padding;
 
-            _canvas.RectFilled(x, y, overlayWidth, overlayHeight, Color.FromArgb(255, 0, 0, 0));
+            _canvas.RectFilled(x, y, overlayWidth, overlayHeight, Color32.FromArgb(255, 0, 0, 0));
 
             // Border
-            _canvas.SetStrokeColor(Color.FromArgb(255, 100, 100, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 100, 100));
             _canvas.SetStrokeWidth(1);
             _canvas.Rect(x, y, overlayWidth, overlayHeight);
             _canvas.Stroke();
@@ -171,14 +173,14 @@ namespace Common
             string fpsText = $"FPS: {fps:F1}";
             string frameTimeText = $"Frame Time: {_averageFrameTime:F2} ms";
 
-            DrawSimpleText(perfText, x + 10, y + 15, Color.FromArgb(255, 255, 255, 100));
-            DrawSimpleText(fpsText, x + 10, y + 35, Color.FromArgb(255, 100, 255, 100));
+            DrawSimpleText(perfText, x + 10, y + 15, Color32.FromArgb(255, 255, 255, 100));
+            DrawSimpleText(fpsText, x + 10, y + 35, Color32.FromArgb(255, 100, 255, 100));
             DrawSimpleText(frameTimeText, x + 10, y + 55, Color.White);
 
             Console.Title = $"FPS: {fps:F1} | Frame Time: {_averageFrameTime:F2} ms | Shapes: {RECT_COUNT + CIRCLE_COUNT}";
         }
 
-        private void DrawSimpleText(string text, double x, double y, Color color)
+        private void DrawSimpleText(string text, double x, double y, Color32 color)
         {
             _canvas.DrawText(text, x, y, color, 17, _font);
         }

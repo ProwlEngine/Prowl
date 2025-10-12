@@ -1,5 +1,6 @@
 ﻿using OpenTK.Graphics.OpenGL4;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 using StbImageSharp;
 using PixelFormat = OpenTK.Graphics.OpenGL4.PixelFormat;
 
@@ -100,7 +101,7 @@ namespace OpenTKExample
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, Handle);
             // Set the texture data
-            GL.TexSubImage2D(TextureTarget.Texture2D, 0, bounds.x, bounds.y, bounds.width, bounds.height, PixelFormat.Rgba, PixelType.UnsignedByte, data);
+            GL.TexSubImage2D(TextureTarget.Texture2D, 0, bounds.Min.X, bounds.Min.Y, bounds.Size.X, bounds.Size.Y, PixelFormat.Rgba, PixelType.UnsignedByte, data);
         }
 
         // Activate texture

@@ -25,7 +25,7 @@ namespace SFMLExample
         private int _currentDemoIndex;
         
         // Camera/view properties
-        private Vector2 _offset = Vector2.zero;
+        private Double2 _offset = Double2.Zero;
         private double _zoom = 1.0f;
         private double _rotation = 0.0f;
         
@@ -38,7 +38,7 @@ namespace SFMLExample
         private FontFile AlamakFont;
         
         // Input tracking
-        private Vector2i _lastMousePos;
+        private Int2 _lastMousePos;
         private Clock _clock = new Clock();
 
         // Key state tracking for demo switching
@@ -143,7 +143,7 @@ namespace SFMLExample
                 _demos[_currentDemoIndex].RenderFrame(deltaTime, _offset, _zoom, _rotation);
                 
                 // Draw using SFML
-                _window.Clear(Color.Black);
+                _window.Clear(SFML.Graphics.Color.Black);
                 _canvas.Render();
                 _window.Display();
             }
@@ -179,16 +179,16 @@ namespace SFMLExample
             _rightKeyPressed = rightKeyCurrentlyPressed;
             _spaceKeyPressed = spaceKeyCurrentlyPressed;
 
-            Vector2i currentPos = Mouse.GetPosition(_window);
+            var currentPos = Mouse.GetPosition(_window);
             if (Mouse.IsButtonPressed(Mouse.Button.Left))
             {
-                Vector2f delta = new Vector2f(currentPos.X - _lastMousePos.X, currentPos.Y - _lastMousePos.Y);
+                var delta = new Int2(currentPos.X - _lastMousePos.X, currentPos.Y - _lastMousePos.Y);
 
-                _offset.x += delta.X * (1.0 / _zoom);
-                _offset.y += delta.Y * (1.0 / _zoom);
+                _offset.X += delta.X * (1.0 / _zoom);
+                _offset.Y += delta.Y * (1.0 / _zoom);
             }
 
-            _lastMousePos = currentPos;
+            _lastMousePos = new Int2(currentPos.X, currentPos.Y);
         }
         
         public void Dispose()

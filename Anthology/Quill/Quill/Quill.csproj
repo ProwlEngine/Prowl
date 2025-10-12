@@ -29,38 +29,9 @@
     </None>
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
-    <PackageReference Include="Prowl.Vector">
-      <Version>0.5.3</Version>
-    </PackageReference>
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net7.0'">
-    <PackageReference Include="Prowl.Vector">
-      <Version>0.5.2</Version>
-    </PackageReference>
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <PackageReference Include="Prowl.Vector">
-      <Version>0.5.2</Version>
-    </PackageReference>
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageReference Include="Prowl.Vector">
-      <Version>0.5.2</Version>
-    </PackageReference>
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
-    <PackageReference Include="Prowl.Vector">
-      <Version>0.5.2</Version>
-    </PackageReference>
-  </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Prowl.Scribe" Version="0.7.5" />
+    <PackageReference Include="Prowl.Vector" Version="2.0.0-preview.80" />
   </ItemGroup>
 
 </Project>

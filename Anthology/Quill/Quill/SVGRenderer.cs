@@ -1,17 +1,18 @@
 ﻿using Prowl.Vector;
 using System;
 using System.Drawing;
+using Color = Prowl.Vector.Color;
 
 namespace Prowl.Quill
 {
     public static class SVGRenderer
     {
-        public static Color currentColor = Color.White;
+        public static Color32 currentColor = Color.White;
 
         //for debug
         public static bool debug;
 
-        public static void DrawToCanvas(Canvas canvas, Vector2 position, SvgElement svgElement)
+        public static void DrawToCanvas(Canvas canvas, Double2 position, SvgElement svgElement)
         {
             var elements = svgElement.Flatten();
 
@@ -63,7 +64,7 @@ namespace Prowl.Quill
             canvas.SetStrokeWidth(pathElement.strokeWidth);
         }
 
-        static void DrawPath(Canvas canvas, Vector2 position, SvgPathElement element)
+        static void DrawPath(Canvas canvas, Double2 position, SvgPathElement element)
         {
             if (element.drawCommands == null)
                 return;
@@ -81,10 +82,10 @@ namespace Prowl.Quill
             }
         }
 
-        static void DrawElement(Canvas canvas, SvgPathElement element, Vector2 position)
+        static void DrawElement(Canvas canvas, SvgPathElement element, Double2 position)
         {
             canvas.BeginPath();
-            var lastControlPoint = Vector2.zero;
+            var lastControlPoint = Double2.Zero;
 
             for (var i = 0; i < element.drawCommands.Length; i++)
             {
@@ -99,35 +100,35 @@ namespace Prowl.Quill
                 switch (cmd.type)
                 {
                     case DrawType.MoveTo:
-                        canvas.MoveTo(offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        canvas.MoveTo(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
                         break;
                     case DrawType.LineTo:
-                        canvas.LineTo(offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        canvas.LineTo(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
                         break;
                     case DrawType.HorizontalLineTo:
-                        canvas.LineTo(offset.x + cmd.param[0], canvas.CurrentPoint.y);
+                        canvas.LineTo(offset.X + cmd.param[0], canvas.CurrentPoint.Y);
                         break;
                     case DrawType.VerticalLineTo:
-                        canvas.LineTo(canvas.CurrentPoint.x, offset.y + cmd.param[0]);
+                        canvas.LineTo(canvas.CurrentPoint.X, offset.Y + cmd.param[0]);
                         break;
                     case DrawType.QuadraticCurveTo:
-                        canvas.QuadraticCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3]);
-                        lastControlPoint = new Vector2(offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        canvas.QuadraticCurveTo(offset.X + cmd.param[0], offset.Y + cmd.param[1], offset.X + cmd.param[2], offset.Y + cmd.param[3]);
+                        lastControlPoint = new Double2(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
                         break;
                     case DrawType.SmoothQuadraticCurveTo:
-                        canvas.QuadraticCurveTo(cp.x, cp.y, offset.x + cmd.param[0], offset.y + cmd.param[1]);
-                        lastControlPoint = new Vector2(offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        canvas.QuadraticCurveTo(cp.X, cp.Y, offset.X + cmd.param[0], offset.Y + cmd.param[1]);
+                        lastControlPoint = new Double2(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
                         break;
                     case DrawType.CubicCurveTo:
-                        canvas.BezierCurveTo(offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3], offset.x + cmd.param[4], offset.y + cmd.param[5]);
-                        lastControlPoint = new Vector2(offset.x + cmd.param[2], offset.y + cmd.param[3]);
+                        canvas.BezierCurveTo(offset.X + cmd.param[0], offset.Y + cmd.param[1], offset.X + cmd.param[2], offset.Y + cmd.param[3], offset.X + cmd.param[4], offset.Y + cmd.param[5]);
+                        lastControlPoint = new Double2(offset.X + cmd.param[2], offset.Y + cmd.param[3]);
                         break;
                     case DrawType.SmoothCubicCurveTo:
-                        canvas.BezierCurveTo(cp.x, cp.y, offset.x + cmd.param[0], offset.y + cmd.param[1], offset.x + cmd.param[2], offset.y + cmd.param[3]);
-                        lastControlPoint = new Vector2(offset.x + cmd.param[0], offset.y + cmd.param[1]);
+                        canvas.BezierCurveTo(cp.X, cp.Y, offset.X + cmd.param[0], offset.Y + cmd.param[1], offset.X + cmd.param[2], offset.Y + cmd.param[3]);
+                        lastControlPoint = new Double2(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
                         break;
                     case DrawType.ArcTo:
-                        canvas.EllipticalArcTo(cmd.param[0], cmd.param[1], cmd.param[2], cmd.param[3] != 0, cmd.param[4] != 0, offset.x + cmd.param[5], offset.y + cmd.param[6]);
+                        canvas.EllipticalArcTo(cmd.param[0], cmd.param[1], cmd.param[2], cmd.param[3] != 0, cmd.param[4] != 0, offset.X + cmd.param[5], offset.Y + cmd.param[6]);
                         break;
                     case DrawType.ClosePath:
                         canvas.ClosePath();
@@ -136,42 +137,42 @@ namespace Prowl.Quill
             }
         }
 
-        static Vector2 ReflectPoint(Vector2 mirrorPoint, Vector2 inputPoint)
+        static Double2 ReflectPoint(Double2 mirrorPoint, Double2 inputPoint)
         {
             return 2 * mirrorPoint - inputPoint;
         }
 
-        static void DrawCircle(Canvas canvas, Vector2 position, SvgCircleElement element)
+        static void DrawCircle(Canvas canvas, Double2 position, SvgCircleElement element)
         {
-            var pos = position + new Vector2(element.cx, element.cy);
+            var pos = position + new Double2(element.cx, element.cy);
 
             if (element.fillType != SvgElement.ColorType.none)
             {
-                canvas.CircleFilled(pos.x, pos.y, element.r, element.fill);
+                canvas.CircleFilled(pos.X, pos.Y, element.r, element.fill);
                 canvas.FillComplexAA();
             }
             else
             {
-                canvas.Circle(pos.x, pos.y, element.r);
+                canvas.Circle(pos.X, pos.Y, element.r);
                 canvas.Stroke();
             }
         }
 
-        static void DrawRect(Canvas canvas, Vector2 position, SvgRectElement element)
+        static void DrawRect(Canvas canvas, Double2 position, SvgRectElement element)
         {
             var pos = element.pos;
             var size = element.size;
 
-            if (element.radius.x == 0)
+            if (element.radius.X == 0)
             {
                 if (element.fillType != SvgElement.ColorType.none)
                 {
-                    canvas.Rect(pos.x, pos.y, size.x, size.y);
+                    canvas.Rect(pos.X, pos.Y, size.X, size.Y);
                     canvas.FillComplexAA();
                 }
                 else
                 {
-                    canvas.RectFilled(pos.x, pos.y, size.x, size.y, element.fill);
+                    canvas.RectFilled(pos.X, pos.Y, size.X, size.Y, element.fill);
                     canvas.Stroke();
                 }
             }
@@ -179,32 +180,32 @@ namespace Prowl.Quill
             {
                 if (element.fillType != SvgElement.ColorType.none)
                 {
-                    canvas.RoundedRect(pos.x, pos.y, size.x, size.y, element.radius.x);
+                    canvas.RoundedRect(pos.X, pos.Y, size.X, size.Y, element.radius.X);
                     canvas.FillComplexAA();
                 }
                 else
                 {
-                    canvas.RoundedRectFilled(pos.x, pos.y, size.x, size.y, element.radius.x, element.fill);
+                    canvas.RoundedRectFilled(pos.X, pos.Y, size.X, size.Y, element.radius.X, element.fill);
                     canvas.Stroke();
                 }
             }
         }
 
-        static void DrawLine(Canvas canvas, Vector2 position, SvgLineElement element)
+        static void DrawLine(Canvas canvas, Double2 position, SvgLineElement element)
         {
             if (element.strokeType == SvgElement.ColorType.none)
                 return;
 
             canvas.BeginPath();
-            canvas.MoveTo(position.x + element.x1, position.y + element.y1);
-            canvas.LineTo(position.x + element.x2, position.y + element.y2);
+            canvas.MoveTo(position.X + element.x1, position.Y + element.y1);
+            canvas.LineTo(position.X + element.x2, position.Y + element.y2);
             canvas.Stroke();
         }
 
-        static void DrawEllipse(Canvas canvas, Vector2 position, SvgEllipseElement element)
+        static void DrawEllipse(Canvas canvas, Double2 position, SvgEllipseElement element)
         {
-            var cx = position.x + element.cx;
-            var cy = position.y + element.cy;
+            var cx = position.X + element.cx;
+            var cy = position.Y + element.cy;
 
             if (element.fillType != SvgElement.ColorType.none)
             {
@@ -221,17 +222,17 @@ namespace Prowl.Quill
             }
         }
 
-        static void DrawPolyline(Canvas canvas, Vector2 position, SvgPolylineElement element)
+        static void DrawPolyline(Canvas canvas, Double2 position, SvgPolylineElement element)
         {
             DrawPoly(canvas, position, element.points, element, false);
         }
 
-        static void DrawPolygon(Canvas canvas, Vector2 position, SvgPolygonElement element)
+        static void DrawPolygon(Canvas canvas, Double2 position, SvgPolygonElement element)
         {
             DrawPoly(canvas, position, element.points, element, true);
         }
 
-        static void DrawPoly(Canvas canvas, Vector2 position, Vector2[] points, SvgElement element, bool closed)
+        static void DrawPoly(Canvas canvas, Double2 position, Double2[] points, SvgElement element, bool closed)
         {
             if (points == null || points.Length == 0)
                 return;
@@ -239,9 +240,9 @@ namespace Prowl.Quill
             if (element.fillType != SvgElement.ColorType.none)
             {
                 canvas.BeginPath();
-                canvas.MoveTo(position.x + points[0].x, position.y + points[0].y);
+                canvas.MoveTo(position.X + points[0].X, position.Y + points[0].Y);
                 for (int i = 1; i < points.Length; i++)
-                    canvas.LineTo(position.x + points[i].x, position.y + points[i].y);
+                    canvas.LineTo(position.X + points[i].X, position.Y + points[i].Y);
                 if (closed)
                     canvas.ClosePath();
                 canvas.FillComplexAA();
@@ -250,9 +251,9 @@ namespace Prowl.Quill
             if (element.strokeType != SvgElement.ColorType.none)
             {
                 canvas.BeginPath();
-                canvas.MoveTo(position.x + points[0].x, position.y + points[0].y);
+                canvas.MoveTo(position.X + points[0].X, position.Y + points[0].Y);
                 for (int i = 1; i < points.Length; i++)
-                    canvas.LineTo(position.x + points[i].x, position.y + points[i].y);
+                    canvas.LineTo(position.X + points[i].X, position.Y + points[i].Y);
                 if (closed)
                     canvas.ClosePath();
                 canvas.Stroke();

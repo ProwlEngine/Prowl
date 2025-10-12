@@ -4,7 +4,7 @@ using SFML.Graphics;
 using SFML.Graphics.Glsl;
 using SFML.System;
 using Color = System.Drawing.Color;
-using IntRect = Prowl.Vector.IntRect;
+using IntRect = Prowl.Vector.Geometry.IntRect;
 
 namespace SFMLExample
 {
@@ -208,12 +208,12 @@ void main()
             return TextureSFML.CreateNew(width, height);
         }
 
-        public Vector2Int GetTextureSize(object texture)
+        public Int2 GetTextureSize(object texture)
         {
             if (texture is not TextureSFML sfmlTexture)
                 throw new ArgumentException("Invalid texture type");
 
-            return new Vector2Int((int)sfmlTexture.Width, (int)sfmlTexture.Height);
+            return new Int2((int)sfmlTexture.Width, (int)sfmlTexture.Height);
         }
 
         public void SetTextureData(object texture, IntRect bounds, byte[] data)
@@ -234,15 +234,13 @@ void main()
             return new Vec4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
         }
 
-        private static Mat4 ToMat4(Matrix4x4 mat)
+        private static Mat4 ToMat4(Double4x4 mat)
         {
-            // Try transposing the matrix when converting
-            // This swaps the row-major and column-major formats
             return new Mat4(
-                (float)mat.M11, (float)mat.M21, (float)mat.M31, (float)mat.M41,
-                (float)mat.M12, (float)mat.M22, (float)mat.M32, (float)mat.M42,
-                (float)mat.M13, (float)mat.M23, (float)mat.M33, (float)mat.M43,
-                (float)mat.M14, (float)mat.M24, (float)mat.M34, (float)mat.M44
+                (float)mat[0, 0], (float)mat[0, 1], (float)mat[0, 2], (float)mat[0, 3],
+                (float)mat[1, 0], (float)mat[1, 1], (float)mat[1, 2], (float)mat[1, 3],
+                (float)mat[2, 0], (float)mat[2, 1], (float)mat[2, 2], (float)mat[2, 3],
+                (float)mat[3, 0], (float)mat[3, 1], (float)mat[3, 2], (float)mat[3, 3]
             );
         }
 
@@ -286,9 +284,9 @@ void main()
                     var vertex = canvas.Vertices[idx];
 
                     SFML.Graphics.Vertex sfmlVertex = new(
-                        new Vector2f((float)vertex.Position.x, (float)vertex.Position.y),
+                        new((float)vertex.Position.X, (float)vertex.Position.Y),
                         new SFML.Graphics.Color(vertex.Color.R, vertex.Color.G, vertex.Color.B, vertex.Color.A),
-                        new Vector2f((float)vertex.UV.x, (float)vertex.UV.y)
+                        new((float)vertex.UV.X, (float)vertex.UV.Y)
                     );
 
                     _vertexArray.Append(sfmlVertex);
@@ -307,7 +305,7 @@ void main()
                         _shader.SetUniform("scissorMat", scissorMat);
 
                         // Set the scissor extent
-                        _shader.SetUniform("scissorExt", new Vec2((float)extent.x, (float)extent.y));
+                        _shader.SetUniform("scissorExt", new Vec2((float)extent.X, (float)extent.Y));
 
                         // Set brush parameters
                         _shader.SetUniform("brushMat", ToMat4(drawCall.Brush.BrushMatrix));
@@ -315,8 +313,8 @@ void main()
                         _shader.SetUniform("brushColor1", ToVec4(drawCall.Brush.Color1));
                         _shader.SetUniform("brushColor2", ToVec4(drawCall.Brush.Color2));
                         _shader.SetUniform("brushParams", new Vec4(
-                            (float)drawCall.Brush.Point1.x, (float)drawCall.Brush.Point1.y,
-                            (float)drawCall.Brush.Point2.x, (float)drawCall.Brush.Point2.y));
+                            (float)drawCall.Brush.Point1.X, (float)drawCall.Brush.Point1.Y,
+                            (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y));
                         _shader.SetUniform("brushParams2", new Vec2(
                             (float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather));
                     }

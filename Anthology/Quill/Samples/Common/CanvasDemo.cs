@@ -2,7 +2,9 @@
 using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
+using Prowl.Vector.Spatial;
 using System.Drawing;
+using Color = Prowl.Vector.Color;
 
 namespace Common
 {
@@ -43,7 +45,7 @@ namespace Common
         /// <summary>
         /// Updates and renders a frame
         /// </summary>
-        public void RenderFrame(double deltaTime, Vector2 offset, double zoom, double rotate)
+        public void RenderFrame(double deltaTime, Double2 offset, double zoom, double rotate)
         {
             // Update time
             _time += deltaTime;
@@ -55,7 +57,7 @@ namespace Common
             _rotation += deltaTime * 30f; // 30 degrees per second
 
             _canvas.TransformBy(Transform2D.CreateTranslation(_width / 2, _height / 2));
-            _canvas.TransformBy(Transform2D.CreateRotate(rotate) * Transform2D.CreateTranslation(offset.x, offset.y) * Transform2D.CreateScale(zoom, zoom));
+            _canvas.TransformBy(Transform2D.CreateTranslation(offset.X, offset.Y) * Transform2D.CreateRotation(rotate) * Transform2D.CreateScale(zoom, zoom));
             _canvas.SetStrokeScale(zoom);
 
             //_canvas.SetTexture(_texture);
@@ -105,10 +107,10 @@ namespace Common
             double y = padding;
 
             // Background with semi-transparency
-            _canvas.RectFilled(x, y, overlayWidth, overlayHeight, Color.FromArgb(180, 0, 0, 0));
+            _canvas.RectFilled(x, y, overlayWidth, overlayHeight, Color32.FromArgb(180, 0, 0, 0));
 
             // Draw border
-            _canvas.SetStrokeColor(Color.FromArgb(255, 100, 100, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 100, 100));
             _canvas.SetStrokeWidth(1);
             _canvas.Rect(x, y, overlayWidth, overlayHeight);
             _canvas.Stroke();
@@ -118,7 +120,7 @@ namespace Common
             double frameTimeAvg = _frameTimeHistory.Count > 0 ? _frameTimeHistory.Average() : 0;
             string frameTimeText = $"Frame Time: {frameTimeAvg:F1} ms";
 
-            DrawText(fpsText, x + 10, y + 20, 14, Color.FromArgb(255, 100, 255, 100));
+            DrawText(fpsText, x + 10, y + 20, 14, Color32.FromArgb(255, 100, 255, 100));
             DrawText(frameTimeText, x + 10, y + 40, 12, Color.White);
 
             // Draw performance graph
@@ -128,7 +130,7 @@ namespace Common
             double graphHeight = 50;
 
             // Draw graph background
-            _canvas.RectFilled(graphX, graphY, graphWidth, graphHeight, Color.FromArgb(60, 255, 255, 255));
+            _canvas.RectFilled(graphX, graphY, graphWidth, graphHeight, Color32.FromArgb(60, 255, 255, 255));
 
             //// Draw FPS graph
             //if (_fpsHistory.Count > 1)
@@ -136,7 +138,7 @@ namespace Common
             //    // Find max value to scale the graph (with minimum range of 0-60 FPS)
             //    double maxFps = Math.Max(60, _fpsHistory.Max());
             //
-            //    _canvas.SetStrokeColor(Color.FromArgb(255, 100, 255, 100));
+            //    _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 255, 100));
             //    _canvas.SetStrokeWidth(1.5);
             //    _canvas.BeginPath();
             //
@@ -168,7 +170,7 @@ namespace Common
             //
             //    // Draw the target 60 FPS line
             //    double targetY = graphY + graphHeight - ((60 / maxFps) * graphHeight);
-            //    _canvas.SetStrokeColor(Color.FromArgb(100, 255, 100, 100));
+            //    _canvas.SetStrokeColor(Color32.FromArgb(100, 255, 100, 100));
             //    _canvas.SetStrokeWidth(1.0);
             //
             //    _canvas.BeginPath();
@@ -178,7 +180,7 @@ namespace Common
             //}
         }
 
-        private void DrawText(string text, double x, double y, double height, Color color)
+        private void DrawText(string text, double x, double y, double height, Color32 color)
         {
             VectorFont.DrawString(_canvas, text.ToUpper(), x, y, height, color, 2f);
         }
@@ -186,9 +188,9 @@ namespace Common
         private void DrawGroupBackground(double x, double y, double width, double height, string title)
         {
             // Background
-            _canvas.RectFilled(x, y, width, height, Color.FromArgb(255, 0, 0, 0));
+            _canvas.RectFilled(x, y, width, height, Color32.FromArgb(255, 0, 0, 0));
 
-            _canvas.SetStrokeColor(Color.FromArgb(255, 190, 190, 190));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 190, 190, 190));
             _canvas.SetStrokeWidth(4);
 
             // Border
@@ -238,7 +240,7 @@ namespace Common
         private void DrawCoordinateSystem(double x, double y, double size)
         {
             // X axis
-            _canvas.SetStrokeColor(Color.FromArgb(150, 255, 100, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(150, 255, 100, 100));
             _canvas.SetStrokeWidth(2);
             _canvas.BeginPath();
             _canvas.MoveTo(x - size, y);
@@ -251,11 +253,11 @@ namespace Common
             _canvas.LineTo(x + size - 10, y - 5);
             _canvas.LineTo(x + size - 10, y + 5);
             _canvas.LineTo(x + size, y);
-            _canvas.SetFillColor(Color.FromArgb(150, 255, 100, 100));
+            _canvas.SetFillColor(Color32.FromArgb(150, 255, 100, 100));
             _canvas.Fill();
 
             // Y axis
-            _canvas.SetStrokeColor(Color.FromArgb(150, 100, 255, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(150, 100, 255, 100));
             _canvas.BeginPath();
             _canvas.MoveTo(x, y + size);
             _canvas.LineTo(x, y - size);
@@ -267,11 +269,11 @@ namespace Common
             _canvas.LineTo(x - 5, y - size + 10);
             _canvas.LineTo(x + 5, y - size + 10);
             _canvas.LineTo(x, y - size);
-            _canvas.SetFillColor(Color.FromArgb(150, 100, 255, 100));
+            _canvas.SetFillColor(Color32.FromArgb(150, 100, 255, 100));
             _canvas.Fill();
 
             // Origin point
-            _canvas.CircleFilled(x, y, 4, Color.FromArgb(150, 255, 255, 255));
+            _canvas.CircleFilled(x, y, 4, Color32.FromArgb(150, 255, 255, 255));
         }
 
         private void DrawDemo2D()
@@ -280,7 +282,7 @@ namespace Common
             _canvas.SaveState();
 
             // Draw 2D grid for reference
-            DrawGrid(16, 17, 50, Color.FromArgb(40, 255, 255, 255));
+            DrawGrid(16, 17, 50, Color32.FromArgb(40, 255, 255, 255));
 
             // Draw coordinate system at center
             DrawCoordinateSystem(0, 0, 50);
@@ -348,8 +350,8 @@ namespace Common
             _canvas.LineTo(30, 30);
             _canvas.LineTo(0, 30);
             _canvas.ClosePath();
-            _canvas.SetStrokeColor(Color.FromArgb(255, 255, 100, 100));
-            _canvas.SetFillColor(Color.FromArgb(100, 255, 100, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 100, 100));
+            _canvas.SetFillColor(Color32.FromArgb(100, 255, 100, 100));
             _canvas.FillAndStroke();
 
             // Triangle using path
@@ -358,8 +360,8 @@ namespace Common
             _canvas.LineTo(80, 30);
             _canvas.LineTo(65, 0);
             _canvas.ClosePath();
-            _canvas.SetStrokeColor(Color.FromArgb(255, 100, 255, 100));
-            _canvas.SetFillColor(Color.FromArgb(100, 100, 255, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 255, 100));
+            _canvas.SetFillColor(Color32.FromArgb(100, 100, 255, 100));
             _canvas.FillAndStroke();
 
             // Demo 2: Line with Widths
@@ -371,7 +373,7 @@ namespace Common
                 _canvas.BeginPath();
                 _canvas.MoveTo(0 + (i * 10), 0);
                 _canvas.LineTo(10 + (i * 10), 50);
-                _canvas.SetStrokeColor(Color.FromArgb(255, 100, 100, 255));
+                _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 100, 255));
                 _canvas.Stroke();
             }
 
@@ -384,21 +386,21 @@ namespace Common
             // Arc
             _canvas.BeginPath();
             _canvas.Arc(20, 20, 20, 0, (double)Math.PI, false);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 100));
             _canvas.Stroke();
             
             // Bezier curve
             _canvas.BeginPath();
             _canvas.MoveTo(50, 30);
             _canvas.BezierCurveTo(60, 0, 80, 40, 90, 10);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 100, 200, 255));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 200, 255));
             _canvas.Stroke();
             
             // Quadratic curve
             _canvas.BeginPath();
             _canvas.MoveTo(110, 30);
             _canvas.QuadraticCurveTo(140, 0, 160, 30);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 200, 100, 255));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 200, 100, 255));
             _canvas.Stroke();
 
             _canvas.RestoreState();
@@ -414,8 +416,8 @@ namespace Common
 
             // Rotating square
             _canvas.SaveState();
-            _canvas.TransformBy(Transform2D.CreateRotate(_rotation));
-            _canvas.RectFilled(-30, -30, 60, 60, Color.FromArgb(200, 100, 200, 255));
+            _canvas.TransformBy(Transform2D.CreateRotation(_rotation));
+            _canvas.RectFilled(-30, -30, 60, 60, Color32.FromArgb(200, 100, 200, 255));
             _canvas.RestoreState();
 
             // Scaling rectangle
@@ -423,14 +425,14 @@ namespace Common
             _canvas.SaveState();
             _canvas.TransformBy(Transform2D.CreateTranslation(70, 0));
             _canvas.TransformBy(Transform2D.CreateScale(scale, scale));
-            _canvas.RectFilled(-20, -20, 40, 40, Color.FromArgb(200, 255, 150, 100));
+            _canvas.RectFilled(-20, -20, 40, 40, Color32.FromArgb(200, 255, 150, 100));
             _canvas.RestoreState();
 
             // Translating circle
             double offsetY = 20 * (double)Math.Sin(_time * 3);
             _canvas.SaveState();
             _canvas.TransformBy(Transform2D.CreateTranslation(-70, offsetY));
-            _canvas.CircleFilled(0, 0, 20, Color.FromArgb(200, 100, 255, 150));
+            _canvas.CircleFilled(0, 0, 20, Color32.FromArgb(200, 100, 255, 150));
             _canvas.RestoreState();
 
             _canvas.RestoreState();
@@ -445,21 +447,21 @@ namespace Common
             _canvas.TransformBy(Transform2D.CreateTranslation(x + 20, y + 30));
 
             // Rectangle
-            _canvas.RectFilled(0, 0, 40, 30, Color.FromArgb(200, 255, 100, 100));
+            _canvas.RectFilled(0, 0, 40, 30, Color32.FromArgb(200, 255, 100, 100));
 
             // Circle
-            _canvas.CircleFilled(80, 15, 15, Color.FromArgb(200, 100, 255, 100));
+            _canvas.CircleFilled(80, 15, 15, Color32.FromArgb(200, 100, 255, 100));
 
             // Pie (animated)
             double startAngle = 0;
             double endAngle = (double)(Math.PI * (1 + Math.Sin(_time)) / 2); // Animate between 0 and PI
-            _canvas.PieFilled(140, 15, 15, startAngle, endAngle, Color.FromArgb(200, 100, 150, 255));
+            _canvas.PieFilled(140, 15, 15, startAngle, endAngle, Color32.FromArgb(200, 100, 150, 255));
 
             // Animated star shape
-            DrawStar(40, 80, 25, 10, 5, _time, Color.FromArgb(255, 255, 200, 100));
+            DrawStar(40, 80, 25, 10, 5, _time, Color32.FromArgb(255, 255, 200, 100));
 
             // Rounded rectangle
-            DrawRoundedRect(100, 60, 60, 40, 10, Color.FromArgb(200, 200, 100, 255));
+            DrawRoundedRect(100, 60, 60, 40, 10, Color32.FromArgb(200, 200, 100, 255));
 
             _canvas.RestoreState();
         }
@@ -472,7 +474,7 @@ namespace Common
             _canvas.SaveState();
             _canvas.TransformBy(Transform2D.CreateTranslation(x + 20, y + 70));
 
-            _canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 255));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
 
             // Thin line
             double[] widths = [0.25f, 1.0f, 3.0f, 4.0f];
@@ -490,24 +492,24 @@ namespace Common
             _canvas.BeginPath();
             _canvas.MoveTo(0, 20 + 5);
             _canvas.LineTo(160, 20 - 5);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 255, 100, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 100, 100));
             _canvas.Stroke();
 
             // Dashed line
-            _canvas.SetStrokeColor(Color.FromArgb(255, 100, 255, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 255, 100));
             _canvas.SetStrokeWidth(4);
 
             _canvas.BeginPath();
             _canvas.MoveTo(0, 40 + 5);
             _canvas.LineTo(160, 40 - 5);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 255, 100, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 100, 100));
             _canvas.SetStrokeDash(new List<double>() { 10, 5, 2, 2 }, 0);
             _canvas.Stroke();
 
             _canvas.BeginPath();
             _canvas.MoveTo(0, 60 + 5);
             _canvas.LineTo(160, 60 - 5);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 100, 100, 255));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 100, 255));
             _canvas.SetStrokeDash(new List<double>() { 5, 5 }, 0);
             _canvas.Stroke();
 
@@ -535,30 +537,30 @@ namespace Common
             double cameraX = (double)Math.Sin(_time * 0.2) * 8;
             double cameraZ = (double)Math.Cos(_time * 0.2) * 8;
             _canvas3D.SetLookAt(
-                new Vector3(cameraX, 5, cameraZ),  // Orbiting camera
-                Vector3.zero,                      // Look at origin
-                Vector3.up                      // Up direction
+                new Double3(cameraX, 5, cameraZ),  // Orbiting camera
+                Double3.Zero,                      // Look at origin
+                Double3.UnitY                         // Up direction
             );
 
             // Draw 3D grid for reference
-            Draw3DGrid(3, 0.5f, Color.FromArgb(30, 255, 255, 255));
+            Draw3DGrid(3, 0.5f, Color32.FromArgb(30, 255, 255, 255));
 
             // Draw coordinate axes
             Draw3DCoordinateAxes(1.0f);
 
             // 1. Draw rotating cube
-            Quaternion cubeRotation = Quaternion.CreateFromYawPitchRoll(
+            Quaternion cubeRotation = Quaternion.FromEuler(
                 _time * 0.5f, _time * 0.3f, 0);
-            _canvas3D.SetWorldTransform(new Vector3(-2, 2, 0), cubeRotation, Vector3.one * 0.5);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 220, 100, 100));
-            _canvas3D.DrawCubeStroked(Vector3.zero, 2.0f);
+            _canvas3D.SetWorldTransform(new Double3(-2, 2, 0), cubeRotation, Double3.One * 0.5);
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 220, 100, 100));
+            _canvas3D.DrawCubeStroked(Double3.Zero, 2.0f);
 
             // 2. Draw rotating sphere
-            Quaternion sphereRotation = Quaternion.CreateFromYawPitchRoll(
+            Quaternion sphereRotation = Quaternion.FromEuler(
                 _time * 0.2f, _time * 0.4f, 0);
-            _canvas3D.SetWorldTransform(new Vector3(2, 2, 0), sphereRotation, Vector3.one * 0.5);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 100, 220, 100));
-            _canvas3D.DrawSphereStroked(Vector3.zero, 1.5f, 10);
+            _canvas3D.SetWorldTransform(new Double3(2, 2, 0), sphereRotation, Double3.One * 0.5);
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 220, 100));
+            _canvas3D.DrawSphereStroked(Double3.Zero, 1.5f, 10);
 
             // Restore the canvas state
             _canvas.RestoreState();
@@ -573,7 +575,7 @@ namespace Common
             _canvas.TransformBy(Transform2D.CreateTranslation(x + 20, y + 40));
 
             // Set stroke color
-            _canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 255));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
 
             // Draw heartbeat lines with different join styles
             void DrawHeartbeat(JointStyle join, double yOffset, Color color)
@@ -627,9 +629,9 @@ namespace Common
             _canvas.SetMiterLimit(100);
 
             // Draw three heartbeat lines with different join styles
-            DrawHeartbeat(JointStyle.Bevel, 0, Color.FromArgb(255, 255, 100, 100));
-            DrawHeartbeat(JointStyle.Round, 40, Color.FromArgb(255, 100, 255, 100));
-            DrawHeartbeat(JointStyle.Miter, 80, Color.FromArgb(255, 100, 100, 255));
+            DrawHeartbeat(JointStyle.Bevel, 0, Color32.FromArgb(255, 255, 100, 100));
+            DrawHeartbeat(JointStyle.Round, 40, Color32.FromArgb(255, 100, 255, 100));
+            DrawHeartbeat(JointStyle.Miter, 80, Color32.FromArgb(255, 100, 100, 255));
 
             // Restore the canvas state
             _canvas.RestoreState();
@@ -673,15 +675,15 @@ namespace Common
             }
 
             // Show all five cap styles with matching start/end caps
-            DrawCapLine(EndCapStyle.Butt, EndCapStyle.Butt, 0, Color.FromArgb(255, 255, 100, 100));
-            DrawCapLine(EndCapStyle.Square, EndCapStyle.Square, spacing, Color.FromArgb(255, 255, 180, 100));
-            DrawCapLine(EndCapStyle.Round, EndCapStyle.Round, spacing * 2, Color.FromArgb(255, 100, 255, 100));
-            DrawCapLine(EndCapStyle.Bevel, EndCapStyle.Bevel, spacing * 3, Color.FromArgb(255, 100, 180, 255));
-            //DrawCapLine(EndCapStyle.TriangleOut, EndCapStyle.TriangleOut, spacing * 4, Color.FromArgb(255, 200, 100, 255));
+            DrawCapLine(EndCapStyle.Butt, EndCapStyle.Butt, 0, Color32.FromArgb(255, 255, 100, 100));
+            DrawCapLine(EndCapStyle.Square, EndCapStyle.Square, spacing, Color32.FromArgb(255, 255, 180, 100));
+            DrawCapLine(EndCapStyle.Round, EndCapStyle.Round, spacing * 2, Color32.FromArgb(255, 100, 255, 100));
+            DrawCapLine(EndCapStyle.Bevel, EndCapStyle.Bevel, spacing * 3, Color32.FromArgb(255, 100, 180, 255));
+            //DrawCapLine(EndCapStyle.TriangleOut, EndCapStyle.TriangleOut, spacing * 4, Color32.FromArgb(255, 200, 100, 255));
 
             // Demonstrate mixing different start and end caps
             double mixedY = spacing * 4;
-            DrawCapLine(EndCapStyle.Round, EndCapStyle.Bevel, mixedY, Color.FromArgb(255, 255, 255, 150));
+            DrawCapLine(EndCapStyle.Round, EndCapStyle.Bevel, mixedY, Color32.FromArgb(255, 255, 255, 150));
 
             _canvas.RestoreState();
         }
@@ -702,17 +704,22 @@ namespace Common
             double scissorHeight = 60 + (Math.Cos(_time * 0.5) * 15);
 
             // Set scissor and visualize the scissor area
-            _canvas.TransformBy(Transform2D.CreateRotate(_time * 15.0f, new(80, 40)));
+            var origin = new Float2(80, 40);
+            _canvas.TransformBy(
+                Transform2D.CreateTranslation(origin.X, origin.Y)
+                * Transform2D.CreateRotation(_time * 15.0f)
+                * Transform2D.CreateTranslation(-origin.X, -origin.Y)
+            );
             _canvas.IntersectScissor(scissorX, scissorY, scissorWidth, scissorHeight);
 
             // Draw a red rectangle to show the scissor area
-            _canvas.SetStrokeColor(Color.FromArgb(255, 255, 100, 100));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 100, 100));
             _canvas.SetStrokeWidth(2);
             _canvas.Rect(scissorX, scissorY, scissorWidth, scissorHeight);
             _canvas.Stroke();
 
             // Draw content that will be scissored
-            _canvas.RectFilled(20, 10, 120, 80, Color.FromArgb(200, 255, 200, 100));
+            _canvas.RectFilled(20, 10, 120, 80, Color32.FromArgb(200, 255, 200, 100));
 
             // Draw some circles that will be scissored
             for (int i = 0; i < 5; i++)
@@ -721,7 +728,7 @@ namespace Common
                 double circleX = 80 + Math.Cos(_time * (1 + i * 0.2)) * 40;
                 double circleY = 40 + Math.Sin(_time * (1 + i * 0.2)) * 30;
                 _canvas.CircleFilled(circleX, circleY, radius,
-                    Color.FromArgb(150, 50 + i * 40, 100, 200 - i * 30));
+                    Color32.FromArgb(150, 50 + i * 40, 100, 200 - i * 30));
             }
 
             // Reset scissor
@@ -758,7 +765,7 @@ namespace Common
                 // 3. Rotated image
                 _canvas.SaveState();
                 _canvas.TransformBy(Transform2D.CreateTranslation(30, 60));
-                _canvas.TransformBy(Transform2D.CreateRotate(45));
+                _canvas.TransformBy(Transform2D.CreateRotation(45));
                 _canvas.Image(_texture, -10, 0, 50, 50, Color.White);
                 _canvas.RestoreState();
 
@@ -770,7 +777,7 @@ namespace Common
                 double r = 0.5f + 0.5f * Math.Sin(_time);
                 double g = 0.5f + 0.5f * Math.Sin(_time + Math.PI * 2 / 3);
                 double b = 0.5f + 0.5f * Math.Sin(_time + Math.PI * 4 / 3);
-                _canvas.Image(_texture, 0, 0, 60, 40, Color.FromArgb(200,
+                _canvas.Image(_texture, 0, 0, 60, 40, Color32.FromArgb(200,
                     (int)(r * 255), (int)(g * 255), (int)(b * 255)));
 
                 _canvas.RestoreState();
@@ -782,7 +789,7 @@ namespace Common
             {
 
                 // Draw "No Image" text
-                DrawText("No Image Available", 30, 45, 14, Color.FromArgb(255, 255, 255, 255));
+                DrawText("No Image Available", 30, 45, 14, Color32.FromArgb(255, 255, 255, 255));
             }
 
             _canvas.RestoreState();
@@ -804,16 +811,16 @@ namespace Common
             // 1
             // Horizontal linear gradient
             _canvas.SetLinearBrush(0, 0, boxSize, 0,
-                Color.FromArgb(255, 255, 100, 100),
-                Color.FromArgb((int)(255 * animatedFactor), 100, 100, 255));
+                Color32.FromArgb(255, 255, 100, 100),
+                Color32.FromArgb((int)(255 * animatedFactor), 100, 100, 255));
             _canvas.RectFilled(0, 0, boxSize, boxSize, Color.White);
 
             // Diagonal linear gradient with animation
             _canvas.SetLinearBrush(
                 0, boxSize + spacing * 2,
                 boxSize, boxSize * 2 + spacing * 5 * animatedFactor,
-                Color.FromArgb(255, 255, 100, 255),
-                Color.FromArgb(255, 100, 255, 255));
+                Color32.FromArgb(255, 255, 100, 255),
+                Color32.FromArgb(255, 100, 255, 255));
             _canvas.RectFilled(0, boxSize + spacing, boxSize, boxSize, Color.White);
 
             // 2
@@ -823,8 +830,8 @@ namespace Common
             _canvas.SetLinearBrush(
                 col2X, 0,
                 col2X + boxSize, boxSize,
-                Color.FromArgb(255, 255, 100, 100),
-                Color.FromArgb(255, 100, 100, 255));
+                Color32.FromArgb(255, 255, 100, 100),
+                Color32.FromArgb(255, 100, 100, 255));
             _canvas.CircleFilled(col2X + boxSize / 2, boxSize / 2, boxSize / 2, Color.White);
 
             // Radial gradient with animation
@@ -833,7 +840,7 @@ namespace Common
                 13,
                 30,
                 Color.PowderBlue,
-                Color.RebeccaPurple);
+                Color.MediumPurple);
             _canvas.CircleFilled(col2X + boxSize / 2, boxSize / 2 + boxSize + spacing, boxSize / 2, Color.White);
 
 
@@ -854,8 +861,8 @@ namespace Common
                 col3X + boxSize / 2, boxSize / 2 + boxSize + spacing,
                 boxSize * 0.7, boxSize * 0.7,
                 5, 10,
-                Color.FromArgb(255, 255, 255, 100),
-                Color.FromArgb(255, 50, 128, 50));
+                Color32.FromArgb(255, 255, 255, 100),
+                Color32.FromArgb(255, 50, 128, 50));
 
             // Use path-based drawing to show gradient with a rounded rect
             _canvas.RoundedRectFilled(
@@ -896,8 +903,8 @@ namespace Common
                 _canvas.ClosePath();
 
                 // Set fill color and stroke
-                _canvas.SetFillColor(Color.FromArgb(255, 100, 200, 255));
-                _canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 255));
+                _canvas.SetFillColor(Color32.FromArgb(255, 100, 200, 255));
+                _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
                 _canvas.SetStrokeWidth(1.5);
 
                 // Fill and stroke
@@ -922,8 +929,8 @@ namespace Common
                 _canvas.ClosePath();
 
                 // Set fill color and stroke
-                _canvas.SetFillColor(Color.FromArgb(255, 255, 150, 100));
-                _canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 255));
+                _canvas.SetFillColor(Color32.FromArgb(255, 255, 150, 100));
+                _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
                 _canvas.SetStrokeWidth(1.5);
 
                 // Fill complex shape (with hole)
@@ -989,8 +996,8 @@ namespace Common
                 _canvas.ClosePath();
 
                 // Set fill color and stroke
-                _canvas.SetFillColor(Color.FromArgb(255, 150, 255, 150));
-                _canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 255));
+                _canvas.SetFillColor(Color32.FromArgb(255, 150, 255, 150));
+                _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
                 _canvas.SetStrokeWidth(1.5);
             
                 // Fill complex shape
@@ -1043,7 +1050,7 @@ namespace Common
                 AddHole(140, 94, 8);
 
                 // Set fill and stroke
-                _canvas.SetFillColor(Color.FromArgb(255, 255, 200, 100));
+                _canvas.SetFillColor(Color32.FromArgb(255, 255, 200, 100));
                 _canvas.SetStrokeColor(Color.White);
                 _canvas.SetStrokeWidth(1.5);
             
@@ -1068,18 +1075,18 @@ namespace Common
             _canvas.DrawText("Normal", 0, 0, Color.White, 32, _fontA);
 
             // Text with different fonts
-            _canvas.DrawText("Small", 0, 53, Color.FromArgb(255, 200, 200, 200), 16, _fontA);
-            _canvas.DrawText("Multiple", 0, 70, Color.FromArgb(255, 200, 255, 200), 32, _fontB);
+            _canvas.DrawText("Small", 0, 53, Color32.FromArgb(255, 200, 200, 200), 16, _fontA);
+            _canvas.DrawText("Multiple", 0, 70, Color32.FromArgb(255, 200, 255, 200), 32, _fontB);
 
             // Different transformations
 
             // 1. Rotation
             _canvas.SaveState();
             double angle = Math.Sin(_time) * 30; // Convert to radians, oscillate ±30°
-            Vector2 center = new Vector2(150, 20);
-            _canvas.TransformBy(Transform2D.CreateTranslation(center.x, center.y));
-            _canvas.TransformBy(Transform2D.CreateRotate(angle));
-            _canvas.DrawText("Rotate", 0, 0, Color.FromArgb(255, 255, 150, 150), 32, _fontA, origin: new Vector2(0.5f, 0.5f));
+            Double2 center = new Double2(150, 20);
+            _canvas.TransformBy(Transform2D.CreateTranslation(center.X, center.Y));
+            _canvas.TransformBy(Transform2D.CreateRotation(angle));
+            _canvas.DrawText("Rotate", 0, 0, Color32.FromArgb(255, 255, 150, 150), 32, _fontA, origin: new Double2(0.5f, 0.5f));
             _canvas.RestoreState();
 
             // 2. Scaling
@@ -1087,12 +1094,12 @@ namespace Common
             double scale = 0.3 + 0.2 * Math.Sin(_time * 1.5);
             _canvas.TransformBy(Transform2D.CreateTranslation(40, 55));
             _canvas.TransformBy(Transform2D.CreateScale(scale, scale));
-            _canvas.DrawText("Scaling", 0, 0, Color.FromArgb(255, 150, 255, 150), 32, _fontA);
+            _canvas.DrawText("Scaling", 0, 0, Color32.FromArgb(255, 150, 255, 150), 32, _fontA);
             _canvas.RestoreState();
 
             // 3. Character spacing
             double spacing = Math.Sin(_time * 2) * 1.0;
-            _canvas.DrawText("Spacing", 90, 45, Color.FromArgb(255, 150, 150, 255), 32, _fontA, (float)spacing);
+            _canvas.DrawText("Spacing", 90, 45, Color32.FromArgb(255, 150, 150, 255), 32, _fontA, (float)spacing);
 
             // 4. Path text (text following a curve)
             _canvas.SaveState();
@@ -1101,7 +1108,7 @@ namespace Common
             double radius = 30;
 
             // First, visualize the path for reference
-            _canvas.SetStrokeColor(Color.FromArgb(40, 255, 255, 255));
+            _canvas.SetStrokeColor(Color32.FromArgb(40, 255, 255, 255));
             _canvas.SetStrokeWidth(1);
             _canvas.BeginPath();
             _canvas.Arc(centerX, centerY, radius, 0, Math.PI * 2, false);
@@ -1126,7 +1133,7 @@ namespace Common
                 byte b = (byte)(128 + 127 * Math.Sin(charAngle + 4 * Math.PI / 3));
 
                 // Draw the character
-                _canvas.DrawText(circularText[i].ToString(), 0, 0, Color.FromArgb(255, r, g, b), 16, _fontA, origin: new Vector2(0.5f, 0.5f));
+                _canvas.DrawText(circularText[i].ToString(), 0, 0, Color32.FromArgb(255, r, g, b), 16, _fontA, origin: new Double2(0.5f, 0.5f));
 
                 _canvas.RestoreState();
             }
@@ -1140,7 +1147,7 @@ namespace Common
 
         private void Draw3DGrid(double size, double spacing, Color color)
         {
-            _canvas3D.SetWorldTransform(Vector3.zero, Quaternion.identity, Vector3.one);
+            _canvas3D.SetWorldTransform(Double3.Zero, Quaternion.Identity, Double3.One);
 
             int lineCount = (int)(size / spacing) * 2 + 1;
             double start = -size;
@@ -1168,7 +1175,7 @@ namespace Common
 
         private void Draw3DCoordinateAxes(double length)
         {
-            _canvas3D.SetWorldTransform(Vector3.zero, Quaternion.identity, Vector3.one);
+            _canvas3D.SetWorldTransform(Double3.Zero, Quaternion.Identity, Double3.One);
 
             _canvas.SetStrokeWidth(2.0f);
 
@@ -1176,21 +1183,21 @@ namespace Common
             _canvas3D.BeginPath();
             _canvas3D.MoveTo(0, 0, 0);
             _canvas3D.LineTo(length, 0, 0);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 255, 0, 0));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 0, 0));
             _canvas3D.Stroke();
 
             // Y axis (green)
             _canvas3D.BeginPath();
             _canvas3D.MoveTo(0, 0, 0);
             _canvas3D.LineTo(0, length, 0);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 0, 255, 0));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 0, 255, 0));
             _canvas3D.Stroke();
 
             // Z axis (blue)
             _canvas3D.BeginPath();
             _canvas3D.MoveTo(0, 0, 0);
             _canvas3D.LineTo(0, 0, length);
-            _canvas.SetStrokeColor(Color.FromArgb(255, 0, 0, 255));
+            _canvas.SetStrokeColor(Color32.FromArgb(255, 0, 0, 255));
             _canvas3D.Stroke();
         }
 

@@ -10,7 +10,7 @@ namespace RaylibExample
 {
     public class Program
     {
-        static Vector2 offset = Vector2.zero;
+        static Double2 offset = Double2.Zero;
         static float zoom = 1.0f;
         static float rotation = 0.0f;
 
@@ -60,7 +60,7 @@ namespace RaylibExample
 
                 // Draw Canvas
                 BeginDrawing();
-                ClearBackground(Color.Black);
+                ClearBackground(Raylib_cs.Color.Black);
 
                 canvas.Render();
 
@@ -72,14 +72,14 @@ namespace RaylibExample
             CloseWindow();
         }
 
-        private static void HandleDemoInput(ref Vector2 offset, ref float zoom, ref float rotation, ref int currentDemoIndex, int demoCount)
+        private static void HandleDemoInput(ref Double2 offset, ref float zoom, ref float rotation, ref int currentDemoIndex, int demoCount)
         {
             // Handle input
             if (IsMouseButtonDown(MouseButton.Left))
             {
-                System.Numerics.Vector2 delta = GetMouseDelta();
-                offset.x += delta.X * (1.0f / zoom);
-                offset.y += delta.Y * (1.0f / zoom);
+                Double2 delta = (Float2)GetMouseDelta();
+                offset.X += delta.X * (1.0f / zoom);
+                offset.Y += delta.Y * (1.0f / zoom);
             }
 
             if (GetMouseWheelMove() != 0)

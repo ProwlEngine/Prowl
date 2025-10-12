@@ -3,10 +3,11 @@ using Common;
 using Prowl.Quill;
 using Prowl.Scribe;
 using Prowl.Scribe.Internal;
+using Prowl.Vector;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
-using Vector2 = Prowl.Vector.Vector2;
+using Double2 = Prowl.Vector.Double2;
 
 namespace SilkExample
 {
@@ -22,7 +23,7 @@ namespace SilkExample
         private SilkNetRenderer _renderer;
 
         // View properties
-        private Vector2 _viewOffset = Vector2.zero;
+        private Double2 _viewOffset = Double2.Zero;
         private double _zoom = 1.0;
         private double _rotation = 0.0;
 
@@ -34,7 +35,7 @@ namespace SilkExample
         
         // Input tracking
         private bool _isDragging = false;
-        private System.Numerics.Vector2 _lastMousePos;
+        private Int2 _lastMousePos;
 
         public SilkWindow(WindowOptions options)
         {
@@ -100,7 +101,7 @@ namespace SilkExample
             mouse.MouseDown += (_, button) => {
                 if (button == MouseButton.Left) {
                     _isDragging = true;
-                    _lastMousePos = mouse.Position;
+                    _lastMousePos = new Int2((int)mouse.Position.X, (int)mouse.Position.Y);
                 }
             };
             
@@ -110,10 +111,10 @@ namespace SilkExample
             
             mouse.MouseMove += (_, position) => {
                 if (_isDragging) {
-                    var delta = position - _lastMousePos;
-                    _viewOffset.x += delta.X * (1.0 / _zoom);
-                    _viewOffset.y += delta.Y * (1.0 / _zoom);
-                    _lastMousePos = position;
+                    var delta = new Int2((int)position.X, (int)position.Y) - _lastMousePos;
+                    _viewOffset.X += delta.X * (1.0 / _zoom);
+                    _viewOffset.Y += delta.Y * (1.0 / _zoom);
+                    _lastMousePos = new Int2((int)position.X, (int)position.Y);
                 }
             };
             

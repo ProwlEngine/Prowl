@@ -67,7 +67,7 @@ namespace Common
         /// <param name="color">Color of the text</param>
         /// <param name="lineWidth">Width of the strokes</param>
         /// <param name="spacing">Spacing between characters (0-1)</param>
-        public static void DrawString(Canvas canvas, string text, double x, double y, double height, Color color, double lineWidth = 1.0f, double spacing = 0.3f)
+        public static void DrawString(Canvas canvas, string text, double x, double y, double height, Color32 color, double lineWidth = 1.0f, double spacing = 0.3f)
         {
             if (string.IsNullOrEmpty(text))
                 return;
@@ -96,7 +96,7 @@ namespace Common
         /// <summary>
         /// Draws a string using vector lines with the text centered at the given position
         /// </summary>
-        public static void DrawStringCentered(Canvas canvas, string text, double x, double y, double height, Color color, double lineWidth = 1.0f, double spacing = 0.2f)
+        public static void DrawStringCentered(Canvas canvas, string text, double x, double y, double height, Color32 color, double lineWidth = 1.0f, double spacing = 0.2f)
         {
             if (string.IsNullOrEmpty(text))
                 return;

@@ -7,6 +7,7 @@ using System.Text;
 using System.Drawing;
 using Prowl.Vector;
 using System.Globalization;
+using Color = Prowl.Vector.Color;
 
 namespace Prowl.Quill
 {
@@ -18,8 +19,8 @@ namespace Prowl.Quill
         public List<SvgElement> Children { get; }
         public DrawCommand[] drawCommands;
 
-        public Color stroke;
-        public Color fill;
+        public Color32 stroke;
+        public Color32 fill;
         public ColorType strokeType;
         public ColorType fillType;
         public double strokeWidth;
@@ -89,17 +90,17 @@ namespace Prowl.Quill
             return 0;
         }
 
-        Color ParseColor(string key)
+        Color32 ParseColor(string key)
         {
-            var color = Color.Transparent;
+            var color = (Color32)Color.Transparent;
             var attribute = "white";
             if (Attributes.ContainsKey(key))
                 attribute = Attributes[key];
 
             if (attribute.Equals("none", StringComparison.OrdinalIgnoreCase))
-                color = Color.Transparent;
+                color = (Color32)Color.Transparent;
             else if (attribute.Equals("currentColor", StringComparison.OrdinalIgnoreCase))
-                color = Color.Transparent; // Placeholder: currentColor requires context (e.g., inherited color)
+                color = (Color32)Color.Transparent; // Placeholder: currentColor requires context (e.g., inherited color)
             else
                 color = ColorParser.Parse(attribute);
 
@@ -129,19 +130,19 @@ namespace Prowl.Quill
 
     public class SvgRectElement : SvgElement
     {
-        public Vector2 pos;
-        public Vector2 size;
-        public Vector2 radius;
+        public Double2 pos;
+        public Double2 size;
+        public Double2 radius;
 
         public override void Parse()
         {
             base.Parse();
-            pos.x = ParseDouble("x");
-            pos.y = ParseDouble("y");
-            size.x = ParseDouble("width");
-            size.y = ParseDouble("height");
-            radius.x = ParseDouble("rx");
-            radius.y = ParseDouble("ry");
+            pos.X = ParseDouble("x");
+            pos.Y = ParseDouble("y");
+            size.X = ParseDouble("width");
+            size.Y = ParseDouble("height");
+            radius.X = ParseDouble("rx");
+            radius.Y = ParseDouble("ry");
         }
     }
 
@@ -188,7 +189,7 @@ namespace Prowl.Quill
 
     public class SvgPolylineElement : SvgElement
     {
-        public Vector2[] points = Array.Empty<Vector2>();
+        public Double2[] points = Array.Empty<Double2>();
 
         public override void Parse()
         {
@@ -197,15 +198,15 @@ namespace Prowl.Quill
                 points = ParsePoints(pts);
         }
 
-        internal static Vector2[] ParsePoints(string pts)
+        internal static Double2[] ParsePoints(string pts)
         {
             var matches = Regex.Matches(pts, @"-?\d*\.?\d+");
-            var list = new List<Vector2>();
+            var list = new List<Double2>();
             for (int i = 0; i + 1 < matches.Count; i += 2)
             {
                 var x = double.Parse(matches[i].Value, CultureInfo.InvariantCulture);
                 var y = double.Parse(matches[i + 1].Value, CultureInfo.InvariantCulture);
-                list.Add(new Vector2(x, y));
+                list.Add(new Double2(x, y));
             }
             return list.ToArray();
         }
@@ -213,7 +214,7 @@ namespace Prowl.Quill
 
     public class SvgPolygonElement : SvgElement
     {
-        public Vector2[] points = Array.Empty<Vector2>();
+        public Double2[] points = Array.Empty<Double2>();
 
         public override void Parse()
         {

@@ -2,6 +2,8 @@
 using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
+using Prowl.Vector.Spatial;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -30,21 +32,21 @@ namespace Prowl.Quill
         public object Texture;
         public Brush Brush;
         internal Transform2D scissor;
-        internal Vector2 scissorExtent;
+        internal Double2 scissorExtent;
 
-        public void GetScissor(out Matrix4x4 matrix, out Vector2 extent)
+        public void GetScissor(out Double4x4 matrix, out Double2 extent)
         {
-            if (scissorExtent.x < -0.5f || scissorExtent.y < -0.5f)
+            if (scissorExtent.X < -0.5f || scissorExtent.Y < -0.5f)
             {
                 // Invalid scissor - disable it
-                matrix = new Matrix4x4();
-                extent = new Vector2(1, 1);
+                matrix = new Double4x4();
+                extent = new Double2(1, 1);
             }
             else
             {
                 // Set up scissor transform and dimensions
-                matrix = scissor.Inverse().ToMatrix4x4();
-                extent = new Vector2(scissorExtent.x, scissorExtent.y);
+                matrix = scissor.Inverse().ToMatrix();
+                extent = new Double2(scissorExtent.X, scissorExtent.Y);
             }
         }
     }
@@ -54,9 +56,9 @@ namespace Prowl.Quill
     {
         public static int SizeInBytes => Marshal.SizeOf<Vertex>();
 
-        public Vector2 Position => new Vector2(x, y);
-        public Vector2 UV => new Vector2(u, v);
-        public Color Color => Color.FromArgb(a, r, g, b);
+        public Double2 Position => new Double2(x, y);
+        public Double2 UV => new Double2(u, v);
+        public Color32 Color => Color32.FromArgb(a, r, g, b);
 
 
         public float x;
@@ -70,12 +72,12 @@ namespace Prowl.Quill
         public byte b;
         public byte a;
 
-        public Vertex(in Vector2 position, in Vector2 UV, in Color color)
+        public Vertex(in Double2 position, in Double2 UV, in Color32 color)
         {
-            x = (float)position.x;
-            y = (float)position.y;
-            u = (float)UV.x;
-            v = (float)UV.y;
+            x = (float)position.X;
+            y = (float)position.Y;
+            u = (float)UV.X;
+            v = (float)UV.Y;
             r = color.R;
             g = color.G;
             b = color.B;
@@ -85,15 +87,15 @@ namespace Prowl.Quill
 
     public struct Brush
     {
-        public Matrix4x4 BrushMatrix => Transform.Inverse().ToMatrix4x4();
+        public Double4x4 BrushMatrix => Transform.Inverse().ToMatrix();
 
         public Transform2D Transform;
 
         public BrushType Type;
-        public Color Color1;
-        public Color Color2;
-        public Vector2 Point1;
-        public Vector2 Point2; // or radius for radial, half-size for box
+        public Color32 Color1;
+        public Color32 Color2;
+        public Double2 Point1;
+        public Double2 Point2; // or radius for radial, half-size for box
         public double CornerRadii;
         public double Feather;
 
@@ -114,7 +116,7 @@ namespace Prowl.Quill
     {
         internal Transform2D transform;
 
-        internal Color strokeColor;
+        internal Color32 strokeColor;
         internal JointStyle strokeJoint;
         internal EndCapStyle strokeStartCap;
         internal EndCapStyle strokeEndCap;
@@ -128,17 +130,17 @@ namespace Prowl.Quill
 
         internal object? texture;
         internal Transform2D scissor;
-        internal Vector2 scissorExtent;
+        internal Double2 scissorExtent;
         internal Brush brush;
 
 
-        internal Color fillColor;
+        internal Color32 fillColor;
         internal WindingMode fillMode;
 
         internal void Reset()
         {
             transform = Transform2D.Identity;
-            strokeColor = Color.FromArgb(255, 0, 0, 0); // Default stroke color (black)
+            strokeColor = Color32.FromArgb(255, 0, 0, 0); // Default stroke color (black)
             strokeJoint = JointStyle.Bevel; // Default joint style
             strokeStartCap = EndCapStyle.Butt; // Default start cap style
             strokeEndCap = EndCapStyle.Butt; // Default end cap style
@@ -150,12 +152,12 @@ namespace Prowl.Quill
             tess_tol = 0.5; // Default tessellation tolerance
             roundingMinDistance = 3; //Default _state.roundingMinDistance
             texture = null;
-            scissor.Zero();
-            scissorExtent.x = -1.0f;
-            scissorExtent.y = -1.0f;
+            scissor = Transform2D.Identity;
+            scissorExtent.X = -1.0f;
+            scissorExtent.Y = -1.0f;
             brush = new Brush();
             brush.Transform = Transform2D.Identity;
-            fillColor = Color.FromArgb(255, 0, 0, 0); // Default fill color (black)
+            fillColor = Color32.FromArgb(255, 0, 0, 0); // Default fill color (black)
             fillMode = WindingMode.OddEven; // Default winding mode
         }
     }
@@ -164,10 +166,10 @@ namespace Prowl.Quill
     {
         internal class SubPath
         {
-            internal List<Vector2> Points { get; }
+            internal List<Double2> Points { get; }
             internal bool IsClosed { get; }
 
-            public SubPath(List<Vector2> points, bool isClosed)
+            public SubPath(List<Double2> points, bool isClosed)
             {
                 Points = points;
                 IsClosed = isClosed;
@@ -177,9 +179,9 @@ namespace Prowl.Quill
         public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.AsReadOnly();
         public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
         public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
-        public Vector2 CurrentPoint => _currentSubPath != null && _currentSubPath.Points.Count > 0 ? CurrentPointInternal : Vector2.zero;
+        public Double2 CurrentPoint => _currentSubPath != null && _currentSubPath.Points.Count > 0 ? CurrentPointInternal : Double2.Zero;
 
-        internal Vector2 CurrentPointInternal => _currentSubPath.Points[_currentSubPath.Points.Count - 1];
+        internal Double2 CurrentPointInternal => _currentSubPath.Points[_currentSubPath.Points.Count - 1];
         internal ICanvasRenderer _renderer;
 
         internal bool _isNewDrawCallRequested = false;
@@ -299,7 +301,7 @@ namespace Prowl.Quill
         public void RestoreState() => _state = _savedStates.Pop();
         public void ResetState() => _state.Reset();
 
-        public void SetStrokeColor(Color color) => _state.strokeColor = color;
+        public void SetStrokeColor(Color32 color) => _state.strokeColor = color;
         public void SetStrokeJoint(JointStyle joint) => _state.strokeJoint = joint;
         public void SetStrokeCap(EndCapStyle cap)
         {
@@ -347,15 +349,15 @@ namespace Prowl.Quill
         public void SetTessellationTolerance(double tolerance = 0.5) => _state.tess_tol = tolerance;
         public void SetRoundingMinDistance(double distance = 3) => _state.roundingMinDistance = distance;
         public void SetTexture(object texture) => _state.texture = texture;
-        public void SetLinearBrush(double x1, double y1, double x2, double y2, Color color1, Color color2)
+        public void SetLinearBrush(double x1, double y1, double x2, double y2, Color32 color1, Color32 color2)
         {
             // Premultiply
-            color1 = Color.FromArgb(
+            color1 = Color32.FromArgb(
                 (byte)(color1.A),
                 (byte)(color1.R * (color1.A / 255f)),
                 (byte)(color1.G * (color1.A / 255f)),
                 (byte)(color1.B * (color1.A / 255f)));
-            color2 = Color.FromArgb(
+            color2 = Color32.FromArgb(
                 (byte)(color2.A),
                 (byte)(color2.R * (color2.A / 255f)),
                 (byte)(color2.G * (color2.A / 255f)),
@@ -364,20 +366,20 @@ namespace Prowl.Quill
             _state.brush.Type = BrushType.Linear;
             _state.brush.Color1 = color1;
             _state.brush.Color2 = color2;
-            _state.brush.Point1 = new Vector2(x1, y1);
-            _state.brush.Point2 = new Vector2(x2, y2);
+            _state.brush.Point1 = new Double2(x1, y1);
+            _state.brush.Point2 = new Double2(x2, y2);
 
             _state.brush.Transform = _state.transform;
         }
-        public void SetRadialBrush(double centerX, double centerY, double innerRadius, double outerRadius, Color innerColor, Color outerColor)
+        public void SetRadialBrush(double centerX, double centerY, double innerRadius, double outerRadius, Color32 innerColor, Color32 outerColor)
         {
             // Premultiply
-            innerColor = Color.FromArgb(
+            innerColor = Color32.FromArgb(
                 (byte)(innerColor.A),
                 (byte)(innerColor.R * (innerColor.A / 255f)),
                 (byte)(innerColor.G * (innerColor.A / 255f)),
                 (byte)(innerColor.B * (innerColor.A / 255f)));
-            outerColor = Color.FromArgb(
+            outerColor = Color32.FromArgb(
                 (byte)(outerColor.A),
                 (byte)(outerColor.R * (outerColor.A / 255f)),
                 (byte)(outerColor.G * (outerColor.A / 255f)),
@@ -386,20 +388,20 @@ namespace Prowl.Quill
             _state.brush.Type = BrushType.Radial;
             _state.brush.Color1 = innerColor;
             _state.brush.Color2 = outerColor;
-            _state.brush.Point1 = new Vector2(centerX, centerY);
-            _state.brush.Point2 = new Vector2(innerRadius, outerRadius); // Store radius
+            _state.brush.Point1 = new Double2(centerX, centerY);
+            _state.brush.Point2 = new Double2(innerRadius, outerRadius); // Store radius
 
             _state.brush.Transform = _state.transform;
         }
-        public void SetBoxBrush(double centerX, double centerY, double width, double height, float radi, float feather, Color innerColor, Color outerColor)
+        public void SetBoxBrush(double centerX, double centerY, double width, double height, float radi, float feather, Color32 innerColor, Color32 outerColor)
         {
             // Premultiply
-            innerColor = Color.FromArgb(
+            innerColor = Color32.FromArgb(
                 (byte)(innerColor.A),
                 (byte)(innerColor.R * (innerColor.A / 255f)),
                 (byte)(innerColor.G * (innerColor.A / 255f)),
                 (byte)(innerColor.B * (innerColor.A / 255f)));
-            outerColor = Color.FromArgb(
+            outerColor = Color32.FromArgb(
                 (byte)(outerColor.A),
                 (byte)(outerColor.R * (outerColor.A / 255f)),
                 (byte)(outerColor.G * (outerColor.A / 255f)),
@@ -408,8 +410,8 @@ namespace Prowl.Quill
             _state.brush.Type = BrushType.Box;
             _state.brush.Color1 = innerColor;
             _state.brush.Color2 = outerColor;
-            _state.brush.Point1 = new Vector2(centerX, centerY);
-            _state.brush.Point2 = new Vector2(width / 2, height / 2); // Store half-size
+            _state.brush.Point1 = new Double2(centerX, centerY);
+            _state.brush.Point2 = new Double2(width / 2, height / 2); // Store half-size
             _state.brush.CornerRadii = radi;
             _state.brush.Feather = feather;
 
@@ -419,7 +421,7 @@ namespace Prowl.Quill
         {
             _state.brush.Type = BrushType.None;
         }
-        public void SetFillColor(Color color) => _state.fillColor = color;
+        public void SetFillColor(Color32 color) => _state.fillColor = color;
 
 
         #region Scissor Methods
@@ -431,9 +433,9 @@ namespace Prowl.Quill
             w = Math.Max(0.0, w);
             h = Math.Max(0.0, h);
             // Work in unit space - conversion to pixels happens in TransformPoint
-            _state.scissor = Transform2D.CreateTranslation(x + w * 0.5, y + h * 0.5) * _state.transform;
-            _state.scissorExtent.x = (w * 0.5) * _scale;
-            _state.scissorExtent.y = (h * 0.5) * _scale;
+            _state.scissor = _state.transform * Transform2D.CreateTranslation(x + w * 0.5, y + h * 0.5);
+            _state.scissorExtent.X = (w * 0.5) * _scale;
+            _state.scissorExtent.Y = (h * 0.5) * _scale;
         }
 
         /// <summary>
@@ -441,17 +443,17 @@ namespace Prowl.Quill
         /// </summary>
         public void IntersectScissor(double x, double y, double w, double h)
         {
-            if (_state.scissorExtent.x < 0)
+            if (_state.scissorExtent.X < 0)
             {
                 Scissor(x, y, w, h);
                 return;
             }
 
             var pxform = _state.scissor;
-            var ex = _state.scissorExtent.x;
-            var ey = _state.scissorExtent.y;
+            var ex = _state.scissorExtent.X;
+            var ey = _state.scissorExtent.Y;
             var invxorm = _state.transform.Inverse();
-            pxform.Multiply(ref invxorm);
+            pxform = invxorm * pxform; // Or pxform * invxorm?
 
             // Calculate extent in current transform space
             var tex = ex * Math.Abs(pxform.A) + ey * Math.Abs(pxform.C);
@@ -459,7 +461,7 @@ namespace Prowl.Quill
 
             // Find the intersection - work in unit space
             var rect = IntersectionOfRects(pxform.E - tex, pxform.F - tey, tex * 2, tey * 2, x, y, w, h);
-            Scissor(rect.x, rect.y, rect.width, rect.height);
+            Scissor(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
         }
 
         /// <summary>
@@ -480,9 +482,9 @@ namespace Prowl.Quill
         /// </summary>
         public void ResetScissor()
         {
-            _state.scissor.Zero();
-            _state.scissorExtent.x = -1.0f;
-            _state.scissorExtent.y = -1.0f;
+            _state.scissor = Transform2D.Identity;
+            _state.scissorExtent.X = -1.0f;
+            _state.scissorExtent.Y = -1.0f;
         }
         #endregion
 
@@ -493,13 +495,14 @@ namespace Prowl.Quill
 
         #region Transformation
 
-        public void TransformBy(Transform2D t) => _state.transform.Premultiply(ref t);
+        //public void TransformBy(Transform2D t) => _state.transform.Premultiply(ref t);
+        public void TransformBy(Transform2D t) => _state.transform = _state.transform * t;
         public void ResetTransform() => _state.transform = Transform2D.Identity;
         public void CurrentTransform(Transform2D xform) => _state.transform = xform;
-        public Vector2 TransformPoint(in Vector2 unitPoint)
+        public Double2 TransformPoint(in Double2 unitPoint)
         {
             // Apply transform in unit space, then convert to pixels
-            Vector2 transformedUnitPoint = _state.transform.TransformPoint(unitPoint);
+            Double2 transformedUnitPoint = _state.transform.TransformPoint(unitPoint);
             return transformedUnitPoint * _scale;
         }
 
@@ -618,8 +621,8 @@ namespace Prowl.Quill
             if (!_isPathOpen)
                 BeginPath();
 
-            _currentSubPath = new SubPath(new List<Vector2>(), false);
-            _currentSubPath.Points.Add(new Vector2(x, y));
+            _currentSubPath = new SubPath(new List<Double2>(), false);
+            _currentSubPath.Points.Add(new Double2(x, y));
             _subPaths.Add(_currentSubPath);
         }
 
@@ -642,7 +645,7 @@ namespace Prowl.Quill
             }
             else
             {
-                _currentSubPath.Points.Add(new Vector2(x, y));
+                _currentSubPath.Points.Add(new Double2(x, y));
             }
         }
 
@@ -659,9 +662,9 @@ namespace Prowl.Quill
             if (_currentSubPath != null && _currentSubPath.Points.Count >= 2)
             {
                 // Move to the first point of the current subpath to start a new one
-                Vector2 firstPoint = _currentSubPath.Points[0];
-                //MoveTo(firstPoint.x, firstPoint.y);
-                LineTo(firstPoint.x, firstPoint.y);
+                Double2 firstPoint = _currentSubPath.Points[0];
+                //MoveTo(firstPoint.X, firstPoint.Y);
+                LineTo(firstPoint.X, firstPoint.Y);
             }
         }
 
@@ -687,7 +690,7 @@ namespace Prowl.Quill
         /// </remarks>
         public void Arc(double x, double y, double radius, double startAngle, double endAngle, bool counterclockwise = false)
         {
-            Vector2 center = new Vector2(x, y);
+            Double2 center = new Double2(x, y);
 
             // Calculate number of segments based on radius size
             double distance = CalculateArcLength(radius, startAngle, endAngle);
@@ -753,17 +756,17 @@ namespace Prowl.Quill
                 return;
             }
 
-            Vector2 p0 = CurrentPointInternal;
-            Vector2 p1 = new Vector2(x1, y1);
-            Vector2 p2 = new Vector2(x2, y2);
+            Double2 p0 = CurrentPointInternal;
+            Double2 p1 = new Double2(x1, y1);
+            Double2 p2 = new Double2(x2, y2);
 
             // Calculate direction vectors
-            Vector2 v1 = p0 - p1;
-            Vector2 v2 = p2 - p1;
+            Double2 v1 = p0 - p1;
+            Double2 v2 = p2 - p1;
 
             // Normalize vectors
-            double len1 = Math.Sqrt(v1.x * v1.x + v1.y * v1.y);
-            double len2 = Math.Sqrt(v2.x * v2.x + v2.y * v2.y);
+            double len1 = Math.Sqrt(v1.X * v1.X + v1.Y * v1.Y);
+            double len2 = Math.Sqrt(v2.X * v2.X + v2.Y * v2.Y);
 
             if (len1 < 0.0001 || len2 < 0.0001)
             {
@@ -775,7 +778,7 @@ namespace Prowl.Quill
             v2 /= len2;
 
             // Calculate angle and tangent points
-            double angle = Math.Acos(v1.x * v2.x + v1.y * v2.y);
+            double angle = Math.Acos(v1.X * v2.X + v1.Y * v2.Y);
             double tan = radius * Math.Tan(angle / 2);
 
             if (double.IsNaN(tan) || tan < 0.0001)
@@ -785,26 +788,26 @@ namespace Prowl.Quill
             }
 
             // Calculate tangent points
-            Vector2 t1 = p1 + v1 * tan;
-            Vector2 t2 = p1 + v2 * tan;
+            Double2 t1 = p1 + v1 * tan;
+            Double2 t2 = p1 + v2 * tan;
 
             // Draw line to first tangent point
-            LineTo(t1.x, t1.y);
+            LineTo(t1.X, t1.Y);
 
             // Calculate arc center and angles
             double d = radius / Math.Sin(angle / 2);
-            Vector2 middle = (v1 + v2);
-            middle /= Math.Sqrt(middle.x * middle.x + middle.y * middle.y);
-            Vector2 center = p1 + middle * d;
+            Double2 middle = (v1 + v2);
+            middle /= Math.Sqrt(middle.X * middle.X + middle.Y * middle.Y);
+            Double2 center = p1 + middle * d;
 
             // Calculate angles for the arc
-            Vector2 a1 = t1 - center;
-            Vector2 a2 = t2 - center;
-            double startAngle = Math.Atan2(a1.y, a1.x);
-            double endAngle = Math.Atan2(a2.y, a2.x);
+            Double2 a1 = t1 - center;
+            Double2 a2 = t2 - center;
+            double startAngle = Math.Atan2(a1.Y, a1.X);
+            double endAngle = Math.Atan2(a2.Y, a2.X);
 
             // Draw the arc
-            Arc(center.x, center.y, radius, startAngle, endAngle, (v1.x * v2.y - v1.y * v2.x) < 0);
+            Arc(center.X, center.Y, radius, startAngle, endAngle, (v1.X * v2.Y - v1.Y * v2.X) < 0);
         }
 
         /// <summary>
@@ -822,8 +825,8 @@ namespace Prowl.Quill
         /// </remarks>
         public void EllipticalArcTo(double rx, double ry, double xAxisRotationDegrees, bool largeArcFlag, bool sweepFlag, double x_end, double y_end)
         {
-            double x = CurrentPointInternal.x;
-            double y = CurrentPointInternal.y;
+            double x = CurrentPointInternal.X;
+            double y = CurrentPointInternal.Y;
 
             // Ensure radii are positive
             double rx_abs = Math.Abs(rx);
@@ -962,13 +965,13 @@ namespace Prowl.Quill
                 return;
             }
 
-            //Vector2 p1 = _currentSubPath!.Points[^1];
-            Vector2 p1 = CurrentPointInternal;
-            Vector2 p2 = new Vector2(cp1x, cp1y);
-            Vector2 p3 = new Vector2(cp2x, cp2y);
-            Vector2 p4 = new Vector2(x, y);
+            //Double2 p1 = _currentSubPath!.Points[^1];
+            Double2 p1 = CurrentPointInternal;
+            Double2 p2 = new Double2(cp1x, cp1y);
+            Double2 p3 = new Double2(cp2x, cp2y);
+            Double2 p4 = new Double2(x, y);
 
-            PathBezierToCasteljau(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y, _state.tess_tol, 0);
+            PathBezierToCasteljau(p1.X, p1.Y, p2.X, p2.Y, p3.X, p3.Y, p4.X, p4.Y, _state.tess_tol, 0);
         }
 
         private void PathBezierToCasteljau(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, double tess_tol, int level)
@@ -982,7 +985,7 @@ namespace Prowl.Quill
             d3 = d3 >= 0 ? d3 : -d3;
             if ((d2 + d3) * (d2 + d3) < tess_tol * (dx * dx + dy * dy))
             {
-                _currentSubPath.Points.Add(new Vector2(x4, y4));
+                _currentSubPath.Points.Add(new Double2(x4, y4));
             }
             else if (level < 10)
             {
@@ -1019,15 +1022,15 @@ namespace Prowl.Quill
                 return;
             }
 
-            Vector2 p1 = CurrentPointInternal;
-            Vector2 p2 = new Vector2(cpx, cpy);
-            Vector2 p3 = new Vector2(x, y);
+            Double2 p1 = CurrentPointInternal;
+            Double2 p2 = new Double2(cpx, cpy);
+            Double2 p3 = new Double2(x, y);
 
             // Convert quadratic curve to cubic bezier
-            double cp1x = p1.x + 2.0 / 3.0 * (p2.x - p1.x);
-            double cp1y = p1.y + 2.0 / 3.0 * (p2.y - p1.y);
-            double cp2x = p3.x + 2.0 / 3.0 * (p2.x - p3.x);
-            double cp2y = p3.y + 2.0 / 3.0 * (p2.y - p3.y);
+            double cp1x = p1.X + 2.0 / 3.0 * (p2.X - p1.X);
+            double cp1y = p1.Y + 2.0 / 3.0 * (p2.Y - p1.Y);
+            double cp2x = p3.X + 2.0 / 3.0 * (p2.X - p3.X);
+            double cp2y = p3.Y + 2.0 / 3.0 * (p2.Y - p3.Y);
 
             BezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y);
         }
@@ -1071,8 +1074,8 @@ namespace Prowl.Quill
             {
                 var copy = path.Points.ToArray();
                 for (int i = 0; i < copy.Length; i++)
-                    copy[i] = TransformPoint(copy[i]) + new Vector2(0.5, 0.5); // And offset by half a pixel to properly align it with Stroke()
-                var points = copy.Select(v => new ContourVertex() { Position = new Vec3() { X = v.x, Y = v.y } }).ToArray();
+                    copy[i] = TransformPoint(copy[i]) + new Double2(0.5, 0.5); // And offset by half a pixel to properly align it with Stroke()
+                var points = copy.Select(v => new ContourVertex() { Position = new Vec3() { X = v.X, Y = v.Y } }).ToArray();
 
                 tess.AddContour(points, ContourOrientation.Original);
             }
@@ -1086,8 +1089,8 @@ namespace Prowl.Quill
             for (int i = 0; i < vertices.Length; i++)
             {
                 var vertex = vertices[i];
-                Vector2 pos = new Vector2(vertex.Position.X, vertex.Position.Y);
-                AddVertex(new Vertex(pos, new Vector2(0.5, 0.5), _state.fillColor));
+                Double2 pos = new Double2(vertex.Position.X, vertex.Position.Y);
+                AddVertex(new Vertex(pos, new Double2(0.5, 0.5), _state.fillColor));
             }
             // Create triangles
             for (int i = 0; i < indices.Length; i += 3)
@@ -1106,12 +1109,12 @@ namespace Prowl.Quill
                 return;
 
             // Transform each point
-            Vector2 center = Vector2.zero;
+            Double2 center = Double2.Zero;
             var copy = subPath.Points.ToArray();
             for (int i = 0; i < copy.Length; i++)
             {
                 var point = copy[i];
-                point = TransformPoint(point) + new Vector2(0.5, 0.5); // And offset by half a pixel to properly center it with Stroke()
+                point = TransformPoint(point) + new Double2(0.5, 0.5); // And offset by half a pixel to properly center it with Stroke()
                 center += point;
                 copy[i] = point;
             }
@@ -1121,14 +1124,14 @@ namespace Prowl.Quill
             uint startVertexIndex = (uint)_vertices.Count;
 
             // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-            AddVertex(new Vertex(center, new Vector2(0.5f, 0.5f), _state.fillColor));
+            AddVertex(new Vertex(center, new Double2(0.5f, 0.5f), _state.fillColor));
 
             // Generate vertices around the path
             int segments = copy.Length;
             for (int i = 0; i < segments; i++) // Edge vertices have UV at 0,0 for anti-aliasing
             {
-                Vector2 dirToPoint = (copy[i] - center).normalized;
-                AddVertex(new Vertex(copy[i] + (dirToPoint * _pixelWidth), new Vector2(0, 0), _state.fillColor));
+                Double2 dirToPoint = Double2.Normalize(copy[i] - center);
+                AddVertex(new Vertex(copy[i] + (dirToPoint * _pixelWidth), new Double2(0, 0), _state.fillColor));
             }
 
             // Create triangles (fan from center to edges)
@@ -1137,12 +1140,12 @@ namespace Prowl.Quill
             uint first = (uint)(startVertexIndex + 1);
             uint second = (uint)(startVertexIndex + 2);
 
-            Vector2 centerPos = _vertices[(int)centerIdx].Position;
-            Vector2 firstPos = _vertices[(int)first].Position;
-            Vector2 secondPos = _vertices[(int)second].Position;
+            Double2 centerPos = _vertices[(int)centerIdx].Position;
+            Double2 firstPos = _vertices[(int)first].Position;
+            Double2 secondPos = _vertices[(int)second].Position;
 
-            double cross = ((firstPos.x - centerPos.x) * (secondPos.y - centerPos.y)) -
-                           ((firstPos.y - centerPos.y) * (secondPos.x - centerPos.x));
+            double cross = ((firstPos.X - centerPos.X) * (secondPos.Y - centerPos.Y)) -
+                           ((firstPos.Y - centerPos.Y) * (secondPos.X - centerPos.X));
 
             bool clockwise = cross <= 0;
 
@@ -1446,7 +1449,7 @@ namespace Prowl.Quill
         /// <param name="height">The height of the rectangle.</param>
         /// <param name="color">The color of the rectangle.</param>
         /// <remarks>This is significantly faster than using the path API to draw a rectangle.</remarks>
-        public void RectFilled(double x, double y, double width, double height, System.Drawing.Color color)
+        public void RectFilled(double x, double y, double width, double height, Color32 color)
         {
             if (width <= 0 || height <= 0)
                 return;
@@ -1461,19 +1464,19 @@ namespace Prowl.Quill
             height += unitPixelWidth;
 
             // Apply transform to the four corners of the rectangle
-            Vector2 topLeft = TransformPoint(new Vector2(x, y));
-            Vector2 topRight = TransformPoint(new Vector2(x, y + height));
-            Vector2 bottomRight = TransformPoint(new Vector2(x + width, y + height));
-            Vector2 bottomLeft = TransformPoint(new Vector2(x + width, y));
+            Double2 topLeft = TransformPoint(new Double2(x, y));
+            Double2 topRight = TransformPoint(new Double2(x, y + height));
+            Double2 bottomRight = TransformPoint(new Double2(x + width, y + height));
+            Double2 bottomLeft = TransformPoint(new Double2(x + width, y));
 
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
 
             // Add all vertices with the transformed coordinates
-            AddVertex(new Vertex(topLeft, new Vector2(0, 0), color));
-            AddVertex(new Vertex(topRight, new Vector2(0, 1), color));
-            AddVertex(new Vertex(bottomRight, new Vector2(1, 1), color));
-            AddVertex(new Vertex(bottomLeft, new Vector2(1, 0), color));
+            AddVertex(new Vertex(topLeft, new Double2(0, 0), color));
+            AddVertex(new Vertex(topRight, new Double2(0, 1), color));
+            AddVertex(new Vertex(bottomRight, new Double2(1, 1), color));
+            AddVertex(new Vertex(bottomLeft, new Double2(1, 0), color));
 
             // Add indexes for fill
             _indices.Add(startVertexIndex);
@@ -1487,7 +1490,7 @@ namespace Prowl.Quill
             AddTriangleCount(2);
         }
 
-        public void Image(object texture, double x, double y, double width, double height, System.Drawing.Color color)
+        public void Image(object texture, double x, double y, double width, double height, Color32 color)
         {
             if (width <= 0 || height <= 0)
                 return;
@@ -1509,7 +1512,7 @@ namespace Prowl.Quill
         /// <param name="color">The color of the rounded rectangle.</param>
         /// <remarks>This is significantly faster than using the path API to draw a rounded rectangle.</remarks>
         public void RoundedRectFilled(double x, double y, double width, double height,
-                                     double radius, System.Drawing.Color color)
+                                     double radius, Color32 color)
         {
             RoundedRectFilled(x, y, width, height, radius, radius, radius, radius, color);
         }
@@ -1530,7 +1533,7 @@ namespace Prowl.Quill
         /// <remarks>This is significantly faster than using the path API to draw a rounded rectangle.</remarks>
         public void RoundedRectFilled(double x, double y, double width, double height,
                                      double tlRadii, double trRadii, double brRadii, double blRadii,
-                                     System.Drawing.Color color)
+                                     Color32 color)
         {
             if (width <= 0 || height <= 0)
                 return;
@@ -1561,86 +1564,86 @@ namespace Prowl.Quill
             uint startVertexIndex = (uint)_vertices.Count;
 
             // Calculate the center point of the rectangle
-            Vector2 center = TransformPoint(new Vector2(x + width / 2, y + height / 2));
+            Double2 center = TransformPoint(new Double2(x + width / 2, y + height / 2));
 
             // Add center vertex with UV at 0.5,0.5 (no AA)
-            AddVertex(new Vertex(center, new Vector2(0.5f, 0.5f), color));
+            AddVertex(new Vertex(center, new Double2(0.5f, 0.5f), color));
 
-            List<Vector2> points = new List<Vector2>();
+            List<Double2> points = new List<Double2>();
 
             // Top-left corner
             if (tlRadii > 0)
             {
-                Vector2 tlCenter = new Vector2(x + tlRadii, y + tlRadii);
+                Double2 tlCenter = new Double2(x + tlRadii, y + tlRadii);
                 for (int i = 0; i <= tlSegments; i++)
                 {
                     double angle = Math.PI + (Math.PI / 2) * i / tlSegments;
-                    double vx = tlCenter.x + tlRadii * Math.Cos(angle);
-                    double vy = tlCenter.y + tlRadii * Math.Sin(angle);
-                    points.Add(new Vector2(vx, vy));
+                    double vx = tlCenter.X + tlRadii * Math.Cos(angle);
+                    double vy = tlCenter.Y + tlRadii * Math.Sin(angle);
+                    points.Add(new Double2(vx, vy));
                 }
             }
             else
             {
-                points.Add(new Vector2(x, y));
+                points.Add(new Double2(x, y));
             }
 
             // Top-right corner
             if (trRadii > 0)
             {
-                Vector2 trCenter = new Vector2(x + width - trRadii, y + trRadii);
+                Double2 trCenter = new Double2(x + width - trRadii, y + trRadii);
                 for (int i = 0; i <= trSegments; i++)
                 {
                     double angle = Math.PI * 3 / 2 + (Math.PI / 2) * i / trSegments;
-                    double vx = trCenter.x + trRadii * Math.Cos(angle);
-                    double vy = trCenter.y + trRadii * Math.Sin(angle);
-                    points.Add(new Vector2(vx, vy));
+                    double vx = trCenter.X + trRadii * Math.Cos(angle);
+                    double vy = trCenter.Y + trRadii * Math.Sin(angle);
+                    points.Add(new Double2(vx, vy));
                 }
             }
             else
             {
-                points.Add(new Vector2(x + width, y));
+                points.Add(new Double2(x + width, y));
             }
 
             // Bottom-right corner
             if (brRadii > 0)
             {
-                Vector2 brCenter = new Vector2(x + width - brRadii, y + height - brRadii);
+                Double2 brCenter = new Double2(x + width - brRadii, y + height - brRadii);
                 for (int i = 0; i <= brSegments; i++)
                 {
                     double angle = 0 + (Math.PI / 2) * i / brSegments;
-                    double vx = brCenter.x + brRadii * Math.Cos(angle);
-                    double vy = brCenter.y + brRadii * Math.Sin(angle);
-                    points.Add(new Vector2(vx, vy));
+                    double vx = brCenter.X + brRadii * Math.Cos(angle);
+                    double vy = brCenter.Y + brRadii * Math.Sin(angle);
+                    points.Add(new Double2(vx, vy));
                 }
             }
             else
             {
-                points.Add(new Vector2(x + width, y + height));
+                points.Add(new Double2(x + width, y + height));
             }
 
             // Bottom-left corner
             if (blRadii > 0)
             {
-                Vector2 blCenter = new Vector2(x + blRadii, y + height - blRadii);
+                Double2 blCenter = new Double2(x + blRadii, y + height - blRadii);
                 for (int i = 0; i <= blSegments; i++)
                 {
                     double angle = Math.PI / 2 + (Math.PI / 2) * i / blSegments;
-                    double vx = blCenter.x + blRadii * Math.Cos(angle);
-                    double vy = blCenter.y + blRadii * Math.Sin(angle);
-                    points.Add(new Vector2(vx, vy));
+                    double vx = blCenter.X + blRadii * Math.Cos(angle);
+                    double vy = blCenter.Y + blRadii * Math.Sin(angle);
+                    points.Add(new Double2(vx, vy));
                 }
             }
             else
             {
-                points.Add(new Vector2(x, y + height));
+                points.Add(new Double2(x, y + height));
             }
 
             // Add all edge vertices
             for (int i = 0; i < points.Count; i++)
             {
-                Vector2 transformedPoint = TransformPoint(points[i]);
-                AddVertex(new Vertex(transformedPoint, new Vector2(0, 0), color));
+                Double2 transformedPoint = TransformPoint(points[i]);
+                AddVertex(new Vertex(transformedPoint, new Double2(0, 0), color));
             }
 
             // Create triangles (fan from center to edges)
@@ -1668,7 +1671,7 @@ namespace Prowl.Quill
         /// <param name="color">The color of the circle.</param>
         /// <param name="segments">The number of segments used to approximate the circle. Higher values create smoother circles.</param>
         /// <remarks>This is significantly faster than using the path API to draw a circle.</remarks>
-        public void CircleFilled(double x, double y, double radius, System.Drawing.Color color, int segments = -1)
+        public void CircleFilled(double x, double y, double radius, Color32 color, int segments = -1)
         {
             if (segments == -1)
             {
@@ -1687,10 +1690,10 @@ namespace Prowl.Quill
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
 
-            Vector2 transformedCenter = TransformPoint(new Vector2(x, y));
+            Double2 transformedCenter = TransformPoint(new Double2(x, y));
 
             // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-            AddVertex(new Vertex(transformedCenter, new Vector2(0.5f, 0.5f), color));
+            AddVertex(new Vertex(transformedCenter, new Double2(0.5f, 0.5f), color));
 
             // Generate vertices around the circle
             for (int i = 0; i <= segments; i++)
@@ -1699,12 +1702,12 @@ namespace Prowl.Quill
                 double vx = x + radius * Math.Cos(angle);
                 double vy = y + radius * Math.Sin(angle);
 
-                Vector2 transformedPoint = TransformPoint(new Vector2(vx, vy));
+                Double2 transformedPoint = TransformPoint(new Double2(vx, vy));
 
                 // Edge vertices have UV at 0,0 for anti-aliasing
                 AddVertex(new Vertex(
                     transformedPoint,
-                    new Vector2(0, 0),  // UV at edge for AA
+                    new Double2(0, 0),  // UV at edge for AA
                     color
                 ));
             }
@@ -1733,7 +1736,7 @@ namespace Prowl.Quill
         /// <param name="endAngle">The ending angle in radians.</param>
         /// <param name="color">The color of the pie.</param>
         /// <param name="segments">The number of segments used to approximate the curved edge. Higher values create smoother curves.</param>
-        public void PieFilled(double x, double y, double radius, double startAngle, double endAngle, System.Drawing.Color color, int segments = -1)
+        public void PieFilled(double x, double y, double radius, double startAngle, double endAngle, Color32 color, int segments = -1)
         {
             if (segments == -1)
             {
@@ -1765,14 +1768,14 @@ namespace Prowl.Quill
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
 
-            Vector2 transformedCenter = TransformPoint(new Vector2(x, y));
-            Vector2 transformedCentroid = TransformPoint(new Vector2(centroidX, centroidY));
+            Double2 transformedCenter = TransformPoint(new Double2(x, y));
+            Double2 transformedCentroid = TransformPoint(new Double2(centroidX, centroidY));
 
             // Add centroid vertex with UV at 0.5,0.5 (fully opaque, no AA)
-            AddVertex(new Vertex(transformedCentroid, new Vector2(0.5f, 0.5f), color));
+            AddVertex(new Vertex(transformedCentroid, new Double2(0.5f, 0.5f), color));
 
             // Start path
-            AddVertex(new Vertex(transformedCenter, new Vector2(0.0f, 0.0f), color));
+            AddVertex(new Vertex(transformedCenter, new Double2(0.0f, 0.0f), color));
 
             // Generate vertices around the arc plus the two radial endpoints
             for (int i = 0; i <= segments; i++)
@@ -1781,18 +1784,18 @@ namespace Prowl.Quill
                 double vx = x + radius * Math.Cos(angle);
                 double vy = y + radius * Math.Sin(angle);
 
-                Vector2 transformedPoint = TransformPoint(new Vector2(vx, vy));
+                Double2 transformedPoint = TransformPoint(new Double2(vx, vy));
 
                 // Offset for AA
-                var direction = (transformedPoint - transformedCenter).normalized;
+                var direction = Double2.Normalize(transformedPoint - transformedCenter);
                 transformedPoint += direction * _pixelWidth;
 
                 // Edge vertices have UV at 0,0 for anti-aliasing
-                AddVertex(new Vertex(transformedPoint, new Vector2(0, 0), color));
+                AddVertex(new Vertex(transformedPoint, new Double2(0, 0), color));
             }
 
             // Close path
-            AddVertex(new Vertex(transformedCenter, new Vector2(0.0f, 0.0f), color));
+            AddVertex(new Vertex(transformedCenter, new Double2(0.0f, 0.0f), color));
 
             // Create triangles (fan from centroid to each pair of edge points)
             for (int i = 0; i < segments + 2; i++)
@@ -1812,51 +1815,51 @@ namespace Prowl.Quill
 
         public void AddFallbackFont(FontFile font) => _scribeRenderer.FontEngine.AddFallbackFont(font);
         public IEnumerable<FontFile> EnumerateSystemFonts() => _scribeRenderer.FontEngine.EnumerateSystemFonts();
-        public Vector2 MeasureText(string text, double pixelSize, FontFile font, double letterSpacing = 0f)
+        public Double2 MeasureText(string text, double pixelSize, FontFile font, double letterSpacing = 0f)
         {
             double actualPixelSize = pixelSize;// * _scale; // This is preferrable, but we also need a way to scale Scribes output quads down accordingly
-            Vector2 pixelResult = _scribeRenderer.FontEngine.MeasureText(text, (float)actualPixelSize, font, (float)letterSpacing);
+            Double2 pixelResult = (Float2)_scribeRenderer.FontEngine.MeasureText(text, (float)actualPixelSize, font, (float)letterSpacing);
             return pixelResult / _scale;
         }
-        public Vector2 MeasureText(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.MeasureText(text, settings);
+        public Double2 MeasureText(string text, TextLayoutSettings settings) => (Float2)_scribeRenderer.FontEngine.MeasureText(text, settings);
 
-        public void DrawText(string text, double x, double y, FontColor color, double pixelSize, FontFile font, double letterSpacing = 0f, Vector2? origin = null)
+        public void DrawText(string text, double x, double y, Color32 color, double pixelSize, FontFile font, double letterSpacing = 0f, Double2? origin = null)
         {
-            Vector2 position = new Vector2(x, y);
+            Double2 position = new Double2(x, y);
             double actualPixelSize = pixelSize;// * _scale; // This is preferrable, but we also need a way to scale Scribes output quads down accordingly
             if (origin.HasValue)
             {
                 var textSize = _scribeRenderer.FontEngine.MeasureText(text, (float)actualPixelSize, font, (float)letterSpacing);
-                position.x -= textSize.X * origin.Value.x;
-                position.y -= textSize.Y * origin.Value.y;
+                position.X -= textSize.X * origin.Value.X;
+                position.Y -= textSize.Y * origin.Value.Y;
             }
-            _scribeRenderer.FontEngine.DrawText(text, position, color, (float)actualPixelSize, font, (float)letterSpacing);
+            _scribeRenderer.FontEngine.DrawText(text, (Float2)position, new FontColor(color.R, color.G, color.B, color.A), (float)actualPixelSize, font, (float)letterSpacing);
         }
 
-        public void DrawText(string text, double x, double y, FontColor color, TextLayoutSettings settings, Vector2? origin = null)
+        public void DrawText(string text, double x, double y, Color32 color, TextLayoutSettings settings, Double2? origin = null)
         {
-            Vector2 position = new Vector2(x, y);
+            Double2 position = new Double2(x, y);
             if (origin.HasValue)
             {
                 var textSize = _scribeRenderer.FontEngine.MeasureText(text, settings);
-                position.x -= textSize.X * origin.Value.x;
-                position.y -= textSize.Y * origin.Value.y;
+                position.X -= textSize.X * origin.Value.X;
+                position.Y -= textSize.Y * origin.Value.Y;
             }
-            _scribeRenderer.FontEngine.DrawText(text, position, color, settings);
+            _scribeRenderer.FontEngine.DrawText(text, (Float2)position, new FontColor(color.R, color.G, color.B, color.A), settings);
         }
 
         public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.CreateLayout(text, settings);
 
-        public void DrawLayout(TextLayout layout, double x, double y, FontColor color, Vector2? origin = null)
+        public void DrawLayout(TextLayout layout, double x, double y, Color32 color, Double2? origin = null)
         {
-            Vector2 position = new Vector2(x, y);
+            Double2 position = new Double2(x, y);
             if (origin.HasValue)
             {
                 var layoutSize = layout.Size;
-                position.x -= layoutSize.X * origin.Value.x;
-                position.y -= layoutSize.Y * origin.Value.y;
+                position.X -= layoutSize.X * origin.Value.X;
+                position.Y -= layoutSize.Y * origin.Value.Y;
             }
-            _scribeRenderer.FontEngine.DrawLayout(layout, position, color);
+            _scribeRenderer.FontEngine.DrawLayout(layout, (Float2)position, new FontColor(color.R, color.G, color.B, color.A));
         }
 
         #region Markdown
@@ -1866,7 +1869,7 @@ namespace Prowl.Quill
             internal MarkdownLayoutSettings Settings;
             internal MarkdownDisplayList List;
 
-            public readonly Vector2 Size => List.Size;
+            public readonly Double2 Size => (Float2)List.Size;
 
             internal QuillMarkdown(MarkdownLayoutSettings settings, MarkdownDisplayList list)
             {
@@ -1892,33 +1895,33 @@ namespace Prowl.Quill
             return md;
         }
 
-        public void DrawMarkdown(QuillMarkdown markdown, Vector2 position)
+        public void DrawMarkdown(QuillMarkdown markdown, Double2 position)
         {
             // Convert units to pixels for position
-            Vector2 pixelPosition = position * _scale;
-            MarkdownLayoutEngine.Render(markdown.List, _scribeRenderer.FontEngine, _scribeRenderer, pixelPosition, markdown.Settings);
+            Double2 pixelPosition = position * _scale;
+            MarkdownLayoutEngine.Render(markdown.List, _scribeRenderer.FontEngine, _scribeRenderer, (Float2)pixelPosition, markdown.Settings);
         }
 
-        public bool GetMarkdownLinkAt(QuillMarkdown markdown, Vector2 renderOffset, Vector2 point, bool useScissor, out string href)
+        public bool GetMarkdownLinkAt(QuillMarkdown markdown, Double2 renderOffset, Double2 point, bool useScissor, out string href)
         {
             // Check if point is within scissor rect if enabled
-            if (useScissor && _state.scissorExtent.x > 0)
+            if (useScissor && _state.scissorExtent.X > 0)
             {
                 // Transform point to scissor space
-                var scissorMatrix = _state.scissor.Inverse().ToMatrix4x4();
-                var transformedPoint = new Vector2(
-                    (float)(scissorMatrix.M11 * point.x + scissorMatrix.M12 * point.y + scissorMatrix.M14),
-                    (float)(scissorMatrix.M21 * point.x + scissorMatrix.M22 * point.y + scissorMatrix.M24)
-                );
+                var transformedPoint = _state.scissor.Inverse().TransformPoint(point);
+                //var transformedPoint = new Double2(
+                //    (float)(scissorMatrix.M11 * point.X + scissorMatrix.M12 * point.Y + scissorMatrix.M14),
+                //    (float)(scissorMatrix.M21 * point.X + scissorMatrix.M22 * point.Y + scissorMatrix.M24)
+                //);
 
                 // Check if the point is within the scissor extent
-                var distanceFromEdges = new Vector2(
-                    Math.Abs(transformedPoint.x) - _state.scissorExtent.x,
-                    Math.Abs(transformedPoint.y) - _state.scissorExtent.y
+                var distanceFromEdges = new Double2(
+                    Math.Abs(transformedPoint.X) - _state.scissorExtent.X,
+                    Math.Abs(transformedPoint.Y) - _state.scissorExtent.Y
                 );
 
                 // If either distance is positive, we're outside the scissor region
-                if (distanceFromEdges.x > 0.5 || distanceFromEdges.y > 0.5)
+                if (distanceFromEdges.X > 0.5 || distanceFromEdges.Y > 0.5)
                 {
                     href = null;
                     return false;
@@ -1927,9 +1930,9 @@ namespace Prowl.Quill
 
 
             // Convert units to pixels for point and render offset
-            Vector2 pixelPoint = point * _scale;
-            Vector2 pixelRenderOffset = renderOffset * _scale;
-            return MarkdownLayoutEngine.TryGetLinkAt(markdown.List, pixelPoint, pixelRenderOffset, out href);
+            Double2 pixelPoint = point * _scale;
+            Double2 pixelRenderOffset = renderOffset * _scale;
+            return MarkdownLayoutEngine.TryGetLinkAt(markdown.List, (Float2)pixelPoint, (Float2)pixelRenderOffset, out href);
         }
 
         #endregion

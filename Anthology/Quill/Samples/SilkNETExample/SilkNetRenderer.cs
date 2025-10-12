@@ -2,6 +2,7 @@
 using Prowl.Quill;
 using Prowl.Vector;
 using System.Drawing;
+using Prowl.Vector.Geometry;
 
 namespace SilkExample
 {
@@ -158,7 +159,7 @@ void main()
         private int _brushParamsLocation;
         private int _brushParams2Location;
 
-        private System.Numerics.Matrix4x4 _projection;
+        private Double4x4 _projection;
         private TextureSilk _defaultTexture;
 
         public SilkNetRenderer(GL gl)
@@ -268,8 +269,7 @@ void main()
 
         public void UpdateProjection(int width, int height)
         {
-            _projection = System.Numerics.Matrix4x4.CreateOrthographicOffCenter(
-                0, width, height, 0, -1, 1);
+            _projection = Double4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1);
         }
 
         public object CreateTexture(uint width, uint height)
@@ -277,12 +277,12 @@ void main()
             return TextureSilk.CreateNew(_gl, width, height);
         }
 
-        public Vector2Int GetTextureSize(object texture)
+        public Int2 GetTextureSize(object texture)
         {
             if (texture is not TextureSilk silkTexture)
                 throw new ArgumentException("Invalid texture type");
 
-            return new Vector2Int((int)silkTexture.Width, (int)silkTexture.Height);
+            return new Int2((int)silkTexture.Width, (int)silkTexture.Height);
         }
 
         public void SetTextureData(object texture, IntRect bounds, byte[] data)
@@ -292,28 +292,19 @@ void main()
             silkTexture.SetData(bounds, data);
         }
         
-        private unsafe void SetMatrix4Uniform(int location, System.Numerics.Matrix4x4 matrix)
+        private unsafe void SetMatrix4Uniform(int location, Double4x4 matrix)
         {
-            float* matrixPtr = stackalloc float[16];
-            matrixPtr[0] = matrix.M11;  matrixPtr[1] = matrix.M12;  matrixPtr[2] = matrix.M13;  matrixPtr[3] = matrix.M14;
-            matrixPtr[4] = matrix.M21;  matrixPtr[5] = matrix.M22;  matrixPtr[6] = matrix.M23;  matrixPtr[7] = matrix.M24;
-            matrixPtr[8] = matrix.M31;  matrixPtr[9] = matrix.M32;  matrixPtr[10] = matrix.M33; matrixPtr[11] = matrix.M34;
-            matrixPtr[12] = matrix.M41; matrixPtr[13] = matrix.M42; matrixPtr[14] = matrix.M43; matrixPtr[15] = matrix.M44;
-    
-            _gl.UniformMatrix4(location, 1, false, matrixPtr);
+            //float* matrixPtr = stackalloc float[16];
+            //matrixPtr[0] = matrix.M11;  matrixPtr[1] = matrix.M12;  matrixPtr[2] = matrix.M13;  matrixPtr[3] = matrix.M14;
+            //matrixPtr[4] = matrix.M21;  matrixPtr[5] = matrix.M22;  matrixPtr[6] = matrix.M23;  matrixPtr[7] = matrix.M24;
+            //matrixPtr[8] = matrix.M31;  matrixPtr[9] = matrix.M32;  matrixPtr[10] = matrix.M33; matrixPtr[11] = matrix.M34;
+            //matrixPtr[12] = matrix.M41; matrixPtr[13] = matrix.M42; matrixPtr[14] = matrix.M43; matrixPtr[15] = matrix.M44;
+
+            var floatM = (Float4x4)matrix;
+
+            _gl.UniformMatrix4(location, 1, false, in floatM.c0.X);
         }
 
-
-        private unsafe void SetMatrix4Uniform(int location, Prowl.Vector.Matrix4x4 matrix)
-        {
-            float* matrixPtr = stackalloc float[16];
-            matrixPtr[0] = (float)matrix.M11;  matrixPtr[1] = (float)matrix.M12;  matrixPtr[2] = (float)matrix.M13;  matrixPtr[3] = (float)matrix.M14;
-            matrixPtr[4] = (float)matrix.M21;  matrixPtr[5] = (float)matrix.M22;  matrixPtr[6] = (float)matrix.M23;  matrixPtr[7] = (float)matrix.M24;
-            matrixPtr[8] = (float)matrix.M31;  matrixPtr[9] = (float)matrix.M32;  matrixPtr[10] = (float)matrix.M33; matrixPtr[11] = (float)matrix.M34;
-            matrixPtr[12] = (float)matrix.M41; matrixPtr[13] = (float)matrix.M42; matrixPtr[14] = (float)matrix.M43; matrixPtr[15] = (float)matrix.M44;
-    
-            _gl.UniformMatrix4(location, 1, false, matrixPtr);
-        }
 
         public unsafe void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
         {
@@ -402,10 +393,10 @@ void main()
             SetMatrix4Uniform(_projectionLocation, _projection);
         }
 
-        private void SetScissorUniforms(Prowl.Vector.Matrix4x4 matrix, Vector2 extent)
+        private void SetScissorUniforms(Prowl.Vector.Double4x4 matrix, Double2 extent)
         {
             SetMatrix4Uniform(_scissorMatLocation, matrix);
-            _gl.Uniform2(_scissorExtLocation, (float)extent.x, (float)extent.y);
+            _gl.Uniform2(_scissorExtLocation, (float)extent.X, (float)extent.Y);
         }
 
         private void SetBrushUniforms(Brush brush)
@@ -432,10 +423,10 @@ void main()
         
             _gl.Uniform4(
                 _brushParamsLocation,
-                (float)brush.Point1.x,
-                (float)brush.Point1.y,
-                (float)brush.Point2.x,
-                (float)brush.Point2.y);
+                (float)brush.Point1.X,
+                (float)brush.Point1.Y,
+                (float)brush.Point2.X,
+                (float)brush.Point2.Y);
         
             _gl.Uniform2(
                 _brushParams2Location,

@@ -13,7 +13,7 @@ namespace OpenTKExample
         {
             // Create window with appropriate settings
             var nativeWindowSettings = new NativeWindowSettings {
-                ClientSize = new Vector2i(1280, 720),
+                ClientSize = new(1280, 720),
                 Title = "OpenTK Quill Example",
                 WindowBorder = WindowBorder.Resizable,
                 API = ContextAPI.OpenGL,

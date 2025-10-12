@@ -1,9 +1,5 @@
 ﻿// TextureSFML.cs
 using SFML.Graphics;
-using Prowl.Vector;
-using System;
-using System.IO;
-using IntRect = Prowl.Vector.IntRect;
 
 namespace SFMLExample
 {
@@ -44,17 +40,18 @@ namespace SFMLExample
             return new TextureSFML(texture, width, height);
         }
 
-        public void SetData(IntRect bounds, byte[] data)
+        public void SetData(Prowl.Vector.Geometry.IntRect bounds, byte[] data)
         {
+            ArgumentNullException.ThrowIfNull(bounds);
             // Make sure we have valid bounds
-            if (bounds.width <= 0 || bounds.height <= 0)
+            if (bounds.Size.X <= 0 || bounds.Size.Y <= 0)
                 throw new ArgumentException("Invalid texture bounds");
                 
             // Create image from raw data
-            Image image = new Image((uint)bounds.width, (uint)bounds.height, data);
+            Image image = new Image((uint)bounds.Size.X, (uint)bounds.Size.Y, data);
             
             // Update texture with the image at the specified position
-            Handle.Update(image, (uint)bounds.x, (uint)bounds.y);
+            Handle.Update(image, (uint)bounds.Min.X, (uint)bounds.Min.Y);
         }
 
         public void Use(int unit = 0)

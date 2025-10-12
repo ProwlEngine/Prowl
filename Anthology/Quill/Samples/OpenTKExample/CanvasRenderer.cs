@@ -2,6 +2,7 @@
 using OpenTK.Mathematics;
 using Prowl.Quill;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 using System.Drawing;
 
 namespace OpenTKExample
@@ -239,18 +240,18 @@ void main()
             _brushParams2Loc = GL.GetUniformLocation(_shaderProgram, "brushParams2");
         }
 
-        private Matrix4 ToTK(Matrix4x4 mat) => new Matrix4(
-            (float)mat.M11, (float)mat.M12, (float)mat.M13, (float)mat.M14,
-            (float)mat.M21, (float)mat.M22, (float)mat.M23, (float)mat.M24,
-            (float)mat.M31, (float)mat.M32, (float)mat.M33, (float)mat.M34,
-            (float)mat.M41, (float)mat.M42, (float)mat.M43, (float)mat.M44
+        private Matrix4 ToTK(Double4x4 mat) => new Matrix4(
+            (float)mat[0, 0], (float)mat[1, 0], (float)mat[2, 0], (float)mat[3, 0],
+            (float)mat[0, 1], (float)mat[1, 1], (float)mat[2, 1], (float)mat[3, 1],
+            (float)mat[0, 2], (float)mat[1, 2], (float)mat[2, 2], (float)mat[3, 2],
+            (float)mat[0, 3], (float)mat[1, 3], (float)mat[2, 3], (float)mat[3, 3]
         );
 
-        private OpenTK.Mathematics.Vector4 ToTK(Prowl.Vector.Vector4 v) => new OpenTK.Mathematics.Vector4(
-            (float)v.x, (float)v.y, (float)v.z, (float)v.w
+        private OpenTK.Mathematics.Vector4 ToTK(Prowl.Vector.Double4 v) => new OpenTK.Mathematics.Vector4(
+            (float)v.X, (float)v.Y, (float)v.Z, (float)v.W
         );
 
-        private OpenTK.Mathematics.Vector4 ToTK(Color color) => new OpenTK.Mathematics.Vector4(
+        private OpenTK.Mathematics.Vector4 ToTK(Color32 color) => new OpenTK.Mathematics.Vector4(
             color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f
         );
 
@@ -259,12 +260,12 @@ void main()
             return TextureTK.CreateNew(width, height);
         }
 
-        public Vector2Int GetTextureSize(object texture)
+        public Int2 GetTextureSize(object texture)
         {
             if (texture is not TextureTK tkTexture)
                 throw new ArgumentException("Invalid texture type");
 
-            return new Vector2Int((int)tkTexture.Width, (int)tkTexture.Height);
+            return new Int2((int)tkTexture.Width, (int)tkTexture.Height);
         }
 
         public void SetTextureData(object texture, IntRect bounds, byte[] data)
@@ -329,7 +330,7 @@ void main()
                 drawCall.GetScissor(out var scissor, out var extent);
                 var tkScissor = ToTK(scissor);
                 GL.UniformMatrix4(_scissorMatLoc, false, ref tkScissor);
-                GL.Uniform2(_scissorExtLoc, (float)extent.x, (float)extent.y);
+                GL.Uniform2(_scissorExtLoc, (float)extent.X, (float)extent.Y);
 
                 // Set brush parameters
                 var brushMat = ToTK(drawCall.Brush.BrushMatrix);
@@ -337,7 +338,7 @@ void main()
                 GL.Uniform1(_brushTypeLoc, (int)drawCall.Brush.Type);
                 GL.Uniform4(_brushColor1Loc, ToTK(drawCall.Brush.Color1));
                 GL.Uniform4(_brushColor2Loc, ToTK(drawCall.Brush.Color2));
-                GL.Uniform4(_brushParamsLoc, (float)drawCall.Brush.Point1.x, (float)drawCall.Brush.Point1.y, (float)drawCall.Brush.Point2.x, (float)drawCall.Brush.Point2.y);
+                GL.Uniform4(_brushParamsLoc, (float)drawCall.Brush.Point1.X, (float)drawCall.Brush.Point1.Y, (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y);
                 GL.Uniform2(_brushParams2Loc, (float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather);
 
                 GL.DrawElements(PrimitiveType.Triangles, drawCall.ElementCount, DrawElementsType.UnsignedInt, indexOffset * sizeof(uint));

@@ -2,6 +2,7 @@
 using Silk.NET.OpenGL;
 using Prowl.Vector;
 using StbImageSharp;
+using Prowl.Vector.Geometry;
 
 namespace SilkExample
 {
@@ -102,10 +103,10 @@ namespace SilkExample
                 _gl.TexSubImage2D(
                     TextureTarget.Texture2D,
                     0,
-                    bounds.x,
-                    bounds.y,
-                    (uint)bounds.width,
-                    (uint)bounds.height,
+                    bounds.Min.X,
+                    bounds.Min.Y,
+                    (uint)bounds.Size.X,
+                    (uint)bounds.Size.Y,
                     PixelFormat.Rgba,
                     PixelType.UnsignedByte,
                     pixelPtr
