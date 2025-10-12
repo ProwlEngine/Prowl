@@ -728,11 +728,13 @@ namespace Prowl.Vector
 
         #endregion
 
-        public static implicit operator Double4(Color c) => new Color(c.R, c.G, c.B, c.A);
-        public static implicit operator System.Numerics.Vector4(Color c) => new Color(c.R, c.G, c.B, c.A);
+        public static implicit operator Double4(Color c) => new Double4(c.R, c.G, c.B, c.A);
+        public static implicit operator System.Numerics.Vector4(Color c) => new System.Numerics.Vector4((float)c.R, (float)c.G, (float)c.B, (float)c.A);
+        public static implicit operator System.Drawing.Color(Color c) => System.Drawing.Color.FromArgb((int)(c.A * 255), (int)(c.R * 255), (int)(c.G * 255), (int)(c.B * 255));
 
         public static implicit operator Color(Double4 v) => new Color(v.X, v.Y, v.Z, v.W);
         public static implicit operator Color(System.Numerics.Vector4 v) => new Color(v.X, v.Y, v.Z, v.W);
+        public static implicit operator Color(System.Drawing.Color c) => new Color(c.R, c.G, c.B, c.A);
 
         public static Color operator +(Color a, double b) => new Color(a.R + b, a.G + b, a.B + b, a.A + b);
         public static Color operator -(Color a, double b) => new Color(a.R - b, a.G - b, a.B - b, a.A - b);

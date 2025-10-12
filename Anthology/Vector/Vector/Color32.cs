@@ -43,15 +43,11 @@ namespace Prowl.Vector
 
         public static Color FromArgb(int red, int green, int blue) => FromArgb(byte.MaxValue, red, green, blue);
         
-        public static implicit operator Color32(Color c)
-        {
-            return new Color32((byte)(Maths.Min(Maths.Max(c.R, 0f), 1f) * 255f), (byte)(Maths.Min(Maths.Max(c.G, 0f), 1f) * 255f), (byte)(Maths.Min(Maths.Max(c.B, 0f), 1f) * 255f), (byte)(Maths.Min(Maths.Max(c.A, 0f), 1f) * 255f));
-        }
+        public static implicit operator Color32(Color c) => new Color32((byte)Maths.Clamp(c.R * 255.0, 0, 255), (byte)Maths.Clamp(c.G * 255.0, 0, 255), (byte)Maths.Clamp(c.B * 255.0, 0, 255), (byte)Maths.Clamp(c.A * 255.0, 0, 255));
+        public static implicit operator System.Drawing.Color(Color32 c) => System.Drawing.Color.FromArgb(c.A, c.R, c.G, c.B);
 
-        public static implicit operator Color(Color32 v)
-        {
-            return new Color(v.R / 255f, v.G / 255f, v.B / 255f, v.A / 255f);
-        }
+        public static implicit operator Color(Color32 v) => new Color(v.R / 255f, v.G / 255f, v.B / 255f, v.A / 255f);
+        public static implicit operator Color32(System.Drawing.Color c) => new Color32(c.R, c.G, c.B, c.A);
 
 
         #region Equals and HashCode
