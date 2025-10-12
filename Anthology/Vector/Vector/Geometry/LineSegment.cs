@@ -23,10 +23,10 @@ namespace Prowl.Vector.Geometry
     public struct LineSegment : IEquatable<LineSegment>, IFormattable
     {
         /// <summary>The starting point of the line segment.</summary>
-        public Float3 Start;
+        public Double3 Start;
 
         /// <summary>The ending point of the line segment.</summary>
-        public Float3 End;
+        public Double3 End;
 
         /// <summary>
         /// Initializes a new line segment with the specified endpoints.
@@ -34,7 +34,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="start">The starting point.</param>
         /// <param name="end">The ending point.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LineSegment(Float3 start, Float3 end)
+        public LineSegment(Double3 start, Double3 end)
         {
             Start = start;
             End = end;
@@ -50,16 +50,16 @@ namespace Prowl.Vector.Geometry
         /// <param name="endY">End point Y coordinate.</param>
         /// <param name="endZ">End point Z coordinate.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LineSegment(float startX, float startY, float startZ, float endX, float endY, float endZ)
+        public LineSegment(double startX, double startY, double startZ, double endX, double endY, double endZ)
         {
-            Start = new Float3(startX, startY, startZ);
-            End = new Float3(endX, endY, endZ);
+            Start = new Double3(startX, startY, startZ);
+            End = new Double3(endX, endY, endZ);
         }
 
         /// <summary>
         /// Gets the direction vector from start to end (not normalized).
         /// </summary>
-        public Float3 Direction
+        public Double3 Direction
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => End - Start;
@@ -68,37 +68,37 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Gets the normalized direction vector from start to end.
         /// </summary>
-        public Float3 NormalizedDirection
+        public Double3 NormalizedDirection
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Maths.Normalize(Direction);
+            get => Double3.Normalize(Direction);
         }
 
         /// <summary>
         /// Gets the length of the line segment.
         /// </summary>
-        public float Length
+        public double Length
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Maths.Length(Direction);
+            get => Double3.Length(Direction);
         }
 
         /// <summary>
         /// Gets the squared length of the line segment.
         /// </summary>
-        public float LengthSquared
+        public double LengthSquared
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Maths.LengthSquared(Direction);
+            get => Double3.LengthSquared(Direction);
         }
 
         /// <summary>
         /// Gets the center point of the line segment.
         /// </summary>
-        public Float3 Center
+        public Double3 Center
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => (Start + End) / 2f;
+            get => (Start + End) / 2.0;
         }
 
         /// <summary>
@@ -107,7 +107,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="t">Parameter value (0 = start, 1 = end).</param>
         /// <returns>The interpolated point.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Float3 GetPoint(float t)
+        public Double3 GetPoint(double t)
         {
             return Maths.Lerp(Start, End, t);
         }
@@ -118,9 +118,9 @@ namespace Prowl.Vector.Geometry
         /// <param name="t">Parameter value.</param>
         /// <returns>The interpolated point.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Float3 GetPointClamped(float t)
+        public Double3 GetPointClamped(double t)
         {
-            return GetPoint(Maths.Clamp(t, 0f, 1f));
+            return GetPoint(Maths.Clamp(t, 0.0, 1.0));
         }
 
         /// <summary>
@@ -129,9 +129,9 @@ namespace Prowl.Vector.Geometry
         /// <param name="point">The point to find the closest point to.</param>
         /// <returns>The closest point on the line segment.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Float3 ClosestPointTo(Float3 point)
+        public Double3 ClosestPointTo(Double3 point)
         {
-            Float3 closestPoint;
+            Double3 closestPoint;
             Intersection.ClosestPointOnLineSegmentToPoint(Start, End, point, out closestPoint);
             return closestPoint;
         }
@@ -142,16 +142,16 @@ namespace Prowl.Vector.Geometry
         /// <param name="point">The point to find the closest point to.</param>
         /// <returns>The parameter t (0 = start, 1 = end).</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public float GetClosestParameter(Float3 point)
+        public double GetClosestParameter(Double3 point)
         {
-            Float3 direction = Direction;
-            float lengthSq = Maths.LengthSquared(direction);
+            Double3 direction = Direction;
+            double lengthSq = Double3.LengthSquared(direction);
             
-            if (lengthSq < float.Epsilon * float.Epsilon)
-                return 0f; // Degenerate segment
+            if (lengthSq < double.Epsilon * double.Epsilon)
+                return 0.0; // Degenerate segment
             
-            float t = Maths.Dot(point - Start, direction) / lengthSq;
-            return Maths.Clamp(t, 0f, 1f);
+            double t = Double3.Dot(point - Start, direction) / lengthSq;
+            return Maths.Clamp(t, 0.0, 1.0);
         }
 
         /// <summary>
@@ -160,7 +160,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="point">The point to test.</param>
         /// <returns>The squared distance.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public float GetSqrDistanceToPoint(Float3 point)
+        public double GetSqrDistanceToPoint(Double3 point)
         {
             return Intersection.DistanceSqPointToLineSegment(Start, End, point);
         }
@@ -171,7 +171,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="point">The point to test.</param>
         /// <returns>The distance.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public float GetDistanceToPoint(Float3 point)
+        public double GetDistanceToPoint(Double3 point)
         {
             return Maths.Sqrt(GetSqrDistanceToPoint(point));
         }
@@ -183,7 +183,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="tolerance">The distance tolerance.</param>
         /// <returns>True if the point is on the line segment.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ContainsPoint(Float3 point, float tolerance = float.Epsilon)
+        public bool ContainsPoint(Double3 point, double tolerance = double.Epsilon)
         {
             return GetDistanceToPoint(point) <= tolerance;
         }
@@ -195,7 +195,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="intersectionPoint">The intersection point if found.</param>
         /// <returns>True if intersection occurs within the segment.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool IntersectsPlane(Plane plane, out Float3 intersectionPoint)
+        public bool IntersectsPlane(Plane plane, out Double3 intersectionPoint)
         {
             return Intersection.LineSegmentPlane(Start, End, plane.Normal, plane.D, out intersectionPoint);
         }
@@ -209,7 +209,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="t1">Parameter on this segment.</param>
         /// <param name="t2">Parameter on the other segment.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void GetClosestPoints(LineSegment other, out Float3 point1, out Float3 point2, out float t1, out float t2)
+        public void GetClosestPoints(LineSegment other, out Double3 point1, out Double3 point2, out double t1, out double t2)
         {
             Intersection.ClosestPointsLineSegmentLineSegment(Start, End, other.Start, other.End, out point1, out point2, out t1, out t2);
         }
@@ -220,7 +220,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="other">The other line segment.</param>
         /// <returns>The squared distance between the segments.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public float GetSqrDistanceToSegment(LineSegment other)
+        public double GetSqrDistanceToSegment(LineSegment other)
         {
             return Intersection.DistanceSqSegmentSegment(Start, End, other.Start, other.End);
         }
@@ -231,7 +231,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="other">The other line segment.</param>
         /// <returns>The distance between the segments.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public float GetDistanceToSegment(LineSegment other)
+        public double GetDistanceToSegment(LineSegment other)
         {
             return Maths.Sqrt(GetSqrDistanceToSegment(other));
         }
@@ -242,9 +242,9 @@ namespace Prowl.Vector.Geometry
         /// <param name="startExtension">Amount to extend at the start.</param>
         /// <param name="endExtension">Amount to extend at the end.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Extend(float startExtension, float endExtension)
+        public void Extend(double startExtension, double endExtension)
         {
-            Float3 direction = NormalizedDirection;
+            Double3 direction = NormalizedDirection;
             Start -= direction * startExtension;
             End += direction * endExtension;
         }
@@ -256,7 +256,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="endExtension">Amount to extend at the end.</param>
         /// <returns>The extended line segment.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LineSegment Extended(float startExtension, float endExtension)
+        public LineSegment Extended(double startExtension, double endExtension)
         {
             var result = this;
             result.Extend(startExtension, endExtension);
@@ -288,11 +288,11 @@ namespace Prowl.Vector.Geometry
         /// <param name="matrix">The transformation matrix.</param>
         /// <returns>The transformed line segment.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LineSegment Transform(Float4x4 matrix)
+        public LineSegment Transform(Double4x4 matrix)
         {
             return new LineSegment(
-                Maths.TransformPoint(Start, matrix),
-                Maths.TransformPoint(End, matrix)
+                Double4x4.TransformPoint(Start, matrix),
+                Double4x4.TransformPoint(End, matrix)
             );
         }
 
@@ -301,15 +301,15 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="subdivisions">Number of subdivisions.</param>
         /// <returns>Array of subdivision points including start and end.</returns>
-        public Float3[] Subdivide(int subdivisions)
+        public Double3[] Subdivide(int subdivisions)
         {
             if (subdivisions < 1)
                 throw new ArgumentException("Subdivisions must be at least 1", nameof(subdivisions));
 
-            var points = new Float3[subdivisions + 1];
+            var points = new Double3[subdivisions + 1];
             for (int i = 0; i <= subdivisions; i++)
             {
-                float t = i / (float)subdivisions;
+                double t = i / (double)subdivisions;
                 points[i] = GetPoint(t);
             }
             return points;
@@ -322,7 +322,7 @@ namespace Prowl.Vector.Geometry
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsDegenerate()
         {
-            return LengthSquared < float.Epsilon * float.Epsilon;
+            return LengthSquared < double.Epsilon * double.Epsilon;
         }
 
         /// <summary>
@@ -332,7 +332,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="length">The length of the segment.</param>
         /// <returns>A line segment starting at the ray origin.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static LineSegment FromRay(Ray ray, float length)
+        public static LineSegment FromRay(Ray ray, double length)
         {
             return new LineSegment(ray.Origin, ray.Origin + ray.Direction * length);
         }
@@ -353,7 +353,7 @@ namespace Prowl.Vector.Geometry
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string ToString(string? format, IFormatProvider? formatProvider = null)
         {
-            return string.Format(formatProvider, "LineSegment(Start: {0}, End: {1})", 
+            return string.Format(formatProvider, "LineSegmentD(Start: {0}, End: {1})", 
                 Start.ToString(format, formatProvider), End.ToString(format, formatProvider));
         }
 

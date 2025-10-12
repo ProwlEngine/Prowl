@@ -27,12 +27,12 @@ public class DiffuseShader : Rasterizer.Shader
     public override void Prepare()
     {
         // Pre-compute combined matrices once
-        var modelView = Maths.Mul(viewMatrix, modelMatrix);
-        s_mvpMatrix = Maths.Mul(projectionMatrix, modelView);
+        var modelView = viewMatrix * modelMatrix;
+        s_mvpMatrix = projectionMatrix * modelView;
         s_modelViewMatrix = modelView;
 
         Float3x3 upper3x3Model = new Float3x3(modelMatrix.c0.XYZ, modelMatrix.c1.XYZ, modelMatrix.c2.XYZ);
-        s_normalMatrix = Maths.Transpose(Maths.Inverse(upper3x3Model));
+        s_normalMatrix = Float3x3.Transpose(upper3x3Model.Invert());
     }
 
     public override ShaderOutput VertexShader(int vertexIndex)
@@ -40,15 +40,15 @@ public class DiffuseShader : Rasterizer.Shader
         var vPosition = GetVertexAttribute<Float3>(vertexIndex, 0);
         var vNormal = GetVertexAttribute<Float3>(vertexIndex, 1);
 
-        Float4 clipPos = Maths.Mul(s_mvpMatrix, new Float4(vPosition, 1.0f));
+        Float4 clipPos = s_mvpMatrix * new Float4(vPosition, 1.0f);
 
         // Transform normal to world space
-        Float3 transformedNormal = (Maths.Mul(s_normalMatrix, vNormal));
+        Float3 transformedNormal = (s_normalMatrix * vNormal);
 
         return new ShaderOutput
         {
             GlPosition = clipPos,
-            Varyings = [ vPosition, transformedNormal ] // 0: position, 1: normal
+            Varyings = [ (Float4)vPosition, (Float4)transformedNormal ] // 0: position, 1: normal
         };
     }
 
@@ -57,7 +57,7 @@ public class DiffuseShader : Rasterizer.Shader
         var position = varyings[0].XYZ;
         var normal = varyings[1].XYZ;
 
-        float diffuse = Maths.Max(0, Maths.Dot(normal, -lightDir));
+        float diffuse = Maths.Max(0, Float3.Dot(normal, -lightDir));
 
         return new FragmentOutput
         {

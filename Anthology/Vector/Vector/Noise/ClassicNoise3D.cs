@@ -51,26 +51,26 @@ namespace Prowl.Vector
             Float3 g111 = new Float3(gx1.W, gy1.W, gz1.W);
 
             Float4 norm0 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g000, g000),
-                Maths.Dot(g010, g010),
-                Maths.Dot(g100, g100),
-                Maths.Dot(g110, g110)
+                Float3.Dot(g000, g000),
+                Float3.Dot(g010, g010),
+                Float3.Dot(g100, g100),
+                Float3.Dot(g110, g110)
             ));
             Float4 norm1 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g001, g001),
-                Maths.Dot(g011, g011),
-                Maths.Dot(g101, g101),
-                Maths.Dot(g111, g111)
+                Float3.Dot(g001, g001),
+                Float3.Dot(g011, g011),
+                Float3.Dot(g101, g101),
+                Float3.Dot(g111, g111)
             ));
 
-            float n000 = norm0.X * Maths.Dot(g000, Pf0);
-            float n010 = norm0.Y * Maths.Dot(g010, new Float3(Pf0.X, Pf1.Y, Pf0.Z));
-            float n100 = norm0.Z * Maths.Dot(g100, new Float3(Pf1.X, Pf0.Y, Pf0.Z));
-            float n110 = norm0.W * Maths.Dot(g110, new Float3(Pf1.X, Pf1.Y, Pf0.Z));
-            float n001 = norm1.X * Maths.Dot(g001, new Float3(Pf0.X, Pf0.Y, Pf1.Z));
-            float n011 = norm1.Y * Maths.Dot(g011, new Float3(Pf0.X, Pf1.Y, Pf1.Z));
-            float n101 = norm1.Z * Maths.Dot(g101, new Float3(Pf1.X, Pf0.Y, Pf1.Z));
-            float n111 = norm1.W * Maths.Dot(g111, Pf1);
+            float n000 = norm0.X * Float3.Dot(g000, Pf0);
+            float n010 = norm0.Y * Float3.Dot(g010, new Float3(Pf0.X, Pf1.Y, Pf0.Z));
+            float n100 = norm0.Z * Float3.Dot(g100, new Float3(Pf1.X, Pf0.Y, Pf0.Z));
+            float n110 = norm0.W * Float3.Dot(g110, new Float3(Pf1.X, Pf1.Y, Pf0.Z));
+            float n001 = norm1.X * Float3.Dot(g001, new Float3(Pf0.X, Pf0.Y, Pf1.Z));
+            float n011 = norm1.Y * Float3.Dot(g011, new Float3(Pf0.X, Pf1.Y, Pf1.Z));
+            float n101 = norm1.Z * Float3.Dot(g101, new Float3(Pf1.X, Pf0.Y, Pf1.Z));
+            float n111 = norm1.W * Float3.Dot(g111, Pf1);
 
             Float3 fade_xyz = Fade(Pf0);
             Float4 n_z = Maths.Lerp(new Float4(n000, n100, n010, n110), new Float4(n001, n101, n011, n111), fade_xyz.Z);
@@ -123,26 +123,26 @@ namespace Prowl.Vector
             Float3 g111 = new Float3(gx1.W, gy1.W, gz1.W);
 
             Float4 norm0 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g000, g000),
-                Maths.Dot(g010, g010),
-                Maths.Dot(g100, g100),
-                Maths.Dot(g110, g110)
+                Float3.Dot(g000, g000),
+                Float3.Dot(g010, g010),
+                Float3.Dot(g100, g100),
+                Float3.Dot(g110, g110)
             ));
             Float4 norm1 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g001, g001),
-                Maths.Dot(g011, g011),
-                Maths.Dot(g101, g101),
-                Maths.Dot(g111, g111)
+                Float3.Dot(g001, g001),
+                Float3.Dot(g011, g011),
+                Float3.Dot(g101, g101),
+                Float3.Dot(g111, g111)
             ));
 
-            float n000 = norm0.X * Maths.Dot(g000, Pf0);
-            float n010 = norm0.Y * Maths.Dot(g010, new Float3(Pf0.X, Pf1.Y, Pf0.Z));
-            float n100 = norm0.Z * Maths.Dot(g100, new Float3(Pf1.X, Pf0.Y, Pf0.Z));
-            float n110 = norm0.W * Maths.Dot(g110, new Float3(Pf1.X, Pf1.Y, Pf0.Z));
-            float n001 = norm1.X * Maths.Dot(g001, new Float3(Pf0.X, Pf0.Y, Pf1.Z));
-            float n011 = norm1.Y * Maths.Dot(g011, new Float3(Pf0.X, Pf1.Y, Pf1.Z));
-            float n101 = norm1.Z * Maths.Dot(g101, new Float3(Pf1.X, Pf0.Y, Pf1.Z));
-            float n111 = norm1.W * Maths.Dot(g111, Pf1);
+            float n000 = norm0.X * Float3.Dot(g000, Pf0);
+            float n010 = norm0.Y * Float3.Dot(g010, new Float3(Pf0.X, Pf1.Y, Pf0.Z));
+            float n100 = norm0.Z * Float3.Dot(g100, new Float3(Pf1.X, Pf0.Y, Pf0.Z));
+            float n110 = norm0.W * Float3.Dot(g110, new Float3(Pf1.X, Pf1.Y, Pf0.Z));
+            float n001 = norm1.X * Float3.Dot(g001, new Float3(Pf0.X, Pf0.Y, Pf1.Z));
+            float n011 = norm1.Y * Float3.Dot(g011, new Float3(Pf0.X, Pf1.Y, Pf1.Z));
+            float n101 = norm1.Z * Float3.Dot(g101, new Float3(Pf1.X, Pf0.Y, Pf1.Z));
+            float n111 = norm1.W * Float3.Dot(g111, Pf1);
 
             Float3 fade_xyz = Fade(Pf0);
             Float4 n_z = Maths.Lerp(new Float4(n000, n100, n010, n110), new Float4(n001, n101, n011, n111), fade_xyz.Z);

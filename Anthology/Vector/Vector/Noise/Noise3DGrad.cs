@@ -15,8 +15,8 @@ namespace Prowl.Vector
             Float4 D = new Float4(0.0f, 0.5f, 1.0f, 2.0f);
 
             // First corner
-            Float3 i = Maths.Floor(v + Maths.Dot(v, C.YYY));
-            Float3 x0 = v - i + Maths.Dot(i, C.XXX);
+            Float3 i = Maths.Floor(v + Float3.Dot(v, C.YYY));
+            Float3 x0 = v - i + Float3.Dot(i, C.XXX);
 
             // Other corners
             Float3 g = Maths.Step(x0.YZX, x0.XYZ);
@@ -69,27 +69,27 @@ namespace Prowl.Vector
             Float3 p3 = new Float3(a1.Z, a1.W, h.W);
 
             // Normalise gradients
-            Float4 norm = TaylorInvSqrt(new Float4(Maths.Dot(p0, p0),
-                                                   Maths.Dot(p1, p1),
-                                                   Maths.Dot(p2, p2),
-                                                   Maths.Dot(p3, p3)));
+            Float4 norm = TaylorInvSqrt(new Float4(Float3.Dot(p0, p0),
+                                                   Float3.Dot(p1, p1),
+                                                   Float3.Dot(p2, p2),
+                                                   Float3.Dot(p3, p3)));
             p0 *= norm.X;
             p1 *= norm.Y;
             p2 *= norm.Z;
             p3 *= norm.W;
 
             // Mix final noise value
-            Float4 m = Maths.Max(0.5f - new Float4(Maths.Dot(x0, x0),
-                                                   Maths.Dot(x1, x1),
-                                                   Maths.Dot(x2, x2),
-                                                   Maths.Dot(x3, x3)),
+            Float4 m = Maths.Max(0.5f - new Float4(Float3.Dot(x0, x0),
+                                                   Float3.Dot(x1, x1),
+                                                   Float3.Dot(x2, x2),
+                                                   Float3.Dot(x3, x3)),
                                  new Float4(0.0f));
             Float4 m2 = m * m;
             Float4 m4 = m2 * m2;
-            Float4 pdotx = new Float4(Maths.Dot(p0, x0),
-                                      Maths.Dot(p1, x1),
-                                      Maths.Dot(p2, x2),
-                                      Maths.Dot(p3, x3));
+            Float4 pdotx = new Float4(Float3.Dot(p0, x0),
+                                      Float3.Dot(p1, x1),
+                                      Float3.Dot(p2, x2),
+                                      Float3.Dot(p3, x3));
 
             // Determine noise gradient
             Float4 temp = m2 * m * pdotx;
@@ -97,7 +97,7 @@ namespace Prowl.Vector
             gradient += m4.X * p0 + m4.Y * p1 + m4.Z * p2 + m4.W * p3;
             gradient *= 105.0f;
 
-            return 105.0f * Maths.Dot(m4, pdotx);
+            return 105.0f * Float4.Dot(m4, pdotx);
         }
     }
 }

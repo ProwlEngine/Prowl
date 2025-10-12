@@ -5,10 +5,6 @@ VisualStudioVersion = 17.13.35507.96
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Vector", "Vector\Vector.csproj", "{D7A7FE19-80CC-4335-8931-03F6D1529343}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj", "{9CF47860-2CEA-F379-09D8-9AEF27965D12}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SourceGenerator", "SourceGenerator\SourceGenerator.csproj", "{B67812E2-BF35-4BCF-B1E0-27E6486B9BCE}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SoftwareRasterizer", "Samples\SoftwareRasterizer\SoftwareRasterizer.csproj", "{1B1204BA-A171-4EA8-B588-6D3CE99B5C02}"
@@ -25,14 +21,6 @@ Global
 		{D7A7FE19-80CC-4335-8931-03F6D1529343}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D7A7FE19-80CC-4335-8931-03F6D1529343}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D7A7FE19-80CC-4335-8931-03F6D1529343}.Release|Any CPU.Build.0 = Release|Any CPU
-		{9CF47860-2CEA-F379-09D8-9AEF27965D12}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{9CF47860-2CEA-F379-09D8-9AEF27965D12}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{9CF47860-2CEA-F379-09D8-9AEF27965D12}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{9CF47860-2CEA-F379-09D8-9AEF27965D12}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B67812E2-BF35-4BCF-B1E0-27E6486B9BCE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B67812E2-BF35-4BCF-B1E0-27E6486B9BCE}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B67812E2-BF35-4BCF-B1E0-27E6486B9BCE}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B67812E2-BF35-4BCF-B1E0-27E6486B9BCE}.Release|Any CPU.Build.0 = Release|Any CPU
 		{1B1204BA-A171-4EA8-B588-6D3CE99B5C02}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{1B1204BA-A171-4EA8-B588-6D3CE99B5C02}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1B1204BA-A171-4EA8-B588-6D3CE99B5C02}.Release|Any CPU.ActiveCfg = Release|Any CPU

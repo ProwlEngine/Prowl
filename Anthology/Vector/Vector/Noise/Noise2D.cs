@@ -17,8 +17,8 @@ namespace Prowl.Vector
                                   0.024390243902439f); // 1.0 / 41.0
 
             // First corner
-            Float2 i = Maths.Floor(v + Maths.Dot(v, C.YY));
-            Float2 x0 = v - i + Maths.Dot(i, C.XX);
+            Float2 i = Maths.Floor(v + Float2.Dot(v, C.YY));
+            Float2 x0 = v - i + Float2.Dot(i, C.XX);
 
             // Other corners
             Float2 i1;
@@ -35,9 +35,9 @@ namespace Prowl.Vector
             Float3 p = Permute(Permute(i.Y + new Float3(0.0f, i1.Y, 1.0f))
                             + i.X + new Float3(0.0f, i1.X, 1.0f));
 
-            Float3 m = Maths.Max(0.5f - new Float3(Maths.Dot(x0, x0),
-                                                   Maths.Dot(x12.XY, x12.XY),
-                                                   Maths.Dot(x12.ZW, x12.ZW)),
+            Float3 m = Maths.Max(0.5f - new Float3(Float2.Dot(x0, x0),
+                                                   Float2.Dot(x12.XY, x12.XY),
+                                                   Float2.Dot(x12.ZW, x12.ZW)),
                                  new Float3(0.0f));
             m = m * m;
             m = m * m;
@@ -57,7 +57,7 @@ namespace Prowl.Vector
             Float3 g = new Float3();
             g.X = a0.X * x0.X + h.X * x0.Y;
             g.YZ = a0.YZ * x12.XZ + h.YZ * x12.YW;
-            return 130.0f * Maths.Dot(m, g);
+            return 130.0f * Float3.Dot(m, g);
         }
     }
 }

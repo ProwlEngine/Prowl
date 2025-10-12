@@ -23,10 +23,10 @@ namespace Prowl.Vector.Geometry
     public struct Sphere : IEquatable<Sphere>, IFormattable
     {
         /// <summary>The center point of the sphere.</summary>
-        public Float3 Center;
+        public Double3 Center;
 
         /// <summary>The radius of the sphere.</summary>
-        public float Radius;
+        public double Radius;
 
         /// <summary>
         /// Initializes a new sphere with the specified center and radius.
@@ -34,10 +34,10 @@ namespace Prowl.Vector.Geometry
         /// <param name="center">The center point of the sphere.</param>
         /// <param name="radius">The radius of the sphere.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Sphere(Float3 center, float radius)
+        public Sphere(Double3 center, double radius)
         {
             Center = center;
-            Radius = Maths.Max(radius, 0f); // Ensure non-negative radius
+            Radius = Maths.Max(radius, 0.0); // Ensure non-negative radius
         }
 
         /// <summary>
@@ -48,46 +48,46 @@ namespace Prowl.Vector.Geometry
         /// <param name="z">Z coordinate of the center.</param>
         /// <param name="radius">The radius of the sphere.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Sphere(float x, float y, float z, float radius)
+        public Sphere(double x, double y, double z, double radius)
         {
-            Center = new Float3(x, y, z);
-            Radius = Maths.Max(radius, 0f);
+            Center = new Double3(x, y, z);
+            Radius = Maths.Max(radius, 0.0);
         }
 
         /// <summary>
         /// Gets the diameter of the sphere.
         /// </summary>
-        public float Diameter
+        public double Diameter
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Radius * 2f;
+            get => Radius * 2.0;
         }
 
         /// <summary>
         /// Gets the surface area of the sphere (4πr²).
         /// </summary>
-        public float SurfaceArea
+        public double SurfaceArea
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => 4 * (float)Maths.PI * Radius * Radius;
+            get => 4 * (double)Maths.PI * Radius * Radius;
         }
 
         /// <summary>
         /// Gets the volume of the sphere (4/3πr³).
         /// </summary>
-        public float Volume
+        public double Volume
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => (4 / 3) * (float)Maths.PI * Radius * Radius * Radius;
+            get => (4 / 3) * (double)Maths.PI * Radius * Radius * Radius;
         }
 
         /// <summary>
         /// Gets the circumference of the sphere (2πr).
         /// </summary>
-        public float Circumference
+        public double Circumference
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => 2f * (float)Maths.PI * Radius;
+            get => 2.0 * (double)Maths.PI * Radius;
         }
 
         /// <summary>
@@ -96,9 +96,9 @@ namespace Prowl.Vector.Geometry
         /// <param name="point">The point to test.</param>
         /// <returns>True if the point is inside or on the sphere surface.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Contains(Float3 point)
+        public bool Contains(Double3 point)
         {
-            return Maths.LengthSquared(point - Center) <= Radius * Radius + float.Epsilon;
+            return Double3.LengthSquared(point - Center) <= Radius * Radius + double.Epsilon;
         }
 
         /// <summary>
@@ -109,8 +109,8 @@ namespace Prowl.Vector.Geometry
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(Sphere other)
         {
-            float distance = Maths.Length(other.Center - Center);
-            return distance + other.Radius <= Radius + float.Epsilon;
+            double distance = Double3.Length(other.Center - Center);
+            return distance + other.Radius <= Radius + double.Epsilon;
         }
 
         /// <summary>
@@ -142,9 +142,9 @@ namespace Prowl.Vector.Geometry
         /// <param name="point">The point to test.</param>
         /// <returns>The signed distance.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public float GetSignedDistanceToPoint(Float3 point)
+        public double GetSignedDistanceToPoint(Double3 point)
         {
-            return Maths.Length(point - Center) - Radius;
+            return Double3.Length(point - Center) - Radius;
         }
 
         /// <summary>
@@ -153,7 +153,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="point">The point to test.</param>
         /// <returns>The absolute distance.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public float GetDistanceToPoint(Float3 point)
+        public double GetDistanceToPoint(Double3 point)
         {
             return Maths.Abs(GetSignedDistanceToPoint(point));
         }
@@ -164,9 +164,9 @@ namespace Prowl.Vector.Geometry
         /// <param name="point">The point to find the closest point to.</param>
         /// <returns>The closest point on the sphere surface.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Float3 ClosestPointTo(Float3 point)
+        public Double3 ClosestPointTo(Double3 point)
         {
-            Float3 closestPoint;
+            Double3 closestPoint;
             Intersection.ClosestPointOnSphereToPoint(point, Center, Radius, out closestPoint);
             return closestPoint;
         }
@@ -176,9 +176,9 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="point">The point to include.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Encapsulate(Float3 point)
+        public void Encapsulate(Double3 point)
         {
-            float distance = Maths.Length(point - Center);
+            double distance = Double3.Length(point - Center);
             if (distance > Radius)
             {
                 Radius = distance;
@@ -192,8 +192,8 @@ namespace Prowl.Vector.Geometry
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Encapsulate(Sphere other)
         {
-            float distance = Maths.Length(other.Center - Center);
-            float requiredRadius = distance + other.Radius;
+            double distance = Double3.Length(other.Center - Center);
+            double requiredRadius = distance + other.Radius;
             if (requiredRadius > Radius)
             {
                 Radius = requiredRadius;
@@ -206,7 +206,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="point">The point to include.</param>
         /// <returns>The encapsulating sphere.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Sphere Encapsulating(Float3 point)
+        public Sphere Encapsulating(Double3 point)
         {
             var result = this;
             result.Encapsulate(point);
@@ -233,18 +233,18 @@ namespace Prowl.Vector.Geometry
         /// <param name="matrix">The transformation matrix.</param>
         /// <returns>The transformed sphere.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Sphere Transform(Float4x4 matrix)
+        public Sphere Transform(Double4x4 matrix)
         {
-            Float3 transformedCenter = Maths.TransformPoint(Center, matrix);
+            Double3 transformedCenter = Double4x4.TransformPoint(Center, matrix);
             
             // For radius, we need to handle scaling. We'll use the maximum scale factor.
-            Float3 scaleVector = new Float3(
-                Maths.Length(new Float3(matrix.c0.X, matrix.c0.Y, matrix.c0.Z)),
-                Maths.Length(new Float3(matrix.c1.X, matrix.c1.Y, matrix.c1.Z)),
-                Maths.Length(new Float3(matrix.c2.X, matrix.c2.Y, matrix.c2.Z))
+            Double3 scaleVector = new Double3(
+                Double3.Length(new Double3(matrix.c0.X, matrix.c0.Y, matrix.c0.Z)),
+                Double3.Length(new Double3(matrix.c1.X, matrix.c1.Y, matrix.c1.Z)),
+                Double3.Length(new Double3(matrix.c2.X, matrix.c2.Y, matrix.c2.Z))
             );
-            float maxScale = Maths.Max(scaleVector.X, Maths.Max(scaleVector.Y, scaleVector.Z));
-            float transformedRadius = Radius * maxScale;
+            double maxScale = Maths.Max(scaleVector.X, Maths.Max(scaleVector.Y, scaleVector.Z));
+            double transformedRadius = Radius * maxScale;
             
             return new Sphere(transformedCenter, transformedRadius);
         }
@@ -254,19 +254,19 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <returns>A uniformly distributed point on the sphere surface.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Float3 SampleSurface()
+        public Double3 SampleSurface()
         {
-            float u = RNG.Shared.NextFloat();
-            float v = RNG.Shared.NextFloat();
-            float theta = 2f * (float)Maths.PI * u;
-            float phi = Maths.Acos(2f * v - 1f);
+            double u = RNG.Shared.NextDouble();
+            double v = RNG.Shared.NextDouble();
+            double theta = 2.0 * (double)Maths.PI * u;
+            double phi = Maths.Acos(2.0 * v - 1.0);
             
-            float sinPhi = Maths.Sin(phi);
-            float x = sinPhi * Maths.Cos(theta);
-            float y = sinPhi * Maths.Sin(theta);
-            float z = Maths.Cos(phi);
+            double sinPhi = Maths.Sin(phi);
+            double x = sinPhi * Maths.Cos(theta);
+            double y = sinPhi * Maths.Sin(theta);
+            double z = Maths.Cos(phi);
             
-            return Center + new Float3(x, y, z) * Radius;
+            return Center + new Double3(x, y, z) * Radius;
         }
 
         /// <summary>
@@ -274,12 +274,12 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <returns>A uniformly distributed point inside the sphere.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Float3 SampleVolume()
+        public Double3 SampleVolume()
         {
-            float u = RNG.Shared.NextFloat();
-            float r = Radius * Maths.Pow(u, 1f / 3); // Cube root for uniform distribution
-            Float3 direction = SampleSurface() - Center;
-            direction = Maths.Normalize(direction);
+            double u = RNG.Shared.NextDouble();
+            double r = Radius * Maths.Pow(u, 1.0 / 3); // Cube root for uniform distribution
+            Double3 direction = SampleSurface() - Center;
+            direction = Double3.Normalize(direction);
             return Center + direction * r;
         }
 
@@ -290,10 +290,10 @@ namespace Prowl.Vector.Geometry
         /// <param name="pointB">Second endpoint.</param>
         /// <returns>A sphere with the two points as diameter endpoints.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Sphere FromDiameter(Float3 pointA, Float3 pointB)
+        public static Sphere FromDiameter(Double3 pointA, Double3 pointB)
         {
-            Float3 center = (pointA + pointB) / 2f;
-            float radius = Maths.Length(pointB - pointA) / 2f;
+            Double3 center = (pointA + pointB) / 2.0;
+            double radius = Double3.Length(pointB - pointA) / 2.0;
             return new Sphere(center, radius);
         }
 
@@ -303,30 +303,30 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="points">The points to encapsulate.</param>
         /// <returns>The smallest encapsulating sphere.</returns>
-        public static Sphere FromPoints(Float3[] points)
+        public static Sphere FromPoints(Double3[] points)
         {
             if (points == null || points.Length == 0)
-                return new Sphere(Float3.Zero, 0f);
+                return new Sphere(Double3.Zero, 0.0);
             
             if (points.Length == 1)
-                return new Sphere(points[0], 0f);
+                return new Sphere(points[0], 0.0);
             
             if (points.Length == 2)
                 return FromDiameter(points[0], points[1]);
             
             // For simplicity, use centroid and max distance approach
             // A more sophisticated implementation would use Welzl's algorithm
-            Float3 centroid = Float3.Zero;
+            Double3 centroid = Double3.Zero;
             for (int i = 0; i < points.Length; i++)
             {
                 centroid += points[i];
             }
             centroid /= points.Length;
             
-            float maxDistSq = 0f;
+            double maxDistSq = 0.0;
             for (int i = 0; i < points.Length; i++)
             {
-                float distSq = Maths.LengthSquared(points[i] - centroid);
+                double distSq = Double3.LengthSquared(points[i] - centroid);
                 if (distSq > maxDistSq)
                     maxDistSq = distSq;
             }
@@ -350,7 +350,7 @@ namespace Prowl.Vector.Geometry
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string ToString(string? format, IFormatProvider? formatProvider = null)
         {
-            return string.Format(formatProvider, "Sphere(Center: {0}, Radius: {1})", 
+            return string.Format(formatProvider, "SphereD(Center: {0}, Radius: {1})", 
                 Center.ToString(format, formatProvider), Radius.ToString(format, formatProvider));
         }
 

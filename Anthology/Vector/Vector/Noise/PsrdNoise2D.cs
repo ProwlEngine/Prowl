@@ -60,12 +60,12 @@ namespace Prowl.Vector
 
             // Gradients dot vectors to corresponding corners
             // (The derivatives of this are simply the gradients)
-            Float3 w = new Float3(Maths.Dot(g0, d0), Maths.Dot(g1, d1), Maths.Dot(g2, d2));
+            Float3 w = new Float3(Float2.Dot(g0, d0), Float2.Dot(g1, d1), Float2.Dot(g2, d2));
 
             // Radial weights from corners
             // 0.8 is the square of 2/sqrt(5), the distance from
             // a grid point to the nearest simplex boundary
-            Float3 t = 0.8f - new Float3(Maths.Dot(d0, d0), Maths.Dot(d1, d1), Maths.Dot(d2, d2));
+            Float3 t = 0.8f - new Float3(Float2.Dot(d0, d0), Float2.Dot(d1, d1), Float2.Dot(d2, d2));
 
             // Partial derivatives for analytical gradient computation
             Float3 dtdx = -2.0f * new Float3(d0.X, d1.X, d2.X);
@@ -98,7 +98,7 @@ namespace Prowl.Vector
 
             // Final noise value is:
             // sum of ((radial weights) times (gradient dot vector from corner))
-            float n = Maths.Dot(t4, w);
+            float n = Float3.Dot(t4, w);
 
             // Final analytical derivative (gradient of a sum of scalar products)
             Float2 dt0 = new Float2(dtdx.X, dtdy.X) * 4.0f * t3.X;
@@ -162,12 +162,12 @@ namespace Prowl.Vector
 
             // Gradients dot vectors to corresponding corners
             // (The derivatives of this are simply the gradients)
-            Float3 w = new Float3(Maths.Dot(g0, d0), Maths.Dot(g1, d1), Maths.Dot(g2, d2));
+            Float3 w = new Float3(Float2.Dot(g0, d0), Float2.Dot(g1, d1), Float2.Dot(g2, d2));
 
             // Radial weights from corners
             // 0.8 is the square of 2/sqrt(5), the distance from
             // a grid point to the nearest simplex boundary
-            Float3 t = 0.8f - new Float3(Maths.Dot(d0, d0), Maths.Dot(d1, d1), Maths.Dot(d2, d2));
+            Float3 t = 0.8f - new Float3(Float2.Dot(d0, d0), Float2.Dot(d1, d1), Float2.Dot(d2, d2));
 
             // Set influence of each surflet to zero outside radius sqrt(0.8)
             t = Maths.Max(t, new Float3(0.0f));
@@ -178,7 +178,7 @@ namespace Prowl.Vector
 
             // Final noise value is:
             // sum of ((radial weights) times (gradient dot vector from corner))
-            float n = Maths.Dot(t4, w);
+            float n = Float3.Dot(t4, w);
 
             // Rescale to cover the range [-1,1] reasonably well
             return 11.0f * n;
@@ -239,12 +239,12 @@ namespace Prowl.Vector
 
             // Gradients dot vectors to corresponding corners
             // (The derivatives of this are simply the gradients)
-            Float3 w = new Float3(Maths.Dot(g0, d0), Maths.Dot(g1, d1), Maths.Dot(g2, d2));
+            Float3 w = new Float3(Float2.Dot(g0, d0), Float2.Dot(g1, d1), Float2.Dot(g2, d2));
 
             // Radial weights from corners
             // 0.8 is the square of 2/sqrt(5), the distance from
             // a grid point to the nearest simplex boundary
-            Float3 t = 0.8f - new Float3(Maths.Dot(d0, d0), Maths.Dot(d1, d1), Maths.Dot(d2, d2));
+            Float3 t = 0.8f - new Float3(Float2.Dot(d0, d0), Float2.Dot(d1, d1), Float2.Dot(d2, d2));
 
             // Partial derivatives for analytical gradient computation
             Float3 dtdx = -2.0f * new Float3(d0.X, d1.X, d2.X);
@@ -277,7 +277,7 @@ namespace Prowl.Vector
 
             // Final noise value is:
             // sum of ((radial weights) times (gradient dot vector from corner))
-            float n = Maths.Dot(t4, w);
+            float n = Float3.Dot(t4, w);
 
             // Final analytical derivative (gradient of a sum of scalar products)
             Float2 dt0 = new Float2(dtdx.X, dtdy.X) * 4.0f * t3.X;
@@ -345,12 +345,12 @@ namespace Prowl.Vector
 
             // Gradients dot vectors to corresponding corners
             // (The derivatives of this are simply the gradients)
-            Float3 w = new Float3(Maths.Dot(g0, d0), Maths.Dot(g1, d1), Maths.Dot(g2, d2));
+            Float3 w = new Float3(Float2.Dot(g0, d0), Float2.Dot(g1, d1), Float2.Dot(g2, d2));
 
             // Radial weights from corners
             // 0.8 is the square of 2/sqrt(5), the distance from
             // a grid point to the nearest simplex boundary
-            Float3 t = 0.8f - new Float3(Maths.Dot(d0, d0), Maths.Dot(d1, d1), Maths.Dot(d2, d2));
+            Float3 t = 0.8f - new Float3(Float2.Dot(d0, d0), Float2.Dot(d1, d1), Float2.Dot(d2, d2));
 
             // Set influence of each surflet to zero outside radius sqrt(0.8)
             t = Maths.Max(t, new Float3(0.0f));
@@ -361,7 +361,7 @@ namespace Prowl.Vector
 
             // Final noise value is:
             // sum of ((radial weights) times (gradient dot vector from corner))
-            float n = Maths.Dot(t4, w);
+            float n = Float3.Dot(t4, w);
 
             // Rescale to cover the range [-1,1] reasonably well
             return 11.0f * n;

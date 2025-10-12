@@ -425,10 +425,10 @@ public partial class GraphicsDevice
     private readonly ThreadLocal<RasterVertex[]> clipOutputVertices = new(() => new RasterVertex[16]);
     private readonly ThreadLocal<List<RasterTriangle>> clippedTriangles = new(() => new List<RasterTriangle>(8));
 
-    private readonly PlaneFloat[] s_planes = new PlaneFloat[]
+    private readonly Plane[] s_planes = new Plane[]
     {
-        new PlaneFloat { Normal = new Float3(0, 0, 1), D = -0.1f },   // Near plane
-        new PlaneFloat { Normal = new Float3(0, 0, -1), D = 100f }    // Far plane
+        new Plane { Normal = new Double3(0, 0, 1), D = -0.1f },   // Near plane
+        new Plane { Normal = new Double3(0, 0, -1), D = 100f }    // Far plane
     };
 
     private List<RasterTriangle> ClipTriangleAgainstPlanes(RasterTriangle triangle)
@@ -488,7 +488,7 @@ public partial class GraphicsDevice
     }
 
     private int ClipPolygonAgainstPlane(RasterVertex[] inputVertices, int inputCount,
-                                       RasterVertex[] outputVertices, PlaneFloat plane)
+                                       RasterVertex[] outputVertices, Plane plane)
     {
         if (inputCount == 0) return 0;
 
@@ -524,11 +524,11 @@ public partial class GraphicsDevice
         return outputCount;
     }
 
-    private float GetPlaneDistance(Float4 position, PlaneFloat plane)
+    private float GetPlaneDistance(Float4 position, Plane plane)
     {
-        return plane.Normal.X * position.X +
+        return (float)(plane.Normal.X * position.X +
                plane.Normal.Y * position.Y +
-               plane.Normal.Z * position.Z + plane.D;
+               plane.Normal.Z * position.Z + plane.D);
     }
 
     private void TriangulatePolygon(RasterVertex[] vertices, int vertexCount, List<RasterTriangle> triangles)

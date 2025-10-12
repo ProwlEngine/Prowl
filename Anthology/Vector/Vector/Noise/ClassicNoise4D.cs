@@ -93,46 +93,46 @@ namespace Prowl.Vector
             Float4 g1111 = new Float4(gx11.W, gy11.W, gz11.W, gw11.W);
 
             Float4 norm00 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g0000, g0000),
-                Maths.Dot(g0100, g0100),
-                Maths.Dot(g1000, g1000),
-                Maths.Dot(g1100, g1100)
+                Float4.Dot(g0000, g0000),
+                Float4.Dot(g0100, g0100),
+                Float4.Dot(g1000, g1000),
+                Float4.Dot(g1100, g1100)
             ));
             Float4 norm01 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g0001, g0001),
-                Maths.Dot(g0101, g0101),
-                Maths.Dot(g1001, g1001),
-                Maths.Dot(g1101, g1101)
+                Float4.Dot(g0001, g0001),
+                Float4.Dot(g0101, g0101),
+                Float4.Dot(g1001, g1001),
+                Float4.Dot(g1101, g1101)
             ));
             Float4 norm10 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g0010, g0010),
-                Maths.Dot(g0110, g0110),
-                Maths.Dot(g1010, g1010),
-                Maths.Dot(g1110, g1110)
+                Float4.Dot(g0010, g0010),
+                Float4.Dot(g0110, g0110),
+                Float4.Dot(g1010, g1010),
+                Float4.Dot(g1110, g1110)
             ));
             Float4 norm11 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g0011, g0011),
-                Maths.Dot(g0111, g0111),
-                Maths.Dot(g1011, g1011),
-                Maths.Dot(g1111, g1111)
+                Float4.Dot(g0011, g0011),
+                Float4.Dot(g0111, g0111),
+                Float4.Dot(g1011, g1011),
+                Float4.Dot(g1111, g1111)
             ));
 
-            float n0000 = norm00.X * Maths.Dot(g0000, Pf0);
-            float n0100 = norm00.Y * Maths.Dot(g0100, new Float4(Pf0.X, Pf1.Y, Pf0.Z, Pf0.W));
-            float n1000 = norm00.Z * Maths.Dot(g1000, new Float4(Pf1.X, Pf0.Y, Pf0.Z, Pf0.W));
-            float n1100 = norm00.W * Maths.Dot(g1100, new Float4(Pf1.X, Pf1.Y, Pf0.Z, Pf0.W));
-            float n0010 = norm10.X * Maths.Dot(g0010, new Float4(Pf0.X, Pf0.Y, Pf1.Z, Pf0.W));
-            float n0110 = norm10.Y * Maths.Dot(g0110, new Float4(Pf0.X, Pf1.Y, Pf1.Z, Pf0.W));
-            float n1010 = norm10.Z * Maths.Dot(g1010, new Float4(Pf1.X, Pf0.Y, Pf1.Z, Pf0.W));
-            float n1110 = norm10.W * Maths.Dot(g1110, new Float4(Pf1.X, Pf1.Y, Pf1.Z, Pf0.W));
-            float n0001 = norm01.X * Maths.Dot(g0001, new Float4(Pf0.X, Pf0.Y, Pf0.Z, Pf1.W));
-            float n0101 = norm01.Y * Maths.Dot(g0101, new Float4(Pf0.X, Pf1.Y, Pf0.Z, Pf1.W));
-            float n1001 = norm01.Z * Maths.Dot(g1001, new Float4(Pf1.X, Pf0.Y, Pf0.Z, Pf1.W));
-            float n1101 = norm01.W * Maths.Dot(g1101, new Float4(Pf1.X, Pf1.Y, Pf0.Z, Pf1.W));
-            float n0011 = norm11.X * Maths.Dot(g0011, new Float4(Pf0.X, Pf0.Y, Pf1.Z, Pf1.W));
-            float n0111 = norm11.Y * Maths.Dot(g0111, new Float4(Pf0.X, Pf1.Y, Pf1.Z, Pf1.W));
-            float n1011 = norm11.Z * Maths.Dot(g1011, new Float4(Pf1.X, Pf0.Y, Pf1.Z, Pf1.W));
-            float n1111 = norm11.W * Maths.Dot(g1111, Pf1);
+            float n0000 = norm00.X * Float4.Dot(g0000, Pf0);
+            float n0100 = norm00.Y * Float4.Dot(g0100, new Float4(Pf0.X, Pf1.Y, Pf0.Z, Pf0.W));
+            float n1000 = norm00.Z * Float4.Dot(g1000, new Float4(Pf1.X, Pf0.Y, Pf0.Z, Pf0.W));
+            float n1100 = norm00.W * Float4.Dot(g1100, new Float4(Pf1.X, Pf1.Y, Pf0.Z, Pf0.W));
+            float n0010 = norm10.X * Float4.Dot(g0010, new Float4(Pf0.X, Pf0.Y, Pf1.Z, Pf0.W));
+            float n0110 = norm10.Y * Float4.Dot(g0110, new Float4(Pf0.X, Pf1.Y, Pf1.Z, Pf0.W));
+            float n1010 = norm10.Z * Float4.Dot(g1010, new Float4(Pf1.X, Pf0.Y, Pf1.Z, Pf0.W));
+            float n1110 = norm10.W * Float4.Dot(g1110, new Float4(Pf1.X, Pf1.Y, Pf1.Z, Pf0.W));
+            float n0001 = norm01.X * Float4.Dot(g0001, new Float4(Pf0.X, Pf0.Y, Pf0.Z, Pf1.W));
+            float n0101 = norm01.Y * Float4.Dot(g0101, new Float4(Pf0.X, Pf1.Y, Pf0.Z, Pf1.W));
+            float n1001 = norm01.Z * Float4.Dot(g1001, new Float4(Pf1.X, Pf0.Y, Pf0.Z, Pf1.W));
+            float n1101 = norm01.W * Float4.Dot(g1101, new Float4(Pf1.X, Pf1.Y, Pf0.Z, Pf1.W));
+            float n0011 = norm11.X * Float4.Dot(g0011, new Float4(Pf0.X, Pf0.Y, Pf1.Z, Pf1.W));
+            float n0111 = norm11.Y * Float4.Dot(g0111, new Float4(Pf0.X, Pf1.Y, Pf1.Z, Pf1.W));
+            float n1011 = norm11.Z * Float4.Dot(g1011, new Float4(Pf1.X, Pf0.Y, Pf1.Z, Pf1.W));
+            float n1111 = norm11.W * Float4.Dot(g1111, Pf1);
 
             Float4 fade_xyzw = Fade(Pf0);
             Float4 n_0w = Maths.Lerp(new Float4(n0000, n1000, n0100, n1100), new Float4(n0001, n1001, n0101, n1101), fade_xyzw.W);
@@ -229,46 +229,46 @@ namespace Prowl.Vector
             Float4 g1111 = new Float4(gx11.W, gy11.W, gz11.W, gw11.W);
 
             Float4 norm00 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g0000, g0000),
-                Maths.Dot(g0100, g0100),
-                Maths.Dot(g1000, g1000),
-                Maths.Dot(g1100, g1100)
+                Float4.Dot(g0000, g0000),
+                Float4.Dot(g0100, g0100),
+                Float4.Dot(g1000, g1000),
+                Float4.Dot(g1100, g1100)
             ));
             Float4 norm01 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g0001, g0001),
-                Maths.Dot(g0101, g0101),
-                Maths.Dot(g1001, g1001),
-                Maths.Dot(g1101, g1101)
+                Float4.Dot(g0001, g0001),
+                Float4.Dot(g0101, g0101),
+                Float4.Dot(g1001, g1001),
+                Float4.Dot(g1101, g1101)
             ));
             Float4 norm10 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g0010, g0010),
-                Maths.Dot(g0110, g0110),
-                Maths.Dot(g1010, g1010),
-                Maths.Dot(g1110, g1110)
+                Float4.Dot(g0010, g0010),
+                Float4.Dot(g0110, g0110),
+                Float4.Dot(g1010, g1010),
+                Float4.Dot(g1110, g1110)
             ));
             Float4 norm11 = TaylorInvSqrt(new Float4(
-                Maths.Dot(g0011, g0011),
-                Maths.Dot(g0111, g0111),
-                Maths.Dot(g1011, g1011),
-                Maths.Dot(g1111, g1111)
+                Float4.Dot(g0011, g0011),
+                Float4.Dot(g0111, g0111),
+                Float4.Dot(g1011, g1011),
+                Float4.Dot(g1111, g1111)
             ));
 
-            float n0000 = norm00.X * Maths.Dot(g0000, Pf0);
-            float n0100 = norm00.Y * Maths.Dot(g0100, new Float4(Pf0.X, Pf1.Y, Pf0.Z, Pf0.W));
-            float n1000 = norm00.Z * Maths.Dot(g1000, new Float4(Pf1.X, Pf0.Y, Pf0.Z, Pf0.W));
-            float n1100 = norm00.W * Maths.Dot(g1100, new Float4(Pf1.X, Pf1.Y, Pf0.Z, Pf0.W));
-            float n0010 = norm10.X * Maths.Dot(g0010, new Float4(Pf0.X, Pf0.Y, Pf1.Z, Pf0.W));
-            float n0110 = norm10.Y * Maths.Dot(g0110, new Float4(Pf0.X, Pf1.Y, Pf1.Z, Pf0.W));
-            float n1010 = norm10.Z * Maths.Dot(g1010, new Float4(Pf1.X, Pf0.Y, Pf1.Z, Pf0.W));
-            float n1110 = norm10.W * Maths.Dot(g1110, new Float4(Pf1.X, Pf1.Y, Pf1.Z, Pf0.W));
-            float n0001 = norm01.X * Maths.Dot(g0001, new Float4(Pf0.X, Pf0.Y, Pf0.Z, Pf1.W));
-            float n0101 = norm01.Y * Maths.Dot(g0101, new Float4(Pf0.X, Pf1.Y, Pf0.Z, Pf1.W));
-            float n1001 = norm01.Z * Maths.Dot(g1001, new Float4(Pf1.X, Pf0.Y, Pf0.Z, Pf1.W));
-            float n1101 = norm01.W * Maths.Dot(g1101, new Float4(Pf1.X, Pf1.Y, Pf0.Z, Pf1.W));
-            float n0011 = norm11.X * Maths.Dot(g0011, new Float4(Pf0.X, Pf0.Y, Pf1.Z, Pf1.W));
-            float n0111 = norm11.Y * Maths.Dot(g0111, new Float4(Pf0.X, Pf1.Y, Pf1.Z, Pf1.W));
-            float n1011 = norm11.Z * Maths.Dot(g1011, new Float4(Pf1.X, Pf0.Y, Pf1.Z, Pf1.W));
-            float n1111 = norm11.W * Maths.Dot(g1111, Pf1);
+            float n0000 = norm00.X * Float4.Dot(g0000, Pf0);
+            float n0100 = norm00.Y * Float4.Dot(g0100, new Float4(Pf0.X, Pf1.Y, Pf0.Z, Pf0.W));
+            float n1000 = norm00.Z * Float4.Dot(g1000, new Float4(Pf1.X, Pf0.Y, Pf0.Z, Pf0.W));
+            float n1100 = norm00.W * Float4.Dot(g1100, new Float4(Pf1.X, Pf1.Y, Pf0.Z, Pf0.W));
+            float n0010 = norm10.X * Float4.Dot(g0010, new Float4(Pf0.X, Pf0.Y, Pf1.Z, Pf0.W));
+            float n0110 = norm10.Y * Float4.Dot(g0110, new Float4(Pf0.X, Pf1.Y, Pf1.Z, Pf0.W));
+            float n1010 = norm10.Z * Float4.Dot(g1010, new Float4(Pf1.X, Pf0.Y, Pf1.Z, Pf0.W));
+            float n1110 = norm10.W * Float4.Dot(g1110, new Float4(Pf1.X, Pf1.Y, Pf1.Z, Pf0.W));
+            float n0001 = norm01.X * Float4.Dot(g0001, new Float4(Pf0.X, Pf0.Y, Pf0.Z, Pf1.W));
+            float n0101 = norm01.Y * Float4.Dot(g0101, new Float4(Pf0.X, Pf1.Y, Pf0.Z, Pf1.W));
+            float n1001 = norm01.Z * Float4.Dot(g1001, new Float4(Pf1.X, Pf0.Y, Pf0.Z, Pf1.W));
+            float n1101 = norm01.W * Float4.Dot(g1101, new Float4(Pf1.X, Pf1.Y, Pf0.Z, Pf1.W));
+            float n0011 = norm11.X * Float4.Dot(g0011, new Float4(Pf0.X, Pf0.Y, Pf1.Z, Pf1.W));
+            float n0111 = norm11.Y * Float4.Dot(g0111, new Float4(Pf0.X, Pf1.Y, Pf1.Z, Pf1.W));
+            float n1011 = norm11.Z * Float4.Dot(g1011, new Float4(Pf1.X, Pf0.Y, Pf1.Z, Pf1.W));
+            float n1111 = norm11.W * Float4.Dot(g1111, Pf1);
 
             Float4 fade_xyzw = Fade(Pf0);
             Float4 n_0w = Maths.Lerp(new Float4(n0000, n1000, n0100, n1100), new Float4(n0001, n1001, n0101, n1101), fade_xyzw.W);

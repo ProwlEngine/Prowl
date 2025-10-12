@@ -18,7 +18,7 @@ namespace Prowl.Vector
             Float4 s = Float4.Zero;
 
             p.XYZ = Maths.Floor(Maths.Frac(new Float3(j) * ip.XYZ) * 7.0f) * ip.Z - 1.0f;
-            p.W = 1.5f - Maths.Dot(Maths.Abs(p.XYZ), ones.XYZ);
+            p.W = 1.5f - Float3.Dot(Maths.Abs(p.XYZ), ones.XYZ);
             s = new Float4(
                 p.X < 0.0f ? 1.0f : 0.0f,
                 p.Y < 0.0f ? 1.0f : 0.0f,
@@ -39,8 +39,8 @@ namespace Prowl.Vector
                                  -0.447213595499958f); // -1 + 4 * G4
 
             // First corner
-            Float4 i = Maths.Floor(v + Maths.Dot(v, new Float4(F4)));
-            Float4 x0 = v - i + Maths.Dot(i, C.XXXX);
+            Float4 i = Maths.Floor(v + Float4.Dot(v, new Float4(F4)));
+            Float4 x0 = v - i + Float4.Dot(i, C.XXXX);
 
             // Other corners
             // Rank sorting originally contributed by Bill Licea-Kane, AMD (formerly ATI)
@@ -90,32 +90,32 @@ namespace Prowl.Vector
             Float4 p4 = Grad4(j1.W, ip);
 
             // Normalise gradients
-            Float4 norm = TaylorInvSqrt(new Float4(Maths.Dot(p0, p0),
-                                                   Maths.Dot(p1, p1),
-                                                   Maths.Dot(p2, p2),
-                                                   Maths.Dot(p3, p3)));
+            Float4 norm = TaylorInvSqrt(new Float4(Float4.Dot(p0, p0),
+                                                   Float4.Dot(p1, p1),
+                                                   Float4.Dot(p2, p2),
+                                                   Float4.Dot(p3, p3)));
             p0 *= norm.X;
             p1 *= norm.Y;
             p2 *= norm.Z;
             p3 *= norm.W;
-            p4 *= TaylorInvSqrt(Maths.Dot(p4, p4));
+            p4 *= TaylorInvSqrt(Float4.Dot(p4, p4));
 
             // Mix contributions from the five corners
-            Float3 m0 = Maths.Max(0.57f - new Float3(Maths.Dot(x0, x0),
-                                                     Maths.Dot(x1, x1),
-                                                     Maths.Dot(x2, x2)),
+            Float3 m0 = Maths.Max(0.57f - new Float3(Float4.Dot(x0, x0),
+                                                     Float4.Dot(x1, x1),
+                                                     Float4.Dot(x2, x2)),
                                   new Float3(0.0f));
-            Float2 m1 = Maths.Max(0.57f - new Float2(Maths.Dot(x3, x3),
-                                                     Maths.Dot(x4, x4)),
+            Float2 m1 = Maths.Max(0.57f - new Float2(Float4.Dot(x3, x3),
+                                                     Float4.Dot(x4, x4)),
                                   new Float2(0.0f));
             m0 = m0 * m0;
             m1 = m1 * m1;
 
-            return 60.1f * (Maths.Dot(m0 * m0, new Float3(Maths.Dot(p0, x0),
-                                                           Maths.Dot(p1, x1),
-                                                           Maths.Dot(p2, x2)))
-                           + Maths.Dot(m1 * m1, new Float2(Maths.Dot(p3, x3),
-                                                           Maths.Dot(p4, x4))));
+            return 60.1f * (Float3.Dot(m0 * m0, new Float3(Float4.Dot(p0, x0),
+                                                           Float4.Dot(p1, x1),
+                                                           Float4.Dot(p2, x2)))
+                           + Float2.Dot(m1 * m1, new Float2(Float4.Dot(p3, x3),
+                                                           Float4.Dot(p4, x4))));
         }
     }
 }

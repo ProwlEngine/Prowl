@@ -28,24 +28,24 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <returns>True if the ray intersects the plane in the forward direction, false otherwise. Outputs the distance to intersection.</returns>
         public static bool RayPlane(
-            Float3 rayOrigin,
-            Float3 rayDir, // Assumed normalized
-            Float3 planeNormal, // Assumed normalized
-            float planeD, // Distance from origin along the normal (Ax + By + Cz = D form)
-            out float distance)
+            Double3 rayOrigin,
+            Double3 rayDir, // Assumed normalized
+            Double3 planeNormal, // Assumed normalized
+            double planeD, // Distance from origin along the normal (Ax + By + Cz = D form)
+            out double distance)
         {
-            float nd = Maths.Dot(rayDir, planeNormal);
-            float pn = Maths.Dot(rayOrigin, planeNormal);
+            double nd = Double3.Dot(rayDir, planeNormal);
+            double pn = Double3.Dot(rayOrigin, planeNormal);
 
-            if (Maths.Abs(nd) < float.Epsilon) // Ray is parallel to the plane
+            if (Maths.Abs(nd) < double.Epsilon) // Ray is parallel to the plane
             {
-                distance = 0f;
+                distance = 0.0;
                 return false;
             }
 
             distance = (planeD - pn) / nd;
 
-            return distance >= 0f; // Intersection must be in the forward direction of the ray
+            return distance >= 0.0; // Intersection must be in the forward direction of the ray
         }
 
         /// <summary>
@@ -54,37 +54,37 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <returns>True if the ray intersects the triangle (front or back face), false otherwise.</returns>
         public static bool RayTriangle(
-            Float3 rayOrigin,
-            Float3 rayDir, // Assumed normalized
-            Float3 v0, Float3 v1, Float3 v2,
-            out float distance, out float u, out float v)
+            Double3 rayOrigin,
+            Double3 rayDir, // Assumed normalized
+            Double3 v0, Double3 v1, Double3 v2,
+            out double distance, out double u, out double v)
         {
-            distance = 0f; u = 0f; v = 0f;
+            distance = 0.0; u = 0.0; v = 0.0;
 
-            Float3 edge1 = v1 - v0;
-            Float3 edge2 = v2 - v0;
+            Double3 edge1 = v1 - v0;
+            Double3 edge2 = v2 - v0;
 
-            Float3 pvec = Maths.Cross(rayDir, edge2);
-            float det = Maths.Dot(edge1, pvec);
+            Double3 pvec = Double3.Cross(rayDir, edge2);
+            double det = Double3.Dot(edge1, pvec);
 
-            if (Maths.Abs(det) < float.Epsilon) // Ray is parallel to triangle plane or backface culling if det < Epsilon
+            if (Maths.Abs(det) < double.Epsilon) // Ray is parallel to triangle plane or backface culling if det < Epsilon
                 return false;
 
-            float invDet = 1f / det;
+            double invDet = 1.0 / det;
 
-            Float3 tvec = rayOrigin - v0;
-            u = Maths.Dot(tvec, pvec) * invDet;
-            if (u < 0f || u > 1f)
+            Double3 tvec = rayOrigin - v0;
+            u = Double3.Dot(tvec, pvec) * invDet;
+            if (u < 0.0 || u > 1.0)
                 return false;
 
-            Float3 qvec = Maths.Cross(tvec, edge1);
-            v = Maths.Dot(rayDir, qvec) * invDet;
-            if (v < 0f || u + v > 1f)
+            Double3 qvec = Double3.Cross(tvec, edge1);
+            v = Double3.Dot(rayDir, qvec) * invDet;
+            if (v < 0.0 || u + v > 1.0)
                 return false;
 
-            distance = Maths.Dot(edge2, qvec) * invDet;
+            distance = Double3.Dot(edge2, qvec) * invDet;
 
-            return distance >= 0f; // Intersection must be in the forward direction
+            return distance >= 0.0; // Intersection must be in the forward direction
         }
 
         /// <summary>
@@ -93,25 +93,25 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <returns>True if intersection occurs. out tMin is entry distance, out tMax is exit distance.</returns>
         public static bool RayAABB(
-            Float3 rayOrigin,
-            Float3 rayDir, // Does not need to be normalized
-            Float3 boxMin,
-            Float3 boxMax,
-            out float tMin, out float tMax)
+            Double3 rayOrigin,
+            Double3 rayDir, // Does not need to be normalized
+            Double3 boxMin,
+            Double3 boxMax,
+            out double tMin, out double tMax)
         {
-            tMin = 0f;
-            tMax = float.MaxValue;
+            tMin = 0.0;
+            tMax = double.MaxValue;
 
             // X slab
-            if (Maths.Abs(rayDir.X) < float.Epsilon)
+            if (Maths.Abs(rayDir.X) < double.Epsilon)
             {
                 if (rayOrigin.X < boxMin.X || rayOrigin.X > boxMax.X) { return false; }
             }
             else
             {
-                float invDirX = 1f / rayDir.X;
-                float t1x = (boxMin.X - rayOrigin.X) * invDirX;
-                float t2x = (boxMax.X - rayOrigin.X) * invDirX;
+                double invDirX = 1.0 / rayDir.X;
+                double t1x = (boxMin.X - rayOrigin.X) * invDirX;
+                double t2x = (boxMax.X - rayOrigin.X) * invDirX;
                 if (t1x > t2x) {
                     (t2x, t1x) = (t1x, t2x);
                 }
@@ -121,15 +121,15 @@ namespace Prowl.Vector.Geometry
             }
 
             // Y slab
-            if (Maths.Abs(rayDir.Y) < float.Epsilon)
+            if (Maths.Abs(rayDir.Y) < double.Epsilon)
             {
                 if (rayOrigin.Y < boxMin.Y || rayOrigin.Y > boxMax.Y) { return false; }
             }
             else
             {
-                float invDirY = 1f / rayDir.Y;
-                float t1y = (boxMin.Y - rayOrigin.Y) * invDirY;
-                float t2y = (boxMax.Y - rayOrigin.Y) * invDirY;
+                double invDirY = 1.0 / rayDir.Y;
+                double t1y = (boxMin.Y - rayOrigin.Y) * invDirY;
+                double t2y = (boxMax.Y - rayOrigin.Y) * invDirY;
                 if (t1y > t2y) {
                     (t2y, t1y) = (t1y, t2y);
                 }
@@ -139,15 +139,15 @@ namespace Prowl.Vector.Geometry
             }
 
             // Z slab
-            if (Maths.Abs(rayDir.Z) < float.Epsilon)
+            if (Maths.Abs(rayDir.Z) < double.Epsilon)
             {
                 if (rayOrigin.Z < boxMin.Z || rayOrigin.Z > boxMax.Z) { return false; }
             }
             else
             {
-                float invDirZ = 1f / rayDir.Z;
-                float t1z = (boxMin.Z - rayOrigin.Z) * invDirZ;
-                float t2z = (boxMax.Z - rayOrigin.Z) * invDirZ;
+                double invDirZ = 1.0 / rayDir.Z;
+                double t1z = (boxMin.Z - rayOrigin.Z) * invDirZ;
+                double t2z = (boxMax.Z - rayOrigin.Z) * invDirZ;
                 if (t1z > t2z) {
                     (t2z, t1z) = (t1z, t2z);
                 }
@@ -156,7 +156,7 @@ namespace Prowl.Vector.Geometry
                 if (tMin > tMax) { return false; }
             }
 
-            return tMax >= 0f && tMin <= tMax;
+            return tMax >= 0.0 && tMin <= tMax;
         }
 
         /// <summary>
@@ -164,30 +164,30 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <returns>True if intersection. out t0 and t1 are distances (t0 <= t1). If only one intersection (tangent) or ray starts inside, t0 may be negative.</returns>
         public static bool RaySphere(
-            Float3 rayOrigin,
-            Float3 rayDir, // Assumed normalized
-            Float3 sphereCenter,
-            float sphereRadius,
-            out float t0, out float t1)
+            Double3 rayOrigin,
+            Double3 rayDir, // Assumed normalized
+            Double3 sphereCenter,
+            double sphereRadius,
+            out double t0, out double t1)
         {
-            t0 = t1 = 0f;
+            t0 = t1 = 0.0;
 
-            Float3 oc = rayOrigin - sphereCenter;
+            Double3 oc = rayOrigin - sphereCenter;
 
-            //float a = Maths.Dot(rayDir, rayDir); // Should be 1.0 if rayDir is normalized
-            const float a = 1f;
+            //double a = Maths.Dot(rayDir, rayDir); // Should be 1.0 if rayDir is normalized
+            const double a = 1.0;
 
-            float b = 2f * Maths.Dot(oc, rayDir);
-            float c = oc.LengthSquared - sphereRadius * sphereRadius;
+            double b = 2.0 * Double3.Dot(oc, rayDir);
+            double c = Double3.LengthSquared(oc) - sphereRadius * sphereRadius;
 
-            float discriminant = b * b - 4 * a * c; // a is 1.0
+            double discriminant = b * b - 4 * a * c; // a is 1.0
 
-            if (discriminant < 0f) return false;
+            if (discriminant < 0.0) return false;
 
-            float sqrtDiscriminant = Maths.Sqrt(discriminant);
+            double sqrtDiscriminant = Maths.Sqrt(discriminant);
             // Denominator is 2*a, which is 2.0 since a=1.0
-            t0 = (-b - sqrtDiscriminant) / 2f;
-            t1 = (-b + sqrtDiscriminant) / 2f;
+            t0 = (-b - sqrtDiscriminant) / 2.0;
+            t1 = (-b + sqrtDiscriminant) / 2.0;
 
             if (t0 > t1) {
                 (t1, t0) = (t0, t1);
@@ -201,41 +201,41 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <returns>True if intersection. out t0 and t1 are distances along the ray (t0 <= t1).</returns>
         public static bool RayCylinderInfinite(
-            Float3 rayOrigin, Float3 rayDir, // rayDir assumed normalized
-            Float3 cylinderAxisPoint, Float3 cylinderAxisDir, // cylinderAxisDir assumed normalized
-            float cylinderRadius,
-            out float t0, out float t1)
+            Double3 rayOrigin, Double3 rayDir, // rayDir assumed normalized
+            Double3 cylinderAxisPoint, Double3 cylinderAxisDir, // cylinderAxisDir assumed normalized
+            double cylinderRadius,
+            out double t0, out double t1)
         {
-            t0 = t1 = 0f;
-            Float3 oc = rayOrigin - cylinderAxisPoint;
+            t0 = t1 = 0.0;
+            Double3 oc = rayOrigin - cylinderAxisPoint;
 
-            float card = Maths.Dot(cylinderAxisDir, rayDir);
-            float caoc = Maths.Dot(cylinderAxisDir, oc);
+            double card = Double3.Dot(cylinderAxisDir, rayDir);
+            double caoc = Double3.Dot(cylinderAxisDir, oc);
 
-            float a = 1f - card * card; // Since rayDir and cylinderAxisDir are normalized, Dot(rayDir,rayDir) = 1
-            float b = 2f * (Maths.Dot(oc, rayDir) - caoc * card);
-            float c = Maths.Dot(oc, oc) - caoc * caoc - cylinderRadius * cylinderRadius;
+            double a = 1.0 - card * card; // Since rayDir and cylinderAxisDir are normalized, Dot(rayDir,rayDir) = 1
+            double b = 2.0 * (Double3.Dot(oc, rayDir) - caoc * card);
+            double c = Double3.Dot(oc, oc) - caoc * caoc - cylinderRadius * cylinderRadius;
 
-            if (Maths.Abs(a) < float.Epsilon) // Ray is parallel to cylinder axis
+            if (Maths.Abs(a) < double.Epsilon) // Ray is parallel to cylinder axis
             {
                 // Check if ray origin is inside the cylinder's radius projected onto the plane
                 // perpendicular to the axis passing through cylinderAxisPoint.
                 // Distance_sq(rayOrigin to line) = Dot(oc, oc) - caoc*caoc
-                if (c > 0f) return false; // Ray is outside and parallel
+                if (c > 0.0) return false; // Ray is outside and parallel
                 // Ray is inside or on the surface and parallel
-                t0 = float.NegativeInfinity;
-                t1 = float.PositiveInfinity;
+                t0 = double.NegativeInfinity;
+                t1 = double.PositiveInfinity;
                 return true;
             }
 
-            float discriminant = b * b - 4 * a * c;
-            if (discriminant < 0f) return false;
+            double discriminant = b * b - 4 * a * c;
+            if (discriminant < 0.0) return false;
 
-            float sqrtDiscriminant = Maths.Sqrt(discriminant);
-            t0 = (-b - sqrtDiscriminant) / (2f * a);
-            t1 = (-b + sqrtDiscriminant) / (2f * a);
+            double sqrtDiscriminant = Maths.Sqrt(discriminant);
+            t0 = (-b - sqrtDiscriminant) / (2.0 * a);
+            t1 = (-b + sqrtDiscriminant) / (2.0 * a);
 
-            if (t0 > t1) { float temp = t0; t0 = t1; t1 = temp; }
+            if (t0 > t1) { double temp = t0; t0 = t1; t1 = temp; }
             return true;
         }
 
@@ -244,71 +244,71 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <returns>True if intersection. out distance is the closest valid intersection distance.</returns>
         public static bool RayCylinderCapped(
-            Float3 rayOrigin, Float3 rayDir, // rayDir assumed normalized
-            Float3 capA_Center, Float3 capB_Center, // Centers of the two end caps
-            float radius,
-            out float distance)
+            Double3 rayOrigin, Double3 rayDir, // rayDir assumed normalized
+            Double3 capA_Center, Double3 capB_Center, // Centers of the two end caps
+            double radius,
+            out double distance)
         {
-            distance = float.MaxValue;
+            distance = double.MaxValue;
             bool intersected = false;
 
-            Float3 cylinderAxisDir = capB_Center - capA_Center;
-            float heightSq = cylinderAxisDir.LengthSquared;
-            if (heightSq < float.Epsilon * float.Epsilon)
+            Double3 cylinderAxisDir = capB_Center - capA_Center;
+            double heightSq = Double3.LengthSquared(cylinderAxisDir);
+            if (heightSq < double.Epsilon * double.Epsilon)
             {
-                float t0, t1;
+                double t0, t1;
                 if (RaySphere(rayOrigin, rayDir, capA_Center, radius, out t0, out t1))
                 {
-                    if (t0 >= 0f && t0 < distance) { distance = t0; intersected = true; }
-                    else if (t1 >= 0f && t1 < distance) { distance = t1; intersected = true; }
+                    if (t0 >= 0.0 && t0 < distance) { distance = t0; intersected = true; }
+                    else if (t1 >= 0.0 && t1 < distance) { distance = t1; intersected = true; }
                 }
                 return intersected;
             }
             cylinderAxisDir = cylinderAxisDir / Maths.Sqrt(heightSq); // Normalize
 
-            float t0_inf, t1_inf;
+            double t0_inf, t1_inf;
             if (RayCylinderInfinite(rayOrigin, rayDir, capA_Center, cylinderAxisDir, radius, out t0_inf, out t1_inf))
             {
-                float height = Maths.Sqrt(heightSq);
-                if (t0_inf >= 0f)
+                double height = Maths.Sqrt(heightSq);
+                if (t0_inf >= 0.0)
                 {
-                    Float3 p0 = rayOrigin + t0_inf * rayDir;
-                    float proj0 = Maths.Dot(p0 - capA_Center, cylinderAxisDir);
-                    if (proj0 >= -float.Epsilon && proj0 <= height + float.Epsilon)
+                    Double3 p0 = rayOrigin + t0_inf * rayDir;
+                    double proj0 = Double3.Dot(p0 - capA_Center, cylinderAxisDir);
+                    if (proj0 >= -double.Epsilon && proj0 <= height + double.Epsilon)
                     {
                         if (t0_inf < distance) { distance = t0_inf; intersected = true; }
                     }
                 }
-                if (t1_inf >= 0f)
+                if (t1_inf >= 0.0)
                 {
-                    Float3 p1 = rayOrigin + t1_inf * rayDir;
-                    float proj1 = Maths.Dot(p1 - capA_Center, cylinderAxisDir);
-                    if (proj1 >= -float.Epsilon && proj1 <= height + float.Epsilon)
+                    Double3 p1 = rayOrigin + t1_inf * rayDir;
+                    double proj1 = Double3.Dot(p1 - capA_Center, cylinderAxisDir);
+                    if (proj1 >= -double.Epsilon && proj1 <= height + double.Epsilon)
                     {
                         if (t1_inf < distance) { distance = t1_inf; intersected = true; }
                     }
                 }
             }
 
-            float capDist;
-            if (RayPlane(rayOrigin, rayDir, -cylinderAxisDir, Maths.Dot(-cylinderAxisDir, capA_Center), out capDist))
+            double capDist;
+            if (RayPlane(rayOrigin, rayDir, -cylinderAxisDir, Double3.Dot(-cylinderAxisDir, capA_Center), out capDist))
             {
-                if (capDist >= 0f && capDist < distance)
+                if (capDist >= 0.0 && capDist < distance)
                 {
-                    Float3 p_capA = rayOrigin + capDist * rayDir;
-                    if ((p_capA - capA_Center).LengthSquared <= radius * radius + float.Epsilon)
+                    Double3 p_capA = rayOrigin + capDist * rayDir;
+                    if (Double3.LengthSquared(p_capA - capA_Center) <= radius * radius + double.Epsilon)
                     {
                         distance = capDist;
                         intersected = true;
                     }
                 }
             }
-            if (RayPlane(rayOrigin, rayDir, cylinderAxisDir, Maths.Dot(cylinderAxisDir, capB_Center), out capDist))
+            if (RayPlane(rayOrigin, rayDir, cylinderAxisDir, Double3.Dot(cylinderAxisDir, capB_Center), out capDist))
             {
-                if (capDist >= 0f && capDist < distance)
+                if (capDist >= 0.0 && capDist < distance)
                 {
-                    Float3 p_capB = rayOrigin + capDist * rayDir;
-                    if ((p_capB - capB_Center).LengthSquared <= radius * radius + float.Epsilon)
+                    Double3 p_capB = rayOrigin + capDist * rayDir;
+                    if (Double3.LengthSquared(p_capB - capB_Center) <= radius * radius + double.Epsilon)
                     {
                         distance = capDist;
                         intersected = true;
@@ -326,24 +326,24 @@ namespace Prowl.Vector.Geometry
         /// Calculates the signed distance from a point to a plane.
         /// Distance is positive if point is on the side of the normal, negative otherwise.
         /// </summary>
-        public static float SignedDistancePointToPlane(
-            Float3 point,
-            Float3 planeNormal, // Assumed normalized
-            float planeD) // Ax + By + Cz = D form (D is dot(Normal, PointOnPlane))
+        public static double SignedDistancePointToPlane(
+            Double3 point,
+            Double3 planeNormal, // Assumed normalized
+            double planeD) // Ax + By + Cz = D form (D is dot(Normal, PointOnPlane))
         {
-            return Maths.Dot(planeNormal, point) - planeD;
+            return Double3.Dot(planeNormal, point) - planeD;
         }
 
         /// <summary>
         /// Calculates the closest point on a plane to a given point.
         /// </summary>
         public static void ClosestPointOnPlaneToPoint(
-            Float3 point,
-            Float3 planeNormal, // Assumed normalized
-            float planeD,
-            out Float3 closestPoint)
+            Double3 point,
+            Double3 planeNormal, // Assumed normalized
+            double planeD,
+            out Double3 closestPoint)
         {
-            float signedDist = SignedDistancePointToPlane(point, planeNormal, planeD);
+            double signedDist = SignedDistancePointToPlane(point, planeNormal, planeD);
             closestPoint = point - signedDist * planeNormal;
         }
 
@@ -351,18 +351,18 @@ namespace Prowl.Vector.Geometry
         /// Calculates the closest point on an infinite line (defined by two points) to a given point.
         /// </summary>
         public static void ClosestPointOnLineToPoint(
-            Float3 lineA, Float3 lineB,
-            Float3 point,
-            out Float3 closestPoint)
+            Double3 lineA, Double3 lineB,
+            Double3 point,
+            out Double3 closestPoint)
         {
-            Float3 ab = lineB - lineA;
-            Float3 ap = point - lineA;
+            Double3 ab = lineB - lineA;
+            Double3 ap = point - lineA;
 
-            float dot_ab_ap = Maths.Dot(ab, ap);
-            float dot_ab_ab = ab.LengthSquared;
+            double dot_ab_ap = Double3.Dot(ab, ap);
+            double dot_ab_ab = Double3.LengthSquared(ab);
 
-            float t = 0f;
-            if (dot_ab_ab > float.Epsilon)
+            double t = 0.0;
+            if (dot_ab_ab > double.Epsilon)
                 t = dot_ab_ap / dot_ab_ab;
 
             closestPoint = lineA + t * ab;
@@ -372,22 +372,22 @@ namespace Prowl.Vector.Geometry
         /// Calculates the closest point on a line segment to a given point.
         /// </summary>
         public static void ClosestPointOnLineSegmentToPoint(
-            Float3 segA, Float3 segB,
-            Float3 point,
-            out Float3 closestPoint)
+            Double3 segA, Double3 segB,
+            Double3 point,
+            out Double3 closestPoint)
         {
-            Float3 ab = segB - segA;
-            Float3 ap = point - segA;
+            Double3 ab = segB - segA;
+            Double3 ap = point - segA;
 
-            float dot_ab_ap = Maths.Dot(ab, ap);
+            double dot_ab_ap = Double3.Dot(ab, ap);
 
-            if (dot_ab_ap <= 0f)
+            if (dot_ab_ap <= 0.0)
             {
                 closestPoint = segA;
                 return;
             }
 
-            float dot_ab_ab = ab.LengthSquared;
+            double dot_ab_ab = Double3.LengthSquared(ab);
 
             if (dot_ab_ap >= dot_ab_ab)
             {
@@ -395,8 +395,8 @@ namespace Prowl.Vector.Geometry
                 return;
             }
 
-            float t = 0f;
-            if (dot_ab_ab > float.Epsilon)
+            double t = 0.0;
+            if (dot_ab_ab > double.Epsilon)
                 t = dot_ab_ap / dot_ab_ab;
 
             closestPoint = segA + t * ab;
@@ -405,70 +405,70 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Calculates the square of the distance from a point to a line segment.
         /// </summary>
-        public static float DistanceSqPointToLineSegment(
-            Float3 segA, Float3 segB,
-            Float3 point)
+        public static double DistanceSqPointToLineSegment(
+            Double3 segA, Double3 segB,
+            Double3 point)
         {
-            ClosestPointOnLineSegmentToPoint(segA, segB, point, out Float3 closestPoint);
-            Float3 diff = point - closestPoint;
-            return diff.LengthSquared;
+            ClosestPointOnLineSegmentToPoint(segA, segB, point, out Double3 closestPoint);
+            Double3 diff = point - closestPoint;
+            return Double3.LengthSquared(diff);
         }
 
         /// <summary>
         /// Calculates the closest point on a triangle to a given point.
         /// </summary>
         public static void ClosestPointOnTriangleToPoint(
-            Float3 point,
-            Float3 v0, Float3 v1, Float3 v2,
-            out Float3 result)
+            Double3 point,
+            Double3 v0, Double3 v1, Double3 v2,
+            out Double3 result)
         {
-            Float3 ab = v1 - v0;
-            Float3 ac = v2 - v0;
-            Float3 ap = point - v0;
+            Double3 ab = v1 - v0;
+            Double3 ac = v2 - v0;
+            Double3 ap = point - v0;
 
-            float d1 = Maths.Dot(ab, ap);
-            float d2 = Maths.Dot(ac, ap);
-            if (d1 <= 0f && d2 <= 0f) { result = v0; return; }
+            double d1 = Double3.Dot(ab, ap);
+            double d2 = Double3.Dot(ac, ap);
+            if (d1 <= 0.0 && d2 <= 0.0) { result = v0; return; }
 
-            Float3 bp = point - v1;
-            float d3 = Maths.Dot(ab, bp);
-            float d4 = Maths.Dot(ac, bp);
-            if (d3 >= 0f && d4 <= d3) { result = v1; return; }
+            Double3 bp = point - v1;
+            double d3 = Double3.Dot(ab, bp);
+            double d4 = Double3.Dot(ac, bp);
+            if (d3 >= 0.0 && d4 <= d3) { result = v1; return; }
 
-            float vc = d1 * d4 - d3 * d2;
-            if (vc <= 0f && d1 >= 0f && d3 <= 0f)
+            double vc = d1 * d4 - d3 * d2;
+            if (vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0)
             {
-                float v_param = (Maths.Abs(d1 - d3) < float.Epsilon) ? 0f : d1 / (d1 - d3);
+                double v_param = (Maths.Abs(d1 - d3) < double.Epsilon) ? 0.0 : d1 / (d1 - d3);
                 result = v0 + v_param * ab;
                 return;
             }
 
-            Float3 cp = point - v2;
-            float d5 = Maths.Dot(ab, cp);
-            float d6 = Maths.Dot(ac, cp);
-            if (d6 >= 0f && d5 <= d6) { result = v2; return; }
+            Double3 cp = point - v2;
+            double d5 = Double3.Dot(ab, cp);
+            double d6 = Double3.Dot(ac, cp);
+            if (d6 >= 0.0 && d5 <= d6) { result = v2; return; }
 
-            float vb = d5 * d2 - d1 * d6;
-            if (vb <= 0f && d2 >= 0f && d6 <= 0f)
+            double vb = d5 * d2 - d1 * d6;
+            if (vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0)
             {
-                float w_param = (Maths.Abs(d2 - d6) < float.Epsilon) ? 0f : d2 / (d2 - d6);
+                double w_param = (Maths.Abs(d2 - d6) < double.Epsilon) ? 0.0 : d2 / (d2 - d6);
                 result = v0 + w_param * ac;
                 return;
             }
 
-            float va = d3 * d6 - d5 * d4;
-            if (va <= 0f && (d4 - d3) >= 0f && (d5 - d6) >= 0f)
+            double va = d3 * d6 - d5 * d4;
+            if (va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0)
             {
-                float denom_bc = (d4 - d3) + (d5 - d6);
-                float w_param = (Maths.Abs(denom_bc) < float.Epsilon) ? 0f : (d4 - d3) / denom_bc;
+                double denom_bc = (d4 - d3) + (d5 - d6);
+                double w_param = (Maths.Abs(denom_bc) < double.Epsilon) ? 0.0 : (d4 - d3) / denom_bc;
                 result = v1 + w_param * (v2 - v1);
                 return;
             }
 
-            float denom_bary = va + vb + vc;
-            if (Maths.Abs(denom_bary) < float.Epsilon) { result = v0; return; }
-            float v_bary = vb / denom_bary;
-            float w_bary = vc / denom_bary;
+            double denom_bary = va + vb + vc;
+            if (Maths.Abs(denom_bary) < double.Epsilon) { result = v0; return; }
+            double v_bary = vb / denom_bary;
+            double w_bary = vc / denom_bary;
             result = v0 + ab * v_bary + ac * w_bary;
         }
 
@@ -476,15 +476,15 @@ namespace Prowl.Vector.Geometry
         /// Calculates the closest point on an AABB to a given point.
         /// </summary>
         public static void ClosestPointOnAABBToPoint(
-            Float3 point,
-            Float3 boxMin, Float3 boxMax,
-            out Float3 closestPoint)
+            Double3 point,
+            Double3 boxMin, Double3 boxMax,
+            out Double3 closestPoint)
         {
             // Assuming Maths.Clamp(value, min, max) exists for scalars
-            float x = Maths.Clamp(point.X, boxMin.X, boxMax.X);
-            float y = Maths.Clamp(point.Y, boxMin.Y, boxMax.Y);
-            float z = Maths.Clamp(point.Z, boxMin.Z, boxMax.Z);
-            closestPoint = new Float3(x, y, z);
+            double x = Maths.Clamp(point.X, boxMin.X, boxMax.X);
+            double y = Maths.Clamp(point.Y, boxMin.Y, boxMax.Y);
+            double z = Maths.Clamp(point.Z, boxMin.Z, boxMax.Z);
+            closestPoint = new Double3(x, y, z);
         }
 
         /// <summary>
@@ -492,17 +492,17 @@ namespace Prowl.Vector.Geometry
         /// If the point is at the center of the sphere, returns a point on the surface (e.g., center + radius on X axis).
         /// </summary>
         public static void ClosestPointOnSphereToPoint(
-            Float3 point,
-            Float3 sphereCenter,
-            float sphereRadius,
-            out Float3 closestPoint)
+            Double3 point,
+            Double3 sphereCenter,
+            double sphereRadius,
+            out Double3 closestPoint)
         {
-            Float3 dir = point - sphereCenter;
-            float distSq = dir.LengthSquared;
+            Double3 dir = point - sphereCenter;
+            double distSq = Double3.LengthSquared(dir);
 
-            if (distSq < float.Epsilon * float.Epsilon)
+            if (distSq < double.Epsilon * double.Epsilon)
             {
-                closestPoint = sphereCenter + new Float3(sphereRadius, 0f, 0f);
+                closestPoint = sphereCenter + new Double3(sphereRadius, 0.0, 0.0);
                 return;
             }
 
@@ -516,49 +516,49 @@ namespace Prowl.Vector.Geometry
         /// and parameters s and t for these points along their respective segments.
         /// </summary>
         public static void ClosestPointsLineSegmentLineSegment(
-            Float3 p1, Float3 q1, // Segment 1
-            Float3 p2, Float3 q2, // Segment 2
-            out Float3 c1, out Float3 c2,
-            out float s, out float t)
+            Double3 p1, Double3 q1, // Segment 1
+            Double3 p2, Double3 q2, // Segment 2
+            out Double3 c1, out Double3 c2,
+            out double s, out double t)
         {
-            Float3 d1 = q1 - p1; // Direction vector of segment S1
-            Float3 d2 = q2 - p2; // Direction vector of segment S2
-            Float3 r = p1 - p2;  // Vector between segment starts
+            Double3 d1 = q1 - p1; // Direction vector of segment S1
+            Double3 d2 = q2 - p2; // Direction vector of segment S2
+            Double3 r = p1 - p2;  // Vector between segment starts
 
-            float a = Maths.Dot(d1, d1); // Squared length of segment S1
-            float e = Maths.Dot(d2, d2); // Squared length of segment S2
-            float f = Maths.Dot(d2, r);
+            double a = Double3.Dot(d1, d1); // Squared length of segment S1
+            double e = Double3.Dot(d2, d2); // Squared length of segment S2
+            double f = Double3.Dot(d2, r);
 
             // Check if either or both segments are points
-            if (a <= float.Epsilon && e <= float.Epsilon) // Both segments are points
+            if (a <= double.Epsilon && e <= double.Epsilon) // Both segments are points
             {
-                s = t = 0f;
+                s = t = 0.0;
                 c1 = p1;
                 c2 = p2;
                 return;
             }
-            if (a <= float.Epsilon) // First segment is a point
+            if (a <= double.Epsilon) // First segment is a point
             {
-                s = 0f;
-                t = Maths.Clamp(f / e, 0f, 1f); // Clamp t to 0..1
+                s = 0.0;
+                t = Maths.Clamp(f / e, 0.0, 1.0); // Clamp t to 0..1
             }
             else
             {
-                float c_val = Maths.Dot(d1, r);
-                if (e <= float.Epsilon) // Second segment is a point
+                double c_val = Double3.Dot(d1, r);
+                if (e <= double.Epsilon) // Second segment is a point
                 {
-                    t = 0f;
-                    s = Maths.Clamp(-c_val / a, 0f, 1f); // Clamp s to 0..1
+                    t = 0.0;
+                    s = Maths.Clamp(-c_val / a, 0.0, 1.0); // Clamp s to 0..1
                 }
                 else // General case
                 {
-                    float b = Maths.Dot(d1, d2);
-                    float denom = a * e - b * b; // Denominator
+                    double b = Double3.Dot(d1, d2);
+                    double denom = a * e - b * b; // Denominator
 
                     // If segments are parallel, handle specially
-                    if (denom <= float.Epsilon)
+                    if (denom <= double.Epsilon)
                     {
-                        s = 0f; // Arbitrarily pick s=0
+                        s = 0.0; // Arbitrarily pick s=0
                         t = (b > e) ? f / b : f / e; // Simplified handling for parallel lines
                     }
                     else
@@ -568,8 +568,8 @@ namespace Prowl.Vector.Geometry
                     }
 
                     // Clamp parameters to the segment lengths [0,1]
-                    s = Maths.Clamp(s, 0f, 1f);
-                    t = Maths.Clamp(t, 0f, 1f);
+                    s = Maths.Clamp(s, 0.0, 1.0);
+                    t = Maths.Clamp(t, 0.0, 1.0);
                 }
             }
 
@@ -580,12 +580,12 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Computes the square of the shortest distance between two line segments.
         /// </summary>
-        public static float DistanceSqSegmentSegment(Float3 p1, Float3 q1, Float3 p2, Float3 q2)
+        public static double DistanceSqSegmentSegment(Double3 p1, Double3 q1, Double3 p2, Double3 q2)
         {
-            Float3 c1, c2;
-            float s, t;
+            Double3 c1, c2;
+            double s, t;
             ClosestPointsLineSegmentLineSegment(p1, q1, p2, q2, out c1, out c2, out s, out t);
-            return (c1 - c2).LengthSquared;
+            return Double3.LengthSquared(c1 - c2);
         }
 
         #endregion
@@ -596,11 +596,11 @@ namespace Prowl.Vector.Geometry
         /// Checks if two spheres overlap or touch.
         /// </summary>
         public static bool SphereSphereOverlap(
-            Float3 centerA, float radiusA,
-            Float3 centerB, float radiusB)
+            Double3 centerA, double radiusA,
+            Double3 centerB, double radiusB)
         {
-            float distSq = (centerA - centerB).LengthSquared;
-            float sumRadii = radiusA + radiusB;
+            double distSq = Double3.LengthSquared(centerA - centerB);
+            double sumRadii = radiusA + radiusB;
             return distSq <= sumRadii * sumRadii;
         }
 
@@ -608,8 +608,8 @@ namespace Prowl.Vector.Geometry
         /// Checks if two AABBs overlap or touch.
         /// </summary>
         public static bool AABBAABBOverlap(
-            Float3 minA, Float3 maxA,
-            Float3 minB, Float3 maxB)
+            Double3 minA, Double3 maxA,
+            Double3 minB, Double3 maxB)
         {
             if (maxA.X < minB.X || minA.X > maxB.X) return false;
             if (maxA.Y < minB.Y || minA.Y > maxB.Y) return false;
@@ -621,11 +621,11 @@ namespace Prowl.Vector.Geometry
         /// Checks if a sphere and an AABB overlap or touch.
         /// </summary>
         public static bool SphereAABBOverlap(
-            Float3 sphereCenter, float sphereRadius,
-            Float3 boxMin, Float3 boxMax)
+            Double3 sphereCenter, double sphereRadius,
+            Double3 boxMin, Double3 boxMax)
         {
-            ClosestPointOnAABBToPoint(sphereCenter, boxMin, boxMax, out Float3 closestPointOnBox);
-            float distSq = (sphereCenter - closestPointOnBox).LengthSquared;
+            ClosestPointOnAABBToPoint(sphereCenter, boxMin, boxMax, out Double3 closestPointOnBox);
+            double distSq = Double3.LengthSquared(sphereCenter - closestPointOnBox);
             return distSq <= sphereRadius * sphereRadius;
         }
 
@@ -634,18 +634,18 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <returns>True if the segment intersects the plane, false otherwise.</returns>
         public static bool LineSegmentPlane(
-            Float3 segA, Float3 segB,
-            Float3 planeNormal, float planeD, // Assumed planeNormal is normalized
-            out Float3 intersectionPoint)
+            Double3 segA, Double3 segB,
+            Double3 planeNormal, double planeD, // Assumed planeNormal is normalized
+            out Double3 intersectionPoint)
         {
-            intersectionPoint = Float3.Zero;
-           Float3 ab = segB - segA;
-           float ab_dot_n = Maths.Dot(ab, planeNormal);
+            intersectionPoint = Double3.Zero;
+           Double3 ab = segB - segA;
+           double ab_dot_n = Double3.Dot(ab, planeNormal);
 
-           if (Maths.Abs(ab_dot_n) < float.Epsilon) // Segment is parallel to plane
+           if (Maths.Abs(ab_dot_n) < double.Epsilon) // Segment is parallel to plane
            {
                // Check if segment start point is on the plane (coplanar)
-               if (Maths.Abs(SignedDistancePointToPlane(segA, planeNormal, planeD)) < float.Epsilon)
+               if (Maths.Abs(SignedDistancePointToPlane(segA, planeNormal, planeD)) < double.Epsilon)
                {
                    // Segment is coplanar with the plane.
                    // This Could be considered an intersection.
@@ -655,9 +655,9 @@ namespace Prowl.Vector.Geometry
                return false;
            }
 
-           float t = (planeD - Maths.Dot(segA, planeNormal)) / ab_dot_n;
+           double t = (planeD - Double3.Dot(segA, planeNormal)) / ab_dot_n;
 
-           if (t >= -float.Epsilon && t <= 1f + float.Epsilon) // Intersection point lies on the segment
+           if (t >= -double.Epsilon && t <= 1.0 + double.Epsilon) // Intersection point lies on the segment
            {
                intersectionPoint = segA + t * ab;
                return true;
@@ -676,56 +676,56 @@ namespace Prowl.Vector.Geometry
         /// <param name="b1">Second triangle vertex 1.</param>
         /// <param name="b2">Second triangle vertex 2.</param>
         /// <returns>True if the triangles intersect or touch.</returns>
-        public static bool TriangleTriangle(Float3 a0, Float3 a1, Float3 a2, Float3 b0, Float3 b1, Float3 b2)
+        public static bool TriangleTriangle(Double3 a0, Double3 a1, Double3 a2, Double3 b0, Double3 b1, Double3 b2)
         {
             // Compute triangle normals
-            Float3 normalA = Maths.Cross(a1 - a0, a2 - a0);
-            Float3 normalB = Maths.Cross(b1 - b0, b2 - b0);
+            Double3 normalA = Double3.Cross(a1 - a0, a2 - a0);
+            Double3 normalB = Double3.Cross(b1 - b0, b2 - b0);
         
             // Check if triangles are degenerate
-            if (normalA.LengthSquared < float.Epsilon * float.Epsilon ||
-                normalB.LengthSquared < float.Epsilon * float.Epsilon)
+            if (Double3.LengthSquared(normalA) < double.Epsilon * double.Epsilon ||
+                Double3.LengthSquared(normalB) < double.Epsilon * double.Epsilon)
                 return false;
         
-            normalA = Maths.Normalize(normalA);
-            normalB = Maths.Normalize(normalB);
+            normalA = Double3.Normalize(normalA);
+            normalB = Double3.Normalize(normalB);
         
             // Test separation along triangle A's normal
-            float dA = Maths.Dot(normalA, a0);
-            float minB, maxB;
+            double dA = Double3.Dot(normalA, a0);
+            double minB, maxB;
             ProjectTriangleOntoAxis(b0, b1, b2, normalA, out minB, out maxB);
-            if (dA < minB - float.Epsilon || dA > maxB + float.Epsilon)
+            if (dA < minB - double.Epsilon || dA > maxB + double.Epsilon)
                 return false;
         
             // Test separation along triangle B's normal
-            float dB = Maths.Dot(normalB, b0);
-            float minA, maxA;
+            double dB = Double3.Dot(normalB, b0);
+            double minA, maxA;
             ProjectTriangleOntoAxis(a0, a1, a2, normalB, out minA, out maxA);
-            if (dB < minA - float.Epsilon || dB > maxA + float.Epsilon)
+            if (dB < minA - double.Epsilon || dB > maxA + double.Epsilon)
                 return false;
         
             // Test separation along cross products of triangle edges
-            Float3[] edgesA = { a1 - a0, a2 - a1, a0 - a2 };
-            Float3[] edgesB = { b1 - b0, b2 - b1, b0 - b2 };
+            Double3[] edgesA = { a1 - a0, a2 - a1, a0 - a2 };
+            Double3[] edgesB = { b1 - b0, b2 - b1, b0 - b2 };
         
             for (int i = 0; i < 3; i++)
             {
                 for (int j = 0; j < 3; j++)
                 {
-                    Float3 axis = Maths.Cross(edgesA[i], edgesB[j]);
+                    Double3 axis = Double3.Cross(edgesA[i], edgesB[j]);
         
                     // Skip if axis is too small (edges are parallel)
-                    if (axis.LengthSquared < float.Epsilon * float.Epsilon)
+                    if (Double3.LengthSquared(axis) < double.Epsilon * double.Epsilon)
                         continue;
         
-                    axis = Maths.Normalize(axis);
+                    axis = Double3.Normalize(axis);
         
                     // Project both triangles onto this axis
                     ProjectTriangleOntoAxis(a0, a1, a2, axis, out minA, out maxA);
                     ProjectTriangleOntoAxis(b0, b1, b2, axis, out minB, out maxB);
         
                     // Check for separation
-                    if (maxA < minB - float.Epsilon || maxB < minA - float.Epsilon)
+                    if (maxA < minB - double.Epsilon || maxB < minA - double.Epsilon)
                         return false;
                 }
             }
@@ -743,11 +743,11 @@ namespace Prowl.Vector.Geometry
         /// <param name="axis">The axis to project onto (assumed normalized).</param>
         /// <param name="min">Minimum projection value.</param>
         /// <param name="max">Maximum projection value.</param>
-        private static void ProjectTriangleOntoAxis(Float3 v0, Float3 v1, Float3 v2, Float3 axis, out float min, out float max)
+        private static void ProjectTriangleOntoAxis(Double3 v0, Double3 v1, Double3 v2, Double3 axis, out double min, out double max)
         {
-            float p0 = Maths.Dot(v0, axis);
-            float p1 = Maths.Dot(v1, axis);
-            float p2 = Maths.Dot(v2, axis);
+            double p0 = Double3.Dot(v0, axis);
+            double p1 = Double3.Dot(v1, axis);
+            double p2 = Double3.Dot(v2, axis);
         
             min = Maths.Min(p0, Maths.Min(p1, p2));
             max = Maths.Max(p0, Maths.Max(p1, p2));
@@ -761,12 +761,12 @@ namespace Prowl.Vector.Geometry
         /// Classifies a point with respect to a plane.
         /// </summary>
         public static PlaneIntersectionType ClassifyPointToPlane(
-             Float3 point,
-             Float3 planeNormal, float planeD)
+             Double3 point,
+             Double3 planeNormal, double planeD)
         {
-            float dist = SignedDistancePointToPlane(point, planeNormal, planeD);
-            if (dist > float.Epsilon) return PlaneIntersectionType.Front;
-            if (dist < -float.Epsilon) return PlaneIntersectionType.Back;
+            double dist = SignedDistancePointToPlane(point, planeNormal, planeD);
+            if (dist > double.Epsilon) return PlaneIntersectionType.Front;
+            if (dist < -double.Epsilon) return PlaneIntersectionType.Back;
             return PlaneIntersectionType.Intersecting;
         }
         
@@ -774,10 +774,10 @@ namespace Prowl.Vector.Geometry
         /// Classifies a sphere with respect to a plane.
         /// </summary>
         public static PlaneIntersectionType ClassifySphereToPlane(
-            Float3 sphereCenter, float sphereRadius,
-            Float3 planeNormal, float planeD)
+            Double3 sphereCenter, double sphereRadius,
+            Double3 planeNormal, double planeD)
         {
-            float signedDist = SignedDistancePointToPlane(sphereCenter, planeNormal, planeD);
+            double signedDist = SignedDistancePointToPlane(sphereCenter, planeNormal, planeD);
             if (signedDist > sphereRadius) return PlaneIntersectionType.Front;
             if (signedDist < -sphereRadius) return PlaneIntersectionType.Back;
             return PlaneIntersectionType.Intersecting;
@@ -787,17 +787,17 @@ namespace Prowl.Vector.Geometry
         /// Classifies an AABB with respect to a plane.
         /// </summary>
         public static PlaneIntersectionType ClassifyAABBToPlane(
-            Float3 boxMin, Float3 boxMax,
-            Float3 planeNormal, float planeD)
+            Double3 boxMin, Double3 boxMax,
+            Double3 planeNormal, double planeD)
         {
-            Float3 center = (boxMin + boxMax) * (1f / 2f);
-            Float3 extents = (boxMax - boxMin) * (1f / 2f);
+            Double3 center = (boxMin + boxMax) * (1.0 / 2.0);
+            Double3 extents = (boxMax - boxMin) * (1.0 / 2.0);
         
-            float r = extents.X * Maths.Abs(planeNormal.X) +
+            double r = extents.X * Maths.Abs(planeNormal.X) +
                       extents.Y * Maths.Abs(planeNormal.Y) +
                       extents.Z * Maths.Abs(planeNormal.Z);
         
-            float s = SignedDistancePointToPlane(center, planeNormal, planeD);
+            double s = SignedDistancePointToPlane(center, planeNormal, planeD);
         
             if (s > r) return PlaneIntersectionType.Front;
             if (s < -r) return PlaneIntersectionType.Back;
@@ -818,14 +818,14 @@ namespace Prowl.Vector.Geometry
         /// <param name="planeDs">Array of 6 plane D values.</param>
         /// <param name="point">The point to test.</param>
         /// <returns>True if the point is inside or on all planes (on the positive/normal side), false otherwise.</returns>
-        public static bool FrustumContainsPoint(Float3[] planeNormals, float[] planeDs, Float3 point)
+        public static bool FrustumContainsPoint(Double3[] planeNormals, double[] planeDs, Double3 point)
         {
             if (planeNormals == null || planeNormals.Length < 6 || planeDs == null || planeDs.Length < 6)
                 throw new ArgumentException("Frustum planes must be provided as 6 normals and 6 D values.");
         
             for (int i = 0; i < 6; i++)
             {
-                if (SignedDistancePointToPlane(point, planeNormals[i], planeDs[i]) < -float.Epsilon) // Point is outside (behind) this plane
+                if (SignedDistancePointToPlane(point, planeNormals[i], planeDs[i]) < -double.Epsilon) // Point is outside (behind) this plane
                 {
                     return false;
                 }
@@ -837,7 +837,7 @@ namespace Prowl.Vector.Geometry
         /// Checks if a sphere intersects or is contained within a frustum.
         /// </summary>
         /// <returns>True if the sphere intersects the frustum, false if it's completely outside.</returns>
-        public static bool FrustumIntersectsSphere(Float3[] planeNormals, float[] planeDs, Float3 sphereCenter, float sphereRadius)
+        public static bool FrustumIntersectsSphere(Double3[] planeNormals, double[] planeDs, Double3 sphereCenter, double sphereRadius)
         {
             if (planeNormals == null || planeNormals.Length < 6 || planeDs == null || planeDs.Length < 6)
                 throw new ArgumentException("Frustum planes must be provided as 6 normals and 6 D values.");
@@ -858,7 +858,7 @@ namespace Prowl.Vector.Geometry
         /// Checks if an AABB intersects or is contained within a frustum.
         /// </summary>
         /// <returns>True if the AABB intersects the frustum, false if it's completely outside.</returns>
-        public static bool FrustumIntersectsAABB(Float3[] planeNormals, float[] planeDs, Float3 boxMin, Float3 boxMax)
+        public static bool FrustumIntersectsAABB(Double3[] planeNormals, double[] planeDs, Double3 boxMin, Double3 boxMax)
         {
             if (planeNormals == null || planeNormals.Length < 6 || planeDs == null || planeDs.Length < 6)
                 throw new ArgumentException("Frustum planes must be provided as 6 normals and 6 D values.");
@@ -869,13 +869,13 @@ namespace Prowl.Vector.Geometry
                 // Find the vertex of the AABB that is "most positive" in the direction of the plane normal (p-vertex)
                 // Find the vertex of the AABB that is "most negative" in the direction of the plane normal (n-vertex)
         
-                Float3 pVertex = boxMin; // Start with min
-                if (planeNormals[i].X >= 0f) pVertex.X = boxMax.X;
-                if (planeNormals[i].Y >= 0f) pVertex.Y = boxMax.Y;
-                if (planeNormals[i].Z >= 0f) pVertex.Z = boxMax.Z;
+                Double3 pVertex = boxMin; // Start with min
+                if (planeNormals[i].X >= 0.0) pVertex.X = boxMax.X;
+                if (planeNormals[i].Y >= 0.0) pVertex.Y = boxMax.Y;
+                if (planeNormals[i].Z >= 0.0) pVertex.Z = boxMax.Z;
         
                 // If p-vertex is behind the plane, the entire box is behind (outside)
-                if (SignedDistancePointToPlane(pVertex, planeNormals[i], planeDs[i]) < -float.Epsilon)
+                if (SignedDistancePointToPlane(pVertex, planeNormals[i], planeDs[i]) < -double.Epsilon)
                 {
                     return false;
                 }
@@ -899,26 +899,26 @@ namespace Prowl.Vector.Geometry
         /// <param name="u">Barycentric coordinate u (weight for v1).</param>
         /// <param name="v">Barycentric coordinate v (weight for v2).</param>
         /// <remarks>w (weight for v0) = 1 - u - v.</remarks>
-        public static void PointTriangleBarycentric(Float3 point, Float3 v0, Float3 v1, Float3 v2, out float u, out float v)
+        public static void PointTriangleBarycentric(Double3 point, Double3 v0, Double3 v1, Double3 v2, out double u, out double v)
         {
-            Float3 edge1 = v1 - v0; // v1 - v0
-            Float3 edge2 = v2 - v0; // v2 - v0
-            Float3 pv = point - v0;
+            Double3 edge1 = v1 - v0; // v1 - v0
+            Double3 edge2 = v2 - v0; // v2 - v0
+            Double3 pv = point - v0;
         
-            float d00 = Maths.Dot(edge1, edge1);
-            float d01 = Maths.Dot(edge1, edge2);
-            float d11 = Maths.Dot(edge2, edge2);
-            float d20 = Maths.Dot(pv, edge1);
-            float d21 = Maths.Dot(pv, edge2);
+            double d00 = Double3.Dot(edge1, edge1);
+            double d01 = Double3.Dot(edge1, edge2);
+            double d11 = Double3.Dot(edge2, edge2);
+            double d20 = Double3.Dot(pv, edge1);
+            double d21 = Double3.Dot(pv, edge2);
         
-            float denom = d00 * d11 - d01 * d01;
-            if (Maths.Abs(denom) < float.Epsilon) // Triangle is degenerate
+            double denom = d00 * d11 - d01 * d01;
+            if (Maths.Abs(denom) < double.Epsilon) // Triangle is degenerate
             {
-                u = 0f; v = 0f;
+                u = 0.0; v = 0.0;
                 return;
             }
         
-            float invDenom = 1f / denom;
+            double invDenom = 1.0 / denom;
             u = (d11 * d20 - d01 * d21) * invDenom;
             v = (d00 * d21 - d01 * d20) * invDenom;
         }
@@ -930,9 +930,9 @@ namespace Prowl.Vector.Geometry
         /// <param name="u">Barycentric coordinate u (weight for v1).</param>
         /// <param name="v">Barycentric coordinate v (weight for v2).</param>
         /// <returns>True if the point is inside or on the edge of the triangle.</returns>
-        public static bool IsPointInTriangle(float u, float v)
+        public static bool IsPointInTriangle(double u, double v)
         {
-            return (u >= -float.Epsilon) && (v >= -float.Epsilon) && (u + v <= 1f + float.Epsilon);
+            return (u >= -double.Epsilon) && (v >= -double.Epsilon) && (u + v <= 1.0 + double.Epsilon);
         }
         
         #endregion

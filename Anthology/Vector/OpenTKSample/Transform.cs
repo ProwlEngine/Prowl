@@ -48,8 +48,8 @@ public class Transform
     /// <summary>The rotation of the transform relative to the parent, as euler angles in degrees.</summary>
     public Float3 localEulerAngles
     {
-        get => _localTransform.eulerAngles;
-        set => _localTransform.eulerAngles = value;
+        get => _localTransform.EulerAngles;
+        set => _localTransform.EulerAngles = value;
     }
 
     #endregion

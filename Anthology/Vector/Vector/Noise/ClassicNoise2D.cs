@@ -31,16 +31,16 @@ namespace Prowl.Vector
             Float2 g11 = new Float2(gx.W, gy.W);
 
             Float4 norm = TaylorInvSqrt(new Float4(
-                Maths.Dot(g00, g00),
-                Maths.Dot(g01, g01),
-                Maths.Dot(g10, g10),
-                Maths.Dot(g11, g11)
+                Float2.Dot(g00, g00),
+                Float2.Dot(g01, g01),
+                Float2.Dot(g10, g10),
+                Float2.Dot(g11, g11)
             ));
 
-            float n00 = norm.X * Maths.Dot(g00, new Float2(fx.X, fy.X));
-            float n01 = norm.Y * Maths.Dot(g01, new Float2(fx.Z, fy.Z));
-            float n10 = norm.Z * Maths.Dot(g10, new Float2(fx.Y, fy.Y));
-            float n11 = norm.W * Maths.Dot(g11, new Float2(fx.W, fy.W));
+            float n00 = norm.X * Float2.Dot(g00, new Float2(fx.X, fy.X));
+            float n01 = norm.Y * Float2.Dot(g01, new Float2(fx.Z, fy.Z));
+            float n10 = norm.Z * Float2.Dot(g10, new Float2(fx.Y, fy.Y));
+            float n11 = norm.W * Float2.Dot(g11, new Float2(fx.W, fy.W));
 
             Float2 fade_xy = Fade(Pf.XY);
             Float2 n_x = Maths.Lerp(new Float2(n00, n01), new Float2(n10, n11), fade_xy.X);
@@ -73,16 +73,16 @@ namespace Prowl.Vector
             Float2 g11 = new Float2(gx.W, gy.W);
 
             Float4 norm = TaylorInvSqrt(new Float4(
-                Maths.Dot(g00, g00),
-                Maths.Dot(g01, g01),
-                Maths.Dot(g10, g10),
-                Maths.Dot(g11, g11)
+                Float2.Dot(g00, g00),
+                Float2.Dot(g01, g01),
+                Float2.Dot(g10, g10),
+                Float2.Dot(g11, g11)
             ));
 
-            float n00 = norm.X * Maths.Dot(g00, new Float2(fx.X, fy.X));
-            float n01 = norm.Y * Maths.Dot(g01, new Float2(fx.Z, fy.Z));
-            float n10 = norm.Z * Maths.Dot(g10, new Float2(fx.Y, fy.Y));
-            float n11 = norm.W * Maths.Dot(g11, new Float2(fx.W, fy.W));
+            float n00 = norm.X * Float2.Dot(g00, new Float2(fx.X, fy.X));
+            float n01 = norm.Y * Float2.Dot(g01, new Float2(fx.Z, fy.Z));
+            float n10 = norm.Z * Float2.Dot(g10, new Float2(fx.Y, fy.Y));
+            float n11 = norm.W * Float2.Dot(g11, new Float2(fx.W, fy.W));
 
             Float2 fade_xy = Fade(Pf.XY);
             Float2 n_x = Maths.Lerp(new Float2(n00, n01), new Float2(n10, n11), fade_xy.X);

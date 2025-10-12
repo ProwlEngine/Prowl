@@ -51,15 +51,15 @@ public struct FreelookCamera
         calculatedForward.X = Maths.Cos(yawRad) * Maths.Cos(pitchRad);
         calculatedForward.Y = Maths.Sin(pitchRad);
         calculatedForward.Z = Maths.Sin(yawRad) * Maths.Cos(pitchRad);
-        Forward = Maths.Normalize(calculatedForward);
+        Forward = Float3.Normalize(calculatedForward);
 
-        Right = Maths.Normalize(Maths.Cross(worldUp, Forward));
-        Up = Maths.Normalize(Maths.Cross(Forward, Right));
+        Right = Float3.Normalize(Float3.Cross(worldUp, Forward));
+        Up = Float3.Normalize(Float3.Cross(Forward, Right));
     }
 
     public Float4x4 GetViewMatrix()
     {
-        return Float4x4.CreateLookAt(Position, Position + Forward, Up);
+        return Float4x4.CreateLookTo(Position, Forward, Up);
     }
 }
 
@@ -164,9 +164,9 @@ public class RaylibDemo
             if (Raylib.IsKeyDown(KeyboardKey.E)) moveDir += Float3.UnitY; // Use world Up for Q/E
             if (Raylib.IsKeyDown(KeyboardKey.Q)) moveDir -= Float3.UnitY;
 
-            if (Maths.LengthSquared(moveDir) > Maths.EpsilonF) // Check if there's any movement input
+            if (Float3.LengthSquared(moveDir) > Maths.EpsilonF) // Check if there's any movement input
             {
-                camera.Position += Maths.Normalize(moveDir) * moveSpeed * deltaTime;
+                camera.Position += Float3.Normalize(moveDir) * moveSpeed * deltaTime;
             }
         }
     }
@@ -198,7 +198,7 @@ public class RaylibDemo
             Draw();
 
             Raylib.BeginDrawing();
-            Raylib.ClearBackground(Color.Black);
+            Raylib.ClearBackground(Raylib_cs.Color.Black);
             //presenter.Present(renderer.GetDisplayBuffer());
             presenter.Present(renderer.BackBuffer);
             Raylib.DrawFPS(10, 10);
@@ -227,7 +227,7 @@ public class RaylibDemo
 
         diffuseShader.viewMatrix = viewMatrix;
         diffuseShader.projectionMatrix = projectionMatrix;
-        diffuseShader.lightDir = Maths.Normalize(new Float3(0.5f, -0.85f, 0.4f));
+        diffuseShader.lightDir = Float3.Normalize(new Float3(0.5f, -0.85f, 0.4f));
         renderer.BindShader(diffuseShader);
 
         DrawMesh(corridorModel, Float4x4.Identity);
@@ -237,7 +237,7 @@ public class RaylibDemo
 
         // Draw rotating cube
         cubeRotation += Raylib.GetFrameTime();
-        var cubeModelMatrix = Maths.Mul(Float4x4.CreateTranslation(new Float3(-1, 0, 0)), Float4x4.FromAxisAngle(Maths.Normalize(Float3.One), cubeRotation));
+        var cubeModelMatrix = Float4x4.CreateTranslation(new Float3(-1, 0, 0)) * Float4x4.FromAxisAngle(Float3.Normalize(Float3.One), cubeRotation);
         DrawMesh(cubeModel, cubeModelMatrix);
 
         // Draw transparent sphere

@@ -149,7 +149,7 @@ public static class MeshGenerator
         var perpendiculars = new Float2[pathPoints.Length - 1];
         for (int i = 0; i < pathPoints.Length - 1; i++)
         {
-            var direction = Maths.Normalize(new Float2(pathPoints[i + 1].X - pathPoints[i].X, pathPoints[i + 1].Y - pathPoints[i].Y));
+            var direction = Float2.Normalize(new Float2(pathPoints[i + 1].X - pathPoints[i].X, pathPoints[i + 1].Y - pathPoints[i].Y));
             perpendiculars[i] = new Float2(-direction.Y, direction.X) * w;
         }
 
@@ -233,7 +233,7 @@ public static class MeshGenerator
             // Left wall normal (outward)
             var wallDir = new Float2(endLeft.X - startLeft.X, endLeft.Y - startLeft.Y);
             var leftNormal = new Float3(-wallDir.Y, 0f, wallDir.X);
-            leftNormal = Maths.Normalize(leftNormal);
+            leftNormal = Float3.Normalize(leftNormal);
             for (int j = 0; j < 4; j++) normals.AddRange(new[] { leftNormal.X, leftNormal.Y, leftNormal.Z });
 
             // Left wall indices
@@ -250,7 +250,7 @@ public static class MeshGenerator
 
             // Right wall normal (outward)
             var rightNormal = new Float3(wallDir.Y, 0f, -wallDir.X);
-            rightNormal = Maths.Normalize(rightNormal);
+            rightNormal = Float3.Normalize(rightNormal);
             for (int j = 0; j < 4; j++) normals.AddRange(new[] { rightNormal.X, rightNormal.Y, rightNormal.Z });
 
             // Right wall indices
