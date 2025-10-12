@@ -112,9 +112,9 @@ public class RaylibDemo
 
         // Initialize FreelookCamera
         camera = new FreelookCamera(
-            position: new Float3(0, 1, -3),
+            position: new Float3(0, 0, 0),
             yaw: 90.0f,
-            pitch: -18.43f,
+            pitch: 0,
             fovY: 70.0f,
             worldUp: Float3.UnitY
         );

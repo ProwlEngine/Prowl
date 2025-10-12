@@ -305,22 +305,27 @@ namespace Prowl.Vector
         /// <summary>Creates a Left-Handed view matrix from an eye position, a forward direction, and an up vector.</summary>
         public static Float4x4 CreateLookAt(Float3 eyePosition, Float3 targetPosition, Float3 upVector)
         {
-            // Columns: [ right | up | forward | position ]
+            // Calculate camera basis vectors
             Float3 f = Float3.Normalize(targetPosition - eyePosition); // camera forward (+Z in camera space)
             Float3 s = Float3.Normalize(Float3.Cross(upVector, f));     // right  = up × f
             Float3 u = Float3.Cross(f, s);                             // up     = f × s
 
+            // A view matrix transforms from world space to camera space.
+            // We need the inverse of the camera-to-world transform.
+            // For an orthonormal rotation matrix, the inverse is the transpose.
+            // The inverse translation is: -R^T * eyePosition
+
             Float4x4 m = Float4x4.Identity;
 
-            // Put axes in columns
-            m[0, 0] = s.X; m[1, 0] = s.Y; m[2, 0] = s.Z;  // column 0 = right
-            m[0, 1] = u.X; m[1, 1] = u.Y; m[2, 1] = u.Z;  // column 1 = up
-            m[0, 2] = f.X; m[1, 2] = f.Y; m[2, 2] = f.Z;  // column 2 = forward
+            // Put axes in ROWS (transpose of rotation)
+            m[0, 0] = s.X; m[0, 1] = s.Y; m[0, 2] = s.Z;  // row 0 = right
+            m[1, 0] = u.X; m[1, 1] = u.Y; m[1, 2] = u.Z;  // row 1 = up
+            m[2, 0] = f.X; m[2, 1] = f.Y; m[2, 2] = f.Z;  // row 2 = forward
 
-            // Translation (position) in last column
-            m[0, 3] = eyePosition.X;
-            m[1, 3] = eyePosition.Y;
-            m[2, 3] = eyePosition.Z;
+            // Translation: -R^T * eyePosition = -(dot products with eye position)
+            m[0, 3] = -Float3.Dot(s, eyePosition);
+            m[1, 3] = -Float3.Dot(u, eyePosition);
+            m[2, 3] = -Float3.Dot(f, eyePosition);
 
             // m[3,*] already [0,0,0,1]
             return m;
