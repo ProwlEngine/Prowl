@@ -129,9 +129,9 @@ void main() {
     /// <summary>
     /// Draws an AABB as a wireframe box.
     /// </summary>
-    public static void DrawAABB(AABBFloat aabb, Float4 color)
+    public static void DrawAABB(AABB aabb, Float4 color)
     {
-        Float3[] corners = aabb.GetCorners();
+        Float3[] corners = aabb.GetCorners().Select(c => (Float3)c).ToArray();
 
         // Draw the 12 edges of the box
         // Bottom face (Z = min)
@@ -156,9 +156,9 @@ void main() {
     /// <summary>
     /// Draws an AABB as a solid filled box.
     /// </summary>
-    public static void DrawAABBSolid(AABBFloat aabb, Float4 color)
+    public static void DrawAABBSolid(AABB aabb, Float4 color)
     {
-        Float3[] corners = aabb.GetCorners();
+        Float3[] corners = aabb.GetCorners().Select(c => (Float3)c).ToArray();
         uint baseIndex = (uint)_solidVertices.Count;
 
         // Add all 8 corners as vertices
@@ -202,41 +202,41 @@ void main() {
     /// <summary>
     /// Draws a triangle as wireframe or filled.
     /// </summary>
-    public static void DrawTriangle(TriangleFloat triangle, Float4 color, bool filled = false)
+    public static void DrawTriangle(Triangle triangle, Float4 color, bool filled = false)
     {
         if (filled)
         {
             // Add triangle as solid geometry
             uint baseIndex = (uint)_solidVertices.Count;
-            _solidVertices.Add(new Vertex(triangle.V0, color));
-            _solidVertices.Add(new Vertex(triangle.V1, color));
-            _solidVertices.Add(new Vertex(triangle.V2, color));
+            _solidVertices.Add(new Vertex((Float3)triangle.V0, color));
+            _solidVertices.Add(new Vertex((Float3)triangle.V1, color));
+            _solidVertices.Add(new Vertex((Float3)triangle.V2, color));
             _solidIndices.AddRange(new uint[] { baseIndex, baseIndex + 1, baseIndex + 2 });
             _solidIndices.AddRange(new uint[] { baseIndex, baseIndex + 2, baseIndex + 1 });
         }
         else
         {
             // Draw wireframe
-            DrawLine(triangle.V0, triangle.V1, color);
-            DrawLine(triangle.V1, triangle.V2, color);
-            DrawLine(triangle.V2, triangle.V0, color);
+            DrawLine((Float3)triangle.V0, (Float3)triangle.V1, color);
+            DrawLine((Float3)triangle.V1, (Float3)triangle.V2, color);
+            DrawLine((Float3)triangle.V2, (Float3)triangle.V0, color);
         }
     }
 
     /// <summary>
     /// Draws a ray with an arrowhead.
     /// </summary>
-    public static void DrawRay(RayFloat ray, float length, Float4 color)
+    public static void DrawRay(Ray ray, float length, Float4 color)
     {
-        Float3 end = ray.GetPoint(length);
-        DrawLine(ray.Origin, end, color);
+        Float3 end = (Float3)ray.GetPoint(length);
+        DrawLine((Float3)ray.Origin, end, color);
 
         // Draw arrowhead
         Float3 arrowSize = Float3.One * (length * 0.1f);
-        Float3 right = Maths.Normalize(Maths.Cross(ray.Direction, Float3.UnitY)) * arrowSize.X;
-        Float3 up = Maths.Normalize(Maths.Cross(right, ray.Direction)) * arrowSize.Y;
+        Float3 right = Float3.Normalize(Float3.Cross((Float3)ray.Direction, Float3.UnitY)) * arrowSize.X;
+        Float3 up = Float3.Normalize(Float3.Cross((Float3)right, (Float3)ray.Direction)) * arrowSize.Y;
 
-        Float3 arrowBase = end - ray.Direction * arrowSize.Z;
+        Float3 arrowBase = end - (Float3)ray.Direction * arrowSize.Z;
         DrawLine(end, arrowBase + right, color);
         DrawLine(end, arrowBase - right, color);
         DrawLine(end, arrowBase + up, color);
@@ -246,28 +246,28 @@ void main() {
     /// <summary>
     /// Draws a sphere as wireframe with latitude and longitude lines.
     /// </summary>
-    public static void DrawSphereWireframe(SphereFloat sphere, Float4 color, int segments = 16)
+    public static void DrawSphereWireframe(Sphere sphere, Float4 color, int segments = 16)
     {
         // Draw latitude circles
         for (int lat = 0; lat <= segments; lat++)
         {
             float theta = lat * (float)Maths.PI / segments;
-            float y = sphere.Center.Y + sphere.Radius * Maths.Cos(theta);
-            float radius = sphere.Radius * Maths.Sin(theta);
+            float y = (float)sphere.Center.Y + (float)sphere.Radius * Maths.Cos(theta);
+            float radius = (float)sphere.Radius * Maths.Sin(theta);
 
             for (int lon = 0; lon < segments; lon++)
             {
                 float phi1 = lon * 2 * (float)Maths.PI / segments;
                 float phi2 = (lon + 1) * 2 * (float)Maths.PI / segments;
 
-                Float3 p1 = sphere.Center + new Float3(
+                Float3 p1 = (Float3)sphere.Center + new Float3(
                     radius * Maths.Cos(phi1),
-                    y - sphere.Center.Y,
+                    y - (float)sphere.Center.Y,
                     radius * Maths.Sin(phi1)
                 );
-                Float3 p2 = sphere.Center + new Float3(
+                Float3 p2 = (Float3)sphere.Center + new Float3(
                     radius * Maths.Cos(phi2),
-                    y - sphere.Center.Y,
+                    y - (float)sphere.Center.Y,
                     radius * Maths.Sin(phi2)
                 );
 
@@ -285,15 +285,15 @@ void main() {
                 float theta1 = lat * (float)Maths.PI / segments;
                 float theta2 = (lat + 1) * (float)Maths.PI / segments;
 
-                Float3 p1 = sphere.Center + new Float3(
-                    sphere.Radius * Maths.Sin(theta1) * Maths.Cos(phi),
-                    sphere.Radius * Maths.Cos(theta1),
-                    sphere.Radius * Maths.Sin(theta1) * Maths.Sin(phi)
+                Float3 p1 = (Float3)sphere.Center + new Float3(
+                    (float)sphere.Radius * Maths.Sin(theta1) * Maths.Cos(phi),
+                    (float)sphere.Radius * Maths.Cos(theta1),
+                    (float)sphere.Radius * Maths.Sin(theta1) * Maths.Sin(phi)
                 );
-                Float3 p2 = sphere.Center + new Float3(
-                    sphere.Radius * Maths.Sin(theta2) * Maths.Cos(phi),
-                    sphere.Radius * Maths.Cos(theta2),
-                    sphere.Radius * Maths.Sin(theta2) * Maths.Sin(phi)
+                Float3 p2 = (Float3)sphere.Center + new Float3(
+                    (float)sphere.Radius * Maths.Sin(theta2) * Maths.Cos(phi),
+                    (float)sphere.Radius * Maths.Cos(theta2),
+                    (float)sphere.Radius * Maths.Sin(theta2) * Maths.Sin(phi)
                 );
 
                 DrawLine(p1, p2, color);
@@ -307,10 +307,10 @@ void main() {
     public static void DrawPlane(Float3 center, Float3 normal, Float3 size, Float4 color, int gridLines = 10)
     {
         // Create a coordinate system for the plane
-        Float3 right = Maths.Normalize(Maths.Cross(normal, Float3.UnitY));
-        if (Maths.LengthSquared(right) < 0.1f) // Handle case where normal is parallel to Y
-            right = Maths.Normalize(Maths.Cross(normal, Float3.UnitX));
-        Float3 forward = Maths.Normalize(Maths.Cross(right, normal));
+        Float3 right = Float3.Normalize(Float3.Cross(normal, Float3.UnitY));
+        if (Float3.LengthSquared(right) < 0.1f) // Handle case where normal is parallel to Y
+            right = Float3.Normalize(Float3.Cross(normal, Float3.UnitX));
+        Float3 forward = Float3.Normalize(Float3.Cross(right, normal));
 
         Float3 halfSize = size * 0.5f;
 

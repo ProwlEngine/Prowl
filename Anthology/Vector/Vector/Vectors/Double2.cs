@@ -273,7 +273,7 @@ namespace Prowl.Vector
 
         #region Casting
 
-        public static explicit operator Double2(Float2 v) => new Double2(v);
+        public static implicit operator Double2(Float2 v) => new Double2(v);
         
         public static explicit operator Double2(Int2 v) => new Double2(v);
 

@@ -65,12 +65,12 @@ public class GameWindow : OpenTK.Windowing.Desktop.GameWindow
             Maths.Cos(Maths.ToRadians(_yaw)) * Maths.Cos(Maths.ToRadians(_pitch))   // Z component
         );
 
-        _cameraForward = Maths.Normalize(direction);
+        _cameraForward = Float3.Normalize(direction);
     }
 
     private Float3 GetCameraRight()
     {
-        Float3 right = Maths.Normalize(Maths.Cross(_worldUp, _cameraForward));
+        Float3 right = Float3.Normalize(Float3.Cross(_worldUp, _cameraForward));
         return right;
     }
 

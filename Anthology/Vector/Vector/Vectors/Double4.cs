@@ -301,7 +301,7 @@ namespace Prowl.Vector
 
         public static explicit operator Double3(Double4 value) => new Double3(value.X, value.Y, value.Z);
 
-        public static explicit operator Double4(Float4 v) => new Double4(v);
+        public static implicit operator Double4(Float4 v) => new Double4(v);
 
         public static explicit operator Double4(Int4 v) => new Double4(v);
 

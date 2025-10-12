@@ -131,7 +131,7 @@ public class SphereDemo : IDemo
 
         Float3 spherePos = position + new Float3(0, bounce, 0);
         Gizmo.DrawSphereWireframe(
-            new SphereFloat(spherePos, 1.0f + sizeWave * 0.2f),
+            new Sphere((Double3)spherePos, 1.0f + sizeWave * 0.2f),
             new Float4(0, 0, 1, 1),
             12
         );
@@ -149,9 +149,9 @@ public class AABBDemo : IDemo
         float scaleWave = Maths.Sin(timeInSeconds * 0.8f) * 0.3f;
         float scale = 1.0f + scaleWave * 0.9f;
 
-        Gizmo.DrawAABB(new AABBFloat(
-            position + new Float3(-0.75f * scale, -0.75f, -0.75f * scale),
-            position + new Float3(0.75f * scale, 0.75f, 0.75f * scale)
+        Gizmo.DrawAABB(new AABB(
+            (Double3)position + new Double3(-0.75f * scale, -0.75f, -0.75f * scale),
+            (Double3)position + new Double3(0.75f * scale, 0.75f, 0.75f * scale)
         ), new Float4(0, 1, 0, 1));
     }
 
@@ -168,10 +168,10 @@ public class TriangleDemo : IDemo
         float cosRot = Maths.Cos(rotation);
         float sinRot = Maths.Sin(rotation);
 
-        TriangleFloat triangle = new TriangleFloat(
-            position + new Float3(cosRot * 0 - sinRot * (-1), -1, cosRot * (-0.5f) - sinRot * 0),
-            position + new Float3(cosRot * 1 - sinRot * 1, 1, cosRot * (-0.5f) - sinRot * 1),
-            position + new Float3(cosRot * (-1) - sinRot * 1, 1, cosRot * 0.5f - sinRot * (-1))
+        Triangle triangle = new Triangle(
+            (Double3)position + new Double3(cosRot * 0 - sinRot * (-1), -1, cosRot * (-0.5f) - sinRot * 0),
+            (Double3)position + new Double3(cosRot * 1 - sinRot * 1, 1, cosRot * (-0.5f) - sinRot * 1),
+            (Double3)position + new Double3(cosRot * (-1) - sinRot * 1, 1, cosRot * 0.5f - sinRot * (-1))
         );
 
         Gizmo.DrawTriangle(triangle, new Float4(0.5f, 0.5f, 1, 1f), true);
@@ -190,8 +190,8 @@ public class RayDemo : IDemo
         float fastWave = Maths.Sin(timeInSeconds * 2.0f) * 0.1f;
         float slowWave = Maths.Sin(timeInSeconds * 0.5f) * 0.2f;
 
-        Float3 rayDir = new Float3(0.5f + fastWave * 10f, 1, 0.2f + slowWave * 10f).Normalized;
-        RayFloat ray = new RayFloat(position + new Float3(0, -1, 0), rayDir);
+        Float3 rayDir = Float3.Normalize(new Float3(0.5f + fastWave * 10f, 1, 0.2f + slowWave * 10f));
+        Ray ray = new Ray((Double3)position + new Double3(0, -1, 0), (Double3)rayDir);
 
         Gizmo.DrawRay(ray, 3.0f, new Float4(1, 1, 0, 1));
     }
@@ -205,7 +205,7 @@ public class PlaneDemo : IDemo
 
     public void Draw(Float3 position, float timeInSeconds)
     {
-        Float3 planeNormal = new Float3(0, 1, 0).Normalized;
+        Float3 planeNormal = Float3.Normalize(new Float3(0, 1, 0));
         Gizmo.DrawPlane(position, planeNormal, new Float3(2, 0, 2), new Float4(0, 1, 1, 1), 8);
     }
 
@@ -221,19 +221,19 @@ public class SplineDemo : IDemo
         timeInSeconds *= 0.25f; // Slow down time for better visibility
 
         // Create control points for a complex 3D path
-        Float3[] controlPoints = {
-            position + new Float3(-2, -1, -1.5f),
-            position + new Float3(-1, 0.5f, -0.5f),
-            position + new Float3(0, -0.5f, 1),
-            position + new Float3(1.5f, 1, 0.5f),
-            position + new Float3(2, -0.5f, -1),
-            position + new Float3(0.5f, -1.5f, 0),
-            position + new Float3(-1.5f, -0.5f, 1.5f)
+        Double3[] controlPoints = {
+            (Double3)position + new Double3(-2, -1, -1.5f),
+            (Double3)position + new Double3(-1, 0.5f, -0.5f),
+            (Double3)position + new Double3(0, -0.5f, 1),
+            (Double3)position + new Double3(1.5f, 1, 0.5f),
+            (Double3)position + new Double3(2, -0.5f, -1),
+            (Double3)position + new Double3(0.5f, -1.5f, 0),
+            (Double3)position + new Double3(-1.5f, -0.5f, 1.5f)
         };
 
         // Create different types of splines
-        var catmullRomSpline = SplineFloat.CreateCatmullRom(controlPoints, closed: true, 0.5f);
-        var bSpline = SplineFloat.CreateBSpline(controlPoints, closed: true);
+        var catmullRomSpline = Spline.CreateCatmullRom(controlPoints, closed: true, 0.5f);
+        var bSpline = Spline.CreateBSpline(controlPoints, closed: true);
 
         // Draw spline paths
         DrawSplinePath(catmullRomSpline, new Float4(0, 1, 0.5f, 0.8f), 100); // Green-cyan
@@ -244,44 +244,44 @@ public class SplineDemo : IDemo
         float t2 = (timeInSeconds * 0.25f) % 1.0f;
 
         // Object 1: Following Catmull-Rom spline with frame visualization
-        var frame1 = catmullRomSpline.EvaluateFrame(t1, SplineFloat.UpVectorMethod.FrenetFrame);
+        var frame1 = catmullRomSpline.EvaluateFrame(t1, Spline.UpVectorMethod.FrenetFrame);
         DrawSplineFrame(frame1, 0.3f);
 
         // Draw a small cube at the position
-        AABBFloat cube1 = new AABBFloat(
-            frame1.Position + new Float3(-0.1f, -0.1f, -0.1f),
-            frame1.Position + new Float3(0.1f, 0.1f, 0.1f)
+        AABB cube1 = new AABB(
+            (Double3)frame1.Position + new Double3(-0.1f, -0.1f, -0.1f),
+            (Double3)frame1.Position + new Double3(0.1f, 0.1f, 0.1f)
         );
         Gizmo.DrawAABBSolid(cube1, new Float4(0, 1, 0.5f, 0.9f));
 
         // Object 2: Following B-spline
-        Float3 pos2 = bSpline.Evaluate(t2);
+        Float3 pos2 = (Float3)bSpline.Evaluate(t2);
         
         // Draw a small sphere
-        SphereFloat sphere2 = new SphereFloat(pos2, 0.12f);
+        Sphere sphere2 = new Sphere((Double3)pos2, 0.12f);
         Gizmo.DrawSphereWireframe(sphere2, new Float4(1, 0.5f, 0, 1), 8);
     }
 
-    private void DrawSplinePath(SplineFloat spline, Float4 color, int segments)
+    private void DrawSplinePath(Spline spline, Float4 color, int segments)
     {
         for (int i = 0; i < segments; i++)
         {
             float t1 = i / (float)segments;
             float t2 = (i + 1) / (float)segments;
 
-            Float3 p1 = spline.Evaluate(t1);
-            Float3 p2 = spline.Evaluate(t2);
+            Float3 p1 = (Float3)spline.Evaluate(t1);
+            Float3 p2 = (Float3)spline.Evaluate(t2);
 
             Gizmo.DrawLine(p1, p2, color);
         }
     }
 
-    private void DrawSplineFrame(SplineFloat.SplineFrame frame, float size)
+    private void DrawSplineFrame(Spline.SplineFrame frame, float size)
     {
         // Draw coordinate frame
-        Gizmo.DrawLine(frame.Position, frame.Position + frame.Right * size, new Float4(1, 0, 0, 0.8f)); // Red = Right
-        Gizmo.DrawLine(frame.Position, frame.Position + frame.Up * size, new Float4(0, 1, 0, 0.8f));    // Green = Up
-        Gizmo.DrawLine(frame.Position, frame.Position + frame.Forward * size, new Float4(0, 0, 1, 0.8f)); // Blue = Forward
+        Gizmo.DrawLine((Float3)frame.Position, (Float3)frame.Position + (Float3)frame.Right * size, new Float4(1, 0, 0, 0.8f)); // Red = Right
+        Gizmo.DrawLine((Float3)frame.Position, (Float3)frame.Position + (Float3)frame.Up * size, new Float4(0, 1, 0, 0.8f));    // Green = Up
+        Gizmo.DrawLine((Float3)frame.Position, (Float3)frame.Position + (Float3)frame.Forward * size, new Float4(0, 0, 1, 0.8f)); // Blue = Forward
     }
 
     public Float3 GetBounds() => new Float3(5.5f, 4.0f, 4.0f);
@@ -294,34 +294,34 @@ public class SplineTypesDemo : IDemo
     public void Draw(Float3 position, float timeInSeconds)
     {
         // Animated control points in X-Z plane
-        Float3[] baseControlPoints = {
-            new Float3(-1.5f, 0, -0.5f),
-            new Float3(-0.5f, 0, 1),
-            new Float3(0.5f, 0, -0.8f),
-            new Float3(1.5f, 0, 0.5f)
+        Double3[] baseControlPoints = {
+            new Double3(-1.5f, 0, -0.5f),
+            new Double3(-0.5f, 0, 1),
+            new Double3(0.5f, 0, -0.8f),
+            new Double3(1.5f, 0, 0.5f)
         };
 
         // Add animation to control points
-        Float3[] animatedPoints = new Float3[baseControlPoints.Length];
+        Double3[] animatedPoints = new Double3[baseControlPoints.Length];
         for (int i = 0; i < baseControlPoints.Length; i++)
         {
             float phase = timeInSeconds * 0.5f + i * 0.7f;
-            Float3 animation = new Float3(
+            Double3 animation = new Double3(
                 (float)Math.Sin(phase) * 0.1f,
                 (float)Math.Cos(phase * 1.3f) * 0.05f, // Small Y movement for visual interest
                 (float)Math.Sin(phase * 0.8f) * 0.1f
             );
-            animatedPoints[i] = position + baseControlPoints[i] + animation;
+            animatedPoints[i] = (Double3)(position + (Float3)baseControlPoints[i] + (Float3)animation);
         }
 
         // Create different spline types
-        var linearSpline = SplineFloat.CreateLinear(animatedPoints);
-        var catmullRomSpline = SplineFloat.CreateCatmullRom(animatedPoints, false, 0.5f);
-        var bezierSpline = SplineFloat.CreateBezier(animatedPoints);
+        var linearSpline = Spline.CreateLinear(animatedPoints);
+        var catmullRomSpline = Spline.CreateCatmullRom(animatedPoints, false, 0.5f);
+        var bezierSpline = Spline.CreateBezier(animatedPoints);
 
         // Offset each spline along Z-axis for comparison
         float[] zOffsets = { 1.25f, 0.0f, -1.25f };
-        SplineFloat[] splines = { linearSpline, catmullRomSpline, bezierSpline };
+        Spline[] splines = { linearSpline, catmullRomSpline, bezierSpline };
         Float4[] colors = {
             new Float4(1, 0, 0, 0.8f),    // Red - Linear
             new Float4(0, 1, 0, 0.8f),    // Green - Catmull-Rom
@@ -341,14 +341,14 @@ public class SplineTypesDemo : IDemo
                 float t1 = i / 100.0f;
                 float t2 = (i + 1) / 100.0f;
 
-                Float3 p1 = spline.Evaluate(t1) + new Float3(0, 0, zOffset);
-                Float3 p2 = spline.Evaluate(t2) + new Float3(0, 0, zOffset);
+                Float3 p1 = (Float3)spline.Evaluate(t1) + new Float3(0, 0, zOffset);
+                Float3 p2 = (Float3)spline.Evaluate(t2) + new Float3(0, 0, zOffset);
 
                 Gizmo.DrawLine(p1, p2, color);
             }
 
             // Draw control points for this spline
-            Float3[] controlPoints = animatedPoints;
+            Float3[] controlPoints = animatedPoints.Select(p => (Float3)p).ToArray();
             for (int i = 0; i < controlPoints.Length; i++)
             {
                 Float3 pointPos = controlPoints[i] + new Float3(0, 0, zOffset);
@@ -364,8 +364,8 @@ public class SplineTypesDemo : IDemo
 
             // Animate a point along each spline
             float t = (timeInSeconds * 0.4f) % 1.0f;
-            Float3 currentPos = spline.Evaluate(t) + new Float3(0, 0, zOffset);
-            Float3 tangent = spline.EvaluateDerivative(t).Normalized;
+            Float3 currentPos = (Float3)spline.Evaluate(t) + new Float3(0, 0, zOffset);
+            Float3 tangent = Float3.Normalize((Float3)spline.EvaluateDerivative(t));
 
             // Draw point
             Gizmo.DrawIntersectionPoint(currentPos, color, 0.07f);
@@ -406,13 +406,13 @@ public class SphereSphereIntersectionDemo : IDemo
         ) * 2f;
 
         // Add some size pulsing based on proximity
-        float distance = (sphere1Offset - sphere2Offset).Length;
+        float distance = Float3.Length(sphere1Offset - sphere2Offset);
         float proximityEffect = Maths.Max(0, 1.0f - distance / 1.5f);
         float size1 = 0.7f + proximityEffect * 0.2f + Maths.Sin(timeInSeconds * 4) * 0.05f;
         float size2 = 0.7f + proximityEffect * 0.15f + Maths.Cos(timeInSeconds * 3.5f) * 0.05f;
 
-        SphereFloat sphere1 = new SphereFloat(position + sphere1Offset, size1);
-        SphereFloat sphere2 = new SphereFloat(position + sphere2Offset, size2);
+        Sphere sphere1 = new Sphere((Double3)position + (Double3)sphere1Offset, size1);
+        Sphere sphere2 = new Sphere((Double3)position + (Double3)sphere2Offset, size2);
         bool intersects = sphere1.Intersects(sphere2);
 
         // Color changes based on intersection and proximity
@@ -446,9 +446,9 @@ public class AABBSphereIntersectionDemo : IDemo
         // AABB also rotates and scales
         float scale = 1.0f + Maths.Sin(timeInSeconds * 1.5f) * 0.2f;
 
-        AABBFloat aabb = new AABBFloat(
-            position + aabbOffset + new Float3(-0.3f * scale, -0.3f * scale, -0.3f * scale),
-            position + aabbOffset + new Float3(0.3f * scale, 0.3f * scale, 0.3f * scale)
+        AABB aabb = new AABB(
+            (Double3)position + (Double3)aabbOffset + new Double3(-0.3f * scale, -0.3f * scale, -0.3f * scale),
+            (Double3)position + (Double3)aabbOffset + new Double3(0.3f * scale, 0.3f * scale, 0.3f * scale)
         );
 
         // Sphere follows a different complex path - lemniscate (infinity symbol) in 3D
@@ -460,7 +460,7 @@ public class AABBSphereIntersectionDemo : IDemo
             (float)(Maths.Sin(lemnTime) * Maths.Cos(lemnTime) / (1 + Maths.Cos(lemnTime) * Maths.Cos(lemnTime))) * 0.5f
         ) * 2f;
 
-        SphereFloat sphere = new SphereFloat(position + sphereOffset, sphereRadius);
+        Sphere sphere = new Sphere((Double3)position + (Double3)sphereOffset, sphereRadius);
         bool intersects = aabb.Intersects(sphere);
 
         Float4 color = intersects ? new Float4(0, 1, 0, 1) : new Float4(1, 0, 0, 1);
@@ -511,7 +511,7 @@ public class RayTriangleIntersectionDemo : IDemo
             rotatedVerts[i] = position + new Float3(ov.X, newY, newZ);
         }
 
-        TriangleFloat triangle = new TriangleFloat(rotatedVerts[0], rotatedVerts[1], rotatedVerts[2]);
+        Triangle triangle = new Triangle(rotatedVerts[0], rotatedVerts[1], rotatedVerts[2]);
 
         // Calculate triangle center for better ray targeting
         Float3 triangleCenter = (rotatedVerts[0] + rotatedVerts[1] + rotatedVerts[2]) / 3.0f;
@@ -527,18 +527,18 @@ public class RayTriangleIntersectionDemo : IDemo
         );
 
         // Ray direction aims at triangle center with some wobble
-        Float3 baseDirection = (triangleCenter - rayStart).Normalized;
+        Float3 baseDirection = Float3.Normalize(triangleCenter - rayStart);
         Float3 wobble = new Float3(
             Maths.Sin(timeInSeconds * 2.5f) * 0.2f,
             Maths.Cos(timeInSeconds * 3.0f) * 0.2f,
             Maths.Sin(timeInSeconds * 2.0f) * 0.2f
         );
-        Float3 rayDir = (baseDirection + wobble).Normalized;
+        Float3 rayDir = Float3.Normalize(baseDirection + wobble);
 
-        RayFloat ray = new RayFloat(rayStart, rayDir);
+        Ray ray = new Ray(rayStart, rayDir);
 
         // Check for intersection
-        bool hasHit = ray.Intersects(triangle, out float hitDistance, out float u, out float v);
+        bool hasHit = ray.Intersects(triangle, out double hitDistance, out double u, out double v);
 
         // Set ray color and length based on hit
         Float4 rayColor;
@@ -547,7 +547,7 @@ public class RayTriangleIntersectionDemo : IDemo
         if (hasHit)
         {
             rayColor = new Float4(0, 1, 0, 1); // Green when hitting
-            rayLength = hitDistance; // Stop at hit point
+            rayLength = (float)hitDistance; // Stop at hit point
         }
         else
         {
@@ -564,7 +564,7 @@ public class RayTriangleIntersectionDemo : IDemo
 
         if (hasHit)
         {
-            Float3 hitPoint = ray.GetPoint(hitDistance);
+            Float3 hitPoint = (Float3)ray.GetPoint(hitDistance);
 
             // Pulsing hit point
             float pulseSize = 0.06f + Maths.Abs(Maths.Sin(timeInSeconds * 8.0f)) * 0.04f;
@@ -604,12 +604,12 @@ public class AABBAABBIntersectionDemo : IDemo
         float scale2 = 1.0f + Maths.Cos(timeInSeconds * 0.9f) * 0.2f;
 
         // Create the AABBs
-        AABBFloat aabb1 = new AABBFloat(
+        AABB aabb1 = new AABB(
             position + aabb1Offset + new Float3(-0.4f * scale1, -0.3f * scale1, -0.35f * scale1),
             position + aabb1Offset + new Float3(0.4f * scale1, 0.3f * scale1, 0.35f * scale1)
         );
 
-        AABBFloat aabb2 = new AABBFloat(
+        AABB aabb2 = new AABB(
             position + aabb2Offset + new Float3(-0.35f * scale2, -0.35f * scale2, -0.4f * scale2),
             position + aabb2Offset + new Float3(0.35f * scale2, 0.35f * scale2, 0.4f * scale2)
         );
@@ -631,7 +631,7 @@ public class AABBAABBIntersectionDemo : IDemo
         // If intersecting, calculate and draw the clipped/intersection AABB
         if (intersects)
         {
-            AABBFloat clipped = aabb1.ClippedBy(aabb2);
+            AABB clipped = aabb1.ClippedBy(aabb2);
 
             // Draw bright wireframe for intersection
             Gizmo.DrawAABB(clipped, new Float4(1, 1, 0, 1));
@@ -659,7 +659,7 @@ public class RaySphereIntersectionDemo : IDemo
 
         // Sphere also pulses in size
         float sphereRadius = 0.6f + Maths.Sin(timeInSeconds * 2.0f) * 0.15f;
-        SphereFloat sphere = new SphereFloat(position + sphereOffset, sphereRadius);
+        Sphere sphere = new Sphere(position + sphereOffset, sphereRadius);
 
         // Ray orbits around the center, aiming toward the sphere with some lead prediction
         float rayTime = timeInSeconds * 1.2f;
@@ -679,8 +679,8 @@ public class RaySphereIntersectionDemo : IDemo
             0 // Simplified Z velocity
         );
 
-        Float3 predictedSpherePos = sphere.Center + sphereVelocity * 0.3f; // Lead the target
-        Float3 baseDirection = (predictedSpherePos - rayStart).Normalized;
+        Float3 predictedSpherePos = (Float3)sphere.Center + sphereVelocity * 0.3f; // Lead the target
+        Float3 baseDirection = Float3.Normalize(predictedSpherePos - rayStart);
 
         // Add some wobble to make it more interesting
         Float3 wobble = new Float3(
@@ -688,12 +688,12 @@ public class RaySphereIntersectionDemo : IDemo
             Maths.Cos(timeInSeconds * 4.0f) * 0.12f,
             Maths.Sin(timeInSeconds * 2.8f) * 0.18f
         );
-        Float3 rayDir = (baseDirection + wobble).Normalized;
+        Float3 rayDir = Float3.Normalize(baseDirection + wobble);
 
-        RayFloat ray = new RayFloat(rayStart, rayDir);
+        Ray ray = new Ray(rayStart, rayDir);
 
         // Check for intersection
-        bool hasHit = ray.Intersects(sphere, out float t0, out float t1);
+        bool hasHit = ray.Intersects(sphere, out double t0, out double t1);
 
         // Dynamic ray properties based on intersection
         Float4 rayColor;
@@ -702,7 +702,7 @@ public class RaySphereIntersectionDemo : IDemo
         if (hasHit)
         {
             rayColor = new Float4(0, 1, 0.3f, 1); // Green-cyan when hitting
-            rayLength = t0; // Stop at first intersection point
+            rayLength = (float)t0; // Stop at first intersection point
         }
         else
         {
@@ -724,8 +724,8 @@ public class RaySphereIntersectionDemo : IDemo
         // intersection visualization
         if (hasHit)
         {
-            Float3 hitPoint1 = ray.GetPoint(t0);
-            Float3 hitPoint2 = ray.GetPoint(t1);
+            Float3 hitPoint1 = (Float3)ray.GetPoint(t0);
+            Float3 hitPoint2 = (Float3)ray.GetPoint(t1);
 
             // hit points
             Gizmo.DrawIntersectionPoint(hitPoint1, new Float4(1, 1, 0, 1), 0.06f);
@@ -739,8 +739,8 @@ public class RaySphereIntersectionDemo : IDemo
             }
 
             // Draw normal vectors at hit points
-            Float3 normal1 = (hitPoint1 - sphere.Center).Normalized;
-            Float3 normal2 = (hitPoint2 - sphere.Center).Normalized;
+            Float3 normal1 = Float3.Normalize((Float3)hitPoint1 - (Float3)sphere.Center);
+            Float3 normal2 = Float3.Normalize((Float3)hitPoint2 - (Float3)sphere.Center);
 
             Gizmo.DrawLine(hitPoint1, hitPoint1 + normal1 * 0.3f, new Float4(0, 1, 1, 0.8f));
             if (Maths.Abs(t1 - t0) > 0.001f)
