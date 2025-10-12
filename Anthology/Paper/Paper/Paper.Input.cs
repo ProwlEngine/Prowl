@@ -14,7 +14,7 @@ namespace Prowl.PaperUI
         public readonly PaperMouseBtn[] MouseValues = Enum.GetValues<PaperMouseBtn>();
 
         // Events
-        public event Action<Vector2> OnPointerPosSet;
+        public event Action<Double2> OnPointerPosSet;
         public event Action<bool> OnCursorVisibilitySet;
 
         #region Keyboard State
@@ -65,13 +65,13 @@ namespace Prowl.PaperUI
         private bool[] _pointerCurState;
         private bool[] _pointerPrevState;
         private double[] _pointerPressedTime;
-        private Vector2[] _pointerClickPos;
+        private Double2[] _pointerClickPos;
         public PaperMouseBtn LastButtonPressed { get; private set; } = PaperMouseBtn.Unknown;
-        public Vector2 PreviousPointerPos { get; private set; } = Vector2.zero;
+        public Double2 PreviousPointerPos { get; private set; } = Double2.Zero;
 
         // Current pointer position
-        private Vector2 _pointerPos;
-        public Vector2 PointerPos {
+        private Double2 _pointerPos;
+        public Double2 PointerPos {
             get => _pointerPos;
             set {
                 _pointerPos = value;
@@ -83,12 +83,12 @@ namespace Prowl.PaperUI
         public double PointerWheel { get; private set; } = 0;
 
         // Derived properties
-        public Vector2 PointerDelta => PointerPos - PreviousPointerPos;
-        public bool IsPointerMoving => PointerDelta.sqrMagnitude > 0;
+        public Double2 PointerDelta => PointerPos - PreviousPointerPos;
+        public bool IsPointerMoving => Double2.LengthSquared(PointerDelta) > 0;
 
         // Double-click tracking
         private double[] _pointerLastClickTime;
-        private Vector2[] _pointerLastClickPos;
+        private Double2[] _pointerLastClickPos;
         private const double MaxDoubleClickTime = 0.25f;
 
         #endregion
@@ -109,7 +109,7 @@ namespace Prowl.PaperUI
         public double Time => _time;
 
         // Scaling
-        private Vector2 _frameBufferScale = Vector2.one;
+        private Double2 _frameBufferScale = Double2.One;
 
         #endregion
 
@@ -141,9 +141,9 @@ namespace Prowl.PaperUI
             _pointerCurState = new bool[MouseValues.Length];
             _pointerPrevState = new bool[MouseValues.Length];
             _pointerPressedTime = new double[MouseValues.Length];
-            _pointerClickPos = new Vector2[MouseValues.Length];
+            _pointerClickPos = new Double2[MouseValues.Length];
             _pointerLastClickTime = new double[MouseValues.Length];
-            _pointerLastClickPos = new Vector2[MouseValues.Length];
+            _pointerLastClickPos = new Double2[MouseValues.Length];
 
             // Initialize clipboard handler
             _clipboardHandler = null;
@@ -227,7 +227,7 @@ namespace Prowl.PaperUI
         /// Begins the input processing for a new frame.
         /// </summary>
         /// <param name="frameBufferScale">The framebuffer scale factor</param>
-        private void StartInputFrame(Vector2 frameBufferScale)
+        private void StartInputFrame(Double2 frameBufferScale)
         {
             _frameBufferScale = frameBufferScale;
 
@@ -334,12 +334,12 @@ namespace Prowl.PaperUI
                 _pointerCurState[i] = false;
                 _pointerPrevState[i] = false;
                 _pointerPressedTime[i] = 0;
-                _pointerClickPos[i] = Vector2.zero;
+                _pointerClickPos[i] = Double2.Zero;
             }
 
             LastButtonPressed = PaperMouseBtn.Unknown;
             PreviousPointerPos = _pointerPos;
-            _pointerPos = Vector2.zero;
+            _pointerPos = Double2.Zero;
             PointerWheel = 0;
         }
 
@@ -377,9 +377,9 @@ namespace Prowl.PaperUI
         /// <param name="y">Y coordinate</param>
         public void SetPointerPosition(double x, double y)
         {
-            x *= _frameBufferScale.x;
-            y *= _frameBufferScale.y;
-            _pointerPos = new Vector2(x, y);
+            x *= _frameBufferScale.X;
+            y *= _frameBufferScale.Y;
+            _pointerPos = new Double2(x, y);
         }
 
         /// <summary>
@@ -395,18 +395,18 @@ namespace Prowl.PaperUI
             var index = (int)btn;
             LastButtonPressed = btn;
 
-            x *= _frameBufferScale.x;
-            y *= _frameBufferScale.y;
+            x *= _frameBufferScale.X;
+            y *= _frameBufferScale.Y;
 
             if (!isPointerMove)
             {
                 _pointerPrevState[index] = _pointerCurState[index];
                 _pointerCurState[index] = isPointerBtnDown;
-                _pointerClickPos[index] = new Vector2(x, y);
+                _pointerClickPos[index] = new Double2(x, y);
             }
             else
             {
-                _pointerPos = new Vector2(x, y);
+                _pointerPos = new Double2(x, y);
             }
         }
 
@@ -542,13 +542,13 @@ namespace Prowl.PaperUI
         /// <param name="btn">The mouse button to query.</param>
         public bool IsPointerDoubleClick(PaperMouseBtn btn) =>
             IsPointerPressed(btn) && _time < _pointerLastClickTime[(int)btn] &&
-            (PointerPos - _pointerLastClickPos[(int)btn]).sqrMagnitude < 2; // 5^2 = 25
+            Double2.LengthSquared(PointerPos - _pointerLastClickPos[(int)btn]) < 2; // 5^2 = 25
 
         /// <summary>
         /// Gets the position where a mouse button was clicked.
         /// </summary>
         /// <param name="btn">The mouse button to query.</param>
-        public Vector2 GetPointerClickPos(PaperMouseBtn btn) => _pointerClickPos[(int)btn];
+        public Double2 GetPointerClickPos(PaperMouseBtn btn) => _pointerClickPos[(int)btn];
 
         /// <summary>
         /// Checks if the pointer is over a specified rectangle.
@@ -556,8 +556,8 @@ namespace Prowl.PaperUI
         /// <param name="btn">The mouse button to query.</param>
         public bool IsPointerOverRect(double x, double y, double width, double height)
         {
-            return _pointerPos.x >= x && _pointerPos.x <= x + width &&
-                   _pointerPos.y >= y && _pointerPos.y <= y + height;
+            return _pointerPos.X >= x && _pointerPos.X <= x + width &&
+                   _pointerPos.Y >= y && _pointerPos.Y <= y + height;
         }
 
         #endregion

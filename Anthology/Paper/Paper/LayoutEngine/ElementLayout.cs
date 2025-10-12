@@ -107,12 +107,12 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 var textSize = element.ProcessText(elementHandle.Owner, (float)availableWidth);
 
-                if (textSize.x > 0 || textSize.y > 0)
+                if (textSize.X > 0 || textSize.Y > 0)
                 {
                     if (parentLayoutType == LayoutType.Row)
-                        contentSize = (textSize.x, textSize.y);
+                        contentSize = (textSize.X, textSize.Y);
                     else
-                        contentSize = (textSize.y, textSize.x);
+                        contentSize = (textSize.Y, textSize.X);
                 }
             }
 
@@ -1286,11 +1286,11 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
 
-        internal static Vector2 ProcessText(this ref ElementData element, Paper gui, float availableWidth)
+        internal static Double2 ProcessText(this ref ElementData element, Paper gui, float availableWidth)
         {
             //if (element.ProcessedText) return Vector2.zero;
 
-            if (string.IsNullOrWhiteSpace(element.Paragraph)) return Vector2.zero;
+            if (string.IsNullOrWhiteSpace(element.Paragraph)) return Double2.Zero;
 
             element.ProcessedText = true;
 
@@ -1320,7 +1320,7 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 element._textLayout = canvas.CreateLayout(element.Paragraph, settings);
 
-                return element._textLayout.Size;
+                return (Float2)element._textLayout.Size;
             }
             else
             {
@@ -1333,8 +1333,8 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 element._quillMarkdown = canvas.CreateMarkdown(element.Paragraph, settings);
 
-                var markdownResult = element._quillMarkdown as dynamic;
-                return markdownResult?.Size ?? Vector2.zero;
+                var markdownResult = element._quillMarkdown;
+                return markdownResult?.Size ?? Double2.Zero;
             }
         }
 

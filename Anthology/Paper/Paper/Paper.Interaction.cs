@@ -1,6 +1,8 @@
 ﻿using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
+using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI
 {
@@ -135,7 +137,7 @@ namespace Prowl.PaperUI
 
         // State tracking collections
         private Dictionary<int, bool> _wasHoveredState = new Dictionary<int, bool>();
-        private Dictionary<int, Vector2> _dragStartPos = new Dictionary<int, Vector2>();
+        private Dictionary<int, Double2> _dragStartPos = new Dictionary<int, Double2>();
         private HashSet<int> _elementsInBubblePath = new HashSet<int>();
         private Dictionary<int, bool> _isDragging = new Dictionary<int, bool>();
 
@@ -228,16 +230,17 @@ namespace Prowl.PaperUI
 
             // Calculate the combined transform
             Transform2D combinedTransform = parentTransform;
-            var rect = new Rect(data.X, data.Y, data.LayoutWidth, data.LayoutHeight);
+            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
             Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
-            combinedTransform.Premultiply(ref styleTransform);
+            //combinedTransform.Premultiply(ref styleTransform);
+            combinedTransform = styleTransform * combinedTransform;
 
             // Transform pointer position to element's local space
             var inverseTransform = combinedTransform.Inverse();
-            inverseTransform.TransformPoint(out double localX, out double localY, PointerPos.x, PointerPos.y);
+            var local = inverseTransform.TransformPoint(PointerPos);
 
             // Check if pointer is over this element
-            bool isPointerOverElement = IsPointOverElementData(data, localX, localY);
+            bool isPointerOverElement = IsPointOverElementData(data, local.X, local.Y);
 
             bool shouldCheckChildren = data._scissorEnabled == false || isPointerOverElement;
 
@@ -247,7 +250,8 @@ namespace Prowl.PaperUI
             {
                 ScrollState scrollState = this.GetElementStorage<ScrollState>(handle, "ScrollState");
                 var transform = Transform2D.CreateTranslation(-scrollState.Position);
-                childTransform.Premultiply(ref transform);
+                //childTransform.Premultiply(ref transform);
+                childTransform = transform * childTransform;
             }
 
             // Check children first (front to back, respecting z-order)
@@ -507,9 +511,9 @@ namespace Prowl.PaperUI
                         // Handle drag end if element was being dragged
                         if (wasDragging)
                         {
-                            Vector2 startPos = _dragStartPos[_activeElementId];
-                            Vector2 endPos = PointerPos;
-                            Vector2 delta = endPos - startPos;
+                            Double2 startPos = _dragStartPos[_activeElementId];
+                            Double2 endPos = PointerPos;
+                            Double2 delta = endPos - startPos;
 
                             // Direct event
                             data.OnDragEnd?.Invoke(new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, delta));
@@ -638,9 +642,9 @@ namespace Prowl.PaperUI
                     if (IsPointerMoving)
                     {
                         bool wasDragging = _isDragging.TryGetValue(_activeElementId, out bool isDragging) && isDragging;
-                        Vector2 startPos = _dragStartPos[_activeElementId];
-                        Vector2 currentPos = PointerPos;
-                        double distanceMoved = (currentPos - startPos).magnitude;
+                        Double2 startPos = _dragStartPos[_activeElementId];
+                        Double2 currentPos = PointerPos;
+                        double distanceMoved = Double2.Length(currentPos - startPos);
                         Rect layoutRect = data.LayoutRect;
 
                         // Only start dragging if we've moved beyond the threshold

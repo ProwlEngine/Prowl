@@ -1,9 +1,8 @@
-﻿using System.Drawing;
-
-using Prowl.Paper.Utilities;
+﻿using Prowl.Paper.Utilities;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Scribe;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
+using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI
 {
@@ -211,8 +210,8 @@ namespace Prowl.PaperUI
         public Transform2D Build(Rect rect)
         {
             // Calculate origin in actual pixels
-            double originX = rect.x + _originX * rect.width;
-            double originY = rect.y + _originY * rect.height;
+            double originX = rect.Min.X + _originX * rect.Size.X;
+            double originY = rect.Min.Y + _originY * rect.Size.Y;
 
             // Create transformation matrix
             Transform2D result = Transform2D.Identity;
@@ -229,7 +228,7 @@ namespace Prowl.PaperUI
 
             // 2. Rotate
             if (_rotate != 0)
-                transformMatrix *= Transform2D.CreateRotate(_rotate);
+                transformMatrix *= Transform2D.CreateRotation(_rotate);
 
             // 3. Scale
             if (_scaleX != 1 || _scaleY != 1)
@@ -246,7 +245,9 @@ namespace Prowl.PaperUI
                 transformMatrix *= _customTransform.Value;
 
             // Complete transformation: move to origin, apply transform, move back from origin
-            result = originMatrix * transformMatrix * Transform2D.CreateTranslation(originX, originY);
+            result = Transform2D.CreateTranslation(originX, originY)
+                     * transformMatrix
+                     * Transform2D.CreateTranslation(-originX, -originY);
 
             return result;
         }
@@ -581,21 +582,21 @@ namespace Prowl.PaperUI
             {
                 return intStart + (int)((intEnd - intStart) * t);
             }
-            else if (start is Color colorStart && end is Color colorEnd)
+            else if (start is Prowl.Vector.Color colorStart && end is Prowl.Vector.Color colorEnd)
             {
                 return InterpolateColor(colorStart, colorEnd, t);
             }
-            else if (start is Vector2 vectorStart && end is Vector2 vectorEnd)
+            else if (start is Double2 vectorStart && end is Double2 vectorEnd)
             {
-                return Vector2.Lerp(vectorStart, vectorEnd, t);
+                return Maths.Lerp(vectorStart, vectorEnd, t);
             }
-            else if (start is Vector3 vector3Start && end is Vector3 vector3End)
+            else if (start is Double3 vector3Start && end is Double3 vector3End)
             {
-                return Vector3.Lerp(vector3Start, vector3End, t);
+                return Maths.Lerp(vector3Start, vector3End, t);
             }
-            else if (start is Vector4 vector4Start && end is Vector4 vector4End)
+            else if (start is Double4 vector4Start && end is Double4 vector4End)
             {
-                return Vector4.Lerp(vector4Start, vector4End, t);
+                return Maths.Lerp(vector4Start, vector4End, t);
             }
             else if (start is UnitValue unitStart && end is UnitValue unitEnd)
             {
@@ -629,11 +630,11 @@ namespace Prowl.PaperUI
         {
             // If start is fully transparent, replace its RGB with end's RGB
             if (start.A == 0)
-                start = Color.FromArgb(0, end.R, end.G, end.B);
+                start = new Color(end.R, end.G, end.B, 0);
 
             // If end is fully transparent, replace its RGB with start's RGB
             if (end.A == 0)
-                end = Color.FromArgb(0, start.R, start.G, start.B);
+                end = new Color(start.R, start.G, start.B, 0);
 
             var a = HSV.FromColor(start);
             var b = HSV.FromColor(end);
@@ -667,7 +668,7 @@ namespace Prowl.PaperUI
             _defaultValues[(int)GuiProp.BackgroundGradient] = Gradient.None;
             _defaultValues[(int)GuiProp.BorderColor] = Color.Transparent;
             _defaultValues[(int)GuiProp.BorderWidth] = 0.0;
-            _defaultValues[(int)GuiProp.Rounded] = new Vector4(0, 0, 0, 0);
+            _defaultValues[(int)GuiProp.Rounded] = new Double4(0, 0, 0, 0);
             _defaultValues[(int)GuiProp.BoxShadow] = BoxShadow.None;
 
             // Core Layout Properties

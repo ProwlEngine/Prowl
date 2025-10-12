@@ -234,8 +234,8 @@ namespace Shared
                 .Margin(0, 0, 20, 0)
                 .OnHeld((e) =>
                 {
-                    double parentWidth = e.ElementRect.width;
-                    double pointerX = e.PointerPosition.x - e.ElementRect.x;
+                    double parentWidth = e.ElementRect.Size.X;
+                    double pointerX = e.PointerPosition.X - e.ElementRect.Min.X;
 
                     // Calculate new slider value based on pointer position
                     sliderValue = Math.Clamp(pointerX / parentWidth, 0f, 1f);
@@ -314,8 +314,8 @@ namespace Shared
                 .Margin(0, 0, 20, 0)
                 .OnHeld((e) =>
                 {
-                    double parentWidth = e.ElementRect.width;
-                    double pointerX = e.PointerPosition.x - e.ElementRect.x;
+                    double parentWidth = e.ElementRect.Size.X;
+                    double pointerX = e.PointerPosition.X - e.ElementRect.Min.X;
 
                     // Calculate new slider value based on pointer position
                     sliderValue = Math.Clamp(pointerX / parentWidth, 0f, 1f);
@@ -414,9 +414,9 @@ namespace Shared
                 // Add a simple pie chart visualization
                 PaperDemo.Gui.AddActionElement((vg, rect) =>
                 {
-                    double centerX = rect.x + rect.width / 2;
-                    double centerY = rect.y + rect.height / 2;
-                    double radius = Math.Min(rect.width, rect.height) * 0.4f;
+                    double centerX = rect.Min.X + rect.Size.X / 2;
+                    double centerY = rect.Min.Y + rect.Size.Y / 2;
+                    double radius = Math.Min(rect.Size.X, rect.Size.Y) * 0.4f;
 
                     // double startAngle = 0;
                     // double[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };

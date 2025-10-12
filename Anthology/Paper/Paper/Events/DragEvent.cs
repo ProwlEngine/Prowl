@@ -3,16 +3,17 @@
 
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.PaperUI.Events;
 
 public class DragEvent : ElementEvent
 {
-    public Vector2 StartPosition { get; }
-    public Vector2 Delta { get; }
-    public Vector2 TotalDelta { get; }
+    public Double2 StartPosition { get; }
+    public Double2 Delta { get; }
+    public Double2 TotalDelta { get; }
 
-    public DragEvent(ElementHandle source, Rect elementRect, Vector2 pointerPos, Vector2 startPos, Vector2 delta, Vector2 totalDelta)
+    public DragEvent(ElementHandle source, Rect elementRect, Double2 pointerPos, Double2 startPos, Double2 delta, Double2 totalDelta)
         : base(source, elementRect, pointerPos)
     {
         StartPosition = startPos;

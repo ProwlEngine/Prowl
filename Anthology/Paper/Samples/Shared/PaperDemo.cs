@@ -1,6 +1,4 @@
-﻿using System.Drawing;
-
-using Prowl.PaperUI;
+﻿using Prowl.PaperUI;
 using Prowl.PaperUI.Themes.Origami;
 using Prowl.Vector;
 
@@ -13,7 +11,7 @@ namespace Shared
         // Track state for interactive elements
         static double sliderValue = 0.5f;
         static int selectedTabIndex = 0;
-        static Vector2 chartPosition = new Vector2(0, 0);
+        static Double2 chartPosition = new Double2(0, 0);
         static double zoomLevel = 1.0f;
         static bool[] toggleState = { true, false, true, false, true };
 
@@ -126,8 +124,8 @@ namespace Shared
         //    //var myWindowB = ImGui.CreateWindow(
         //    //    fontMedium,
         //    //    "My OtherWindow",
-        //    //    new Vector2(100, 400),
-        //    //    new Vector2(200, 100),
+        //    //    new Double2(100, 400),
+        //    //    new Double2(200, 100),
         //    //    (window) => {
         //    //        // Window content rendering
         //    //        using (ImGui.Column("WindowInnerContent")
@@ -341,7 +339,7 @@ namespace Shared
                         // Card icon with conditional styling based on parent hover
                         Gui.Box("StatIcon", i)
                             .Size(40)
-                            .BackgroundColor(Color.FromArgb(150, Themes.colorPalette[i % Themes.colorPalette.Length]))
+                            .BackgroundColor(Color32.FromArgb(150, Themes.colorPalette[i % Themes.colorPalette.Length]))
                             .Rounded(8)
                             .If(Gui.IsParentHovered)
                                 .Rounded(20)
@@ -400,9 +398,9 @@ namespace Shared
                                     .Height(30)
                                     .Rounded(8)
                                     .Margin(5, 5, 0, 0)
-                                    .BackgroundColor(period == "Week" ? Themes.primaryColor : Color.FromArgb(50, 0, 0, 0))
+                                    .BackgroundColor(period == "Week" ? Themes.primaryColor : Color32.FromArgb(50, 0, 0, 0))
                                     .Hovered
-                                        .BackgroundColor(Color.FromArgb(50, Themes.primaryColor))
+                                        .BackgroundColor(Color32.FromArgb(50, Themes.primaryColor))
                                         .End()
                                     .Transition(GuiProp.BackgroundColor, 0.2f)
                                     .Text(period, Fonts.arial).TextColor(period == "Week" ? Color.White : Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
@@ -421,7 +419,7 @@ namespace Shared
                         .Enter())
                     {
                         using (Gui.Box("ChartCanvas")
-                            .Translate(chartPosition.x, chartPosition.y)
+                            .Translate(chartPosition.X, chartPosition.Y)
                             .Scale(zoomLevel)
                             .Enter())
                         {
@@ -431,10 +429,10 @@ namespace Shared
                                 // Draw grid lines
                                 for (int i = 0; i <= 5; i++)
                                 {
-                                    double y = rect.y + (rect.height / 5) * i;
+                                    double y = rect.Min.Y + (rect.Size.Y / 5) * i;
                                     vg.BeginPath();
-                                    vg.MoveTo(rect.x, y);
-                                    vg.LineTo(rect.x + rect.width, y);
+                                    vg.MoveTo(rect.Min.X, y);
+                                    vg.LineTo(rect.Min.X + rect.Size.X, y);
                                     vg.SetStrokeColor(Themes.lightTextColor);
                                     vg.SetStrokeWidth(1);
                                     vg.Stroke();
@@ -442,11 +440,11 @@ namespace Shared
 
                                 // Draw animated data points
                                 vg.BeginPath();
-                                double pointSpacing = rect.width / (dataPoints.Length - 1);
+                                double pointSpacing = rect.Size.X / (dataPoints.Length - 1);
                                 double animatedValue;
 
                                 // Draw fill
-                                vg.MoveTo(rect.x, rect.y + rect.height);
+                                vg.MoveTo(rect.Min.X, rect.Min.Y + rect.Size.Y);
 
                                 for (int i = 0; i < dataPoints.Length; i++)
                                 {
@@ -454,8 +452,8 @@ namespace Shared
                                     //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
                                     animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    double x = rect.x + i * pointSpacing;
-                                    double y = rect.y + rect.height - (animatedValue * rect.height);
+                                    double x = rect.Min.X + i * pointSpacing;
+                                    double y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
 
                                     if (i == 0)
                                         vg.MoveTo(x, y);
@@ -464,18 +462,18 @@ namespace Shared
                                 }
 
                                 // Complete the fill path
-                                vg.LineTo(rect.x + rect.width, rect.y + rect.height);
-                                vg.LineTo(rect.x, rect.y + rect.height);
+                                vg.LineTo(rect.Min.X + rect.Size.X, rect.Min.Y + rect.Size.Y);
+                                vg.LineTo(rect.Min.X, rect.Min.Y + rect.Size.Y);
 
                                 // Fill with gradient
                                 //var paint = vg.LinearGradient(
-                                //    rect.x, rect.y,
-                                //    rect.x, rect.y + rect.height,
-                                //    Color.FromArgb(100, primaryColor),
-                                //    Color.FromArgb(10, primaryColor));
+                                //    rect.Min.X, rect.Min.Y,
+                                //    rect.Min.X, rect.Min.Y + rect.Size.Y,
+                                //    Color32.FromArgb(100, primaryColor),
+                                //    Color32.FromArgb(10, primaryColor));
                                 //vg.SetFillPaint(paint);
                                 vg.SaveState();
-                                vg.SetLinearBrush(rect.x, rect.y, rect.x, rect.y + rect.height, Color.FromArgb(100, Themes.primaryColor), Color.FromArgb(10, Themes.primaryColor));
+                                vg.SetLinearBrush(rect.Min.X, rect.Min.Y, rect.Min.X, rect.Min.Y + rect.Size.Y, Color32.FromArgb(100, Themes.primaryColor), Color32.FromArgb(10, Themes.primaryColor));
                                 vg.FillComplex();
                                 vg.RestoreState();
 
@@ -489,8 +487,8 @@ namespace Shared
                                     //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
                                     animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    double x = rect.x + i * pointSpacing;
-                                    double y = rect.y + rect.height - (animatedValue * rect.height);
+                                    double x = rect.Min.X + i * pointSpacing;
+                                    double y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
 
                                     if (i == 0)
                                         vg.MoveTo(x, y);
@@ -509,8 +507,8 @@ namespace Shared
                                     //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
                                     animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    double x = rect.x + i * pointSpacing;
-                                    double y = rect.y + rect.height - (animatedValue * rect.height);
+                                    double x = rect.Min.X + i * pointSpacing;
+                                    double y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
 
                                     vg.BeginPath();
                                     vg.Circle(x, y, 6);
@@ -575,8 +573,8 @@ namespace Shared
                                     .Height(40)
                                     .Rounded(8)
                                     .Margin(0, 0, 15, 0)
-                                    .BackgroundColor(Color.FromArgb(150, Themes.colorPalette[i % Themes.colorPalette.Length]))
-                                    //.Style(BoxStyle.SolidRounded(Color.FromArgb(150, colorPalette[i % colorPalette.Length]), 20f))
+                                    .BackgroundColor(Color32.FromArgb(150, Themes.colorPalette[i % Themes.colorPalette.Length]))
+                                    //.Style(BoxStyle.SolidRounded(Color32.FromArgb(150, colorPalette[i % colorPalette.Length]), 20f))
                                     .Enter()) { }
 
                                 // Activity content
@@ -664,7 +662,7 @@ namespace Shared
                             .SetScroll(Scroll.ScrollY)
                             .Enter())
                         {
-                            double scrollState = Gui.GetElementStorage<ScrollState>(Gui.CurrentParent, "ScrollState", new ScrollState()).Position.y;
+                            double scrollState = Gui.GetElementStorage<ScrollState>(Gui.CurrentParent, "ScrollState", new ScrollState()).Position.Y;
 
                             for (int i = 0; i < 10; i++)
                             {
@@ -694,7 +692,7 @@ namespace Shared
                                 }
 
                                 // Convert to Color
-                                Color itemColor = Color.FromArgb(255,
+                                Color itemColor = Color32.FromArgb(255,
                                     (int)(r * 255),
                                     (int)(g * 255),
                                     (int)(b * 255));
@@ -705,8 +703,8 @@ namespace Shared
                                 using (Gui.Box("Card", i)
                                     .Height(70)
                                     .Margin(10, 10, 5, 5)
-                                    .BackgroundColor(Color.FromArgb(230, itemColor))
-                                    .BorderColor(Themes.isDark ? Color.FromArgb(50, 255, 255, 255) : Color.FromArgb(50, 0, 0, 0))
+                                    .BackgroundColor(Color32.FromArgb(230, itemColor))
+                                    .BorderColor(Themes.isDark ? Color32.FromArgb(50, 255, 255, 255) : Color32.FromArgb(50, 0, 0, 0))
                                     .BorderWidth(1)
                                     .Rounded(12)
                                     .Enter())
@@ -720,7 +718,7 @@ namespace Shared
                                             .Width(50)
                                             .Height(50)
                                             .Rounded(25)
-                                            .BackgroundColor(Color.FromArgb(60, 255, 255, 255))
+                                            .BackgroundColor(Color32.FromArgb(60, 255, 255, 255))
                                             .Text(icon, Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter).FontSize(26)
                                             .Enter()) { }
 
@@ -735,7 +733,7 @@ namespace Shared
                                                 .Enter()) { }
 
                                             using (Gui.Box("CardDescription", i)
-                                                .Text("Interactive card with animations", Fonts.arial).TextColor(Color.FromArgb(200, Themes.textColor)).Alignment(TextAlignment.MiddleLeft).FontSize(19)
+                                                .Text("Interactive card with animations", Fonts.arial).TextColor(Color32.FromArgb(200, Themes.textColor)).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                                 .Enter()) { }
                                         }
                                     }
@@ -901,8 +899,8 @@ namespace Shared
                             Gui.AddActionElement((vg, rect) => {
                                 int days = 7;
                                 int weeks = 4;
-                                double cellWidth = rect.width / days;
-                                double cellHeight = rect.height / weeks;
+                                double cellWidth = rect.Size.X / days;
+                                double cellHeight = rect.Size.Y / weeks;
                                 double cellSize = Math.Min(cellWidth, cellHeight) * 0.8f;
                                 double cellMargin = Math.Min(cellWidth, cellHeight) * 0.1f;
 
@@ -911,8 +909,8 @@ namespace Shared
                                     for (int day = 0; day < weeks; day++)
                                     {
                                         // Calculate position
-                                        double x = rect.x + week * cellWidth + cellMargin;
-                                        double y = rect.y + day * cellHeight + cellMargin;
+                                        double x = rect.Min.X + week * cellWidth + cellMargin;
+                                        double y = rect.Min.Y + day * cellHeight + cellMargin;
 
                                         // Generate intensity based on position and time
                                         double value = Math.Sin(week * 0.4f + day * 0.7f + time) * 0.5f + 0.5f;
@@ -924,7 +922,7 @@ namespace Shared
 
                                         // Apply color based on intensity
                                         int alpha = (int)(40 + value * 215);
-                                        vg.SetFillColor(Color.FromArgb(alpha, Themes.primaryColor));
+                                        vg.SetFillColor(Color32.FromArgb(alpha, Themes.primaryColor));
                                         vg.Fill();
                                     }
                                 }
@@ -971,8 +969,8 @@ namespace Shared
                                     // Skill bar
                                     using (Gui.Row("SkillBarBg", i)
                                         .Height(15)
-                                        .BackgroundColor(Color.FromArgb(30, 0, 0, 0))
-                                        //.Style(BoxStyle.SolidRounded(Color.FromArgb(30, 0, 0, 0), 7.5f))
+                                        .BackgroundColor(Color32.FromArgb(30, 0, 0, 0))
+                                        //.Style(BoxStyle.SolidRounded(Color32.FromArgb(30, 0, 0, 0), 7.5f))
                                         .Enter())
                                     {
                                         // Animate the skill level with time

@@ -2,6 +2,7 @@ using Prowl.PaperUI.Events;
 using Prowl.Quill;
 using Prowl.Scribe;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.PaperUI.LayoutEngine
 {
@@ -72,7 +73,7 @@ namespace Prowl.PaperUI.LayoutEngine
         public TextAlignment TextAlignment;
 
         // Cached text layout objects
-        internal object _quillMarkdown;
+        internal Quill.Canvas.QuillMarkdown? _quillMarkdown;
         internal TextLayout _textLayout;
 
         // Rendering

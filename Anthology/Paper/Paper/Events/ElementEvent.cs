@@ -3,6 +3,7 @@
 
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.PaperUI.Events;
 
@@ -15,30 +16,30 @@ public class ElementEvent
     public Rect ElementRect { get; }
 
     // The raw pointer position in screen coordinates
-    public Vector2 PointerPosition { get; }
+    public Double2 PointerPosition { get; }
 
     // The pointer position normalized to the element (0,0 = top-left, 1,1 = bottom-right)
-    public Vector2 NormalizedPosition { get; }
+    public Double2 NormalizedPosition { get; }
 
     // The pointer position relative to the element's top-left corner
-    public Vector2 RelativePosition { get; }
+    public Double2 RelativePosition { get; }
 
-    public ElementEvent(ElementHandle source, Rect elementRect, Vector2 pointerPos)
+    public ElementEvent(ElementHandle source, Rect elementRect, Double2 pointerPos)
     {
         Source = source;
         ElementRect = elementRect;
         PointerPosition = pointerPos;
 
         // Calculate relative position (pointer position relative to element's origin)
-        RelativePosition = new Vector2(
-            pointerPos.x - elementRect.x,
-            pointerPos.y - elementRect.y
+        RelativePosition = new Double2(
+            pointerPos.X - elementRect.Min.X,
+            pointerPos.Y - elementRect.Min.Y
         );
 
         // Calculate normalized position (0-1 range within the element)
-        NormalizedPosition = new Vector2(
-            elementRect.width > 0 ? RelativePosition.x / elementRect.width : 0,
-            elementRect.height > 0 ? RelativePosition.y / elementRect.height : 0
+        NormalizedPosition = new Double2(
+            elementRect.Size.X > 0 ? RelativePosition.X / elementRect.Size.X : 0,
+            elementRect.Size.Y > 0 ? RelativePosition.Y / elementRect.Size.Y : 0
         );
     }
 }

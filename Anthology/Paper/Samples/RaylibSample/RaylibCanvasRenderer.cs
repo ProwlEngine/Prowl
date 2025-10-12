@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 using Prowl.Quill;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 using Raylib_cs;
 
@@ -186,17 +187,17 @@ void main()
 
     public object CreateTexture(uint width, uint height)
     {
-        var image = GenImageColor((int)width, (int)height, new Color(0, 0, 0, 0));
+        var image = GenImageColor((int)width, (int)height, new(0, 0, 0, 0));
         var texture = LoadTextureFromImage(image);
         SetTextureFilter(texture, TextureFilter.Point);
         return texture;
     }
 
-    public Vector2Int GetTextureSize(object texture)
+    public Int2 GetTextureSize(object texture)
     {
         if (texture is not Texture2D tex)
             throw new ArgumentException("Texture must be of type Texture2D");
-        return new Vector2Int(tex.Width, tex.Height);
+        return new Int2(tex.Width, tex.Height);
     }
 
     public void SetTextureData(object texture, IntRect bounds, byte[] data)
@@ -204,7 +205,7 @@ void main()
         // Update the texture data with the provided byte array
         if (texture is not Texture2D tex)
             throw new ArgumentException("Texture must be of type Texture2D");
-        UpdateTextureRec(tex, new(bounds.x, bounds.y, bounds.width, bounds.height), data);
+        UpdateTextureRec(tex, new(bounds.Min.X, bounds.Min.Y, bounds.Size.X, bounds.Size.Y), data);
     }
 
     void SetUniforms(Prowl.Quill.DrawCall drawCall)
@@ -218,20 +219,20 @@ void main()
 
         // Set scissor rectangle
         drawCall.GetScissor(out var scissor, out var extent);
-        scissor = Matrix4x4.Transpose(scissor);
+        //scissor = Matrix4x4.Transpose(scissor);
 
-        SetShaderValueMatrix(shader, scissorMatLoc, scissor.ToFloat());
-        SetShaderValue(shader, scissorExtLoc, [(float)extent.x, (float)extent.y], ShaderUniformDataType.Vec2);
+        SetShaderValueMatrix(shader, scissorMatLoc, (Float4x4)scissor);
+        SetShaderValue(shader, scissorExtLoc, [(float)extent.X, (float)extent.Y], ShaderUniformDataType.Vec2);
 
         // Set gradient parameters
         SetShaderValue(shader, _brushTypeLoc, (int)drawCall.Brush.Type, ShaderUniformDataType.Int);
         if (drawCall.Brush.Type != BrushType.None)
         {
-            var brushMat = Matrix4x4.Transpose(drawCall.Brush.BrushMatrix);
-            SetShaderValueMatrix(shader, _brushMatLoc, brushMat.ToFloat());
+            //var brushMat = Matrix4x4.Transpose(drawCall.Brush.BrushMatrix);
+            SetShaderValueMatrix(shader, _brushMatLoc, (Float4x4)drawCall.Brush.BrushMatrix);
             SetShaderValue(shader, _brushColor1Loc, ToVec4(drawCall.Brush.Color1), ShaderUniformDataType.Vec4);
             SetShaderValue(shader, _brushColor2Loc, ToVec4(drawCall.Brush.Color2), ShaderUniformDataType.Vec4);
-            SetShaderValue(shader, _brushParamsLoc, new System.Numerics.Vector4((float)drawCall.Brush.Point1.x, (float)drawCall.Brush.Point1.y, (float)drawCall.Brush.Point2.x, (float)drawCall.Brush.Point2.y), ShaderUniformDataType.Vec4);
+            SetShaderValue(shader, _brushParamsLoc, new System.Numerics.Vector4((float)drawCall.Brush.Point1.X, (float)drawCall.Brush.Point1.Y, (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y), ShaderUniformDataType.Vec4);
             SetShaderValue(shader, _brushParams2Loc, new System.Numerics.Vector2((float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather), ShaderUniformDataType.Vec2);
         }
     }

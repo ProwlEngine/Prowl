@@ -1,8 +1,9 @@
-using System.Drawing;
 using System.Runtime.CompilerServices;
 
 using Prowl.Quill;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
+using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI.Themes.Origami;
 
@@ -47,7 +48,7 @@ public static class SpinnerUtil
         public static SpinnerConfig Default => new()
         {
             Size = 16,
-            Color = Color.FromArgb(255, 100, 116, 139), // slate-500
+            Color = Color32.FromArgb(255, 100, 116, 139), // slate-500
             StrokeWidth = 2,
             Speed = 1.0
         };
@@ -56,7 +57,7 @@ public static class SpinnerUtil
         public static SpinnerConfig Small => new()
         {
             Size = 12,
-            Color = Color.FromArgb(255, 100, 116, 139),
+            Color = Color32.FromArgb(255, 100, 116, 139),
             StrokeWidth = 1.5,
             Speed = 1.0
         };
@@ -65,7 +66,7 @@ public static class SpinnerUtil
         public static SpinnerConfig Large => new()
         {
             Size = 24,
-            Color = Color.FromArgb(255, 100, 116, 139),
+            Color = Color32.FromArgb(255, 100, 116, 139),
             StrokeWidth = 3,
             Speed = 1.0
         };
@@ -81,20 +82,20 @@ public static class SpinnerUtil
     public static Action<Canvas, Rect> CreateSpinner(Paper paper, SpinnerConfig config)
     {
         return (canvas, rect) => {
-            var centerX = rect.x + rect.width / 2;
-            var centerY = rect.y + rect.height / 2;
+            var centerX = rect.Min.X + rect.Size.X / 2;
+            var centerY = rect.Min.Y + rect.Size.Y / 2;
             var radius = config.Size / 2;
             
             // Calculate rotation based on time
             var time = paper.Time;
             var rotation = (time * config.Speed * 2) % (Math.PI * 2); // Full rotation every second at speed 1.0
-            var rotDegrees = MathD.ToDeg(rotation);
+            var rotDegrees = Maths.ToDegrees(rotation);
 
             canvas.SaveState();
             
             // Move to center and rotate
             canvas.TransformBy(Transform2D.CreateTranslation(centerX, centerY));
-            canvas.TransformBy(Transform2D.CreateRotate(rotDegrees));
+            canvas.TransformBy(Transform2D.CreateRotation(rotDegrees));
 
             // Draw the spinner arc
             canvas.BeginPath();
@@ -158,8 +159,8 @@ public static class SpinnerUtil
     public static Action<Canvas, Rect> CreateDotsSpinner(Paper paper, SpinnerConfig config)
     {
         return (canvas, rect) => {
-            var centerX = rect.x + rect.width / 2;
-            var centerY = rect.y + rect.height / 2;
+            var centerX = rect.Min.X + rect.Size.X / 2;
+            var centerY = rect.Min.Y + rect.Size.Y / 2;
             var time = paper.Time * config.Speed;
             
             // Three dots with staggered animation
@@ -178,7 +179,7 @@ public static class SpinnerUtil
                 var opacity = (Math.Sin(time * 3 + animationOffset) + 1) / 2; // 0 to 1
                 opacity = Math.Max(0.3, opacity); // Minimum visibility
                 
-                var dotColor = Color.FromArgb((int)(255 * opacity), config.Color);
+                var dotColor = Color32.FromArgb((int)(255 * opacity), config.Color);
 
                 canvas.BeginPath();
                 canvas.Circle(x, y, dotSize);
@@ -199,8 +200,8 @@ public static class SpinnerUtil
     public static Action<Canvas, Rect> CreatePulseSpinner(Paper paper, SpinnerConfig config)
     {
         return (canvas, rect) => {
-            var centerX = rect.x + rect.width / 2;
-            var centerY = rect.y + rect.height / 2;
+            var centerX = rect.Min.X + rect.Size.X / 2;
+            var centerY = rect.Min.Y + rect.Size.Y / 2;
             var time = paper.Time * config.Speed;
             
             // Pulsing radius
@@ -209,7 +210,7 @@ public static class SpinnerUtil
             
             // Pulsing opacity
             var opacity = (Math.Sin(time * 4) + 1) / 2 * 0.7 + 0.3; // 0.3 to 1.0
-            var pulseColor = Color.FromArgb((int)(255 * opacity), config.Color);
+            var pulseColor = Color32.FromArgb((int)(255 * opacity), config.Color);
 
             canvas.SaveState();
             
