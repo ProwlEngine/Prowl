@@ -19,7 +19,7 @@ public class ModelRenderer : MonoBehaviour
     public AnimationClip CurrentAnimation;
     public bool PlayAutomatically = true;
     public bool Loop = true;
-    public double AnimationSpeed = 10.0;
+    public double AnimationSpeed = 1.0;
 
     private double _animationTime = 0.0;
     private bool _isPlaying = false;
@@ -56,7 +56,7 @@ public class ModelRenderer : MonoBehaviour
         // Update animation
         if (_isPlaying && CurrentAnimation != null)
         {
-            _animationTime += Time.deltaTimeF * AnimationSpeed;
+            _animationTime += Time.deltaTime * AnimationSpeed;
 
             if (_animationTime >= CurrentAnimation.Duration)
             {

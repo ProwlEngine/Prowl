@@ -431,9 +431,27 @@ namespace Prowl.Runtime.AssetImporting
                 // Create Animation
                 AnimationClip animation = new AnimationClip();
                 animation.Name = anim.Name;
-                animation.Duration = anim.DurationInTicks / (anim.TicksPerSecond != 0 ? anim.TicksPerSecond : 25.0);
-                animation.TicksPerSecond = anim.TicksPerSecond;
+
+                double ticksPerSecond = anim.TicksPerSecond != 0 ? anim.TicksPerSecond : 25.0;
+
+                // FIX: glTF 2.0 files have a known Assimp bug where TicksPerSecond is wrong
+                // glTF times are in seconds, Assimp converts to milliseconds (*1000)
+                // but TicksPerSecond should be 1000, not the reported value
+                // Detect this by checking if TicksPerSecond is suspiciously low (< 100)
+                // and duration seems too long (> 30 seconds for typical animations)
+                double rawDuration = anim.DurationInTicks / ticksPerSecond;
+                if (ticksPerSecond < 100 && rawDuration > 30.0)
+                {
+                    // This is likely a glTF file with the bug - force TicksPerSecond to 1000
+                    Debug.LogWarning($"Animation '{anim.Name}' appears to be glTF with incorrect TicksPerSecond. " +
+                                     $"Original TPS: {ticksPerSecond}, Duration: {rawDuration:F2}s. " +
+                                     $"Correcting to TPS=1000 for glTF...");
+                    ticksPerSecond = 1000.0;
+                }
+
+                animation.TicksPerSecond = ticksPerSecond;
                 animation.DurationInTicks = anim.DurationInTicks;
+                animation.Duration = anim.DurationInTicks / ticksPerSecond;
 
                 foreach (var channel in anim.NodeAnimationChannels)
                 {
