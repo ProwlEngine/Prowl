@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageId>Prowl.$(AssemblyName)</PackageId>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <Authors>Wulferis</Authors>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Title>Prowl.Paper</Title>
