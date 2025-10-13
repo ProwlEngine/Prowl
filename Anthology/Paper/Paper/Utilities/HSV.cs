@@ -3,7 +3,7 @@
 
 using System.Drawing;
 
-namespace Prowl.Paper.Utilities;
+namespace Prowl.PaperUI.Utilities;
 
 public struct HSV
 {
