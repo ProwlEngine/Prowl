@@ -15,26 +15,18 @@ public static class Primitives
     {
         _standardMaterial ??= new Material(Shader.LoadDefault(DefaultShader.Standard));
         _cubeMesh ??= Mesh.CreateCube(Double3.One);
-
-        // game object
-        var (go, ren) = Cube(name, size, _standardMaterial, _cubeMesh);
-
-        return go;
+        return Cube(name, size, _standardMaterial, _cubeMesh);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static GameObject Cube(string name, Double3 size, Material material)
     {
         _cubeMesh ??= Mesh.CreateCube(Double3.One);
-
-        // game object
-        var (go, ren) = Cube(name, size, material, _cubeMesh);
-
-        return go;
+        return Cube(name, size, material, _cubeMesh);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static (GameObject, MeshRenderer) Cube(string name, Double3 size, Material material, Mesh mesh)
+    public static GameObject Cube(string name, Double3 size, Material material, Mesh mesh)
     {
         // game object
         var go = new GameObject(name);
@@ -45,7 +37,7 @@ public static class Primitives
         ren.Mesh = mesh;
         ren.Material = material;
 
-        return (go, ren);
+        return go;
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -53,28 +45,18 @@ public static class Primitives
     {
         _standardMaterial ??= new Material(Shader.LoadDefault(DefaultShader.Standard));
         _cubeMesh ??= Mesh.CreateCube(Double3.One);
-
-        // game object
-        var (go, ren, rb, col) = PhysicsCube(name, size, _standardMaterial, _cubeMesh, isStatic);
-        rb.IsStatic = isStatic;
-
-        return go;
+        return PhysicsCube(name, size, _standardMaterial, _cubeMesh, isStatic);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static GameObject PhysicsCube(string name, Double3 size, Material material, bool isStatic = false)
     {
         _cubeMesh ??= Mesh.CreateCube(Double3.One);
-
-        // game object
-        var (go, ren, rb, col) = PhysicsCube(name, size, material, _cubeMesh, isStatic);
-        rb.IsStatic = isStatic;
-
-        return go;
+        return PhysicsCube(name, size, material, _cubeMesh, isStatic);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static (GameObject, MeshRenderer, Rigidbody3D, BoxCollider) PhysicsCube(string name, Double3 size, Material material, Mesh mesh, bool isStatic = false)
+    public static GameObject PhysicsCube(string name, Double3 size, Material material, Mesh mesh, bool isStatic = false)
     {
         // game object
         var go = new GameObject(name);
@@ -91,6 +73,6 @@ public static class Primitives
         var col = go.AddComponent<BoxCollider>();
         // col.Size = size; // <- boxCollider is scaled with gameobject, no need to scale it here
 
-        return (go, ren, rb, col);
+        return go;
     }
 }
