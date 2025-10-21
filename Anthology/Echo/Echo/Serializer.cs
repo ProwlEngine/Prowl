@@ -62,6 +62,7 @@ public static class Serializer
             new DateTimeOffsetFormat(),
             new TimeSpanFormat(),
             new GuidFormat(),
+            new Formatters.UriFormat(),
             new EnumFormat(),
             new TupleFormat(),
             new AnonymousTypeFormat(),

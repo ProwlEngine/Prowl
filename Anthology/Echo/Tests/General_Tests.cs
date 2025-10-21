@@ -235,6 +235,40 @@ public class General_Tests
     }
 
     [Fact]
+    public void TestUri()
+    {
+        // HTTP URL
+        var http = new Uri("http://example.com");
+        var serialized = Serializer.Serialize(http);
+        var deserialized = Serializer.Deserialize<Uri>(serialized);
+        Assert.Equal(http, deserialized);
+
+        // HTTPS URL with path
+        var https = new Uri("https://example.com/path/to/resource");
+        serialized = Serializer.Serialize(https);
+        deserialized = Serializer.Deserialize<Uri>(serialized);
+        Assert.Equal(https, deserialized);
+
+        // URL with query string
+        var withQuery = new Uri("https://example.com/search?q=test&page=1");
+        serialized = Serializer.Serialize(withQuery);
+        deserialized = Serializer.Deserialize<Uri>(serialized);
+        Assert.Equal(withQuery, deserialized);
+
+        // File URI
+        var file = new Uri("file:///C:/Users/test/file.txt");
+        serialized = Serializer.Serialize(file);
+        deserialized = Serializer.Deserialize<Uri>(serialized);
+        Assert.Equal(file, deserialized);
+
+        // Relative URI
+        var relative = new Uri("/relative/path", UriKind.Relative);
+        serialized = Serializer.Serialize(relative);
+        deserialized = Serializer.Deserialize<Uri>(serialized);
+        Assert.Equal(relative, deserialized);
+    }
+
+    [Fact]
     public void TestTupleSerialization()
     {
         // ValueTuple with 2 elements
