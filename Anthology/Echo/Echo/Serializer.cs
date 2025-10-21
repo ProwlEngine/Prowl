@@ -63,6 +63,7 @@ public static class Serializer
             new TimeSpanFormat(),
             new GuidFormat(),
             new Formatters.UriFormat(),
+            new VersionFormat(),
             new EnumFormat(),
             new TupleFormat(),
             new AnonymousTypeFormat(),

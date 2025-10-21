@@ -269,6 +269,34 @@ public class General_Tests
     }
 
     [Fact]
+    public void TestVersion()
+    {
+        // Two component version
+        var twoComponent = new Version(1, 2);
+        var serialized = Serializer.Serialize(twoComponent);
+        var deserialized = Serializer.Deserialize<Version>(serialized);
+        Assert.Equal(twoComponent, deserialized);
+
+        // Three component version
+        var threeComponent = new Version(1, 2, 3);
+        serialized = Serializer.Serialize(threeComponent);
+        deserialized = Serializer.Deserialize<Version>(serialized);
+        Assert.Equal(threeComponent, deserialized);
+
+        // Four component version
+        var fourComponent = new Version(1, 2, 3, 4);
+        serialized = Serializer.Serialize(fourComponent);
+        deserialized = Serializer.Deserialize<Version>(serialized);
+        Assert.Equal(fourComponent, deserialized);
+
+        // Parse from string
+        var parsed = Version.Parse("5.4.3.2");
+        serialized = Serializer.Serialize(parsed);
+        deserialized = Serializer.Deserialize<Version>(serialized);
+        Assert.Equal(parsed, deserialized);
+    }
+
+    [Fact]
     public void TestTupleSerialization()
     {
         // ValueTuple with 2 elements
