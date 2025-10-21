@@ -133,6 +133,46 @@ public class General_Tests
     }
 
     [Fact]
+    public void TestTimeSpan()
+    {
+        // Positive duration
+        var duration = new TimeSpan(1, 2, 3, 4, 5);
+        var serialized = Serializer.Serialize(duration);
+        var deserialized = Serializer.Deserialize<TimeSpan>(serialized);
+        Assert.Equal(duration, deserialized);
+
+        // Minimum value
+        var min = TimeSpan.MinValue;
+        serialized = Serializer.Serialize(min);
+        deserialized = Serializer.Deserialize<TimeSpan>(serialized);
+        Assert.Equal(min, deserialized);
+
+        // Maximum value
+        var max = TimeSpan.MaxValue;
+        serialized = Serializer.Serialize(max);
+        deserialized = Serializer.Deserialize<TimeSpan>(serialized);
+        Assert.Equal(max, deserialized);
+
+        // Zero value
+        var zero = TimeSpan.Zero;
+        serialized = Serializer.Serialize(zero);
+        deserialized = Serializer.Deserialize<TimeSpan>(serialized);
+        Assert.Equal(zero, deserialized);
+
+        // Negative duration
+        var negative = new TimeSpan(-5, -30, -45);
+        serialized = Serializer.Serialize(negative);
+        deserialized = Serializer.Deserialize<TimeSpan>(serialized);
+        Assert.Equal(negative, deserialized);
+
+        // From days
+        var days = TimeSpan.FromDays(7.5);
+        serialized = Serializer.Serialize(days);
+        deserialized = Serializer.Deserialize<TimeSpan>(serialized);
+        Assert.Equal(days, deserialized);
+    }
+
+    [Fact]
     public void TestGuid()
     {
         // Empty Guid

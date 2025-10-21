@@ -59,6 +59,7 @@ public static class Serializer
             new PrimitiveFormat(),
             new NullableFormat(),
             new DateTimeFormat(),
+            new TimeSpanFormat(),
             new GuidFormat(),
             new EnumFormat(),
             new AnonymousTypeFormat(),
