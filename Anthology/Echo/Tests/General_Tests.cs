@@ -194,6 +194,45 @@ public class General_Tests
         Assert.Equal(specific, deserialized);
     }
 
+    [Fact]
+    public void TestDateTimeOffset()
+    {
+        // Current time
+        var now = DateTimeOffset.Now;
+        var serialized = Serializer.Serialize(now);
+        var deserialized = Serializer.Deserialize<DateTimeOffset>(serialized);
+        Assert.Equal(now, deserialized);
+
+        // Minimum value
+        var min = DateTimeOffset.MinValue;
+        serialized = Serializer.Serialize(min);
+        deserialized = Serializer.Deserialize<DateTimeOffset>(serialized);
+        Assert.Equal(min, deserialized);
+
+        // Maximum value
+        var max = DateTimeOffset.MaxValue;
+        serialized = Serializer.Serialize(max);
+        deserialized = Serializer.Deserialize<DateTimeOffset>(serialized);
+        Assert.Equal(max, deserialized);
+
+        // UTC time
+        var utc = DateTimeOffset.UtcNow;
+        serialized = Serializer.Serialize(utc);
+        deserialized = Serializer.Deserialize<DateTimeOffset>(serialized);
+        Assert.Equal(utc, deserialized);
+
+        // Specific date with offset
+        var specific = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.FromHours(-5));
+        serialized = Serializer.Serialize(specific);
+        deserialized = Serializer.Deserialize<DateTimeOffset>(serialized);
+        Assert.Equal(specific, deserialized);
+
+        // Different timezone offset
+        var withOffset = new DateTimeOffset(2024, 6, 15, 10, 30, 45, TimeSpan.FromHours(8));
+        serialized = Serializer.Serialize(withOffset);
+        deserialized = Serializer.Deserialize<DateTimeOffset>(serialized);
+        Assert.Equal(withOffset, deserialized);
+    }
     [Flags]
     public enum TestFlags
     {
