@@ -21,6 +21,28 @@ public class Collection_Tests
     }
 
     [Fact]
+    public void TestCollection_WithNulls_ShouldPreserveNulls()
+    {
+        var original = new System.Collections.ObjectModel.Collection<string?>
+        {
+            "first",
+            null,
+            "third",
+            null,
+            "fifth"
+        };
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<System.Collections.ObjectModel.Collection<string?>>(serialized);
+
+        Assert.Equal(original.Count, deserialized.Count);
+        for (int i = 0; i < original.Count; i++)
+        {
+            Assert.Equal(original[i], deserialized[i]);
+        }
+    }
+
+    [Fact]
     public void TestListOfLists()
     {
         var original = new List<List<int>>
