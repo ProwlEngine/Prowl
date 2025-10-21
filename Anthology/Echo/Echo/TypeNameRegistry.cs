@@ -191,8 +191,8 @@ public static class TypeNameRegistry
             var baseName = genericName[..openIndex];
             var argsString = genericName[(openIndex + 1)..closeIndex];
 
-            // Split arguments - Is this good enough? Should be?
-            var argTypeNames = argsString.Split(',').Select(s => s.Trim()).ToArray();
+            // Split arguments by comma, but respect nested generics
+            var argTypeNames = SplitGenericArguments(argsString);
             var argTypes = argTypeNames.Select(ResolveCompactTypeName).ToArray();
 
             if (argTypes.Any(t => t == null)) return null;
@@ -207,6 +207,47 @@ public static class TypeNameRegistry
         {
             return null;
         }
+    }
+
+    private static List<string> SplitGenericArguments(string argsString)
+    {
+        var result = new List<string>();
+        var currentArg = new System.Text.StringBuilder();
+        int depth = 0;
+
+        for (int i = 0; i < argsString.Length; i++)
+        {
+            char c = argsString[i];
+
+            if (c == '<')
+            {
+                depth++;
+                currentArg.Append(c);
+            }
+            else if (c == '>')
+            {
+                depth--;
+                currentArg.Append(c);
+            }
+            else if (c == ',' && depth == 0)
+            {
+                // Top-level comma - this separates type arguments
+                result.Add(currentArg.ToString().Trim());
+                currentArg.Clear();
+            }
+            else
+            {
+                currentArg.Append(c);
+            }
+        }
+
+        // Add the last argument
+        if (currentArg.Length > 0)
+        {
+            result.Add(currentArg.ToString().Trim());
+        }
+
+        return result;
     }
 
     private static Type? FindGenericTypeDefinition(string name, int arity)

@@ -117,6 +117,28 @@ public class Collection_Tests
         }
     }
 
+    public class KeyValuePair
+    {
+        public int Key;
+        public string Value;
+    }
+
+    [Fact]
+    public void TestNestedGenericWithFields_ShouldPreserveType()
+    {
+        // Test nested generics with a class that uses fields (not properties like Tuple)
+        var original = new Dictionary<KeyValuePair, bool>();
+        var key1 = new KeyValuePair { Key = 1, Value = "one" };
+        var key2 = new KeyValuePair { Key = 2, Value = "two" };
+        original[key1] = true;
+        original[key2] = false;
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<Dictionary<KeyValuePair, bool>>(serialized);
+
+        Assert.Equal(2, deserialized.Count);
+    }
+
     [Fact]
     public void TestListOfLists()
     {
