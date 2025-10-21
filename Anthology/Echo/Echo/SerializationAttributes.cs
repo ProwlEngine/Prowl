@@ -16,6 +16,13 @@ public class SerializeFieldAttribute : Attribute
 {
 }
 
+[AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+public class SerializeIfAttribute : Attribute
+{
+    public string ConditionMemberName { get; }
+    public SerializeIfAttribute(string conditionMemberName) => ConditionMemberName = conditionMemberName;
+}
+
 [AttributeUsage(AttributeTargets.Field, AllowMultiple = true)]
 public class FormerlySerializedAsAttribute : Attribute
 {
