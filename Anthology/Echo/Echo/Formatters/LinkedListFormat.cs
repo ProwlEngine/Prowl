@@ -27,14 +27,17 @@ internal sealed class LinkedListFormat : ISerializationFormat
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
         Type elementType = targetType.GetGenericArguments()[0];
-        dynamic linkedList = Activator.CreateInstance(targetType)
+        var linkedList = Activator.CreateInstance(targetType)
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
+
+        // Use reflection to get the AddLast method to avoid ambiguity with null values
+        var addLastMethod = targetType.GetMethod("AddLast", new[] { elementType })
+            ?? throw new InvalidOperationException($"AddLast method not found on type: {targetType}");
 
         foreach (var tag in value.List)
         {
             var item = Serializer.Deserialize(tag, elementType, context);
-            if (item != null)
-                linkedList.AddLast((dynamic)item);
+            addLastMethod.Invoke(linkedList, new[] { item });
         }
 
         return linkedList;

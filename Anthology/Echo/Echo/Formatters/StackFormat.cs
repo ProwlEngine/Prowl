@@ -38,8 +38,7 @@ internal sealed class StackFormat : ISerializationFormat
         foreach (var tag in value.List)
         {
             var item = Serializer.Deserialize(tag, elementType, context);
-            if (item != null)
-                stack.Push((dynamic)item);
+            stack.Push((dynamic)item);
         }
 
         return stack;

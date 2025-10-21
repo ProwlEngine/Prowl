@@ -43,6 +43,81 @@ public class Collection_Tests
     }
 
     [Fact]
+    public void TestHashSet_WithNulls_ShouldPreserveNulls()
+    {
+        var original = new HashSet<string?> { "first", null, "third" };
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<HashSet<string?>>(serialized);
+
+        Assert.Equal(original.Count, deserialized.Count);
+        Assert.True(deserialized.SetEquals(original));
+    }
+
+    [Fact]
+    public void TestQueue_WithNulls_ShouldPreserveNulls()
+    {
+        var original = new Queue<string?>();
+        original.Enqueue("first");
+        original.Enqueue(null);
+        original.Enqueue("third");
+        original.Enqueue(null);
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<Queue<string?>>(serialized);
+
+        Assert.Equal(original.Count, deserialized.Count);
+        var originalList = original.ToList();
+        var deserializedList = deserialized.ToList();
+        for (int i = 0; i < originalList.Count; i++)
+        {
+            Assert.Equal(originalList[i], deserializedList[i]);
+        }
+    }
+
+    [Fact]
+    public void TestStack_WithNulls_ShouldPreserveNulls()
+    {
+        var original = new Stack<string?>();
+        original.Push("first");
+        original.Push(null);
+        original.Push("third");
+        original.Push(null);
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<Stack<string?>>(serialized);
+
+        Assert.Equal(original.Count, deserialized.Count);
+        var originalList = original.ToList();
+        var deserializedList = deserialized.ToList();
+        for (int i = 0; i < originalList.Count; i++)
+        {
+            Assert.Equal(originalList[i], deserializedList[i]);
+        }
+    }
+
+    [Fact]
+    public void TestLinkedList_WithNulls_ShouldPreserveNulls()
+    {
+        var original = new LinkedList<string?>();
+        original.AddLast("first");
+        original.AddLast((string?)null);
+        original.AddLast("third");
+        original.AddLast((string?)null);
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<LinkedList<string?>>(serialized);
+
+        Assert.Equal(original.Count, deserialized.Count);
+        var originalList = original.ToList();
+        var deserializedList = deserialized.ToList();
+        for (int i = 0; i < originalList.Count; i++)
+        {
+            Assert.Equal(originalList[i], deserializedList[i]);
+        }
+    }
+
+    [Fact]
     public void TestListOfLists()
     {
         var original = new List<List<int>>

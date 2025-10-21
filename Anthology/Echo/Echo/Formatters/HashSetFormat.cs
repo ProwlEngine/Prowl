@@ -31,8 +31,7 @@ internal sealed class HashSetFormat : ISerializationFormat
         foreach (var tag in value.List)
         {
             var item = Serializer.Deserialize(tag, elementType, context);
-            if (item != null)
-                hashSet.Add((dynamic)item);
+            hashSet.Add((dynamic)item);
         }
         return hashSet;
     }
