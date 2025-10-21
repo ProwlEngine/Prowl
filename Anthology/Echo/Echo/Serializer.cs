@@ -63,6 +63,7 @@ public static class Serializer
             new TimeSpanFormat(),
             new GuidFormat(),
             new EnumFormat(),
+            new TupleFormat(),
             new AnonymousTypeFormat(),
             new HashSetFormat(),
             new ArrayFormat(),

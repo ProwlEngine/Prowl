@@ -233,6 +233,42 @@ public class General_Tests
         deserialized = Serializer.Deserialize<DateTimeOffset>(serialized);
         Assert.Equal(withOffset, deserialized);
     }
+
+    [Fact]
+    public void TestTupleSerialization()
+    {
+        // ValueTuple with 2 elements
+        var tuple2 = (42, "Hello");
+        var serialized = Serializer.Serialize(tuple2);
+        var deserialized = Serializer.Deserialize<(int, string)>(serialized);
+        Assert.Equal(tuple2, deserialized);
+
+        // ValueTuple with 3 elements
+        var tuple3 = (1, "Two", 3.0f);
+        serialized = Serializer.Serialize(tuple3);
+        var deserialized3 = Serializer.Deserialize<(int, string, float)>(serialized);
+        Assert.Equal(tuple3, deserialized3);
+
+        // ValueTuple with 4 elements
+        var tuple4 = (1, 2.0, "three", true);
+        serialized = Serializer.Serialize(tuple4);
+        var deserialized4 = Serializer.Deserialize<(int, double, string, bool)>(serialized);
+        Assert.Equal(tuple4, deserialized4);
+
+        // Nested tuple
+        var nested = ((1, 2), ("a", "b"));
+        serialized = Serializer.Serialize(nested);
+        var deserializedNested = Serializer.Deserialize<((int, int), (string, string))>(serialized);
+        Assert.Equal(nested, deserializedNested);
+
+        // Classic Tuple
+        var classicTuple = Tuple.Create(10, "Test");
+        serialized = Serializer.Serialize(classicTuple);
+        var deserializedClassic = Serializer.Deserialize<Tuple<int, string>>(serialized);
+        Assert.Equal(classicTuple.Item1, deserializedClassic.Item1);
+        Assert.Equal(classicTuple.Item2, deserializedClassic.Item2);
+    }
+
     [Flags]
     public enum TestFlags
     {
