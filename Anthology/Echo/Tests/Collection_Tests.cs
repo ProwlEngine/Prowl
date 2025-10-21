@@ -528,6 +528,69 @@ public class Collection_Tests
     }
 
     [Fact]
+    public void TestSortedDictionary()
+    {
+        var original = new SortedDictionary<string, int>
+        {
+            { "zebra", 26 },
+            { "alpha", 1 },
+            { "beta", 2 },
+            { "gamma", 3 }
+        };
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<SortedDictionary<string, int>>(serialized);
+
+        Assert.Equal(original, deserialized);
+        // Verify sorting is preserved
+        Assert.Equal(new[] { "alpha", "beta", "gamma", "zebra" }, deserialized.Keys);
+    }
+
+    [Fact]
+    public void TestSortedDictionaryWithIntKeys()
+    {
+        var original = new SortedDictionary<int, string>
+        {
+            { 5, "five" },
+            { 1, "one" },
+            { 3, "three" },
+            { 2, "two" }
+        };
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<SortedDictionary<int, string>>(serialized);
+
+        Assert.Equal(original, deserialized);
+        // Verify sorting is preserved
+        Assert.Equal(new[] { 1, 2, 3, 5 }, deserialized.Keys);
+    }
+
+    [Fact]
+    public void TestSortedDictionaryWithCustomComparer()
+    {
+        // Create a reverse comparer
+        var comparer = Comparer<string>.Create((x, y) => string.Compare(y, x, StringComparison.Ordinal));
+        var original = new SortedDictionary<string, int>(comparer)
+        {
+            { "alpha", 1 },
+            { "beta", 2 },
+            { "gamma", 3 },
+            { "zebra", 26 }
+        };
+
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<SortedDictionary<string, int>>(serialized);
+
+        // Note: Custom comparer is not preserved during serialization,
+        // so we just check the values are correct
+        Assert.Equal(4, deserialized.Count);
+        Assert.Equal(1, deserialized["alpha"]);
+        Assert.Equal(2, deserialized["beta"]);
+        Assert.Equal(3, deserialized["gamma"]);
+        Assert.Equal(26, deserialized["zebra"]);
+    }
+
+    [Fact]
     public void TestMixedNestedDictionaries()
     {
         var original = new Dictionary<int, Dictionary<string, Dictionary<Guid, bool>>>

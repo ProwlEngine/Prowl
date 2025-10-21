@@ -331,6 +331,143 @@ public class General_Tests
         Assert.Equal(classicTuple.Item2, deserializedClassic.Item2);
     }
 
+    [Fact]
+    public void TestAnonymousTypes()
+    {
+        // Simple anonymous type
+        var simple = new { Name = "John", Age = 30 };
+        var serialized = Serializer.Serialize(simple);
+
+        // We can deserialize to a compound and check the values
+        Assert.Equal(EchoType.Compound, serialized.TagType);
+        Assert.True(serialized.TryGet("Name", out var nameTag));
+        Assert.Equal("John", nameTag.StringValue);
+        Assert.True(serialized.TryGet("Age", out var ageTag));
+        Assert.Equal(30, ageTag.IntValue);
+
+        // Nested anonymous type
+        var nested = new
+        {
+            Person = new { Name = "Jane", Age = 25 },
+            City = "New York",
+            Timestamp = DateTime.Now
+        };
+        serialized = Serializer.Serialize(nested);
+        Assert.Equal(EchoType.Compound, serialized.TagType);
+        Assert.True(serialized.TryGet("Person", out var personTag));
+        Assert.True(serialized.TryGet("City", out var cityTag));
+        Assert.Equal("New York", cityTag.StringValue);
+
+        // Anonymous type with collections
+        var withCollections = new
+        {
+            Numbers = new List<int> { 1, 2, 3 },
+            Names = new[] { "A", "B", "C" },
+            Count = 42
+        };
+        serialized = Serializer.Serialize(withCollections);
+        Assert.True(serialized.TryGet("Numbers", out var numbersTag));
+        Assert.True(serialized.TryGet("Count", out var countTag));
+        Assert.Equal(42, countTag.IntValue);
+    }
+
+    [Fact]
+    public void TestComplexNestedObjectArrays()
+    {
+        // Create a complex nested structure: object[] containing object[] containing various int collections
+        var complexArray = new object[]
+        {
+            // First inner array - primitives and basic collections
+            new object[]
+            {
+                42,                                          // Plain int
+                new List<int> { 1, 2, 3, 4, 5 },            // List<int>
+                new LinkedList<int>(new[] { 10, 20, 30 }),  // LinkedList<int>
+            },
+
+            // Second inner array - more collection types
+            new object[]
+            {
+                new Queue<int>(new[] { 100, 200, 300 }),    // Queue<int>
+                new HashSet<int> { 5, 10, 15, 20 },         // HashSet<int>
+                999,                                         // Another plain int
+            },
+
+            // Third inner array - mixed types
+            new object[]
+            {
+                new List<int> { 7, 8, 9 },
+                123,
+                new HashSet<int> { 1, 2, 3 },
+                new LinkedList<int>(new[] { 50, 60 }),
+            },
+
+            // Fourth inner array - edge cases
+            new object[]
+            {
+                new List<int>(),                            // Empty list
+                new Queue<int>(),                           // Empty queue
+                0,                                          // Zero
+                new HashSet<int> { 42 },                   // Single element
+            }
+        };
+
+        // Serialize
+        var serialized = Serializer.Serialize(complexArray);
+
+        // Deserialize
+        var deserialized = Serializer.Deserialize<object[]>(serialized);
+
+        // Verify structure
+        Assert.NotNull(deserialized);
+        Assert.Equal(4, deserialized.Length);
+
+        // Verify first inner array
+        var firstInner = deserialized[0] as object[];
+        Assert.NotNull(firstInner);
+        Assert.Equal(3, firstInner.Length);
+        Assert.Equal(42, firstInner[0]);
+        var list1 = firstInner[1] as List<int>;
+        Assert.NotNull(list1);
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, list1);
+        var linkedList1 = firstInner[2] as LinkedList<int>;
+        Assert.NotNull(linkedList1);
+        Assert.Equal(new[] { 10, 20, 30 }, linkedList1);
+
+        // Verify second inner array
+        var secondInner = deserialized[1] as object[];
+        Assert.NotNull(secondInner);
+        Assert.Equal(3, secondInner.Length);
+        var queue = secondInner[0] as Queue<int>;
+        Assert.NotNull(queue);
+        Assert.Equal(new[] { 100, 200, 300 }, queue);
+        var hashSet = secondInner[1] as HashSet<int>;
+        Assert.NotNull(hashSet);
+        Assert.True(hashSet.SetEquals(new[] { 5, 10, 15, 20 }));
+        Assert.Equal(999, secondInner[2]);
+
+        // Verify third inner array
+        var thirdInner = deserialized[2] as object[];
+        Assert.NotNull(thirdInner);
+        Assert.Equal(4, thirdInner.Length);
+
+        // Verify fourth inner array (edge cases)
+        var fourthInner = deserialized[3] as object[];
+        Assert.NotNull(fourthInner);
+        Assert.Equal(4, fourthInner.Length);
+        var emptyList = fourthInner[0] as List<int>;
+        Assert.NotNull(emptyList);
+        Assert.Empty(emptyList);
+        var emptyQueue = fourthInner[1] as Queue<int>;
+        Assert.NotNull(emptyQueue);
+        Assert.Empty(emptyQueue);
+        Assert.Equal(0, fourthInner[2]);
+        var singleHashSet = fourthInner[3] as HashSet<int>;
+        Assert.NotNull(singleHashSet);
+        Assert.Single(singleHashSet);
+        Assert.Contains(42, singleHashSet);
+    }
+
     [Flags]
     public enum TestFlags
     {
@@ -939,6 +1076,38 @@ public class General_Tests
         TestEnum2? nullValue = null;
         serialized = Serializer.Serialize(nullValue);
         deserialized = Serializer.Deserialize<TestEnum2?>(serialized);
+        Assert.Null(deserialized);
+    }
+
+    [Fact]
+    public void TestNullableTimeSpan()
+    {
+        // Non-null value
+        TimeSpan? original = TimeSpan.FromHours(2.5);
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<TimeSpan?>(serialized);
+        Assert.Equal(original, deserialized);
+
+        // Null value
+        TimeSpan? nullValue = null;
+        serialized = Serializer.Serialize(nullValue);
+        deserialized = Serializer.Deserialize<TimeSpan?>(serialized);
+        Assert.Null(deserialized);
+    }
+
+    [Fact]
+    public void TestNullableDateTimeOffset()
+    {
+        // Non-null value
+        DateTimeOffset? original = DateTimeOffset.Now;
+        var serialized = Serializer.Serialize(original);
+        var deserialized = Serializer.Deserialize<DateTimeOffset?>(serialized);
+        Assert.Equal(original, deserialized);
+
+        // Null value
+        DateTimeOffset? nullValue = null;
+        serialized = Serializer.Serialize(nullValue);
+        deserialized = Serializer.Deserialize<DateTimeOffset?>(serialized);
         Assert.Null(deserialized);
     }
 
