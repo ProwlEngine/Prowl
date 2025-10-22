@@ -10,7 +10,7 @@ namespace Prowl.Vector.Geometry
     /// <summary>
     /// Represents an Axis-Aligned Bounding Box (AABB) in 3D space.
     /// </summary>
-    public struct AABB : IEquatable<AABB>, IFormattable
+    public struct AABB : IEquatable<AABB>, IFormattable, IBoundingShape
     {
         /// <summary>The minimum corner of the AABB.</summary>
         public Double3 Min;
@@ -551,6 +551,23 @@ namespace Prowl.Vector.Geometry
        {
            Double3 radiusVector = new Double3(sphere.Radius, sphere.Radius, sphere.Radius);
            return new AABB(sphere.Center - radiusVector, sphere.Center + radiusVector);
+       }
+
+       // --- IBoundingShape Implementation ---
+
+       /// <summary>
+       /// Returns the point on the AABB that is farthest in the given direction.
+       /// </summary>
+       /// <param name="direction">The direction to search in.</param>
+       /// <returns>The farthest corner in the given direction.</returns>
+       [MethodImpl(MethodImplOptions.AggressiveInlining)]
+       public Double3 SupportMap(Double3 direction)
+       {
+           return new Double3(
+               direction.X >= 0 ? Max.X : Min.X,
+               direction.Y >= 0 ? Max.Y : Min.Y,
+               direction.Z >= 0 ? Max.Z : Min.Z
+           );
        }
 
        // --- IEquatable & IFormattable Implementation ---

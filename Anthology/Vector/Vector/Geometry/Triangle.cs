@@ -10,7 +10,7 @@ namespace Prowl.Vector.Geometry
     /// <summary>
     /// Represents a 3D triangle defined by three vertices.
     /// </summary>
-    public struct Triangle : IEquatable<Triangle>, IFormattable
+    public struct Triangle : IEquatable<Triangle>, IFormattable, IBoundingShape
     {
         /// <summary>The first vertex of the triangle.</summary>
         public Double3 V0;
@@ -411,6 +411,28 @@ namespace Prowl.Vector.Geometry
             double baryU = 1.0 - sqrtU;
             double baryV = v * sqrtU;
             return GetPointFromBarycentric(baryU, baryV);
+        }
+
+        // --- IBoundingShape Implementation ---
+
+        /// <summary>
+        /// Returns the vertex on the triangle that is farthest in the given direction.
+        /// </summary>
+        /// <param name="direction">The direction to search in.</param>
+        /// <returns>The farthest vertex in the given direction.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Double3 SupportMap(Double3 direction)
+        {
+            double dot0 = Double3.Dot(V0, direction);
+            double dot1 = Double3.Dot(V1, direction);
+            double dot2 = Double3.Dot(V2, direction);
+
+            if (dot0 >= dot1 && dot0 >= dot2)
+                return V0;
+            else if (dot1 >= dot2)
+                return V1;
+            else
+                return V2;
         }
 
         // --- IEquatable & IFormattable Implementation ---

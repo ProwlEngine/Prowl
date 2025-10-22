@@ -11,7 +11,7 @@ namespace Prowl.Vector.Geometry
     /// Represents a 3D viewing frustum defined by 6 planes.
     /// Planes are ordered: Near, Far, Left, Right, Top, Bottom.
     /// </summary>
-    public struct Frustum : IEquatable<Frustum>, IFormattable
+    public struct Frustum : IEquatable<Frustum>, IFormattable, IBoundingShape
     {
         /// <summary>The 6 frustum planes: Near, Far, Left, Right, Top, Bottom.</summary>
         public Plane[] Planes;
@@ -471,7 +471,97 @@ namespace Prowl.Vector.Geometry
             result.Expand(amount);
             return result;
         }
-        
+
+        /// <summary>
+        /// Computes the 8 corner points of the frustum by intersecting planes.
+        /// </summary>
+        /// <returns>Array of 8 corner points.</returns>
+        public Double3[] GetCorners()
+        {
+            if (Planes == null || Planes.Length != 6)
+                return new Double3[0];
+
+            var corners = new Double3[8];
+
+            // Corner indices represent binary combinations of Near/Far, Left/Right, Top/Bottom
+            // 0: Near-Left-Bottom,  1: Near-Right-Bottom,  2: Near-Left-Top,  3: Near-Right-Top
+            // 4: Far-Left-Bottom,   5: Far-Right-Bottom,   6: Far-Left-Top,   7: Far-Right-Top
+
+            corners[0] = IntersectThreePlanes(Near, Left, Bottom);   // Near-Left-Bottom
+            corners[1] = IntersectThreePlanes(Near, Right, Bottom);  // Near-Right-Bottom
+            corners[2] = IntersectThreePlanes(Near, Left, Top);      // Near-Left-Top
+            corners[3] = IntersectThreePlanes(Near, Right, Top);     // Near-Right-Top
+            corners[4] = IntersectThreePlanes(Far, Left, Bottom);    // Far-Left-Bottom
+            corners[5] = IntersectThreePlanes(Far, Right, Bottom);   // Far-Right-Bottom
+            corners[6] = IntersectThreePlanes(Far, Left, Top);       // Far-Left-Top
+            corners[7] = IntersectThreePlanes(Far, Right, Top);      // Far-Right-Top
+
+            return corners;
+        }
+
+        /// <summary>
+        /// Computes the intersection point of three planes.
+        /// </summary>
+        private static Double3 IntersectThreePlanes(Plane p1, Plane p2, Plane p3)
+        {
+            // Using Cramer's rule to solve the system:
+            // n1·p = d1
+            // n2·p = d2
+            // n3·p = d3
+
+            Double3 n1 = p1.Normal;
+            Double3 n2 = p2.Normal;
+            Double3 n3 = p3.Normal;
+
+            double d1 = p1.D;
+            double d2 = p2.D;
+            double d3 = p3.D;
+
+            // Calculate determinant
+            Double3 cross = Double3.Cross(n2, n3);
+            double det = Double3.Dot(n1, cross);
+
+            // If determinant is near zero, planes don't intersect at a unique point
+            if (Maths.Abs(det) < 1e-10)
+                return Double3.Zero; // Fallback for degenerate case
+
+            // Calculate intersection point
+            Double3 result = (d1 * cross +
+                            Double3.Cross(n1, d3 * n2 - d2 * n3)) / det;
+
+            return result;
+        }
+
+        // --- IBoundingShape Implementation ---
+
+        /// <summary>
+        /// Returns the corner of the frustum that is farthest in the given direction.
+        /// </summary>
+        /// <param name="direction">The direction to search in.</param>
+        /// <returns>The farthest corner in the given direction.</returns>
+        public Double3 SupportMap(Double3 direction)
+        {
+            Double3[] corners = GetCorners();
+
+            if (corners.Length == 0)
+                return Double3.Zero;
+
+            double maxDot = Double3.Dot(corners[0], direction);
+            int maxIndex = 0;
+
+            for (int i = 1; i < corners.Length; i++)
+            {
+                double dot = Double3.Dot(corners[i], direction);
+                if (dot > maxDot)
+                {
+                    maxDot = dot;
+                    maxIndex = i;
+                }
+            }
+
+            return corners[maxIndex];
+        }
+
         // --- IEquatable & IFormattable Implementation ---
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Equals(Frustum other)

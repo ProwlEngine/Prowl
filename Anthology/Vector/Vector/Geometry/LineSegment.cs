@@ -10,7 +10,7 @@ namespace Prowl.Vector.Geometry
     /// <summary>
     /// Represents a 3D line segment defined by two endpoints.
     /// </summary>
-    public struct LineSegment : IEquatable<LineSegment>, IFormattable
+    public struct LineSegment : IEquatable<LineSegment>, IFormattable, IBoundingShape
     {
         /// <summary>The starting point of the line segment.</summary>
         public Double3 Start;
@@ -325,6 +325,22 @@ namespace Prowl.Vector.Geometry
         public static LineSegment FromRay(Ray ray, double length)
         {
             return new LineSegment(ray.Origin, ray.Origin + ray.Direction * length);
+        }
+
+        // --- IBoundingShape Implementation ---
+
+        /// <summary>
+        /// Returns the endpoint of the line segment that is farthest in the given direction.
+        /// </summary>
+        /// <param name="direction">The direction to search in.</param>
+        /// <returns>The farthest endpoint in the given direction.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Double3 SupportMap(Double3 direction)
+        {
+            double dotStart = Double3.Dot(Start, direction);
+            double dotEnd = Double3.Dot(End, direction);
+
+            return dotEnd >= dotStart ? End : Start;
         }
 
         // --- IEquatable & IFormattable Implementation ---

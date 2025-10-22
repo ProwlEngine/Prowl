@@ -10,7 +10,7 @@ namespace Prowl.Vector.Geometry
     /// <summary>
     /// Represents a 3D sphere defined by a center point and radius.
     /// </summary>
-    public struct Sphere : IEquatable<Sphere>, IFormattable
+    public struct Sphere : IEquatable<Sphere>, IFormattable, IBoundingShape
     {
         /// <summary>The center point of the sphere.</summary>
         public Double3 Center;
@@ -322,6 +322,23 @@ namespace Prowl.Vector.Geometry
             }
             
             return new Sphere(centroid, Maths.Sqrt(maxDistSq));
+        }
+
+        // --- IBoundingShape Implementation ---
+
+        /// <summary>
+        /// Returns the point on the sphere that is farthest in the given direction.
+        /// </summary>
+        /// <param name="direction">The direction to search in.</param>
+        /// <returns>The farthest point on the sphere in the given direction.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Double3 SupportMap(Double3 direction)
+        {
+            double length = Double3.Length(direction);
+            if (length < double.Epsilon)
+                return Center; // Return center if direction is zero
+
+            return Center + (direction / length) * Radius;
         }
 
         // --- IEquatable & IFormattable Implementation ---
