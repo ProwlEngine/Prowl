@@ -346,6 +346,91 @@ void main() {
         DrawLine(point - new Float3(0, 0, offset.Z), point + new Float3(0, 0, offset.Z), color);
     }
 
+    /// <summary>
+    /// Draws a frustum as wireframe showing all 6 planes.
+    /// </summary>
+    public static void DrawFrustum(Frustum frustum, Float4 color)
+    {
+        // Calculate the 8 corner points of the frustum by finding plane intersections
+        var corners = CalculateFrustumCorners(frustum);
+
+        if (corners == null || corners.Length != 8)
+            return;
+
+        // Draw near plane (corners 0-3)
+        DrawLine(corners[0], corners[1], color);
+        DrawLine(corners[1], corners[2], color);
+        DrawLine(corners[2], corners[3], color);
+        DrawLine(corners[3], corners[0], color);
+
+        // Draw far plane (corners 4-7)
+        DrawLine(corners[4], corners[5], color);
+        DrawLine(corners[5], corners[6], color);
+        DrawLine(corners[6], corners[7], color);
+        DrawLine(corners[7], corners[4], color);
+
+        // Draw connecting edges
+        DrawLine(corners[0], corners[4], color);
+        DrawLine(corners[1], corners[5], color);
+        DrawLine(corners[2], corners[6], color);
+        DrawLine(corners[3], corners[7], color);
+    }
+
+    /// <summary>
+    /// Calculates the 8 corner points of a frustum by intersecting planes.
+    /// </summary>
+    private static Float3[] CalculateFrustumCorners(Frustum frustum)
+    {
+        var planes = frustum.Planes;
+        if (planes == null || planes.Length != 6)
+            return null;
+
+        var corners = new Float3[8];
+
+        // Near plane corners (intersections with near, left/right, top/bottom)
+        corners[0] = IntersectThreePlanes(planes[0], planes[2], planes[5]); // near, left, bottom
+        corners[1] = IntersectThreePlanes(planes[0], planes[3], planes[5]); // near, right, bottom
+        corners[2] = IntersectThreePlanes(planes[0], planes[3], planes[4]); // near, right, top
+        corners[3] = IntersectThreePlanes(planes[0], planes[2], planes[4]); // near, left, top
+
+        // Far plane corners (intersections with far, left/right, top/bottom)
+        corners[4] = IntersectThreePlanes(planes[1], planes[2], planes[5]); // far, left, bottom
+        corners[5] = IntersectThreePlanes(planes[1], planes[3], planes[5]); // far, right, bottom
+        corners[6] = IntersectThreePlanes(planes[1], planes[3], planes[4]); // far, right, top
+        corners[7] = IntersectThreePlanes(planes[1], planes[2], planes[4]); // far, left, top
+
+        return corners;
+    }
+
+    /// <summary>
+    /// Finds the intersection point of three planes.
+    /// </summary>
+    private static Float3 IntersectThreePlanes(Plane p1, Plane p2, Plane p3)
+    {
+        // Using the formula: intersection = (cross(n2,n3)*d1 + cross(n3,n1)*d2 + cross(n1,n2)*d3) / det
+        // where det = dot(n1, cross(n2,n3))
+        // Plane equation: dot(normal, point) = D
+
+        Double3 n1 = p1.Normal;
+        Double3 n2 = p2.Normal;
+        Double3 n3 = p3.Normal;
+        double d1 = p1.D;
+        double d2 = p2.D;
+        double d3 = p3.D;
+
+        Double3 cross23 = Double3.Cross(n2, n3);
+        Double3 cross31 = Double3.Cross(n3, n1);
+        Double3 cross12 = Double3.Cross(n1, n2);
+
+        double det = Double3.Dot(n1, cross23);
+
+        if (Math.Abs(det) < 1e-6)
+            return Float3.Zero; // Planes don't intersect at a single point
+
+        Double3 intersection = (cross23 * d1 + cross31 * d2 + cross12 * d3) / det;
+        return (Float3)intersection;
+    }
+
     #endregion
 
     public static void Render(Float4x4 viewProjectionMatrix)

@@ -25,7 +25,7 @@ public static class GeometryDemo
         //new LineSegmentDemo(),
         new SplineDemo(),
         new SplineTypesDemo(),
-        //new FrustrumDemo(),
+        new FrustumDemo(),
 
         new SphereSphereIntersectionDemo(),
         //new SphereTriangleIntersectionDemo(),
@@ -39,9 +39,9 @@ public static class GeometryDemo
         new AABBSphereIntersectionDemo(),
         //new AABBPointIntersectionDemo(),
 
-        //new FrustrumAABBIntersectionDemo(),
-        //new FrustrumSphereIntersectionDemo(),
-        //new FrustrumPointIntersectionDemo(),
+        new FrustumAABBIntersectionDemo(),
+        new FrustumSphereIntersectionDemo(),
+        new FrustumPointIntersectionDemo(),
     };
 
     public static void DrawGeometryDemo(float timeInSeconds)
@@ -210,6 +210,48 @@ public class PlaneDemo : IDemo
     }
 
     public Float3 GetBounds() => new Float3(4.0f, 1.0f, 4.0f);
+}
+
+public class FrustumDemo : IDemo
+{
+    public string Name => "Frustum";
+
+    public void Draw(Float3 position, float timeInSeconds)
+    {
+        // Animate camera parameters
+        float rotationAngle = timeInSeconds * 0.3f;
+        float heightOscillation = Maths.Sin(timeInSeconds * 0.5f) * 0.2f;
+
+        // Camera positioned close to the grid cell, looking at the center
+        Double3 camPos = (Double3)position + new Double3(
+            Maths.Cos(rotationAngle) * 1.2f,
+            0.8f + heightOscillation,
+            Maths.Sin(rotationAngle) * 1.2f
+        );
+        Double3 lookAt = (Double3)position;
+        Double3 forward = Double3.Normalize(lookAt - camPos);
+        Double3 up = new Double3(0, 1, 0);
+
+        // Animate field of view
+        double fov = Maths.PI / 3 + Maths.Sin(timeInSeconds * 0.8f) * 0.15;
+        double aspect = 1.3;
+        double nearDist = 0.3;
+        double farDist = 1.5f + Maths.Sin(timeInSeconds * 0.4f) * 0.3f;
+
+        // Create frustum from camera parameters
+        Frustum frustum = Frustum.FromCamera(camPos, forward, up, fov, aspect, nearDist, farDist);
+
+        // Draw the frustum
+        Gizmo.DrawFrustum(frustum, new Float4(1, 1, 0, 1));
+
+        // Draw camera position
+        Gizmo.DrawIntersectionPoint((Float3)camPos, new Float4(0, 1, 1, 1), 0.08f);
+
+        // Draw look-at target
+        Gizmo.DrawIntersectionPoint((Float3)lookAt, new Float4(1, 0, 1, 1), 0.06f);
+    }
+
+    public Float3 GetBounds() => new Float3(3.0f, 2.5f, 3.0f);
 }
 
 public class SplineDemo : IDemo
@@ -749,6 +791,163 @@ public class RaySphereIntersectionDemo : IDemo
     }
 
     public Float3 GetBounds() => new Float3(5.0f, 3.0f, 4.0f);
+}
+
+public class FrustumAABBIntersectionDemo : IDemo
+{
+    public string Name => "Frustum-AABB Intersection";
+
+    public void Draw(Float3 position, float timeInSeconds)
+    {
+        timeInSeconds *= 0.75f; // Slow down time for better visibility
+
+        // Create a frustum centered in the grid cell
+        Double3 camPos = (Double3)position + new Double3(0, 0.6, 1.0);
+        Double3 lookAt = (Double3)position + new Double3(0, 0, -0.3);
+        Double3 forward = Double3.Normalize(lookAt - camPos);
+        Double3 up = new Double3(0, 1, 0);
+
+        double fov = Maths.PI / 5.5;
+        double aspect = 1.3;
+        double nearDist = 0.2;
+        double farDist = 1.8;
+
+        Frustum frustum = Frustum.FromCamera(camPos, forward, up, fov, aspect, nearDist, farDist);
+
+        // Animate AABB through the frustum - moves along the frustum's view direction
+        float moveTime = timeInSeconds * 0.8f;
+        Float3 aabbOffset = new Float3(
+            Maths.Sin(moveTime * 1.2f) * 0.9f,
+            Maths.Sin(moveTime * 0.9f) * 0.6f,
+            Maths.Sin(moveTime) * 0.8f  // Moves back and forth through frustum
+        );
+
+        float scale = 0.2f + Maths.Sin(timeInSeconds * 1.5f) * 0.05f;
+
+        AABB aabb = new AABB(
+            (Double3)position + (Double3)aabbOffset + new Double3(-scale, -scale, -scale),
+            (Double3)position + (Double3)aabbOffset + new Double3(scale, scale, scale)
+        );
+
+        bool intersects = frustum.Intersects(aabb);
+
+        // Draw frustum wireframe - color changes based on intersection for debugging
+        Float4 frustumColor = intersects ? new Float4(0, 1, 0, 0.8f) : new Float4(1, 0, 0, 0.8f);
+        Gizmo.DrawFrustum(frustum, frustumColor);
+
+        // Draw AABB with strong color based on intersection
+        Float4 aabbColor = intersects ? new Float4(0, 1, 0, 1) : new Float4(1, 0, 0, 1);
+        Gizmo.DrawAABBSolid(aabb, aabbColor * new Float4(1, 1, 1, 0.7f));
+        Gizmo.DrawAABB(aabb, aabbColor);
+
+        // Draw a line from AABB center to frustum origin for debugging
+        Gizmo.DrawLine((Float3)aabb.Center, (Float3)camPos, new Float4(1, 1, 0, 0.3f));
+    }
+
+    public Float3 GetBounds() => new Float3(2.5f, 2.0f, 2.5f);
+}
+
+public class FrustumSphereIntersectionDemo : IDemo
+{
+    public string Name => "Frustum-Sphere Intersection";
+
+    public void Draw(Float3 position, float timeInSeconds)
+    {
+        timeInSeconds *= 0.75f; // Slow down time for better visibility
+
+        // Create a frustum centered in the grid cell
+        float frustumRotation = timeInSeconds * 0.2f;
+        Double3 camPos = (Double3)position + new Double3(
+            Maths.Sin(frustumRotation) * 0.15f,
+            0.7,
+            0.9 + Maths.Cos(frustumRotation) * 0.1f
+        );
+        Double3 lookAt = (Double3)position + new Double3(0, 0, -0.2);
+        Double3 forward = Double3.Normalize(lookAt - camPos);
+        Double3 up = new Double3(0, 1, 0);
+
+        double fov = Maths.PI / 5.5;
+        double aspect = 1.3;
+        double nearDist = 0.2;
+        double farDist = 1.6;
+
+        Frustum frustum = Frustum.FromCamera(camPos, forward, up, fov, aspect, nearDist, farDist);
+
+        // Animate sphere moving through the frustum
+        float sphereTime = timeInSeconds * 0.9f;
+        Float3 sphereOffset = new Float3(
+            Maths.Sin(sphereTime * 1.3f) * 0.8f,
+            Maths.Sin(sphereTime * 1.1f) * 0.6f,
+            Maths.Sin(sphereTime) * 0.7f  // Moves back and forth through frustum
+        );
+
+        float radius = 0.25f + Maths.Sin(timeInSeconds * 2.0f) * 0.05f;
+        Sphere sphere = new Sphere((Double3)position + (Double3)sphereOffset, radius);
+
+        bool intersects = frustum.Intersects(sphere);
+
+        // Draw frustum
+        Float4 frustumColor = new Float4(0.7f, 0.7f, 0.7f, 0.8f);
+        Gizmo.DrawFrustum(frustum, frustumColor);
+
+        // Draw sphere with color based on intersection
+        Float4 sphereColor = intersects ? new Float4(0, 1, 0, 1) : new Float4(1, 0, 0, 1);
+        Gizmo.DrawSphereWireframe(sphere, sphereColor, 12);
+    }
+
+    public Float3 GetBounds() => new Float3(2.5f, 2.0f, 2.5f);
+}
+
+public class FrustumPointIntersectionDemo : IDemo
+{
+    public string Name => "Frustum-Point Containment";
+
+    public void Draw(Float3 position, float timeInSeconds)
+    {
+        timeInSeconds *= 0.75f; // Slow down time for better visibility
+
+        // Create a frustum centered in the grid cell
+        Double3 camPos = (Double3)position + new Double3(0, 0.7, 1.0);
+        Double3 lookAt = (Double3)position + new Double3(0, 0, -0.2);
+        Double3 forward = Double3.Normalize(lookAt - camPos);
+        Double3 up = new Double3(0, 1, 0);
+
+        double fov = Maths.PI / 5.5;
+        double aspect = 1.3;
+        double nearDist = 0.2;
+        double farDist = 1.6;
+
+        Frustum frustum = Frustum.FromCamera(camPos, forward, up, fov, aspect, nearDist, farDist);
+
+        // Create multiple animated points orbiting in the frustum area
+        int pointCount = 8;
+        for (int i = 0; i < pointCount; i++)
+        {
+            float phase = (timeInSeconds + i * 0.4f) * 0.7f;
+            float angle = (i / (float)pointCount) * 2f * (float)Maths.PI;
+
+            // Each point follows a different orbital path
+            Float3 pointOffset = new Float3(
+                Maths.Cos(angle + phase * 1.5f) * (0.3f + Maths.Sin(phase * 1.2f) * 1.25f),
+                Maths.Sin(phase * 1.5f) * 1.35f,
+                Maths.Sin(angle + phase * 1.3f) * (0.4f + Maths.Cos(phase * 0.8f) * 1.3f) - 0.2f
+            );
+
+            Double3 point = (Double3)position + (Double3)pointOffset;
+            bool contains = frustum.Contains(point);
+
+            // Draw point with different colors based on containment
+            Float4 pointColor = contains ? new Float4(0, 1, 0, 1) : new Float4(1, 0, 0, 1);
+            float pointSize = contains ? 0.08f : 0.05f;
+
+            Gizmo.DrawIntersectionPoint((Float3)point, pointColor, pointSize);
+        }
+
+        // Draw the frustum
+        Gizmo.DrawFrustum(frustum, new Float4(0.7f, 0.7f, 0.7f, 0.8f));
+    }
+
+    public Float3 GetBounds() => new Float3(2.5f, 2.0f, 2.5f);
 }
 
 #endregion
