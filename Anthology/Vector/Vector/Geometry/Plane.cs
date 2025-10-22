@@ -21,15 +21,25 @@ namespace Prowl.Vector.Geometry
 
         /// <summary>
         /// Initializes a new plane from a normal vector and distance.
-        /// The normal will be normalized.
+        /// Both the normal and distance will be normalized together to maintain the plane equation.
+        /// If the normal has length L, the resulting plane will have Normal = normal/L and D = d/L.
         /// </summary>
         /// <param name="normal">The normal vector (will be normalized).</param>
-        /// <param name="d">The distance from origin.</param>
+        /// <param name="d">The distance from origin (will be scaled by the normalization factor).</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Plane(Double3 normal, double d)
         {
-            Normal = Double3.Normalize(normal);
-            D = d;
+            double length = Double3.Length(normal);
+            if (length > double.Epsilon)
+            {
+                Normal = normal / length;
+                D = d / length;
+            }
+            else
+            {
+                Normal = Double3.UnitZ;
+                D = 0;
+            }
         }
 
         /// <summary>
