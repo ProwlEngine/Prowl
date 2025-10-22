@@ -568,12 +568,12 @@ namespace Prowl.Vector.Geometry
         /// <param name="mode">Wireframe for edges. Solid mode not supported for Frustum.</param>
         /// <param name="resolution">Unused for Frustum (topology is fixed).</param>
         /// <returns>Mesh data for rendering.</returns>
-        public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
         {
             Double3[] corners = GetCorners();
 
             if (corners == null || corners.Length != 8)
-                return new MeshData(new Double3[0], MeshTopology.LineList);
+                return new GeometryData(new Double3[0], MeshTopology.LineList);
 
             // Corner indices from GetCorners():
             // 0: Near-Left-Bottom,  1: Near-Right-Bottom,  2: Near-Left-Top,  3: Near-Right-Top
@@ -602,7 +602,7 @@ namespace Prowl.Vector.Geometry
             vertices[idx++] = corners[2]; vertices[idx++] = corners[6]; // Left-Top
             vertices[idx++] = corners[3]; vertices[idx++] = corners[7]; // Right-Top
 
-            return new MeshData(vertices, MeshTopology.LineList);
+            return new GeometryData(vertices, MeshTopology.LineList);
         }
 
         // --- IEquatable & IFormattable Implementation ---

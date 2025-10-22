@@ -441,7 +441,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="mode">Wireframe for edges, Solid for filled triangle.</param>
         /// <param name="resolution">Unused for Triangle (topology is fixed).</param>
         /// <returns>Mesh data for rendering.</returns>
-        public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
         {
             if (mode == MeshMode.Wireframe)
             {
@@ -452,7 +452,7 @@ namespace Prowl.Vector.Geometry
                     V1, V2,
                     V2, V0
                 };
-                return new MeshData(vertices, MeshTopology.LineList);
+                return new GeometryData(vertices, MeshTopology.LineList);
             }
             else
             {
@@ -463,7 +463,7 @@ namespace Prowl.Vector.Geometry
                     0, 1, 2,  // Front face
                     0, 2, 1   // Back face
                 };
-                return new MeshData(vertices, indices, MeshTopology.TriangleList);
+                return new GeometryData(vertices, indices, MeshTopology.TriangleList);
             }
         }
 

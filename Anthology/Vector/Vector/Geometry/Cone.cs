@@ -239,7 +239,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="mode">Wireframe for outline, Solid for filled cone.</param>
         /// <param name="resolution">Number of segments around the base circle.</param>
         /// <returns>Mesh data for rendering.</returns>
-        public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
         {
             resolution = Maths.Max(resolution, 3);
 
@@ -253,7 +253,7 @@ namespace Prowl.Vector.Geometry
             }
         }
 
-        private MeshData GetWireframeMesh(int segments)
+        private GeometryData GetWireframeMesh(int segments)
         {
             var vertices = new System.Collections.Generic.List<Double3>();
 
@@ -261,7 +261,7 @@ namespace Prowl.Vector.Geometry
             double height = Double3.Length(axis);
 
             if (height < double.Epsilon)
-                return new MeshData(new Double3[] { Apex }, MeshTopology.LineList);
+                return new GeometryData(new Double3[] { Apex }, MeshTopology.LineList);
 
             Double3 axisNorm = axis / height;
 
@@ -303,10 +303,10 @@ namespace Prowl.Vector.Geometry
                 vertices.Add(basePoints[index]);
             }
 
-            return new MeshData(vertices.ToArray(), MeshTopology.LineList);
+            return new GeometryData(vertices.ToArray(), MeshTopology.LineList);
         }
 
-        private MeshData GetSolidMesh(int segments)
+        private GeometryData GetSolidMesh(int segments)
         {
             var vertices = new System.Collections.Generic.List<Double3>();
             var indices = new System.Collections.Generic.List<uint>();
@@ -315,7 +315,7 @@ namespace Prowl.Vector.Geometry
             double height = Double3.Length(axis);
 
             if (height < double.Epsilon)
-                return new MeshData(new Double3[] { Apex }, MeshTopology.TriangleList);
+                return new GeometryData(new Double3[] { Apex }, MeshTopology.TriangleList);
 
             Double3 axisNorm = axis / height;
 
@@ -368,7 +368,7 @@ namespace Prowl.Vector.Geometry
                 indices.Add(current);
             }
 
-            return new MeshData(vertices.ToArray(), indices.ToArray(), MeshTopology.TriangleList);
+            return new GeometryData(vertices.ToArray(), indices.ToArray(), MeshTopology.TriangleList);
         }
 
         // --- IEquatable & IFormattable Implementation ---

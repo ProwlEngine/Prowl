@@ -347,7 +347,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="mode">Wireframe for latitude/longitude lines, Solid for filled sphere.</param>
         /// <param name="resolution">Number of segments (must be at least 3).</param>
         /// <returns>Mesh data for rendering.</returns>
-        public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
         {
             resolution = Maths.Max(resolution, 3);
 
@@ -361,7 +361,7 @@ namespace Prowl.Vector.Geometry
             }
         }
 
-        private MeshData GetWireframeMesh(int segments)
+        private GeometryData GetWireframeMesh(int segments)
         {
             var vertices = new System.Collections.Generic.List<Double3>();
 
@@ -419,10 +419,10 @@ namespace Prowl.Vector.Geometry
                 }
             }
 
-            return new MeshData(vertices.ToArray(), MeshTopology.LineList);
+            return new GeometryData(vertices.ToArray(), MeshTopology.LineList);
         }
 
-        private MeshData GetSolidMesh(int segments)
+        private GeometryData GetSolidMesh(int segments)
         {
             var vertices = new System.Collections.Generic.List<Double3>();
             var indices = new System.Collections.Generic.List<uint>();
@@ -470,7 +470,7 @@ namespace Prowl.Vector.Geometry
                 }
             }
 
-            return new MeshData(vertices.ToArray(), indices.ToArray(), MeshTopology.TriangleList);
+            return new GeometryData(vertices.ToArray(), indices.ToArray(), MeshTopology.TriangleList);
         }
 
         // --- IEquatable & IFormattable Implementation ---

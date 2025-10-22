@@ -576,7 +576,7 @@ namespace Prowl.Vector.Geometry
        /// <param name="mode">Wireframe for edges, Solid for filled box.</param>
        /// <param name="resolution">Unused for AABB (box topology is fixed).</param>
        /// <returns>Mesh data for rendering.</returns>
-       public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+       public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
        {
            Double3[] corners = GetCorners();
 
@@ -604,7 +604,7 @@ namespace Prowl.Vector.Geometry
                vertices[idx++] = corners[2]; vertices[idx++] = corners[6];
                vertices[idx++] = corners[3]; vertices[idx++] = corners[7];
 
-               return new MeshData(vertices, MeshTopology.LineList);
+               return new GeometryData(vertices, MeshTopology.LineList);
            }
            else
            {
@@ -625,7 +625,7 @@ namespace Prowl.Vector.Geometry
                    1, 3, 5, 3, 7, 5
                };
 
-               return new MeshData(corners, indices, MeshTopology.TriangleList);
+               return new GeometryData(corners, indices, MeshTopology.TriangleList);
            }
        }
 

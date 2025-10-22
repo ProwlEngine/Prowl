@@ -349,11 +349,11 @@ namespace Prowl.Vector.Geometry
         /// <param name="mode">Both modes render as a line.</param>
         /// <param name="resolution">Unused for LineSegment (topology is fixed).</param>
         /// <returns>Mesh data for rendering.</returns>
-        public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
         {
             // LineSegment is always just a line
             var vertices = new Double3[] { Start, End };
-            return new MeshData(vertices, MeshTopology.LineList);
+            return new GeometryData(vertices, MeshTopology.LineList);
         }
 
         // --- IEquatable & IFormattable Implementation ---

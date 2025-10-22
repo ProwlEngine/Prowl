@@ -129,7 +129,7 @@ void main() {
     /// </summary>
     public static void DrawShape(IBoundingShape shape, Float4 color, MeshMode mode, int resolution = 16)
     {
-        MeshData meshData = shape.GetMeshData(mode, resolution);
+        GeometryData meshData = shape.GetMeshData(mode, resolution);
 
         if (meshData.Vertices.Length == 0)
             return;

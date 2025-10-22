@@ -48,7 +48,7 @@ namespace Prowl.Vector.Geometry
     /// <summary>
     /// Contains mesh data for rendering a shape, including vertices and topology information.
     /// </summary>
-    public readonly struct MeshData
+    public readonly struct GeometryData
     {
         /// <summary>
         /// The vertex positions.
@@ -68,7 +68,7 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Creates mesh data with vertices and topology (non-indexed).
         /// </summary>
-        public MeshData(Double3[] vertices, MeshTopology topology)
+        public GeometryData(Double3[] vertices, MeshTopology topology)
         {
             Vertices = vertices;
             Indices = null;
@@ -78,7 +78,7 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Creates mesh data with vertices, indices, and topology (indexed rendering).
         /// </summary>
-        public MeshData(Double3[] vertices, uint[] indices, MeshTopology topology)
+        public GeometryData(Double3[] vertices, uint[] indices, MeshTopology topology)
         {
             Vertices = vertices;
             Indices = indices;

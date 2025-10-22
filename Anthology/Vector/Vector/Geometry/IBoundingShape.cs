@@ -22,6 +22,6 @@ namespace Prowl.Vector.Geometry
         /// <param name="mode">Wireframe for outline rendering, Solid for filled geometry.</param>
         /// <param name="resolution">Level of detail for curved surfaces (e.g., number of segments for spheres).</param>
         /// <returns>Mesh data containing vertices, indices, and topology information.</returns>
-        MeshData GetMeshData(MeshMode mode, int resolution = 16);
+        GeometryData GetMeshData(MeshMode mode, int resolution = 16);
     }
 }
