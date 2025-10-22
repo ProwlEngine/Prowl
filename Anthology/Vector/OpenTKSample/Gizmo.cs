@@ -431,6 +431,59 @@ void main() {
         return (Float3)intersection;
     }
 
+    public static void DrawConeWireframe(Cone cone, Float4 color, int segments = 16)
+    {
+        Float3 apex = (Float3)cone.Apex;
+        Float3 baseCenter = (Float3)cone.BaseCenter;
+        float radius = (float)cone.BaseRadius;
+
+        // Calculate axis and perpendicular vectors for the base circle
+        Double3 axis = cone.BaseCenter - cone.Apex;
+        double height = Double3.Length(axis);
+
+        if (height < double.Epsilon)
+            return; // Degenerate cone
+
+        Double3 axisNorm = axis / height;
+
+        // Find two perpendicular vectors to the axis
+        Double3 perpendicular1 = Maths.Abs(axisNorm.X) < 0.9 ?
+            Double3.Cross(axisNorm, new Double3(1, 0, 0)) :
+            Double3.Cross(axisNorm, new Double3(0, 1, 0));
+        perpendicular1 = Double3.Normalize(perpendicular1);
+
+        Double3 perpendicular2 = Double3.Cross(axisNorm, perpendicular1);
+
+        // Generate base circle points
+        Float3[] basePoints = new Float3[segments];
+        for (int i = 0; i < segments; i++)
+        {
+            float angle = (float)(i * 2.0 * Math.PI / segments);
+            float cosAngle = Maths.Cos(angle);
+            float sinAngle = Maths.Sin(angle);
+
+            Double3 point = cone.BaseCenter +
+                          perpendicular1 * (radius * cosAngle) +
+                          perpendicular2 * (radius * sinAngle);
+            basePoints[i] = (Float3)point;
+        }
+
+        // Draw base circle
+        for (int i = 0; i < segments; i++)
+        {
+            int next = (i + 1) % segments;
+            DrawLine(basePoints[i], basePoints[next], color);
+        }
+
+        // Draw lines from apex to base circle (8 lines evenly spaced)
+        int lineCount = 8;
+        for (int i = 0; i < lineCount; i++)
+        {
+            int index = (i * segments) / lineCount;
+            DrawLine(apex, basePoints[index], color);
+        }
+    }
+
     #endregion
 
     public static void Render(Float4x4 viewProjectionMatrix)

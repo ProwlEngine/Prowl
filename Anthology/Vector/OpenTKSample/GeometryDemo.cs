@@ -42,6 +42,13 @@ public static class GeometryDemo
         new FrustumAABBIntersectionDemo(),
         new FrustumSphereIntersectionDemo(),
         new FrustumPointIntersectionDemo(),
+
+        new GJKFrustumSphereDemo(),
+        new GJKLineSegmentSphereDemo(),
+
+        new GJKConeSphereDemo(),
+        new GJKConeAABBDemo(),
+        new GJKConeTriangleDemo(),
     };
 
     public static void DrawGeometryDemo(float timeInSeconds)
@@ -952,6 +959,279 @@ public class FrustumPointIntersectionDemo : IDemo
     }
 
     public Float3 GetBounds() => new Float3(2.5f, 2.0f, 2.5f);
+}
+
+#endregion
+
+#region GJK Collision Detection Demos
+
+public class GJKFrustumSphereDemo : IDemo
+{
+    public string Name => "GJK: Frustum-Sphere";
+
+    public void Draw(Float3 position, float timeInSeconds)
+    {
+        timeInSeconds *= 0.25f;
+
+        // Create animated frustum
+        float rotation = timeInSeconds * 0.4f;
+        Double3 camPos = (Double3)position + new Double3(
+            Maths.Cos(rotation) * 0.3,
+            0.5,
+            Maths.Sin(rotation) * 0.3
+        );
+        Double3 lookAt = (Double3)position;
+        Double3 forward = Double3.Normalize(lookAt - camPos);
+        Double3 up = new Double3(0, 1, 0);
+
+        double fov = Maths.PI / 4 + Maths.Sin(timeInSeconds * 1.5) * 0.1;
+        double aspect = 1.2;
+        double nearDist = 0.2;
+        double farDist = 1.2;
+
+        Frustum frustum = Frustum.FromCamera(camPos, forward, up, fov, aspect, nearDist, farDist);
+
+        // Orbiting sphere
+        float sphereTime = timeInSeconds * 1.3f;
+        Float3 sphereOffset = new Float3(
+            Maths.Cos(sphereTime) * 0.7f,
+            Maths.Sin(sphereTime * 1.5f) * 0.5f,
+            Maths.Sin(sphereTime) * 0.6f
+        );
+
+        float radius = 0.25f + Maths.Sin(timeInSeconds * 2.5f) * 0.05f;
+        Sphere sphere = new Sphere((Double3)position + (Double3)sphereOffset, radius);
+
+        // Use GJK for collision detection
+        bool intersects = GJK.Intersects(frustum, sphere);
+
+        Float4 color = intersects ? new Float4(0, 1, 0, 1) : new Float4(1, 0.3f, 1, 1);
+
+        Gizmo.DrawFrustum(frustum, new Float4(color.X, color.Y, color.Z, 0.6f));
+        Gizmo.DrawSphereWireframe(sphere, color, 12);
+    }
+
+    public Float3 GetBounds() => new Float3(2.5f, 2.5f, 2.5f);
+}
+
+public class GJKLineSegmentSphereDemo : IDemo
+{
+    public string Name => "GJK: LineSegment-Sphere";
+
+    public void Draw(Float3 position, float timeInSeconds)
+    {
+        timeInSeconds *= 0.25f;
+
+        // Rotating line segment
+        float rotation = timeInSeconds * 0.7f;
+        float tilt = timeInSeconds * 0.5f;
+
+        float cosRot = Maths.Cos(rotation);
+        float sinRot = Maths.Sin(rotation);
+        float cosTilt = Maths.Cos(tilt);
+        float sinTilt = Maths.Sin(tilt);
+
+        Float3 segmentDir = new Float3(
+            cosRot * cosTilt,
+            sinTilt,
+            sinRot * cosTilt
+        );
+
+        float segmentLength = 0.8f + Maths.Sin(timeInSeconds * 1.8f) * 0.2f;
+        Float3 segmentStart = position - segmentDir * (segmentLength * 0.5f);
+        Float3 segmentEnd = position + segmentDir * (segmentLength * 0.5f);
+
+        LineSegment lineSegment = new LineSegment((Double3)segmentStart, (Double3)segmentEnd);
+
+        // Orbiting sphere
+        float sphereTime = timeInSeconds * 1.4f;
+        Float3 sphereOffset = new Float3(
+            Maths.Cos(sphereTime) * 0.6f,
+            Maths.Sin(sphereTime * 1.6f) * 0.4f,
+            Maths.Sin(sphereTime) * 0.7f
+        );
+
+        float radius = 0.3f + Maths.Cos(timeInSeconds * 2.2f) * 0.08f;
+        Sphere sphere = new Sphere((Double3)position + (Double3)sphereOffset, radius);
+
+        // Use GJK for collision detection
+        bool intersects = GJK.Intersects(lineSegment, sphere);
+
+        Float4 color = intersects ? new Float4(0, 1, 0, 1) : new Float4(1, 1, 0, 1);
+
+        // Draw line segment
+        Gizmo.DrawLine(segmentStart, segmentEnd, color);
+        // Draw endpoints
+        Gizmo.DrawIntersectionPoint(segmentStart, color, 0.05f);
+        Gizmo.DrawIntersectionPoint(segmentEnd, color, 0.05f);
+
+        Gizmo.DrawSphereWireframe(sphere, color, 12);
+    }
+
+    public Float3 GetBounds() => new Float3(2.5f, 2.5f, 2.5f);
+}
+
+public class GJKConeSphereDemo : IDemo
+{
+    public string Name => "GJK: Cone-Sphere";
+
+    public void Draw(Float3 position, float timeInSeconds)
+    {
+        timeInSeconds *= 0.25f;
+
+        // Rotating cone
+        float rotation = timeInSeconds * 0.6f;
+        float tilt = timeInSeconds * 0.4f;
+
+        Float3 coneApex = position + new Float3(0, 0.6f + Maths.Sin(timeInSeconds * 1.5f) * 0.1f, 0);
+        Float3 axisDir = new Float3(
+            Maths.Sin(rotation) * Maths.Cos(tilt),
+            -0.7f,
+            Maths.Cos(rotation) * Maths.Cos(tilt)
+        );
+
+        float height = 0.8f + Maths.Sin(timeInSeconds * 1.2f) * 0.1f;
+        float baseRadius = 0.4f + Maths.Cos(timeInSeconds * 1.8f) * 0.08f;
+
+        Cone cone = Cone.FromAxisDirection((Double3)coneApex, (Double3)axisDir, height, baseRadius);
+
+        // Orbiting sphere
+        float sphereTime = timeInSeconds * 1.1f;
+        Float3 sphereOffset = new Float3(
+            Maths.Cos(sphereTime) * 0.7f,
+            Maths.Sin(sphereTime * 1.4f) * 0.5f,
+            Maths.Sin(sphereTime) * 0.6f
+        );
+
+        float radius = 0.25f + Maths.Sin(timeInSeconds * 2.2f) * 0.05f;
+        Sphere sphere = new Sphere((Double3)position + (Double3)sphereOffset, radius);
+
+        // Use GJK for collision detection
+        bool intersects = GJK.Intersects(cone, sphere);
+
+        Float4 color = intersects ? new Float4(0, 1, 0, 1) : new Float4(1, 0.5f, 0, 1);
+
+        Gizmo.DrawConeWireframe(cone, color, 16);
+        Gizmo.DrawSphereWireframe(sphere, color, 12);
+    }
+
+    public Float3 GetBounds() => new Float3(2.5f, 2.5f, 2.5f);
+}
+
+public class GJKConeAABBDemo : IDemo
+{
+    public string Name => "GJK: Cone-AABB";
+
+    public void Draw(Float3 position, float timeInSeconds)
+    {
+        timeInSeconds *= 0.25f;
+
+        // Animated cone
+        float rotation = timeInSeconds * 0.5f;
+        Float3 coneApex = position + new Float3(0, 0.7f, 0);
+        Float3 axisDir = new Float3(
+            Maths.Sin(rotation) * 0.5f,
+            -1.0f,
+            Maths.Cos(rotation) * 0.5f
+        );
+
+        float height = 1.0f;
+        float baseRadius = 0.4f + Maths.Sin(timeInSeconds * 1.5f) * 0.1f;
+
+        Cone cone = Cone.FromAxisDirection((Double3)coneApex, (Double3)axisDir, height, baseRadius);
+
+        // Rotating AABB
+        float aabbRot = timeInSeconds * 0.8f;
+        float scale = 0.4f + Maths.Cos(timeInSeconds * 1.3f) * 0.1f;
+
+        Float3 aabbOffset = new Float3(
+            Maths.Cos(aabbRot) * 0.5f,
+            Maths.Sin(aabbRot * 1.2f) * 0.3f,
+            Maths.Sin(aabbRot) * 0.5f
+        );
+
+        AABB aabb = new AABB(
+            (Double3)position + (Double3)aabbOffset - new Double3(scale, scale, scale),
+            (Double3)position + (Double3)aabbOffset + new Double3(scale, scale, scale)
+        );
+
+        // Use GJK for collision detection
+        bool intersects = GJK.Intersects(cone, aabb);
+
+        Float4 color = intersects ? new Float4(0, 1, 0, 1) : new Float4(0.8f, 0.2f, 0.8f, 1);
+
+        Gizmo.DrawConeWireframe(cone, color, 16);
+        Gizmo.DrawAABBSolid(aabb, new Float4(color.X, color.Y, color.Z, 0.4f));
+        Gizmo.DrawAABB(aabb, color);
+    }
+
+    public Float3 GetBounds() => new Float3(2.5f, 2.5f, 2.5f);
+}
+
+public class GJKConeTriangleDemo : IDemo
+{
+    public string Name => "GJK: Cone-Triangle";
+
+    public void Draw(Float3 position, float timeInSeconds)
+    {
+        timeInSeconds *= 0.25f;
+
+        // Cone pointing upward with slight wobble
+        Float3 coneApex = position + new Float3(0, -0.5f, 0);
+        Float3 axisDir = new Float3(
+            Maths.Sin(timeInSeconds * 1.2f) * 0.2f,
+            1.0f,
+            Maths.Cos(timeInSeconds * 1.3f) * 0.2f
+        );
+
+        float height = 1.0f + Maths.Sin(timeInSeconds * 1.5f) * 0.1f;
+        float baseRadius = 0.45f;
+
+        Cone cone = Cone.FromAxisDirection((Double3)coneApex, (Double3)axisDir, height, baseRadius);
+
+        // Rotating triangle
+        float triRotation = timeInSeconds * 0.6f;
+        float triTilt = timeInSeconds * 0.4f;
+
+        Float3[] verts = new Float3[3];
+        Float3[] baseVerts = {
+            new Float3(-0.5f, 0, 0.3f),
+            new Float3(0.5f, 0, 0.3f),
+            new Float3(0, 0.7f, -0.3f)
+        };
+
+        for (int i = 0; i < 3; i++)
+        {
+            Float3 v = baseVerts[i];
+            // Rotate around Y
+            float x = v.X * Maths.Cos(triRotation) - v.Z * Maths.Sin(triRotation);
+            float z = v.X * Maths.Sin(triRotation) + v.Z * Maths.Cos(triRotation);
+            // Rotate around X (tilt)
+            float y = v.Y * Maths.Cos(triTilt) - z * Maths.Sin(triTilt);
+            z = v.Y * Maths.Sin(triTilt) + z * Maths.Cos(triTilt);
+
+            Float3 triOffset = new Float3(
+                Maths.Cos(timeInSeconds * 1.1f) * 0.6f,
+                Maths.Sin(timeInSeconds * 1.4f) * 0.4f,
+                Maths.Sin(timeInSeconds * 0.9f) * 0.5f
+            );
+
+            verts[i] = position + triOffset + new Float3(x, y, z);
+        }
+
+        Triangle triangle = new Triangle((Double3)verts[0], (Double3)verts[1], (Double3)verts[2]);
+
+        // Use GJK for collision detection
+        bool intersects = GJK.Intersects(cone, triangle);
+
+        Float4 color = intersects ? new Float4(0, 1, 0, 1) : new Float4(0, 0.7f, 1, 1);
+
+        Gizmo.DrawConeWireframe(cone, color, 16);
+        Gizmo.DrawTriangle(triangle, new Float4(color.X, color.Y, color.Z, 0.3f), true);
+        Gizmo.DrawTriangle(triangle, color, false);
+    }
+
+    public Float3 GetBounds() => new Float3(2.5f, 2.5f, 2.5f);
 }
 
 #endregion

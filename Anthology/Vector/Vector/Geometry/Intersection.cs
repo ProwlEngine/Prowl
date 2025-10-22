@@ -620,6 +620,156 @@ namespace Prowl.Vector.Geometry
         }
 
         /// <summary>
+        /// Checks if a triangle and a sphere overlap using GJK.
+        /// </summary>
+        public static bool TriangleSphereOverlap(
+            Double3 v0, Double3 v1, Double3 v2,
+            Double3 sphereCenter, double sphereRadius)
+        {
+            Triangle tri = new Triangle(v0, v1, v2);
+            Sphere sphere = new Sphere(sphereCenter, sphereRadius);
+            return GJK.Intersects(tri, sphere);
+        }
+
+        /// <summary>
+        /// Checks if a triangle and an AABB overlap using GJK.
+        /// </summary>
+        public static bool TriangleAABBOverlap(
+            Double3 v0, Double3 v1, Double3 v2,
+            Double3 boxMin, Double3 boxMax)
+        {
+            Triangle tri = new Triangle(v0, v1, v2);
+            AABB aabb = new AABB(boxMin, boxMax);
+            return GJK.Intersects(tri, aabb);
+        }
+
+        /// <summary>
+        /// Checks if a line segment and a sphere overlap using GJK.
+        /// </summary>
+        public static bool LineSegmentSphereOverlap(
+            Double3 segStart, Double3 segEnd,
+            Double3 sphereCenter, double sphereRadius)
+        {
+            LineSegment seg = new LineSegment(segStart, segEnd);
+            Sphere sphere = new Sphere(sphereCenter, sphereRadius);
+            return GJK.Intersects(seg, sphere);
+        }
+
+        /// <summary>
+        /// Checks if a line segment and an AABB overlap using GJK.
+        /// </summary>
+        public static bool LineSegmentAABBOverlap(
+            Double3 segStart, Double3 segEnd,
+            Double3 boxMin, Double3 boxMax)
+        {
+            LineSegment seg = new LineSegment(segStart, segEnd);
+            AABB aabb = new AABB(boxMin, boxMax);
+            return GJK.Intersects(seg, aabb);
+        }
+
+        /// <summary>
+        /// Checks if a line segment and a triangle overlap using GJK.
+        /// </summary>
+        public static bool LineSegmentTriangleOverlap(
+            Double3 segStart, Double3 segEnd,
+            Double3 v0, Double3 v1, Double3 v2)
+        {
+            LineSegment seg = new LineSegment(segStart, segEnd);
+            Triangle tri = new Triangle(v0, v1, v2);
+            return GJK.Intersects(seg, tri);
+        }
+
+        /// <summary>
+        /// Checks if two line segments overlap using GJK.
+        /// </summary>
+        public static bool LineSegmentLineSegmentOverlap(
+            Double3 seg1Start, Double3 seg1End,
+            Double3 seg2Start, Double3 seg2End)
+        {
+            LineSegment seg1 = new LineSegment(seg1Start, seg1End);
+            LineSegment seg2 = new LineSegment(seg2Start, seg2End);
+            return GJK.Intersects(seg1, seg2);
+        }
+
+        /// <summary>
+        /// Checks if a frustum and a triangle overlap using GJK.
+        /// </summary>
+        public static bool FrustumTriangleOverlap(Frustum frustum, Double3 v0, Double3 v1, Double3 v2)
+        {
+            Triangle tri = new Triangle(v0, v1, v2);
+            return GJK.Intersects(frustum, tri);
+        }
+
+        /// <summary>
+        /// Checks if a frustum and a line segment overlap using GJK.
+        /// </summary>
+        public static bool FrustumLineSegmentOverlap(Frustum frustum, Double3 segStart, Double3 segEnd)
+        {
+            LineSegment seg = new LineSegment(segStart, segEnd);
+            return GJK.Intersects(frustum, seg);
+        }
+
+        /// <summary>
+        /// Checks if two frustums overlap using GJK.
+        /// </summary>
+        public static bool FrustumFrustumOverlap(Frustum frustumA, Frustum frustumB)
+        {
+            return GJK.Intersects(frustumA, frustumB);
+        }
+
+        /// <summary>
+        /// Checks if a cone and a sphere overlap using GJK.
+        /// </summary>
+        public static bool ConeSphereOverlap(Cone cone, Double3 sphereCenter, double sphereRadius)
+        {
+            Sphere sphere = new Sphere(sphereCenter, sphereRadius);
+            return GJK.Intersects(cone, sphere);
+        }
+
+        /// <summary>
+        /// Checks if a cone and an AABB overlap using GJK.
+        /// </summary>
+        public static bool ConeAABBOverlap(Cone cone, Double3 boxMin, Double3 boxMax)
+        {
+            AABB aabb = new AABB(boxMin, boxMax);
+            return GJK.Intersects(cone, aabb);
+        }
+
+        /// <summary>
+        /// Checks if a cone and a triangle overlap using GJK.
+        /// </summary>
+        public static bool ConeTriangleOverlap(Cone cone, Double3 v0, Double3 v1, Double3 v2)
+        {
+            Triangle tri = new Triangle(v0, v1, v2);
+            return GJK.Intersects(cone, tri);
+        }
+
+        /// <summary>
+        /// Checks if a cone and a line segment overlap using GJK.
+        /// </summary>
+        public static bool ConeLineSegmentOverlap(Cone cone, Double3 segStart, Double3 segEnd)
+        {
+            LineSegment seg = new LineSegment(segStart, segEnd);
+            return GJK.Intersects(cone, seg);
+        }
+
+        /// <summary>
+        /// Checks if a cone and a frustum overlap using GJK.
+        /// </summary>
+        public static bool ConeFrustumOverlap(Cone cone, Frustum frustum)
+        {
+            return GJK.Intersects(cone, frustum);
+        }
+
+        /// <summary>
+        /// Checks if two cones overlap using GJK.
+        /// </summary>
+        public static bool ConeConeOverlap(Cone coneA, Cone coneB)
+        {
+            return GJK.Intersects(coneA, coneB);
+        }
+
+        /// <summary>
         /// Checks if a line segment and a plane overlap or touch, If so outputs the intersection point.
         /// </summary>
         /// <returns>True if the segment intersects the plane, false otherwise.</returns>
