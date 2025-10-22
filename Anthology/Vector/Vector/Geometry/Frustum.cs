@@ -11,7 +11,7 @@ namespace Prowl.Vector.Geometry
     /// Represents a 3D viewing frustum defined by 6 planes.
     /// Planes are ordered: Near, Far, Left, Right, Top, Bottom.
     /// </summary>
-    public struct Frustrum : IEquatable<Frustrum>, IFormattable
+    public struct Frustum : IEquatable<Frustum>, IFormattable
     {
         /// <summary>The 6 frustum planes: Near, Far, Left, Right, Top, Bottom.</summary>
         public Plane[] Planes;
@@ -21,7 +21,7 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="planes">Array of 6 planes in order: Near, Far, Left, Right, Top, Bottom.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Frustrum(Plane[] planes)
+        public Frustum(Plane[] planes)
         {
             if (planes == null || planes.Length != 6)
                 throw new ArgumentException("Frustum requires exactly 6 planes", nameof(planes));
@@ -40,7 +40,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="top">Top plane.</param>
         /// <param name="bottom">Bottom plane.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Frustrum(Plane near, Plane far, Plane left, 
+        public Frustum(Plane near, Plane far, Plane left, 
                              Plane right, Plane top, Plane bottom)
         {
             Planes = new Plane[6] { near, far, left, right, top, bottom };
@@ -106,7 +106,7 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="viewProjectionMatrix">The combined view-projection matrix.</param>
         /// <returns>The extracted frustum.</returns>
-        public static Frustrum FromMatrix(Double4x4 viewProjectionMatrix)
+        public static Frustum FromMatrix(Double4x4 viewProjectionMatrix)
         {
             var planes = new Plane[6];
             
@@ -165,7 +165,7 @@ namespace Prowl.Vector.Geometry
             double farD = viewProjectionMatrix.c3.W - viewProjectionMatrix.c2.W;
             planes[1] = new Plane(farNormal, farD);
 
-            return new Frustrum(planes);
+            return new Frustum(planes);
         }
 
         /// <summary>
@@ -175,7 +175,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="projectionMatrix">The projection matrix.</param>
         /// <returns>The frustum.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Frustrum FromMatrices(Double4x4 viewMatrix, Double4x4 projectionMatrix)
+        public static Frustum FromMatrices(Double4x4 viewMatrix, Double4x4 projectionMatrix)
         {
             Double4x4 viewProjection = projectionMatrix * viewMatrix;
             return FromMatrix(viewProjection);
@@ -191,13 +191,13 @@ namespace Prowl.Vector.Geometry
         {
             Double3[] normals = new Double3[6];
             double[] ds = new double[6];
-            
+
             for (int i = 0; i < 6; i++)
             {
                 normals[i] = Planes[i].Normal;
                 ds[i] = Planes[i].D;
             }
-            
+
             return Intersection.FrustumContainsPoint(normals, ds, point);
         }
 
@@ -246,7 +246,7 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="matrix">The transformation matrix.</param>
         /// <returns>The transformed frustum.</returns>
-        public Frustrum Transform(Double4x4 matrix)
+        public Frustum Transform(Double4x4 matrix)
         {
             var transformedPlanes = new Plane[6];
             
@@ -260,7 +260,7 @@ namespace Prowl.Vector.Geometry
                 transformedPlanes[i] = new Plane(transformedPlaneVec.XYZ, transformedPlaneVec.W);
             }
             
-            return new Frustrum(transformedPlanes);
+            return new Frustum(transformedPlanes);
         }
 
         /// <summary>
@@ -286,7 +286,7 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <returns>The normalized frustum.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Frustrum Normalized()
+        public Frustum Normalized()
         {
             var result = this;
             result.Normalize();
@@ -379,7 +379,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="nearDist">Near plane distance.</param>
         /// <param name="farDist">Far plane distance.</param>
         /// <returns>The camera frustum.</returns>
-        public static Frustrum FromCamera(Double3 position, Double3 forward, Double3 up, 
+        public static Frustum FromCamera(Double3 position, Double3 forward, Double3 up, 
                                                double fovY, double aspect, double nearDist, double farDist)
         {
             Double3 right = Double3.Normalize(Double3.Cross(forward, up));
@@ -400,15 +400,15 @@ namespace Prowl.Vector.Geometry
             // Side planes
             Double3 leftNormal = Double3.Normalize(Double3.Cross(actualUp, forward + right * tanHalfFovX));
             Double3 rightNormal = Double3.Normalize(Double3.Cross(forward - right * tanHalfFovX, actualUp));
-            Double3 topNormal = Double3.Normalize(Double3.Cross(right, forward + actualUp * tanHalfFovY));
-            Double3 bottomNormal = Double3.Normalize(Double3.Cross(forward - actualUp * tanHalfFovY, right));
+            Double3 topNormal = Double3.Normalize(Double3.Cross(forward + actualUp * tanHalfFovY, right));
+            Double3 bottomNormal = Double3.Normalize(Double3.Cross(right, forward - actualUp * tanHalfFovY));
             
             Plane p_left = new Plane(leftNormal, Double3.Dot(leftNormal, position));
             Plane p_right = new Plane(rightNormal, Double3.Dot(rightNormal, position));
             Plane p_top = new Plane(topNormal, Double3.Dot(topNormal, position));
             Plane p_bottom = new Plane(bottomNormal, Double3.Dot(bottomNormal, position));
             
-            return new Frustrum(near, far, p_left, p_right, p_top, p_bottom);
+            return new Frustum(near, far, p_left, p_right, p_top, p_bottom);
         }
         
         /// <summary>
@@ -421,7 +421,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="nearDist">Near plane distance.</param>
         /// <param name="farDist">Far plane distance.</param>
         /// <returns>The orthographic frustum.</returns>
-        public static Frustrum CreateOrthographic(double left, double right, double bottom, 
+        public static Frustum CreateOrthographic(double left, double right, double bottom, 
                                                         double top, double nearDist, double farDist)
         {
             var planes = new Plane[6];
@@ -436,7 +436,7 @@ namespace Prowl.Vector.Geometry
             planes[4] = new Plane(new Double3(0.0, -1.0, 0.0), top);     // Top
             planes[5] = new Plane(new Double3(0.0, 1.0, 0.0), -bottom);  // Bottom
             
-            return new Frustrum(planes);
+            return new Frustum(planes);
         }
         
         /// <summary>
@@ -457,7 +457,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="amount">Amount to expand by.</param>
         /// <returns>The expanded frustum.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Frustrum Expanded(double amount)
+        public Frustum Expanded(double amount)
         {
             var result = this;
             result.Expand(amount);
@@ -466,7 +466,7 @@ namespace Prowl.Vector.Geometry
         
         // --- IEquatable & IFormattable Implementation ---
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Equals(Frustrum other)
+        public bool Equals(Frustum other)
         {
             if (Planes == null && other.Planes == null) return true;
             if (Planes == null || other.Planes == null) return false;
@@ -481,7 +481,7 @@ namespace Prowl.Vector.Geometry
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override bool Equals(object? obj) => obj is Frustrum other && Equals(other);
+        public override bool Equals(object? obj) => obj is Frustum other && Equals(other);
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int GetHashCode()
@@ -515,7 +515,7 @@ namespace Prowl.Vector.Geometry
                 Planes[5].ToString(format, formatProvider));
         }
         
-        public static bool operator ==(Frustrum left, Frustrum right) => left.Equals(right);
-        public static bool operator !=(Frustrum left, Frustrum right) => !left.Equals(right);
+        public static bool operator ==(Frustum left, Frustum right) => left.Equals(right);
+        public static bool operator !=(Frustum left, Frustum right) => !left.Equals(right);
     }
 }
