@@ -109,61 +109,90 @@ namespace Prowl.Vector.Geometry
         public static Frustum FromMatrix(Double4x4 viewProjectionMatrix)
         {
             var planes = new Plane[6];
-            
+
             // Extract planes from matrix (Gribb/Hartmann method)
-            // Left plane
+            // For column-major matrix: Row i = (c0[i], c1[i], c2[i], c3[i])
+
+            // Left plane = row3 + row0
             Double3 leftNormal = new Double3(
-                viewProjectionMatrix.c3.X + viewProjectionMatrix.c0.X,
-                viewProjectionMatrix.c3.Y + viewProjectionMatrix.c0.Y,
-                viewProjectionMatrix.c3.Z + viewProjectionMatrix.c0.Z
+                viewProjectionMatrix.c0.W + viewProjectionMatrix.c0.X,
+                viewProjectionMatrix.c1.W + viewProjectionMatrix.c1.X,
+                viewProjectionMatrix.c2.W + viewProjectionMatrix.c2.X
             );
-            double leftD = viewProjectionMatrix.c3.W + viewProjectionMatrix.c0.W;
-            planes[2] = new Plane(leftNormal, leftD);
+            double leftD = viewProjectionMatrix.c3.W + viewProjectionMatrix.c3.X;
+            planes[2] = default;  // Don't use constructor - will normalize manually
+            planes[2].Normal = leftNormal;
+            planes[2].D = leftD;
 
-            // Right plane
+            // Right plane = row3 - row0
             Double3 rightNormal = new Double3(
-                viewProjectionMatrix.c3.X - viewProjectionMatrix.c0.X,
-                viewProjectionMatrix.c3.Y - viewProjectionMatrix.c0.Y,
-                viewProjectionMatrix.c3.Z - viewProjectionMatrix.c0.Z
+                viewProjectionMatrix.c0.W - viewProjectionMatrix.c0.X,
+                viewProjectionMatrix.c1.W - viewProjectionMatrix.c1.X,
+                viewProjectionMatrix.c2.W - viewProjectionMatrix.c2.X
             );
-            double rightD = viewProjectionMatrix.c3.W - viewProjectionMatrix.c0.W;
-            planes[3] = new Plane(rightNormal, rightD);
+            double rightD = viewProjectionMatrix.c3.W - viewProjectionMatrix.c3.X;
+            planes[3] = default;
+            planes[3].Normal = rightNormal;
+            planes[3].D = rightD;
 
-            // Bottom plane
+            // Bottom plane = row3 + row1
             Double3 bottomNormal = new Double3(
-                viewProjectionMatrix.c3.X + viewProjectionMatrix.c1.X,
-                viewProjectionMatrix.c3.Y + viewProjectionMatrix.c1.Y,
-                viewProjectionMatrix.c3.Z + viewProjectionMatrix.c1.Z
+                viewProjectionMatrix.c0.W + viewProjectionMatrix.c0.Y,
+                viewProjectionMatrix.c1.W + viewProjectionMatrix.c1.Y,
+                viewProjectionMatrix.c2.W + viewProjectionMatrix.c2.Y
             );
-            double bottomD = viewProjectionMatrix.c3.W + viewProjectionMatrix.c1.W;
-            planes[5] = new Plane(bottomNormal, bottomD);
+            double bottomD = viewProjectionMatrix.c3.W + viewProjectionMatrix.c3.Y;
+            planes[5] = default;
+            planes[5].Normal = bottomNormal;
+            planes[5].D = bottomD;
 
-            // Top plane
+            // Top plane = row3 - row1
             Double3 topNormal = new Double3(
-                viewProjectionMatrix.c3.X - viewProjectionMatrix.c1.X,
-                viewProjectionMatrix.c3.Y - viewProjectionMatrix.c1.Y,
-                viewProjectionMatrix.c3.Z - viewProjectionMatrix.c1.Z
+                viewProjectionMatrix.c0.W - viewProjectionMatrix.c0.Y,
+                viewProjectionMatrix.c1.W - viewProjectionMatrix.c1.Y,
+                viewProjectionMatrix.c2.W - viewProjectionMatrix.c2.Y
             );
-            double topD = viewProjectionMatrix.c3.W - viewProjectionMatrix.c1.W;
-            planes[4] = new Plane(topNormal, topD);
+            double topD = viewProjectionMatrix.c3.W - viewProjectionMatrix.c3.Y;
+            planes[4] = default;
+            planes[4].Normal = topNormal;
+            planes[4].D = topD;
 
-            // Near plane
+            // Near plane = row2 (for 0..1 depth range, DirectX style)
             Double3 nearNormal = new Double3(
-                viewProjectionMatrix.c2.X,
-                viewProjectionMatrix.c2.Y,
+                viewProjectionMatrix.c0.Z,
+                viewProjectionMatrix.c1.Z,
                 viewProjectionMatrix.c2.Z
             );
-            double nearD = viewProjectionMatrix.c2.W;
-            planes[0] = new Plane(nearNormal, nearD);
+            double nearD = viewProjectionMatrix.c3.Z;
+            planes[0] = default;
+            planes[0].Normal = nearNormal;
+            planes[0].D = nearD;
 
-            // Far plane
+            // Far plane = row3 - row2
             Double3 farNormal = new Double3(
-                viewProjectionMatrix.c3.X - viewProjectionMatrix.c2.X,
-                viewProjectionMatrix.c3.Y - viewProjectionMatrix.c2.Y,
-                viewProjectionMatrix.c3.Z - viewProjectionMatrix.c2.Z
+                viewProjectionMatrix.c0.W - viewProjectionMatrix.c0.Z,
+                viewProjectionMatrix.c1.W - viewProjectionMatrix.c1.Z,
+                viewProjectionMatrix.c2.W - viewProjectionMatrix.c2.Z
             );
-            double farD = viewProjectionMatrix.c3.W - viewProjectionMatrix.c2.W;
-            planes[1] = new Plane(farNormal, farD);
+            double farD = viewProjectionMatrix.c3.W - viewProjectionMatrix.c3.Z;
+            planes[1] = default;
+            planes[1].Normal = farNormal;
+            planes[1].D = farD;
+
+            // Normalize all planes
+            // Gribb/Hartmann extracts planes as: Ax + By + Cz + D = 0
+            // Our Plane class uses: dot(normal, point) = D  (i.e., Ax + By + Cz - D = 0)
+            // So we need to negate D and normalize both normal and D together
+            for (int i = 0; i < 6; i++)
+            {
+                double length = Double3.Length(planes[i].Normal);
+                if (length > double.Epsilon)
+                {
+                    // Manually normalize and set fields directly (bypassing constructor)
+                    planes[i].Normal = planes[i].Normal / length;
+                    planes[i].D = -planes[i].D / length;
+                }
+            }
 
             return new Frustum(planes);
         }
