@@ -570,6 +570,65 @@ namespace Prowl.Vector.Geometry
            );
        }
 
+       /// <summary>
+       /// Generates mesh data for rendering this AABB.
+       /// </summary>
+       /// <param name="mode">Wireframe for edges, Solid for filled box.</param>
+       /// <param name="resolution">Unused for AABB (box topology is fixed).</param>
+       /// <returns>Mesh data for rendering.</returns>
+       public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+       {
+           Double3[] corners = GetCorners();
+
+           if (mode == MeshMode.Wireframe)
+           {
+               // 12 edges, each edge is 2 vertices (LineList)
+               var vertices = new Double3[24];
+               int idx = 0;
+
+               // Bottom face (4 edges)
+               vertices[idx++] = corners[0]; vertices[idx++] = corners[1];
+               vertices[idx++] = corners[1]; vertices[idx++] = corners[3];
+               vertices[idx++] = corners[3]; vertices[idx++] = corners[2];
+               vertices[idx++] = corners[2]; vertices[idx++] = corners[0];
+
+               // Top face (4 edges)
+               vertices[idx++] = corners[4]; vertices[idx++] = corners[5];
+               vertices[idx++] = corners[5]; vertices[idx++] = corners[7];
+               vertices[idx++] = corners[7]; vertices[idx++] = corners[6];
+               vertices[idx++] = corners[6]; vertices[idx++] = corners[4];
+
+               // Vertical edges (4 edges)
+               vertices[idx++] = corners[0]; vertices[idx++] = corners[4];
+               vertices[idx++] = corners[1]; vertices[idx++] = corners[5];
+               vertices[idx++] = corners[2]; vertices[idx++] = corners[6];
+               vertices[idx++] = corners[3]; vertices[idx++] = corners[7];
+
+               return new MeshData(vertices, MeshTopology.LineList);
+           }
+           else
+           {
+               // Solid mode: 8 vertices, 36 indices (12 triangles, 6 faces)
+               var indices = new uint[]
+               {
+                   // Bottom face (Z = Min.Z)
+                   0, 2, 1, 1, 2, 3,
+                   // Top face (Z = Max.Z)
+                   4, 5, 6, 5, 7, 6,
+                   // Front face (Y = Min.Y)
+                   0, 1, 4, 1, 5, 4,
+                   // Back face (Y = Max.Y)
+                   2, 6, 3, 3, 6, 7,
+                   // Left face (X = Min.X)
+                   0, 4, 2, 2, 4, 6,
+                   // Right face (X = Max.X)
+                   1, 3, 5, 3, 7, 5
+               };
+
+               return new MeshData(corners, indices, MeshTopology.TriangleList);
+           }
+       }
+
        // --- IEquatable & IFormattable Implementation ---
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
        public bool Equals(AABB other) => Min.Equals(other.Min) && Max.Equals(other.Max);

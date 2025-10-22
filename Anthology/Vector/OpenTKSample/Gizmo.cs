@@ -124,6 +124,79 @@ void main() {
         _lineIndices.Add(baseIndex + 1);
     }
 
+    /// <summary>
+    /// Generic method to draw any IBoundingShape using its GetMeshData implementation.
+    /// </summary>
+    public static void DrawShape(IBoundingShape shape, Float4 color, MeshMode mode, int resolution = 16)
+    {
+        MeshData meshData = shape.GetMeshData(mode, resolution);
+
+        if (meshData.Vertices.Length == 0)
+            return;
+
+        bool isLine = meshData.Topology == MeshTopology.LineList || meshData.Topology == MeshTopology.LineStrip;
+        var targetVertices = isLine ? _lineVertices : _solidVertices;
+        var targetIndices = isLine ? _lineIndices : _solidIndices;
+
+        uint baseIndex = (uint)targetVertices.Count;
+
+        // Add vertices
+        for (int i = 0; i < meshData.Vertices.Length; i++)
+        {
+            targetVertices.Add(new Vertex((Float3)meshData.Vertices[i], color));
+        }
+
+        // Add indices based on topology
+        if (meshData.IsIndexed)
+        {
+            // Use provided indices
+            for (int i = 0; i < meshData.Indices!.Length; i++)
+            {
+                targetIndices.Add(baseIndex + meshData.Indices[i]);
+            }
+        }
+        else
+        {
+            // Generate indices based on topology
+            if (meshData.Topology == MeshTopology.LineList || meshData.Topology == MeshTopology.TriangleList)
+            {
+                // Direct sequential indices
+                for (uint i = 0; i < meshData.Vertices.Length; i++)
+                {
+                    targetIndices.Add(baseIndex + i);
+                }
+            }
+            else if (meshData.Topology == MeshTopology.LineStrip)
+            {
+                // Convert line strip to line list
+                for (uint i = 0; i < meshData.Vertices.Length - 1; i++)
+                {
+                    targetIndices.Add(baseIndex + i);
+                    targetIndices.Add(baseIndex + i + 1);
+                }
+            }
+            else if (meshData.Topology == MeshTopology.TriangleStrip)
+            {
+                // Convert triangle strip to triangle list
+                for (uint i = 0; i < meshData.Vertices.Length - 2; i++)
+                {
+                    if (i % 2 == 0)
+                    {
+                        targetIndices.Add(baseIndex + i);
+                        targetIndices.Add(baseIndex + i + 1);
+                        targetIndices.Add(baseIndex + i + 2);
+                    }
+                    else
+                    {
+                        targetIndices.Add(baseIndex + i);
+                        targetIndices.Add(baseIndex + i + 2);
+                        targetIndices.Add(baseIndex + i + 1);
+                    }
+                }
+            }
+        }
+    }
+
     #region --- Additional Geometry Gizmos ---
 
     /// <summary>
@@ -131,26 +204,7 @@ void main() {
     /// </summary>
     public static void DrawAABB(AABB aabb, Float4 color)
     {
-        Float3[] corners = aabb.GetCorners().Select(c => (Float3)c).ToArray();
-
-        // Draw the 12 edges of the box
-        // Bottom face (Z = min)
-        DrawLine(corners[0], corners[1], color); // min->max X
-        DrawLine(corners[1], corners[3], color); // max X->max Y
-        DrawLine(corners[3], corners[2], color); // max Y->min X
-        DrawLine(corners[2], corners[0], color); // min X->min Y
-
-        // Top face (Z = max)
-        DrawLine(corners[4], corners[5], color); // min->max X
-        DrawLine(corners[5], corners[7], color); // max X->max Y
-        DrawLine(corners[7], corners[6], color); // max Y->min X
-        DrawLine(corners[6], corners[4], color); // min X->min Y
-
-        // Vertical edges
-        DrawLine(corners[0], corners[4], color); // min X, min Y
-        DrawLine(corners[1], corners[5], color); // max X, min Y
-        DrawLine(corners[2], corners[6], color); // min X, max Y
-        DrawLine(corners[3], corners[7], color); // max X, max Y
+        DrawShape(aabb, color, MeshMode.Wireframe);
     }
 
     /// <summary>
@@ -158,45 +212,7 @@ void main() {
     /// </summary>
     public static void DrawAABBSolid(AABB aabb, Float4 color)
     {
-        Float3[] corners = aabb.GetCorners().Select(c => (Float3)c).ToArray();
-        uint baseIndex = (uint)_solidVertices.Count;
-
-        // Add all 8 corners as vertices
-        for (int i = 0; i < 8; i++)
-        {
-            _solidVertices.Add(new Vertex(corners[i], color));
-        }
-
-        // Define the 12 triangles (counter-clockwise winding for outward-facing normals)
-        // Corner indices from GetCorners():
-        // 0: (Min.X, Min.Y, Min.Z)  1: (Max.X, Min.Y, Min.Z)
-        // 2: (Min.X, Max.Y, Min.Z)  3: (Max.X, Max.Y, Min.Z)
-        // 4: (Min.X, Min.Y, Max.Z)  5: (Max.X, Min.Y, Max.Z)
-        // 6: (Min.X, Max.Y, Max.Z)  7: (Max.X, Max.Y, Max.Z)
-
-        // Bottom face (Z = Min.Z) - corners 0,1,2,3
-        _solidIndices.AddRange(new uint[] { baseIndex + 0, baseIndex + 2, baseIndex + 1 });
-        _solidIndices.AddRange(new uint[] { baseIndex + 1, baseIndex + 2, baseIndex + 3 });
-
-        // Top face (Z = Max.Z) - corners 4,5,6,7
-        _solidIndices.AddRange(new uint[] { baseIndex + 4, baseIndex + 5, baseIndex + 6 });
-        _solidIndices.AddRange(new uint[] { baseIndex + 5, baseIndex + 7, baseIndex + 6 });
-
-        // Front face (Y = Min.Y) - corners 0,1,4,5
-        _solidIndices.AddRange(new uint[] { baseIndex + 0, baseIndex + 1, baseIndex + 4 });
-        _solidIndices.AddRange(new uint[] { baseIndex + 1, baseIndex + 5, baseIndex + 4 });
-
-        // Back face (Y = Max.Y) - corners 2,3,6,7
-        _solidIndices.AddRange(new uint[] { baseIndex + 2, baseIndex + 6, baseIndex + 3 });
-        _solidIndices.AddRange(new uint[] { baseIndex + 3, baseIndex + 6, baseIndex + 7 });
-
-        // Left face (X = Min.X) - corners 0,2,4,6
-        _solidIndices.AddRange(new uint[] { baseIndex + 0, baseIndex + 4, baseIndex + 2 });
-        _solidIndices.AddRange(new uint[] { baseIndex + 2, baseIndex + 4, baseIndex + 6 });
-
-        // Right face (X = Max.X) - corners 1,3,5,7
-        _solidIndices.AddRange(new uint[] { baseIndex + 1, baseIndex + 3, baseIndex + 5 });
-        _solidIndices.AddRange(new uint[] { baseIndex + 3, baseIndex + 7, baseIndex + 5 });
+        DrawShape(aabb, color, MeshMode.Solid);
     }
 
     /// <summary>
@@ -204,23 +220,7 @@ void main() {
     /// </summary>
     public static void DrawTriangle(Triangle triangle, Float4 color, bool filled = false)
     {
-        if (filled)
-        {
-            // Add triangle as solid geometry
-            uint baseIndex = (uint)_solidVertices.Count;
-            _solidVertices.Add(new Vertex((Float3)triangle.V0, color));
-            _solidVertices.Add(new Vertex((Float3)triangle.V1, color));
-            _solidVertices.Add(new Vertex((Float3)triangle.V2, color));
-            _solidIndices.AddRange(new uint[] { baseIndex, baseIndex + 1, baseIndex + 2 });
-            _solidIndices.AddRange(new uint[] { baseIndex, baseIndex + 2, baseIndex + 1 });
-        }
-        else
-        {
-            // Draw wireframe
-            DrawLine((Float3)triangle.V0, (Float3)triangle.V1, color);
-            DrawLine((Float3)triangle.V1, (Float3)triangle.V2, color);
-            DrawLine((Float3)triangle.V2, (Float3)triangle.V0, color);
-        }
+        DrawShape(triangle, color, filled ? MeshMode.Solid : MeshMode.Wireframe);
     }
 
     /// <summary>
@@ -248,57 +248,7 @@ void main() {
     /// </summary>
     public static void DrawSphereWireframe(Sphere sphere, Float4 color, int segments = 16)
     {
-        // Draw latitude circles
-        for (int lat = 0; lat <= segments; lat++)
-        {
-            float theta = lat * (float)Maths.PI / segments;
-            float y = (float)sphere.Center.Y + (float)sphere.Radius * Maths.Cos(theta);
-            float radius = (float)sphere.Radius * Maths.Sin(theta);
-
-            for (int lon = 0; lon < segments; lon++)
-            {
-                float phi1 = lon * 2 * (float)Maths.PI / segments;
-                float phi2 = (lon + 1) * 2 * (float)Maths.PI / segments;
-
-                Float3 p1 = (Float3)sphere.Center + new Float3(
-                    radius * Maths.Cos(phi1),
-                    y - (float)sphere.Center.Y,
-                    radius * Maths.Sin(phi1)
-                );
-                Float3 p2 = (Float3)sphere.Center + new Float3(
-                    radius * Maths.Cos(phi2),
-                    y - (float)sphere.Center.Y,
-                    radius * Maths.Sin(phi2)
-                );
-
-                DrawLine(p1, p2, color);
-            }
-        }
-
-        // Draw longitude lines
-        for (int lon = 0; lon < segments; lon++)
-        {
-            float phi = lon * 2 * (float)Maths.PI / segments;
-
-            for (int lat = 0; lat < segments; lat++)
-            {
-                float theta1 = lat * (float)Maths.PI / segments;
-                float theta2 = (lat + 1) * (float)Maths.PI / segments;
-
-                Float3 p1 = (Float3)sphere.Center + new Float3(
-                    (float)sphere.Radius * Maths.Sin(theta1) * Maths.Cos(phi),
-                    (float)sphere.Radius * Maths.Cos(theta1),
-                    (float)sphere.Radius * Maths.Sin(theta1) * Maths.Sin(phi)
-                );
-                Float3 p2 = (Float3)sphere.Center + new Float3(
-                    (float)sphere.Radius * Maths.Sin(theta2) * Maths.Cos(phi),
-                    (float)sphere.Radius * Maths.Cos(theta2),
-                    (float)sphere.Radius * Maths.Sin(theta2) * Maths.Sin(phi)
-                );
-
-                DrawLine(p1, p2, color);
-            }
-        }
+        DrawShape(sphere, color, MeshMode.Wireframe, segments);
     }
 
     /// <summary>
@@ -351,29 +301,7 @@ void main() {
     /// </summary>
     public static void DrawFrustum(Frustum frustum, Float4 color)
     {
-        // Calculate the 8 corner points of the frustum by finding plane intersections
-        var corners = CalculateFrustumCorners(frustum);
-
-        if (corners == null || corners.Length != 8)
-            return;
-
-        // Draw near plane (corners 0-3)
-        DrawLine(corners[0], corners[1], color);
-        DrawLine(corners[1], corners[2], color);
-        DrawLine(corners[2], corners[3], color);
-        DrawLine(corners[3], corners[0], color);
-
-        // Draw far plane (corners 4-7)
-        DrawLine(corners[4], corners[5], color);
-        DrawLine(corners[5], corners[6], color);
-        DrawLine(corners[6], corners[7], color);
-        DrawLine(corners[7], corners[4], color);
-
-        // Draw connecting edges
-        DrawLine(corners[0], corners[4], color);
-        DrawLine(corners[1], corners[5], color);
-        DrawLine(corners[2], corners[6], color);
-        DrawLine(corners[3], corners[7], color);
+        DrawShape(frustum, color, MeshMode.Wireframe);
     }
 
     /// <summary>
@@ -433,55 +361,7 @@ void main() {
 
     public static void DrawConeWireframe(Cone cone, Float4 color, int segments = 16)
     {
-        Float3 apex = (Float3)cone.Apex;
-        Float3 baseCenter = (Float3)cone.BaseCenter;
-        float radius = (float)cone.BaseRadius;
-
-        // Calculate axis and perpendicular vectors for the base circle
-        Double3 axis = cone.BaseCenter - cone.Apex;
-        double height = Double3.Length(axis);
-
-        if (height < double.Epsilon)
-            return; // Degenerate cone
-
-        Double3 axisNorm = axis / height;
-
-        // Find two perpendicular vectors to the axis
-        Double3 perpendicular1 = Maths.Abs(axisNorm.X) < 0.9 ?
-            Double3.Cross(axisNorm, new Double3(1, 0, 0)) :
-            Double3.Cross(axisNorm, new Double3(0, 1, 0));
-        perpendicular1 = Double3.Normalize(perpendicular1);
-
-        Double3 perpendicular2 = Double3.Cross(axisNorm, perpendicular1);
-
-        // Generate base circle points
-        Float3[] basePoints = new Float3[segments];
-        for (int i = 0; i < segments; i++)
-        {
-            float angle = (float)(i * 2.0 * Math.PI / segments);
-            float cosAngle = Maths.Cos(angle);
-            float sinAngle = Maths.Sin(angle);
-
-            Double3 point = cone.BaseCenter +
-                          perpendicular1 * (radius * cosAngle) +
-                          perpendicular2 * (radius * sinAngle);
-            basePoints[i] = (Float3)point;
-        }
-
-        // Draw base circle
-        for (int i = 0; i < segments; i++)
-        {
-            int next = (i + 1) % segments;
-            DrawLine(basePoints[i], basePoints[next], color);
-        }
-
-        // Draw lines from apex to base circle (8 lines evenly spaced)
-        int lineCount = 8;
-        for (int i = 0; i < lineCount; i++)
-        {
-            int index = (i * segments) / lineCount;
-            DrawLine(apex, basePoints[index], color);
-        }
+        DrawShape(cone, color, MeshMode.Wireframe, segments);
     }
 
     #endregion

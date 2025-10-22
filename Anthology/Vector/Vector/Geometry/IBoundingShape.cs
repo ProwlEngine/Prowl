@@ -4,7 +4,7 @@
 namespace Prowl.Vector.Geometry
 {
     /// <summary>
-    /// Interface for bounding shapes that support GJK collision detection.
+    /// Interface for bounding shapes that support GJK collision detection and rendering.
     /// </summary>
     public interface IBoundingShape
     {
@@ -15,5 +15,13 @@ namespace Prowl.Vector.Geometry
         /// <param name="direction">The direction to search in (doesn't need to be normalized).</param>
         /// <returns>The farthest point on the shape in the given direction.</returns>
         Double3 SupportMap(Double3 direction);
+
+        /// <summary>
+        /// Generates mesh data for rendering this shape.
+        /// </summary>
+        /// <param name="mode">Wireframe for outline rendering, Solid for filled geometry.</param>
+        /// <param name="resolution">Level of detail for curved surfaces (e.g., number of segments for spheres).</param>
+        /// <returns>Mesh data containing vertices, indices, and topology information.</returns>
+        MeshData GetMeshData(MeshMode mode, int resolution = 16);
     }
 }

@@ -343,6 +343,19 @@ namespace Prowl.Vector.Geometry
             return dotEnd >= dotStart ? End : Start;
         }
 
+        /// <summary>
+        /// Generates mesh data for rendering this line segment.
+        /// </summary>
+        /// <param name="mode">Both modes render as a line.</param>
+        /// <param name="resolution">Unused for LineSegment (topology is fixed).</param>
+        /// <returns>Mesh data for rendering.</returns>
+        public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+        {
+            // LineSegment is always just a line
+            var vertices = new Double3[] { Start, End };
+            return new MeshData(vertices, MeshTopology.LineList);
+        }
+
         // --- IEquatable & IFormattable Implementation ---
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Equals(LineSegment other) => Start.Equals(other.Start) && End.Equals(other.End);

@@ -341,6 +341,138 @@ namespace Prowl.Vector.Geometry
             return Center + (direction / length) * Radius;
         }
 
+        /// <summary>
+        /// Generates mesh data for rendering this sphere.
+        /// </summary>
+        /// <param name="mode">Wireframe for latitude/longitude lines, Solid for filled sphere.</param>
+        /// <param name="resolution">Number of segments (must be at least 3).</param>
+        /// <returns>Mesh data for rendering.</returns>
+        public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+        {
+            resolution = Maths.Max(resolution, 3);
+
+            if (mode == MeshMode.Wireframe)
+            {
+                return GetWireframeMesh(resolution);
+            }
+            else
+            {
+                return GetSolidMesh(resolution);
+            }
+        }
+
+        private MeshData GetWireframeMesh(int segments)
+        {
+            var vertices = new System.Collections.Generic.List<Double3>();
+
+            // Generate latitude circles
+            for (int lat = 0; lat <= segments; lat++)
+            {
+                double theta = lat * Maths.PI / segments;
+                double y = Center.Y + Radius * Maths.Cos(theta);
+                double radius = Radius * Maths.Sin(theta);
+
+                for (int lon = 0; lon < segments; lon++)
+                {
+                    double phi1 = lon * 2.0 * Maths.PI / segments;
+                    double phi2 = (lon + 1) * 2.0 * Maths.PI / segments;
+
+                    Double3 p1 = Center + new Double3(
+                        radius * Maths.Cos(phi1),
+                        y - Center.Y,
+                        radius * Maths.Sin(phi1)
+                    );
+                    Double3 p2 = Center + new Double3(
+                        radius * Maths.Cos(phi2),
+                        y - Center.Y,
+                        radius * Maths.Sin(phi2)
+                    );
+
+                    vertices.Add(p1);
+                    vertices.Add(p2);
+                }
+            }
+
+            // Generate longitude lines
+            for (int lon = 0; lon < segments; lon++)
+            {
+                double phi = lon * 2.0 * Maths.PI / segments;
+
+                for (int lat = 0; lat < segments; lat++)
+                {
+                    double theta1 = lat * Maths.PI / segments;
+                    double theta2 = (lat + 1) * Maths.PI / segments;
+
+                    Double3 p1 = Center + new Double3(
+                        Radius * Maths.Sin(theta1) * Maths.Cos(phi),
+                        Radius * Maths.Cos(theta1),
+                        Radius * Maths.Sin(theta1) * Maths.Sin(phi)
+                    );
+                    Double3 p2 = Center + new Double3(
+                        Radius * Maths.Sin(theta2) * Maths.Cos(phi),
+                        Radius * Maths.Cos(theta2),
+                        Radius * Maths.Sin(theta2) * Maths.Sin(phi)
+                    );
+
+                    vertices.Add(p1);
+                    vertices.Add(p2);
+                }
+            }
+
+            return new MeshData(vertices.ToArray(), MeshTopology.LineList);
+        }
+
+        private MeshData GetSolidMesh(int segments)
+        {
+            var vertices = new System.Collections.Generic.List<Double3>();
+            var indices = new System.Collections.Generic.List<uint>();
+
+            // Generate vertices
+            for (int lat = 0; lat <= segments; lat++)
+            {
+                double theta = lat * Maths.PI / segments;
+                double sinTheta = Maths.Sin(theta);
+                double cosTheta = Maths.Cos(theta);
+
+                for (int lon = 0; lon <= segments; lon++)
+                {
+                    double phi = lon * 2.0 * Maths.PI / segments;
+                    double sinPhi = Maths.Sin(phi);
+                    double cosPhi = Maths.Cos(phi);
+
+                    Double3 position = Center + new Double3(
+                        Radius * sinTheta * cosPhi,
+                        Radius * cosTheta,
+                        Radius * sinTheta * sinPhi
+                    );
+
+                    vertices.Add(position);
+                }
+            }
+
+            // Generate indices for triangle list
+            for (int lat = 0; lat < segments; lat++)
+            {
+                for (int lon = 0; lon < segments; lon++)
+                {
+                    uint first = (uint)(lat * (segments + 1) + lon);
+                    uint second = (uint)(first + segments + 1);
+
+                    // First triangle
+                    indices.Add(first);
+                    indices.Add(second);
+                    indices.Add(first + 1);
+
+                    // Second triangle
+                    indices.Add(second);
+                    indices.Add(second + 1);
+                    indices.Add(first + 1);
+                }
+            }
+
+            return new MeshData(vertices.ToArray(), indices.ToArray(), MeshTopology.TriangleList);
+        }
+
         // --- IEquatable & IFormattable Implementation ---
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Equals(Sphere other) => Center.Equals(other.Center) && Radius.Equals(other.Radius);

@@ -562,6 +562,49 @@ namespace Prowl.Vector.Geometry
             return corners[maxIndex];
         }
 
+        /// <summary>
+        /// Generates mesh data for rendering this frustum.
+        /// </summary>
+        /// <param name="mode">Wireframe for edges. Solid mode not supported for Frustum.</param>
+        /// <param name="resolution">Unused for Frustum (topology is fixed).</param>
+        /// <returns>Mesh data for rendering.</returns>
+        public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+        {
+            Double3[] corners = GetCorners();
+
+            if (corners == null || corners.Length != 8)
+                return new MeshData(new Double3[0], MeshTopology.LineList);
+
+            // Corner indices from GetCorners():
+            // 0: Near-Left-Bottom,  1: Near-Right-Bottom,  2: Near-Left-Top,  3: Near-Right-Top
+            // 4: Far-Left-Bottom,   5: Far-Right-Bottom,   6: Far-Left-Top,   7: Far-Right-Top
+
+            // Frustum is always rendered as wireframe
+            // 12 edges: 4 for near plane, 4 for far plane, 4 connecting edges
+            var vertices = new Double3[24];
+            int idx = 0;
+
+            // Near plane rectangle: bottom edge (0-1), right edge (1-3), top edge (3-2), left edge (2-0)
+            vertices[idx++] = corners[0]; vertices[idx++] = corners[1]; // Bottom
+            vertices[idx++] = corners[1]; vertices[idx++] = corners[3]; // Right
+            vertices[idx++] = corners[3]; vertices[idx++] = corners[2]; // Top
+            vertices[idx++] = corners[2]; vertices[idx++] = corners[0]; // Left
+
+            // Far plane rectangle: bottom edge (4-5), right edge (5-7), top edge (7-6), left edge (6-4)
+            vertices[idx++] = corners[4]; vertices[idx++] = corners[5]; // Bottom
+            vertices[idx++] = corners[5]; vertices[idx++] = corners[7]; // Right
+            vertices[idx++] = corners[7]; vertices[idx++] = corners[6]; // Top
+            vertices[idx++] = corners[6]; vertices[idx++] = corners[4]; // Left
+
+            // Connecting edges from near to far
+            vertices[idx++] = corners[0]; vertices[idx++] = corners[4]; // Left-Bottom
+            vertices[idx++] = corners[1]; vertices[idx++] = corners[5]; // Right-Bottom
+            vertices[idx++] = corners[2]; vertices[idx++] = corners[6]; // Left-Top
+            vertices[idx++] = corners[3]; vertices[idx++] = corners[7]; // Right-Top
+
+            return new MeshData(vertices, MeshTopology.LineList);
+        }
+
         // --- IEquatable & IFormattable Implementation ---
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Equals(Frustum other)

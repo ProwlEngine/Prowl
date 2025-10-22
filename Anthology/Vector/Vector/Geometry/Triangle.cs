@@ -435,6 +435,38 @@ namespace Prowl.Vector.Geometry
                 return V2;
         }
 
+        /// <summary>
+        /// Generates mesh data for rendering this triangle.
+        /// </summary>
+        /// <param name="mode">Wireframe for edges, Solid for filled triangle.</param>
+        /// <param name="resolution">Unused for Triangle (topology is fixed).</param>
+        /// <returns>Mesh data for rendering.</returns>
+        public MeshData GetMeshData(MeshMode mode, int resolution = 16)
+        {
+            if (mode == MeshMode.Wireframe)
+            {
+                // 3 edges, each edge is 2 vertices (LineList)
+                var vertices = new Double3[]
+                {
+                    V0, V1,
+                    V1, V2,
+                    V2, V0
+                };
+                return new MeshData(vertices, MeshTopology.LineList);
+            }
+            else
+            {
+                // Solid triangle (double-sided: front and back faces)
+                var vertices = new Double3[] { V0, V1, V2 };
+                var indices = new uint[]
+                {
+                    0, 1, 2,  // Front face
+                    0, 2, 1   // Back face
+                };
+                return new MeshData(vertices, indices, MeshTopology.TriangleList);
+            }
+        }
+
         // --- IEquatable & IFormattable Implementation ---
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Equals(Triangle other) => V0.Equals(other.V0) && V1.Equals(other.V1) && V2.Equals(other.V2);
