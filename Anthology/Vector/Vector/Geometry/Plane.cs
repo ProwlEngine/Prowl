@@ -59,6 +59,17 @@ namespace Prowl.Vector.Geometry
         }
 
         /// <summary>
+        /// Internal constructor for creating a plane from already-normalized values.
+        /// Bypasses normalization for performance.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private Plane(Double3 normalizedNormal, double d, bool skipNormalization)
+        {
+            Normal = normalizedNormal;
+            D = d;
+        }
+
+        /// <summary>
         /// Initializes a new plane from a normal vector and a point on the plane.
         /// </summary>
         /// <param name="normal">The normal vector (will be normalized).</param>
@@ -67,7 +78,7 @@ namespace Prowl.Vector.Geometry
         public static Plane FromNormalAndPoint(Double3 normal, Double3 pointOnPlane)
         {
             Double3 normalizedNormal = Double3.Normalize(normal);
-            return new Plane(normalizedNormal, Double3.Dot(normalizedNormal, pointOnPlane));
+            return new Plane(normalizedNormal, Double3.Dot(normalizedNormal, pointOnPlane), true);
         }
 
         /// <summary>
@@ -147,7 +158,7 @@ namespace Prowl.Vector.Geometry
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Plane Flipped()
         {
-            return new Plane(-Normal, -D);
+            return new Plane(-Normal, -D, true);
         }
 
         /// <summary>
@@ -168,7 +179,7 @@ namespace Prowl.Vector.Geometry
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Plane Translated(Double3 translation)
         {
-            return new Plane(Normal, D + Double3.Dot(Normal, translation));
+            return new Plane(Normal, D + Double3.Dot(Normal, translation), true);
         }
 
         // --- IEquatable & IFormattable Implementation ---
