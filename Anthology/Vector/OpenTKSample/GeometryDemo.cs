@@ -906,10 +906,9 @@ public class FrustumPointIntersectionDemo : IDemo
     {
         timeInSeconds *= 0.75f; // Slow down time for better visibility
 
-        // Create a frustum centered in the grid cell
+        // Create a frustum from view-projection matrices (demonstrating FromMatrices method)
         Double3 camPos = (Double3)position + new Double3(0, 0.7, 1.0);
         Double3 lookAt = (Double3)position + new Double3(0, 0, -0.2);
-        Double3 forward = Double3.Normalize(lookAt - camPos);
         Double3 up = new Double3(0, 1, 0);
 
         double fov = Maths.PI / 5.5;
@@ -917,7 +916,12 @@ public class FrustumPointIntersectionDemo : IDemo
         double nearDist = 0.2;
         double farDist = 1.6;
 
-        Frustum frustum = Frustum.FromCamera(camPos, forward, up, fov, aspect, nearDist, farDist);
+        // Create view and projection matrices
+        Double4x4 viewMatrix = Double4x4.CreateLookAt(camPos, lookAt, up);
+        Double4x4 projectionMatrix = Double4x4.CreatePerspectiveFov(fov, aspect, nearDist, farDist);
+
+        // Construct frustum from matrices instead of FromCamera
+        Frustum frustum = Frustum.FromMatrices(viewMatrix, projectionMatrix);
 
         // Create multiple animated points orbiting in the frustum area
         int pointCount = 8;
