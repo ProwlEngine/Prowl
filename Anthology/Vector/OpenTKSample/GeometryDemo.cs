@@ -23,6 +23,7 @@ public static class GeometryDemo
         new SubdividedCubeDemo(),
         new CubeSubdivisionComparison(),
         new GeometryDataVisualizationDemo(),
+        new BisectPlaneDemo(),
 
         // Basic Shapes
         new SphereDemo(),

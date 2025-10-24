@@ -698,8 +698,8 @@ namespace Prowl.Vector.Geometry
                     vertices.Add(faceVerts[i + 1].Point);
 
                     indices.Add(baseIndex);
-                    indices.Add(baseIndex + 1);
                     indices.Add(baseIndex + 2);
+                    indices.Add(baseIndex + 1);
                 }
             }
 
