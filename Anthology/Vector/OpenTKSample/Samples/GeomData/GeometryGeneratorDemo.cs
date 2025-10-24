@@ -22,13 +22,13 @@ namespace OpenTKSample.Samples
                 // Basic shapes
                 GeometryGenerator.Box(new Double3(1, 1, 1)),
                 GeometryGenerator.Plane(2.0, 4),
-                GeometryGenerator.Sphere(0.6, segments: 24, rings: 16),
+                GeometryGenerator.Sphere(0.6, segments: 8, rings: 8),
 
                 // Advanced shapes
-                GeometryGenerator.Icosphere(0.6, subdivisions: 2),
-                GeometryGenerator.Cylinder(0.5, 1.5, segments: 24, rings: 1),
-                GeometryGenerator.Cone(0.6, 1.2, segments: 24),
-                GeometryGenerator.Torus(0.6, 0.2, majorSegments: 32, minorSegments: 16),
+                GeometryGenerator.Icosphere(0.6, subdivisions: 1),
+                GeometryGenerator.Cylinder(0.5, 1.5, segments: 8, rings: 1),
+                GeometryGenerator.Cone(0.6, 1.2, segments: 8),
+                GeometryGenerator.Torus(0.6, 0.2, majorSegments: 8, minorSegments: 8),
 
                 // Platonic solids
                 GeometryGenerator.Tetrahedron(1.0),
