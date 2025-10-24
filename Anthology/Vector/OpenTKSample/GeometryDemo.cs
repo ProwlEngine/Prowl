@@ -24,6 +24,7 @@ public static class GeometryDemo
         new CubeSubdivisionComparison(),
         new GeometryDataVisualizationDemo(),
         new BisectPlaneDemo(),
+        new GeometryGeneratorDemo(),
 
         // Basic Shapes
         new SphereDemo(),
