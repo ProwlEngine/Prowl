@@ -73,12 +73,6 @@ public class BisectPlaneDemo : IDemo
         DrawCuttingPlane(position + new Float3(-1.5f, 0, 0), planeOffset);
         DrawCuttingPlane(position, planeOffset);
         DrawCuttingPlane(position + new Float3(1.5f, 0, 0), planeOffset);
-
-        // Draw original sphere outline for reference (faint)
-        var originalTransformed = CopyGeometryData(_originalMesh);
-        GeometryOperators.Translate(originalTransformed, (Double3)position);
-        var originalLines = originalTransformed.ToLineMesh();
-        Gizmo.DrawLineMesh(originalLines, new Float4(0.15f, 0.15f, 0.15f, 0.2f));
     }
 
     private void DrawCuttingPlane(Float3 position, float offset)
