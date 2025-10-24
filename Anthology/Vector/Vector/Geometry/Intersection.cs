@@ -11,6 +11,8 @@ namespace Prowl.Vector.Geometry
     /// </summary>
     public static class Intersection
     {
+        const double SAFE_EPSILON = 0.00001;
+
         #region --- Ray Intersection Tests ---
 
         /// <summary>
@@ -24,8 +26,6 @@ namespace Prowl.Vector.Geometry
             double planeD, // Distance from origin along the normal (Ax + By + Cz = D form)
             out double distance)
         {
-            const double SAFE_EPSILON = 0.00001;
-
             double nd = Double3.Dot(rayDir, planeNormal);
             double pn = Double3.Dot(rayOrigin, planeNormal);
 
@@ -51,8 +51,6 @@ namespace Prowl.Vector.Geometry
             Double3 v0, Double3 v1, Double3 v2,
             out double distance, out double u, out double v)
         {
-            const double SAFE_EPSILON = 0.00001;
-
             distance = 0.0; u = 0.0; v = 0.0;
 
             Double3 edge1 = v1 - v0;
@@ -93,8 +91,6 @@ namespace Prowl.Vector.Geometry
             Double3 boxMax,
             out double tMin, out double tMax)
         {
-            const double SAFE_EPSILON = 0.00001;
-
             tMin = 0.0;
             tMax = double.MaxValue;
 
@@ -202,8 +198,6 @@ namespace Prowl.Vector.Geometry
             double cylinderRadius,
             out double t0, out double t1)
         {
-            const double SAFE_EPSILON = 0.00001;
-
             t0 = t1 = 0.0;
             Double3 oc = rayOrigin - cylinderAxisPoint;
 
@@ -247,8 +241,6 @@ namespace Prowl.Vector.Geometry
             double radius,
             out double distance)
         {
-            const double SAFE_EPSILON = 0.00001;
-
             distance = double.MaxValue;
             bool intersected = false;
 
@@ -362,7 +354,7 @@ namespace Prowl.Vector.Geometry
             double dot_ab_ab = Double3.LengthSquared(ab);
 
             double t = 0.0;
-            if (dot_ab_ab > double.Epsilon)
+            if (dot_ab_ab > SAFE_EPSILON)
                 t = dot_ab_ap / dot_ab_ab;
 
             closestPoint = lineA + t * ab;
@@ -396,7 +388,7 @@ namespace Prowl.Vector.Geometry
             }
 
             double t = 0.0;
-            if (dot_ab_ab > double.Epsilon)
+            if (dot_ab_ab > SAFE_EPSILON)
                 t = dot_ab_ap / dot_ab_ab;
 
             closestPoint = segA + t * ab;
@@ -438,7 +430,7 @@ namespace Prowl.Vector.Geometry
             double vc = d1 * d4 - d3 * d2;
             if (vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0)
             {
-                double v_param = (Maths.Abs(d1 - d3) < double.Epsilon) ? 0.0 : d1 / (d1 - d3);
+                double v_param = (Maths.Abs(d1 - d3) < SAFE_EPSILON) ? 0.0 : d1 / (d1 - d3);
                 result = v0 + v_param * ab;
                 return;
             }
@@ -451,7 +443,7 @@ namespace Prowl.Vector.Geometry
             double vb = d5 * d2 - d1 * d6;
             if (vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0)
             {
-                double w_param = (Maths.Abs(d2 - d6) < double.Epsilon) ? 0.0 : d2 / (d2 - d6);
+                double w_param = (Maths.Abs(d2 - d6) < SAFE_EPSILON) ? 0.0 : d2 / (d2 - d6);
                 result = v0 + w_param * ac;
                 return;
             }
@@ -460,13 +452,13 @@ namespace Prowl.Vector.Geometry
             if (va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0)
             {
                 double denom_bc = (d4 - d3) + (d5 - d6);
-                double w_param = (Maths.Abs(denom_bc) < double.Epsilon) ? 0.0 : (d4 - d3) / denom_bc;
+                double w_param = (Maths.Abs(denom_bc) < SAFE_EPSILON) ? 0.0 : (d4 - d3) / denom_bc;
                 result = v1 + w_param * (v2 - v1);
                 return;
             }
 
             double denom_bary = va + vb + vc;
-            if (Maths.Abs(denom_bary) < double.Epsilon) { result = v0; return; }
+            if (Maths.Abs(denom_bary) < SAFE_EPSILON) { result = v0; return; }
             double v_bary = vb / denom_bary;
             double w_bary = vc / denom_bary;
             result = v0 + ab * v_bary + ac * w_bary;
@@ -500,7 +492,7 @@ namespace Prowl.Vector.Geometry
             Double3 dir = point - sphereCenter;
             double distSq = Double3.LengthSquared(dir);
 
-            if (distSq < double.Epsilon * double.Epsilon)
+            if (distSq < SAFE_EPSILON * SAFE_EPSILON)
             {
                 closestPoint = sphereCenter + new Double3(sphereRadius, 0.0, 0.0);
                 return;
@@ -530,14 +522,14 @@ namespace Prowl.Vector.Geometry
             double f = Double3.Dot(d2, r);
 
             // Check if either or both segments are points
-            if (a <= double.Epsilon && e <= double.Epsilon) // Both segments are points
+            if (a <= SAFE_EPSILON && e <= SAFE_EPSILON) // Both segments are points
             {
                 s = t = 0.0;
                 c1 = p1;
                 c2 = p2;
                 return;
             }
-            if (a <= double.Epsilon) // First segment is a point
+            if (a <= SAFE_EPSILON) // First segment is a point
             {
                 s = 0.0;
                 t = Maths.Clamp(f / e, 0.0, 1.0); // Clamp t to 0..1
@@ -545,7 +537,7 @@ namespace Prowl.Vector.Geometry
             else
             {
                 double c_val = Double3.Dot(d1, r);
-                if (e <= double.Epsilon) // Second segment is a point
+                if (e <= SAFE_EPSILON) // Second segment is a point
                 {
                     t = 0.0;
                     s = Maths.Clamp(-c_val / a, 0.0, 1.0); // Clamp s to 0..1
@@ -556,7 +548,7 @@ namespace Prowl.Vector.Geometry
                     double denom = a * e - b * b; // Denominator
 
                     // If segments are parallel, handle specially
-                    if (denom <= double.Epsilon)
+                    if (denom <= SAFE_EPSILON)
                     {
                         s = 0.0; // Arbitrarily pick s=0
                         t = (b > e) ? f / b : f / e; // Simplified handling for parallel lines
@@ -789,30 +781,30 @@ namespace Prowl.Vector.Geometry
             out Double3 intersectionPoint)
         {
             intersectionPoint = Double3.Zero;
-           Double3 ab = segB - segA;
-           double ab_dot_n = Double3.Dot(ab, planeNormal);
+            Double3 ab = segB - segA;
+            double ab_dot_n = Double3.Dot(ab, planeNormal);
 
-           if (Maths.Abs(ab_dot_n) < double.Epsilon) // Segment is parallel to plane
-           {
-               // Check if segment start point is on the plane (coplanar)
-               if (Maths.Abs(SignedDistancePointToPlane(segA, planeNormal, planeD)) < double.Epsilon)
-               {
-                   // Segment is coplanar with the plane.
-                   // This Could be considered an intersection.
-                   // But for now let's just say it doesn't produce an intersection point.
-                   return false;
-               }
-               return false;
-           }
+            if (Maths.Abs(ab_dot_n) < SAFE_EPSILON) // Segment is parallel to plane
+            {
+                // Check if segment start point is on the plane (coplanar)
+                if (Maths.Abs(SignedDistancePointToPlane(segA, planeNormal, planeD)) < SAFE_EPSILON)
+                {
+                    // Segment is coplanar with the plane.
+                    // This Could be considered an intersection.
+                    // But for now let's just say it doesn't produce an intersection point.
+                    return false;
+                }
+                return false;
+            }
 
-           double t = (planeD - Double3.Dot(segA, planeNormal)) / ab_dot_n;
+            double t = (planeD - Double3.Dot(segA, planeNormal)) / ab_dot_n;
 
-           if (t >= -double.Epsilon && t <= 1.0 + double.Epsilon) // Intersection point lies on the segment
-           {
-               intersectionPoint = segA + t * ab;
-               return true;
-           }
-           return false;
+            if (t >= -SAFE_EPSILON && t <= 1.0 + SAFE_EPSILON) // Intersection point lies on the segment
+            {
+                intersectionPoint = segA + t * ab;
+                return true;
+            }
+            return false;
         }
         
         /// <summary>
@@ -833,8 +825,8 @@ namespace Prowl.Vector.Geometry
             Double3 normalB = Double3.Cross(b1 - b0, b2 - b0);
         
             // Check if triangles are degenerate
-            if (Double3.LengthSquared(normalA) < double.Epsilon * double.Epsilon ||
-                Double3.LengthSquared(normalB) < double.Epsilon * double.Epsilon)
+            if (Double3.LengthSquared(normalA) < SAFE_EPSILON * SAFE_EPSILON ||
+                Double3.LengthSquared(normalB) < SAFE_EPSILON * SAFE_EPSILON)
                 return false;
         
             normalA = Double3.Normalize(normalA);
@@ -844,14 +836,14 @@ namespace Prowl.Vector.Geometry
             double dA = Double3.Dot(normalA, a0);
             double minB, maxB;
             ProjectTriangleOntoAxis(b0, b1, b2, normalA, out minB, out maxB);
-            if (dA < minB - double.Epsilon || dA > maxB + double.Epsilon)
+            if (dA < minB - SAFE_EPSILON || dA > maxB + SAFE_EPSILON)
                 return false;
         
             // Test separation along triangle B's normal
             double dB = Double3.Dot(normalB, b0);
             double minA, maxA;
             ProjectTriangleOntoAxis(a0, a1, a2, normalB, out minA, out maxA);
-            if (dB < minA - double.Epsilon || dB > maxA + double.Epsilon)
+            if (dB < minA - SAFE_EPSILON || dB > maxA + SAFE_EPSILON)
                 return false;
         
             // Test separation along cross products of triangle edges
@@ -865,7 +857,7 @@ namespace Prowl.Vector.Geometry
                     Double3 axis = Double3.Cross(edgesA[i], edgesB[j]);
         
                     // Skip if axis is too small (edges are parallel)
-                    if (Double3.LengthSquared(axis) < double.Epsilon * double.Epsilon)
+                    if (Double3.LengthSquared(axis) < SAFE_EPSILON * SAFE_EPSILON)
                         continue;
         
                     axis = Double3.Normalize(axis);
@@ -875,7 +867,7 @@ namespace Prowl.Vector.Geometry
                     ProjectTriangleOntoAxis(b0, b1, b2, axis, out minB, out maxB);
         
                     // Check for separation
-                    if (maxA < minB - double.Epsilon || maxB < minA - double.Epsilon)
+                    if (maxA < minB - SAFE_EPSILON || maxB < minA - SAFE_EPSILON)
                         return false;
                 }
             }
@@ -915,8 +907,8 @@ namespace Prowl.Vector.Geometry
              Double3 planeNormal, double planeD)
         {
             double dist = SignedDistancePointToPlane(point, planeNormal, planeD);
-            if (dist > double.Epsilon) return PlaneIntersectionType.Front;
-            if (dist < -double.Epsilon) return PlaneIntersectionType.Back;
+            if (dist > SAFE_EPSILON) return PlaneIntersectionType.Front;
+            if (dist < -SAFE_EPSILON) return PlaneIntersectionType.Back;
             return PlaneIntersectionType.Intersecting;
         }
         
@@ -975,7 +967,7 @@ namespace Prowl.Vector.Geometry
         
             for (int i = 0; i < 6; i++)
             {
-                if (SignedDistancePointToPlane(point, planeNormals[i], planeDs[i]) < -double.Epsilon) // Point is outside (behind) this plane
+                if (SignedDistancePointToPlane(point, planeNormals[i], planeDs[i]) < -SAFE_EPSILON) // Point is outside (behind) this plane
                 {
                     return false;
                 }
@@ -1025,7 +1017,7 @@ namespace Prowl.Vector.Geometry
                 if (planeNormals[i].Z >= 0.0) pVertex.Z = boxMax.Z;
         
                 // If p-vertex is behind the plane, the entire box is behind (outside)
-                if (SignedDistancePointToPlane(pVertex, planeNormals[i], planeDs[i]) < -double.Epsilon)
+                if (SignedDistancePointToPlane(pVertex, planeNormals[i], planeDs[i]) < -SAFE_EPSILON)
                 {
                     return false;
                 }
@@ -1062,7 +1054,7 @@ namespace Prowl.Vector.Geometry
             double d21 = Double3.Dot(pv, edge2);
         
             double denom = d00 * d11 - d01 * d01;
-            if (Maths.Abs(denom) < double.Epsilon) // Triangle is degenerate
+            if (Maths.Abs(denom) < SAFE_EPSILON) // Triangle is degenerate
             {
                 u = 0.0; v = 0.0;
                 return;
@@ -1082,7 +1074,7 @@ namespace Prowl.Vector.Geometry
         /// <returns>True if the point is inside or on the edge of the triangle.</returns>
         public static bool IsPointInTriangle(double u, double v)
         {
-            return (u >= -double.Epsilon) && (v >= -double.Epsilon) && (u + v <= 1.0 + double.Epsilon);
+            return (u >= -SAFE_EPSILON) && (v >= -SAFE_EPSILON) && (u + v <= 1.0 + SAFE_EPSILON);
         }
         
         #endregion
