@@ -24,10 +24,12 @@ namespace Prowl.Vector.Geometry
             double planeD, // Distance from origin along the normal (Ax + By + Cz = D form)
             out double distance)
         {
+            const double SAFE_EPSILON = 0.00001;
+
             double nd = Double3.Dot(rayDir, planeNormal);
             double pn = Double3.Dot(rayOrigin, planeNormal);
 
-            if (Maths.Abs(nd) < double.Epsilon) // Ray is parallel to the plane
+            if (Maths.Abs(nd) < SAFE_EPSILON) // Ray is parallel to the plane
             {
                 distance = 0.0;
                 return false;
@@ -49,6 +51,8 @@ namespace Prowl.Vector.Geometry
             Double3 v0, Double3 v1, Double3 v2,
             out double distance, out double u, out double v)
         {
+            const double SAFE_EPSILON = 0.00001;
+
             distance = 0.0; u = 0.0; v = 0.0;
 
             Double3 edge1 = v1 - v0;
@@ -57,24 +61,24 @@ namespace Prowl.Vector.Geometry
             Double3 pvec = Double3.Cross(rayDir, edge2);
             double det = Double3.Dot(edge1, pvec);
 
-            if (Maths.Abs(det) < double.Epsilon) // Ray is parallel to triangle plane or backface culling if det < Epsilon
+            if (Maths.Abs(det) < SAFE_EPSILON) // Ray is parallel to triangle plane or backface culling if det < Epsilon
                 return false;
 
             double invDet = 1.0 / det;
 
             Double3 tvec = rayOrigin - v0;
             u = Double3.Dot(tvec, pvec) * invDet;
-            if (u < 0.0 || u > 1.0)
+            if (u < 0.0 - SAFE_EPSILON || u > 1.0 + SAFE_EPSILON)
                 return false;
 
             Double3 qvec = Double3.Cross(tvec, edge1);
             v = Double3.Dot(rayDir, qvec) * invDet;
-            if (v < 0.0 || u + v > 1.0)
+            if (v < 0.0 - SAFE_EPSILON || u + v > 1.0 + SAFE_EPSILON)
                 return false;
 
             distance = Double3.Dot(edge2, qvec) * invDet;
 
-            return distance >= 0.0; // Intersection must be in the forward direction
+            return distance >= SAFE_EPSILON; // Intersection must be in the forward direction
         }
 
         /// <summary>
@@ -89,11 +93,13 @@ namespace Prowl.Vector.Geometry
             Double3 boxMax,
             out double tMin, out double tMax)
         {
+            const double SAFE_EPSILON = 0.00001;
+
             tMin = 0.0;
             tMax = double.MaxValue;
 
             // X slab
-            if (Maths.Abs(rayDir.X) < double.Epsilon)
+            if (Maths.Abs(rayDir.X) < SAFE_EPSILON)
             {
                 if (rayOrigin.X < boxMin.X || rayOrigin.X > boxMax.X) { return false; }
             }
@@ -111,7 +117,7 @@ namespace Prowl.Vector.Geometry
             }
 
             // Y slab
-            if (Maths.Abs(rayDir.Y) < double.Epsilon)
+            if (Maths.Abs(rayDir.Y) < SAFE_EPSILON)
             {
                 if (rayOrigin.Y < boxMin.Y || rayOrigin.Y > boxMax.Y) { return false; }
             }
@@ -129,7 +135,7 @@ namespace Prowl.Vector.Geometry
             }
 
             // Z slab
-            if (Maths.Abs(rayDir.Z) < double.Epsilon)
+            if (Maths.Abs(rayDir.Z) < SAFE_EPSILON)
             {
                 if (rayOrigin.Z < boxMin.Z || rayOrigin.Z > boxMax.Z) { return false; }
             }
@@ -196,6 +202,8 @@ namespace Prowl.Vector.Geometry
             double cylinderRadius,
             out double t0, out double t1)
         {
+            const double SAFE_EPSILON = 0.00001;
+
             t0 = t1 = 0.0;
             Double3 oc = rayOrigin - cylinderAxisPoint;
 
@@ -206,7 +214,7 @@ namespace Prowl.Vector.Geometry
             double b = 2.0 * (Double3.Dot(oc, rayDir) - caoc * card);
             double c = Double3.Dot(oc, oc) - caoc * caoc - cylinderRadius * cylinderRadius;
 
-            if (Maths.Abs(a) < double.Epsilon) // Ray is parallel to cylinder axis
+            if (Maths.Abs(a) < SAFE_EPSILON) // Ray is parallel to cylinder axis
             {
                 // Check if ray origin is inside the cylinder's radius projected onto the plane
                 // perpendicular to the axis passing through cylinderAxisPoint.
@@ -239,12 +247,14 @@ namespace Prowl.Vector.Geometry
             double radius,
             out double distance)
         {
+            const double SAFE_EPSILON = 0.00001;
+
             distance = double.MaxValue;
             bool intersected = false;
 
             Double3 cylinderAxisDir = capB_Center - capA_Center;
             double heightSq = Double3.LengthSquared(cylinderAxisDir);
-            if (heightSq < double.Epsilon * double.Epsilon)
+            if (heightSq < SAFE_EPSILON * SAFE_EPSILON)
             {
                 double t0, t1;
                 if (RaySphere(rayOrigin, rayDir, capA_Center, radius, out t0, out t1))
@@ -264,7 +274,7 @@ namespace Prowl.Vector.Geometry
                 {
                     Double3 p0 = rayOrigin + t0_inf * rayDir;
                     double proj0 = Double3.Dot(p0 - capA_Center, cylinderAxisDir);
-                    if (proj0 >= -double.Epsilon && proj0 <= height + double.Epsilon)
+                    if (proj0 >= -SAFE_EPSILON && proj0 <= height + SAFE_EPSILON)
                     {
                         if (t0_inf < distance) { distance = t0_inf; intersected = true; }
                     }
@@ -273,7 +283,7 @@ namespace Prowl.Vector.Geometry
                 {
                     Double3 p1 = rayOrigin + t1_inf * rayDir;
                     double proj1 = Double3.Dot(p1 - capA_Center, cylinderAxisDir);
-                    if (proj1 >= -double.Epsilon && proj1 <= height + double.Epsilon)
+                    if (proj1 >= -SAFE_EPSILON && proj1 <= height + SAFE_EPSILON)
                     {
                         if (t1_inf < distance) { distance = t1_inf; intersected = true; }
                     }
@@ -286,7 +296,7 @@ namespace Prowl.Vector.Geometry
                 if (capDist >= 0.0 && capDist < distance)
                 {
                     Double3 p_capA = rayOrigin + capDist * rayDir;
-                    if (Double3.LengthSquared(p_capA - capA_Center) <= radius * radius + double.Epsilon)
+                    if (Double3.LengthSquared(p_capA - capA_Center) <= radius * radius + SAFE_EPSILON)
                     {
                         distance = capDist;
                         intersected = true;
@@ -298,7 +308,7 @@ namespace Prowl.Vector.Geometry
                 if (capDist >= 0.0 && capDist < distance)
                 {
                     Double3 p_capB = rayOrigin + capDist * rayDir;
-                    if (Double3.LengthSquared(p_capB - capB_Center) <= radius * radius + double.Epsilon)
+                    if (Double3.LengthSquared(p_capB - capB_Center) <= radius * radius + SAFE_EPSILON)
                     {
                         distance = capDist;
                         intersected = true;
