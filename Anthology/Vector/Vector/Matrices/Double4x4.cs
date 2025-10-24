@@ -458,11 +458,7 @@ namespace Prowl.Vector
         public static Double3 TransformNormal(Double3 normal, Double4x4 matrix)
         {
             // Extract the upper-left 3x3 portion for rotation/scale
-            Double3x3 upperLeft = new Double3x3(
-                matrix.c0.X, matrix.c0.Y, matrix.c0.Z,
-                matrix.c1.X, matrix.c1.Y, matrix.c1.Z,
-                matrix.c2.X, matrix.c2.Y, matrix.c2.Z
-            );
+            Double3x3 upperLeft = new Double3x3(matrix);
             return Double3x3.TransformNormal(normal, upperLeft);
         }
 
