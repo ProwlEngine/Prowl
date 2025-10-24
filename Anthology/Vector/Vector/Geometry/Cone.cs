@@ -239,83 +239,19 @@ namespace Prowl.Vector.Geometry
         /// <param name="mode">Wireframe for outline, Solid for filled cone.</param>
         /// <param name="resolution">Number of segments around the base circle.</param>
         /// <returns>Mesh data for rendering.</returns>
-        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
+        public GeometryData GetGeometryData(int resolution = 16)
         {
             resolution = Maths.Max(resolution, 3);
-
-            if (mode == MeshMode.Wireframe)
-            {
-                return GetWireframeMesh(resolution);
-            }
-            else
-            {
-                return GetSolidMesh(resolution);
-            }
-        }
-
-        private GeometryData GetWireframeMesh(int segments)
-        {
-            var vertices = new System.Collections.Generic.List<Double3>();
+            var geometryData = new GeometryData();
 
             Double3 axis = BaseCenter - Apex;
             double height = Double3.Length(axis);
 
             if (height < double.Epsilon)
-                return new GeometryData(new Double3[] { Apex }, MeshTopology.LineList);
-
-            Double3 axisNorm = axis / height;
-
-            // Find two perpendicular vectors to the axis
-            Double3 perpendicular1 = Maths.Abs(axisNorm.X) < 0.9 ?
-                Double3.Cross(axisNorm, new Double3(1, 0, 0)) :
-                Double3.Cross(axisNorm, new Double3(0, 1, 0));
-            perpendicular1 = Double3.Normalize(perpendicular1);
-
-            Double3 perpendicular2 = Double3.Cross(axisNorm, perpendicular1);
-
-            // Generate base circle points
-            Double3[] basePoints = new Double3[segments];
-            for (int i = 0; i < segments; i++)
             {
-                double angle = i * 2.0 * Maths.PI / segments;
-                double cosAngle = Maths.Cos(angle);
-                double sinAngle = Maths.Sin(angle);
-
-                basePoints[i] = BaseCenter +
-                              perpendicular1 * (BaseRadius * cosAngle) +
-                              perpendicular2 * (BaseRadius * sinAngle);
+                geometryData.AddVertex(Apex);
+                return geometryData;
             }
-
-            // Draw base circle
-            for (int i = 0; i < segments; i++)
-            {
-                int next = (i + 1) % segments;
-                vertices.Add(basePoints[i]);
-                vertices.Add(basePoints[next]);
-            }
-
-            // Draw lines from apex to base circle (evenly spaced)
-            int lineCount = Maths.Min(8, segments);
-            for (int i = 0; i < lineCount; i++)
-            {
-                int index = (i * segments) / lineCount;
-                vertices.Add(Apex);
-                vertices.Add(basePoints[index]);
-            }
-
-            return new GeometryData(vertices.ToArray(), MeshTopology.LineList);
-        }
-
-        private GeometryData GetSolidMesh(int segments)
-        {
-            var vertices = new System.Collections.Generic.List<Double3>();
-            var indices = new System.Collections.Generic.List<uint>();
-
-            Double3 axis = BaseCenter - Apex;
-            double height = Double3.Length(axis);
-
-            if (height < double.Epsilon)
-                return new GeometryData(new Double3[] { Apex }, MeshTopology.TriangleList);
 
             Double3 axisNorm = axis / height;
 
@@ -328,47 +264,40 @@ namespace Prowl.Vector.Geometry
             Double3 perpendicular2 = Double3.Cross(axisNorm, perpendicular1);
 
             // Add apex vertex
-            vertices.Add(Apex); // index 0
+            var apex = geometryData.AddVertex(Apex);
 
             // Add base center vertex
-            vertices.Add(BaseCenter); // index 1
+            var baseCenter = geometryData.AddVertex(BaseCenter);
 
             // Generate base circle vertices
-            for (int i = 0; i < segments; i++)
+            var baseVerts = new GeometryData.Vertex[resolution];
+            for (int i = 0; i < resolution; i++)
             {
-                double angle = i * 2.0 * Maths.PI / segments;
+                double angle = i * 2.0 * Maths.PI / resolution;
                 double cosAngle = Maths.Cos(angle);
                 double sinAngle = Maths.Sin(angle);
 
                 Double3 point = BaseCenter +
                               perpendicular1 * (BaseRadius * cosAngle) +
                               perpendicular2 * (BaseRadius * sinAngle);
-                vertices.Add(point); // indices 2 to segments+1
+                baseVerts[i] = geometryData.AddVertex(point);
             }
 
             // Generate lateral surface triangles (apex to base edge)
-            for (int i = 0; i < segments; i++)
+            for (int i = 0; i < resolution; i++)
             {
-                uint current = (uint)(2 + i);
-                uint next = (uint)(2 + (i + 1) % segments);
-
-                indices.Add(0); // apex
-                indices.Add(current);
-                indices.Add(next);
+                int next = (i + 1) % resolution;
+                geometryData.AddFace(apex, baseVerts[i], baseVerts[next]);
             }
 
             // Generate base triangles (base center to edge)
-            for (int i = 0; i < segments; i++)
+            for (int i = 0; i < resolution; i++)
             {
-                uint current = (uint)(2 + i);
-                uint next = (uint)(2 + (i + 1) % segments);
-
-                indices.Add(1); // base center
-                indices.Add(next);
-                indices.Add(current);
+                int next = (i + 1) % resolution;
+                geometryData.AddFace(baseCenter, baseVerts[next], baseVerts[i]);
             }
 
-            return new GeometryData(vertices.ToArray(), indices.ToArray(), MeshTopology.TriangleList);
+            return geometryData;
         }
 
         // --- IEquatable & IFormattable Implementation ---

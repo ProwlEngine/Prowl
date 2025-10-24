@@ -436,35 +436,23 @@ namespace Prowl.Vector.Geometry
         }
 
         /// <summary>
-        /// Generates mesh data for rendering this triangle.
+        /// Generates geometry data for this triangle as a BMesh-like structure.
         /// </summary>
-        /// <param name="mode">Wireframe for edges, Solid for filled triangle.</param>
         /// <param name="resolution">Unused for Triangle (topology is fixed).</param>
-        /// <returns>Mesh data for rendering.</returns>
-        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
+        /// <returns>GeometryData containing vertices, edges, and face information.</returns>
+        public GeometryData GetGeometryData(int resolution = 16)
         {
-            if (mode == MeshMode.Wireframe)
-            {
-                // 3 edges, each edge is 2 vertices (LineList)
-                var vertices = new Double3[]
-                {
-                    V0, V1,
-                    V1, V2,
-                    V2, V0
-                };
-                return new GeometryData(vertices, MeshTopology.LineList);
-            }
-            else
-            {
-                // Solid triangle (double-sided: front and back faces)
-                var vertices = new Double3[] { V0, V1, V2 };
-                var indices = new uint[]
-                {
-                    0, 1, 2,  // Front face
-                    0, 2, 1   // Back face
-                };
-                return new GeometryData(vertices, indices, MeshTopology.TriangleList);
-            }
+            var geometryData = new GeometryData();
+
+            // Add vertices
+            var v0 = geometryData.AddVertex(V0);
+            var v1 = geometryData.AddVertex(V1);
+            var v2 = geometryData.AddVertex(V2);
+
+            // Add face (automatically creates edges)
+            geometryData.AddFace(v0, v1, v2);
+
+            return geometryData;
         }
 
         // --- IEquatable & IFormattable Implementation ---

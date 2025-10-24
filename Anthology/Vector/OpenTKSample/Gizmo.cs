@@ -11,6 +11,64 @@ using Prowl.Vector.Geometry;
 
 namespace OpenTKSample;
 
+/// <summary>
+/// Specifies the rendering mode for geometry visualization.
+/// </summary>
+public enum MeshMode
+{
+    /// <summary>
+    /// Render as wireframe/outline using lines.
+    /// </summary>
+    Wireframe,
+
+    /// <summary>
+    /// Render as solid filled geometry using triangles.
+    /// </summary>
+    Solid
+}
+
+/// <summary>
+/// Flags for visualizing different elements of GeometryData (BMesh).
+/// </summary>
+[Flags]
+public enum GeometryDataVisualization
+{
+    /// <summary>
+    /// No visualization.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// Draw vertex normals as lines extending from vertices.
+    /// </summary>
+    Normals = 1 << 0,
+
+    /// <summary>
+    /// Draw all edges as colored lines.
+    /// </summary>
+    Edges = 1 << 1,
+
+    /// <summary>
+    /// Draw loop positions (face corners) as small markers.
+    /// </summary>
+    Loops = 1 << 2,
+
+    /// <summary>
+    /// Draw vertices as crosses.
+    /// </summary>
+    Vertices = 1 << 3,
+
+    /// <summary>
+    /// Draw solid mesh first, then overlay debug info on top.
+    /// </summary>
+    Solid = 1 << 4,
+
+    /// <summary>
+    /// Draw all debug elements.
+    /// </summary>
+    All = Normals | Edges | Loops | Vertices | Solid
+}
+
 public static class Gizmo
 {
     private struct Vertex
@@ -125,75 +183,69 @@ void main() {
     }
 
     /// <summary>
-    /// Generic method to draw any IBoundingShape using its GetMeshData implementation.
+    /// Generic method to draw any IBoundingShape using its GetGeometryData implementation.
     /// </summary>
     public static void DrawShape(IBoundingShape shape, Float4 color, MeshMode mode, int resolution = 16)
     {
-        GeometryData meshData = shape.GetMeshData(mode, resolution);
+        GeometryData geometryData = shape.GetGeometryData(resolution);
 
-        if (meshData.Vertices.Length == 0)
-            return;
-
-        bool isLine = meshData.Topology == MeshTopology.LineList || meshData.Topology == MeshTopology.LineStrip;
-        var targetVertices = isLine ? _lineVertices : _solidVertices;
-        var targetIndices = isLine ? _lineIndices : _solidIndices;
-
-        uint baseIndex = (uint)targetVertices.Count;
-
-        // Add vertices
-        for (int i = 0; i < meshData.Vertices.Length; i++)
+        if (mode == MeshMode.Wireframe)
         {
-            targetVertices.Add(new Vertex((Float3)meshData.Vertices[i], color));
-        }
-
-        // Add indices based on topology
-        if (meshData.IsIndexed)
-        {
-            // Use provided indices
-            for (int i = 0; i < meshData.Indices!.Length; i++)
-            {
-                targetIndices.Add(baseIndex + meshData.Indices[i]);
-            }
+            // Convert to line mesh and draw edges
+            var lineMesh = geometryData.ToLineMesh();
+            DrawLineMesh(lineMesh, color);
         }
         else
         {
-            // Generate indices based on topology
-            if (meshData.Topology == MeshTopology.LineList || meshData.Topology == MeshTopology.TriangleList)
-            {
-                // Direct sequential indices
-                for (uint i = 0; i < meshData.Vertices.Length; i++)
-                {
-                    targetIndices.Add(baseIndex + i);
-                }
-            }
-            else if (meshData.Topology == MeshTopology.LineStrip)
-            {
-                // Convert line strip to line list
-                for (uint i = 0; i < meshData.Vertices.Length - 1; i++)
-                {
-                    targetIndices.Add(baseIndex + i);
-                    targetIndices.Add(baseIndex + i + 1);
-                }
-            }
-            else if (meshData.Topology == MeshTopology.TriangleStrip)
-            {
-                // Convert triangle strip to triangle list
-                for (uint i = 0; i < meshData.Vertices.Length - 2; i++)
-                {
-                    if (i % 2 == 0)
-                    {
-                        targetIndices.Add(baseIndex + i);
-                        targetIndices.Add(baseIndex + i + 1);
-                        targetIndices.Add(baseIndex + i + 2);
-                    }
-                    else
-                    {
-                        targetIndices.Add(baseIndex + i);
-                        targetIndices.Add(baseIndex + i + 2);
-                        targetIndices.Add(baseIndex + i + 1);
-                    }
-                }
-            }
+            // Convert to triangle mesh and draw solid
+            var triangleMesh = geometryData.ToTriangleMesh();
+            DrawTriangleMesh(triangleMesh, color);
+        }
+    }
+
+    /// <summary>
+    /// Draw a triangle mesh from GeometryData.
+    /// </summary>
+    public static void DrawTriangleMesh(GeometryData.TriangleMesh mesh, Float4 color)
+    {
+        if (mesh.Vertices == null || mesh.Vertices.Length == 0)
+            return;
+
+        uint baseIndex = (uint)_solidVertices.Count;
+
+        // Add vertices
+        for (int i = 0; i < mesh.Vertices.Length; i++)
+        {
+            _solidVertices.Add(new Vertex((Float3)mesh.Vertices[i], color));
+        }
+
+        // Add indices
+        for (int i = 0; i < mesh.Indices.Length; i++)
+        {
+            _solidIndices.Add(baseIndex + mesh.Indices[i]);
+        }
+    }
+
+    /// <summary>
+    /// Draw a line mesh from GeometryData.
+    /// </summary>
+    public static void DrawLineMesh(GeometryData.LineMesh mesh, Float4 color)
+    {
+        if (mesh.Vertices == null || mesh.Vertices.Length == 0)
+            return;
+
+        uint baseIndex = (uint)_lineVertices.Count;
+
+        // Add vertices
+        for (int i = 0; i < mesh.Vertices.Length; i++)
+        {
+            _lineVertices.Add(new Vertex((Float3)mesh.Vertices[i], color));
+        }
+
+        // Add indices
+        for (int i = 0; i < mesh.Indices.Length; i++)
+        {
+            _lineIndices.Add(baseIndex + mesh.Indices[i]);
         }
     }
 
@@ -362,6 +414,195 @@ void main() {
     public static void DrawConeWireframe(Cone cone, Float4 color, int segments = 16)
     {
         DrawShape(cone, color, MeshMode.Wireframe, segments);
+    }
+
+    /// <summary>
+    /// Draws a GeometryData (BMesh) with various visualization options.
+    /// When Solid flag is set, draws the solid mesh first, then overlays debug info on top.
+    /// </summary>
+    /// <param name="geometryData">The GeometryData to visualize</param>
+    /// <param name="flags">Visualization flags</param>
+    /// <param name="solidColor">Color for solid rendering (default: semi-transparent white)</param>
+    /// <param name="normalColor">Color for normals (default: yellow)</param>
+    /// <param name="edgeColor">Color for edges (default: cyan)</param>
+    /// <param name="loopColor">Color for loops (default: magenta)</param>
+    /// <param name="vertexColor">Color for vertices (default: red)</param>
+    /// <param name="normalLength">Length of normal lines (default: 0.2)</param>
+    /// <param name="vertexSize">Size of vertex crosses (default: 0.05)</param>
+    /// <param name="loopSize">Size of loop markers (default: 0.03)</param>
+    public static void DrawGeometryData(
+        GeometryData geometryData,
+        GeometryDataVisualization flags,
+        Float4? solidColor = null,
+        Float4? normalColor = null,
+        Float4? edgeColor = null,
+        Float4? loopColor = null,
+        Float4? vertexColor = null,
+        float normalLength = 0.2f,
+        float vertexSize = 0.05f,
+        float loopSize = 0.03f)
+    {
+        // Set default colors if not provided
+        solidColor ??= new Float4(0.8f, 0.8f, 0.8f, 0.6f);
+        normalColor ??= new Float4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
+        edgeColor ??= new Float4(0.0f, 1.0f, 1.0f, 1.0f);   // Cyan
+        loopColor ??= new Float4(1.0f, 0.0f, 1.0f, 1.0f);   // Magenta
+        vertexColor ??= new Float4(1.0f, 0.0f, 0.0f, 1.0f); // Red
+
+        // Step 1: Draw solid mesh first if requested
+        if (flags.HasFlag(GeometryDataVisualization.Solid))
+        {
+            var triangleMesh = geometryData.ToTriangleMesh();
+            DrawTriangleMesh(triangleMesh, solidColor.Value);
+        }
+
+        // Step 2: Draw edges
+        if (flags.HasFlag(GeometryDataVisualization.Edges))
+        {
+            foreach (var edge in geometryData.Edges)
+            {
+                DrawLine((Float3)edge.Vert1.Point, (Float3)edge.Vert2.Point, edgeColor.Value);
+            }
+        }
+
+        // Step 3: Draw loops (face corners) as arrows along edges
+        if (flags.HasFlag(GeometryDataVisualization.Loops))
+        {
+            foreach (var face in geometryData.Faces)
+            {
+                if (face.Loop != null)
+                {
+                    // Calculate face normal and center for offsetting arrows inward
+                    var verts = face.NeighborVertices();
+                    Double3 faceNormal = Double3.UnitY;
+                    Double3 faceCenter = face.Center();
+
+                    if (verts.Count >= 3)
+                    {
+                        var v0 = verts[0].Point;
+                        var v1 = verts[1].Point;
+                        var v2 = verts[2].Point;
+                        var edge1 = v1 - v0;
+                        var edge2 = v2 - v0;
+                        var normal = Double3.Cross(edge1, edge2);
+                        if (Double3.LengthSquared(normal) > 1e-6)
+                            faceNormal = Double3.Normalize(normal);
+                    }
+
+                    var it = face.Loop;
+                    do
+                    {
+                        // Get edge direction
+                        var nextLoop = it.Next;
+                        if (nextLoop != null && nextLoop != it)
+                        {
+                            Double3 edgeStart = it.Vert.Point;
+                            Double3 edgeEnd = nextLoop.Vert.Point;
+                            Double3 edgeDir = Double3.Normalize(edgeEnd - edgeStart);
+                            double edgeLength = Double3.Distance(edgeStart, edgeEnd);
+
+                            // Position arrow slightly along the edge and offset inward toward face center
+                            double arrowT = 0.4; // Position along edge
+                            Double3 arrowBase = Maths.Lerp(edgeStart, edgeEnd, arrowT);
+
+                            // Offset slightly inward (toward face center) and up along normal
+                            Double3 toCenter = Double3.Normalize(faceCenter - arrowBase);
+                            arrowBase += toCenter * (edgeLength * 0.15) + faceNormal * loopSize;
+
+                            // Arrow points along edge direction
+                            Double3 arrowTip = arrowBase + edgeDir * (edgeLength * 0.2);
+
+                            // Draw arrow shaft
+                            DrawLine((Float3)arrowBase, (Float3)arrowTip, loopColor.Value);
+
+                            // Draw arrowhead
+                            Double3 perpendicular = Double3.Normalize(Double3.Cross(edgeDir, faceNormal));
+                            Double3 arrowLeft = arrowTip - edgeDir * (edgeLength * 0.08) + perpendicular * (edgeLength * 0.05);
+                            Double3 arrowRight = arrowTip - edgeDir * (edgeLength * 0.08) - perpendicular * (edgeLength * 0.05);
+
+                            DrawLine((Float3)arrowTip, (Float3)arrowLeft, loopColor.Value);
+                            DrawLine((Float3)arrowTip, (Float3)arrowRight, loopColor.Value);
+                        }
+
+                        it = it.Next;
+                    } while (it != face.Loop && it != null);
+                }
+            }
+        }
+
+        // Step 4: Draw vertices
+        if (flags.HasFlag(GeometryDataVisualization.Vertices))
+        {
+            foreach (var vertex in geometryData.Vertices)
+            {
+                DrawIntersectionPoint((Float3)vertex.Point, vertexColor.Value, vertexSize);
+            }
+        }
+
+        // Step 5: Draw normals
+        if (flags.HasFlag(GeometryDataVisualization.Normals))
+        {
+            foreach (var vertex in geometryData.Vertices)
+            {
+                // Try to get normal from vertex attributes
+                Double3 normal = Double3.UnitY; // Default normal
+                bool hasNormal = false;
+
+                if (vertex.Attributes.TryGetValue("normal", out var normalAttr))
+                {
+                    if (normalAttr is GeometryData.FloatAttributeValue floatAttr && floatAttr.Data.Length >= 3)
+                    {
+                        normal = new Double3(floatAttr.Data[0], floatAttr.Data[1], floatAttr.Data[2]);
+                        // Ensure normal is normalized
+                        if (Double3.LengthSquared(normal) > 1e-6)
+                        {
+                            normal = Double3.Normalize(normal);
+                            hasNormal = true;
+                        }
+                    }
+                }
+
+                // If no normal attribute, calculate from adjacent faces
+                if (!hasNormal)
+                {
+                    var adjacentFaces = vertex.NeighborFaces().ToArray();
+                    if (adjacentFaces.Length > 0)
+                    {
+                        normal = Double3.Zero;
+                        foreach (var face in adjacentFaces)
+                        {
+                            // Calculate face normal
+                            var verts = face.NeighborVertices();
+                            if (verts.Count >= 3)
+                            {
+                                var v0 = verts[0].Point;
+                                var v1 = verts[1].Point;
+                                var v2 = verts[2].Point;
+                                var edge1 = v1 - v0;
+                                var edge2 = v2 - v0;
+                                var faceNormal = Double3.Cross(edge1, edge2);
+                                if (Double3.LengthSquared(faceNormal) > 1e-6)
+                                {
+                                    normal += Double3.Normalize(faceNormal);
+                                }
+                            }
+                        }
+                        if (Double3.LengthSquared(normal) > 1e-6)
+                        {
+                            normal = Double3.Normalize(normal);
+                        }
+                        else
+                        {
+                            normal = Double3.UnitY;
+                        }
+                    }
+                }
+
+                Float3 start = (Float3)vertex.Point;
+                Float3 end = start + (Float3)normal * normalLength;
+                DrawLine(start, end, normalColor.Value);
+            }
+        }
     }
 
     #endregion

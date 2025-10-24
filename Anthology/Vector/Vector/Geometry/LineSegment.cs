@@ -344,16 +344,20 @@ namespace Prowl.Vector.Geometry
         }
 
         /// <summary>
-        /// Generates mesh data for rendering this line segment.
+        /// Generates geometry data for this line segment as a BMesh-like structure.
         /// </summary>
-        /// <param name="mode">Both modes render as a line.</param>
         /// <param name="resolution">Unused for LineSegment (topology is fixed).</param>
-        /// <returns>Mesh data for rendering.</returns>
-        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
+        /// <returns>GeometryData containing two vertices and one edge.</returns>
+        public GeometryData GetGeometryData(int resolution = 16)
         {
-            // LineSegment is always just a line
-            var vertices = new Double3[] { Start, End };
-            return new GeometryData(vertices, MeshTopology.LineList);
+            var geometryData = new GeometryData();
+
+            // Add vertices and edge
+            var v0 = geometryData.AddVertex(Start);
+            var v1 = geometryData.AddVertex(End);
+            geometryData.AddEdge(v0, v1);
+
+            return geometryData;
         }
 
         // --- IEquatable & IFormattable Implementation ---

@@ -342,101 +342,27 @@ namespace Prowl.Vector.Geometry
         }
 
         /// <summary>
-        /// Generates mesh data for rendering this sphere.
+        /// Generates geometry data for this sphere as a BMesh-like structure.
         /// </summary>
-        /// <param name="mode">Wireframe for latitude/longitude lines, Solid for filled sphere.</param>
-        /// <param name="resolution">Number of segments (must be at least 3).</param>
-        /// <returns>Mesh data for rendering.</returns>
-        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
+        /// <param name="resolution">Number of segments for latitude and longitude (must be at least 3).</param>
+        /// <returns>GeometryData containing vertices, edges, and quad faces forming a UV sphere.</returns>
+        public GeometryData GetGeometryData(int resolution = 16)
         {
             resolution = Maths.Max(resolution, 3);
+            var geometryData = new GeometryData();
 
-            if (mode == MeshMode.Wireframe)
+            // Generate vertices using UV sphere parameterization
+            var vertexGrid = new GeometryData.Vertex[resolution + 1, resolution + 1];
+
+            for (int lat = 0; lat <= resolution; lat++)
             {
-                return GetWireframeMesh(resolution);
-            }
-            else
-            {
-                return GetSolidMesh(resolution);
-            }
-        }
-
-        private GeometryData GetWireframeMesh(int segments)
-        {
-            var vertices = new System.Collections.Generic.List<Double3>();
-
-            // Generate latitude circles
-            for (int lat = 0; lat <= segments; lat++)
-            {
-                double theta = lat * Maths.PI / segments;
-                double y = Center.Y + Radius * Maths.Cos(theta);
-                double radius = Radius * Maths.Sin(theta);
-
-                for (int lon = 0; lon < segments; lon++)
-                {
-                    double phi1 = lon * 2.0 * Maths.PI / segments;
-                    double phi2 = (lon + 1) * 2.0 * Maths.PI / segments;
-
-                    Double3 p1 = Center + new Double3(
-                        radius * Maths.Cos(phi1),
-                        y - Center.Y,
-                        radius * Maths.Sin(phi1)
-                    );
-                    Double3 p2 = Center + new Double3(
-                        radius * Maths.Cos(phi2),
-                        y - Center.Y,
-                        radius * Maths.Sin(phi2)
-                    );
-
-                    vertices.Add(p1);
-                    vertices.Add(p2);
-                }
-            }
-
-            // Generate longitude lines
-            for (int lon = 0; lon < segments; lon++)
-            {
-                double phi = lon * 2.0 * Maths.PI / segments;
-
-                for (int lat = 0; lat < segments; lat++)
-                {
-                    double theta1 = lat * Maths.PI / segments;
-                    double theta2 = (lat + 1) * Maths.PI / segments;
-
-                    Double3 p1 = Center + new Double3(
-                        Radius * Maths.Sin(theta1) * Maths.Cos(phi),
-                        Radius * Maths.Cos(theta1),
-                        Radius * Maths.Sin(theta1) * Maths.Sin(phi)
-                    );
-                    Double3 p2 = Center + new Double3(
-                        Radius * Maths.Sin(theta2) * Maths.Cos(phi),
-                        Radius * Maths.Cos(theta2),
-                        Radius * Maths.Sin(theta2) * Maths.Sin(phi)
-                    );
-
-                    vertices.Add(p1);
-                    vertices.Add(p2);
-                }
-            }
-
-            return new GeometryData(vertices.ToArray(), MeshTopology.LineList);
-        }
-
-        private GeometryData GetSolidMesh(int segments)
-        {
-            var vertices = new System.Collections.Generic.List<Double3>();
-            var indices = new System.Collections.Generic.List<uint>();
-
-            // Generate vertices
-            for (int lat = 0; lat <= segments; lat++)
-            {
-                double theta = lat * Maths.PI / segments;
+                double theta = lat * Maths.PI / resolution;
                 double sinTheta = Maths.Sin(theta);
                 double cosTheta = Maths.Cos(theta);
 
-                for (int lon = 0; lon <= segments; lon++)
+                for (int lon = 0; lon <= resolution; lon++)
                 {
-                    double phi = lon * 2.0 * Maths.PI / segments;
+                    double phi = lon * 2.0 * Maths.PI / resolution;
                     double sinPhi = Maths.Sin(phi);
                     double cosPhi = Maths.Cos(phi);
 
@@ -446,31 +372,25 @@ namespace Prowl.Vector.Geometry
                         Radius * sinTheta * sinPhi
                     );
 
-                    vertices.Add(position);
+                    vertexGrid[lat, lon] = geometryData.AddVertex(position);
                 }
             }
 
-            // Generate indices for triangle list
-            for (int lat = 0; lat < segments; lat++)
+            // Generate quad faces (will be triangulated automatically on conversion)
+            for (int lat = 0; lat < resolution; lat++)
             {
-                for (int lon = 0; lon < segments; lon++)
+                for (int lon = 0; lon < resolution; lon++)
                 {
-                    uint first = (uint)(lat * (segments + 1) + lon);
-                    uint second = (uint)(first + segments + 1);
+                    var v0 = vertexGrid[lat, lon];
+                    var v1 = vertexGrid[lat, lon + 1];
+                    var v2 = vertexGrid[lat + 1, lon + 1];
+                    var v3 = vertexGrid[lat + 1, lon];
 
-                    // First triangle
-                    indices.Add(first);
-                    indices.Add(second);
-                    indices.Add(first + 1);
-
-                    // Second triangle
-                    indices.Add(second);
-                    indices.Add(second + 1);
-                    indices.Add(first + 1);
+                    geometryData.AddFace(v0, v1, v2, v3);
                 }
             }
 
-            return new GeometryData(vertices.ToArray(), indices.ToArray(), MeshTopology.TriangleList);
+            return geometryData;
         }
 
         // --- IEquatable & IFormattable Implementation ---

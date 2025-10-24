@@ -571,62 +571,37 @@ namespace Prowl.Vector.Geometry
        }
 
        /// <summary>
-       /// Generates mesh data for rendering this AABB.
+       /// Generates geometry data for this AABB as a BMesh-like structure.
        /// </summary>
-       /// <param name="mode">Wireframe for edges, Solid for filled box.</param>
        /// <param name="resolution">Unused for AABB (box topology is fixed).</param>
-       /// <returns>Mesh data for rendering.</returns>
-       public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
+       /// <returns>GeometryData containing vertices, edges, and faces for the box.</returns>
+       public GeometryData GetGeometryData(int resolution = 16)
        {
+           var geometryData = new GeometryData();
            Double3[] corners = GetCorners();
 
-           if (mode == MeshMode.Wireframe)
+           // Add 8 vertices
+           var verts = new GeometryData.Vertex[8];
+           for (int i = 0; i < 8; i++)
            {
-               // 12 edges, each edge is 2 vertices (LineList)
-               var vertices = new Double3[24];
-               int idx = 0;
-
-               // Bottom face (4 edges)
-               vertices[idx++] = corners[0]; vertices[idx++] = corners[1];
-               vertices[idx++] = corners[1]; vertices[idx++] = corners[3];
-               vertices[idx++] = corners[3]; vertices[idx++] = corners[2];
-               vertices[idx++] = corners[2]; vertices[idx++] = corners[0];
-
-               // Top face (4 edges)
-               vertices[idx++] = corners[4]; vertices[idx++] = corners[5];
-               vertices[idx++] = corners[5]; vertices[idx++] = corners[7];
-               vertices[idx++] = corners[7]; vertices[idx++] = corners[6];
-               vertices[idx++] = corners[6]; vertices[idx++] = corners[4];
-
-               // Vertical edges (4 edges)
-               vertices[idx++] = corners[0]; vertices[idx++] = corners[4];
-               vertices[idx++] = corners[1]; vertices[idx++] = corners[5];
-               vertices[idx++] = corners[2]; vertices[idx++] = corners[6];
-               vertices[idx++] = corners[3]; vertices[idx++] = corners[7];
-
-               return new GeometryData(vertices, MeshTopology.LineList);
+               verts[i] = geometryData.AddVertex(corners[i]);
            }
-           else
-           {
-               // Solid mode: 8 vertices, 36 indices (12 triangles, 6 faces)
-               var indices = new uint[]
-               {
-                   // Bottom face (Z = Min.Z)
-                   0, 2, 1, 1, 2, 3,
-                   // Top face (Z = Max.Z)
-                   4, 5, 6, 5, 7, 6,
-                   // Front face (Y = Min.Y)
-                   0, 1, 4, 1, 5, 4,
-                   // Back face (Y = Max.Y)
-                   2, 6, 3, 3, 6, 7,
-                   // Left face (X = Min.X)
-                   0, 4, 2, 2, 4, 6,
-                   // Right face (X = Max.X)
-                   1, 3, 5, 3, 7, 5
-               };
 
-               return new GeometryData(corners, indices, MeshTopology.TriangleList);
-           }
+           // Add 6 faces (quads)
+           // Bottom face (Z = Min.Z)
+           geometryData.AddFace(verts[0], verts[2], verts[3], verts[1]);
+           // Top face (Z = Max.Z)
+           geometryData.AddFace(verts[4], verts[5], verts[7], verts[6]);
+           // Front face (Y = Min.Y)
+           geometryData.AddFace(verts[0], verts[1], verts[5], verts[4]);
+           // Back face (Y = Max.Y)
+           geometryData.AddFace(verts[2], verts[6], verts[7], verts[3]);
+           // Left face (X = Min.X)
+           geometryData.AddFace(verts[0], verts[4], verts[6], verts[2]);
+           // Right face (X = Max.X)
+           geometryData.AddFace(verts[1], verts[3], verts[7], verts[5]);
+
+           return geometryData;
        }
 
        // --- IEquatable & IFormattable Implementation ---

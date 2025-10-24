@@ -563,46 +563,44 @@ namespace Prowl.Vector.Geometry
         }
 
         /// <summary>
-        /// Generates mesh data for rendering this frustum.
+        /// Generates geometry data for this frustum as a BMesh-like structure.
         /// </summary>
-        /// <param name="mode">Wireframe for edges. Solid mode not supported for Frustum.</param>
         /// <param name="resolution">Unused for Frustum (topology is fixed).</param>
-        /// <returns>Mesh data for rendering.</returns>
-        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
+        /// <returns>GeometryData containing vertices, edges, and quad faces for the frustum.</returns>
+        public GeometryData GetGeometryData(int resolution = 16)
         {
+            var geometryData = new GeometryData();
             Double3[] corners = GetCorners();
 
             if (corners == null || corners.Length != 8)
-                return new GeometryData(new Double3[0], MeshTopology.LineList);
+                return geometryData;
 
             // Corner indices from GetCorners():
             // 0: Near-Left-Bottom,  1: Near-Right-Bottom,  2: Near-Left-Top,  3: Near-Right-Top
             // 4: Far-Left-Bottom,   5: Far-Right-Bottom,   6: Far-Left-Top,   7: Far-Right-Top
 
-            // Frustum is always rendered as wireframe
-            // 12 edges: 4 for near plane, 4 for far plane, 4 connecting edges
-            var vertices = new Double3[24];
-            int idx = 0;
+            // Add 8 vertices
+            var verts = new GeometryData.Vertex[8];
+            for (int i = 0; i < 8; i++)
+            {
+                verts[i] = geometryData.AddVertex(corners[i]);
+            }
 
-            // Near plane rectangle: bottom edge (0-1), right edge (1-3), top edge (3-2), left edge (2-0)
-            vertices[idx++] = corners[0]; vertices[idx++] = corners[1]; // Bottom
-            vertices[idx++] = corners[1]; vertices[idx++] = corners[3]; // Right
-            vertices[idx++] = corners[3]; vertices[idx++] = corners[2]; // Top
-            vertices[idx++] = corners[2]; vertices[idx++] = corners[0]; // Left
+            // Add 6 quad faces for the frustum
+            // Near plane (looking from inside the frustum)
+            geometryData.AddFace(verts[0], verts[1], verts[3], verts[2]);
+            // Far plane
+            geometryData.AddFace(verts[4], verts[6], verts[7], verts[5]);
+            // Bottom plane
+            geometryData.AddFace(verts[0], verts[4], verts[5], verts[1]);
+            // Top plane
+            geometryData.AddFace(verts[2], verts[3], verts[7], verts[6]);
+            // Left plane
+            geometryData.AddFace(verts[0], verts[2], verts[6], verts[4]);
+            // Right plane
+            geometryData.AddFace(verts[1], verts[5], verts[7], verts[3]);
 
-            // Far plane rectangle: bottom edge (4-5), right edge (5-7), top edge (7-6), left edge (6-4)
-            vertices[idx++] = corners[4]; vertices[idx++] = corners[5]; // Bottom
-            vertices[idx++] = corners[5]; vertices[idx++] = corners[7]; // Right
-            vertices[idx++] = corners[7]; vertices[idx++] = corners[6]; // Top
-            vertices[idx++] = corners[6]; vertices[idx++] = corners[4]; // Left
-
-            // Connecting edges from near to far
-            vertices[idx++] = corners[0]; vertices[idx++] = corners[4]; // Left-Bottom
-            vertices[idx++] = corners[1]; vertices[idx++] = corners[5]; // Right-Bottom
-            vertices[idx++] = corners[2]; vertices[idx++] = corners[6]; // Left-Top
-            vertices[idx++] = corners[3]; vertices[idx++] = corners[7]; // Right-Top
-
-            return new GeometryData(vertices, MeshTopology.LineList);
+            return geometryData;
         }
 
         // --- IEquatable & IFormattable Implementation ---

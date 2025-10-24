@@ -17,11 +17,11 @@ namespace Prowl.Vector.Geometry
         Double3 SupportMap(Double3 direction);
 
         /// <summary>
-        /// Generates mesh data for rendering this shape.
+        /// Generates geometry data for this shape as a BMesh-like structure.
+        /// The returned GeometryData can be converted to triangle or line meshes for rendering.
         /// </summary>
-        /// <param name="mode">Wireframe for outline rendering, Solid for filled geometry.</param>
         /// <param name="resolution">Level of detail for curved surfaces (e.g., number of segments for spheres).</param>
-        /// <returns>Mesh data containing vertices, indices, and topology information.</returns>
-        GeometryData GetMeshData(MeshMode mode, int resolution = 16);
+        /// <returns>GeometryData containing vertices, edges, loops, and faces with full topology information.</returns>
+        GeometryData GetGeometryData(int resolution = 16);
     }
 }
