@@ -7,8 +7,10 @@ using Prowl.Vector.Geometry;
 namespace OpenTKSample.Samples;
 
 /// <summary>
-/// Demonstrates the ExtrudeFaces operator on various shapes.
-/// Shows both outward and inward extrusion with different configurations.
+/// Demonstrates the ExtrudeFaces operator on various shapes with three different modes:
+/// - AlongNormals: vertices move along averaged normals (smooth, shared vertices)
+/// - AverageNormal: all vertices move in same direction (shared vertices)
+/// - PerFace: each face gets its own vertices (separated)
 /// </summary>
 public class FaceExtrusionDemo : IDemo
 {
@@ -32,41 +34,7 @@ public class FaceExtrusionDemo : IDemo
         // Animate the extrusion distance
         float extrudeAmount = (float)(Math.Sin(timeInSeconds * 0.8) * 0.3 + 0.35);
 
-        // LEFT: Original cube with top face extruded outward
-        {
-            var mesh = CopyGeometryData(_originalCube);
-
-            // Find the top face (highest Y normal)
-            GeometryData.Face? topFace = null;
-            foreach (var face in mesh.Faces)
-            {
-                var verts = face.NeighborVertices();
-                if (verts.Count >= 3)
-                {
-                    var v0 = verts[0].Point;
-                    var v1 = verts[1].Point;
-                    var v2 = verts[2].Point;
-                    var normal = Double3.Normalize(Double3.Cross(v1 - v0, v2 - v0));
-
-                    if (normal.Y > 0.9) // Top face
-                    {
-                        topFace = face;
-                        break;
-                    }
-                }
-            }
-
-            if (topFace != null)
-            {
-                GeometryOperators.ExtrudeFaces(mesh, new[] { topFace }, extrudeAmount, useVertexNormals: false);
-            }
-
-            Float3 leftPos = position + new Float3(-1.5f, 0, 0);
-            DrawMesh(mesh, leftPos, new Float4(0.3f, 0.8f, 1.0f, 0.8f), MeshMode.Wireframe);
-            DrawMesh(mesh, leftPos, new Float4(0.5f, 0.7f, 1.0f, 0.4f), MeshMode.Solid);
-        }
-
-        // CENTER: Cube with multiple faces extruded
+        // LEFT: Cube with top face extruded - PerFace mode (creates separated geometry)
         {
             var mesh = CopyGeometryData(_originalCube);
 
@@ -92,19 +60,50 @@ public class FaceExtrusionDemo : IDemo
 
             if (facesToExtrude.Count > 0)
             {
-                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.7, useVertexNormals: false);
+                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.7, ExtrudeMode.AverageNormal);
+            }
+
+            Float3 leftPos = position + new Float3(-1.5f, 0, 0);
+            DrawMesh(mesh, leftPos, new Float4(0.3f, 0.8f, 1.0f, 0.8f), MeshMode.Wireframe);
+            DrawMesh(mesh, leftPos, new Float4(0.5f, 0.7f, 1.0f, 0.4f), MeshMode.Solid);
+        }
+
+        // CENTER: Cube with multiple faces - AlongNormals mode (smooth with shared vertices)
+        {
+            var mesh = CopyGeometryData(_originalCube);
+
+            // Find top and front faces
+            var facesToExtrude = new List<GeometryData.Face>();
+            foreach (var face in mesh.Faces)
+            {
+                var verts = face.NeighborVertices();
+                if (verts.Count >= 3)
+                {
+                    var v0 = verts[0].Point;
+                    var v1 = verts[1].Point;
+                    var v2 = verts[2].Point;
+                    var normal = Double3.Normalize(Double3.Cross(v1 - v0, v2 - v0));
+
+                    // Top face or front face
+                    if (normal.Y > 0.9 || normal.Z < -0.9)
+                    {
+                        facesToExtrude.Add(face);
+                    }
+                }
+            }
+
+            if (facesToExtrude.Count > 0)
+            {
+                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.7, ExtrudeMode.AlongNormals);
             }
 
             DrawMesh(mesh, position, new Float4(1.0f, 0.5f, 0.2f, 0.8f), MeshMode.Wireframe);
             DrawMesh(mesh, position, new Float4(1.0f, 0.6f, 0.3f, 0.5f), MeshMode.Solid);
         }
 
-        // RIGHT: Sphere with half faces extruded (using vertex normals for smooth extrusion)
+        // RIGHT: Sphere with half faces - AlongNormals mode (creates smooth rounded extrusion)
         {
             var mesh = CopyGeometryData(_originalCylinder);
-
-            // Calculate normals for smooth extrusion
-            GeometryOperators.RecalculateNormals(mesh);
 
             // Extrude faces on the upper hemisphere
             var facesToExtrude = new List<GeometryData.Face>();
@@ -119,7 +118,7 @@ public class FaceExtrusionDemo : IDemo
 
             if (facesToExtrude.Count > 0)
             {
-                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.5, useVertexNormals: true);
+                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.5, ExtrudeMode.AlongNormals);
             }
 
             Float3 rightPos = position + new Float3(1.5f, 0, 0);
@@ -129,7 +128,7 @@ public class FaceExtrusionDemo : IDemo
         // BOTTOM ROW: Show inward extrusion
         float bottomY = -2.0f;
 
-        // Bottom Left: Cube with top face extruded inward
+        // Bottom Left: Inward extrusion using AverageNormal mode
         {
             var mesh = CopyGeometryData(_originalCube);
 
@@ -154,8 +153,8 @@ public class FaceExtrusionDemo : IDemo
 
             if (topFace != null)
             {
-                // Negative distance for inward extrusion
-                GeometryOperators.ExtrudeFaces(mesh, new[] { topFace }, -extrudeAmount * 0.8, useVertexNormals: false);
+                // Negative distance for inward extrusion - AverageNormal mode
+                GeometryOperators.ExtrudeFaces(mesh, new[] { topFace }, -extrudeAmount * 0.8, ExtrudeMode.AverageNormal);
             }
 
             Float3 bottomLeftPos = position + new Float3(-1.5f, bottomY, 0);
@@ -172,12 +171,12 @@ public class FaceExtrusionDemo : IDemo
             DrawMesh(mesh, bottomCenterPos, new Float4(0.5f, 0.5f, 0.5f, 0.3f), MeshMode.Solid);
         }
 
-        // Bottom Right: All faces extruded outward (creates interesting shape)
+        // Bottom Right: All faces extruded - PerFace mode (each face separated)
         {
             var mesh = CopyGeometryData(_originalCube);
 
             var allFaces = mesh.Faces.ToList();
-            GeometryOperators.ExtrudeFaces(mesh, allFaces, extrudeAmount * 0.4, useVertexNormals: false);
+            GeometryOperators.ExtrudeFaces(mesh, allFaces, extrudeAmount * 0.4, ExtrudeMode.PerFace);
 
             Float3 bottomRightPos = position + new Float3(1.5f, bottomY, 0);
             DrawMesh(mesh, bottomRightPos, new Float4(1.0f, 1.0f, 0.3f, 0.8f), MeshMode.Wireframe);

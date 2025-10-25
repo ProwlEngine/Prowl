@@ -44,12 +44,12 @@ namespace Prowl.Vector.Geometry
                 var v7 = geometryData.AddVertex(center + new Double3(-halfSize.X, halfSize.Y, halfSize.Z));
 
                 // Create 6 faces
-                geometryData.AddFace(v0, v1, v2, v3); // Front (-Z)
-                geometryData.AddFace(v5, v4, v7, v6); // Back (+Z)
-                geometryData.AddFace(v1, v5, v6, v2); // Right (+X)
-                geometryData.AddFace(v4, v0, v3, v7); // Left (-X)
-                geometryData.AddFace(v3, v2, v6, v7); // Top (+Y)
-                geometryData.AddFace(v4, v5, v1, v0); // Bottom (-Y)
+                geometryData.AddFace(v1, v0, v3, v2); // Front (-Z)
+                geometryData.AddFace(v4, v5, v6, v7); // Back (+Z)
+                geometryData.AddFace(v5, v1, v2, v6); // Right (+X)
+                geometryData.AddFace(v0, v4, v7, v3); // Left (-X)
+                geometryData.AddFace(v2, v3, v7, v6); // Top (+Y)
+                geometryData.AddFace(v5, v4, v0, v1); // Bottom (-Y)
             }
             else
             {
