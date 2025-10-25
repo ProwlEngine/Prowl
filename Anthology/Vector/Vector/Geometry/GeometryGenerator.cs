@@ -545,10 +545,10 @@ namespace Prowl.Vector.Geometry
                     int jNext = (j + 1) % minorSegments;
 
                     geometryData.AddFace(
-                        vertices[i, j],
                         vertices[iNext, j],
-                        vertices[iNext, jNext],
-                        vertices[i, jNext]
+                        vertices[i, j],
+                        vertices[i, jNext],
+                        vertices[iNext, jNext]
                     );
                 }
             }

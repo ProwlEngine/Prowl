@@ -21,6 +21,7 @@ public static class GeometryDemo
     {
         // BMesh / GeometryData Demos
         new SubdividedCubeDemo(),
+        new CSGOperationsDemo(),
         new CubeSubdivisionComparison(),
         new GeometryDataVisualizationDemo(),
         new BisectPlaneDemo(),

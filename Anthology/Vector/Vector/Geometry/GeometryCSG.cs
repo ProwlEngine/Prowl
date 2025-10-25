@@ -1,0 +1,1953 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace Prowl.Vector.Geometry
+{
+    /// <summary>
+    /// CSG (Constructive Solid Geometry) operations for GeometryData.
+    /// Complete production implementation supporting Union, Intersection, and Subtraction.
+    /// </summary>
+    public static class GeometryCSG
+    {
+        public enum Operation
+        {
+            Union,
+            Intersection,
+            Subtraction
+        }
+
+        #region Public API
+
+        public static GeometryData PerformOperation(Operation operation, GeometryData meshA, GeometryData meshB)
+        {
+            var brushA = GeometryDataToBrush(meshA);
+            var brushB = GeometryDataToBrush(meshB);
+            var resultBrush = new CSGBrush();
+
+            var brushOp = new CSGBrushOperation();
+            brushOp.MergeBrushes(operation, brushA, brushB, ref resultBrush);
+
+            return BrushToGeometryData(resultBrush);
+        }
+
+        public static GeometryData Union(GeometryData meshA, GeometryData meshB)
+            => PerformOperation(Operation.Union, meshA, meshB);
+
+        public static GeometryData Intersect(GeometryData meshA, GeometryData meshB)
+            => PerformOperation(Operation.Intersection, meshA, meshB);
+
+        public static GeometryData Subtraction(GeometryData meshA, GeometryData meshB)
+            => PerformOperation(Operation.Subtraction, meshA, meshB);
+
+        #endregion
+
+        #region CSGBrush
+
+        private class CSGBrush
+        {
+            public struct Face
+            {
+                public List<Double3> Vertices;
+                public Double2[] UVs;
+                public AABB Aabb;
+            }
+
+            public Face[] Faces = Array.Empty<Face>();
+
+            public void RegenFaceAABBs()
+            {
+                for (int i = 0; i < Faces.Length; i++)
+                {
+                    if (Faces[i].Vertices != null && Faces[i].Vertices.Count > 0)
+                    {
+                        Faces[i].Aabb = AABB.FromPoints(Faces[i].Vertices.ToArray());
+                    }
+                }
+            }
+
+            public static bool IsSnapable(Double3 point1, Double3 point2, double distance)
+            {
+                return Double3.LengthSquared(point1 - point2) < distance * distance;
+            }
+
+            public static bool IsEqualApprox(Double3 vec1, Double3 vec2)
+            {
+                Double3 vec3 = vec1 - vec2;
+                return Maths.Abs(vec3.X) < Intersection.INTERSECTION_EPSILON && Maths.Abs(vec3.Y) < Intersection.INTERSECTION_EPSILON && Maths.Abs(vec3.Z) < Intersection.INTERSECTION_EPSILON;
+            }
+
+            public static bool IsEqualApprox(Double2 vec1, Double2 vec2)
+            {
+                Double2 vec3 = vec1 - vec2;
+                return Maths.Abs(vec3.X) < Intersection.INTERSECTION_EPSILON && Maths.Abs(vec3.Y) < Intersection.INTERSECTION_EPSILON;
+            }
+
+            public static Double2 InterpolateSegmentUV(Double2[] segmentPoints, Double2[] uvs, Double2 interpolation)
+            {
+                if (IsEqualApprox(segmentPoints[0], segmentPoints[1]))
+                    return uvs[0];
+
+                double segmentLength = Double2.Length(segmentPoints[1] - segmentPoints[0]);
+                double distance = Double2.Length(interpolation - segmentPoints[0]);
+                double fraction = distance / segmentLength;
+
+                return Maths.Lerp(uvs[0], uvs[1], fraction);
+            }
+
+            public static Double2 InterpolateTriangleUV(Double2[] vertices, Double2[] uvs, Double2 interpolationPoint)
+            {
+                if (IsEqualApprox(interpolationPoint, vertices[0])) return uvs[0];
+                if (IsEqualApprox(interpolationPoint, vertices[1])) return uvs[1];
+                if (IsEqualApprox(interpolationPoint, vertices[2])) return uvs[2];
+
+                Double2 edge1 = vertices[1] - vertices[0];
+                Double2 edge2 = vertices[2] - vertices[0];
+                Double2 interpolation = interpolationPoint - vertices[0];
+
+                double edge1OnEdge1 = Double2.Dot(edge1, edge1);
+                double edge1OnEdge2 = Double2.Dot(edge1, edge2);
+                double edge2OnEdge2 = Double2.Dot(edge2, edge2);
+                double interOnEdge1 = Double2.Dot(interpolation, edge1);
+                double interOnEdge2 = Double2.Dot(interpolation, edge2);
+                double scale = (edge1OnEdge1 * edge2OnEdge2 - edge1OnEdge2 * edge1OnEdge2);
+                if (Maths.Abs(scale) < Intersection.INTERSECTION_EPSILON)
+                    return uvs[0];
+
+                double v = (edge2OnEdge2 * interOnEdge1 - edge1OnEdge2 * interOnEdge2) / scale;
+                double w = (edge1OnEdge1 * interOnEdge2 - edge1OnEdge2 * interOnEdge1) / scale;
+                double u = 1.0 - v - w;
+
+                return uvs[0] * u + uvs[1] * v + uvs[2] * w;
+            }
+
+            public static bool RayIntersectsTriangle(Double3 from, Double3 dir, Double3[] vertices, double tolerance, ref Double3 intersectionPoint)
+            {
+                if (Prowl.Vector.Geometry.Intersection.RayTriangle(from, dir, vertices[0], vertices[1], vertices[2], out double distance, out _, out _))
+                {
+                    intersectionPoint = from + dir * distance;
+                    return true;
+                }
+                return false;
+            }
+
+            public static bool IsPointInTriangle(Double3 point, Double3[] vertices, int shifted = 0)
+            {
+                double det = Double3.Dot(vertices[0], Double3.Cross(vertices[1], vertices[2]));
+
+                if (Maths.Abs(det) < Intersection.INTERSECTION_EPSILON)
+                {
+                    if (shifted > 2)
+                        return false;
+                    Double3 shiftBy = Double3.Zero;
+                    shiftBy[shifted] = 1;
+                    Double3 shiftedPoint = point + shiftBy;
+                    Double3[] shiftedVertices = { vertices[0] + shiftBy, vertices[1] + shiftBy, vertices[2] + shiftBy };
+                    return IsPointInTriangle(shiftedPoint, shiftedVertices, shifted + 1);
+                }
+
+                double[] lambda = new double[3];
+                lambda[0] = Double3.Dot(point, Double3.Cross(vertices[1], vertices[2])) / det;
+                lambda[1] = Double3.Dot(point, Double3.Cross(vertices[2], vertices[0])) / det;
+                lambda[2] = Double3.Dot(point, Double3.Cross(vertices[0], vertices[1])) / det;
+
+                if (Maths.Abs((lambda[0] + lambda[1] + lambda[2]) - 1) >= Intersection.INTERSECTION_EPSILON)
+                    return false;
+
+                if (lambda[0] < 0 || lambda[1] < 0 || lambda[2] < 0)
+                    return false;
+
+                return true;
+            }
+
+            public static bool IsTriangleDegenerate(Double2[] vertices, double tolerance)
+            {
+                double det = vertices[0].X * vertices[1].Y - vertices[0].X * vertices[2].Y +
+                        vertices[0].Y * vertices[2].X - vertices[0].Y * vertices[1].X +
+                        vertices[1].X * vertices[2].Y - vertices[1].Y * vertices[2].X;
+
+                return Maths.Abs(det) < tolerance;
+            }
+
+            public static bool AreSegmentsParallel(Double2[] segment1Points, Double2[] segment2Points, double tolerance)
+            {
+                Double2 segment1 = segment1Points[1] - segment1Points[0];
+                Double2 segment2 = segment2Points[1] - segment2Points[0];
+                double segment1Length2 = Double2.Dot(segment1, segment1);
+                double segment2Length2 = Double2.Dot(segment2, segment2);
+                double segmentOntoSegment = Double2.Dot(segment2, segment1);
+
+                if (segment1Length2 < tolerance || segment2Length2 < tolerance)
+                    return true;
+
+                double maxSeparation2;
+                if (segment1Length2 > segment2Length2)
+                    maxSeparation2 = segment2Length2 - segmentOntoSegment * segmentOntoSegment / segment1Length2;
+                else
+                    maxSeparation2 = segment1Length2 - segmentOntoSegment * segmentOntoSegment / segment2Length2;
+
+                return maxSeparation2 < tolerance;
+            }
+        }
+
+        #endregion
+
+        #region Transform2DFace
+
+        private class Transform2DFace
+        {
+            private Double3 basisL1 = new Double3(1, 0, 0);
+            private Double3 basisL2 = new Double3(0, 1, 0);
+            private Double3 basisL3 = new Double3(0, 0, 1);
+            private Double3 position = Double3.Zero;
+
+            public void SetBasisColumn(int col, Double3 value)
+            {
+                basisL1[col] = value[0];
+                basisL2[col] = value[1];
+                basisL3[col] = value[2];
+            }
+
+            public Double3 GetBasisColumn(int col)
+            {
+                return new Double3(basisL1[col], basisL2[col], basisL3[col]);
+            }
+
+            public void SetPosition(Double3 pos)
+            {
+                position = pos;
+            }
+
+            public Double3 Xform(Double3 vector)
+            {
+                return new Double3(
+                    Double3.Dot(basisL1, vector) + position.X,
+                    Double3.Dot(basisL2, vector) + position.Y,
+                    Double3.Dot(basisL3, vector) + position.Z);
+            }
+
+            private Double3 BasisXform(Double3 vector)
+            {
+                return new Double3(
+                    Double3.Dot(basisL1, vector),
+                    Double3.Dot(basisL2, vector),
+                    Double3.Dot(basisL3, vector));
+            }
+
+            private double Cofac(ref Double3 row1, int col1, ref Double3 row2, int col2)
+            {
+                return row1[col1] * row2[col2] - row1[col2] * row2[col1];
+            }
+
+            private void BasisInvert()
+            {
+                double[] co = new double[3];
+                co[0] = Cofac(ref basisL2, 1, ref basisL3, 2);
+                co[1] = Cofac(ref basisL2, 2, ref basisL3, 0);
+                co[2] = Cofac(ref basisL2, 0, ref basisL3, 1);
+
+                double det = basisL1[0] * co[0] + basisL1[1] * co[1] + basisL1[2] * co[2];
+                if (Maths.Abs(det) < double.Epsilon)
+                    return;
+
+                double s = 1.0 / det;
+
+                SetBasis(
+                    co[0] * s, Cofac(ref basisL1, 2, ref basisL3, 1) * s, Cofac(ref basisL1, 1, ref basisL2, 2) * s,
+                    co[1] * s, Cofac(ref basisL1, 0, ref basisL3, 2) * s, Cofac(ref basisL1, 2, ref basisL2, 0) * s,
+                    co[2] * s, Cofac(ref basisL1, 1, ref basisL3, 0) * s, Cofac(ref basisL1, 0, ref basisL2, 1) * s);
+            }
+
+            public void SetBasis(double xx, double xy, double xz, double yx, double yy, double yz, double zx, double zy, double zz)
+            {
+                basisL1 = new Double3(xx, xy, xz);
+                basisL2 = new Double3(yx, yy, yz);
+                basisL3 = new Double3(zx, zy, zz);
+            }
+
+            public void AffineInvert()
+            {
+                BasisInvert();
+                position = BasisXform(-position);
+            }
+
+            public Transform2DFace AffineInverse()
+            {
+                Transform2DFace result = new Transform2DFace();
+                result.basisL1 = basisL1;
+                result.basisL2 = basisL2;
+                result.basisL3 = basisL3;
+                result.position = position;
+                result.AffineInvert();
+                return result;
+            }
+        }
+
+        #endregion
+
+        #region Build2DFaces
+
+        private class Build2DFaces
+        {
+            private struct Vertex2D
+            {
+                public Double2 Point;
+                public Double2 UV;
+            }
+
+            private struct Face2D
+            {
+                public int[] VertexIdx;
+            }
+
+            private List<Vertex2D> vertices = new List<Vertex2D>();
+            private List<Face2D> faces = new List<Face2D>();
+            private const double vertexTolerance = 1e-10;
+            private Transform2DFace to3D;
+            private Transform2DFace to2D;
+            private Plane plane;
+
+            public Build2DFaces() { }
+
+            public Build2DFaces(CSGBrush brush, int faceIdx)
+            {
+                Double3[] points3D = new Double3[3];
+                for (int i = 0; i < 3; i++)
+                    points3D[i] = brush.Faces[faceIdx].Vertices[i];
+
+                plane = new Plane(points3D[0], points3D[1], points3D[2]);
+                to3D = new Transform2DFace();
+                to3D.SetPosition(points3D[0]);
+                to3D.SetBasisColumn(2, plane.Normal);
+                Double3 temp = points3D[1] - points3D[2];
+                temp = Double3.Normalize(temp);
+                to3D.SetBasisColumn(0, temp);
+                temp = Double3.Cross(to3D.GetBasisColumn(0), to3D.GetBasisColumn(2));
+                temp = Double3.Normalize(temp);
+                to3D.SetBasisColumn(1, temp);
+                to2D = to3D.AffineInverse();
+
+                Face2D face = new Face2D { VertexIdx = new int[3] };
+                for (int i = 0; i < 3; i++)
+                {
+                    Vertex2D vertex = new Vertex2D();
+                    Double3 point2D = to2D.Xform(points3D[i]);
+                    vertex.Point = new Double2(point2D.X, point2D.Y);
+                    vertex.UV = brush.Faces[faceIdx].UVs[i];
+                    vertices.Add(vertex);
+                    face.VertexIdx[i] = i;
+                }
+                faces.Add(face);
+            }
+
+            private static Double2 GetClosestPointToSegment(Double2 point, Double2[] segment)
+            {
+                Double2 p = point - segment[0];
+                Double2 n = segment[1] - segment[0];
+                double l2 = Double2.LengthSquared(n);
+                if (l2 < 1e-20)
+                    return segment[0];
+
+                double d = Double2.Dot(n, p) / l2;
+
+                if (d <= 0.0)
+                    return segment[0];
+                else if (d >= 1.0)
+                    return segment[1];
+                else
+                    return segment[0] + n * d;
+            }
+
+            private static bool SegmentIntersectsSegment(Double2 fromA, Double2 toA, Double2 fromB, Double2 toB, ref Double2 result)
+            {
+                Double2 AB = toA - fromA;
+                Double2 AC = fromB - fromA;
+                Double2 AD = toB - fromA;
+
+                double ABlen = Double2.Dot(AB, AB);
+                if (ABlen <= 0)
+                    return false;
+
+                Double2 ABNorm = AB / ABlen;
+                AC = new Double2(AC.X * ABNorm.X + AC.Y * ABNorm.Y, AC.Y * ABNorm.X - AC.X * ABNorm.Y);
+                AD = new Double2(AD.X * ABNorm.X + AD.Y * ABNorm.Y, AD.Y * ABNorm.X - AD.X * ABNorm.Y);
+
+                if ((AC.Y < -Intersection.INTERSECTION_EPSILON && AD.Y < -Intersection.INTERSECTION_EPSILON) ||
+                    (AC.Y > Intersection.INTERSECTION_EPSILON && AD.Y > Intersection.INTERSECTION_EPSILON))
+                    return false;
+
+                if (Maths.Abs(AD.Y - AC.Y) < Intersection.INTERSECTION_EPSILON)
+                    return false;
+
+                double ABpos = AD.X + (AC.X - AD.X) * AD.Y / (AD.Y - AC.Y);
+
+                if ((ABpos < 0) || (ABpos > 1))
+                    return false;
+
+                result = fromA + AB * ABpos;
+                return true;
+            }
+
+            private static bool IsPointInTriangle(Double2 point, Double2 a, Double2 b, Double2 c)
+            {
+                Double2 an = a - point;
+                Double2 bn = b - point;
+                Double2 cn = c - point;
+
+                bool orientation = (an.X * bn.Y - an.Y * bn.X) > 0;
+
+                if (((bn.X * cn.Y - bn.Y * cn.X) > 0) != orientation)
+                    return false;
+
+                return ((cn.X * an.Y - cn.Y * an.X) > 0) == orientation;
+            }
+
+            private static bool PlaneIntersectsSegment(Plane plane, Double3 begin, Double3 end, ref Double3 result)
+            {
+                return Prowl.Vector.Geometry.Intersection.LineSegmentPlane(begin, end, plane.Normal, plane.D, out result);
+            }
+
+            private int GetPointIdx(Double2 point)
+            {
+                for (int vertexIdx = 0; vertexIdx < vertices.Count; ++vertexIdx)
+                {
+                    if (Double2.LengthSquared(vertices[vertexIdx].Point - point) < vertexTolerance)
+                        return vertexIdx;
+                }
+                return -1;
+            }
+
+            private int AddVertex(Vertex2D vertex)
+            {
+                int vertexId = GetPointIdx(vertex.Point);
+                if (vertexId != -1)
+                    return vertexId;
+
+                vertices.Add(vertex);
+                return vertices.Count - 1;
+            }
+
+            private void AddVertexIdxSorted(List<int> vertexIndices, int newVertexIndex)
+            {
+                if (newVertexIndex >= 0 && vertexIndices.IndexOf(newVertexIndex) == -1)
+                {
+                    if (vertexIndices.Count == 0)
+                    {
+                        vertexIndices.Add(newVertexIndex);
+                        return;
+                    }
+
+                    Double2 firstPoint;
+                    Double2 newPoint;
+                    int axis;
+                    if (vertexIndices.Count == 1)
+                    {
+                        firstPoint = vertices[vertexIndices[0]].Point;
+                        newPoint = vertices[newVertexIndex].Point;
+
+                        axis = 0;
+                        if (Maths.Abs(newPoint.X - firstPoint.X) < Maths.Abs(newPoint.Y - firstPoint.Y))
+                            axis = 1;
+
+                        if (newPoint[axis] < firstPoint[axis])
+                            vertexIndices.Insert(0, newVertexIndex);
+                        else
+                            vertexIndices.Add(newVertexIndex);
+
+                        return;
+                    }
+
+                    firstPoint = vertices[vertexIndices[0]].Point;
+                    Double2 lastPoint = vertices[vertexIndices[vertexIndices.Count - 1]].Point;
+                    newPoint = vertices[newVertexIndex].Point;
+
+                    axis = 0;
+                    if (Maths.Abs(lastPoint.X - firstPoint.X) < Maths.Abs(lastPoint.Y - firstPoint.Y))
+                        axis = 1;
+
+                    for (int insertIdx = 0; insertIdx < vertexIndices.Count; ++insertIdx)
+                    {
+                        Double2 insertPoint = vertices[vertexIndices[insertIdx]].Point;
+                        if (newPoint[axis] < insertPoint[axis])
+                        {
+                            vertexIndices.Insert(insertIdx, newVertexIndex);
+                            return;
+                        }
+                    }
+                    vertexIndices.Add(newVertexIndex);
+                }
+            }
+
+            private void MergeFaces(List<int> segmentIndices)
+            {
+                int segments = segmentIndices.Count - 1;
+                if (segments < 2)
+                    return;
+
+                // Faces around an inner vertex are merged by moving the inner vertex to the first vertex
+                for (int sortedIdx = 1; sortedIdx < segments; ++sortedIdx)
+                {
+                    int closestIdx = 0;
+                    int innerIdx = segmentIndices[sortedIdx];
+
+                    if (sortedIdx > segments / 2)
+                    {
+                        closestIdx = segments;
+                        innerIdx = segmentIndices[segments + segments / 2 - sortedIdx];
+                    }
+
+                    List<int> mergeFacesIdx = new List<int>();
+                    List<Face2D> mergeFaces = new List<Face2D>();
+                    List<int> mergeFacesInnerVertexIdx = new List<int>();
+                    for (int faceIdx = 0; faceIdx < faces.Count; ++faceIdx)
+                    {
+                        for (int faceVertexIdx = 0; faceVertexIdx < 3; ++faceVertexIdx)
+                        {
+                            if (faces[faceIdx].VertexIdx[faceVertexIdx] == innerIdx)
+                            {
+                                mergeFacesIdx.Add(faceIdx);
+                                mergeFaces.Add(faces[faceIdx]);
+                                mergeFacesInnerVertexIdx.Add(faceVertexIdx);
+                            }
+                        }
+                    }
+
+                    List<int> degeneratePoints = new List<int>();
+
+                    for (int mergeIdx = 0; mergeIdx < mergeFaces.Count; ++mergeIdx)
+                    {
+                        int[] outerEdgeIdx = new int[2];
+                        outerEdgeIdx[0] = mergeFaces[mergeIdx].VertexIdx[(mergeFacesInnerVertexIdx[mergeIdx] + 1) % 3];
+                        outerEdgeIdx[1] = mergeFaces[mergeIdx].VertexIdx[(mergeFacesInnerVertexIdx[mergeIdx] + 2) % 3];
+
+                        if (outerEdgeIdx[0] == segmentIndices[closestIdx] || outerEdgeIdx[1] == segmentIndices[closestIdx])
+                            continue;
+
+                        Double2[] edge1 = { vertices[outerEdgeIdx[0]].Point, vertices[segmentIndices[closestIdx]].Point };
+                        Double2[] edge2 = { vertices[outerEdgeIdx[1]].Point, vertices[segmentIndices[closestIdx]].Point };
+                        if (CSGBrush.AreSegmentsParallel(edge1, edge2, vertexTolerance))
+                        {
+                            if (!degeneratePoints.Contains(outerEdgeIdx[0]))
+                                degeneratePoints.Add(outerEdgeIdx[0]);
+                            if (!degeneratePoints.Contains(outerEdgeIdx[1]))
+                                degeneratePoints.Add(outerEdgeIdx[1]);
+                            continue;
+                        }
+
+                        Face2D newFace = new Face2D { VertexIdx = new int[3] };
+                        newFace.VertexIdx[0] = segmentIndices[closestIdx];
+                        newFace.VertexIdx[1] = outerEdgeIdx[0];
+                        newFace.VertexIdx[2] = outerEdgeIdx[1];
+                        faces.Add(newFace);
+                    }
+
+                    mergeFacesIdx.Sort();
+                    mergeFacesIdx.Reverse();
+                    for (int i = 0; i < mergeFacesIdx.Count; ++i)
+                        faces.RemoveAt(mergeFacesIdx[i]);
+
+                    if (degeneratePoints.Count == 0)
+                        continue;
+
+                    // Split faces using degenerate points
+                    for (int faceIdx = 0; faceIdx < faces.Count; ++faceIdx)
+                    {
+                        Face2D face = faces[faceIdx];
+                        Vertex2D[] faceVertices = {
+                            vertices[face.VertexIdx[0]],
+                            vertices[face.VertexIdx[1]],
+                            vertices[face.VertexIdx[2]]
+                        };
+                        Double2[] facePoints = { faceVertices[0].Point, faceVertices[1].Point, faceVertices[2].Point };
+
+                        for (int pointIdx = 0; pointIdx < degeneratePoints.Count; ++pointIdx)
+                        {
+                            int degenerateIdx = degeneratePoints[pointIdx];
+                            Double2 point2D = vertices[degenerateIdx].Point;
+
+                            bool existing = false;
+                            for (int i = 0; i < 3; ++i)
+                            {
+                                if (Double2.LengthSquared(faceVertices[i].Point - point2D) < vertexTolerance)
+                                {
+                                    existing = true;
+                                    break;
+                                }
+                            }
+                            if (existing)
+                                continue;
+
+                            for (int faceEdgeIdx = 0; faceEdgeIdx < 3; ++faceEdgeIdx)
+                            {
+                                Double2[] edgePoints = { facePoints[faceEdgeIdx], facePoints[(faceEdgeIdx + 1) % 3] };
+                                Double2 closestPoint = GetClosestPointToSegment(point2D, edgePoints);
+
+                                if (Double2.LengthSquared(point2D - closestPoint) < vertexTolerance)
+                                {
+                                    int oppositeVertexIdx = face.VertexIdx[(faceEdgeIdx + 2) % 3];
+
+                                    if (degenerateIdx == oppositeVertexIdx)
+                                    {
+                                        faces.RemoveAt(faceIdx);
+                                        --faceIdx;
+                                        break;
+                                    }
+
+                                    Face2D leftFace = new Face2D { VertexIdx = new int[3] };
+                                    leftFace.VertexIdx[0] = degenerateIdx;
+                                    leftFace.VertexIdx[1] = face.VertexIdx[(faceEdgeIdx + 1) % 3];
+                                    leftFace.VertexIdx[2] = oppositeVertexIdx;
+                                    Face2D rightFace = new Face2D { VertexIdx = new int[3] };
+                                    rightFace.VertexIdx[0] = oppositeVertexIdx;
+                                    rightFace.VertexIdx[1] = face.VertexIdx[faceEdgeIdx];
+                                    rightFace.VertexIdx[2] = degenerateIdx;
+                                    faces.RemoveAt(faceIdx);
+                                    faces.Insert(faceIdx, rightFace);
+                                    faces.Insert(faceIdx, leftFace);
+
+                                    ++faceIdx;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            private void FindEdgeIntersections(Double2[] segmentPoints, ref List<int> segmentIndices)
+            {
+                for (int faceIdx = 0; faceIdx < faces.Count; ++faceIdx)
+                {
+                    Face2D face = faces[faceIdx];
+                    Vertex2D[] faceVertices = {
+                        vertices[face.VertexIdx[0]],
+                        vertices[face.VertexIdx[1]],
+                        vertices[face.VertexIdx[2]]
+                    };
+
+                    for (int faceEdgeIdx = 0; faceEdgeIdx < 3; ++faceEdgeIdx)
+                    {
+                        Double2[] edgePoints = {
+                            faceVertices[faceEdgeIdx].Point,
+                            faceVertices[(faceEdgeIdx + 1) % 3].Point
+                        };
+                        Double2[] edgeUVs = {
+                            faceVertices[faceEdgeIdx].UV,
+                            faceVertices[(faceEdgeIdx + 1) % 3].UV
+                        };
+                        Double2 intersectionPoint = Double2.Zero;
+
+                        bool onEdge = false;
+                        for (int edgePointIdx = 0; edgePointIdx < 2; ++edgePointIdx)
+                        {
+                            intersectionPoint = GetClosestPointToSegment(segmentPoints[edgePointIdx], edgePoints);
+                            if (Double2.LengthSquared(segmentPoints[edgePointIdx] - intersectionPoint) < vertexTolerance)
+                            {
+                                onEdge = true;
+                                break;
+                            }
+                        }
+
+                        if (onEdge || SegmentIntersectsSegment(segmentPoints[0], segmentPoints[1], edgePoints[0], edgePoints[1], ref intersectionPoint))
+                        {
+                            if ((Double2.LengthSquared(edgePoints[0] - intersectionPoint) < vertexTolerance) ||
+                                (Double2.LengthSquared(edgePoints[1] - intersectionPoint) < vertexTolerance))
+                                continue;
+
+                            if (CSGBrush.AreSegmentsParallel(segmentPoints, edgePoints, vertexTolerance))
+                                continue;
+
+                            Vertex2D newVertex = new Vertex2D
+                            {
+                                Point = intersectionPoint,
+                                UV = CSGBrush.InterpolateSegmentUV(edgePoints, edgeUVs, intersectionPoint)
+                            };
+                            int newVertexIdx = AddVertex(newVertex);
+                            int oppositeVertexIdx = face.VertexIdx[(faceEdgeIdx + 2) % 3];
+                            AddVertexIdxSorted(segmentIndices, newVertexIdx);
+
+                            if (newVertexIdx == oppositeVertexIdx)
+                            {
+                                faces.RemoveAt(faceIdx);
+                                --faceIdx;
+                                break;
+                            }
+
+                            Double2 closestPoint = GetClosestPointToSegment(vertices[oppositeVertexIdx].Point, segmentPoints);
+                            if (Double2.LengthSquared(vertices[oppositeVertexIdx].Point - closestPoint) < vertexTolerance)
+                                AddVertexIdxSorted(segmentIndices, oppositeVertexIdx);
+
+                            Face2D leftFace = new Face2D { VertexIdx = new int[3] };
+                            leftFace.VertexIdx[0] = newVertexIdx;
+                            leftFace.VertexIdx[1] = face.VertexIdx[(faceEdgeIdx + 1) % 3];
+                            leftFace.VertexIdx[2] = oppositeVertexIdx;
+                            Face2D rightFace = new Face2D { VertexIdx = new int[3] };
+                            rightFace.VertexIdx[0] = oppositeVertexIdx;
+                            rightFace.VertexIdx[1] = face.VertexIdx[faceEdgeIdx];
+                            rightFace.VertexIdx[2] = newVertexIdx;
+                            faces.RemoveAt(faceIdx);
+                            faces.Insert(faceIdx, rightFace);
+                            faces.Insert(faceIdx, leftFace);
+
+                            --faceIdx;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            private int InsertPoint(Double2 point)
+            {
+                int newVertexIdx = -1;
+
+                for (int faceIdx = 0; faceIdx < faces.Count; ++faceIdx)
+                {
+                    Face2D face = faces[faceIdx];
+                    Vertex2D[] faceVertices = {
+                        vertices[face.VertexIdx[0]],
+                        vertices[face.VertexIdx[1]],
+                        vertices[face.VertexIdx[2]]
+                    };
+                    Double2[] points = { faceVertices[0].Point, faceVertices[1].Point, faceVertices[2].Point };
+                    Double2[] uvs = { faceVertices[0].UV, faceVertices[1].UV, faceVertices[2].UV };
+
+                    if (CSGBrush.IsTriangleDegenerate(points, vertexTolerance))
+                        continue;
+
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        if (Double2.LengthSquared(faceVertices[i].Point - point) < vertexTolerance)
+                            return face.VertexIdx[i];
+                    }
+
+                    bool onEdge = false;
+                    for (int faceEdgeIdx = 0; faceEdgeIdx < 3; ++faceEdgeIdx)
+                    {
+                        Double2[] edgePoints = { points[faceEdgeIdx], points[(faceEdgeIdx + 1) % 3] };
+                        Double2[] edgeUVs = { uvs[faceEdgeIdx], uvs[(faceEdgeIdx + 1) % 3] };
+
+                        Double2 closestPoint = GetClosestPointToSegment(point, edgePoints);
+                        if (Double2.LengthSquared(point - closestPoint) < vertexTolerance)
+                        {
+                            onEdge = true;
+
+                            Vertex2D newVertex = new Vertex2D
+                            {
+                                Point = point,
+                                UV = CSGBrush.InterpolateSegmentUV(edgePoints, edgeUVs, point)
+                            };
+                            newVertexIdx = AddVertex(newVertex);
+                            int oppositeVertexIdx = face.VertexIdx[(faceEdgeIdx + 2) % 3];
+
+                            if (newVertexIdx == oppositeVertexIdx)
+                            {
+                                faces.RemoveAt(faceIdx);
+                                --faceIdx;
+                                break;
+                            }
+
+                            Double2[] splitEdge1 = { vertices[newVertexIdx].Point, edgePoints[0] };
+                            Double2[] splitEdge2 = { vertices[newVertexIdx].Point, edgePoints[1] };
+                            Double2[] newEdge = { vertices[newVertexIdx].Point, vertices[oppositeVertexIdx].Point };
+                            if (CSGBrush.AreSegmentsParallel(splitEdge1, newEdge, vertexTolerance) &&
+                                CSGBrush.AreSegmentsParallel(splitEdge2, newEdge, vertexTolerance))
+                                break;
+
+                            Face2D leftFace = new Face2D { VertexIdx = new int[3] };
+                            leftFace.VertexIdx[0] = newVertexIdx;
+                            leftFace.VertexIdx[1] = face.VertexIdx[(faceEdgeIdx + 1) % 3];
+                            leftFace.VertexIdx[2] = oppositeVertexIdx;
+                            Face2D rightFace = new Face2D { VertexIdx = new int[3] };
+                            rightFace.VertexIdx[0] = oppositeVertexIdx;
+                            rightFace.VertexIdx[1] = face.VertexIdx[faceEdgeIdx];
+                            rightFace.VertexIdx[2] = newVertexIdx;
+                            faces.RemoveAt(faceIdx);
+                            faces.Insert(faceIdx, rightFace);
+                            faces.Insert(faceIdx, leftFace);
+
+                            ++faceIdx;
+                            break;
+                        }
+                    }
+
+                    if (!onEdge && IsPointInTriangle(point, faceVertices[0].Point, faceVertices[1].Point, faceVertices[2].Point))
+                    {
+                        Vertex2D newVertex = new Vertex2D
+                        {
+                            Point = point,
+                            UV = CSGBrush.InterpolateTriangleUV(points, uvs, point)
+                        };
+                        newVertexIdx = AddVertex(newVertex);
+
+                        for (int i = 0; i < 3; ++i)
+                        {
+                            Double2[] newPoints = { points[i], points[(i + 1) % 3], vertices[newVertexIdx].Point };
+                            if (CSGBrush.IsTriangleDegenerate(newPoints, vertexTolerance))
+                                continue;
+
+                            Face2D newFace = new Face2D { VertexIdx = new int[3] };
+                            newFace.VertexIdx[0] = face.VertexIdx[i];
+                            newFace.VertexIdx[1] = face.VertexIdx[(i + 1) % 3];
+                            newFace.VertexIdx[2] = newVertexIdx;
+                            faces.Add(newFace);
+                        }
+                        faces.RemoveAt(faceIdx);
+                        break;
+                    }
+                }
+
+                return newVertexIdx;
+            }
+
+            public void Insert(CSGBrush brush, int faceIdx)
+            {
+                Double2[] points2D = new Double2[3];
+                int pointsCount = 0;
+
+                for (int i = 0; i < 3; i++)
+                {
+                    Double3 point3D = brush.Faces[faceIdx].Vertices[i];
+
+                    if (plane.GetDistanceToPoint(point3D) < Intersection.INTERSECTION_EPSILON)
+                    {
+                        Double3 point2D = to2D.Xform(point3D);
+                        points2D[pointsCount++] = new Double2(point2D.X, point2D.Y);
+                    }
+                    else
+                    {
+                        Double3 nextPoint3D = brush.Faces[faceIdx].Vertices[(i + 1) % 3];
+
+                        if (plane.GetDistanceToPoint(nextPoint3D) >= Intersection.INTERSECTION_EPSILON)
+                        {
+                            bool side1 = plane.GetSide(point3D);
+                            bool side2 = plane.GetSide(nextPoint3D);
+
+                            if (side1 != side2)
+                            {
+                                Double3 point2D = Double3.Zero;
+                                if (PlaneIntersectsSegment(plane, point3D, nextPoint3D, ref point2D))
+                                {
+                                    point2D = to2D.Xform(point2D);
+                                    points2D[pointsCount++] = new Double2(point2D.X, point2D.Y);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                List<int> segmentIndices = new List<int>();
+                Double2[] segment = new Double2[2];
+                int[] insertedIndex = { -1, -1, -1 };
+
+                for (int i = 0; i < pointsCount; ++i)
+                    insertedIndex[i] = InsertPoint(points2D[i]);
+
+                if (pointsCount == 2)
+                {
+                    segment[0] = points2D[0];
+                    segment[1] = points2D[1];
+                    FindEdgeIntersections(segment, ref segmentIndices);
+                    for (int i = 0; i < 2; ++i)
+                        AddVertexIdxSorted(segmentIndices, insertedIndex[i]);
+                    MergeFaces(segmentIndices);
+                }
+
+                if (pointsCount == 3)
+                {
+                    for (int edgeIdx = 0; edgeIdx < 3; ++edgeIdx)
+                    {
+                        segment[0] = points2D[edgeIdx];
+                        segment[1] = points2D[(edgeIdx + 1) % 3];
+                        FindEdgeIntersections(segment, ref segmentIndices);
+                        for (int i = 0; i < 2; ++i)
+                            AddVertexIdxSorted(segmentIndices, insertedIndex[(edgeIdx + i) % 3]);
+                        MergeFaces(segmentIndices);
+                        segmentIndices.Clear();
+                    }
+                }
+            }
+
+            public void AddFacesToMesh(ref MeshMerge meshMerge, bool fromB)
+            {
+                for (int faceIdx = 0; faceIdx < faces.Count; ++faceIdx)
+                {
+                    Face2D face = faces[faceIdx];
+                    Vertex2D[] fv = {
+                        vertices[face.VertexIdx[0]],
+                        vertices[face.VertexIdx[1]],
+                        vertices[face.VertexIdx[2]]
+                    };
+
+                    Double3[] points3D = new Double3[3];
+                    Double2[] uvs = new Double2[3];
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        Double3 point2D = new Double3(fv[i].Point.X, fv[i].Point.Y, 0);
+                        points3D[i] = to3D.Xform(point2D);
+                        uvs[i] = fv[i].UV;
+                    }
+
+                    meshMerge.AddFace(points3D, uvs, fromB);
+                }
+            }
+        }
+
+        #endregion
+
+        #region MeshMerge
+
+        private class MeshMerge
+        {
+            private const int BVH_LIMIT = 10;
+
+            private enum VISIT
+            {
+                TEST_AABB_BIT = 0,
+                VISIT_LEFT_BIT = 1,
+                VISIT_RIGHT_BIT = 2,
+                VISIT_DONE_BIT = 3,
+                VISITED_BIT_SHIFT = 29,
+                NODE_IDX_MASK = (1 << 29) - 1,
+            }
+
+            public struct FaceBVH
+            {
+                public int Face;
+                public int Left;
+                public int Right;
+                public int Next;
+                public Double3 Center;
+                public AABB Aabb;
+            }
+
+            public struct Face
+            {
+                public bool FromB;
+                public int[] Points;
+                public Double2[] UVs;
+            }
+
+            public List<Double3> Points = new List<Double3>();
+            public List<Face> FacesA = new List<Face>();
+            public List<Face> FacesB = new List<Face>();
+            public double VertexSnap = 0.0;
+            private Dictionary<SnapKey, int> snapCache = new Dictionary<SnapKey, int>();
+
+            private struct SnapKey : IEquatable<SnapKey>
+            {
+                public int X, Y, Z;
+
+                public SnapKey(Double3 point, double snap)
+                {
+                    X = (int)Math.Round(((point.X + snap) * 0.31234) / snap);
+                    Y = (int)Math.Round(((point.Y + snap) * 0.31234) / snap);
+                    Z = (int)Math.Round(((point.Z + snap) * 0.31234) / snap);
+                }
+
+                public bool Equals(SnapKey other) => X == other.X && Y == other.Y && Z == other.Z;
+                public override int GetHashCode() => HashCode.Combine(X, Y, Z);
+            }
+
+            public void AddFace(Double3[] points, Double2[] uvs, bool fromB)
+            {
+                int[] indices = new int[3];
+                for (int i = 0; i < 3; i++)
+                {
+                    var key = new SnapKey(points[i], VertexSnap);
+                    if (snapCache.TryGetValue(key, out int existing))
+                    {
+                        indices[i] = existing;
+                    }
+                    else
+                    {
+                        indices[i] = Points.Count;
+                        Points.Add(points[i]);
+                        snapCache[key] = indices[i];
+                    }
+                }
+
+                if (indices[0] == indices[1] || indices[0] == indices[2] || indices[1] == indices[2])
+                    return;
+
+                var face = new Face
+                {
+                    FromB = fromB,
+                    Points = indices,
+                    UVs = (Double2[])uvs.Clone()
+                };
+
+                if (fromB)
+                    FacesB.Add(face);
+                else
+                    FacesA.Add(face);
+            }
+
+            private class FaceBVHCmpX : IComparer
+            {
+                int IComparer.Compare(object? obj1, object? obj2)
+                {
+                    var p_left = ((int, FaceBVH))obj1!;
+                    var p_right = ((int, FaceBVH))obj2!;
+                    if (p_left.Item2.Center.X == p_right.Item2.Center.X) return 0;
+                    return p_left.Item2.Center.X < p_right.Item2.Center.X ? -1 : 1;
+                }
+            }
+
+            private class FaceBVHCmpY : IComparer
+            {
+                int IComparer.Compare(object? obj1, object? obj2)
+                {
+                    var p_left = ((int, FaceBVH))obj1!;
+                    var p_right = ((int, FaceBVH))obj2!;
+                    if (p_left.Item2.Center.Y == p_right.Item2.Center.Y) return 0;
+                    return p_left.Item2.Center.Y < p_right.Item2.Center.Y ? -1 : 1;
+                }
+            }
+
+            private class FaceBVHCmpZ : IComparer
+            {
+                int IComparer.Compare(object? obj1, object? obj2)
+                {
+                    var p_left = ((int, FaceBVH))obj1!;
+                    var p_right = ((int, FaceBVH))obj2!;
+                    if (p_left.Item2.Center.Z == p_right.Item2.Center.Z) return 0;
+                    return p_left.Item2.Center.Z < p_right.Item2.Center.Z ? -1 : 1;
+                }
+            }
+
+            private int CreateBVH(ref FaceBVH[] facebvh, ref (int, FaceBVH)[] idFacebvh, int from, int size, int depth, ref int maxDepth)
+            {
+                if (depth > maxDepth)
+                    maxDepth = depth;
+
+                if (size == 0)
+                    return -1;
+
+                if (size <= BVH_LIMIT)
+                {
+                    for (int i = 0; i < size - 1; i++)
+                        facebvh[idFacebvh[from + i].Item1].Next = idFacebvh[from + i + 1].Item1;
+                    return idFacebvh[from].Item1;
+                }
+
+                AABB aabb = facebvh[idFacebvh[from].Item1].Aabb;
+                for (int i = 1; i < size; i++)
+                    aabb.Encapsulate(idFacebvh[from + i].Item2.Aabb);
+
+                int li = aabb.Size.X > aabb.Size.Y ? (aabb.Size.X > aabb.Size.Z ? 0 : 2) : (aabb.Size.Y > aabb.Size.Z ? 1 : 2);
+
+                switch (li)
+                {
+                    case 0:
+                        {
+                            SortArray temp = new SortArray(new FaceBVHCmpX());
+                            temp.NthElement(from, from + size, from + size / 2, ref idFacebvh);
+                        }
+                        break;
+                    case 1:
+                        {
+                            SortArray temp = new SortArray(new FaceBVHCmpY());
+                            temp.NthElement(from, from + size, from + size / 2, ref idFacebvh);
+                        }
+                        break;
+                    case 2:
+                        {
+                            SortArray temp = new SortArray(new FaceBVHCmpZ());
+                            temp.NthElement(from, from + size, from + size / 2, ref idFacebvh);
+                        }
+                        break;
+                }
+
+                int left = CreateBVH(ref facebvh, ref idFacebvh, from, size / 2, depth + 1, ref maxDepth);
+                int right = CreateBVH(ref facebvh, ref idFacebvh, from + size / 2, size - size / 2, depth + 1, ref maxDepth);
+
+                Array.Resize(ref facebvh, facebvh.Length + 1);
+                facebvh[facebvh.Length - 1].Aabb = aabb;
+                facebvh[facebvh.Length - 1].Center = aabb.Center;
+                facebvh[facebvh.Length - 1].Face = -1;
+                facebvh[facebvh.Length - 1].Left = left;
+                facebvh[facebvh.Length - 1].Right = right;
+                facebvh[facebvh.Length - 1].Next = -1;
+
+                return facebvh.Length - 1;
+            }
+
+            private void AddDistance(ref List<double> intersectionsA, ref List<double> intersectionsB, bool fromB, double distance)
+            {
+                List<double> intersections = fromB ? intersectionsB : intersectionsA;
+
+                foreach (double E in intersections)
+                {
+                    if (Maths.Abs(E - distance) < Intersection.INTERSECTION_EPSILON)
+                        return;
+                }
+
+                intersections.Add(distance);
+            }
+
+            private bool BVHInside(ref FaceBVH[] facebvh, int maxDepth, int bvhFirst, int faceIdx, bool fromFacesA)
+            {
+                Face face = fromFacesA ? FacesA[faceIdx] : FacesB[faceIdx];
+
+                Double3[] facePoints = {
+                    Points[face.Points[0]],
+                    Points[face.Points[1]],
+                    Points[face.Points[2]]
+                };
+                Double3 faceCenter = (facePoints[0] + facePoints[1] + facePoints[2]) / 3.0;
+                Plane facePlane = new Plane(facePoints[0], facePoints[1], facePoints[2]);
+                Double3 faceNormal = facePlane.Normal;
+
+                int[] stack = new int[maxDepth];
+
+                List<double> intersectionsA = new List<double>();
+                List<double> intersectionsB = new List<double>();
+
+                int level = 0;
+                stack[0] = bvhFirst;
+
+                while (true)
+                {
+                    int node = stack[level] & (int)VISIT.NODE_IDX_MASK;
+                    FaceBVH? currentFacebvh = facebvh[node];
+                    bool done = false;
+
+                    switch (stack[level] >> (int)VISIT.VISITED_BIT_SHIFT)
+                    {
+                        case (int)VISIT.TEST_AABB_BIT:
+                            {
+                                if (((FaceBVH)currentFacebvh).Face >= 0)
+                                {
+                                    while (currentFacebvh != null)
+                                    {
+                                        FaceBVH current = (FaceBVH)currentFacebvh;
+                                        // Check ray-AABB intersection
+                                        if (RayIntersectsAABB(faceCenter, faceNormal, current.Aabb))
+                                        {
+                                            Face currentFace = fromFacesA ? FacesB[current.Face] : FacesA[current.Face];
+                                            Double3[] currentPoints = {
+                                                Points[currentFace.Points[0]],
+                                                Points[currentFace.Points[1]],
+                                                Points[currentFace.Points[2]]
+                                            };
+                                            Plane currentPlane = new Plane(currentPoints[0], currentPoints[1], currentPoints[2]);
+                                            Double3 currentNormal = currentPlane.Normal;
+                                            Double3 intersectionPoint = Double3.Zero;
+
+                                            if (CSGBrush.IsEqualApprox(currentNormal, faceNormal) &&
+                                                CSGBrush.IsPointInTriangle(faceCenter, currentPoints))
+                                            {
+                                                if (!face.FromB)
+                                                    AddDistance(ref intersectionsA, ref intersectionsB, currentFace.FromB, 0);
+                                            }
+                                            else if (CSGBrush.RayIntersectsTriangle(faceCenter, faceNormal, currentPoints, Intersection.INTERSECTION_EPSILON, ref intersectionPoint))
+                                            {
+                                                double distance = Double3.Length(faceCenter - intersectionPoint);
+                                                AddDistance(ref intersectionsA, ref intersectionsB, currentFace.FromB, distance);
+                                            }
+                                        }
+
+                                        if (current.Next != -1)
+                                            currentFacebvh = facebvh[current.Next];
+                                        else
+                                            currentFacebvh = null;
+                                    }
+
+                                    stack[level] = ((int)VISIT.VISIT_DONE_BIT << (int)VISIT.VISITED_BIT_SHIFT) | node;
+                                }
+                                else
+                                {
+                                    bool valid = RayIntersectsAABB(faceCenter, faceNormal, ((FaceBVH)currentFacebvh).Aabb);
+
+                                    if (!valid)
+                                        stack[level] = ((int)VISIT.VISIT_DONE_BIT << (int)VISIT.VISITED_BIT_SHIFT) | node;
+                                    else
+                                        stack[level] = ((int)VISIT.VISIT_LEFT_BIT << (int)VISIT.VISITED_BIT_SHIFT) | node;
+                                }
+                                continue;
+                            }
+
+                        case (int)VISIT.VISIT_LEFT_BIT:
+                            {
+                                stack[level] = ((int)VISIT.VISIT_RIGHT_BIT << (int)VISIT.VISITED_BIT_SHIFT) | node;
+                                stack[level + 1] = ((FaceBVH)currentFacebvh).Left | ((int)VISIT.TEST_AABB_BIT << (int)VISIT.VISITED_BIT_SHIFT);
+                                level++;
+                                continue;
+                            }
+
+                        case (int)VISIT.VISIT_RIGHT_BIT:
+                            {
+                                stack[level] = ((int)VISIT.VISIT_DONE_BIT << (int)VISIT.VISITED_BIT_SHIFT) | node;
+                                stack[level + 1] = ((FaceBVH)currentFacebvh).Right | ((int)VISIT.TEST_AABB_BIT << (int)VISIT.VISITED_BIT_SHIFT);
+                                level++;
+                                continue;
+                            }
+
+                        case (int)VISIT.VISIT_DONE_BIT:
+                            {
+                                if (level == 0)
+                                {
+                                    done = true;
+                                    break;
+                                }
+                                else
+                                {
+                                    level--;
+                                }
+                                continue;
+                            }
+                    }
+
+                    if (done)
+                        break;
+                }
+
+                int res = (intersectionsA.Count + intersectionsB.Count) & 1;
+                return res != 0;
+            }
+
+            private bool RayIntersectsAABB(Double3 origin, Double3 direction, AABB aabb)
+            {
+                return Prowl.Vector.Geometry.Intersection.RayAABB(origin, direction, aabb.Min, aabb.Max, out _, out _);
+            }
+
+            public void DoOperation(Operation operation, ref CSGBrush mergedBrush)
+            {
+                FaceBVH[] bvhvecA = new FaceBVH[FacesA.Count];
+                FaceBVH[] facebvhA = bvhvecA;
+
+                FaceBVH[] bvhvecB = new FaceBVH[FacesB.Count];
+                FaceBVH[] facebvhB = bvhvecB;
+
+                AABB aabbA = new AABB();
+                AABB aabbB = new AABB();
+
+                bool firstA = true;
+                bool firstB = true;
+
+                for (int i = 0; i < FacesA.Count; i++)
+                {
+                    facebvhA[i] = new FaceBVH();
+                    facebvhA[i].Left = -1;
+                    facebvhA[i].Right = -1;
+                    facebvhA[i].Face = i;
+                    facebvhA[i].Aabb = AABB.FromPoints(new[] {
+                        Points[FacesA[i].Points[0]],
+                        Points[FacesA[i].Points[1]],
+                        Points[FacesA[i].Points[2]]
+                    });
+                    facebvhA[i].Center = facebvhA[i].Aabb.Center;
+                    facebvhA[i].Aabb = facebvhA[i].Aabb.Expanded(VertexSnap);
+                    facebvhA[i].Next = -1;
+                    if (firstA)
+                    {
+                        aabbA = facebvhA[i].Aabb;
+                        firstA = false;
+                    }
+                    else
+                    {
+                        aabbA.Encapsulate(facebvhA[i].Aabb);
+                    }
+                }
+
+                for (int i = 0; i < FacesB.Count; i++)
+                {
+                    facebvhB[i] = new FaceBVH();
+                    facebvhB[i].Left = -1;
+                    facebvhB[i].Right = -1;
+                    facebvhB[i].Face = i;
+                    facebvhB[i].Aabb = AABB.FromPoints(new[] {
+                        Points[FacesB[i].Points[0]],
+                        Points[FacesB[i].Points[1]],
+                        Points[FacesB[i].Points[2]]
+                    });
+                    facebvhB[i].Center = facebvhB[i].Aabb.Center;
+                    facebvhB[i].Aabb = facebvhB[i].Aabb.Expanded(VertexSnap);
+                    facebvhB[i].Next = -1;
+                    if (firstB)
+                    {
+                        aabbB = facebvhB[i].Aabb;
+                        firstB = false;
+                    }
+                    else
+                    {
+                        aabbB.Encapsulate(facebvhB[i].Aabb);
+                    }
+                }
+
+                AABB intersectionAabb = aabbA.ClippedBy(aabbB);
+
+                (int, FaceBVH)[] bvhtrvecA = new (int, FaceBVH)[FacesA.Count];
+                for (int i = 0; i < FacesA.Count; i++)
+                    bvhtrvecA[i] = (i, facebvhA[i]);
+
+                (int, FaceBVH)[] bvhtrvecB = new (int, FaceBVH)[FacesB.Count];
+                for (int i = 0; i < FacesB.Count; i++)
+                    bvhtrvecB[i] = (i, facebvhB[i]);
+
+                int maxDepthA = 0;
+                int bvhRootA = CreateBVH(ref facebvhA, ref bvhtrvecA, 0, FacesA.Count, 1, ref maxDepthA);
+                int maxAllocA = facebvhA.Length;
+
+                int maxDepthB = 0;
+                int bvhRootB = CreateBVH(ref facebvhB, ref bvhtrvecB, 0, FacesB.Count, 1, ref maxDepthB);
+                int maxAllocB = facebvhB.Length;
+
+                switch (operation)
+                {
+                    case Operation.Union:
+                        {
+                            int facesCount = 0;
+                            Array.Resize(ref mergedBrush.Faces, FacesA.Count + FacesB.Count);
+
+                            for (int i = 0; i < FacesA.Count; i++)
+                            {
+                                if (!intersectionAabb.Intersects(facebvhA[i].Aabb))
+                                {
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[0]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[1]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[2]]);
+                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
+                                    facesCount++;
+                                    continue;
+                                }
+
+                                if (!BVHInside(ref facebvhB, maxDepthB, maxAllocB - 1, i, true))
+                                {
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[0]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[1]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[2]]);
+                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
+                                    facesCount++;
+                                }
+                            }
+
+                            for (int i = 0; i < FacesB.Count; i++)
+                            {
+                                if (!intersectionAabb.Intersects(facebvhB[i].Aabb))
+                                {
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[0]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[1]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[2]]);
+                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
+                                    facesCount++;
+                                    continue;
+                                }
+
+                                if (!BVHInside(ref facebvhA, maxDepthA, maxAllocA - 1, i, false))
+                                {
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[0]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[1]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[2]]);
+                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
+                                    facesCount++;
+                                }
+                            }
+                            Array.Resize(ref mergedBrush.Faces, facesCount);
+                        }
+                        break;
+
+                    case Operation.Intersection:
+                        {
+                            int facesCount = 0;
+                            Array.Resize(ref mergedBrush.Faces, FacesA.Count + FacesB.Count);
+
+                            for (int i = 0; i < FacesA.Count; i++)
+                            {
+                                if (!intersectionAabb.Intersects(facebvhA[i].Aabb))
+                                    continue;
+
+                                if (BVHInside(ref facebvhB, maxDepthB, maxAllocB - 1, i, true))
+                                {
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[0]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[1]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[2]]);
+                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
+                                    facesCount++;
+                                }
+                            }
+
+                            for (int i = 0; i < FacesB.Count; i++)
+                            {
+                                if (!intersectionAabb.Intersects(facebvhB[i].Aabb))
+                                    continue;
+
+                                if (BVHInside(ref facebvhA, maxDepthA, maxAllocA - 1, i, false))
+                                {
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[0]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[1]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[2]]);
+                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
+                                    facesCount++;
+                                }
+                            }
+                            Array.Resize(ref mergedBrush.Faces, facesCount);
+                        }
+                        break;
+
+                    case Operation.Subtraction:
+                        {
+                            int facesCount = 0;
+                            Array.Resize(ref mergedBrush.Faces, FacesA.Count + FacesB.Count);
+
+                            for (int i = 0; i < FacesA.Count; i++)
+                            {
+                                if (!intersectionAabb.Intersects(facebvhA[i].Aabb))
+                                {
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[0]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[1]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[2]]);
+                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
+                                    facesCount++;
+                                    continue;
+                                }
+
+                                if (!BVHInside(ref facebvhB, maxDepthB, maxAllocB - 1, i, true))
+                                {
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[0]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[1]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[2]]);
+                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
+                                    facesCount++;
+                                }
+                            }
+
+                            for (int i = 0; i < FacesB.Count; i++)
+                            {
+                                if (!intersectionAabb.Intersects(facebvhB[i].Aabb))
+                                    continue;
+
+                                if (BVHInside(ref facebvhA, maxDepthA, maxAllocA - 1, i, false))
+                                {
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    // Flip winding order for subtraction
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[1]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[0]]);
+                                    mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[2]]);
+                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
+                                    facesCount++;
+                                }
+                            }
+                            Array.Resize(ref mergedBrush.Faces, facesCount);
+                        }
+                        break;
+                }
+            }
+        }
+
+        #endregion
+
+        #region SortArray
+
+        private class SortArray
+        {
+            private IComparer compare;
+
+            public SortArray(IComparer comp)
+            {
+                this.compare = comp;
+            }
+
+            private int Bitlog(int n)
+            {
+                int k;
+                for (k = 0; n != 1; n >>= 1)
+                    ++k;
+                return k;
+            }
+
+            public void NthElement(int first, int last, int nth, ref (int, MeshMerge.FaceBVH)[] array)
+            {
+                if (first == last || nth == last)
+                    return;
+                Introselect(first, nth, last, ref array, Bitlog(last - first) * 2);
+            }
+
+            private void Introselect(int first, int nth, int last, ref (int, MeshMerge.FaceBVH)[] array, int maxDepth)
+            {
+                while (last - first > 3)
+                {
+                    if (maxDepth == 0)
+                    {
+                        PartialSelect(first, nth + 1, last, ref array);
+                        var temps = array[first];
+                        array[first] = array[nth];
+                        array[nth] = temps;
+                        return;
+                    }
+
+                    maxDepth--;
+
+                    int cut = Partitioner(
+                            first,
+                            last,
+                            MedianOf3(
+                                    array[first],
+                                    array[first + (last - first) / 2],
+                                    array[last - 1]),
+                            ref array);
+
+                    if (cut <= nth)
+                        first = cut;
+                    else
+                        last = cut;
+                }
+                InsertionSort(first, last, ref array);
+            }
+
+            private void InsertionSort(int first, int last, ref (int, MeshMerge.FaceBVH)[] array)
+            {
+                if (first == last)
+                    return;
+                for (int i = first + 1; i != last; i++)
+                    LinearInsert(first, i, ref array);
+            }
+
+            private void LinearInsert(int first, int last, ref (int, MeshMerge.FaceBVH)[] array)
+            {
+                var val = array[last];
+                if (compare.Compare(val, array[first]) < 0)
+                {
+                    for (int i = last; i > first; i--)
+                        array[i] = array[i - 1];
+                    array[first] = val;
+                }
+                else
+                {
+                    UnguardedLinearInsert(last, val, ref array);
+                }
+            }
+
+            private void UnguardedLinearInsert(int last, (int, MeshMerge.FaceBVH) value, ref (int, MeshMerge.FaceBVH)[] array)
+            {
+                int next = last - 1;
+                while (compare.Compare(value, array[next]) < 0)
+                {
+                    array[last] = array[next];
+                    last = next;
+                    next--;
+                }
+                array[last] = value;
+            }
+
+            private (int, MeshMerge.FaceBVH) MedianOf3((int, MeshMerge.FaceBVH) a, (int, MeshMerge.FaceBVH) b, (int, MeshMerge.FaceBVH) c)
+            {
+                if (compare.Compare(a, b) < 0)
+                {
+                    if (compare.Compare(b, c) < 0)
+                        return b;
+                    else if (compare.Compare(a, c) < 0)
+                        return c;
+                    else
+                        return a;
+                }
+                else if (compare.Compare(a, c) < 0)
+                {
+                    return a;
+                }
+                else if (compare.Compare(b, c) < 0)
+                {
+                    return c;
+                }
+                else
+                {
+                    return b;
+                }
+            }
+
+            private void PartialSelect(int first, int last, int middle, ref (int, MeshMerge.FaceBVH)[] array)
+            {
+                MakeHeap(first, middle, ref array);
+                for (int i = middle; i < last; i++)
+                {
+                    if (compare.Compare(array[i], array[first]) < 0)
+                        PopHeap(first, middle, i, array[i], ref array);
+                }
+            }
+
+            private void PopHeap(int first, int last, int result, (int, MeshMerge.FaceBVH) value, ref (int, MeshMerge.FaceBVH)[] array)
+            {
+                array[result] = array[first];
+                AdjustHeap(first, 0, last - first, value, ref array);
+            }
+
+            private void MakeHeap(int first, int last, ref (int, MeshMerge.FaceBVH)[] array)
+            {
+                if (last - first < 2)
+                    return;
+                int len = last - first;
+                int parent = (len - 2) / 2;
+                while (true)
+                {
+                    AdjustHeap(first, parent, len, array[first + parent], ref array);
+                    if (parent == 0)
+                        return;
+                    parent--;
+                }
+            }
+
+            private void AdjustHeap(int first, int holeIdx, int len, (int, MeshMerge.FaceBVH) value, ref (int, MeshMerge.FaceBVH)[] array)
+            {
+                int topIndex = holeIdx;
+                int secondChild = 2 * holeIdx + 2;
+
+                while (secondChild < len)
+                {
+                    if (compare.Compare(array[first + secondChild], array[first + (secondChild - 1)]) < 0)
+                        secondChild--;
+                    array[first + holeIdx] = array[first + secondChild];
+                    holeIdx = secondChild;
+                    secondChild = 2 * (secondChild + 1);
+                }
+
+                if (secondChild == len)
+                {
+                    array[first + holeIdx] = array[first + (secondChild - 1)];
+                    holeIdx = secondChild - 1;
+                }
+                PushHeap(first, holeIdx, topIndex, value, ref array);
+            }
+
+            private void PushHeap(int first, int holeIdx, int topIndex, (int, MeshMerge.FaceBVH) value, ref (int, MeshMerge.FaceBVH)[] array)
+            {
+                int parent = (holeIdx - 1) / 2;
+                while (holeIdx > topIndex && compare.Compare(array[first + parent], value) < 0)
+                {
+                    array[first + holeIdx] = array[first + parent];
+                    holeIdx = parent;
+                    parent = (holeIdx - 1) / 2;
+                }
+                array[first + holeIdx] = value;
+            }
+
+            private int Partitioner(int first, int last, (int, MeshMerge.FaceBVH) pivot, ref (int, MeshMerge.FaceBVH)[] array)
+            {
+                while (true)
+                {
+                    while (compare.Compare(array[first], pivot) < 0)
+                        first++;
+                    last--;
+                    while (compare.Compare(pivot, array[last]) < 0)
+                        last--;
+                    if (!(first < last))
+                        return first;
+                    var temps = array[first];
+                    array[first] = array[last];
+                    array[last] = temps;
+                    first++;
+                }
+            }
+        }
+
+        #endregion
+
+        #region CSGBrushOperation
+
+        private class CSGBrushOperation
+        {
+            public struct Build2DFaceCollection
+            {
+                public Dictionary<int, Build2DFaces> Build2DFacesA;
+                public Dictionary<int, Build2DFaces> Build2DFacesB;
+            }
+
+            public void MergeBrushes(Operation operation, CSGBrush brushA, CSGBrush brushB, ref CSGBrush mergedBrush)
+            {
+                Build2DFaceCollection build2DFaceCollection;
+                build2DFaceCollection.Build2DFacesA = new Dictionary<int, Build2DFaces>();
+                build2DFaceCollection.Build2DFacesB = new Dictionary<int, Build2DFaces>();
+                brushA.RegenFaceAABBs();
+                brushB.RegenFaceAABBs();
+
+                for (int i = 0; i < brushA.Faces.Length; i++)
+                {
+                    for (int j = 0; j < brushB.Faces.Length; j++)
+                    {
+                        if (brushA.Faces[i].Aabb.Intersects(brushB.Faces[j].Aabb))
+                        {
+                            UpdateFaces(ref brushA, i, ref brushB, j, ref build2DFaceCollection, Intersection.INTERSECTION_EPSILON);
+                        }
+                    }
+                }
+
+                MeshMerge meshMerge = new MeshMerge { VertexSnap = Intersection.INTERSECTION_EPSILON };
+
+                for (int i = 0; i < brushA.Faces.Length; i++)
+                {
+                    if (build2DFaceCollection.Build2DFacesA.ContainsKey(i))
+                    {
+                        build2DFaceCollection.Build2DFacesA[i].AddFacesToMesh(ref meshMerge, false);
+                    }
+                    else
+                    {
+                        Double3[] points = new Double3[3];
+                        Double2[] uvs = new Double2[3];
+                        for (int j = 0; j < 3; j++)
+                        {
+                            points[j] = brushA.Faces[i].Vertices[j];
+                            uvs[j] = brushA.Faces[i].UVs[j];
+                        }
+                        meshMerge.AddFace(points, uvs, false);
+                    }
+                }
+
+                for (int i = 0; i < brushB.Faces.Length; i++)
+                {
+                    if (build2DFaceCollection.Build2DFacesB.ContainsKey(i))
+                    {
+                        build2DFaceCollection.Build2DFacesB[i].AddFacesToMesh(ref meshMerge, true);
+                    }
+                    else
+                    {
+                        Double3[] points = new Double3[3];
+                        Double2[] uvs = new Double2[3];
+                        for (int j = 0; j < 3; j++)
+                        {
+                            points[j] = brushB.Faces[i].Vertices[j];
+                            uvs[j] = brushB.Faces[i].UVs[j];
+                        }
+                        meshMerge.AddFace(points, uvs, true);
+                    }
+                }
+
+                meshMerge.DoOperation(operation, ref mergedBrush);
+            }
+
+            private void UpdateFaces(ref CSGBrush brushA, int faceIdxA, ref CSGBrush brushB, int faceIdxB,
+                ref Build2DFaceCollection collection, double vertexSnap)
+            {
+                Double3[] verticesA = new Double3[3];
+                for (int i = 0; i < 3; i++)
+                    verticesA[i] = brushA.Faces[faceIdxA].Vertices[i];
+
+                Double3[] verticesB = new Double3[3];
+                for (int i = 0; i < 3; i++)
+                    verticesB[i] = brushB.Faces[faceIdxB].Vertices[i];
+
+                bool hasDegenerate = false;
+                if (CSGBrush.IsSnapable(verticesA[0], verticesA[1], vertexSnap) ||
+                    CSGBrush.IsSnapable(verticesA[0], verticesA[2], vertexSnap) ||
+                    CSGBrush.IsSnapable(verticesA[1], verticesA[2], vertexSnap))
+                {
+                    collection.Build2DFacesA[faceIdxA] = new Build2DFaces();
+                    hasDegenerate = true;
+                }
+
+                if (CSGBrush.IsSnapable(verticesB[0], verticesB[1], vertexSnap) ||
+                    CSGBrush.IsSnapable(verticesB[0], verticesB[2], vertexSnap) ||
+                    CSGBrush.IsSnapable(verticesB[1], verticesB[2], vertexSnap))
+                {
+                    collection.Build2DFacesB[faceIdxB] = new Build2DFaces();
+                    hasDegenerate = true;
+                }
+                if (hasDegenerate)
+                    return;
+
+                int overCount = 0, underCount = 0;
+                Plane planeA = new Plane(verticesA[0], verticesA[1], verticesA[2]);
+                double distanceTolerance = 0.3;
+
+                for (int i = 0; i < 3; i++)
+                {
+                    bool isPointOver = Double3.Dot(planeA.Normal, verticesB[i]) > planeA.D;
+                    if (planeA.GetDistanceToPoint(verticesB[i]) < distanceTolerance)
+                    {
+                        // In plane
+                    }
+                    else if (isPointOver)
+                    {
+                        overCount++;
+                    }
+                    else
+                    {
+                        underCount++;
+                    }
+                }
+                if (overCount == 3 || underCount == 3)
+                    return;
+
+                overCount = 0;
+                underCount = 0;
+                Plane planeB = new Plane(verticesB[0], verticesB[1], verticesB[2]);
+
+                for (int i = 0; i < 3; i++)
+                {
+                    bool isPointOver = Double3.Dot(planeB.Normal, verticesA[i]) > planeB.D;
+                    if (planeB.GetDistanceToPoint(verticesA[i]) < distanceTolerance)
+                    {
+                        // In plane
+                    }
+                    else if (isPointOver)
+                    {
+                        overCount++;
+                    }
+                    else
+                    {
+                        underCount++;
+                    }
+                }
+                if (overCount == 3 || underCount == 3)
+                    return;
+
+                // Check for intersection using SAT
+                {
+                    for (int i = 0; i < 3; i++)
+                    {
+                        Double3 axisA = Double3.Normalize(verticesA[i] - verticesA[(i + 1) % 3]);
+
+                        for (int j = 0; j < 3; j++)
+                        {
+                            Double3 axisB = Double3.Normalize(verticesB[j] - verticesB[(j + 1) % 3]);
+
+                            Double3 sepAxis = Double3.Cross(axisA, axisB);
+                            if (Double3.LengthSquared(sepAxis) < Intersection.INTERSECTION_EPSILON)
+                                continue;
+                            sepAxis = Double3.Normalize(sepAxis);
+
+                            double minA = 1e20, maxA = -1e20;
+                            double minB = 1e20, maxB = -1e20;
+
+                            for (int k = 0; k < 3; k++)
+                            {
+                                double d = Double3.Dot(sepAxis, verticesA[k]);
+                                minA = Maths.Min(minA, d);
+                                maxA = Maths.Max(maxA, d);
+                                d = Double3.Dot(sepAxis, verticesB[k]);
+                                minB = Maths.Min(minB, d);
+                                maxB = Maths.Max(maxB, d);
+                            }
+
+                            minB -= (maxA - minA) * 0.5;
+                            maxB += (maxA - minA) * 0.5;
+
+                            double dmin = minB - (minA + maxA) * 0.5;
+                            double dmax = maxB - (minA + maxA) * 0.5;
+
+                            if (dmin > Intersection.INTERSECTION_EPSILON || dmax < -Intersection.INTERSECTION_EPSILON)
+                                return;
+                        }
+                    }
+                }
+
+                if (!collection.Build2DFacesA.ContainsKey(faceIdxA))
+                    collection.Build2DFacesA.Add(faceIdxA, new Build2DFaces(brushA, faceIdxA));
+                collection.Build2DFacesA[faceIdxA].Insert(brushB, faceIdxB);
+
+                if (!collection.Build2DFacesB.ContainsKey(faceIdxB))
+                    collection.Build2DFacesB.Add(faceIdxB, new Build2DFaces(brushB, faceIdxB));
+                collection.Build2DFacesB[faceIdxB].Insert(brushA, faceIdxA);
+            }
+        }
+
+        #endregion
+
+        #region Conversion Methods
+
+        private static CSGBrush GeometryDataToBrush(GeometryData geom)
+        {
+            var brush = new CSGBrush();
+            var facesList = new List<CSGBrush.Face>();
+
+            foreach (var face in geom.Faces)
+            {
+                var verts = face.NeighborVertices();
+                if (verts.Count < 3) continue;
+
+                // Triangulate face
+                for (int i = 1; i < verts.Count - 1; i++)
+                {
+                    CSGBrush.Face brushFace = new CSGBrush.Face();
+                    brushFace.Vertices = new List<Double3>(3);
+                    brushFace.Vertices.Add(verts[0].Point);
+                    brushFace.Vertices.Add(verts[i].Point);
+                    brushFace.Vertices.Add(verts[i + 1].Point);
+
+                    var loops = new[] {
+                        face.GetLoop(verts[0]),
+                        face.GetLoop(verts[i]),
+                        face.GetLoop(verts[i + 1])
+                    };
+
+                    brushFace.UVs = new Double2[3];
+                    for (int j = 0; j < 3; j++)
+                    {
+                        if (loops[j] != null && loops[j].Attributes.TryGetValue("uv", out var uvAttr))
+                        {
+                            var floatAttr = uvAttr.AsFloat();
+                            if (floatAttr != null && floatAttr.Data.Length >= 2)
+                            {
+                                brushFace.UVs[j] = new Double2(floatAttr.Data[0], floatAttr.Data[1]);
+                            }
+                        }
+                        else
+                        {
+                            brushFace.UVs[j] = Double2.Zero;
+                        }
+                    }
+
+                    facesList.Add(brushFace);
+                }
+            }
+
+            brush.Faces = facesList.ToArray();
+            brush.RegenFaceAABBs();
+            return brush;
+        }
+
+        private static GeometryData BrushToGeometryData(CSGBrush brush)
+        {
+            var geom = new GeometryData();
+            geom.AddLoopAttribute("uv", GeometryData.AttributeBaseType.Float, 2);
+
+            var vertexMap = new Dictionary<Double3, GeometryData.Vertex>();
+
+            foreach (var face in brush.Faces)
+            {
+                if (face.Vertices == null || face.Vertices.Count < 3) continue;
+
+                var geomVerts = new GeometryData.Vertex[face.Vertices.Count];
+                for (int i = 0; i < face.Vertices.Count; i++)
+                {
+                    if (!vertexMap.TryGetValue(face.Vertices[i], out var vert))
+                    {
+                        vert = geom.AddVertex(face.Vertices[i]);
+                        vertexMap[face.Vertices[i]] = vert;
+                    }
+                    geomVerts[i] = vert;
+                }
+
+                var geomFace = geom.AddFace(geomVerts);
+                if (geomFace != null && geomFace.Loop != null)
+                {
+                    var loop = geomFace.Loop;
+                    for (int i = 0; i < face.Vertices.Count; i++)
+                    {
+                        if (loop != null && i < face.UVs.Length)
+                        {
+                            loop.Attributes["uv"] = new GeometryData.FloatAttributeValue(
+                                face.UVs[i].X, face.UVs[i].Y
+                            );
+                        }
+                        loop = loop.Next;
+                    }
+                }
+            }
+
+            return geom;
+        }
+
+        #endregion
+    }
+}
