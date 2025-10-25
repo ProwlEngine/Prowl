@@ -30,30 +30,57 @@ namespace Prowl.Vector.Geometry
             var geometryData = new GeometryData();
             Double3 halfSize = size * 0.5;
 
-            // Generate each face of the box
-            // Front face (+Z)
-            AddBoxFace(geometryData, center, halfSize, segments.X, segments.Y,
-                new Double3(-1, -1, 1), new Double3(1, 0, 0), new Double3(0, 1, 0));
+            // If no subdivisions, use a simple 8-vertex cube
+            if (segments.X == 1 && segments.Y == 1 && segments.Z == 1)
+            {
+                // Create 8 corner vertices
+                var v0 = geometryData.AddVertex(center + new Double3(-halfSize.X, -halfSize.Y, -halfSize.Z));
+                var v1 = geometryData.AddVertex(center + new Double3(halfSize.X, -halfSize.Y, -halfSize.Z));
+                var v2 = geometryData.AddVertex(center + new Double3(halfSize.X, halfSize.Y, -halfSize.Z));
+                var v3 = geometryData.AddVertex(center + new Double3(-halfSize.X, halfSize.Y, -halfSize.Z));
+                var v4 = geometryData.AddVertex(center + new Double3(-halfSize.X, -halfSize.Y, halfSize.Z));
+                var v5 = geometryData.AddVertex(center + new Double3(halfSize.X, -halfSize.Y, halfSize.Z));
+                var v6 = geometryData.AddVertex(center + new Double3(halfSize.X, halfSize.Y, halfSize.Z));
+                var v7 = geometryData.AddVertex(center + new Double3(-halfSize.X, halfSize.Y, halfSize.Z));
 
-            // Back face (-Z)
-            AddBoxFace(geometryData, center, halfSize, segments.X, segments.Y,
-                new Double3(1, -1, -1), new Double3(-1, 0, 0), new Double3(0, 1, 0));
+                // Create 6 faces
+                geometryData.AddFace(v0, v1, v2, v3); // Front (-Z)
+                geometryData.AddFace(v5, v4, v7, v6); // Back (+Z)
+                geometryData.AddFace(v1, v5, v6, v2); // Right (+X)
+                geometryData.AddFace(v4, v0, v3, v7); // Left (-X)
+                geometryData.AddFace(v3, v2, v6, v7); // Top (+Y)
+                geometryData.AddFace(v4, v5, v1, v0); // Bottom (-Y)
+            }
+            else
+            {
+                // Use subdivided faces (original behavior)
+                // Front face (+Z)
+                AddBoxFace(geometryData, center, halfSize, segments.X, segments.Y,
+                    new Double3(-1, -1, 1), new Double3(1, 0, 0), new Double3(0, 1, 0));
 
-            // Right face (+X)
-            AddBoxFace(geometryData, center, halfSize, segments.Z, segments.Y,
-                new Double3(1, -1, 1), new Double3(0, 0, -1), new Double3(0, 1, 0));
+                // Back face (-Z)
+                AddBoxFace(geometryData, center, halfSize, segments.X, segments.Y,
+                    new Double3(1, -1, -1), new Double3(-1, 0, 0), new Double3(0, 1, 0));
 
-            // Left face (-X)
-            AddBoxFace(geometryData, center, halfSize, segments.Z, segments.Y,
-                new Double3(-1, -1, -1), new Double3(0, 0, 1), new Double3(0, 1, 0));
+                // Right face (+X)
+                AddBoxFace(geometryData, center, halfSize, segments.Z, segments.Y,
+                    new Double3(1, -1, 1), new Double3(0, 0, -1), new Double3(0, 1, 0));
 
-            // Top face (+Y)
-            AddBoxFace(geometryData, center, halfSize, segments.X, segments.Z,
-                new Double3(-1, 1, 1), new Double3(1, 0, 0), new Double3(0, 0, -1));
+                // Left face (-X)
+                AddBoxFace(geometryData, center, halfSize, segments.Z, segments.Y,
+                    new Double3(-1, -1, -1), new Double3(0, 0, 1), new Double3(0, 1, 0));
 
-            // Bottom face (-Y)
-            AddBoxFace(geometryData, center, halfSize, segments.X, segments.Z,
-                new Double3(-1, -1, -1), new Double3(1, 0, 0), new Double3(0, 0, 1));
+                // Top face (+Y)
+                AddBoxFace(geometryData, center, halfSize, segments.X, segments.Z,
+                    new Double3(-1, 1, 1), new Double3(1, 0, 0), new Double3(0, 0, -1));
+
+                // Bottom face (-Y)
+                AddBoxFace(geometryData, center, halfSize, segments.X, segments.Z,
+                    new Double3(-1, -1, -1), new Double3(1, 0, 0), new Double3(0, 0, 1));
+
+                // Weld vertices along edges to avoid duplicates
+                GeometryOperators.WeldVertices(geometryData, 0.0001);
+            }
 
             return geometryData;
         }
@@ -192,7 +219,7 @@ namespace Prowl.Vector.Geometry
             rings = Maths.Max(2, rings);
 
             var geometryData = new GeometryData();
-            var vertices = new GeometryData.Vertex[rings + 1, segments + 1];
+            var vertices = new GeometryData.Vertex[rings + 1, segments];
 
             for (int lat = 0; lat <= rings; lat++)
             {
@@ -200,7 +227,7 @@ namespace Prowl.Vector.Geometry
                 double sinTheta = Maths.Sin(theta);
                 double cosTheta = Maths.Cos(theta);
 
-                for (int lon = 0; lon <= segments; lon++)
+                for (int lon = 0; lon < segments; lon++)
                 {
                     double phi = lon * 2.0 * Maths.PI / segments;
                     double sinPhi = Maths.Sin(phi);
@@ -220,9 +247,11 @@ namespace Prowl.Vector.Geometry
             {
                 for (int lon = 0; lon < segments; lon++)
                 {
+                    int nextLon = (lon + 1) % segments;
+
                     var v0 = vertices[lat, lon];
-                    var v1 = vertices[lat, lon + 1];
-                    var v2 = vertices[lat + 1, lon + 1];
+                    var v1 = vertices[lat, nextLon];
+                    var v2 = vertices[lat + 1, nextLon];
                     var v3 = vertices[lat + 1, lon];
 
                     geometryData.AddFace(v0, v1, v2, v3);
@@ -350,14 +379,14 @@ namespace Prowl.Vector.Geometry
             var geometryData = new GeometryData();
             double halfHeight = height * 0.5;
 
-            // Side vertices
-            var sideVertices = new GeometryData.Vertex[rings + 1, segments + 1];
+            // Side vertices (without wrapping duplicate at seg=segments)
+            var sideVertices = new GeometryData.Vertex[rings + 1, segments];
 
             for (int ring = 0; ring <= rings; ring++)
             {
                 double y = -halfHeight + (height * ring / rings);
 
-                for (int seg = 0; seg <= segments; seg++)
+                for (int seg = 0; seg < segments; seg++)
                 {
                     double angle = seg * 2.0 * Maths.PI / segments;
                     Double3 pos = center + new Double3(
@@ -375,60 +404,37 @@ namespace Prowl.Vector.Geometry
             {
                 for (int seg = 0; seg < segments; seg++)
                 {
+                    int nextSeg = (seg + 1) % segments;
                     geometryData.AddFace(
-                        sideVertices[ring, seg + 1],
+                        sideVertices[ring, nextSeg],
                         sideVertices[ring, seg],
                         sideVertices[ring + 1, seg],
-                        sideVertices[ring + 1, seg + 1]
+                        sideVertices[ring + 1, nextSeg]
                     );
                 }
             }
 
-            // Top cap
+            // Top cap (reuse top ring vertices from side)
             if (capTop)
             {
                 var topCenter = geometryData.AddVertex(center + new Double3(0, halfHeight, 0));
-                var topRing = new GeometryData.Vertex[segments];
-
-                for (int seg = 0; seg < segments; seg++)
-                {
-                    double angle = seg * 2.0 * Maths.PI / segments;
-                    Double3 pos = center + new Double3(
-                        Maths.Cos(angle) * radius,
-                        halfHeight,
-                        Maths.Sin(angle) * radius
-                    );
-                    topRing[seg] = geometryData.AddVertex(pos);
-                }
 
                 for (int seg = 0; seg < segments; seg++)
                 {
                     int next = (seg + 1) % segments;
-                    geometryData.AddFace(topCenter, topRing[next], topRing[seg]);
+                    geometryData.AddFace(topCenter, sideVertices[rings, next], sideVertices[rings, seg]);
                 }
             }
 
-            // Bottom cap
+            // Bottom cap (reuse bottom ring vertices from side)
             if (capBottom)
             {
                 var bottomCenter = geometryData.AddVertex(center + new Double3(0, -halfHeight, 0));
-                var bottomRing = new GeometryData.Vertex[segments];
-
-                for (int seg = 0; seg < segments; seg++)
-                {
-                    double angle = seg * 2.0 * Maths.PI / segments;
-                    Double3 pos = center + new Double3(
-                        Maths.Cos(angle) * radius,
-                        -halfHeight,
-                        Maths.Sin(angle) * radius
-                    );
-                    bottomRing[seg] = geometryData.AddVertex(pos);
-                }
 
                 for (int seg = 0; seg < segments; seg++)
                 {
                     int next = (seg + 1) % segments;
-                    geometryData.AddFace(bottomCenter, bottomRing[seg], bottomRing[next]);
+                    geometryData.AddFace(bottomCenter, sideVertices[0, seg], sideVertices[0, next]);
                 }
             }
 
@@ -478,7 +484,7 @@ namespace Prowl.Vector.Geometry
                 geometryData.AddFace(apex, baseRing[next], baseRing[seg]);
             }
 
-            // Bottom cap
+            // Bottom cap (reuses baseRing vertices)
             if (capBottom)
             {
                 geometryData.AddFace(baseRing);
