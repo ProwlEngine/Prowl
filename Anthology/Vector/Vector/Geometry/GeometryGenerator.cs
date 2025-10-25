@@ -481,12 +481,7 @@ namespace Prowl.Vector.Geometry
             // Bottom cap
             if (capBottom)
             {
-                var bottomCenter = geometryData.AddVertex(center);
-                for (int seg = 0; seg < segments; seg++)
-                {
-                    int next = (seg + 1) % segments;
-                    geometryData.AddFace(bottomCenter, baseRing[seg], baseRing[next]);
-                }
+                geometryData.AddFace(baseRing);
             }
 
             return geometryData;
