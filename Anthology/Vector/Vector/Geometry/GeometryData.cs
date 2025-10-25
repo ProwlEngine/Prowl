@@ -205,6 +205,19 @@ namespace Prowl.Vector.Geometry
                 return verts;
             }
 
+            public IEnumerable<Vertex> NeighborVerticesEnumerable()
+            {
+                if (Loop != null)
+                {
+                    var it = Loop;
+                    do
+                    {
+                        yield return it.Vert;
+                        it = it.Next;
+                    } while (it != Loop);
+                }
+            }
+
             public Loop? GetLoop(Vertex v)
             {
                 if (Loop != null)
