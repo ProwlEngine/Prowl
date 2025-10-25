@@ -4,13 +4,17 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Prowl.Vector.Geometry
 {
     /// <summary>
     /// CSG (Constructive Solid Geometry) operations for GeometryData.
     /// Complete production implementation supporting Union, Intersection, and Subtraction.
+    ///
+    /// IMPORTANT: All input geometry MUST be fully triangulated before CSG operations.
+    /// Operations will throw InvalidOperationException if any face is not a triangle.
+    /// Use GeometryOperators.Triangulate() or ensure geometry generators produce triangles only.
     /// </summary>
     public static class GeometryCSG
     {
@@ -23,6 +27,15 @@ namespace Prowl.Vector.Geometry
 
         #region Public API
 
+        /// <summary>
+        /// Performs a CSG operation on two geometries.
+        /// Both geometries MUST be triangulated (all faces must have exactly 3 vertices).
+        /// </summary>
+        /// <param name="operation">The CSG operation to perform</param>
+        /// <param name="meshA">First geometry (must be triangulated)</param>
+        /// <param name="meshB">Second geometry (must be triangulated)</param>
+        /// <returns>Result geometry</returns>
+        /// <exception cref="InvalidOperationException">Thrown if either geometry contains non-triangle faces</exception>
         public static GeometryData PerformOperation(Operation operation, GeometryData meshA, GeometryData meshB)
         {
             var brushA = GeometryDataToBrush(meshA);
@@ -35,12 +48,24 @@ namespace Prowl.Vector.Geometry
             return BrushToGeometryData(resultBrush);
         }
 
+        /// <summary>
+        /// Computes the union of two triangulated geometries.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown if either geometry contains non-triangle faces</exception>
         public static GeometryData Union(GeometryData meshA, GeometryData meshB)
             => PerformOperation(Operation.Union, meshA, meshB);
 
+        /// <summary>
+        /// Computes the intersection of two triangulated geometries.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown if either geometry contains non-triangle faces</exception>
         public static GeometryData Intersect(GeometryData meshA, GeometryData meshB)
             => PerformOperation(Operation.Intersection, meshA, meshB);
 
+        /// <summary>
+        /// Subtracts meshB from meshA (meshA - meshB) for triangulated geometries.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown if either geometry contains non-triangle faces</exception>
         public static GeometryData Subtraction(GeometryData meshA, GeometryData meshB)
             => PerformOperation(Operation.Subtraction, meshA, meshB);
 
@@ -50,43 +75,31 @@ namespace Prowl.Vector.Geometry
 
         private class CSGBrush
         {
+            private static readonly double EPSILON_SQUARED = Intersection.INTERSECTION_EPSILON * Intersection.INTERSECTION_EPSILON;
+
             public struct Face
             {
                 public List<Double3> Vertices;
                 public Double2[] UVs;
-                public AABB Aabb;
             }
 
             public Face[] Faces = Array.Empty<Face>();
 
-            public void RegenFaceAABBs()
-            {
-                for (int i = 0; i < Faces.Length; i++)
-                {
-                    if (Faces[i].Vertices != null && Faces[i].Vertices.Count > 0)
-                    {
-                        Faces[i].Aabb = AABB.FromPoints(Faces[i].Vertices.ToArray());
-                    }
-                }
-            }
-
-            public static bool IsSnapable(Double3 point1, Double3 point2, double distance)
-            {
-                return Double3.LengthSquared(point1 - point2) < distance * distance;
-            }
-
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool IsEqualApprox(Double3 vec1, Double3 vec2)
             {
                 Double3 vec3 = vec1 - vec2;
-                return Maths.Abs(vec3.X) < Intersection.INTERSECTION_EPSILON && Maths.Abs(vec3.Y) < Intersection.INTERSECTION_EPSILON && Maths.Abs(vec3.Z) < Intersection.INTERSECTION_EPSILON;
+                return vec3.X * vec3.X + vec3.Y * vec3.Y + vec3.Z * vec3.Z < EPSILON_SQUARED;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool IsEqualApprox(Double2 vec1, Double2 vec2)
             {
                 Double2 vec3 = vec1 - vec2;
-                return Maths.Abs(vec3.X) < Intersection.INTERSECTION_EPSILON && Maths.Abs(vec3.Y) < Intersection.INTERSECTION_EPSILON;
+                return vec3.X * vec3.X + vec3.Y * vec3.Y < EPSILON_SQUARED;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Double2 InterpolateSegmentUV(Double2[] segmentPoints, Double2[] uvs, Double2 interpolation)
             {
                 if (IsEqualApprox(segmentPoints[0], segmentPoints[1]))
@@ -99,6 +112,7 @@ namespace Prowl.Vector.Geometry
                 return Maths.Lerp(uvs[0], uvs[1], fraction);
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Double2 InterpolateTriangleUV(Double2[] vertices, Double2[] uvs, Double2 interpolationPoint)
             {
                 if (IsEqualApprox(interpolationPoint, vertices[0])) return uvs[0];
@@ -125,6 +139,7 @@ namespace Prowl.Vector.Geometry
                 return uvs[0] * u + uvs[1] * v + uvs[2] * w;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool RayIntersectsTriangle(Double3 from, Double3 dir, Double3[] vertices, double tolerance, ref Double3 intersectionPoint)
             {
                 if (Prowl.Vector.Geometry.Intersection.RayTriangle(from, dir, vertices[0], vertices[1], vertices[2], out double distance, out _, out _))
@@ -135,6 +150,7 @@ namespace Prowl.Vector.Geometry
                 return false;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool IsPointInTriangle(Double3 point, Double3[] vertices, int shifted = 0)
             {
                 double det = Double3.Dot(vertices[0], Double3.Cross(vertices[1], vertices[2]));
@@ -164,6 +180,7 @@ namespace Prowl.Vector.Geometry
                 return true;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool IsTriangleDegenerate(Double2[] vertices, double tolerance)
             {
                 double det = vertices[0].X * vertices[1].Y - vertices[0].X * vertices[2].Y +
@@ -175,6 +192,7 @@ namespace Prowl.Vector.Geometry
 
             public static bool AreSegmentsParallel(Double2[] segment1Points, Double2[] segment2Points, double tolerance)
             {
+
                 Double2 segment1 = segment1Points[1] - segment1Points[0];
                 Double2 segment2 = segment2Points[1] - segment2Points[0];
                 double segment1Length2 = Double2.Dot(segment1, segment1);
@@ -1668,17 +1686,12 @@ namespace Prowl.Vector.Geometry
                 Build2DFaceCollection build2DFaceCollection;
                 build2DFaceCollection.Build2DFacesA = new Dictionary<int, Build2DFaces>();
                 build2DFaceCollection.Build2DFacesB = new Dictionary<int, Build2DFaces>();
-                brushA.RegenFaceAABBs();
-                brushB.RegenFaceAABBs();
 
                 for (int i = 0; i < brushA.Faces.Length; i++)
                 {
                     for (int j = 0; j < brushB.Faces.Length; j++)
                     {
-                        if (brushA.Faces[i].Aabb.Intersects(brushB.Faces[j].Aabb))
-                        {
-                            UpdateFaces(ref brushA, i, ref brushB, j, ref build2DFaceCollection, Intersection.INTERSECTION_EPSILON);
-                        }
+                        UpdateFaces(ref brushA, i, ref brushB, j, ref build2DFaceCollection, Intersection.INTERSECTION_EPSILON);
                     }
                 }
 
@@ -1686,9 +1699,9 @@ namespace Prowl.Vector.Geometry
 
                 for (int i = 0; i < brushA.Faces.Length; i++)
                 {
-                    if (build2DFaceCollection.Build2DFacesA.ContainsKey(i))
+                    if (build2DFaceCollection.Build2DFacesA.TryGetValue(i, out Build2DFaces? value))
                     {
-                        build2DFaceCollection.Build2DFacesA[i].AddFacesToMesh(ref meshMerge, false);
+                        value.AddFacesToMesh(ref meshMerge, false);
                     }
                     else
                     {
@@ -1705,9 +1718,9 @@ namespace Prowl.Vector.Geometry
 
                 for (int i = 0; i < brushB.Faces.Length; i++)
                 {
-                    if (build2DFaceCollection.Build2DFacesB.ContainsKey(i))
+                    if (build2DFaceCollection.Build2DFacesB.TryGetValue(i, out Build2DFaces? value))
                     {
-                        build2DFaceCollection.Build2DFacesB[i].AddFacesToMesh(ref meshMerge, true);
+                        value.AddFacesToMesh(ref meshMerge, true);
                     }
                     else
                     {
@@ -1725,129 +1738,42 @@ namespace Prowl.Vector.Geometry
                 meshMerge.DoOperation(operation, ref mergedBrush);
             }
 
-            private void UpdateFaces(ref CSGBrush brushA, int faceIdxA, ref CSGBrush brushB, int faceIdxB,
-                ref Build2DFaceCollection collection, double vertexSnap)
+            private void UpdateFaces(ref CSGBrush brushA, int fIdxA, ref CSGBrush brushB, int fIdxB, ref Build2DFaceCollection collection, double vertexSnap)
             {
-                Double3[] verticesA = new Double3[3];
-                for (int i = 0; i < 3; i++)
-                    verticesA[i] = brushA.Faces[faceIdxA].Vertices[i];
+                var vA = brushA.Faces[fIdxA].Vertices;
+                var vB = brushB.Faces[fIdxB].Vertices;
 
-                Double3[] verticesB = new Double3[3];
-                for (int i = 0; i < 3; i++)
-                    verticesB[i] = brushB.Faces[faceIdxB].Vertices[i];
-
-                bool hasDegenerate = false;
-                if (CSGBrush.IsSnapable(verticesA[0], verticesA[1], vertexSnap) ||
-                    CSGBrush.IsSnapable(verticesA[0], verticesA[2], vertexSnap) ||
-                    CSGBrush.IsSnapable(verticesA[1], verticesA[2], vertexSnap))
+                // Check if triangle A is degenerate
+                double snapSq = vertexSnap * vertexSnap; // Compute once instead of 6 times
+                if (Double3.LengthSquared(vA[0] - vA[1]) < snapSq ||
+                    Double3.LengthSquared(vA[0] - vA[2]) < snapSq ||
+                    Double3.LengthSquared(vA[1] - vA[2]) < snapSq)
                 {
-                    collection.Build2DFacesA[faceIdxA] = new Build2DFaces();
-                    hasDegenerate = true;
-                }
-
-                if (CSGBrush.IsSnapable(verticesB[0], verticesB[1], vertexSnap) ||
-                    CSGBrush.IsSnapable(verticesB[0], verticesB[2], vertexSnap) ||
-                    CSGBrush.IsSnapable(verticesB[1], verticesB[2], vertexSnap))
-                {
-                    collection.Build2DFacesB[faceIdxB] = new Build2DFaces();
-                    hasDegenerate = true;
-                }
-                if (hasDegenerate)
+                    collection.Build2DFacesA[fIdxA] = new Build2DFaces();
                     return;
-
-                int overCount = 0, underCount = 0;
-                Plane planeA = new Plane(verticesA[0], verticesA[1], verticesA[2]);
-                double distanceTolerance = 0.3;
-
-                for (int i = 0; i < 3; i++)
-                {
-                    bool isPointOver = Double3.Dot(planeA.Normal, verticesB[i]) > planeA.D;
-                    if (planeA.GetDistanceToPoint(verticesB[i]) < distanceTolerance)
-                    {
-                        // In plane
-                    }
-                    else if (isPointOver)
-                    {
-                        overCount++;
-                    }
-                    else
-                    {
-                        underCount++;
-                    }
                 }
-                if (overCount == 3 || underCount == 3)
+
+                // Check if triangle B is degenerate
+                if (Double3.LengthSquared(vB[0] - vB[1]) < snapSq ||
+                    Double3.LengthSquared(vB[0] - vB[2]) < snapSq ||
+                    Double3.LengthSquared(vB[1] - vB[2]) < snapSq)
+                {
+                    collection.Build2DFacesB[fIdxB] = new Build2DFaces();
                     return;
-
-                overCount = 0;
-                underCount = 0;
-                Plane planeB = new Plane(verticesB[0], verticesB[1], verticesB[2]);
-
-                for (int i = 0; i < 3; i++)
-                {
-                    bool isPointOver = Double3.Dot(planeB.Normal, verticesA[i]) > planeB.D;
-                    if (planeB.GetDistanceToPoint(verticesA[i]) < distanceTolerance)
-                    {
-                        // In plane
-                    }
-                    else if (isPointOver)
-                    {
-                        overCount++;
-                    }
-                    else
-                    {
-                        underCount++;
-                    }
-                }
-                if (overCount == 3 || underCount == 3)
-                    return;
-
-                // Check for intersection using SAT
-                {
-                    for (int i = 0; i < 3; i++)
-                    {
-                        Double3 axisA = Double3.Normalize(verticesA[i] - verticesA[(i + 1) % 3]);
-
-                        for (int j = 0; j < 3; j++)
-                        {
-                            Double3 axisB = Double3.Normalize(verticesB[j] - verticesB[(j + 1) % 3]);
-
-                            Double3 sepAxis = Double3.Cross(axisA, axisB);
-                            if (Double3.LengthSquared(sepAxis) < Intersection.INTERSECTION_EPSILON)
-                                continue;
-                            sepAxis = Double3.Normalize(sepAxis);
-
-                            double minA = 1e20, maxA = -1e20;
-                            double minB = 1e20, maxB = -1e20;
-
-                            for (int k = 0; k < 3; k++)
-                            {
-                                double d = Double3.Dot(sepAxis, verticesA[k]);
-                                minA = Maths.Min(minA, d);
-                                maxA = Maths.Max(maxA, d);
-                                d = Double3.Dot(sepAxis, verticesB[k]);
-                                minB = Maths.Min(minB, d);
-                                maxB = Maths.Max(maxB, d);
-                            }
-
-                            minB -= (maxA - minA) * 0.5;
-                            maxB += (maxA - minA) * 0.5;
-
-                            double dmin = minB - (minA + maxA) * 0.5;
-                            double dmax = maxB - (minA + maxA) * 0.5;
-
-                            if (dmin > Intersection.INTERSECTION_EPSILON || dmax < -Intersection.INTERSECTION_EPSILON)
-                                return;
-                        }
-                    }
                 }
 
-                if (!collection.Build2DFacesA.ContainsKey(faceIdxA))
-                    collection.Build2DFacesA.Add(faceIdxA, new Build2DFaces(brushA, faceIdxA));
-                collection.Build2DFacesA[faceIdxA].Insert(brushB, faceIdxB);
+                if (!Intersection.TriangleTriangle(vA[0], vA[1], vA[2], vB[0], vB[1], vB[2]))
+                {
+                    return; // No Collision, dont need to process these two triangles
+                }
 
-                if (!collection.Build2DFacesB.ContainsKey(faceIdxB))
-                    collection.Build2DFacesB.Add(faceIdxB, new Build2DFaces(brushB, faceIdxB));
-                collection.Build2DFacesB[faceIdxB].Insert(brushA, faceIdxA);
+                if (!collection.Build2DFacesA.ContainsKey(fIdxA))
+                    collection.Build2DFacesA.Add(fIdxA, new Build2DFaces(brushA, fIdxA));
+                collection.Build2DFacesA[fIdxA].Insert(brushB, fIdxB);
+
+                if (!collection.Build2DFacesB.ContainsKey(fIdxB))
+                    collection.Build2DFacesB.Add(fIdxB, new Build2DFaces(brushB, fIdxB));
+                collection.Build2DFacesB[fIdxB].Insert(brushA, fIdxA);
             }
         }
 
@@ -1860,49 +1786,18 @@ namespace Prowl.Vector.Geometry
             var brush = new CSGBrush();
             var facesList = new List<CSGBrush.Face>();
 
+            // All faces are already validated as triangles
             foreach (var face in geom.Faces)
             {
-                var verts = face.NeighborVertices();
-                if (verts.Count < 3) continue;
+                var triangleData = geom.GetTriangleData(face);
 
-                // Triangulate face
-                for (int i = 1; i < verts.Count - 1; i++)
-                {
-                    CSGBrush.Face brushFace = new CSGBrush.Face();
-                    brushFace.Vertices = new List<Double3>(3);
-                    brushFace.Vertices.Add(verts[0].Point);
-                    brushFace.Vertices.Add(verts[i].Point);
-                    brushFace.Vertices.Add(verts[i + 1].Point);
-
-                    var loops = new[] {
-                        face.GetLoop(verts[0]),
-                        face.GetLoop(verts[i]),
-                        face.GetLoop(verts[i + 1])
-                    };
-
-                    brushFace.UVs = new Double2[3];
-                    for (int j = 0; j < 3; j++)
-                    {
-                        if (loops[j] != null && loops[j].Attributes.TryGetValue("uv", out var uvAttr))
-                        {
-                            var floatAttr = uvAttr.AsFloat();
-                            if (floatAttr != null && floatAttr.Data.Length >= 2)
-                            {
-                                brushFace.UVs[j] = new Double2(floatAttr.Data[0], floatAttr.Data[1]);
-                            }
-                        }
-                        else
-                        {
-                            brushFace.UVs[j] = Double2.Zero;
-                        }
-                    }
-
-                    facesList.Add(brushFace);
-                }
+                CSGBrush.Face brushFace = new CSGBrush.Face();
+                brushFace.Vertices = new List<Double3>(triangleData.Vertices);
+                brushFace.UVs = triangleData.UVs;
+                facesList.Add(brushFace);
             }
 
             brush.Faces = facesList.ToArray();
-            brush.RegenFaceAABBs();
             return brush;
         }
 

@@ -2,6 +2,7 @@ using Prowl.Vector;
 using Prowl.Vector.Geometry;
 using System.Linq;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace OpenTKSample.Samples
 {
@@ -23,9 +24,10 @@ namespace OpenTKSample.Samples
         public CSGOperationsDemo()
         {
             // Create two base spheres (we'll animate their positions)
-            _baseSphereA = GeometryGenerator.Icosphere(0.6, subdivisions: 1);
+            _baseSphereA = GeometryGenerator.Icosphere(0.6, subdivisions: 0);
             //_baseSphereB = GeometryGenerator.Icosphere(0.6, subdivisions: 1);
-            _baseSphereB = GeometryGenerator.Torus(0.4, 0.2, majorSegments: 8, minorSegments: 8);
+            _baseSphereB = GeometryGenerator.Box(new Double3(0.6));
+            GeometryOperators.Triangulate(_baseSphereB);
         }
 
         public void Draw(Float3 position, float timeInSeconds)
@@ -48,9 +50,16 @@ namespace OpenTKSample.Samples
 
             try
             {
+                var timeStamp = Stopwatch.GetTimestamp();
+
                 unionResult = GeometryCSG.Union(sphereA, sphereB);
                 intersectionResult = GeometryCSG.Intersect(sphereA, sphereB);
                 subtractionResult = GeometryCSG.Subtraction(sphereA, sphereB);
+
+                var time = Stopwatch.GetTimestamp();
+
+                double elapsedMs = (time - timeStamp) * 1000.0 / Stopwatch.Frequency;
+                System.Console.WriteLine($"CSG operations completed in {elapsedMs:F2}ms");
             }
             catch (System.Exception ex)
             {

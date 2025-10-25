@@ -752,5 +752,102 @@ namespace Prowl.Vector.Geometry
         }
 
         #endregion
+
+        #region CSG Utilities
+
+        /// <summary>
+        /// Validates that all faces in the geometry are triangles.
+        /// Throws InvalidOperationException if any face has more or fewer than 3 vertices.
+        /// </summary>
+        public void ValidateTriangulated()
+        {
+            for (int i = 0; i < Faces.Count; i++)
+            {
+                if (Faces[i].VertCount != 3)
+                    throw new InvalidOperationException($"Face {i} has {Faces[i].VertCount} vertices. All faces must be triangles (3 vertices). Please triangulate your geometry using GeometryOperators.Triangulate().");
+            }
+        }
+
+        /// <summary>
+        /// Gets the axis-aligned bounding box of the entire geometry.
+        /// </summary>
+        public AABB GetAABB()
+        {
+            if (Vertices.Count == 0)
+                return new AABB();
+
+            var min = Vertices[0].Point;
+            var max = Vertices[0].Point;
+
+            foreach (var vertex in Vertices)
+            {
+                min = new Double3(
+                    Maths.Min(min.X, vertex.Point.X),
+                    Maths.Min(min.Y, vertex.Point.Y),
+                    Maths.Min(min.Z, vertex.Point.Z)
+                );
+                max = new Double3(
+                    Maths.Max(max.X, vertex.Point.X),
+                    Maths.Max(max.Y, vertex.Point.Y),
+                    Maths.Max(max.Z, vertex.Point.Z)
+                );
+            }
+
+            return new AABB(min, max);
+        }
+
+        /// <summary>
+        /// Gets triangle data for a face, including vertex positions and UVs.
+        /// Assumes the face is a triangle - use ValidateTriangulated() first.
+        /// </summary>
+        public struct TriangleData
+        {
+            public Double3[] Vertices; // Always 3 vertices
+            public Double2[] UVs;      // Always 3 UVs
+            public Face Face;
+
+            public TriangleData(Double3[] vertices, Double2[] uvs, Face face)
+            {
+                Vertices = vertices;
+                UVs = uvs;
+                Face = face;
+            }
+        }
+
+        /// <summary>
+        /// Extracts triangle data from a face. Throws if face is not a triangle.
+        /// </summary>
+        public TriangleData GetTriangleData(Face face)
+        {
+            if (face.VertCount != 3)
+                throw new InvalidOperationException("Face must be a triangle");
+
+            var verts = face.NeighborVertices();
+            var vertices = new Double3[3];
+            var uvs = new Double2[3];
+
+            for (int i = 0; i < 3; i++)
+            {
+                vertices[i] = verts[i].Point;
+
+                var loop = face.GetLoop(verts[i]);
+                if (loop != null && loop.Attributes.TryGetValue("uv", out var uvAttr))
+                {
+                    var floatAttr = uvAttr.AsFloat();
+                    if (floatAttr != null && floatAttr.Data.Length >= 2)
+                    {
+                        uvs[i] = new Double2(floatAttr.Data[0], floatAttr.Data[1]);
+                    }
+                }
+                else
+                {
+                    uvs[i] = Double2.Zero;
+                }
+            }
+
+            return new TriangleData(vertices, uvs, face);
+        }
+
+        #endregion
     }
 }
