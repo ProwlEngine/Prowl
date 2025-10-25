@@ -597,6 +597,56 @@ namespace Prowl.Vector.Geometry
         }
 
         /// <summary>
+        /// Tests if two 2D line segments intersect and returns the intersection point and parameter t.
+        /// </summary>
+        /// <param name="p1">Start point of first segment</param>
+        /// <param name="p2">End point of first segment</param>
+        /// <param name="p3">Start point of second segment</param>
+        /// <param name="p4">End point of second segment</param>
+        /// <param name="intersection">The intersection point if segments intersect</param>
+        /// <param name="t">Parameter t along first segment (0 to 1) where intersection occurs</param>
+        /// <returns>True if segments intersect, false otherwise</returns>
+        public static bool SegmentSegment2DOverlap(Double2 p1, Double2 p2, Double2 p3, Double2 p4, out Double2 intersection, out double t)
+        {
+            intersection = Double2.Zero;
+            t = 0;
+
+            double x1 = p1.X, y1 = p1.Y;
+            double x2 = p2.X, y2 = p2.Y;
+            double x3 = p3.X, y3 = p3.Y;
+            double x4 = p4.X, y4 = p4.Y;
+
+            // Calculate the denominator
+            double denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+
+            // If denominator is zero, lines are parallel
+            if (Maths.Abs(denom) < INTERSECTION_EPSILON)
+            {
+                return false;
+            }
+
+            // Calculate parameter for first line segment
+            double ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+
+            // Calculate parameter for second line segment
+            double ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+
+            // Check if intersection point lies on both segments
+            if (ua >= 0.0 && ua <= 1.0 && ub >= 0.0 && ub <= 1.0)
+            {
+                // Calculate intersection point
+                intersection = new Double2(
+                    x1 + ua * (x2 - x1),
+                    y1 + ua * (y2 - y1)
+                );
+                t = ua;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Checks if two AABBs overlap or touch.
         /// </summary>
         public static bool AABBAABBOverlap(
