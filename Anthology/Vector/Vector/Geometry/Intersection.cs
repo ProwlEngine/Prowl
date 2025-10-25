@@ -820,59 +820,87 @@ namespace Prowl.Vector.Geometry
         /// <returns>True if the triangles intersect or touch.</returns>
         public static bool TriangleTriangle(Double3 a0, Double3 a1, Double3 a2, Double3 b0, Double3 b1, Double3 b2)
         {
-            // Compute triangle normals
+            const double eps = INTERSECTION_EPSILON;
+
+            // Quick AABB test first (super cheap early-out)
+            double minAx = Maths.Min(a0.X, Maths.Min(a1.X, a2.X));
+            double maxAx = Maths.Max(a0.X, Maths.Max(a1.X, a2.X));
+            double minBx = Maths.Min(b0.X, Maths.Min(b1.X, b2.X));
+            double maxBx = Maths.Max(b0.X, Maths.Max(b1.X, b2.X));
+            if (maxAx < minBx - eps || maxBx < minAx - eps) return false;
+
+            // Compute normals (cheap early-out #2)
             Double3 normalA = Double3.Cross(a1 - a0, a2 - a0);
             Double3 normalB = Double3.Cross(b1 - b0, b2 - b0);
-        
-            // Check if triangles are degenerate
-            if (Double3.LengthSquared(normalA) < INTERSECTION_EPSILON * INTERSECTION_EPSILON ||
-                Double3.LengthSquared(normalB) < INTERSECTION_EPSILON * INTERSECTION_EPSILON)
+
+            double lenSqA = Double3.LengthSquared(normalA);
+            double lenSqB = Double3.LengthSquared(normalB);
+            if (lenSqA < eps * eps || lenSqB < eps * eps)
                 return false;
-        
-            normalA = Double3.Normalize(normalA);
-            normalB = Double3.Normalize(normalB);
-        
-            // Test separation along triangle A's normal
+
+            // Normalize in-place
+            double invLenA = 1.0 / Math.Sqrt(lenSqA);
+            double invLenB = 1.0 / Math.Sqrt(lenSqB);
+            normalA *= invLenA;
+            normalB *= invLenB;
+
+            // Test triangle normals (inline projection for speed)
             double dA = Double3.Dot(normalA, a0);
-            double minB, maxB;
-            ProjectTriangleOntoAxis(b0, b1, b2, normalA, out minB, out maxB);
-            if (dA < minB - INTERSECTION_EPSILON || dA > maxB + INTERSECTION_EPSILON)
+            double proj0 = Double3.Dot(normalA, b0);
+            double proj1 = Double3.Dot(normalA, b1);
+            double proj2 = Double3.Dot(normalA, b2);
+            double minB = Maths.Min(proj0, Maths.Min(proj1, proj2));
+            double maxB = Maths.Max(proj0, Maths.Max(proj1, proj2));
+            if (dA < minB - eps || dA > maxB + eps)
                 return false;
-        
-            // Test separation along triangle B's normal
+
             double dB = Double3.Dot(normalB, b0);
-            double minA, maxA;
-            ProjectTriangleOntoAxis(a0, a1, a2, normalB, out minA, out maxA);
-            if (dB < minA - INTERSECTION_EPSILON || dB > maxA + INTERSECTION_EPSILON)
+            proj0 = Double3.Dot(normalB, a0);
+            proj1 = Double3.Dot(normalB, a1);
+            proj2 = Double3.Dot(normalB, a2);
+            double minA = Maths.Min(proj0, Maths.Min(proj1, proj2));
+            double maxA = Maths.Max(proj0, Maths.Max(proj1, proj2));
+            if (dB < minA - eps || dB > maxA + eps)
                 return false;
-        
-            // Test separation along cross products of triangle edges
-            Double3[] edgesA = { a1 - a0, a2 - a1, a0 - a2 };
-            Double3[] edgesB = { b1 - b0, b2 - b1, b0 - b2 };
-        
+
+            // SAT test on edge cross products (no allocations)
             for (int i = 0; i < 3; i++)
             {
+                Double3 edgeA = (i == 0 ? a1 - a0 : i == 1 ? a2 - a1 : a0 - a2);
+
                 for (int j = 0; j < 3; j++)
                 {
-                    Double3 axis = Double3.Cross(edgesA[i], edgesB[j]);
-        
-                    // Skip if axis is too small (edges are parallel)
-                    if (Double3.LengthSquared(axis) < INTERSECTION_EPSILON * INTERSECTION_EPSILON)
+                    Double3 edgeB = (j == 0 ? b1 - b0 : j == 1 ? b2 - b1 : b0 - b2);
+                    Double3 axis = Double3.Cross(edgeA, edgeB);
+
+                    double axisSqLen = Double3.LengthSquared(axis);
+                    if (axisSqLen < eps * eps)
                         continue;
-        
-                    axis = Double3.Normalize(axis);
-        
-                    // Project both triangles onto this axis
-                    ProjectTriangleOntoAxis(a0, a1, a2, axis, out minA, out maxA);
-                    ProjectTriangleOntoAxis(b0, b1, b2, axis, out minB, out maxB);
-        
-                    // Check for separation
-                    if (maxA < minB - INTERSECTION_EPSILON || maxB < minA - INTERSECTION_EPSILON)
+
+                    // Normalize
+                    double invLen = 1.0 / Math.Sqrt(axisSqLen);
+                    axis *= invLen;
+
+                    // Project A
+                    proj0 = Double3.Dot(axis, a0);
+                    proj1 = Double3.Dot(axis, a1);
+                    proj2 = Double3.Dot(axis, a2);
+                    minA = Maths.Min(proj0, Maths.Min(proj1, proj2));
+                    maxA = Maths.Max(proj0, Maths.Max(proj1, proj2));
+
+                    // Project B
+                    proj0 = Double3.Dot(axis, b0);
+                    proj1 = Double3.Dot(axis, b1);
+                    proj2 = Double3.Dot(axis, b2);
+                    minB = Maths.Min(proj0, Maths.Min(proj1, proj2));
+                    maxB = Maths.Max(proj0, Maths.Max(proj1, proj2));
+
+                    // Separation test
+                    if (maxA < minB - eps || maxB < minA - eps)
                         return false;
                 }
             }
-        
-            // No separating axis found, triangles must intersect
+
             return true;
         }
         
