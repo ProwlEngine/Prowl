@@ -20,6 +20,7 @@ public static class GeometryDemo
     private static readonly IDemo[] demos = new IDemo[]
     {
         // BMesh / GeometryData Demos
+        new FaceInsetDemo(),
         new BevelVerticesDemo(),
         new FaceExtrusionDemo(),
         new SubdividedCubeDemo(),
