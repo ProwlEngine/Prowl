@@ -1567,7 +1567,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="mesh">The mesh to weld vertices in.</param>
         /// <param name="threshold">Maximum distance between vertices to be welded together.</param>
         /// <returns>The number of vertices that were welded (removed).</returns>
-        public static int WeldVertices(GeometryData mesh, double threshold)
+        public static int WeldVertices(GeometryData mesh, double threshold = 0.0001)
         {
             if (threshold <= 0)
                 return 0;
@@ -2058,8 +2058,7 @@ namespace Prowl.Vector.Geometry
             var vertexData = new Dictionary<GeometryData.Vertex, (
                 List<GeometryData.Edge> edges,
                 List<GeometryData.Face> faces,
-                List<GeometryData.Edge> orderedEdges,
-                Dictionary<GeometryData.Edge, GeometryData.Vertex> edgeToNewVertex,
+                Dictionary<GeometryData.Vertex, GeometryData.Vertex> otherVertToNewVertex,
                 List<GeometryData.Vertex> newVertices
             )>();
 
@@ -2076,37 +2075,22 @@ namespace Prowl.Vector.Geometry
 
                 var orderedEdges = OrderEdgesAroundVertex(vertex, connectedEdges, connectedFaces);
                 var newVertices = new List<GeometryData.Vertex>();
-                var edgeToNewVertex = new Dictionary<GeometryData.Edge, GeometryData.Vertex>();
+                var otherVertToNewVertex = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
 
                 foreach (var edge in orderedEdges)
                 {
                     var otherVertex = edge.OtherVertex(vertex);
 
-                    // Check if the other vertex is also being beveled
-                    if (bevelSet.Contains(otherVertex))
-                    {
-                        // This edge connects two beveled vertices
-                        // We'll handle this specially - create vertex closer to current vertex
-                        Double3 newPos = Maths.Lerp(vertex.Point, otherVertex.Point, offset);
-                        var newVert = mesh.AddVertex(newPos);
-                        AttributeLerp(mesh, newVert, vertex, otherVertex, offset);
+                    // Create new vertex at offset distance from the vertex being beveled
+                    Double3 newPos = Maths.Lerp(vertex.Point, otherVertex.Point, offset);
+                    var newVert = mesh.AddVertex(newPos);
+                    AttributeLerp(mesh, newVert, vertex, otherVertex, offset);
 
-                        newVertices.Add(newVert);
-                        edgeToNewVertex[edge] = newVert;
-                    }
-                    else
-                    {
-                        // Normal case: other vertex is not being beveled
-                        Double3 newPos = Maths.Lerp(vertex.Point, otherVertex.Point, offset);
-                        var newVert = mesh.AddVertex(newPos);
-                        AttributeLerp(mesh, newVert, vertex, otherVertex, offset);
-
-                        newVertices.Add(newVert);
-                        edgeToNewVertex[edge] = newVert;
-                    }
+                    newVertices.Add(newVert);
+                    otherVertToNewVertex[otherVertex] = newVert;
                 }
 
-                vertexData[vertex] = (connectedEdges, connectedFaces, orderedEdges, edgeToNewVertex, newVertices);
+                vertexData[vertex] = (connectedEdges, connectedFaces, otherVertToNewVertex, newVertices);
             }
 
             // Second pass: collect all affected faces
@@ -2122,7 +2106,7 @@ namespace Prowl.Vector.Geometry
                 if (!vertexData.ContainsKey(vertex))
                     continue;
 
-                var (_, connectedFaces, _, _, _) = vertexData[vertex];
+                var (_, connectedFaces, _, _) = vertexData[vertex];
 
                 foreach (var face in connectedFaces)
                 {
@@ -2174,7 +2158,7 @@ namespace Prowl.Vector.Geometry
             {
                 if (!vertexData.ContainsKey(vertex))
                     continue;
-                var (connectedEdges, _, _, _, _) = vertexData[vertex];
+                var (connectedEdges, _, _, _) = vertexData[vertex];
                 foreach (var edge in connectedEdges)
                 {
                     edgesToRemove.Add(edge);
@@ -2191,7 +2175,7 @@ namespace Prowl.Vector.Geometry
                 if (!vertexData.ContainsKey(vertex))
                     continue;
 
-                var (_, connectedFaces, _, _, newVertices) = vertexData[vertex];
+                var (_, connectedFaces, _, newVertices) = vertexData[vertex];
 
                 if (newVertices.Count >= 3)
                 {
@@ -2232,6 +2216,7 @@ namespace Prowl.Vector.Geometry
             foreach (var (_, faceAttrs, verts, loopAttrs) in allFaceUpdateData)
             {
                 var newFaceVerts = new List<GeometryData.Vertex>();
+                bool faceIsValid = true;
 
                 for (int i = 0; i < verts.Count; i++)
                 {
@@ -2246,25 +2231,28 @@ namespace Prowl.Vector.Geometry
                         var prevVert = verts[prevIdx];
                         var nextVert = verts[nextIdx];
 
-                        var (_, _, orderedEdges, edgeToNewVertex, _) = vertexData[currentVert];
+                        var (_, _, otherVertToNewVertex, _) = vertexData[currentVert];
 
-                        // Find the edges that connect to prev and next vertices
+                        // Find the new vertices along edges to prev and next vertices
+                        // These should be in our mapping since we created them from this vertex
                         GeometryData.Vertex? newVertFromPrev = null;
                         GeometryData.Vertex? newVertToNext = null;
 
-                        foreach (var edge in orderedEdges)
+                        if (otherVertToNewVertex.ContainsKey(prevVert))
+                            newVertFromPrev = otherVertToNewVertex[prevVert];
+                        if (otherVertToNewVertex.ContainsKey(nextVert))
+                            newVertToNext = otherVertToNewVertex[nextVert];
+
+                        // If we didn't find both vertices, mark face as invalid
+                        if (newVertFromPrev == null || newVertToNext == null)
                         {
-                            var otherVert = edge.OtherVertex(currentVert);
-                            if (otherVert == prevVert)
-                                newVertFromPrev = edgeToNewVertex[edge];
-                            if (otherVert == nextVert)
-                                newVertToNext = edgeToNewVertex[edge];
+                            faceIsValid = false;
+                            break;
                         }
 
                         // Add the new vertices in the correct order
-                        if (newVertFromPrev != null)
-                            newFaceVerts.Add(newVertFromPrev);
-                        if (newVertToNext != null && newVertToNext != newVertFromPrev)
+                        newFaceVerts.Add(newVertFromPrev);
+                        if (newVertToNext != newVertFromPrev)
                             newFaceVerts.Add(newVertToNext);
                     }
                     else
@@ -2274,10 +2262,28 @@ namespace Prowl.Vector.Geometry
                     }
                 }
 
-                // Create the updated face
-                if (newFaceVerts.Count >= 3)
+                // Skip this face if it's invalid
+                if (!faceIsValid)
+                    continue;
+
+                // Clean up: remove consecutive duplicate vertices
+                var cleanedVerts = new List<GeometryData.Vertex>();
+                for (int i = 0; i < newFaceVerts.Count; i++)
                 {
-                    var newFace = mesh.AddFace(newFaceVerts.ToArray());
+                    var current = newFaceVerts[i];
+                    var next = newFaceVerts[(i + 1) % newFaceVerts.Count];
+
+                    // Only add if it's not the same as the next vertex
+                    if (current != next)
+                    {
+                        cleanedVerts.Add(current);
+                    }
+                }
+
+                // Create the updated face
+                if (cleanedVerts.Count >= 3)
+                {
+                    var newFace = mesh.AddFace(cleanedVerts.ToArray());
                     if (newFace != null)
                     {
                         // Restore face attributes

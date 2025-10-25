@@ -23,20 +23,7 @@ public class BevelVerticesDemo : IDemo
         _originalCube = GeometryGenerator.Box(Double3.One);
 
         // Create a pyramid (4-sided)
-        _originalPyramid = GeometryGenerator.Cone(0.5, 1);
-        //_originalPyramid = new GeometryData();
-        //var apex = _originalPyramid.AddVertex(new Double3(0, 1, 0));
-        //var base1 = _originalPyramid.AddVertex(new Double3(-0.5, -0.5, -0.5));
-        //var base2 = _originalPyramid.AddVertex(new Double3(0.5, -0.5, -0.5));
-        //var base3 = _originalPyramid.AddVertex(new Double3(0.5, -0.5, 0.5));
-        //var base4 = _originalPyramid.AddVertex(new Double3(-0.5, -0.5, 0.5));
-        //
-        //// Create pyramid faces
-        //_originalPyramid.AddFace(base1, base2, base3, base4); // Base
-        //_originalPyramid.AddFace(apex, base2, base1); // Side 1
-        //_originalPyramid.AddFace(apex, base3, base2); // Side 2
-        //_originalPyramid.AddFace(apex, base4, base3); // Side 3
-        //_originalPyramid.AddFace(apex, base1, base4); // Side 4
+        _originalPyramid = GeometryGenerator.Cone(0.5, 1, default, 6);
     }
 
     public void Draw(Float3 position, float timeInSeconds)
@@ -73,7 +60,8 @@ public class BevelVerticesDemo : IDemo
 
             if (cornerVertex != null)
             {
-                GeometryOperators.BevelVertices(mesh, [.. mesh.Vertices], bevelOffset);
+                GeometryOperators.BevelVertices(mesh, [cornerVertex], bevelOffset);
+                //GeometryOperators.BevelVertices(mesh, [.. mesh.Vertices], bevelOffset);
             }
 
             Float3 topCenterPos = position + new Float3(0, 1.5f, 0);
@@ -84,30 +72,30 @@ public class BevelVerticesDemo : IDemo
         // RIGHT: Cube with all corners beveled
         {
             var mesh = CopyGeometryData(_originalCube);
-
+        
             // Get all vertices (all corners)
             var allVertices = mesh.Vertices.ToList();
             GeometryOperators.BevelVertices(mesh, allVertices, bevelOffset * 0.8);
-
+        
             Float3 topRightPos = position + new Float3(2.5f, 1.5f, 0);
             DrawMesh(mesh, topRightPos, new Float4(0.2f, 1.0f, 0.5f, 0.8f), MeshMode.Wireframe);
             DrawMesh(mesh, topRightPos, new Float4(0.3f, 1.0f, 0.6f, 0.4f), MeshMode.Solid);
         }
-
+        
         // BOTTOM ROW: Pyramid beveling
         // LEFT: Original pyramid
         {
             var mesh = CopyGeometryData(_originalPyramid);
-
+        
             Float3 bottomLeftPos = position + new Float3(-2.5f, -1.5f, 0);
             DrawMesh(mesh, bottomLeftPos, new Float4(0.6f, 0.6f, 0.6f, 0.8f), MeshMode.Wireframe);
             DrawMesh(mesh, bottomLeftPos, new Float4(0.5f, 0.5f, 0.5f, 0.3f), MeshMode.Solid);
         }
-
+        
         // CENTER: Pyramid with apex beveled
         {
             var mesh = CopyGeometryData(_originalPyramid);
-
+        
             // Find the apex (highest Y coordinate)
             GeometryData.Vertex? apex = null;
             double maxY = double.MinValue;
@@ -119,29 +107,29 @@ public class BevelVerticesDemo : IDemo
                     apex = v;
                 }
             }
-
+        
             if (apex != null)
             {
                 GeometryOperators.BevelVertices(mesh, new[] { apex }, bevelOffset);
             }
-
+        
             Float3 bottomCenterPos = position + new Float3(0, -1.5f, 0);
             DrawMesh(mesh, bottomCenterPos, new Float4(1.0f, 0.5f, 0.2f, 0.8f), MeshMode.Wireframe);
             DrawMesh(mesh, bottomCenterPos, new Float4(1.0f, 0.6f, 0.3f, 0.5f), MeshMode.Solid);
         }
-
+        
         // RIGHT: Pyramid with all vertices beveled
         {
             var mesh = CopyGeometryData(_originalPyramid);
-
+        
             var allVertices = mesh.Vertices.ToList();
-            GeometryOperators.BevelVertices(mesh, allVertices, bevelOffset * 0.7);
-
+            GeometryOperators.BevelVertices(mesh, allVertices, bevelOffset);
+        
             Float3 bottomRightPos = position + new Float3(2.5f, -1.5f, 0);
             DrawMesh(mesh, bottomRightPos, new Float4(0.8f, 0.3f, 1.0f, 0.8f), MeshMode.Wireframe);
             DrawMesh(mesh, bottomRightPos, new Float4(0.7f, 0.5f, 1.0f, 0.4f), MeshMode.Solid);
         }
-
+        
         // Draw animated offset indicator
         DrawOffsetIndicator(position + new Float3(0, -3.0f, 0), bevelOffset);
     }
