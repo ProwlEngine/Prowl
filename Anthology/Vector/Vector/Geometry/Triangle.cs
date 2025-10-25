@@ -413,6 +413,13 @@ namespace Prowl.Vector.Geometry
             return GetPointFromBarycentric(baryU, baryV);
         }
 
+        public AABB GetAABB() 
+        {
+            Double3 min = Maths.Min(Maths.Min(V0, V1), V2);
+            Double3 max = Maths.Max(Maths.Max(V0, V1), V2);
+            return new AABB(min, max);
+        }
+
         // --- IBoundingShape Implementation ---
 
         /// <summary>
