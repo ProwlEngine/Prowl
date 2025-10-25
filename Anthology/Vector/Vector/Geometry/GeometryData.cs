@@ -245,6 +245,18 @@ namespace Prowl.Vector.Geometry
                 }
                 return sum > 0 ? p / sum : Double3.Zero;
             }
+
+            /// <summary>
+            /// Gets the axis-aligned bounding box
+            /// </summary>
+            public AABB GetAABB()
+            {
+                var verts = NeighborVertices();
+                if (verts.Count == 0)
+                    return new AABB();
+
+                return AABB.FromPoints(verts.Select(v => v.Point).ToArray());
+            }
         }
 
         #endregion
