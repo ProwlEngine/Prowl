@@ -1247,6 +1247,112 @@ namespace Prowl.Vector.Geometry
             }
         }
 
+        /// <summary>
+        /// Triangulates all faces in the mesh by converting n-gons (faces with more than 3 vertices) into triangles.
+        /// Uses fan triangulation from the first vertex of each face.
+        /// All loop attributes (including UVs) are preserved on the resulting triangles.
+        /// Faces that are already triangles are left unchanged.
+        /// Modifies the mesh in-place.
+        /// </summary>
+        /// <param name="mesh">The mesh to triangulate.</param>
+        public static void Triangulate(GeometryData mesh)
+        {
+            // Collect faces that need triangulation
+            var facesToTriangulate = new List<GeometryData.Face>();
+
+            foreach (var face in mesh.Faces)
+            {
+                if (face.VertCount > 3)
+                {
+                    facesToTriangulate.Add(face);
+                }
+            }
+
+            // Process each face that needs triangulation
+            foreach (var face in facesToTriangulate)
+            {
+                var verts = face.NeighborVertices();
+                if (verts.Count < 3) continue;
+
+                // Store loop attributes for each vertex in the face
+                var loopAttributes = new Dictionary<string, GeometryData.AttributeValue>[verts.Count];
+                for (int i = 0; i < verts.Count; i++)
+                {
+                    var loop = face.GetLoop(verts[i]);
+                    loopAttributes[i] = new Dictionary<string, GeometryData.AttributeValue>();
+                    if (loop != null)
+                    {
+                        foreach (var kvp in loop.Attributes)
+                        {
+                            loopAttributes[i][kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
+                        }
+                    }
+                }
+
+                // Store face attributes
+                var faceAttributes = new Dictionary<string, GeometryData.AttributeValue>();
+                foreach (var kvp in face.Attributes)
+                {
+                    faceAttributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
+                }
+
+                // Create triangles using fan triangulation from first vertex
+                var triangles = new List<(GeometryData.Vertex, GeometryData.Vertex, GeometryData.Vertex, int, int, int)>();
+                for (int i = 1; i < verts.Count - 1; i++)
+                {
+                    triangles.Add((verts[0], verts[i], verts[i + 1], 0, i, i + 1));
+                }
+
+                // Remove the original face
+                mesh.RemoveFace(face);
+
+                // Add triangular faces
+                foreach (var (v0, v1, v2, idx0, idx1, idx2) in triangles)
+                {
+                    var newFace = mesh.AddFace(v0, v1, v2);
+                    if (newFace != null)
+                    {
+                        // Copy face attributes
+                        foreach (var kvp in faceAttributes)
+                        {
+                            newFace.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
+                        }
+
+                        // Copy loop attributes
+                        var loop = newFace.Loop;
+                        if (loop != null)
+                        {
+                            // First vertex (v0)
+                            foreach (var kvp in loopAttributes[idx0])
+                            {
+                                loop.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
+                            }
+                            loop = loop.Next;
+
+                            // Second vertex (v1)
+                            if (loop != null)
+                            {
+                                foreach (var kvp in loopAttributes[idx1])
+                                {
+                                    loop.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
+                                }
+                                loop = loop.Next;
+                            }
+
+                            // Third vertex (v2)
+                            if (loop != null)
+                            {
+                                foreach (var kvp in loopAttributes[idx2])
+                                {
+                                    loop.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         #endregion
     }
 }
