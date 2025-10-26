@@ -5,7 +5,7 @@ using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 
-namespace Prowl.Vector.Geometry
+namespace Prowl.Vector
 {
     /// <summary>
     /// Represents a 3D plane defined by a normal vector and distance from origin.

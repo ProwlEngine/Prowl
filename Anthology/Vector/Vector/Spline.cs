@@ -7,7 +7,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Linq;
 
-namespace Prowl.Vector.Geometry
+namespace Prowl.Vector
 {
 
     /// <summary>

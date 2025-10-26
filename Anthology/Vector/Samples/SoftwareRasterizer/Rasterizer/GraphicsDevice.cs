@@ -4,7 +4,6 @@
 using System.Runtime.CompilerServices;
 
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 
 using SoftwareRasterizer.Rasterizer.Engines;
 

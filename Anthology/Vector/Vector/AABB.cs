@@ -4,8 +4,9 @@
 using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using Prowl.Vector.Geometry;
 
-namespace Prowl.Vector.Geometry
+namespace Prowl.Vector
 {
     /// <summary>
     /// Represents an Axis-Aligned Bounding Box (AABB) in 3D space.

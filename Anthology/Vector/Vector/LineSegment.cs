@@ -5,7 +5,9 @@ using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 
-namespace Prowl.Vector.Geometry
+using Prowl.Vector.Geometry;
+
+namespace Prowl.Vector
 {
     /// <summary>
     /// Represents a 3D line segment defined by two endpoints.
