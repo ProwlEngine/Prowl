@@ -135,6 +135,33 @@ namespace Prowl.Vector.Geometry
             }
         }
 
+
+        /// <summary>
+        /// Scale specified faces uniformly from their centers.
+        /// </summary>
+        /// <param name="mesh">The mesh to scale.</param>
+        /// <param name="faces">The faces to scale.</param>
+        /// <param name="scale">The scale factor.</param>
+        public static void ScaleFace(GeometryData mesh, GeometryData.Face face, double scale)
+        {
+            // Calculate face center
+            Double3 center = Double3.Zero;
+            var verts = face.NeighborVertices();
+            int count = verts.Count;
+            foreach (var v in verts)
+            {
+                center += v.Point;
+            }
+            center /= count;
+            // Scale each vertex away from the center
+            foreach (var v in verts)
+            {
+                Double3 dir = v.Point - center;
+                v.Point = center + dir * scale;
+            }
+        }
+
+
         /// <summary>
         /// Translate the entire mesh by an offset.
         /// </summary>
@@ -149,6 +176,28 @@ namespace Prowl.Vector.Geometry
         }
 
         /// <summary>
+        /// Translate specified faces by an offset.
+        /// </summary>
+        /// <param name="mesh">The mesh to translate.</param>
+        /// <param name="faces">The faces to translate.</param>
+        /// <param name="offset">The translation offset.</param>
+        public static void TranslateFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, Double3 offset)
+        {
+            var movedVertices = new HashSet<GeometryData.Vertex>();
+            foreach (var face in faces)
+            {
+                foreach (var v in face.NeighborVerticesEnumerable())
+                {
+                    if (!movedVertices.Contains(v))
+                    {
+                        v.Point += offset;
+                        movedVertices.Add(v);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// Transform all vertices by a matrix.
         /// </summary>
         /// <param name="mesh">The mesh to transform.</param>
@@ -158,6 +207,28 @@ namespace Prowl.Vector.Geometry
             foreach (var v in mesh.Vertices)
             {
                 v.Point = Double4x4.TransformPoint(v.Point, transform);
+            }
+        }
+
+        /// <summary>
+        /// Transform specified faces by a matrix.
+        /// </summary>
+        /// <param name="mesh">The mesh to transform.</param>
+        /// <param name="faces">The faces to transform.</param>
+        /// <param name="transform">The transformation matrix.</param>
+        public static void TransformFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, Double4x4 transform)
+        {
+            var transformedVertices = new HashSet<GeometryData.Vertex>();
+            foreach (var face in faces)
+            {
+                foreach (var v in face.NeighborVerticesEnumerable())
+                {
+                    if (!transformedVertices.Contains(v))
+                    {
+                        v.Point = Double4x4.TransformPoint(v.Point, transform);
+                        transformedVertices.Add(v);
+                    }
+                }
             }
         }
 
