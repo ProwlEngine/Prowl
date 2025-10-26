@@ -259,6 +259,23 @@ namespace Prowl.Vector.Geometry
                 return sum > 0 ? p / sum : Double3.Zero;
             }
 
+            public Double3 Normal()
+            {
+                var verts = NeighborVertices();
+                if (verts.Count < 3)
+                    return Double3.Zero;
+                Double3 normal = Double3.Zero;
+                for (int i = 0; i < verts.Count; i++)
+                {
+                    var current = verts[i].Point;
+                    var next = verts[(i + 1) % verts.Count].Point;
+                    normal.X += (current.Y - next.Y) * (current.Z + next.Z);
+                    normal.Y += (current.Z - next.Z) * (current.X + next.X);
+                    normal.Z += (current.X - next.X) * (current.Y + next.Y);
+                }
+                return Double3.Normalize(normal);
+            }
+
             /// <summary>
             /// Gets the axis-aligned bounding box
             /// </summary>
