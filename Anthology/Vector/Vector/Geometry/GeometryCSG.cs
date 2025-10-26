@@ -1789,7 +1789,7 @@ namespace Prowl.Vector.Geometry
             // All faces are already validated as triangles
             foreach (var face in geom.Faces)
             {
-                var triangleData = geom.GetTriangleData(face);
+                var triangleData = GetTriangleData(face);
 
                 CSGBrush.Face brushFace = new CSGBrush.Face();
                 brushFace.Vertices = new List<Double3>(triangleData.Vertices);
@@ -1799,6 +1799,60 @@ namespace Prowl.Vector.Geometry
 
             brush.Faces = facesList.ToArray();
             return brush;
+        }
+
+
+
+        /// <summary>
+        /// Gets triangle data for a face, including vertex positions and UVs.
+        /// Assumes the face is a triangle - use ValidateTriangulated() first.
+        /// </summary>
+        public struct TriangleData
+        {
+            public Double3[] Vertices; // Always 3 vertices
+            public Double2[] UVs;      // Always 3 UVs
+            public GeometryData.Face Face;
+
+            public TriangleData(Double3[] vertices, Double2[] uvs, GeometryData.Face face)
+            {
+                Vertices = vertices;
+                UVs = uvs;
+                Face = face;
+            }
+        }
+
+        /// <summary>
+        /// Extracts triangle data from a face. Throws if face is not a triangle.
+        /// </summary>
+        public static TriangleData GetTriangleData(GeometryData.Face face)
+        {
+            if (face.VertCount != 3)
+                throw new InvalidOperationException("Face must be a triangle");
+
+            var verts = face.NeighborVertices();
+            var vertices = new Double3[3];
+            var uvs = new Double2[3];
+
+            for (int i = 0; i < 3; i++)
+            {
+                vertices[i] = verts[i].Point;
+
+                var loop = face.GetLoop(verts[i]);
+                if (loop != null && loop.Attributes.TryGetValue("uv", out var uvAttr))
+                {
+                    var floatAttr = uvAttr.AsFloat();
+                    if (floatAttr != null && floatAttr.Data.Length >= 2)
+                    {
+                        uvs[i] = new Double2(floatAttr.Data[0], floatAttr.Data[1]);
+                    }
+                }
+                else
+                {
+                    uvs[i] = Double2.Zero;
+                }
+            }
+
+            return new TriangleData(vertices, uvs, face);
         }
 
         private static GeometryData BrushToGeometryData(CSGBrush brush)
