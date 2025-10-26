@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Prowl.Vector.Geometry.GeomOps
+namespace Prowl.Vector.Geometry.Operators
 {
     internal class InsetOp
     {

@@ -52,7 +52,7 @@ public class BisectPlaneDemo : IDemo
         {
             var mesh = CopyGeometryData(_originalMesh);
             GeometryOperators.BisectPlane(mesh, _cuttingPlane, epsilon: 0.001, snapToPlane: true);
-            GeometryOperators.ClearPositive(mesh, _cuttingPlane, epsilon: 0.001);
+            GeometryOperators.RemoveVerticesOnPlanePositiveSide(mesh, _cuttingPlane, epsilon: 0.001);
 
             DrawMesh(mesh, position, new Float4(1.0f, 0.5f, 0.2f, 0.8f), MeshMode.Wireframe);
             DrawMesh(mesh, position, new Float4(1.0f, 0.6f, 0.3f, 0.5f), MeshMode.Solid);
@@ -62,7 +62,7 @@ public class BisectPlaneDemo : IDemo
         {
             var mesh = CopyGeometryData(_originalMesh);
             GeometryOperators.BisectPlane(mesh, _cuttingPlane, epsilon: 0.001, snapToPlane: true);
-            GeometryOperators.ClearNegative(mesh, _cuttingPlane, epsilon: 0.001);
+            GeometryOperators.RemoveVerticesOnPlaneNegativeSide(mesh, _cuttingPlane, epsilon: 0.001);
 
             Float3 rightPos = position + new Float3(1.5f, 0, 0);
             DrawMesh(mesh, rightPos, new Float4(0.2f, 1.0f, 0.5f, 0.8f), MeshMode.Wireframe);
