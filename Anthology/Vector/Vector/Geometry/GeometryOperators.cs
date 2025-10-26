@@ -1680,6 +1680,46 @@ namespace Prowl.Vector.Geometry
             }
         }
 
+
+        #endregion
+
+        #region Inset
+
+        private class EdgeInfo
+        {
+            public GeometryData.Vertex V1 { get; set; }
+            public GeometryData.Vertex V2 { get; set; }
+            public int UsageCount { get; set; }
+            public bool IsBoundary => UsageCount == 1;
+
+            public override int GetHashCode()
+            {
+                // Canonical edge representation
+                var h1 = V1.GetHashCode();
+                var h2 = V2.GetHashCode();
+                return h1 < h2 ? (h1, h2).GetHashCode() : (h2, h1).GetHashCode();
+            }
+
+            public override bool Equals(object obj)
+            {
+                if (obj is EdgeInfo other)
+                {
+                    return (V1 == other.V1 && V2 == other.V2) ||
+                           (V1 == other.V2 && V2 == other.V1);
+                }
+                return false;
+            }
+        }
+
+        private class VertexInfo
+        {
+            public GeometryData.Vertex Vertex { get; set; }
+            public List<GeometryData.Face> Faces { get; set; } = new List<GeometryData.Face>();
+            public HashSet<GeometryData.Vertex> SharedEdgeNeighbors { get; set; } = new HashSet<GeometryData.Vertex>();
+            public Double3 TargetPosition { get; set; }
+            public bool IsShared => Faces.Count > 1;
+        }
+
         /// <summary>
         /// Inset a collection of faces by shrinking them towards their centers.
         /// Creates new smaller faces and connects them with wall faces to the original edges.
@@ -1687,9 +1727,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="mesh">The mesh containing the faces.</param>
         /// <param name="facesToInset">The faces to inset.</param>
         /// <param name="amount">The inset amount (0 = no change, 1 = full inset to face center).</param>
-        /// <param name="mode">The inset mode:
-        /// Shared - vertices are shared; non-shared vertices move towards face centers, shared vertices move along their edges,
-        /// PerFace - each face gets its own vertices (no sharing).</param>
+        /// <param name="mode">The inset mode (Shared or PerFace).</param>
         public static void InsetFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToInset,
             double amount, InsetMode mode = InsetMode.Shared)
         {
@@ -1699,187 +1737,49 @@ namespace Prowl.Vector.Geometry
             // Clamp amount to valid range
             amount = Math.Max(0.0, Math.Min(1.0, amount));
 
-            // Calculate face centers
+            // Early exit for zero inset
+            if (Math.Abs(amount) < 1e-10) return;
+
+            // Calculate face centers and normals
             var faceCenters = new Dictionary<GeometryData.Face, Double3>();
             foreach (var face in facesToInsetList)
             {
                 faceCenters[face] = face.Center();
             }
 
-            // For Shared mode, calculate target positions
-            var vertexTargetPositions = new Dictionary<GeometryData.Vertex, Double3>();
+            // Build comprehensive edge information
+            var edgeInfoMap = BuildEdgeInfo(facesToInsetList);
 
+            // Build vertex information for Shared mode
+            var vertexInfoMap = BuildVertexInfo(facesToInsetList, edgeInfoMap, mode);
+
+            // Calculate target positions
             if (mode == InsetMode.Shared)
             {
-                // Build a map of which faces each vertex belongs to
-                var vertexFaces = new Dictionary<GeometryData.Vertex, List<GeometryData.Face>>();
-
-                foreach (var face in facesToInsetList)
-                {
-                    var verts = face.NeighborVertices();
-                    foreach (var vert in verts)
-                    {
-                        if (!vertexFaces.ContainsKey(vert))
-                            vertexFaces[vert] = new List<GeometryData.Face>();
-                        vertexFaces[vert].Add(face);
-                    }
-                }
-
-                // Identify shared vertices (used by more than one selected face)
-                var sharedVertices = new HashSet<GeometryData.Vertex>();
-                foreach (var kvp in vertexFaces)
-                {
-                    if (kvp.Value.Count > 1)
-                        sharedVertices.Add(kvp.Key);
-                }
-
-                // Calculate target positions
-                foreach (var kvp in vertexFaces)
-                {
-                    var vert = kvp.Key;
-                    var faces = kvp.Value;
-
-                    if (!sharedVertices.Contains(vert))
-                    {
-                        // Non-shared vertex: use per-face technique (move towards face center)
-                        var faceCenter = faceCenters[faces[0]];
-                        vertexTargetPositions[vert] = Maths.Lerp(vert.Point, faceCenter, amount);
-                    }
-                    else
-                    {
-                        // Shared vertex: must stay on edge line
-                        // Find an edge where both endpoints are shared vertices
-                        GeometryData.Vertex? edgePartner = null;
-                        int vertNumEdges = 0;
-                        foreach (var face in faces)
-                        {
-                            var verts = face.NeighborVertices();
-                            int vertIndex = verts.IndexOf(vert);
-
-                            if (vertIndex >= 0)
-                            {
-                                int prevIndex = (vertIndex - 1 + verts.Count) % verts.Count;
-                                int nextIndex = (vertIndex + 1) % verts.Count;
-
-                                var prevVert = verts[prevIndex];
-                                var nextVert = verts[nextIndex];
-
-                                if (sharedVertices.Contains(prevVert))
-                                {
-                                    edgePartner = prevVert;
-                                    vertNumEdges++;
-                                }
-                                if (sharedVertices.Contains(nextVert))
-                                {
-                                    edgePartner = nextVert;
-                                    vertNumEdges++;
-                                }
-                            }
-                        }
-
-                        if (vertNumEdges < 3)
-                        {
-                            if (edgePartner != null)
-                            {
-                                // Move towards the midpoint of the edge
-                                var edgeMidpoint = (vert.Point + edgePartner.Point) / 2.0;
-                                vertexTargetPositions[vert] = Maths.Lerp(vert.Point, edgeMidpoint, amount);
-                            }
-                            else
-                            {
-                                // Fallback: average of all face centers
-                                Double3 avgCenter = Double3.Zero;
-                                foreach (var face in faces)
-                                {
-                                    avgCenter += faceCenters[face];
-                                }
-                                avgCenter /= faces.Count;
-                                vertexTargetPositions[vert] = Maths.Lerp(vert.Point, avgCenter, amount);
-                            }
-                        }
-                        else
-                        {
-                            vertexTargetPositions[vert] = vert.Point;
-                        }
-                    }
-                }
-            }
-
-            // Track which vertices we've created for the inset surface
-            var vertexMapping = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
-
-            // Track all edges that are part of the inset faces
-            var edgeUsageCount = new Dictionary<(GeometryData.Vertex, GeometryData.Vertex), int>();
-
-            // First pass: count edge usage to identify boundary edges (only for shared vertex modes)
-            if (mode != InsetMode.PerFace)
-            {
-                foreach (var face in facesToInsetList)
-                {
-                    var verts = face.NeighborVertices();
-                    for (int i = 0; i < verts.Count; i++)
-                    {
-                        var v1 = verts[i];
-                        var v2 = verts[(i + 1) % verts.Count];
-
-                        // Create a canonical edge key (smaller vertex first for consistency)
-                        var edgeKey = v1.GetHashCode() < v2.GetHashCode() ? (v1, v2) : (v2, v1);
-
-                        if (!edgeUsageCount.ContainsKey(edgeKey))
-                            edgeUsageCount[edgeKey] = 0;
-                        edgeUsageCount[edgeKey]++;
-                    }
-                }
+                CalculateSharedTargetPositions(vertexInfoMap, faceCenters, amount);
             }
 
             // Store face data for recreation
-            var faceData = new List<(
-                GeometryData.Face originalFace,
-                List<GeometryData.Vertex> verts,
-                Dictionary<string, GeometryData.AttributeValue> faceAttrs,
-                List<Dictionary<string, GeometryData.AttributeValue>> loopAttrs,
-                Dictionary<GeometryData.Vertex, GeometryData.Vertex> perFaceMapping)>();
-
+            var faceDataList = new List<FaceData>();
             foreach (var face in facesToInsetList)
             {
-                var verts = face.NeighborVertices();
-                var perFaceMapping = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
-                var faceCenter = faceCenters[face];
-
-                // Create inset vertices based on mode
-                foreach (var vert in verts)
+                var faceData = new FaceData
                 {
-                    GeometryData.Vertex newVert;
-
-                    if (mode == InsetMode.PerFace)
-                    {
-                        // PerFace: Always create new vertices for this face
-                        Double3 targetPos = faceCenter;
-                        Double3 newPos = Maths.Lerp(vert.Point, targetPos, amount);
-                        newVert = mesh.AddVertex(newPos);
-                        AttributeLerp(mesh, newVert, vert, vert, 1.0);
-                        perFaceMapping[vert] = newVert;
-                    }
-                    else if (!vertexMapping.ContainsKey(vert))
-                    {
-                        // Shared: Use pre-calculated averaged target position
-                        Double3 newPos = vertexTargetPositions[vert];
-                        newVert = mesh.AddVertex(newPos);
-                        AttributeLerp(mesh, newVert, vert, vert, 1.0);
-                        vertexMapping[vert] = newVert;
-                    }
-                }
+                    OriginalFace = face,
+                    Vertices = face.NeighborVertices(),
+                    FaceCenter = faceCenters[face]
+                };
 
                 // Store face attributes
-                var faceAttrs = new Dictionary<string, GeometryData.AttributeValue>();
+                faceData.FaceAttributes = new Dictionary<string, GeometryData.AttributeValue>();
                 foreach (var attr in mesh.FaceAttributes)
                 {
                     if (face.Attributes.ContainsKey(attr.Name))
-                        faceAttrs[attr.Name] = GeometryData.AttributeValue.Copy(face.Attributes[attr.Name]);
+                        faceData.FaceAttributes[attr.Name] = GeometryData.AttributeValue.Copy(face.Attributes[attr.Name]);
                 }
 
                 // Store loop attributes
-                var loopAttrs = new List<Dictionary<string, GeometryData.AttributeValue>>();
+                faceData.LoopAttributes = new List<Dictionary<string, GeometryData.AttributeValue>>();
                 if (face.Loop != null)
                 {
                     var it = face.Loop;
@@ -1891,12 +1791,44 @@ namespace Prowl.Vector.Geometry
                             if (it.Attributes.ContainsKey(attr.Name))
                                 attrs[attr.Name] = GeometryData.AttributeValue.Copy(it.Attributes[attr.Name]);
                         }
-                        loopAttrs.Add(attrs);
+                        faceData.LoopAttributes.Add(attrs);
                         it = it.Next;
                     } while (it != face.Loop);
                 }
 
-                faceData.Add((face, verts, faceAttrs, loopAttrs, perFaceMapping));
+                faceDataList.Add(faceData);
+            }
+
+            // Create new vertices for inset
+            var vertexMapping = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
+
+            foreach (var faceData in faceDataList)
+            {
+                faceData.PerFaceMapping = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
+
+                foreach (var vert in faceData.Vertices)
+                {
+                    GeometryData.Vertex newVert;
+
+                    if (mode == InsetMode.PerFace)
+                    {
+                        // PerFace: Always create new vertices
+                        Double3 newPos = Maths.Lerp(vert.Point, faceData.FaceCenter, amount);
+                        newVert = mesh.AddVertex(newPos);
+                        AttributeLerp(mesh, newVert, vert, vert, 1.0);
+                        faceData.PerFaceMapping[vert] = newVert;
+                    }
+                    else if (!vertexMapping.ContainsKey(vert))
+                    {
+                        // Shared: Use pre-calculated target position
+                        if (vertexInfoMap.TryGetValue(vert, out var vertInfo))
+                        {
+                            newVert = mesh.AddVertex(vertInfo.TargetPosition);
+                            AttributeLerp(mesh, newVert, vert, vert, 1.0);
+                            vertexMapping[vert] = newVert;
+                        }
+                    }
+                }
             }
 
             // Remove original faces
@@ -1906,41 +1838,38 @@ namespace Prowl.Vector.Geometry
             }
 
             // Create inset faces
-            for (int faceIdx = 0; faceIdx < faceData.Count; faceIdx++)
+            foreach (var faceData in faceDataList)
             {
-                var (originalFace, verts, faceAttrs, loopAttrs, perFaceMapping) = faceData[faceIdx];
-
-                // Map to new vertices based on mode
                 GeometryData.Vertex[] newVerts;
+
                 if (mode == InsetMode.PerFace)
                 {
-                    newVerts = verts.Select(v => perFaceMapping[v]).ToArray();
+                    newVerts = faceData.Vertices.Select(v => faceData.PerFaceMapping[v]).ToArray();
                 }
                 else
                 {
-                    newVerts = verts.Select(v => vertexMapping[v]).ToArray();
+                    newVerts = faceData.Vertices.Select(v => vertexMapping[v]).ToArray();
                 }
 
                 var newFace = mesh.AddFace(newVerts);
                 if (newFace != null)
                 {
                     // Restore face attributes
-                    foreach (var kvp in faceAttrs)
+                    foreach (var kvp in faceData.FaceAttributes)
                     {
                         newFace.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
                     }
 
                     // Restore loop attributes
-                    if (newFace.Loop != null && loopAttrs.Count > 0)
+                    if (newFace.Loop != null && faceData.LoopAttributes.Count > 0)
                     {
                         var it = newFace.Loop;
                         int idx = 0;
-
                         do
                         {
-                            if (idx < loopAttrs.Count)
+                            if (idx < faceData.LoopAttributes.Count)
                             {
-                                foreach (var kvp in loopAttrs[idx])
+                                foreach (var kvp in faceData.LoopAttributes[idx])
                                 {
                                     it.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
                                 }
@@ -1953,49 +1882,213 @@ namespace Prowl.Vector.Geometry
             }
 
             // Create wall faces
-            if (mode == InsetMode.PerFace)
+            CreateWallFaces(mesh, faceDataList, edgeInfoMap, vertexMapping, mode);
+        }
+
+        private static Dictionary<(GeometryData.Vertex, GeometryData.Vertex), EdgeInfo> BuildEdgeInfo(
+            List<GeometryData.Face> facesToInsetList)
+        {
+            var edgeInfoMap = new Dictionary<(GeometryData.Vertex, GeometryData.Vertex), EdgeInfo>();
+
+            foreach (var face in facesToInsetList)
             {
-                // PerFace: Each face creates its own walls
-                foreach (var (originalFace, verts, _, _, perFaceMapping) in faceData)
+                var verts = face.NeighborVertices();
+                for (int i = 0; i < verts.Count; i++)
                 {
+                    var v1 = verts[i];
+                    var v2 = verts[(i + 1) % verts.Count];
+
+                    // Create canonical edge key
+                    var edgeKey = GetCanonicalEdge(v1, v2);
+
+                    if (!edgeInfoMap.ContainsKey(edgeKey))
+                    {
+                        edgeInfoMap[edgeKey] = new EdgeInfo { V1 = edgeKey.Item1, V2 = edgeKey.Item2, UsageCount = 0 };
+                    }
+                    edgeInfoMap[edgeKey].UsageCount++;
+                }
+            }
+
+            return edgeInfoMap;
+        }
+
+        private static Dictionary<GeometryData.Vertex, VertexInfo> BuildVertexInfo(
+            List<GeometryData.Face> facesToInsetList,
+            Dictionary<(GeometryData.Vertex, GeometryData.Vertex), EdgeInfo> edgeInfoMap,
+            InsetMode mode)
+        {
+            var vertexInfoMap = new Dictionary<GeometryData.Vertex, VertexInfo>();
+
+            // Build vertex-to-faces mapping
+            foreach (var face in facesToInsetList)
+            {
+                var verts = face.NeighborVertices();
+                foreach (var vert in verts)
+                {
+                    if (!vertexInfoMap.ContainsKey(vert))
+                    {
+                        vertexInfoMap[vert] = new VertexInfo { Vertex = vert };
+                    }
+                    vertexInfoMap[vert].Faces.Add(face);
+                }
+            }
+
+            if (mode == InsetMode.Shared)
+            {
+                // Identify shared edges (edges used by more than one face)
+                var sharedEdges = new HashSet<(GeometryData.Vertex, GeometryData.Vertex)>();
+                foreach (var kvp in edgeInfoMap)
+                {
+                    if (kvp.Value.UsageCount > 1)
+                    {
+                        sharedEdges.Add(kvp.Key);
+                    }
+                }
+
+                // For each vertex, find its shared edge neighbors
+                foreach (var face in facesToInsetList)
+                {
+                    var verts = face.NeighborVertices();
                     for (int i = 0; i < verts.Count; i++)
                     {
                         var v1 = verts[i];
                         var v2 = verts[(i + 1) % verts.Count];
 
-                        var insetV1 = perFaceMapping[v1];
-                        var insetV2 = perFaceMapping[v2];
+                        var edgeKey = GetCanonicalEdge(v1, v2);
 
-                        // Create quad wall face
-                        mesh.AddFace(insetV1, v1,  v2, insetV2);
+                        if (sharedEdges.Contains(edgeKey) && vertexInfoMap[v1].IsShared && vertexInfoMap[v2].IsShared)
+                        {
+                            vertexInfoMap[v1].SharedEdgeNeighbors.Add(v2);
+                            vertexInfoMap[v2].SharedEdgeNeighbors.Add(v1);
+                        }
+                    }
+                }
+            }
+
+            return vertexInfoMap;
+        }
+
+        private static void CalculateSharedTargetPositions(
+            Dictionary<GeometryData.Vertex, VertexInfo> vertexInfoMap,
+            Dictionary<GeometryData.Face, Double3> faceCenters,
+            double amount)
+        {
+            foreach (var kvp in vertexInfoMap)
+            {
+                var vert = kvp.Key;
+                var vertInfo = kvp.Value;
+
+                if (!vertInfo.IsShared)
+                {
+                    // Non-shared vertex: move towards face center
+                    var faceCenter = faceCenters[vertInfo.Faces[0]];
+                    vertInfo.TargetPosition = Maths.Lerp(vert.Point, faceCenter, amount);
+                }
+                else
+                {
+                    // Shared vertex: handle based on connectivity
+                    var connectedSharedVerts = vertInfo.SharedEdgeNeighbors.ToList();
+
+                    if (connectedSharedVerts.Count == 0)
+                    {
+                        // Isolated - shouldn't happen but fallback to stay in place
+                        vertInfo.TargetPosition = vert.Point;
+                    }
+                    else if (connectedSharedVerts.Count == 1)
+                    {
+                        // End of chain: move along the single shared edge
+                        var edgePartner = connectedSharedVerts[0];
+                        var edgeMidpoint = (vert.Point + edgePartner.Point) * 0.5;
+                        vertInfo.TargetPosition = Maths.Lerp(vert.Point, edgeMidpoint, amount);
+                    }
+                    else if (connectedSharedVerts.Count == 2)
+                    {
+                        // Middle of chain: move towards average of neighbors
+                        // This preserves the edge flow
+                        var avgPos = Double3.Zero;
+                        foreach (var neighbor in connectedSharedVerts)
+                        {
+                            avgPos += neighbor.Point;
+                        }
+                        avgPos /= connectedSharedVerts.Count;
+                        vertInfo.TargetPosition = Maths.Lerp(vert.Point, avgPos, amount);
+                    }
+                    else
+                    {
+                        // Junction vertex (3+ shared edges): don't move to preserve topology
+                        // This prevents mesh collapse at complex junctions
+                        vertInfo.TargetPosition = vert.Point;
+                    }
+                }
+            }
+        }
+
+        private static void CreateWallFaces(
+            GeometryData mesh,
+            List<FaceData> faceDataList,
+            Dictionary<(GeometryData.Vertex, GeometryData.Vertex), EdgeInfo> edgeInfoMap,
+            Dictionary<GeometryData.Vertex, GeometryData.Vertex> vertexMapping,
+            InsetMode mode)
+        {
+            if (mode == InsetMode.PerFace)
+            {
+                // PerFace: Each face creates its own walls
+                foreach (var faceData in faceDataList)
+                {
+                    for (int i = 0; i < faceData.Vertices.Count; i++)
+                    {
+                        var v1 = faceData.Vertices[i];
+                        var v2 = faceData.Vertices[(i + 1) % faceData.Vertices.Count];
+
+                        var insetV1 = faceData.PerFaceMapping[v1];
+                        var insetV2 = faceData.PerFaceMapping[v2];
+
+                        // Create quad wall face (winding order matters!)
+                        mesh.AddFace(insetV1, v1, v2, insetV2);
                     }
                 }
             }
             else
             {
                 // Shared: Only create walls for boundary edges
-                foreach (var (originalFace, verts, _, _, _) in faceData)
+                foreach (var faceData in faceDataList)
                 {
-                    for (int i = 0; i < verts.Count; i++)
+                    for (int i = 0; i < faceData.Vertices.Count; i++)
                     {
-                        var v1 = verts[i];
-                        var v2 = verts[(i + 1) % verts.Count];
+                        var v1 = faceData.Vertices[i];
+                        var v2 = faceData.Vertices[(i + 1) % faceData.Vertices.Count];
 
-                        // Create canonical edge key
-                        var edgeKey = v1.GetHashCode() < v2.GetHashCode() ? (v1, v2) : (v2, v1);
+                        var edgeKey = GetCanonicalEdge(v1, v2);
 
-                        // Only create a wall if this edge was on the boundary (used by only one face)
-                        if (edgeUsageCount[edgeKey] == 1)
+                        // Only create wall if this edge is on the boundary
+                        if (edgeInfoMap.TryGetValue(edgeKey, out var edgeInfo) && edgeInfo.IsBoundary)
                         {
-                            var insetV1 = vertexMapping[v1];
-                            var insetV2 = vertexMapping[v2];
-
-                            // Create quad wall face
-                            mesh.AddFace(insetV1, v1, v2, insetV2);
+                            if (vertexMapping.TryGetValue(v1, out var insetV1) &&
+                                vertexMapping.TryGetValue(v2, out var insetV2))
+                            {
+                                // Create quad wall face
+                                mesh.AddFace(insetV1, v1, v2, insetV2);
+                            }
                         }
                     }
                 }
             }
+        }
+
+        private static (GeometryData.Vertex, GeometryData.Vertex) GetCanonicalEdge(
+            GeometryData.Vertex v1, GeometryData.Vertex v2)
+        {
+            return v1.GetHashCode() < v2.GetHashCode() ? (v1, v2) : (v2, v1);
+        }
+
+        private class FaceData
+        {
+            public GeometryData.Face OriginalFace { get; set; }
+            public List<GeometryData.Vertex> Vertices { get; set; }
+            public Double3 FaceCenter { get; set; }
+            public Dictionary<string, GeometryData.AttributeValue> FaceAttributes { get; set; }
+            public List<Dictionary<string, GeometryData.AttributeValue>> LoopAttributes { get; set; }
+            public Dictionary<GeometryData.Vertex, GeometryData.Vertex> PerFaceMapping { get; set; }
         }
 
         #endregion
@@ -2763,181 +2856,6 @@ namespace Prowl.Vector.Geometry
                 if (mesh.Vertices.Contains(vertex))
                     mesh.RemoveVertex(vertex);
             }
-        }
-
-        /// <summary>
-        /// Bevel a single vertex by replacing it with a small face.
-        /// </summary>
-        [Obsolete("Use BevelVertices instead")]
-        private static void BevelVertex(GeometryData mesh, GeometryData.Vertex vertex, double offset)
-        {
-            // Find all edges connected to this vertex
-            var connectedEdges = vertex.NeighborEdges().ToList();
-            if (connectedEdges.Count < 2)
-                return; // Can't bevel a vertex with less than 2 edges
-
-            // Find all faces connected to this vertex to determine ordering
-            var connectedFaces = vertex.NeighborFaces().ToList();
-            if (connectedFaces.Count == 0)
-                return;
-
-            // We need to order the edges around the vertex based on face connectivity
-            // This ensures the bevel face has correct winding order
-            var orderedEdges = OrderEdgesAroundVertex(vertex, connectedEdges, connectedFaces);
-
-            // Create new vertices along each edge
-            var newVertices = new List<GeometryData.Vertex>();
-            var edgeToNewVertex = new Dictionary<GeometryData.Edge, GeometryData.Vertex>();
-
-            foreach (var edge in orderedEdges)
-            {
-                var otherVertex = edge.OtherVertex(vertex);
-
-                // Create new vertex at offset distance from the vertex being beveled
-                Double3 newPos = Maths.Lerp(vertex.Point, otherVertex.Point, offset);
-                var newVert = mesh.AddVertex(newPos);
-
-                // Interpolate attributes
-                AttributeLerp(mesh, newVert, vertex, otherVertex, offset);
-
-                newVertices.Add(newVert);
-                edgeToNewVertex[edge] = newVert;
-            }
-
-            // Store face data for all faces that use this vertex
-            var faceUpdateData = new List<(GeometryData.Face face, List<GeometryData.Vertex> verts,
-                Dictionary<string, GeometryData.AttributeValue> faceAttrs,
-                List<Dictionary<string, GeometryData.AttributeValue>> loopAttrs)>();
-
-            foreach (var face in connectedFaces)
-            {
-                var verts = face.NeighborVertices();
-
-                // Store face attributes
-                var faceAttrs = new Dictionary<string, GeometryData.AttributeValue>();
-                foreach (var attr in mesh.FaceAttributes)
-                {
-                    if (face.Attributes.ContainsKey(attr.Name))
-                        faceAttrs[attr.Name] = GeometryData.AttributeValue.Copy(face.Attributes[attr.Name]);
-                }
-
-                // Store loop attributes
-                var loopAttrs = new List<Dictionary<string, GeometryData.AttributeValue>>();
-                if (face.Loop != null)
-                {
-                    var it = face.Loop;
-                    do
-                    {
-                        var attrs = new Dictionary<string, GeometryData.AttributeValue>();
-                        foreach (var attr in mesh.LoopAttributes)
-                        {
-                            if (it.Attributes.ContainsKey(attr.Name))
-                                attrs[attr.Name] = GeometryData.AttributeValue.Copy(it.Attributes[attr.Name]);
-                        }
-                        loopAttrs.Add(attrs);
-                        it = it.Next;
-                    } while (it != face.Loop);
-                }
-
-                faceUpdateData.Add((face, verts, faceAttrs, loopAttrs));
-            }
-
-            // Remove old faces
-            foreach (var data in faceUpdateData)
-            {
-                mesh.RemoveFace(data.face);
-            }
-
-            // Remove old edges
-            foreach (var edge in connectedEdges)
-            {
-                mesh.RemoveEdge(edge);
-            }
-
-            // Create the bevel face connecting all new vertices
-            if (newVertices.Count >= 3)
-            {
-                mesh.AddFace(newVertices.ToArray());
-            }
-
-            // Recreate faces with updated vertices
-            foreach (var (_, verts, faceAttrs, loopAttrs) in faceUpdateData)
-            {
-                // Replace the beveled vertex with the appropriate new vertices
-                var newFaceVerts = new List<GeometryData.Vertex>();
-
-                for (int i = 0; i < verts.Count; i++)
-                {
-                    if (verts[i] == vertex)
-                    {
-                        // Find which edges of this face connect to the vertex
-                        int prevIdx = (i - 1 + verts.Count) % verts.Count;
-                        int nextIdx = (i + 1) % verts.Count;
-
-                        var prevVert = verts[prevIdx];
-                        var nextVert = verts[nextIdx];
-
-                        // Find the edges that connect to these vertices
-                        GeometryData.Vertex? newVertFromPrev = null;
-                        GeometryData.Vertex? newVertToNext = null;
-
-                        foreach (var edge in orderedEdges)
-                        {
-                            var otherVert = edge.OtherVertex(vertex);
-                            if (otherVert == prevVert)
-                                newVertFromPrev = edgeToNewVertex[edge];
-                            if (otherVert == nextVert)
-                                newVertToNext = edgeToNewVertex[edge];
-                        }
-
-                        // Add the new vertices in the correct order
-                        if (newVertFromPrev != null)
-                            newFaceVerts.Add(newVertFromPrev);
-                        if (newVertToNext != null && newVertToNext != newVertFromPrev)
-                            newFaceVerts.Add(newVertToNext);
-                    }
-                    else
-                    {
-                        newFaceVerts.Add(verts[i]);
-                    }
-                }
-
-                // Create the updated face
-                if (newFaceVerts.Count >= 3)
-                {
-                    var newFace = mesh.AddFace(newFaceVerts.ToArray());
-                    if (newFace != null)
-                    {
-                        // Restore face attributes
-                        foreach (var kvp in faceAttrs)
-                        {
-                            newFace.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                        }
-
-                        // Restore loop attributes
-                        if (newFace.Loop != null && loopAttrs.Count > 0)
-                        {
-                            var it = newFace.Loop;
-                            int loopIdx = 0;
-                            do
-                            {
-                                if (loopIdx < loopAttrs.Count)
-                                {
-                                    foreach (var kvp in loopAttrs[loopIdx])
-                                    {
-                                        it.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                                    }
-                                }
-                                it = it.Next;
-                                loopIdx++;
-                            } while (it != newFace.Loop);
-                        }
-                    }
-                }
-            }
-
-            // Remove the original vertex
-            mesh.RemoveVertex(vertex);
         }
 
         /// <summary>
