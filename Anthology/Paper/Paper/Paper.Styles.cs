@@ -685,13 +685,13 @@ namespace Prowl.PaperUI
             _defaultValues[(int)GuiProp.Right] = UnitValue.Auto;
             _defaultValues[(int)GuiProp.Top] = UnitValue.Auto;
             _defaultValues[(int)GuiProp.Bottom] = UnitValue.Auto;
-            _defaultValues[(int)GuiProp.MinLeft] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.MinLeft] = UnitValue.Pixels(double.MinValue);
             _defaultValues[(int)GuiProp.MaxLeft] = UnitValue.Pixels(double.MaxValue);
-            _defaultValues[(int)GuiProp.MinRight] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.MinRight] = UnitValue.Pixels(double.MinValue);
             _defaultValues[(int)GuiProp.MaxRight] = UnitValue.Pixels(double.MaxValue);
-            _defaultValues[(int)GuiProp.MinTop] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.MinTop] = UnitValue.Pixels(double.MinValue);
             _defaultValues[(int)GuiProp.MaxTop] = UnitValue.Pixels(double.MaxValue);
-            _defaultValues[(int)GuiProp.MinBottom] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.MinBottom] = UnitValue.Pixels(double.MinValue);
             _defaultValues[(int)GuiProp.MaxBottom] = UnitValue.Pixels(double.MaxValue);
 
             // Child Layout Properties
