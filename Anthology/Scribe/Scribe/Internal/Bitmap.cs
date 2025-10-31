@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Numerics;
+using Prowl.Vector;
 using static Prowl.Scribe.Internal.Common;
 
 namespace Prowl.Scribe.Internal
@@ -317,7 +317,7 @@ namespace Prowl.Scribe.Internal
         }
 
         /// <summary>Build edges from contours (already flattened) and rasterize.</summary>
-        private void RasterizeContours(Vector2[] pts, int[] wcount, int windings, float scaleX, float scaleY, int offX, int offY, int invert)
+        private void RasterizeContours(Float2[] pts, int[] wcount, int windings, float scaleX, float scaleY, int offX, int offY, int invert)
         {
             float yScale = invert != 0 ? -scaleY : scaleY;
             int vsubsample = 1; // retained from original code path
@@ -335,7 +335,7 @@ namespace Prowl.Scribe.Internal
 
             for (int wIndex = 0; wIndex < windings; ++wIndex)
             {
-                var p = new FakePtr<Vector2>(pts, m);
+                var p = new FakePtr<Float2>(pts, m);
                 int contourVerts = wcount[wIndex];
                 m += contourVerts;
 
@@ -370,7 +370,7 @@ namespace Prowl.Scribe.Internal
             RasterizeSortedEdges(edgePtr, n, vsubsample, offX, offY);
         }
 
-        private Vector2[] FlattenCurves(GlyphVertex[] vertices, int numVerts, float objspaceFlatness, out int[] contourLengths, out int numContours)
+        private Float2[] FlattenCurves(GlyphVertex[] vertices, int numVerts, float objspaceFlatness, out int[] contourLengths, out int numContours)
         {
             int vCount = Math.Min(numVerts, vertices?.Length ?? 0);
             contourLengths = null;
@@ -393,13 +393,13 @@ namespace Prowl.Scribe.Internal
             int totalPoints = FlattenCurvesPass(vertices, vCount, flat2, target: null, contourLengths, fillContourLens: true);
 
             // Pass 1: allocate and write points
-            var points = new Vector2[totalPoints];
+            var points = new Float2[totalPoints];
             FlattenCurvesPass(vertices, vCount, flat2, points, contourLengths, fillContourLens: false);
 
             return points;
         }
 
-        private int FlattenCurvesPass(GlyphVertex[] vertices, int vCount, float flat2, Vector2[] target, int[] contourLengths, bool fillContourLens)
+        private int FlattenCurvesPass(GlyphVertex[] vertices, int vCount, float flat2, Float2[] target, int[] contourLengths, bool fillContourLens)
         {
             float x = 0f, y = 0f;
             int contourIndex = -1;
@@ -458,14 +458,14 @@ namespace Prowl.Scribe.Internal
             return numPoints;
         }
 
-        private void AddPoint(Vector2[] points, int index, float x, float y)
+        private void AddPoint(Float2[] points, int index, float x, float y)
         {
             if (points == null) return;
             points[index].X = x;
             points[index].Y = y;
         }
 
-        private int TesselateCurve(Vector2[] points, ref int numPoints, float x0, float y0, float x1, float y1, float x2, float y2, float flat2, int depth)
+        private int TesselateCurve(Float2[] points, ref int numPoints, float x0, float y0, float x1, float y1, float x2, float y2, float flat2, int depth)
         {
             // Midpoint curvature metric
             float mx = (x0 + 2 * x1 + x2) * 0.25f;
@@ -489,7 +489,7 @@ namespace Prowl.Scribe.Internal
             return 1;
         }
 
-        private void TesselateCubic(Vector2[] points, ref int numPoints, float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3, float flat2, int depth)
+        private void TesselateCubic(Float2[] points, ref int numPoints, float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3, float flat2, int depth)
         {
             float dx0 = x1 - x0, dy0 = y1 - y0;
             float dx1 = x2 - x1, dy1 = y2 - y1;

@@ -3,13 +3,13 @@
 //
 // Usage:
 //   var dl = MarkdownLayoutEngine.Layout(doc, fontSystem, settings, imageProvider);
-//   MarkdownLayoutEngine.Render(dl, fontSystem, renderer, new Vector2(x, y)); // draws shapes + text
+//   MarkdownLayoutEngine.Render(dl, fontSystem, renderer, new Float2(x, y)); // draws shapes + text
 
 using Prowl.Scribe.Internal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
+using Prowl.Vector;
 
 namespace Prowl.Scribe
 {
@@ -17,7 +17,7 @@ namespace Prowl.Scribe
 
     public interface IMarkdownImageProvider
     {
-        bool TryGetImage(string url, out object texture, out Vector2 size);
+        bool TryGetImage(string url, out object texture, out Float2 size);
     }
 
     public enum DecorationKind { Underline, Strike, Overline }
@@ -39,7 +39,7 @@ namespace Prowl.Scribe
     public struct DrawText : IDrawOp
     {
         public TextLayout Layout;
-        public Vector2 Pos;
+        public Float2 Pos;
         public FontColor Color;
         public List<DecorationSpan> Decorations; // optional
         public List<IntRange> LinkRanges;
@@ -146,7 +146,7 @@ namespace Prowl.Scribe
     {
         public readonly List<IDrawOp> Ops = new List<IDrawOp>();
         public readonly List<LinkInfo> Links = new List<LinkInfo>();
-        public Vector2 Size; // overall width/height used
+        public Float2 Size; // overall width/height used
     }
 
     #endregion
@@ -193,11 +193,11 @@ namespace Prowl.Scribe
                 maxRight = MathF.Max(maxRight, settings.Width);
             }
 
-            dl.Size = new Vector2(settings.Width, cursorY);
+            dl.Size = new Float2(settings.Width, cursorY);
             return dl;
         }
 
-        public static void Render(MarkdownDisplayList dl, FontSystem fontSystem, IFontRenderer renderer, Vector2 position, MarkdownLayoutSettings settings)
+        public static void Render(MarkdownDisplayList dl, FontSystem fontSystem, IFontRenderer renderer, Float2 position, MarkdownLayoutSettings settings)
         {
             if (dl == null || dl.Ops.Count == 0) return;
 
@@ -225,7 +225,7 @@ namespace Prowl.Scribe
             {
                 if (op is DrawText t)
                 {
-                    var offsetPos = new Vector2(t.Pos.X + position.X, t.Pos.Y + position.Y);
+                    var offsetPos = new Float2(t.Pos.X + position.X, t.Pos.Y + position.Y);
                     fontSystem.DrawLayout(t.Layout, offsetPos, t.Color);
                     if (t.LinkRanges != null && t.LinkRanges.Count > 0)
                         DrawLinkOverprint(t, position, fontSystem, renderer, settings);
@@ -239,16 +239,16 @@ namespace Prowl.Scribe
                     var r = img.Rect;
                     float offsetX = r.X + position.X;
                     float offsetY = r.Y + position.Y;
-                    vertsImg[0] = new IFontRenderer.Vertex(new Vector3(offsetX, offsetY, 0), FontColor.White, new Vector2(0, 0));
-                    vertsImg[1] = new IFontRenderer.Vertex(new Vector3(offsetX + r.Width, offsetY, 0), FontColor.White, new Vector2(1, 0));
-                    vertsImg[2] = new IFontRenderer.Vertex(new Vector3(offsetX, offsetY + r.Height, 0), FontColor.White, new Vector2(0, 1));
-                    vertsImg[3] = new IFontRenderer.Vertex(new Vector3(offsetX + r.Width, offsetY + r.Height, 0), FontColor.White, new Vector2(1, 1));
+                    vertsImg[0] = new IFontRenderer.Vertex(new Float3(offsetX, offsetY, 0), FontColor.White, new Float2(0, 0));
+                    vertsImg[1] = new IFontRenderer.Vertex(new Float3(offsetX + r.Width, offsetY, 0), FontColor.White, new Float2(1, 0));
+                    vertsImg[2] = new IFontRenderer.Vertex(new Float3(offsetX, offsetY + r.Height, 0), FontColor.White, new Float2(0, 1));
+                    vertsImg[3] = new IFontRenderer.Vertex(new Float3(offsetX + r.Width, offsetY + r.Height, 0), FontColor.White, new Float2(1, 1));
                     renderer.DrawQuads(img.Texture, vertsImg, idxImg);
                 }
             }
         }
 
-        public static bool TryGetLinkAt(MarkdownDisplayList dl, Vector2 point, Vector2 renderOffset, out string href)
+        public static bool TryGetLinkAt(MarkdownDisplayList dl, Float2 point, Float2 renderOffset, out string href)
         {
             foreach (var link in dl.Links)
             {
@@ -316,7 +316,7 @@ namespace Prowl.Scribe
             var linkRanges = new List<IntRange>();
             foreach (var ls in linkSpans) linkRanges.Add(ls.Range);
 
-            var op = new DrawText { Layout = tl, Pos = new Vector2(x, y), Color = settings.ColorText, Decorations = decos, LinkRanges = linkRanges };
+            var op = new DrawText { Layout = tl, Pos = new Float2(x, y), Color = settings.ColorText, Decorations = decos, LinkRanges = linkRanges };
             dl.Ops.Add(op);
             if (linkSpans.Count > 0)
                 AddLinkHitBoxes(dl, op, linkSpans);
@@ -404,7 +404,7 @@ namespace Prowl.Scribe
                     tlsNum.Alignment = TextAlignment.Right;
                     tlsNum.Font = settings.ParagraphFont;
                     var tlNum = fontSystem.CreateLayout($"{index}.", tlsNum);
-                    dl.Ops.Add(new DrawText { Layout = tlNum, Pos = new Vector2(x + depth * settings.ListIndent, lineTop), Color = settings.ColorText });
+                    dl.Ops.Add(new DrawText { Layout = tlNum, Pos = new Float2(x + depth * settings.ListIndent, lineTop), Color = settings.ColorText });
                 }
 
                 // lead line
@@ -460,7 +460,7 @@ namespace Prowl.Scribe
             var tl = fontSystem.CreateLayout(cb.Code.Replace("\r\n", "\n"), tls);
             float h = tl.Size.Y + 2 * pad;
             dl.Ops.Add(new DrawQuad { Rect = new RectangleF(x, y, wAvail, h), Color = settings.ColorCodeBg });
-            dl.Ops.Add(new DrawText { Layout = tl, Pos = new Vector2(innerX, y + pad), Color = settings.ColorText });
+            dl.Ops.Add(new DrawText { Layout = tl, Pos = new Float2(innerX, y + pad), Color = settings.ColorText });
             return y + h + settings.ParagraphSpacing;
         }
 
@@ -540,7 +540,7 @@ namespace Prowl.Scribe
 
                     var linkRanges = new List<IntRange>();
                     foreach (var ls in linkSpans) linkRanges.Add(ls.Range);
-                    var op = new DrawText { Layout = tl, Pos = new Vector2(cx, rowY), Color = settings.ColorText, Decorations = decos, LinkRanges = linkRanges };
+                    var op = new DrawText { Layout = tl, Pos = new Float2(cx, rowY), Color = settings.ColorText, Decorations = decos, LinkRanges = linkRanges };
                     dl.Ops.Add(op);
                     if (linkSpans.Count > 0) AddLinkHitBoxes(dl, op, linkSpans);
                     rowHeight = MathF.Max(rowHeight, tl.Size.Y);
@@ -687,7 +687,7 @@ namespace Prowl.Scribe
             return (sb.ToString(), decos, links, styles);
         }
 
-        private static void DrawLinkOverprint(DrawText t, Vector2 position, FontSystem fontSystem, IFontRenderer renderer, MarkdownLayoutSettings settings)
+        private static void DrawLinkOverprint(DrawText t, Float2 position, FontSystem fontSystem, IFontRenderer renderer, MarkdownLayoutSettings settings)
         {
             var layout = t.Layout;
             if (layout.Lines == null || layout.Lines.Count == 0) return;
@@ -738,10 +738,10 @@ namespace Prowl.Scribe
 
                         var c = settings.ColorLink;
                         // 4 vertices (pos, uv, color)
-                        verts.Add(new IFontRenderer.Vertex(new Vector3(x, y, 0), c, new Vector2(g.U0, g.V0)));
-                        verts.Add(new IFontRenderer.Vertex(new Vector3(x + g.AtlasWidth, y, 0), c, new Vector2(g.U1, g.V0)));
-                        verts.Add(new IFontRenderer.Vertex(new Vector3(x, y + g.AtlasHeight, 0), c, new Vector2(g.U0, g.V1)));
-                        verts.Add(new IFontRenderer.Vertex(new Vector3(x + g.AtlasWidth, y + g.AtlasHeight, 0), c, new Vector2(g.U1, g.V1)));
+                        verts.Add(new IFontRenderer.Vertex(new Float3(x, y, 0), c, new Float2(g.U0, g.V0)));
+                        verts.Add(new IFontRenderer.Vertex(new Float3(x + g.AtlasWidth, y, 0), c, new Float2(g.U1, g.V0)));
+                        verts.Add(new IFontRenderer.Vertex(new Float3(x, y + g.AtlasHeight, 0), c, new Float2(g.U0, g.V1)));
+                        verts.Add(new IFontRenderer.Vertex(new Float3(x + g.AtlasWidth, y + g.AtlasHeight, 0), c, new Float2(g.U1, g.V1)));
                         idx.Add(vbase + 0); idx.Add(vbase + 2); idx.Add(vbase + 1);
                         idx.Add(vbase + 1); idx.Add(vbase + 2); idx.Add(vbase + 3);
                         vbase += 4;
@@ -753,7 +753,7 @@ namespace Prowl.Scribe
                 renderer.DrawQuads(fontSystem.Texture, verts.ToArray(), idx.ToArray());
         }
 
-        private static void DrawDecorations(DrawText t, Vector2 position, FontSystem fontSystem, IFontRenderer renderer, MarkdownLayoutSettings settings)
+        private static void DrawDecorations(DrawText t, Float2 position, FontSystem fontSystem, IFontRenderer renderer, MarkdownLayoutSettings settings)
         {
             var layout = t.Layout;
             if (layout.Lines == null || layout.Lines.Count == 0) return;
@@ -910,11 +910,11 @@ namespace Prowl.Scribe
         private static void AddQuad(ref List<IFontRenderer.Vertex> verts, ref List<int> idx, ref int vbase, RectangleF r, FontColor color)
         {
             // UV(0,0) white texel as requested
-            var uv = new Vector2(0, 0);
-            verts.Add(new IFontRenderer.Vertex(new Vector3(r.X, r.Y, 0), color, uv));
-            verts.Add(new IFontRenderer.Vertex(new Vector3(r.X + r.Width, r.Y, 0), color, uv));
-            verts.Add(new IFontRenderer.Vertex(new Vector3(r.X, r.Y + r.Height, 0), color, uv));
-            verts.Add(new IFontRenderer.Vertex(new Vector3(r.X + r.Width, r.Y + r.Height, 0), color, uv));
+            var uv = new Float2(0, 0);
+            verts.Add(new IFontRenderer.Vertex(new Float3(r.X, r.Y, 0), color, uv));
+            verts.Add(new IFontRenderer.Vertex(new Float3(r.X + r.Width, r.Y, 0), color, uv));
+            verts.Add(new IFontRenderer.Vertex(new Float3(r.X, r.Y + r.Height, 0), color, uv));
+            verts.Add(new IFontRenderer.Vertex(new Float3(r.X + r.Width, r.Y + r.Height, 0), color, uv));
             idx.Add(vbase + 0); idx.Add(vbase + 1); idx.Add(vbase + 2);
             idx.Add(vbase + 1); idx.Add(vbase + 3); idx.Add(vbase + 2);
             vbase += 4;

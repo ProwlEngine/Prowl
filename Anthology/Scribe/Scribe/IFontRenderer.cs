@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Numerics;
+using Prowl.Vector;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Scribe
@@ -9,11 +9,11 @@ namespace Prowl.Scribe
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct Vertex
         {
-            public Vector3 Position;
+            public Float3 Position;
             public FontColor Color;
-            public Vector2 TextureCoordinate;
+            public Float2 TextureCoordinate;
 
-            public Vertex(Vector3 position, FontColor color, Vector2 texCoord)
+            public Vertex(Float3 position, FontColor color, Float2 texCoord)
             {
                 Position = position;
                 Color = color;

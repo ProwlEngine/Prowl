@@ -1,6 +1,7 @@
 using Prowl.Scribe;
 using System.Numerics;
 using System.Linq;
+using Prowl.Vector;
 
 namespace Tests
 {
@@ -290,7 +291,7 @@ namespace Tests
             settings.Font = font;
 
             var emptyLayout = fs.CreateLayout("", settings);
-            Assert.Equal(Vector2.Zero, emptyLayout.Size);
+            Assert.Equal(Float2.Zero, emptyLayout.Size);
 
             var spaceLayout = fs.CreateLayout(" ", settings);
             Assert.True(spaceLayout.Size.X > 0, "Space should have positive width");
@@ -345,7 +346,7 @@ namespace Tests
             var testText = "Alignment Test";
             
             var alignments = new TextAlignment[] { TextAlignment.Left, TextAlignment.Center, TextAlignment.Right };
-            Vector2? previousSize = null;
+            Float2? previousSize = null;
             
             foreach (var alignment in alignments)
             {

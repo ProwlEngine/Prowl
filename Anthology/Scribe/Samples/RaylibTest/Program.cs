@@ -1,7 +1,7 @@
 ﻿using Prowl.Scribe;
 using Raylib_cs;
 using System.Diagnostics;
-using System.Numerics;
+using Prowl.Vector;
 using System.Runtime.InteropServices;
 
 public sealed class RaylibMarkdownImageProvider : IMarkdownImageProvider, IDisposable
@@ -16,7 +16,7 @@ public sealed class RaylibMarkdownImageProvider : IMarkdownImageProvider, IDispo
     private static readonly HttpClient _httpClient = new();
     private readonly Dictionary<string, MarkdownImage> _cache = new();
 
-    public bool TryGetImage(string src, out object texture, out Vector2 size)
+    public bool TryGetImage(string src, out object texture, out Float2 size)
     {
         texture = default;
         size = default;
@@ -24,7 +24,7 @@ public sealed class RaylibMarkdownImageProvider : IMarkdownImageProvider, IDispo
         if (_cache.TryGetValue(src, out var image))
         {
             texture = image.Texture;
-            size = new Vector2(image.Width, image.Height);
+            size = new Float2(image.Width, image.Height);
             return true;
         }
 
@@ -45,7 +45,7 @@ public sealed class RaylibMarkdownImageProvider : IMarkdownImageProvider, IDispo
                 _cache[src] = image;
 
                 texture = image.Texture;
-                size = new Vector2(image.Width, image.Height);
+                size = new Float2(image.Width, image.Height);
                 return true;
             }
             catch
@@ -68,7 +68,7 @@ public sealed class RaylibMarkdownImageProvider : IMarkdownImageProvider, IDispo
                 _cache[src] = image;
 
                 texture = image.Texture;
-                size = new Vector2(image.Width, image.Height);
+                size = new Float2(image.Width, image.Height);
                 return true;
             }
             catch
@@ -253,7 +253,7 @@ for (int i = 0; i < 3; i++) {
             HandleInput(ref demoMode, ref settings, ref showAtlas, ref showMetrics, fontAtlas);
 
             Raylib.BeginDrawing();
-            Raylib.ClearBackground(new Color(245, 246, 250, 255));
+            Raylib.ClearBackground(new Raylib_cs.Color(245, 246, 250, 255));
 
             DrawDemo(demoMode, sampleTexts[demoMode], settings, fontAtlas, renderer, imageProvider, showMetrics);
             DrawUI(demoMode, settings, fontAtlas, showAtlas, showMetrics);
@@ -315,9 +315,9 @@ for (int i = 0; i < 3; i++) {
     {
         Raylib.SetMouseCursor(MouseCursor.Default);
         var contentArea = new Rectangle(50, 100, (int)settings.MaxWidth + 40, Raylib.GetScreenHeight() - 160);
-        Raylib.DrawRectangleRec(contentArea, new Color(240, 240, 240, 100));
-        Raylib.DrawRectangleLinesEx(contentArea, 2, Color.Gray);
-        var position = new Vector2(contentArea.X + 20, contentArea.Y + 20);
+        Raylib.DrawRectangleRec(contentArea, new Raylib_cs.Color(240, 240, 240, 100));
+        Raylib.DrawRectangleLinesEx(contentArea, 2, Raylib_cs.Color.Gray);
+        var position = new Float2(contentArea.X + 20, contentArea.Y + 20);
 
         switch (mode)
         {
@@ -340,55 +340,55 @@ for (int i = 0; i < 3; i++) {
     }
 
     // === Existing demo helpers (trimmed) ===
-    static void DrawBasic(string text, Vector2 pos, TextLayoutSettings settings, FontSystem fs)
+    static void DrawBasic(string text, Float2 pos, TextLayoutSettings settings, FontSystem fs)
     {
         var layout = fs.CreateLayout(text, settings);
         fs.DrawLayout(layout, pos, FontColor.Black);
     }
 
-    static void DrawWrapping(string text, Vector2 pos, TextLayoutSettings s, FontSystem fs)
+    static void DrawWrapping(string text, Float2 pos, TextLayoutSettings s, FontSystem fs)
     {
         var w = s; w.WrapMode = TextWrapMode.Wrap; w.MaxWidth = MathF.Max(260, s.MaxWidth * 0.5f);
         var nw = s; nw.WrapMode = TextWrapMode.NoWrap; nw.MaxWidth = w.MaxWidth;
         fs.DrawText("Wrap ON:", pos, FontColor.Red, 16, font);
-        fs.DrawLayout(fs.CreateLayout(text, w), pos + new Vector2(0, 22), FontColor.Black);
+        fs.DrawLayout(fs.CreateLayout(text, w), pos + new Float2(0, 22), FontColor.Black);
         var x2 = pos.X + w.MaxWidth + 60;
-        fs.DrawText("Wrap OFF:", new Vector2(x2, pos.Y), FontColor.Red, 16, font);
-        fs.DrawLayout(fs.CreateLayout(text, nw), new Vector2(x2, pos.Y + 22), FontColor.Black);
+        fs.DrawText("Wrap OFF:", new Float2(x2, pos.Y), FontColor.Red, 16, font);
+        fs.DrawLayout(fs.CreateLayout(text, nw), new Float2(x2, pos.Y + 22), FontColor.Black);
     }
 
-    static void DrawAlignment(Vector2 pos, TextLayoutSettings s, FontSystem fs)
+    static void DrawAlignment(Float2 pos, TextLayoutSettings s, FontSystem fs)
     {
         var sample = "This paragraph demonstrates left/center/right alignment across a fixed width.";
         float y = pos.Y;
         foreach (var (name, align) in new[] { ("Left", TextAlignment.Left), ("Center", TextAlignment.Center), ("Right", TextAlignment.Right) })
         {
             var t = s; t.Alignment = align; t.WrapMode = TextWrapMode.Wrap; t.MaxWidth = 400;
-            fs.DrawText(name + ":", new Vector2(pos.X, y), FontColor.Blue, 16, font);
+            fs.DrawText(name + ":", new Float2(pos.X, y), FontColor.Blue, 16, font);
             var layout = fs.CreateLayout(sample, t);
-            fs.DrawLayout(layout, new Vector2(pos.X, y + 22), FontColor.Black);
+            fs.DrawLayout(layout, new Float2(pos.X, y + 22), FontColor.Black);
             y += layout.Size.Y + 40;
         }
     }
 
-    static void DrawTypography(Vector2 pos, TextLayoutSettings s, FontSystem fs)
+    static void DrawTypography(Float2 pos, TextLayoutSettings s, FontSystem fs)
     {
         float y = pos.Y;
         for (float spacing = 0; spacing <= 2; spacing += 1)
         {
             var t = s; t.LetterSpacing = spacing; t.WrapMode = TextWrapMode.NoWrap;
-            fs.DrawText($"Spacing {spacing:F1}:", new Vector2(pos.X, y), FontColor.Blue, 14, font);
-            fs.DrawText("Letter Spacing", new Vector2(pos.X + 120, y), FontColor.Black, t);
+            fs.DrawText($"Spacing {spacing:F1}:", new Float2(pos.X, y), FontColor.Blue, 14, font);
+            fs.DrawText("Letter Spacing", new Float2(pos.X + 120, y), FontColor.Black, t);
             y += 28;
         }
         var lh = s; lh.LineHeight = 1.6f; lh.WrapMode = TextWrapMode.NoWrap;
-        fs.DrawText("Line height:", new Vector2(pos.X, y), FontColor.Blue, 14, font);
-        fs.DrawLayout(fs.CreateLayout("Line\nheight\nsample", lh), new Vector2(pos.X + 120, y), FontColor.Black);
+        fs.DrawText("Line height:", new Float2(pos.X, y), FontColor.Blue, 14, font);
+        fs.DrawLayout(fs.CreateLayout("Line\nheight\nsample", lh), new Float2(pos.X + 120, y), FontColor.Black);
     }
 
     // === Markdown demo ===
     static bool isMouseOverLink = false;
-    static void DrawMarkdown(string md, Vector2 pos, TextLayoutSettings baseText, FontSystem fs,
+    static void DrawMarkdown(string md, Float2 pos, TextLayoutSettings baseText, FontSystem fs,
         IFontRenderer renderer, IMarkdownImageProvider imageProvider)
     {
 
@@ -441,21 +441,21 @@ for (int i = 0; i < 3; i++) {
 
     static void DrawUI(object mode, TextLayoutSettings settings, FontSystem fs, bool showAtlas, bool showMetrics)
     {
-        fs.DrawText($"Demo Mode: {mode}", new Vector2(50, 20), FontColor.Black, 24, font);
+        fs.DrawText($"Demo Mode: {mode}", new Float2(50, 20), FontColor.Black, 24, font);
         var sx = Raylib.GetScreenWidth() - 380;
         var sy = 20;
-        fs.DrawText("Settings:", new Vector2(sx, sy), FontColor.Blue, 16, font); sy += 24;
-        fs.DrawText($"Font Size: {settings.PixelSize}", new Vector2(sx, sy), FontColor.Black, 14, font); sy += 18;
-        fs.DrawText($"Max Width: {settings.MaxWidth}", new Vector2(sx, sy), FontColor.Black, 14, font); sy += 18;
-        fs.DrawText($"Wrap: {settings.WrapMode}", new Vector2(sx, sy), FontColor.Black, 14, font); sy += 18;
-        fs.DrawText($"Alignment: {settings.Alignment}", new Vector2(sx, sy), FontColor.Black, 14, font); sy += 18;
-        fs.DrawText($"Line Height: {settings.LineHeight:F2}", new Vector2(sx, sy), FontColor.Black, 14, font);
+        fs.DrawText("Settings:", new Float2(sx, sy), FontColor.Blue, 16, font); sy += 24;
+        fs.DrawText($"Font Size: {settings.PixelSize}", new Float2(sx, sy), FontColor.Black, 14, font); sy += 18;
+        fs.DrawText($"Max Width: {settings.MaxWidth}", new Float2(sx, sy), FontColor.Black, 14, font); sy += 18;
+        fs.DrawText($"Wrap: {settings.WrapMode}", new Float2(sx, sy), FontColor.Black, 14, font); sy += 18;
+        fs.DrawText($"Alignment: {settings.Alignment}", new Float2(sx, sy), FontColor.Black, 14, font); sy += 18;
+        fs.DrawText($"Line Height: {settings.LineHeight:F2}", new Float2(sx, sy), FontColor.Black, 14, font);
 
         var cy = Raylib.GetScreenHeight() - 124;
-        fs.DrawText("Controls:", new Vector2(50, cy), FontColor.Blue, 16, font); cy += 22;
-        fs.DrawText("1-4 Modes, 5 Markdown | ↑↓ size | ←→ width | W wrap | A align", new Vector2(50, cy), FontColor.Gray, 12, font); cy += 18;
-        fs.DrawText("TAB ± letter spacing | [ ] word spacing | -/= line height | T tabs", new Vector2(50, cy), FontColor.Gray, 12, font); cy += 18;
-        fs.DrawText("SPACE atlas | M metrics | R reset", new Vector2(50, cy), FontColor.Gray, 12, font);
+        fs.DrawText("Controls:", new Float2(50, cy), FontColor.Blue, 16, font); cy += 22;
+        fs.DrawText("1-4 Modes, 5 Markdown | ↑↓ size | ←→ width | W wrap | A align", new Float2(50, cy), FontColor.Gray, 12, font); cy += 18;
+        fs.DrawText("TAB ± letter spacing | [ ] word spacing | -/= line height | T tabs", new Float2(50, cy), FontColor.Gray, 12, font); cy += 18;
+        fs.DrawText("SPACE atlas | M metrics | R reset", new Float2(50, cy), FontColor.Gray, 12, font);
     }
 
     static void DrawAtlasView(Texture2D atlasTexture, FontSystem fs)
@@ -463,10 +463,10 @@ for (int i = 0; i < 3; i++) {
         int disp = 300;
         int ax = Raylib.GetScreenWidth() - disp - 20;
         int ay = 100;
-        Raylib.DrawRectangle(ax - 2, ay - 2, disp + 4, disp + 4, Color.Black);
+        Raylib.DrawRectangle(ax - 2, ay - 2, disp + 4, disp + 4, Raylib_cs.Color.Black);
         Rectangle src = new Rectangle(0, 0, atlasTexture.Width, atlasTexture.Height);
         Rectangle dst = new Rectangle(ax, ay, disp, disp);
-        Raylib.DrawTexturePro(atlasTexture, src, dst, Vector2.Zero, 0, Color.White);
-        fs.DrawText($"Atlas {fs.Width}x{fs.Height}", new Vector2(ax, ay + disp + 6), FontColor.Black, 14, font);
+        Raylib.DrawTexturePro(atlasTexture, src, dst, Float2.Zero, 0, Raylib_cs.Color.White);
+        fs.DrawText($"Atlas {fs.Width}x{fs.Height}", new Float2(ax, ay + disp + 6), FontColor.Black, 14, font);
     }
 }

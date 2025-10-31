@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Numerics;
+using Prowl.Vector;
 
 namespace Prowl.Scribe
 {
     public class TextLayout
     {
         public List<Line> Lines { get; private set; }
-        public Vector2 Size { get; private set; }
+        public Float2 Size { get; private set; }
         public TextLayoutSettings Settings { get; private set; }
         public string Text { get; private set; }
 
@@ -24,7 +24,7 @@ namespace Prowl.Scribe
 
             if (string.IsNullOrEmpty(text))
             {
-                Size = Vector2.Zero;
+                Size = Float2.Zero;
                 return;
             }
 
@@ -42,7 +42,7 @@ namespace Prowl.Scribe
 
             Lines.Clear();
 
-            var line = new Line(new Vector2(0, currentY), 0);
+            var line = new Line(new Float2(0, currentY), 0);
 
             // Hoist Settings & constants
             var text = Text;
@@ -74,7 +74,7 @@ namespace Prowl.Scribe
             void EmitGlyph(AtlasGlyph glyph, FontFile font, char c, float offsetX, float offsetY, float advanceBase, ref float x, List<GlyphInstance> outList, int charIndex)
             {
                 float a = GetAscender(font);
-                var gi = new GlyphInstance(glyph, new Vector2(x + offsetX, offsetY + a), c, advanceBase, charIndex);
+                var gi = new GlyphInstance(glyph, new Float2(x + offsetX, offsetY + a), c, advanceBase, charIndex);
                 outList.Add(gi);
                 x += advanceBase;
                 lastCodepointForKerning = c; // kerning only continues within the current word/run
@@ -91,7 +91,7 @@ namespace Prowl.Scribe
                     currentX = 0f;
                     currentY += lineHeight;
                     i++;
-                    line = new Line(new Vector2(0, currentY), i);
+                    line = new Line(new Float2(0, currentY), i);
                     lastCodepointForKerning = 0;
                     hasTrailingNewline = true;
                     continue;
@@ -122,7 +122,7 @@ namespace Prowl.Scribe
                         FinalizeLine(ref line, currentY, lineHeight, s, currentX);
                         currentX = 0f;
                         currentY += lineHeight;
-                        line = new Line(new Vector2(0, currentY), i);
+                        line = new Line(new Float2(0, currentY), i);
                     }
                     else
                     {
@@ -199,7 +199,7 @@ namespace Prowl.Scribe
                         FinalizeLine(ref line, currentY, lineHeight, wordStart, currentX);
                         currentX = 0f;
                         currentY += lineHeight;
-                        line = new Line(new Vector2(0, currentY), wordStart);
+                        line = new Line(new Float2(0, currentY), wordStart);
                         lastCodepointForKerning = 0; // new line: no leading kerning
                     }
 
@@ -300,7 +300,7 @@ namespace Prowl.Scribe
                     FinalizeLine(ref line, currentY, lineHeight, i, currentX);
                     currentX = 0f;
                     currentY += lineHeight;
-                    line = new Line(new Vector2(0, currentY), i);
+                    line = new Line(new Float2(0, currentY), i);
                     lastKernCode = 0; // break kerning across lines
                 }
                 else if (wrapEnabled && line.Glyphs.Count == 0 && currentX + k + adv > maxWidth)
@@ -315,7 +315,7 @@ namespace Prowl.Scribe
 
                 // Emit glyph
                 float a = getAscender(g.Font);
-                var gi = new GlyphInstance(g, new Vector2(currentX + g.Metrics.OffsetX, g.Metrics.OffsetY + a), c, adv, i);
+                var gi = new GlyphInstance(g, new Float2(currentX + g.Metrics.OffsetX, g.Metrics.OffsetY + a), c, adv, i);
                 line.Glyphs.Add(gi);
                 currentX += adv;
                 lastKernCode = c;
@@ -343,7 +343,7 @@ namespace Prowl.Scribe
 
         private void FinalizeLine(ref Line line, float y, float lineHeight, int endIndex, float currentX)
         {
-            line.Position = new Vector2(0, y);
+            line.Position = new Float2(0, y);
             line.Height = lineHeight;
             // Use the maximum of glyph-based width and currentX to account for trailing whitespace
             float glyphWidth = line.Glyphs.Count > 0 ? line.Glyphs[^1].Position.X + line.Glyphs[^1].AdvanceWidth : 0;
@@ -377,7 +377,7 @@ namespace Prowl.Scribe
                     for (int i = 0; i < line.Glyphs.Count; i++)
                     {
                         var glyph = line.Glyphs[i];
-                        glyph.Position = new Vector2(glyph.Position.X + offset, glyph.Position.Y);
+                        glyph.Position = new Float2(glyph.Position.X + offset, glyph.Position.Y);
                         line.Glyphs[i] = glyph;
                     }
                 //}
@@ -398,13 +398,13 @@ namespace Prowl.Scribe
         {
             if (Lines.Count == 0)
             {
-                Size = Vector2.Zero;
+                Size = Float2.Zero;
                 return;
             }
 
             float maxWidth = GetMaxLineWidth();
             float totalHeight = Lines[^1].Position.Y + Lines[^1].Height;
-            Size = new Vector2(maxWidth, totalHeight);
+            Size = new Float2(maxWidth, totalHeight);
         }
 
         public Line GetLineForIndex(int index)
@@ -421,17 +421,17 @@ namespace Prowl.Scribe
             return Lines[^1];
         }
 
-        public Vector2 GetCursorPosition(int index)
+        public Float2 GetCursorPosition(int index)
         {
             if (Lines.Count == 0)
-                return Vector2.Zero;
+                return Float2.Zero;
 
             index = Math.Clamp(index, 0, Text.Length);
 
             foreach (var line in Lines)
             {
                 if (index < line.StartIndex)
-                    return new Vector2(0, line.Position.Y);
+                    return new Float2(0, line.Position.Y);
 
                 if (index <= line.EndIndex)
                 {
@@ -448,9 +448,9 @@ namespace Prowl.Scribe
                             {
                                 float spaceWidth = (glyphStart - currentX) / spaces;
                                 float offset = index - currentIndex;
-                                return new Vector2(line.Position.X + currentX + spaceWidth * offset, line.Position.Y);
+                                return new Float2(line.Position.X + currentX + spaceWidth * offset, line.Position.Y);
                             }
-                            return new Vector2(line.Position.X + glyphStart, line.Position.Y);
+                            return new Float2(line.Position.X + glyphStart, line.Position.Y);
                         }
 
                         currentX = glyphStart + glyph.AdvanceWidth;
@@ -462,18 +462,18 @@ namespace Prowl.Scribe
                     {
                         float spaceWidth = trailing > 0 ? (line.Width - currentX) / trailing : 0f;
                         float offset = index - currentIndex;
-                        return new Vector2(line.Position.X + currentX + spaceWidth * offset, line.Position.Y);
+                        return new Float2(line.Position.X + currentX + spaceWidth * offset, line.Position.Y);
                     }
 
-                    return new Vector2(line.Position.X + line.Width, line.Position.Y);
+                    return new Float2(line.Position.X + line.Width, line.Position.Y);
                 }
             }
 
             var last = Lines[^1];
-            return new Vector2(last.Width, last.Position.Y);
+            return new Float2(last.Width, last.Position.Y);
         }
 
-        public int GetCursorIndex(Vector2 position)
+        public int GetCursorIndex(Float2 position)
         {
             if (Lines.Count == 0)
                 return 0;

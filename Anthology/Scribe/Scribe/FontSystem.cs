@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Numerics;
+using Prowl.Vector;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -421,7 +421,7 @@ namespace Prowl.Scribe
 
         #region Updated API Methods
 
-        public Vector2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0)
+        public Float2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0)
         {
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = pixelSize;
@@ -432,13 +432,13 @@ namespace Prowl.Scribe
             return layout.Size;
         }
 
-        public Vector2 MeasureText(string text, TextLayoutSettings settings)
+        public Float2 MeasureText(string text, TextLayoutSettings settings)
         {
             var layout = CreateLayout(text, settings);
             return layout.Size;
         }
 
-        public void DrawText(string text, Vector2 position, FontColor color, float pixelSize, FontFile font, float letterSpacing = 0)
+        public void DrawText(string text, Float2 position, FontColor color, float pixelSize, FontFile font, float letterSpacing = 0)
         {
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = pixelSize;
@@ -449,7 +449,7 @@ namespace Prowl.Scribe
         }
 
 
-        public void DrawText(string text, Vector2 position, FontColor color, TextLayoutSettings settings)
+        public void DrawText(string text, Float2 position, FontColor color, TextLayoutSettings settings)
         {
             if (string.IsNullOrEmpty(text)) return;
 
@@ -457,7 +457,7 @@ namespace Prowl.Scribe
             DrawLayout(layout, position, color);
         }
 
-        public void DrawLayout(TextLayout layout, Vector2 position, FontColor color)
+        public void DrawLayout(TextLayout layout, Float2 position, FontColor color)
         {
             if (layout.Lines.Count == 0) return;
 
@@ -481,10 +481,10 @@ namespace Prowl.Scribe
                     float glyphH = glyph.Metrics.Height;
 
                     // Create quad vertices
-                    vertices.Add(new IFontRenderer.Vertex(new Vector3(glyphX, glyphY, 0), color, new Vector2(glyph.U0, glyph.V0)));
-                    vertices.Add(new IFontRenderer.Vertex(new Vector3(glyphX + glyphW, glyphY, 0), color, new Vector2(glyph.U1, glyph.V0)));
-                    vertices.Add(new IFontRenderer.Vertex(new Vector3(glyphX, glyphY + glyphH, 0), color, new Vector2(glyph.U0, glyph.V1)));
-                    vertices.Add(new IFontRenderer.Vertex(new Vector3(glyphX + glyphW, glyphY + glyphH, 0), color, new Vector2(glyph.U1, glyph.V1)));
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX, glyphY, 0), color, new Float2(glyph.U0, glyph.V0)));
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX + glyphW, glyphY, 0), color, new Float2(glyph.U1, glyph.V0)));
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX, glyphY + glyphH, 0), color, new Float2(glyph.U0, glyph.V1)));
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX + glyphW, glyphY + glyphH, 0), color, new Float2(glyph.U1, glyph.V1)));
 
                     // Create quad indices
                     indices.AddRange(new[] { vertexCount, vertexCount + 1, vertexCount + 2, vertexCount + 1, vertexCount + 3, vertexCount + 2 });

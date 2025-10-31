@@ -1,7 +1,7 @@
 ﻿using Prowl.Scribe.Internal;
 using System;
 using System.Collections.Generic;
-using System.Numerics;
+using Prowl.Vector;
 
 namespace Prowl.Scribe
 {
@@ -98,12 +98,12 @@ namespace Prowl.Scribe
     public struct GlyphInstance
     {
         public AtlasGlyph Glyph;
-        public Vector2 Position;
+        public Float2 Position;
         public char Character;
         public float AdvanceWidth;
         public int CharIndex;
 
-        public GlyphInstance(AtlasGlyph glyph, Vector2 position, char character, float advanceWidth, int charIndex)
+        public GlyphInstance(AtlasGlyph glyph, Float2 position, char character, float advanceWidth, int charIndex)
         {
             Glyph = glyph;
             Position = position;
@@ -118,11 +118,11 @@ namespace Prowl.Scribe
         public List<GlyphInstance> Glyphs;
         public float Width;
         public float Height;
-        public Vector2 Position; // relative to layout origin
+        public Float2 Position; // relative to layout origin
         public int StartIndex; // character index in original string
         public int EndIndex; // character index in original string
 
-        public Line(Vector2 position, int startIndex)
+        public Line(Float2 position, int startIndex)
         {
             Glyphs = new List<GlyphInstance>();
             Width = 0;
