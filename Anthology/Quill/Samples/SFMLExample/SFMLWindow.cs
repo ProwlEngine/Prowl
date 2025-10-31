@@ -25,9 +25,9 @@ namespace SFMLExample
         private int _currentDemoIndex;
         
         // Camera/view properties
-        private Double2 _offset = Double2.Zero;
-        private double _zoom = 1.0f;
-        private double _rotation = 0.0f;
+        private Float2 _offset = Float2.Zero;
+        private float _zoom = 1.0f;
+        private float _rotation = 0.0f;
         
         // Resources
         private TextureSFML _whiteTexture;
@@ -115,8 +115,8 @@ namespace SFMLExample
         private void OnMouseWheelScrolled(object sender, MouseWheelScrollEventArgs e)
         {
             // Zoom with mouse wheel
-            _zoom += e.Delta * 0.1;
-            if (_zoom < 0.1) _zoom = 0.1;
+            _zoom += e.Delta * 0.1f;
+            if (_zoom < 0.1) _zoom = 0.1f;
         }
         
         public void Run()
@@ -158,9 +158,9 @@ namespace SFMLExample
             // Rotate with Q/E keys
             float deltaTime = 1.0f / 60.0f; // Approximate if not available
             if (Keyboard.IsKeyPressed(Keyboard.Key.Q))
-                _rotation += 10.0 * deltaTime;
+                _rotation += 10.0f * deltaTime;
             if (Keyboard.IsKeyPressed(Keyboard.Key.E))
-                _rotation -= 10.0 * deltaTime;
+                _rotation -= 10.0f * deltaTime;
 
             // Demo switching with Left/Right keys (with key release detection)
             bool leftKeyCurrentlyPressed = Keyboard.IsKeyPressed(Keyboard.Key.Left);
@@ -184,8 +184,8 @@ namespace SFMLExample
             {
                 var delta = new Int2(currentPos.X - _lastMousePos.X, currentPos.Y - _lastMousePos.Y);
 
-                _offset.X += delta.X * (1.0 / _zoom);
-                _offset.Y += delta.Y * (1.0 / _zoom);
+                _offset.X += delta.X * (1.0f / _zoom);
+                _offset.Y += delta.Y * (1.0f / _zoom);
             }
 
             _lastMousePos = new Int2(currentPos.X, currentPos.Y);

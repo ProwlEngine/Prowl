@@ -159,7 +159,7 @@ void main()
         private int _brushParamsLocation;
         private int _brushParams2Location;
 
-        private Double4x4 _projection;
+        private Float4x4 _projection;
         private TextureSilk _defaultTexture;
 
         public SilkNetRenderer(GL gl)
@@ -269,7 +269,7 @@ void main()
 
         public void UpdateProjection(int width, int height)
         {
-            _projection = Double4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1);
+            _projection = Float4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1);
         }
 
         public object CreateTexture(uint width, uint height)
@@ -292,7 +292,7 @@ void main()
             silkTexture.SetData(bounds, data);
         }
         
-        private unsafe void SetMatrix4Uniform(int location, Double4x4 matrix)
+        private unsafe void SetMatrix4Uniform(int location, Float4x4 matrix)
         {
             //float* matrixPtr = stackalloc float[16];
             //matrixPtr[0] = matrix.M11;  matrixPtr[1] = matrix.M12;  matrixPtr[2] = matrix.M13;  matrixPtr[3] = matrix.M14;
@@ -300,9 +300,7 @@ void main()
             //matrixPtr[8] = matrix.M31;  matrixPtr[9] = matrix.M32;  matrixPtr[10] = matrix.M33; matrixPtr[11] = matrix.M34;
             //matrixPtr[12] = matrix.M41; matrixPtr[13] = matrix.M42; matrixPtr[14] = matrix.M43; matrixPtr[15] = matrix.M44;
 
-            var floatM = (Float4x4)matrix;
-
-            _gl.UniformMatrix4(location, 1, false, in floatM.c0.X);
+            _gl.UniformMatrix4(location, 1, false, in matrix.c0.X);
         }
 
 
@@ -393,7 +391,7 @@ void main()
             SetMatrix4Uniform(_projectionLocation, _projection);
         }
 
-        private void SetScissorUniforms(Prowl.Vector.Double4x4 matrix, Double2 extent)
+        private void SetScissorUniforms(Prowl.Vector.Float4x4 matrix, Float2 extent)
         {
             SetMatrix4Uniform(_scissorMatLocation, matrix);
             _gl.Uniform2(_scissorExtLocation, (float)extent.X, (float)extent.Y);

@@ -1,9 +1,6 @@
 ﻿using Prowl.Scribe;
-using Prowl.Scribe.Internal;
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 using System;
-using System.Drawing;
 
 namespace Prowl.Quill
 {
@@ -80,9 +77,9 @@ namespace Prowl.Quill
 
                 // Transform vertices through the current transform matrix
                 uint index = (uint)_canvas.Vertices.Count;
-                var vertA = new Vertex(_canvas.TransformPoint(new Double2(a.Position.X, a.Position.Y)), (Double2)(Float2)a.TextureCoordinate, ToColor(a.Color));
-                var vertB = new Vertex(_canvas.TransformPoint(new Double2(b.Position.X, b.Position.Y)), (Double2)(Float2)b.TextureCoordinate, ToColor(b.Color));
-                var vertC = new Vertex(_canvas.TransformPoint(new Double2(c.Position.X, c.Position.Y)), (Double2)(Float2)c.TextureCoordinate, ToColor(c.Color));
+                var vertA = new Vertex(_canvas.TransformPoint(new Float2(a.Position.X, a.Position.Y)), a.TextureCoordinate, ToColor(a.Color));
+                var vertB = new Vertex(_canvas.TransformPoint(new Float2(b.Position.X, b.Position.Y)), b.TextureCoordinate, ToColor(b.Color));
+                var vertC = new Vertex(_canvas.TransformPoint(new Float2(c.Position.X, c.Position.Y)), c.TextureCoordinate, ToColor(c.Color));
 
                 _canvas.AddVertex(vertA);
                 _canvas.AddVertex(vertC);

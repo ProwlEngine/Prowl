@@ -8,12 +8,12 @@ namespace Common
     internal class SVGDemo : IDemo
     {
         private Canvas _canvas;
-        private double _width;
-        private double _height;
+        private float _width;
+        private float _height;
 
         List<SvgElement> svgElements;
 
-        public SVGDemo(Canvas canvas, double width, double height)
+        public SVGDemo(Canvas canvas, float width, float height)
         {
             _canvas = canvas;
             _width = width;
@@ -25,7 +25,7 @@ namespace Common
         /// <summary>
         /// Updates and renders a frame
         /// </summary>
-        public void RenderFrame(double deltaTime, Double2 offset, double zoom, double rotate)
+        public void RenderFrame(float deltaTime, Float2 offset, float zoom, float rotate)
         {
             _canvas.TransformBy(Transform2D.CreateTranslation(_width / 2, _height / 2));
             _canvas.TransformBy(Transform2D.CreateTranslation(offset.X, offset.Y) * Transform2D.CreateRotation(rotate) * Transform2D.CreateScale(zoom, zoom));
@@ -56,21 +56,21 @@ namespace Common
         void DrawSVG()
         {
             _canvas.SetTessellationTolerance(0.01f);
-            _canvas.SetRoundingMinDistance(0.5);
+            _canvas.SetRoundingMinDistance(0.5f);
 
             const int iconPerLine = 10;
-            var offset = new Double2(30, 30);
+            var offset = new Float2(30, 30);
             for (int i = 0; i < svgElements.Count; i++)
             {
                 var x = i % iconPerLine;
                 var y = i / iconPerLine;
-                SVGRenderer.DrawToCanvas(_canvas, new Double2(x * 30, y * 30) + offset, svgElements[i]);
+                SVGRenderer.DrawToCanvas(_canvas, new Float2(x * 30, y * 30) + offset, svgElements[i]);
             }
 
             _canvas.ResetState();
         }
 
-        private void DrawGrid(int x, int y, double cellSize, Color32 color)
+        private void DrawGrid(int x, int y, float cellSize, Color32 color)
         {
             _canvas.SetStrokeColor(color);
             _canvas.SetStrokeWidth(4);
@@ -117,7 +117,7 @@ namespace Common
             _canvas.Stroke();
         }
 
-        private void DrawCoordinateSystem(double x, double y, double size)
+        private void DrawCoordinateSystem(float x, float y, float size)
         {
             // X axis
             _canvas.SetStrokeColor(Color32.FromArgb(150, 255, 100, 100));

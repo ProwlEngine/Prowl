@@ -7,7 +7,6 @@ using Prowl.Vector;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
-using Double2 = Prowl.Vector.Double2;
 
 namespace SilkExample
 {
@@ -23,9 +22,9 @@ namespace SilkExample
         private SilkNetRenderer _renderer;
 
         // View properties
-        private Double2 _viewOffset = Double2.Zero;
-        private double _zoom = 1.0;
-        private double _rotation = 0.0;
+        private Float2 _viewOffset = Float2.Zero;
+        private float _zoom = 1.0f;
+        private float _rotation = 0.0f;
 
         // Resources
         private TextureSilk _whiteTexture;
@@ -112,14 +111,14 @@ namespace SilkExample
             mouse.MouseMove += (_, position) => {
                 if (_isDragging) {
                     var delta = new Int2((int)position.X, (int)position.Y) - _lastMousePos;
-                    _viewOffset.X += delta.X * (1.0 / _zoom);
-                    _viewOffset.Y += delta.Y * (1.0 / _zoom);
+                    _viewOffset.X += delta.X * (1.0f / _zoom);
+                    _viewOffset.Y += delta.Y * (1.0f / _zoom);
                     _lastMousePos = new Int2((int)position.X, (int)position.Y);
                 }
             };
             
             mouse.Scroll += (_, scrollWheel) => {
-                _zoom = Math.Max(0.1, _zoom + scrollWheel.Y * 0.1);
+                _zoom = Maths.Max(0.1f, _zoom + scrollWheel.Y * 0.1f);
             };
         }
 
@@ -132,7 +131,7 @@ namespace SilkExample
             _canvas.Clear();
             
             // Render demo content
-            _demos[_currentDemoIndex].RenderFrame(deltaTime, _viewOffset, _zoom, _rotation);
+            _demos[_currentDemoIndex].RenderFrame((float)deltaTime, _viewOffset, _zoom, _rotation);
             
             // Draw canvas to screen
             _canvas.Render();
@@ -142,8 +141,8 @@ namespace SilkExample
         {
             // Handle keyboard rotation
             var keyboard = _input.Keyboards[0];
-            if (keyboard.IsKeyPressed(Key.Q)) _rotation += 10.0 * deltaTime;
-            if (keyboard.IsKeyPressed(Key.E)) _rotation -= 10.0 * deltaTime;
+            if (keyboard.IsKeyPressed(Key.Q)) _rotation += 10.0f * (float)deltaTime;
+            if (keyboard.IsKeyPressed(Key.E)) _rotation -= 10.0f * (float)deltaTime;
         }
         
         private void OnResize(Silk.NET.Maths.Vector2D<int> newSize)

@@ -232,21 +232,21 @@ void main()
 
             // Set scissor rectangle
             drawCall.GetScissor(out var scissor, out var extent);
-            //scissor = Double4x4.Transpose(scissor);
+            //scissor = Float4x4.Transpose(scissor);
 
-            SetShaderValueMatrix(shader, scissorMatLoc, (Float4x4)scissor);
+            SetShaderValueMatrix(shader, scissorMatLoc, scissor);
             SetShaderValue(shader, scissorExtLoc, [(float)extent.X, (float)extent.Y], ShaderUniformDataType.Vec2);
 
             // Set gradient parameters
             SetShaderValue(shader, _brushTypeLoc, (int)drawCall.Brush.Type, ShaderUniformDataType.Int);
             if (drawCall.Brush.Type != BrushType.None)
             {
-                //var brushMat = Double4x4.Transpose(drawCall.Brush.BrushMatrix);
-                SetShaderValueMatrix(shader, _brushMatLoc, (Float4x4)drawCall.Brush.BrushMatrix);
+                //var brushMat = Float4x4.Transpose(drawCall.Brush.BrushMatrix);
+                SetShaderValueMatrix(shader, _brushMatLoc, drawCall.Brush.BrushMatrix);
                 var brcol1 = (Prowl.Vector.Color)drawCall.Brush.Color1;
                 var brcol2 = (Prowl.Vector.Color)drawCall.Brush.Color2;
-                SetShaderValue(shader, _brushColor1Loc, (Float4)(Double4)brcol1, ShaderUniformDataType.Vec4);
-                SetShaderValue(shader, _brushColor2Loc, (Float4)(Double4)brcol2, ShaderUniformDataType.Vec4);
+                SetShaderValue(shader, _brushColor1Loc, brcol1, ShaderUniformDataType.Vec4);
+                SetShaderValue(shader, _brushColor2Loc, brcol2, ShaderUniformDataType.Vec4);
                 SetShaderValue(shader, _brushParamsLoc, new Float4((float)drawCall.Brush.Point1.X, (float)drawCall.Brush.Point1.Y, (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y), ShaderUniformDataType.Vec4);
                 SetShaderValue(shader, _brushParams2Loc, new Float2((float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather), ShaderUniformDataType.Vec2);
             }

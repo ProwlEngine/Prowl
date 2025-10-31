@@ -1,12 +1,11 @@
-﻿using System;
+﻿using Prowl.Vector;
+using System;
 using System.Collections.Generic;
-using System.Xml;
-using System.IO;
-using System.Text.RegularExpressions;
-using System.Text;
-using System.Drawing;
-using Prowl.Vector;
 using System.Globalization;
+using System.IO;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Xml;
 using Color = Prowl.Vector.Color;
 
 namespace Prowl.Quill
@@ -23,7 +22,7 @@ namespace Prowl.Quill
         public Color32 fill;
         public ColorType strokeType;
         public ColorType fillType;
-        public double strokeWidth;
+        public float strokeWidth;
 
         public SvgElement()
         {
@@ -61,7 +60,7 @@ namespace Prowl.Quill
             if (fillType == ColorType.specific)
                 fill = ParseColor("fill");
 
-            strokeWidth = Attributes.ContainsKey("stroke-width") ? ParseDouble("stroke-width") : 1.0;
+            strokeWidth = Attributes.ContainsKey("stroke-width") ? ParseFloat("stroke-width") : 1.0f;
         }
 
         string? ParseString(string key)
@@ -83,9 +82,9 @@ namespace Prowl.Quill
             return ColorType.none;
         }
 
-        protected double ParseDouble(string key)
+        protected float ParseFloat(string key)
         {
-            if (Attributes.TryGetValue(key, out var value) && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
+            if (Attributes.TryGetValue(key, out var value) && float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
                 return result;
             return 0;
         }
@@ -130,66 +129,66 @@ namespace Prowl.Quill
 
     public class SvgRectElement : SvgElement
     {
-        public Double2 pos;
-        public Double2 size;
-        public Double2 radius;
+        public Float2 pos;
+        public Float2 size;
+        public Float2 radius;
 
         public override void Parse()
         {
             base.Parse();
-            pos.X = ParseDouble("x");
-            pos.Y = ParseDouble("y");
-            size.X = ParseDouble("width");
-            size.Y = ParseDouble("height");
-            radius.X = ParseDouble("rx");
-            radius.Y = ParseDouble("ry");
+            pos.X = ParseFloat("x");
+            pos.Y = ParseFloat("y");
+            size.X = ParseFloat("width");
+            size.Y = ParseFloat("height");
+            radius.X = ParseFloat("rx");
+            radius.Y = ParseFloat("ry");
         }
     }
 
     public class SvgCircleElement : SvgElement
     {
-        public double cx, cy, r;
+        public float cx, cy, r;
 
         public override void Parse()
         {
             base.Parse();
-            cx = ParseDouble("cx");
-            cy = ParseDouble("cy");
-            r = ParseDouble("r");
+            cx = ParseFloat("cx");
+            cy = ParseFloat("cy");
+            r = ParseFloat("r");
         }
     }
 
     public class SvgEllipseElement : SvgElement
     {
-        public double cx, cy, rx, ry;
+        public float cx, cy, rx, ry;
 
         public override void Parse()
         {
             base.Parse();
-            cx = ParseDouble("cx");
-            cy = ParseDouble("cy");
-            rx = ParseDouble("rx");
-            ry = ParseDouble("ry");
+            cx = ParseFloat("cx");
+            cy = ParseFloat("cy");
+            rx = ParseFloat("rx");
+            ry = ParseFloat("ry");
         }
     }
 
     public class SvgLineElement : SvgElement
     {
-        public double x1, y1, x2, y2;
+        public float x1, y1, x2, y2;
 
         public override void Parse()
         {
             base.Parse();
-            x1 = ParseDouble("x1");
-            y1 = ParseDouble("y1");
-            x2 = ParseDouble("x2");
-            y2 = ParseDouble("y2");
+            x1 = ParseFloat("x1");
+            y1 = ParseFloat("y1");
+            x2 = ParseFloat("x2");
+            y2 = ParseFloat("y2");
         }
     }
 
     public class SvgPolylineElement : SvgElement
     {
-        public Double2[] points = Array.Empty<Double2>();
+        public Float2[] points = Array.Empty<Float2>();
 
         public override void Parse()
         {
@@ -198,15 +197,15 @@ namespace Prowl.Quill
                 points = ParsePoints(pts);
         }
 
-        internal static Double2[] ParsePoints(string pts)
+        internal static Float2[] ParsePoints(string pts)
         {
             var matches = Regex.Matches(pts, @"-?\d*\.?\d+");
-            var list = new List<Double2>();
+            var list = new List<Float2>();
             for (int i = 0; i + 1 < matches.Count; i += 2)
             {
-                var x = double.Parse(matches[i].Value, CultureInfo.InvariantCulture);
-                var y = double.Parse(matches[i + 1].Value, CultureInfo.InvariantCulture);
-                list.Add(new Double2(x, y));
+                var x = float.Parse(matches[i].Value, CultureInfo.InvariantCulture);
+                var y = float.Parse(matches[i + 1].Value, CultureInfo.InvariantCulture);
+                list.Add(new Float2(x, y));
             }
             return list.ToArray();
         }
@@ -214,7 +213,7 @@ namespace Prowl.Quill
 
     public class SvgPolygonElement : SvgElement
     {
-        public Double2[] points = Array.Empty<Double2>();
+        public Float2[] points = Array.Empty<Float2>();
 
         public override void Parse()
         {
@@ -267,11 +266,11 @@ namespace Prowl.Quill
 
                 if (!string.IsNullOrEmpty(parametersString))
                 {
-                    var param = new List<double>();
+                    var param = new List<float>();
                     var matches2 = Regex.Matches(parametersString, @"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?");
                     for (int j = 0; j < matches2.Count; j++)
                         for (int k = 0; k < matches2[j].Groups.Count; k++)
-                            param.Add(double.Parse(matches2[j].Groups[k].ToString(), CultureInfo.InvariantCulture));
+                            param.Add(float.Parse(matches2[j].Groups[k].ToString(), CultureInfo.InvariantCulture));
 
                     drawCommand.param = param.ToArray();
                 }
@@ -318,7 +317,7 @@ namespace Prowl.Quill
     {
         public DrawType type;
         public bool relative;
-        public double[] param;
+        public float[] param;
 
         public override string ToString()
         {

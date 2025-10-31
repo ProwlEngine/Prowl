@@ -1,6 +1,5 @@
 ﻿using Prowl.Vector;
 using System;
-using System.Drawing;
 using Color = Prowl.Vector.Color;
 
 namespace Prowl.Quill
@@ -12,7 +11,7 @@ namespace Prowl.Quill
         //for debug
         public static bool debug;
 
-        public static void DrawToCanvas(Canvas canvas, Double2 position, SvgElement svgElement)
+        public static void DrawToCanvas(Canvas canvas, Float2 position, SvgElement svgElement)
         {
             var elements = svgElement.Flatten();
 
@@ -64,7 +63,7 @@ namespace Prowl.Quill
             canvas.SetStrokeWidth(pathElement.strokeWidth);
         }
 
-        static void DrawPath(Canvas canvas, Double2 position, SvgPathElement element)
+        static void DrawPath(Canvas canvas, Float2 position, SvgPathElement element)
         {
             if (element.drawCommands == null)
                 return;
@@ -82,10 +81,10 @@ namespace Prowl.Quill
             }
         }
 
-        static void DrawElement(Canvas canvas, SvgPathElement element, Double2 position)
+        static void DrawElement(Canvas canvas, SvgPathElement element, Float2 position)
         {
             canvas.BeginPath();
-            var lastControlPoint = Double2.Zero;
+            var lastControlPoint = Float2.Zero;
 
             for (var i = 0; i < element.drawCommands.Length; i++)
             {
@@ -113,19 +112,19 @@ namespace Prowl.Quill
                         break;
                     case DrawType.QuadraticCurveTo:
                         canvas.QuadraticCurveTo(offset.X + cmd.param[0], offset.Y + cmd.param[1], offset.X + cmd.param[2], offset.Y + cmd.param[3]);
-                        lastControlPoint = new Double2(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
+                        lastControlPoint = new Float2(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
                         break;
                     case DrawType.SmoothQuadraticCurveTo:
                         canvas.QuadraticCurveTo(cp.X, cp.Y, offset.X + cmd.param[0], offset.Y + cmd.param[1]);
-                        lastControlPoint = new Double2(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
+                        lastControlPoint = new Float2(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
                         break;
                     case DrawType.CubicCurveTo:
                         canvas.BezierCurveTo(offset.X + cmd.param[0], offset.Y + cmd.param[1], offset.X + cmd.param[2], offset.Y + cmd.param[3], offset.X + cmd.param[4], offset.Y + cmd.param[5]);
-                        lastControlPoint = new Double2(offset.X + cmd.param[2], offset.Y + cmd.param[3]);
+                        lastControlPoint = new Float2(offset.X + cmd.param[2], offset.Y + cmd.param[3]);
                         break;
                     case DrawType.SmoothCubicCurveTo:
                         canvas.BezierCurveTo(cp.X, cp.Y, offset.X + cmd.param[0], offset.Y + cmd.param[1], offset.X + cmd.param[2], offset.Y + cmd.param[3]);
-                        lastControlPoint = new Double2(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
+                        lastControlPoint = new Float2(offset.X + cmd.param[0], offset.Y + cmd.param[1]);
                         break;
                     case DrawType.ArcTo:
                         canvas.EllipticalArcTo(cmd.param[0], cmd.param[1], cmd.param[2], cmd.param[3] != 0, cmd.param[4] != 0, offset.X + cmd.param[5], offset.Y + cmd.param[6]);
@@ -137,14 +136,14 @@ namespace Prowl.Quill
             }
         }
 
-        static Double2 ReflectPoint(Double2 mirrorPoint, Double2 inputPoint)
+        static Float2 ReflectPoint(Float2 mirrorPoint, Float2 inputPoint)
         {
             return 2 * mirrorPoint - inputPoint;
         }
 
-        static void DrawCircle(Canvas canvas, Double2 position, SvgCircleElement element)
+        static void DrawCircle(Canvas canvas, Float2 position, SvgCircleElement element)
         {
-            var pos = position + new Double2(element.cx, element.cy);
+            var pos = position + new Float2(element.cx, element.cy);
 
             if (element.fillType != SvgElement.ColorType.none)
             {
@@ -158,7 +157,7 @@ namespace Prowl.Quill
             }
         }
 
-        static void DrawRect(Canvas canvas, Double2 position, SvgRectElement element)
+        static void DrawRect(Canvas canvas, Float2 position, SvgRectElement element)
         {
             var pos = element.pos;
             var size = element.size;
@@ -191,7 +190,7 @@ namespace Prowl.Quill
             }
         }
 
-        static void DrawLine(Canvas canvas, Double2 position, SvgLineElement element)
+        static void DrawLine(Canvas canvas, Float2 position, SvgLineElement element)
         {
             if (element.strokeType == SvgElement.ColorType.none)
                 return;
@@ -202,7 +201,7 @@ namespace Prowl.Quill
             canvas.Stroke();
         }
 
-        static void DrawEllipse(Canvas canvas, Double2 position, SvgEllipseElement element)
+        static void DrawEllipse(Canvas canvas, Float2 position, SvgEllipseElement element)
         {
             var cx = position.X + element.cx;
             var cy = position.Y + element.cy;
@@ -222,17 +221,17 @@ namespace Prowl.Quill
             }
         }
 
-        static void DrawPolyline(Canvas canvas, Double2 position, SvgPolylineElement element)
+        static void DrawPolyline(Canvas canvas, Float2 position, SvgPolylineElement element)
         {
             DrawPoly(canvas, position, element.points, element, false);
         }
 
-        static void DrawPolygon(Canvas canvas, Double2 position, SvgPolygonElement element)
+        static void DrawPolygon(Canvas canvas, Float2 position, SvgPolygonElement element)
         {
             DrawPoly(canvas, position, element.points, element, true);
         }
 
-        static void DrawPoly(Canvas canvas, Double2 position, Double2[] points, SvgElement element, bool closed)
+        static void DrawPoly(Canvas canvas, Float2 position, Float2[] points, SvgElement element, bool closed)
         {
             if (points == null || points.Length == 0)
                 return;

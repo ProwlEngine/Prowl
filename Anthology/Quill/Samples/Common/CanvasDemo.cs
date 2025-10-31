@@ -12,26 +12,26 @@ namespace Common
     {
         private Canvas _canvas;
         private Canvas3D _canvas3D;
-        private double _width;
-        private double _height;
+        private float _width;
+        private float _height;
         private object _texture;
         private FontFile _fontA;
         private FontFile _fontB;
 
-        private double _time;
+        private float _time;
 
         // Demo state
-        private double _rotation = 0f;
+        private float _rotation = 0f;
 
         // Performance monitoring
-        private Queue<double> _frameTimeHistory = new Queue<double>();
-        private Queue<double> _fpsHistory = new Queue<double>();
+        private Queue<float> _frameTimeHistory = new Queue<float>();
+        private Queue<float> _fpsHistory = new Queue<float>();
         private const int MAX_HISTORY_SAMPLES = 100;
-        private double _fpsUpdateCounter = 0;
-        private double _currentFps = 0;
-        private const double FPS_UPDATE_INTERVAL = 0.5; // Update FPS display every half second
+        private float _fpsUpdateCounter = 0;
+        private float _currentFps = 0;
+        private const float FPS_UPDATE_INTERVAL = 0.5f; // Update FPS display every half second
 
-        public CanvasDemo(Canvas canvas, double width, double height, object texture, FontFile fontA, FontFile fontB)
+        public CanvasDemo(Canvas canvas, float width, float height, object texture, FontFile fontA, FontFile fontB)
         {
             _canvas = canvas;
             _width = width;
@@ -45,7 +45,7 @@ namespace Common
         /// <summary>
         /// Updates and renders a frame
         /// </summary>
-        public void RenderFrame(double deltaTime, Double2 offset, double zoom, double rotate)
+        public void RenderFrame(float deltaTime, Float2 offset, float zoom, float rotate)
         {
             // Update time
             _time += deltaTime;
@@ -71,10 +71,10 @@ namespace Common
             DrawPerformanceOverlay();
         }
 
-        private void UpdatePerformanceMetrics(double deltaTime)
+        private void UpdatePerformanceMetrics(float deltaTime)
         {
             // Calculate FPS
-            double instantFps = deltaTime > 0 ? 1.0 / deltaTime : 0;
+            float instantFps = deltaTime > 0 ? 1.0f / deltaTime : 0f;
 
             // Add to history queues, keeping a fixed size
             _frameTimeHistory.Enqueue(deltaTime * 1000); // Convert to milliseconds
@@ -98,13 +98,13 @@ namespace Common
         private void DrawPerformanceOverlay()
         {
             // Draw background for performance overlay
-            double overlayWidth = 200;
-            double overlayHeight = 120;
-            double padding = 10;
+            float overlayWidth = 200;
+            float overlayHeight = 120;
+            float padding = 10;
 
             // Position in top-right corner with padding
-            double x = _width - overlayWidth - padding;
-            double y = padding;
+            float x = _width - overlayWidth - padding;
+            float y = padding;
 
             // Background with semi-transparency
             _canvas.RectFilled(x, y, overlayWidth, overlayHeight, Color32.FromArgb(180, 0, 0, 0));
@@ -117,17 +117,17 @@ namespace Common
 
             // Draw FPS counter
             string fpsText = $"FPS: {_currentFps:F1}";
-            double frameTimeAvg = _frameTimeHistory.Count > 0 ? _frameTimeHistory.Average() : 0;
+            float frameTimeAvg = _frameTimeHistory.Count > 0 ? _frameTimeHistory.Average() : 0;
             string frameTimeText = $"Frame Time: {frameTimeAvg:F1} ms";
 
             DrawText(fpsText, x + 10, y + 20, 14, Color32.FromArgb(255, 100, 255, 100));
             DrawText(frameTimeText, x + 10, y + 40, 12, Color.White);
 
             // Draw performance graph
-            double graphX = x + 10;
-            double graphY = y + 60;
-            double graphWidth = overlayWidth - 20;
-            double graphHeight = 50;
+            float graphX = x + 10;
+            float graphY = y + 60;
+            float graphWidth = overlayWidth - 20;
+            float graphHeight = 50;
 
             // Draw graph background
             _canvas.RectFilled(graphX, graphY, graphWidth, graphHeight, Color32.FromArgb(60, 255, 255, 255));
@@ -136,7 +136,7 @@ namespace Common
             //if (_fpsHistory.Count > 1)
             //{
             //    // Find max value to scale the graph (with minimum range of 0-60 FPS)
-            //    double maxFps = Math.Max(60, _fpsHistory.Max());
+            //    float maxFps = Maths.Max(60, _fpsHistory.Max());
             //
             //    _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 255, 100));
             //    _canvas.SetStrokeWidth(1.5);
@@ -144,14 +144,14 @@ namespace Common
             //
             //    // Draw the FPS graph line
             //    bool first = true;
-            //    double xStep = graphWidth / (MAX_HISTORY_SAMPLES - 1);
+            //    float xStep = graphWidth / (MAX_HISTORY_SAMPLES - 1);
             //    int i = 0;
             //
-            //    foreach (double fps in _fpsHistory)
+            //    foreach (float fps in _fpsHistory)
             //    {
-            //        double normalizedValue = fps / maxFps; // 0.0 to 1.0
-            //        double pointX = graphX + (i * xStep);
-            //        double pointY = graphY + graphHeight - (normalizedValue * graphHeight);
+            //        float normalizedValue = fps / maxFps; // 0.0 to 1.0
+            //        float pointX = graphX + (i * xStep);
+            //        float pointY = graphY + graphHeight - (normalizedValue * graphHeight);
             //
             //        if (first)
             //        {
@@ -169,7 +169,7 @@ namespace Common
             //    _canvas.Stroke();
             //
             //    // Draw the target 60 FPS line
-            //    double targetY = graphY + graphHeight - ((60 / maxFps) * graphHeight);
+            //    float targetY = graphY + graphHeight - ((60 / maxFps) * graphHeight);
             //    _canvas.SetStrokeColor(Color32.FromArgb(100, 255, 100, 100));
             //    _canvas.SetStrokeWidth(1.0);
             //
@@ -180,12 +180,12 @@ namespace Common
             //}
         }
 
-        private void DrawText(string text, double x, double y, double height, Color32 color)
+        private void DrawText(string text, float x, float y, float height, Color32 color)
         {
             VectorFont.DrawString(_canvas, text.ToUpper(), x, y, height, color, 2f);
         }
 
-        private void DrawGroupBackground(double x, double y, double width, double height, string title)
+        private void DrawGroupBackground(float x, float y, float width, float height, string title)
         {
             // Background
             _canvas.RectFilled(x, y, width, height, Color32.FromArgb(255, 0, 0, 0));
@@ -206,14 +206,14 @@ namespace Common
             DrawText(title, x + 5, y - 25, 14, Color.White);
 
             // Underline
-            double textWidth = VectorFont.MeasureString(title, 14);
+            float textWidth = VectorFont.MeasureString(title, 14);
             _canvas.BeginPath();
             _canvas.MoveTo(x + 5, y - 6);
             _canvas.LineTo(x + 5 + textWidth, y - 6);
             _canvas.Stroke();
         }
 
-        private void DrawGrid(int x, int y, double cellSize, Color color)
+        private void DrawGrid(int x, int y, float cellSize, Color color)
         {
             _canvas.SetStrokeColor(color);
             _canvas.SetStrokeWidth(4);
@@ -237,7 +237,7 @@ namespace Common
             _canvas.Stroke();
         }   
 
-        private void DrawCoordinateSystem(double x, double y, double size)
+        private void DrawCoordinateSystem(float x, float y, float size)
         {
             // X axis
             _canvas.SetStrokeColor(Color32.FromArgb(150, 255, 100, 100));
@@ -329,7 +329,7 @@ namespace Common
 
         #region 2D Drawing Demos
 
-        private void DrawPathOperationsDemo(double x, double y, double width, double height)
+        private void DrawPathOperationsDemo(float x, float y, float width, float height)
         {
             _canvas.SaveState();
 
@@ -366,7 +366,7 @@ namespace Common
 
             // Demo 2: Line with Widths
             _canvas.TransformBy(Transform2D.CreateTranslation(100, 0));
-            double lineWidth = 8;
+            float lineWidth = 8;
             for (int i = 0; i < 7; i++) {
                 lineWidth -= 1.1f;
                 _canvas.SetStrokeWidth(lineWidth);
@@ -385,7 +385,7 @@ namespace Common
             
             // Arc
             _canvas.BeginPath();
-            _canvas.Arc(20, 20, 20, 0, (double)Math.PI, false);
+            _canvas.Arc(20, 20, 20, 0, (float)Maths.PI, false);
             _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 100));
             _canvas.Stroke();
             
@@ -406,7 +406,7 @@ namespace Common
             _canvas.RestoreState();
         }
 
-        private void DrawTransformationsDemo(double x, double y, double width, double height)
+        private void DrawTransformationsDemo(float x, float y, float width, float height)
         {
             // Draw group background and title
             DrawGroupBackground(x, y, width, height, "Transformations");
@@ -421,7 +421,7 @@ namespace Common
             _canvas.RestoreState();
 
             // Scaling rectangle
-            double scale = 0.5f + 0.3f * (double)Math.Sin(_time * 2);
+            float scale = 0.5f + 0.3f * (float)Maths.Sin(_time * 2);
             _canvas.SaveState();
             _canvas.TransformBy(Transform2D.CreateTranslation(70, 0));
             _canvas.TransformBy(Transform2D.CreateScale(scale, scale));
@@ -429,7 +429,7 @@ namespace Common
             _canvas.RestoreState();
 
             // Translating circle
-            double offsetY = 20 * (double)Math.Sin(_time * 3);
+            float offsetY = 20 * (float)Maths.Sin(_time * 3);
             _canvas.SaveState();
             _canvas.TransformBy(Transform2D.CreateTranslation(-70, offsetY));
             _canvas.CircleFilled(0, 0, 20, Color32.FromArgb(200, 100, 255, 150));
@@ -438,7 +438,7 @@ namespace Common
             _canvas.RestoreState();
         }
 
-        private void DrawShapesDemo(double x, double y, double width, double height)
+        private void DrawShapesDemo(float x, float y, float width, float height)
         {
             // Draw group background and title
             DrawGroupBackground(x, y, width, height, "Shapes");
@@ -453,8 +453,8 @@ namespace Common
             _canvas.CircleFilled(80, 15, 15, Color32.FromArgb(200, 100, 255, 100));
 
             // Pie (animated)
-            double startAngle = 0;
-            double endAngle = (double)(Math.PI * (1 + Math.Sin(_time)) / 2); // Animate between 0 and PI
+            float startAngle = 0;
+            float endAngle = (float)(Maths.PI * (1 + Maths.Sin(_time)) / 2); // Animate between 0 and PI
             _canvas.PieFilled(140, 15, 15, startAngle, endAngle, Color32.FromArgb(200, 100, 150, 255));
 
             // Animated star shape
@@ -466,7 +466,7 @@ namespace Common
             _canvas.RestoreState();
         }
 
-        private void DrawLineStylesDemo(double x, double y, double width, double height)
+        private void DrawLineStylesDemo(float x, float y, float width, float height)
         {
             // Draw group background and title
             DrawGroupBackground(x, y, width, height, "Lines");
@@ -477,7 +477,7 @@ namespace Common
             _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
 
             // Thin line
-            double[] widths = [0.25f, 1.0f, 3.0f, 4.0f];
+            float[] widths = [0.25f, 1.0f, 3.0f, 4.0f];
             for (int i=0; i<4; i++)
             {
                 _canvas.SetStrokeWidth(widths[i]);
@@ -503,43 +503,43 @@ namespace Common
             _canvas.MoveTo(0, 40 + 5);
             _canvas.LineTo(160, 40 - 5);
             _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 100, 100));
-            _canvas.SetStrokeDash(new List<double>() { 10, 5, 2, 2 }, 0);
+            _canvas.SetStrokeDash(new List<float>() { 10, 5, 2, 2 }, 0);
             _canvas.Stroke();
 
             _canvas.BeginPath();
             _canvas.MoveTo(0, 60 + 5);
             _canvas.LineTo(160, 60 - 5);
             _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 100, 255));
-            _canvas.SetStrokeDash(new List<double>() { 5, 5 }, 0);
+            _canvas.SetStrokeDash(new List<float>() { 5, 5 }, 0);
             _canvas.Stroke();
 
             _canvas.RestoreState();
         }
 
-        private void Draw3DDemo(double x, double y, double width, double height)
+        private void Draw3DDemo(float x, float y, float width, float height)
         {
             DrawGroupBackground(x, y, width, height, "3D");
 
             // Save the canvas state
             _canvas.SaveState();
             _canvas.TransformBy(Transform2D.CreateTranslation(x, y));
-            _canvas.SetStrokeWidth(2.0);
+            _canvas.SetStrokeWidth(2.0f);
 
             // Setup the 3D viewport
             _canvas3D.ViewportWidth = width;
             _canvas3D.ViewportHeight = height;
 
             // Set up the camera
-            double aspectRatio = width / height;
-            _canvas3D.SetPerspectiveProjection((double)(Math.PI / 4), aspectRatio, 0.1f, 100f);
+            float aspectRatio = width / height;
+            _canvas3D.SetPerspectiveProjection((float)(Maths.PI / 4), aspectRatio, 0.1f, 100f);
 
             // Position camera based on time
-            double cameraX = (double)Math.Sin(_time * 0.2) * 8;
-            double cameraZ = (double)Math.Cos(_time * 0.2) * 8;
+            float cameraX = (float)Maths.Sin(_time * 0.2) * 8;
+            float cameraZ = (float)Maths.Cos(_time * 0.2) * 8;
             _canvas3D.SetLookAt(
-                new Double3(cameraX, 5, cameraZ),  // Orbiting camera
-                Double3.Zero,                      // Look at origin
-                Double3.UnitY                         // Up direction
+                new Float3(cameraX, 5, cameraZ),  // Orbiting camera
+                Float3.Zero,                      // Look at origin
+                Float3.UnitY                         // Up direction
             );
 
             // Draw 3D grid for reference
@@ -551,22 +551,22 @@ namespace Common
             // 1. Draw rotating cube
             Quaternion cubeRotation = Quaternion.FromEuler(
                 _time * 0.5f, _time * 0.3f, 0);
-            _canvas3D.SetWorldTransform(new Double3(-2, 2, 0), cubeRotation, Double3.One * 0.5);
+            _canvas3D.SetWorldTransform(new Float3(-2, 2, 0), cubeRotation, Float3.One * 0.5f);
             _canvas.SetStrokeColor(Color32.FromArgb(255, 220, 100, 100));
-            _canvas3D.DrawCubeStroked(Double3.Zero, 2.0f);
+            _canvas3D.DrawCubeStroked(Float3.Zero, 2.0f);
 
             // 2. Draw rotating sphere
             Quaternion sphereRotation = Quaternion.FromEuler(
                 _time * 0.2f, _time * 0.4f, 0);
-            _canvas3D.SetWorldTransform(new Double3(2, 2, 0), sphereRotation, Double3.One * 0.5);
+            _canvas3D.SetWorldTransform(new Float3(2, 2, 0), sphereRotation, Float3.One * 0.5f);
             _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 220, 100));
-            _canvas3D.DrawSphereStroked(Double3.Zero, 1.5f, 10);
+            _canvas3D.DrawSphereStroked(Float3.Zero, 1.5f, 10);
 
             // Restore the canvas state
             _canvas.RestoreState();
         }
 
-        private void DrawJoinStylesDemo(double x, double y, double width, double height)
+        private void DrawJoinStylesDemo(float x, float y, float width, float height)
         {
             // Draw group background and title
             DrawGroupBackground(x, y, width, height, "Joins");
@@ -578,14 +578,14 @@ namespace Common
             _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
 
             // Draw heartbeat lines with different join styles
-            void DrawHeartbeat(JointStyle join, double yOffset, Color color)
+            void DrawHeartbeat(JointStyle join, float yOffset, Color color)
             {
                 _canvas.SetStrokeJoint(join);
                 _canvas.SetStrokeColor(color);
                 _canvas.SetStrokeWidth(5);
 
                 // Base animation for spikes
-                double baseAnim = Math.Sin(_time * 1) * 0.5f + 0.5f; // 0 to 1 range
+                float baseAnim = Maths.Sin(_time * 1) * 0.5f + 0.5f; // 0 to 1 range
 
                 _canvas.BeginPath();
                 _canvas.MoveTo(0, yOffset);
@@ -594,7 +594,7 @@ namespace Common
                 _canvas.LineTo(10, yOffset);
 
                 // First spike
-                double p1Height = 10 * baseAnim;
+                float p1Height = 10 * baseAnim;
                 _canvas.LineTo(30, yOffset - p1Height);
                 _canvas.LineTo(40, yOffset);
 
@@ -603,16 +603,16 @@ namespace Common
                 _canvas.BezierCurveTo(50, yOffset + p1Height, 60, yOffset + p1Height, 70, yOffset);
 
                 // Major spike
-                double qrsHeight = Math.Abs(40 * (0.5f * Math.Sin(_time * 1)));
+                float qrsHeight = Maths.Abs(40 * (0.5f * Maths.Sin(_time * 1)));
                 _canvas.LineTo(70, yOffset - qrsHeight);
-                _canvas.LineTo(80, yOffset + (qrsHeight * 0.5));
+                _canvas.LineTo(80, yOffset + (qrsHeight * 0.5f));
                 _canvas.LineTo(90, yOffset);
 
                 // Flat section
                 _canvas.LineTo(100, yOffset);
 
                 // Small spike (T wave)
-                double tHeight = 30 * (baseAnim * 0.7f);
+                float tHeight = 30 * (baseAnim * 0.7f);
                 _canvas.LineTo(130, yOffset - (7 + tHeight));
                 _canvas.LineTo(120, yOffset);
 
@@ -637,7 +637,7 @@ namespace Common
             _canvas.RestoreState();
         }
 
-        private void DrawCapStylesDemo(double x, double y, double width, double height)
+        private void DrawCapStylesDemo(float x, float y, float width, float height)
         {
             // Draw group background and title
             DrawGroupBackground(x, y, width, height, "Caps");
@@ -647,11 +647,11 @@ namespace Common
 
             // Setup for drawing lines
             _canvas.SetStrokeWidth(17);
-            double lineLength = width - 40;
-            double spacing = 20;
+            float lineLength = width - 40;
+            float spacing = 20;
 
             // Demo lines with different cap styles
-            void DrawCapLine(EndCapStyle startCap, EndCapStyle endCap, double yOffset, Color color)
+            void DrawCapLine(EndCapStyle startCap, EndCapStyle endCap, float yOffset, Color color)
             {
                 // Set the cap styles and color
                 _canvas.SetStrokeStartCap(startCap);
@@ -682,13 +682,13 @@ namespace Common
             //DrawCapLine(EndCapStyle.TriangleOut, EndCapStyle.TriangleOut, spacing * 4, Color32.FromArgb(255, 200, 100, 255));
 
             // Demonstrate mixing different start and end caps
-            double mixedY = spacing * 4;
+            float mixedY = spacing * 4;
             DrawCapLine(EndCapStyle.Round, EndCapStyle.Bevel, mixedY, Color32.FromArgb(255, 255, 255, 150));
 
             _canvas.RestoreState();
         }
 
-        private void DrawScissorDemo(double x, double y, double width, double height)
+        private void DrawScissorDemo(float x, float y, float width, float height)
         {
             // Draw group background and title
             DrawGroupBackground(x, y, width, height, "Scissor");
@@ -698,10 +698,10 @@ namespace Common
 
 
             // Create a scissor region with animation
-            double scissorX = 40 + (Math.Sin(_time) * 30);
-            double scissorY = 10 + (Math.Cos(_time * 1.3) * 5);
-            double scissorWidth = 80 + (Math.Sin(_time * 0.7) * 15);
-            double scissorHeight = 60 + (Math.Cos(_time * 0.5) * 15);
+            float scissorX = 40 + (Maths.Sin(_time) * 30);
+            float scissorY = 10 + (Maths.Cos(_time * 1.3f) * 5);
+            float scissorWidth = 80 + (Maths.Sin(_time * 0.7f) * 15);
+            float scissorHeight = 60 + (Maths.Cos(_time * 0.5f) * 15);
 
             // Set scissor and visualize the scissor area
             var origin = new Float2(80, 40);
@@ -724,9 +724,9 @@ namespace Common
             // Draw some circles that will be scissored
             for (int i = 0; i < 5; i++)
             {
-                double radius = 10 + i * 5;
-                double circleX = 80 + Math.Cos(_time * (1 + i * 0.2)) * 40;
-                double circleY = 40 + Math.Sin(_time * (1 + i * 0.2)) * 30;
+                float radius = 10 + i * 5;
+                float circleX = 80 + Maths.Cos(_time * (1 + i * 0.2f)) * 40;
+                float circleY = 40 + Maths.Sin(_time * (1 + i * 0.2f)) * 30;
                 _canvas.CircleFilled(circleX, circleY, radius,
                     Color32.FromArgb(150, 50 + i * 40, 100, 200 - i * 30));
             }
@@ -738,7 +738,7 @@ namespace Common
             _canvas.RestoreState();
         }
 
-        private void DrawImageDemo(double x, double y, double width, double height)
+        private void DrawImageDemo(float x, float y, float width, float height)
         {
             // Draw group background and title
             DrawGroupBackground(x, y, width, height, "Images");
@@ -755,7 +755,7 @@ namespace Common
                 _canvas.Image(_texture, 0, 0, 50, 50, Color.White);
 
                 // 2. Scaled image
-                double scale = 0.7f + 0.3f * Math.Sin(_time);
+                float scale = 0.7f + 0.3f * Maths.Sin(_time);
                 _canvas.SaveState();
                 _canvas.TransformBy(Transform2D.CreateTranslation(80, 0));
                 _canvas.TransformBy(Transform2D.CreateScale(scale, scale));
@@ -774,9 +774,9 @@ namespace Common
                 _canvas.TransformBy(Transform2D.CreateTranslation(80, 60));
 
                 // Apply color tint that changes over time
-                double r = 0.5f + 0.5f * Math.Sin(_time);
-                double g = 0.5f + 0.5f * Math.Sin(_time + Math.PI * 2 / 3);
-                double b = 0.5f + 0.5f * Math.Sin(_time + Math.PI * 4 / 3);
+                float r = 0.5f + 0.5f * Maths.Sin(_time);
+                float g = 0.5f + 0.5f * Maths.Sin(_time + Maths.PI * 2 / 3);
+                float b = 0.5f + 0.5f * Maths.Sin(_time + Maths.PI * 4 / 3);
                 _canvas.Image(_texture, 0, 0, 60, 40, Color32.FromArgb(200,
                     (int)(r * 255), (int)(g * 255), (int)(b * 255)));
 
@@ -795,7 +795,7 @@ namespace Common
             _canvas.RestoreState();
         }
 
-        private void DrawGradientDemo(double x, double y, double width, double height)
+        private void DrawGradientDemo(float x, float y, float width, float height)
         {
             // Draw group background and title
             DrawGroupBackground(x, y, width, height, "Gradients");
@@ -804,9 +804,9 @@ namespace Common
             _canvas.TransformBy(Transform2D.CreateTranslation(x + 20, y + 30));
 
             // Section spacing
-            double spacing = 20;
-            double boxSize = 40;
-            double animatedFactor = (Math.Sin(_time * 2.0) * 0.5 + 0.5); // 0 to 1 animation
+            float spacing = 20;
+            float boxSize = 40;
+            float animatedFactor = (Maths.Sin(_time * 2.0f) * 0.5f + 0.5f); // 0 to 1 animation
 
             // 1
             // Horizontal linear gradient
@@ -824,7 +824,7 @@ namespace Common
             _canvas.RectFilled(0, boxSize + spacing, boxSize, boxSize, Color.White);
 
             // 2
-            double col2X = boxSize + spacing;
+            float col2X = boxSize + spacing;
 
             // Circle with linear gradient
             _canvas.SetLinearBrush(
@@ -845,12 +845,12 @@ namespace Common
 
 
             // 3
-            double col3X = (boxSize + spacing) * 2;
+            float col3X = (boxSize + spacing) * 2;
 
             // Basic box gradient
             _canvas.SetBoxBrush(
                 col3X + boxSize / 2, boxSize / 2,
-                boxSize * 0.7, boxSize * 0.7,
+                boxSize * 0.7f, boxSize * 0.7f,
                 5, 10,
                 Color.Turquoise,
                 Color.Tomato);
@@ -859,7 +859,7 @@ namespace Common
             // Rounded rect with box gradient
             _canvas.SetBoxBrush(
                 col3X + boxSize / 2, boxSize / 2 + boxSize + spacing,
-                boxSize * 0.7, boxSize * 0.7,
+                boxSize * 0.7f, boxSize * 0.7f,
                 5, 10,
                 Color32.FromArgb(255, 255, 255, 100),
                 Color32.FromArgb(255, 50, 128, 50));
@@ -877,7 +877,7 @@ namespace Common
             _canvas.RestoreState();
         }
 
-        private void DrawConcaveDemo(double x, double y, double width, double height)
+        private void DrawConcaveDemo(float x, float y, float width, float height)
         {
             // Draw group background and title
             DrawGroupBackground(x, y, width, height, "Concave");
@@ -905,7 +905,7 @@ namespace Common
                 // Set fill color and stroke
                 _canvas.SetFillColor(Color32.FromArgb(255, 100, 200, 255));
                 _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
-                _canvas.SetStrokeWidth(1.5);
+                _canvas.SetStrokeWidth(1.5f);
 
                 // Fill and stroke
                 _canvas.FillAndStroke();
@@ -931,7 +931,7 @@ namespace Common
                 // Set fill color and stroke
                 _canvas.SetFillColor(Color32.FromArgb(255, 255, 150, 100));
                 _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
-                _canvas.SetStrokeWidth(1.5);
+                _canvas.SetStrokeWidth(1.5f);
 
                 // Fill complex shape (with hole)
                 _canvas.FillComplex();
@@ -940,23 +940,23 @@ namespace Common
 
             // PART 3: Animated complex shape with multiple holes
             {
-                double time = _time;
-                double wave = Math.Sin(time) * 3;
+                float time = _time;
+                float wave = Maths.Sin(time) * 3;
             
                 // Outer path
                 _canvas.BeginPath();
-                double centerX = 150;
-                double centerY = 25;
-                double radius = 20;
+                float centerX = 150;
+                float centerY = 25;
+                float radius = 20;
             
                 // Create wavy outer circle
                 int segments = 20;
                 for (int i = 0; i <= segments; i++)
                 {
-                    double angle = 2 * Math.PI * i / segments;
-                    double r = radius + Math.Sin(angle * 5 + time * 2) * 5;
-                    double px = centerX + r * Math.Cos(angle);
-                    double py = centerY + r * Math.Sin(angle);
+                    float angle = 2 * Maths.PI * i / segments;
+                    float r = radius + Maths.Sin(angle * 5 + time * 2) * 5;
+                    float px = centerX + r * Maths.Cos(angle);
+                    float py = centerY + r * Maths.Sin(angle);
             
                     if (i == 0)
                         _canvas.MoveTo(px, py);
@@ -966,31 +966,31 @@ namespace Common
                 _canvas.ClosePath();
             
                 // Inner hole 1 (counter-clockwise)
-                double hole1X = centerX - 5 + Math.Sin(time * 1.5) * 3;
-                double hole1Y = centerY - 5 + Math.Cos(time * 1.5) * 3;
-                double hole1Radius = 5 + Math.Sin(time * 2) * 1;
+                float hole1X = centerX - 5 + Maths.Sin(time * 1.5f) * 3;
+                float hole1Y = centerY - 5 + Maths.Cos(time * 1.5f) * 3;
+                float hole1Radius = 5 + Maths.Sin(time * 2) * 1;
             
                 _canvas.MoveTo(hole1X + hole1Radius, hole1Y);
                 for (int i = segments; i >= 0; i--)
                 { // CCW direction
-                    double angle = 2 * Math.PI * i / segments;
-                    double px = hole1X + hole1Radius * Math.Cos(angle);
-                    double py = hole1Y + hole1Radius * Math.Sin(angle);
+                    float angle = 2 * Maths.PI * i / segments;
+                    float px = hole1X + hole1Radius * Maths.Cos(angle);
+                    float py = hole1Y + hole1Radius * Maths.Sin(angle);
                     _canvas.LineTo(px, py);
                 }
                 _canvas.ClosePath();
                 
                 // Inner hole 2 (counter-clockwise)
-                double hole2X = centerX + 10 + Math.Cos(time) * 3;
-                double hole2Y = centerY + 5 + Math.Sin(time * 2) * 3;
-                double hole2Radius = 4 + Math.Cos(time * 3) * 1;
+                float hole2X = centerX + 10 + Maths.Cos(time) * 3;
+                float hole2Y = centerY + 5 + Maths.Sin(time * 2) * 3;
+                float hole2Radius = 4 + Maths.Cos(time * 3) * 1;
                 
                 _canvas.MoveTo(hole2X + hole2Radius, hole2Y);
                 for (int i = segments; i >= 0; i--)
                 { // CCW direction
-                    double angle = 2 * Math.PI * i / segments;
-                    double px = hole2X + hole2Radius * Math.Cos(angle);
-                    double py = hole2Y + hole2Radius * Math.Sin(angle);
+                    float angle = 2 * Maths.PI * i / segments;
+                    float px = hole2X + hole2Radius * Maths.Cos(angle);
+                    float py = hole2Y + hole2Radius * Maths.Sin(angle);
                     _canvas.LineTo(px, py);
                 }
                 _canvas.ClosePath();
@@ -998,7 +998,7 @@ namespace Common
                 // Set fill color and stroke
                 _canvas.SetFillColor(Color32.FromArgb(255, 150, 255, 150));
                 _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
-                _canvas.SetStrokeWidth(1.5);
+                _canvas.SetStrokeWidth(1.5f);
             
                 // Fill complex shape
                 _canvas.FillComplex();
@@ -1022,18 +1022,18 @@ namespace Common
                     00, 80);
                 _canvas.ClosePath();
 
-                double time = _time;
+                float time = _time;
 
-                void AddHole(double holeX, double holeY, double holeSize)
+                void AddHole(float holeX, float holeY, float holeSize)
                 {
-                    holeY += Math.Sin(time * 0.5) * 9;
-                    holeSize *= Math.Sin(time += 0.25);
+                    holeY += Maths.Sin(time * 0.5f) * 9;
+                    holeSize *= Maths.Sin(time += 0.25f);
                     _canvas.MoveTo(holeX + holeSize, holeY);
                     for (int j = 20; j >= 0; j--)
                     {
-                        double angle = 2 * Math.PI * j / 20;
-                        double px = holeX + holeSize * Math.Cos(angle);
-                        double py = holeY + holeSize * Math.Sin(angle);
+                        float angle = 2 * Maths.PI * j / 20;
+                        float px = holeX + holeSize * Maths.Cos(angle);
+                        float py = holeY + holeSize * Maths.Sin(angle);
                         _canvas.LineTo(px, py);
                     }
                     _canvas.ClosePath();
@@ -1052,7 +1052,7 @@ namespace Common
                 // Set fill and stroke
                 _canvas.SetFillColor(Color32.FromArgb(255, 255, 200, 100));
                 _canvas.SetStrokeColor(Color.White);
-                _canvas.SetStrokeWidth(1.5);
+                _canvas.SetStrokeWidth(1.5f);
             
                 // Fill using auto-detection
                 _canvas.FillComplexAA();
@@ -1062,7 +1062,7 @@ namespace Common
             _canvas.RestoreState();
         }
 
-        private void DrawTextDemo(double x, double y, double width, double height)
+        private void DrawTextDemo(float x, float y, float width, float height)
         {
             // Draw group background and title
             DrawGroupBackground(x, y, width, height, "Text");
@@ -1082,36 +1082,36 @@ namespace Common
 
             // 1. Rotation
             _canvas.SaveState();
-            double angle = Math.Sin(_time) * 30; // Convert to radians, oscillate ±30°
-            Double2 center = new Double2(150, 20);
+            float angle = Maths.Sin(_time) * 30; // Convert to radians, oscillate ±30°
+            Float2 center = new Float2(150, 20);
             _canvas.TransformBy(Transform2D.CreateTranslation(center.X, center.Y));
             _canvas.TransformBy(Transform2D.CreateRotation(angle));
-            _canvas.DrawText("Rotate", 0, 0, Color32.FromArgb(255, 255, 150, 150), 32, _fontA, origin: new Double2(0.5f, 0.5f));
+            _canvas.DrawText("Rotate", 0, 0, Color32.FromArgb(255, 255, 150, 150), 32, _fontA, origin: new Float2(0.5f, 0.5f));
             _canvas.RestoreState();
 
             // 2. Scaling
             _canvas.SaveState();
-            double scale = 0.3 + 0.2 * Math.Sin(_time * 1.5);
+            float scale = 0.3f + 0.2f * Maths.Sin(_time * 1.5f);
             _canvas.TransformBy(Transform2D.CreateTranslation(40, 55));
             _canvas.TransformBy(Transform2D.CreateScale(scale, scale));
             _canvas.DrawText("Scaling", 0, 0, Color32.FromArgb(255, 150, 255, 150), 32, _fontA);
             _canvas.RestoreState();
 
             // 3. Character spacing
-            double spacing = Math.Sin(_time * 2) * 1.0;
+            float spacing = Maths.Sin(_time * 2) * 1.0f;
             _canvas.DrawText("Spacing", 90, 45, Color32.FromArgb(255, 150, 150, 255), 32, _fontA, (float)spacing);
 
             // 4. Path text (text following a curve)
             _canvas.SaveState();
-            double centerX = 140;
-            double centerY = 105;
-            double radius = 30;
+            float centerX = 140;
+            float centerY = 105;
+            float radius = 30;
 
             // First, visualize the path for reference
             _canvas.SetStrokeColor(Color32.FromArgb(40, 255, 255, 255));
             _canvas.SetStrokeWidth(1);
             _canvas.BeginPath();
-            _canvas.Arc(centerX, centerY, radius, 0, Math.PI * 2, false);
+            _canvas.Arc(centerX, centerY, radius, 0, Maths.PI * 2, false);
             _canvas.Stroke();
 
             // Now draw text along the path
@@ -1120,20 +1120,20 @@ namespace Common
 
             for (int i = 0; i < charCount; i++)
             {
-                double charAngle = 2 * Math.PI * i / charCount - _time * 0.5;
-                double charX = centerX + radius * Math.Cos(charAngle);
-                double charY = centerY + radius * Math.Sin(charAngle);
+                float charAngle = 2 * Maths.PI * i / charCount - _time * 0.5f;
+                float charX = centerX + radius * Maths.Cos(charAngle);
+                float charY = centerY + radius * Maths.Sin(charAngle);
 
                 _canvas.SaveState();
                 _canvas.TransformBy(Transform2D.CreateTranslation(charX, charY));
 
                 // Calculate color based on position
-                byte r = (byte)(128 + 127 * Math.Sin(charAngle));
-                byte g = (byte)(128 + 127 * Math.Sin(charAngle + 2 * Math.PI / 3));
-                byte b = (byte)(128 + 127 * Math.Sin(charAngle + 4 * Math.PI / 3));
+                byte r = (byte)(128 + 127 * Maths.Sin(charAngle));
+                byte g = (byte)(128 + 127 * Maths.Sin(charAngle + 2 * Maths.PI / 3));
+                byte b = (byte)(128 + 127 * Maths.Sin(charAngle + 4 * Maths.PI / 3));
 
                 // Draw the character
-                _canvas.DrawText(circularText[i].ToString(), 0, 0, Color32.FromArgb(255, r, g, b), 16, _fontA, origin: new Double2(0.5f, 0.5f));
+                _canvas.DrawText(circularText[i].ToString(), 0, 0, Color32.FromArgb(255, r, g, b), 16, _fontA, origin: new Float2(0.5f, 0.5f));
 
                 _canvas.RestoreState();
             }
@@ -1145,19 +1145,19 @@ namespace Common
 
         #region Shapes/Lines
 
-        private void Draw3DGrid(double size, double spacing, Color color)
+        private void Draw3DGrid(float size, float spacing, Color color)
         {
-            _canvas3D.SetWorldTransform(Double3.Zero, Quaternion.Identity, Double3.One);
+            _canvas3D.SetWorldTransform(Float3.Zero, Quaternion.Identity, Float3.One);
 
             int lineCount = (int)(size / spacing) * 2 + 1;
-            double start = -size;
+            float start = -size;
 
             _canvas.SetStrokeWidth(1.0f);
             _canvas.SetStrokeColor(color);
 
             for (int i = 0; i < lineCount; i++)
             {
-                double pos = start + i * spacing;
+                float pos = start + i * spacing;
 
                 // Draw X lines
                 _canvas3D.BeginPath();
@@ -1173,9 +1173,9 @@ namespace Common
             }
         }
 
-        private void Draw3DCoordinateAxes(double length)
+        private void Draw3DCoordinateAxes(float length)
         {
-            _canvas3D.SetWorldTransform(Double3.Zero, Quaternion.Identity, Double3.One);
+            _canvas3D.SetWorldTransform(Float3.Zero, Quaternion.Identity, Float3.One);
 
             _canvas.SetStrokeWidth(2.0f);
 
@@ -1201,28 +1201,28 @@ namespace Common
             _canvas3D.Stroke();
         }
 
-        private void DrawDashedLine(double x1, double y1, double x2, double y2, double dashLength, double gapLength, Color color, double width)
+        private void DrawDashedLine(float x1, float y1, float x2, float y2, float dashLength, float gapLength, Color color, float width)
         {
-            double dx = x2 - x1;
-            double dy = y2 - y1;
-            double distance = (double)Math.Sqrt(dx * dx + dy * dy);
-            double dashCount = distance / (dashLength + gapLength);
+            float dx = x2 - x1;
+            float dy = y2 - y1;
+            float distance = (float)Maths.Sqrt(dx * dx + dy * dy);
+            float dashCount = distance / (dashLength + gapLength);
 
-            double xStep = dx / dashCount / (dashLength + gapLength) * dashLength;
-            double yStep = dy / dashCount / (dashLength + gapLength) * dashLength;
+            float xStep = dx / dashCount / (dashLength + gapLength) * dashLength;
+            float yStep = dy / dashCount / (dashLength + gapLength) * dashLength;
 
-            double gapXStep = dx / dashCount / (dashLength + gapLength) * gapLength;
-            double gapYStep = dy / dashCount / (dashLength + gapLength) * gapLength;
+            float gapXStep = dx / dashCount / (dashLength + gapLength) * gapLength;
+            float gapYStep = dy / dashCount / (dashLength + gapLength) * gapLength;
 
             _canvas.SetStrokeColor(color);
             _canvas.SetStrokeWidth(width);
 
             for (int i = 0; i < dashCount; i++)
             {
-                double startX = x1 + i * (xStep + gapXStep);
-                double startY = y1 + i * (yStep + gapYStep);
-                double endX = startX + xStep;
-                double endY = startY + yStep;
+                float startX = x1 + i * (xStep + gapXStep);
+                float startY = y1 + i * (yStep + gapYStep);
+                float endX = startX + xStep;
+                float endY = startY + yStep;
 
                 _canvas.BeginPath();
                 _canvas.MoveTo(startX, startY);
@@ -1231,16 +1231,16 @@ namespace Common
             }
         }
 
-        private void DrawStar(double x, double y, double outerRadius, double innerRadius, int points, double rotation, Color color)
+        private void DrawStar(float x, float y, float outerRadius, float innerRadius, int points, float rotation, Color color)
         {
             _canvas.BeginPath();
 
             for (int i = 0; i < points * 2; i++)
             {
-                double radius = i % 2 == 0 ? outerRadius : innerRadius;
-                double angle = rotation + (double)(i * Math.PI / points);
-                double px = x + radius * (double)Math.Cos(angle);
-                double py = y + radius * (double)Math.Sin(angle);
+                float radius = i % 2 == 0 ? outerRadius : innerRadius;
+                float angle = rotation + (float)(i * Maths.PI / points);
+                float px = x + radius * (float)Maths.Cos(angle);
+                float py = y + radius * (float)Maths.Sin(angle);
 
                 if (i == 0)
                     _canvas.MoveTo(px, py);
@@ -1253,10 +1253,10 @@ namespace Common
             _canvas.Fill();
         }
 
-        private void DrawRoundedRect(double x, double y, double width, double height, double radius, Color color)
+        private void DrawRoundedRect(float x, float y, float width, float height, float radius, Color color)
         {
             // Ensure radius is not too large
-            radius = Math.Min(radius, Math.Min(width / 2, height / 2));
+            radius = Maths.Min(radius, Maths.Min(width / 2, height / 2));
 
             _canvas.BeginPath();
 
@@ -1265,19 +1265,19 @@ namespace Common
 
             // Top edge and top-right corner
             _canvas.LineTo(x + width - radius, y);
-            _canvas.Arc(x + width - radius, y + radius, radius, -Math.PI / 2, 0, false);
+            _canvas.Arc(x + width - radius, y + radius, radius, -Maths.PI / 2, 0, false);
 
             // Right edge and bottom-right corner
             _canvas.LineTo(x + width, y + height - radius);
-            _canvas.Arc(x + width - radius, y + height - radius, radius, 0, Math.PI / 2, false);
+            _canvas.Arc(x + width - radius, y + height - radius, radius, 0, Maths.PI / 2, false);
 
             // Bottom edge and bottom-left corner
             _canvas.LineTo(x + radius, y + height);
-            _canvas.Arc(x + radius, y + height - radius, radius, Math.PI / 2, Math.PI, false);
+            _canvas.Arc(x + radius, y + height - radius, radius, Maths.PI / 2, Maths.PI, false);
 
             // Left edge and top-left corner
             _canvas.LineTo(x, y + radius);
-            _canvas.Arc(x + radius, y + radius, radius, Math.PI, 3 * Math.PI / 2, false);
+            _canvas.Arc(x + radius, y + radius, radius, Maths.PI, 3 * Maths.PI / 2, false);
 
             _canvas.ClosePath();
             _canvas.SetFillColor(color);

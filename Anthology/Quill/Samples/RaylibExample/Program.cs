@@ -10,7 +10,7 @@ namespace RaylibExample
 {
     public class Program
     {
-        static Double2 offset = Double2.Zero;
+        static Float2 offset = Float2.Zero;
         static float zoom = 1.0f;
         static float rotation = 0.0f;
 
@@ -72,12 +72,12 @@ namespace RaylibExample
             CloseWindow();
         }
 
-        private static void HandleDemoInput(ref Double2 offset, ref float zoom, ref float rotation, ref int currentDemoIndex, int demoCount)
+        private static void HandleDemoInput(ref Float2 offset, ref float zoom, ref float rotation, ref int currentDemoIndex, int demoCount)
         {
             // Handle input
             if (IsMouseButtonDown(MouseButton.Left))
             {
-                Double2 delta = (Float2)GetMouseDelta();
+                Float2 delta = GetMouseDelta();
                 offset.X += delta.X * (1.0f / zoom);
                 offset.Y += delta.Y * (1.0f / zoom);
             }

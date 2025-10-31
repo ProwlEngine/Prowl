@@ -40,7 +40,7 @@ namespace SFMLExample
             return new TextureSFML(texture, width, height);
         }
 
-        public void SetData(Prowl.Vector.Geometry.IntRect bounds, byte[] data)
+        public void SetData(Prowl.Vector.IntRect bounds, byte[] data)
         {
             ArgumentNullException.ThrowIfNull(bounds);
             // Make sure we have valid bounds

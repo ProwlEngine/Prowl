@@ -23,9 +23,9 @@ namespace OpenTKExample
         private BenchmarkScene _benchmarkScene;
 
         // Camera/view properties
-        private Double2 _offset = Double2.Zero;
-        private double _zoom = 1.0f;
-        private double _rotation = 0.0f;
+        private Float2 _offset = Float2.Zero;
+        private float _zoom = 1.0f;
+        private float _rotation = 0.0f;
 
         private TextureTK _whiteTexture;
         private TextureTK _demoTexture;
@@ -72,7 +72,7 @@ namespace OpenTKExample
             _canvas.Clear();
 
             // Let demo render to canvas
-            _demos[_currentDemoIndex].RenderFrame(args.Time, _offset, _zoom, _rotation);
+            _demos[_currentDemoIndex].RenderFrame((float)args.Time, _offset, _zoom, _rotation);
             //_benchmarkScene.RenderFrame(args.Time, ClientSize.X, ClientSize.Y);
 
             // Draw the canvas content using OpenGL
@@ -98,21 +98,21 @@ namespace OpenTKExample
             // Zoom with mouse wheel
             if (mouse.ScrollDelta.Y != 0)
             {
-                _zoom += mouse.ScrollDelta.Y * 0.1;
-                if (_zoom < 0.1f) _zoom = 0.1;
+                _zoom += mouse.ScrollDelta.Y * 0.1f;
+                if (_zoom < 0.1f) _zoom = 0.1f;
             }
 
             // Pan with left mouse button
             if (mouse.IsButtonDown(MouseButton.Left))
             {
                 var delta = mouse.Delta;
-                _offset.X += delta.X * (1.0 / _zoom);
-                _offset.Y += delta.Y * (1.0 / _zoom);
+                _offset.X += delta.X * (1.0f / _zoom);
+                _offset.Y += delta.Y * (1.0f / _zoom);
             }
 
             // Rotate with Q/E keys
-            if (keyboard.IsKeyDown(Keys.Q)) _rotation += 10.0 * args.Time;
-            if (keyboard.IsKeyDown(Keys.E)) _rotation -= 10.0 * args.Time;
+            if (keyboard.IsKeyDown(Keys.Q)) _rotation += 10.0f * (float)args.Time;
+            if (keyboard.IsKeyDown(Keys.E)) _rotation -= 10.0f * (float)args.Time;
 
 
             if (keyboard.IsKeyReleased(Keys.Left))

@@ -18,19 +18,19 @@ namespace Prowl.Quill
         private static List<Triangle> TriangleCache => _triangles ??= new List<Triangle>();
         private static List<PolySegment> PolySegmentCache => _polySegments ??= new List<PolySegment>();
 
-        private const double MiterMinAngle = 20.0 * Math.PI / 180.0;
-        private const double RoundMinAngle = 40.0 * Math.PI / 180.0;
-        private const double Epsilon = 1e-6;
-        private const double EpsilonSqr = 1e-9;
-        private static readonly Double2 HalfPixel = new Double2(0.5f, 0.5f);
+        private const float MiterMinAngle = 20.0f * Maths.PI / 180.0f;
+        private const float RoundMinAngle = 40.0f * Maths.PI / 180.0f;
+        private const float Epsilon = 1e-6f;
+        private const float EpsilonSqr = 1e-9f;
+        private static readonly Float2 HalfPixel = new Float2(0.5f, 0.5f);
 
         public struct Triangle
         {
-            public Double2 V1, V2, V3;
-            public Double2 UV1, UV2, UV3;
+            public Float2 V1, V2, V3;
+            public Float2 UV1, UV2, UV3;
             public Color32 Color;
 
-            public Triangle(Double2 v1, Double2 v2, Double2 v3, Double2 uv1, Double2 uv2, Double2 uv3, Color32 color)
+            public Triangle(Float2 v1, Float2 v2, Float2 v3, Float2 uv1, Float2 uv2, Float2 uv3, Color32 color)
             {
                 V1 = v1; V2 = v2; V3 = v3;
                 UV1 = uv1; UV2 = uv2; UV3 = uv3;
@@ -48,7 +48,7 @@ namespace Prowl.Quill
         /// <param name="miterLimit">The miter limit (used when jointStyle is Miter)</param>
         /// <param name="allowOverlap">Whether to allow overlapping vertices for better results with close points</param>
         /// <returns>A list of triangles describing the path</returns>
-        public static IReadOnlyList<Triangle> Create(List<Double2> points, double thickness, double pixelWidth, Color32 color, JointStyle jointStyle = JointStyle.Miter, double miterLimit = 4.0, bool allowOverlap = false, EndCapStyle startCap = EndCapStyle.Butt, EndCapStyle endCap = EndCapStyle.Butt, List<double> dashPattern = null, double dashOffset = 0.0)
+        public static IReadOnlyList<Triangle> Create(List<Float2> points, float thickness, float pixelWidth, Color32 color, JointStyle jointStyle = JointStyle.Miter, float miterLimit = 4.0f, bool allowOverlap = false, EndCapStyle startCap = EndCapStyle.Butt, EndCapStyle endCap = EndCapStyle.Butt, List<float> dashPattern = null, float dashOffset = 0.0f)
         {
             TriangleCache.Clear();
 
@@ -56,14 +56,14 @@ namespace Prowl.Quill
                 return TriangleCache;
 
             // Handle thin lines with alpha adjustment instead of thickness reduction
-            if (thickness < 1.0)
+            if (thickness < 1.0f)
             {
                 color = Color32.FromArgb((int)(color.A * thickness), color.R, color.G, color.B);
-                thickness = 1.0;
+                thickness = 1.0f;
             }
 
             thickness += pixelWidth;
-            double halfThickness = thickness / 2;
+            float halfThickness = thickness / 2;
 
             var dashSegments = GenerateDashSegments(points, dashPattern, dashOffset, HalfPixel);
             if (dashSegments.Count == 0)
@@ -78,7 +78,7 @@ namespace Prowl.Quill
 
                 // Check if this is a closed polyline
                 bool isClosedPolyline = dashPoints.Count > 2 &&
-                    Double2.LengthSquared(dashPoints[0] - dashPoints[^1]) < EpsilonSqr;
+                    Float2.LengthSquared(dashPoints[0] - dashPoints[^1]) < EpsilonSqr;
 
                 GenerateTrianglesForPolyline(jointStyle, miterLimit, allowOverlap, startCap, endCap,
                                            color, isClosedPolyline);
@@ -87,22 +87,22 @@ namespace Prowl.Quill
             return TriangleCache;
         }
 
-        private static void CreatePolySegments(List<Double2> points, double halfThickness)
+        private static void CreatePolySegments(List<Float2> points, float halfThickness)
         {
             PolySegmentCache.Clear();
 
             // Create line segments, skipping identical consecutive points
             for (int i = 0; i < points.Count - 1; i++)
             {
-                Double2 p1 = points[i];
-                Double2 p2 = points[i + 1];
+                Float2 p1 = points[i];
+                Float2 p2 = points[i + 1];
 
-                if (Double2.LengthSquared(p1 - p2) > EpsilonSqr)
+                if (Float2.LengthSquared(p1 - p2) > EpsilonSqr)
                     PolySegmentCache.Add(new PolySegment(new LineSegment(p1, p2), halfThickness));
             }
         }
 
-        private static void GenerateTrianglesForPolyline(JointStyle jointStyle, double miterLimit, bool allowOverlap, EndCapStyle startCap, EndCapStyle endCap, Color32 color, bool isClosedPolyline)
+        private static void GenerateTrianglesForPolyline(JointStyle jointStyle, float miterLimit, bool allowOverlap, EndCapStyle startCap, EndCapStyle endCap, Color32 color, bool isClosedPolyline)
         {
             var segmentData = new SegmentRenderData();
 
@@ -110,7 +110,7 @@ namespace Prowl.Quill
             {
                 var segment = PolySegmentCache[i];
                 CalculateSegmentUVs(i, PolySegmentCache.Count, startCap, endCap, isClosedPolyline,
-                                  out double startU, out double endU);
+                                  out float startU, out float endU);
 
                 if (i == 0)
                 {
@@ -169,16 +169,16 @@ namespace Prowl.Quill
 
         private struct SegmentRenderData
         {
-            public Double2 Start1, Start2, End1, End2;
-            public Double2 NextStart1, NextStart2;
-            public Double2 StartUV1, StartUV2, EndUV1, EndUV2;
-            public Double2 NextStartUV1, NextStartUV2;
+            public Float2 Start1, Start2, End1, End2;
+            public Float2 NextStart1, NextStart2;
+            public Float2 StartUV1, StartUV2, EndUV1, EndUV2;
+            public Float2 NextStartUV1, NextStartUV2;
         }
 
-        private static void CalculateSegmentUVs(int index, int totalCount, EndCapStyle startCap, EndCapStyle endCap, bool isClosedPolyline, out double startU, out double endU)
+        private static void CalculateSegmentUVs(int index, int totalCount, EndCapStyle startCap, EndCapStyle endCap, bool isClosedPolyline, out float startU, out float endU)
         {
-            startU = 0.5;
-            endU = 0.5;
+            startU = 0.5f;
+            endU = 0.5f;
 
             if (isClosedPolyline)
             {
@@ -188,39 +188,39 @@ namespace Prowl.Quill
 
             if (totalCount == 1)
             {
-                startU = startCap != EndCapStyle.Butt ? 0.5 : 0.0;
-                endU = endCap != EndCapStyle.Butt ? 0.5 : 1.0;
+                startU = startCap != EndCapStyle.Butt ? 0.5f : 0.0f;
+                endU = endCap != EndCapStyle.Butt ? 0.5f : 1.0f;
             }
             else if (index == 0)
             {
-                startU = startCap != EndCapStyle.Butt ? 0.5 : 0.0;
+                startU = startCap != EndCapStyle.Butt ? 0.5f : 0.0f;
             }
             else if (index == totalCount - 1)
             {
-                endU = endCap != EndCapStyle.Butt ? 0.5 : 1.0;
+                endU = endCap != EndCapStyle.Butt ? 0.5f : 1.0f;
             }
         }
 
-        private static void InitializeFirstSegment(PolySegment segment, double startU, ref SegmentRenderData data)
+        private static void InitializeFirstSegment(PolySegment segment, float startU, ref SegmentRenderData data)
         {
             data.Start1 = segment.Edge1.A;
             data.Start2 = segment.Edge2.A;
-            data.StartUV1 = new Double2(startU, 0);
-            data.StartUV2 = new Double2(startU, 1);
+            data.StartUV1 = new Float2(startU, 0);
+            data.StartUV2 = new Float2(startU, 1);
         }
 
-        private static void FinalizeLastSegment(PolySegment segment, double endU, ref SegmentRenderData data)
+        private static void FinalizeLastSegment(PolySegment segment, float endU, ref SegmentRenderData data)
         {
             data.End1 = segment.Edge1.B;
             data.End2 = segment.Edge2.B;
-            data.EndUV1 = new Double2(endU, 0);
-            data.EndUV2 = new Double2(endU, 1);
+            data.EndUV1 = new Float2(endU, 0);
+            data.EndUV2 = new Float2(endU, 1);
         }
 
 
-        private static List<List<Double2>> GenerateDashSegments(List<Double2> points, List<double> dashPattern, double dashOffset, Double2 halfPixelOffset)
+        private static List<List<Float2>> GenerateDashSegments(List<Float2> points, List<float> dashPattern, float dashOffset, Float2 halfPixelOffset)
         {
-            var allDashSegments = new List<List<Double2>>();
+            var allDashSegments = new List<List<Float2>>();
 
             if (points.Count < 2 || dashPattern == null || dashPattern.Count == 0 || dashPattern.Sum() <= Epsilon)
             {
@@ -233,14 +233,14 @@ namespace Prowl.Quill
             }
 
             var dashState = InitializeDashState(dashPattern, dashOffset);
-            var currentDashPoints = new List<Double2>();
+            var currentDashPoints = new List<Float2>();
 
             ProcessLineSegments(points, halfPixelOffset, dashPattern, dashState, currentDashPoints, allDashSegments);
 
             // Add final dash segment if we're in dash state
             if (dashState.IsInDash && currentDashPoints.Count >= 2)
             {
-                allDashSegments.Add(new List<Double2>(currentDashPoints));
+                allDashSegments.Add(new List<Float2>(currentDashPoints));
             }
 
             allDashSegments.RemoveAll(dash => dash.Count < 2);
@@ -250,14 +250,14 @@ namespace Prowl.Quill
         private struct DashState
         {
             public int PatternIndex;
-            public double RemainingLength;
+            public float RemainingLength;
             public bool IsInDash;
         }
 
-        private static DashState InitializeDashState(List<double> dashPattern, double dashOffset)
+        private static DashState InitializeDashState(List<float> dashPattern, float dashOffset)
         {
-            double totalPatternLength = dashPattern.Sum();
-            double currentOffset = ((dashOffset % totalPatternLength) + totalPatternLength) % totalPatternLength;
+            float totalPatternLength = dashPattern.Sum();
+            float currentOffset = ((dashOffset % totalPatternLength) + totalPatternLength) % totalPatternLength;
 
             var state = new DashState { PatternIndex = 0, RemainingLength = 0, IsInDash = false };
 
@@ -266,7 +266,7 @@ namespace Prowl.Quill
             {
                 if (dashPattern.Count == 0) break;
 
-                double currentPatternLength = dashPattern[state.PatternIndex % dashPattern.Count];
+                float currentPatternLength = dashPattern[state.PatternIndex % dashPattern.Count];
                 if (currentOffset >= currentPatternLength)
                 {
                     currentOffset -= currentPatternLength;
@@ -293,33 +293,33 @@ namespace Prowl.Quill
             return state;
         }
 
-        private static void ProcessLineSegments(List<Double2> points, Double2 halfPixelOffset, List<double> dashPattern, DashState dashState, List<Double2> currentDashPoints, List<List<Double2>> allDashSegments)
+        private static void ProcessLineSegments(List<Float2> points, Float2 halfPixelOffset, List<float> dashPattern, DashState dashState, List<Float2> currentDashPoints, List<List<Float2>> allDashSegments)
         {
             for (int i = 0; i < points.Count - 1; i++)
             {
-                Double2 p1 = points[i];
-                Double2 p2 = points[i + 1];
+                Float2 p1 = points[i];
+                Float2 p2 = points[i + 1];
 
                 if (p1 == p2) continue;
 
-                Double2 segmentVector = p2 - p1;
-                double segmentLength = Double2.Length(segmentVector);
+                Float2 segmentVector = p2 - p1;
+                float segmentLength = Float2.Length(segmentVector);
 
                 if (segmentLength <= Epsilon) continue;
 
-                Double2 segmentDirection = Double2.Normalize(segmentVector);
-                double distanceTraversed = 0;
+                Float2 segmentDirection = Float2.Normalize(segmentVector);
+                float distanceTraversed = 0;
 
                 ProcessSingleSegment(p1, segmentDirection, segmentLength, halfPixelOffset, dashPattern,
                                    ref dashState, ref distanceTraversed, currentDashPoints, allDashSegments);
             }
         }
 
-        private static void ProcessSingleSegment(Double2 segmentStart, Double2 segmentDirection, double segmentLength, Double2 halfPixelOffset, List<double> dashPattern, ref DashState dashState, ref double distanceTraversed, List<Double2> currentDashPoints, List<List<Double2>> allDashSegments)
+        private static void ProcessSingleSegment(Float2 segmentStart, Float2 segmentDirection, float segmentLength, Float2 halfPixelOffset, List<float> dashPattern, ref DashState dashState, ref float distanceTraversed, List<Float2> currentDashPoints, List<List<Float2>> allDashSegments)
         {
             while (distanceTraversed < segmentLength)
             {
-                double lengthToProcess = Math.Min(dashState.RemainingLength, segmentLength - distanceTraversed);
+                float lengthToProcess = Math.Min(dashState.RemainingLength, segmentLength - distanceTraversed);
 
                 if (lengthToProcess <= Epsilon)
                 {
@@ -335,8 +335,8 @@ namespace Prowl.Quill
                     }
                 }
 
-                Double2 startPoint = segmentStart + segmentDirection * distanceTraversed;
-                Double2 endPoint = segmentStart + segmentDirection * (distanceTraversed + lengthToProcess);
+                Float2 startPoint = segmentStart + segmentDirection * distanceTraversed;
+                Float2 endPoint = segmentStart + segmentDirection * (distanceTraversed + lengthToProcess);
 
                 if (dashState.IsInDash)
                 {
@@ -359,15 +359,15 @@ namespace Prowl.Quill
             }
         }
 
-        private static void AddDashPoint(List<Double2> dashPoints, Double2 point, Double2 halfPixelOffset)
+        private static void AddDashPoint(List<Float2> dashPoints, Float2 point, Float2 halfPixelOffset)
         {
-            Double2 adjustedPoint = point + halfPixelOffset;
+            Float2 adjustedPoint = point + halfPixelOffset;
 
             if (dashPoints.Count == 0)
             {
                 dashPoints.Add(adjustedPoint);
             }
-            else if (Double2.LengthSquared(dashPoints[^1] - adjustedPoint) > EpsilonSqr)
+            else if (Float2.LengthSquared(dashPoints[^1] - adjustedPoint) > EpsilonSqr)
             {
                 dashPoints.Add(adjustedPoint);
             }
@@ -377,7 +377,7 @@ namespace Prowl.Quill
             }
         }
 
-        private static void AdvanceDashPattern(ref DashState dashState, List<double> dashPattern, List<Double2> currentDashPoints, List<List<Double2>> allDashSegments)
+        private static void AdvanceDashPattern(ref DashState dashState, List<float> dashPattern, List<Float2> currentDashPoints, List<List<Float2>> allDashSegments)
         {
             bool wasDashState = dashState.IsInDash;
             dashState.PatternIndex++;
@@ -392,7 +392,7 @@ namespace Prowl.Quill
                 // End of dash - save current segment
                 if (currentDashPoints.Count >= 2)
                 {
-                    allDashSegments.Add(new List<Double2>(currentDashPoints));
+                    allDashSegments.Add(new List<Float2>(currentDashPoints));
                 }
                 currentDashPoints.Clear();
             }
@@ -403,16 +403,16 @@ namespace Prowl.Quill
             }
         }
 
-        private static void CreateJoint(List<PolySegment> allSegments, PolySegment segment1, PolySegment segment2, int segment1Index, int segment2Index, JointStyle jointStyle, double miterLimit, bool allowOverlap, double uAtJoint, Color32 color, ref SegmentRenderData data)
+        private static void CreateJoint(List<PolySegment> allSegments, PolySegment segment1, PolySegment segment2, int segment1Index, int segment2Index, JointStyle jointStyle, float miterLimit, bool allowOverlap, float uAtJoint, Color32 color, ref SegmentRenderData data)
         {
-            Double2 dir1 = segment1.Center.Direction;
-            Double2 dir2 = segment2.Center.Direction;
-            double angle = CalculateAngle(dir1, dir2);
+            Float2 dir1 = segment1.Center.Direction;
+            Float2 dir2 = segment2.Center.Direction;
+            float angle = CalculateAngle(dir1, dir2);
 
             // Check if miter joint should fall back to bevel
             if (jointStyle == JointStyle.Miter)
             {
-                double sinHalfAngle = Math.Sin(angle / 2);
+                float sinHalfAngle = Maths.Sin(angle / 2);
                 if (angle < MiterMinAngle || (Math.Abs(sinHalfAngle) > Epsilon && 1 / Math.Abs(sinHalfAngle) > miterLimit))
                 {
                     jointStyle = JointStyle.Bevel;
@@ -429,50 +429,50 @@ namespace Prowl.Quill
             }
         }
 
-        private static void CreateMiterJoint(PolySegment segment1, PolySegment segment2, double uAtJoint, ref SegmentRenderData data)
+        private static void CreateMiterJoint(PolySegment segment1, PolySegment segment2, float uAtJoint, ref SegmentRenderData data)
         {
-            Double2? intersection1 = LineSegment.Intersection(segment1.Edge1, segment2.Edge1, true);
-            Double2? intersection2 = LineSegment.Intersection(segment1.Edge2, segment2.Edge2, true);
+            Float2? intersection1 = LineSegment.Intersection(segment1.Edge1, segment2.Edge1, true);
+            Float2? intersection2 = LineSegment.Intersection(segment1.Edge2, segment2.Edge2, true);
 
             data.End1 = intersection1 ?? segment1.Edge1.B;
             data.End2 = intersection2 ?? segment1.Edge2.B;
             data.NextStart1 = data.End1;
             data.NextStart2 = data.End2;
 
-            data.EndUV1 = data.NextStartUV1 = new Double2(uAtJoint, 0);
-            data.EndUV2 = data.NextStartUV2 = new Double2(uAtJoint, 1);
+            data.EndUV1 = data.NextStartUV1 = new Float2(uAtJoint, 0);
+            data.EndUV2 = data.NextStartUV2 = new Float2(uAtJoint, 1);
         }
 
-        private static void CreateBevelOrRoundJoint(PolySegment segment1, PolySegment segment2, JointStyle jointStyle, double uAtJoint, bool allowOverlap, Color32 color, ref SegmentRenderData data)
+        private static void CreateBevelOrRoundJoint(PolySegment segment1, PolySegment segment2, JointStyle jointStyle, float uAtJoint, bool allowOverlap, Color32 color, ref SegmentRenderData data)
         {
-            Double2 dir1 = segment1.Center.Direction;
-            Double2 dir2 = segment2.Center.Direction;
-            double crossProduct = Cross(dir1, dir2);
+            Float2 dir1 = segment1.Center.Direction;
+            Float2 dir2 = segment2.Center.Direction;
+            float crossProduct = Cross(dir1, dir2);
             bool isClockwise = crossProduct < 0;
 
             // Determine inner and outer edges
             LineSegment outer1, outer2, inner1, inner2;
-            Double2 outerJointUV, innerJointUV;
+            Float2 outerJointUV, innerJointUV;
 
             if (isClockwise)
             {
                 outer1 = segment1.Edge1; outer2 = segment2.Edge1;
                 inner1 = segment1.Edge2; inner2 = segment2.Edge2;
-                outerJointUV = new Double2(uAtJoint, 0);
-                innerJointUV = new Double2(uAtJoint, 1);
+                outerJointUV = new Float2(uAtJoint, 0);
+                innerJointUV = new Float2(uAtJoint, 1);
             }
             else
             {
                 outer1 = segment1.Edge2; outer2 = segment2.Edge2;
                 inner1 = segment1.Edge1; inner2 = segment2.Edge1;
-                outerJointUV = new Double2(uAtJoint, 1);
-                innerJointUV = new Double2(uAtJoint, 0);
+                outerJointUV = new Float2(uAtJoint, 1);
+                innerJointUV = new Float2(uAtJoint, 0);
             }
 
-            Double2? innerIntersection = LineSegment.Intersection(inner1, inner2, allowOverlap);
-            Double2 innerPoint = innerIntersection ?? inner1.B;
-            double angle = CalculateAngle(dir1, dir2);
-            Double2 innerStart = innerIntersection.HasValue ? innerPoint : (angle > Math.PI / 2 ? outer1.B : inner1.B);
+            Float2? innerIntersection = LineSegment.Intersection(inner1, inner2, allowOverlap);
+            Float2 innerPoint = innerIntersection ?? inner1.B;
+            float angle = CalculateAngle(dir1, dir2);
+            Float2 innerStart = innerIntersection.HasValue ? innerPoint : (angle > Math.PI / 2 ? outer1.B : inner1.B);
 
             // Set segment data
             if (isClockwise)
@@ -508,17 +508,17 @@ namespace Prowl.Quill
 
         private static void AddEndCap(PolySegment segment, EndCapStyle capStyle, bool isStart, Color32 color)
         {
-            Double2 position = isStart ? segment.Center.A : segment.Center.B;
-            Double2 direction = segment.Center.Direction;
+            Float2 position = isStart ? segment.Center.A : segment.Center.B;
+            Float2 direction = segment.Center.Direction;
             if (isStart) direction = -direction;
 
-            if (Double2.LengthSquared(direction) < EpsilonSqr) return;
+            if (Float2.LengthSquared(direction) < EpsilonSqr) return;
 
-            Double2 edge1Point = isStart ? segment.Edge1.A : segment.Edge1.B;
-            Double2 edge2Point = isStart ? segment.Edge2.A : segment.Edge2.B;
-            double halfThickness = Double2.Length(segment.Edge1.A - segment.Edge2.A) / 2; // Fixed: use segment thickness
+            Float2 edge1Point = isStart ? segment.Edge1.A : segment.Edge1.B;
+            Float2 edge2Point = isStart ? segment.Edge2.A : segment.Edge2.B;
+            float halfThickness = Float2.Length(segment.Edge1.A - segment.Edge2.A) / 2; // Fixed: use segment thickness
 
-            double lineConnectU = (capStyle == EndCapStyle.Butt) ? (isStart ? 0.0 : 1.0) : 0.5;
+            float lineConnectU = (capStyle == EndCapStyle.Butt) ? (isStart ? 0.0f : 1.0f) : 0.5f;
 
             switch (capStyle)
             {
@@ -536,18 +536,18 @@ namespace Prowl.Quill
             }
         }
 
-        private static void AddSquareCap(Double2 edge1Point, Double2 edge2Point, Double2 direction, double halfThickness, bool isStart, Color32 color, double lineConnectU)
+        private static void AddSquareCap(Float2 edge1Point, Float2 edge2Point, Float2 direction, float halfThickness, bool isStart, Color32 color, float lineConnectU)
         {
-            Double2 extension = direction * halfThickness;
-            Double2 corner1 = edge1Point + extension;
-            Double2 corner2 = edge2Point + extension;
+            Float2 extension = direction * halfThickness;
+            Float2 corner1 = edge1Point + extension;
+            Float2 corner2 = edge2Point + extension;
 
-            double extremityU = isStart ? 0.0 : 1.0;
+            float extremityU = isStart ? 0.0f : 1.0f;
 
-            Double2 baseUV1 = new Double2(lineConnectU, 0);
-            Double2 baseUV2 = new Double2(lineConnectU, 1);
-            Double2 extremityUV1 = new Double2(extremityU, 0);
-            Double2 extremityUV2 = new Double2(extremityU, 1);
+            Float2 baseUV1 = new Float2(lineConnectU, 0);
+            Float2 baseUV2 = new Float2(lineConnectU, 1);
+            Float2 extremityUV1 = new Float2(extremityU, 0);
+            Float2 extremityUV2 = new Float2(extremityU, 1);
 
             if (isStart)
             {
@@ -561,28 +561,28 @@ namespace Prowl.Quill
             }
         }
 
-        private static void AddRoundOrBevelCap(Double2 position, Double2 direction, double radius, EndCapStyle capStyle, bool isStart, Color32 color, double lineConnectU)
+        private static void AddRoundOrBevelCap(Float2 position, Float2 direction, float radius, EndCapStyle capStyle, bool isStart, Color32 color, float lineConnectU)
         {
             int numSegments = capStyle == EndCapStyle.Bevel ? 2 : CalculateRoundSegments(radius);
-            Double2 perpendicular = new Double2(-direction.Y, direction.X);
-            Double2 fanConnectUV = new Double2(lineConnectU, 0.5f);
+            Float2 perpendicular = new Float2(-direction.Y, direction.X);
+            Float2 fanConnectUV = new Float2(lineConnectU, 0.5f);
 
-            double totalAngle = Math.PI;
-            double angleStep = totalAngle / numSegments;
-            double startAngle = -Math.PI / 2.0;
+            float totalAngle = Maths.PI;
+            float angleStep = totalAngle / numSegments;
+            float startAngle = -Maths.PI / 2.0f;
 
             for (int i = 0; i < numSegments; i++)
             {
-                double currentAngle = startAngle + i * angleStep;
-                double nextAngle = startAngle + (i + 1) * angleStep;
+                float currentAngle = startAngle + i * angleStep;
+                float nextAngle = startAngle + (i + 1) * angleStep;
 
-                Double2 currentPoint = position + direction * (Math.Cos(currentAngle) * radius) +
-                                     perpendicular * (Math.Sin(currentAngle) * radius);
-                Double2 nextPoint = position + direction * (Math.Cos(nextAngle) * radius) +
-                                  perpendicular * (Math.Sin(nextAngle) * radius);
+                Float2 currentPoint = position + direction * (Maths.Cos(currentAngle) * radius) +
+                                     perpendicular * (Maths.Sin(currentAngle) * radius);
+                Float2 nextPoint = position + direction * (Maths.Cos(nextAngle) * radius) +
+                                  perpendicular * (Maths.Sin(nextAngle) * radius);
 
-                Double2 currentUV = new Double2(isStart ? 0.0f : 1.0f, 0.5f + (float)(Math.Sin(currentAngle) * 0.5));
-                Double2 nextUV = new Double2(isStart ? 0.0f : 1.0f, 0.5f + (float)(Math.Sin(nextAngle) * 0.5));
+                Float2 currentUV = new Float2(isStart ? 0.0f : 1.0f, 0.5f + (Maths.Sin(currentAngle) * 0.5f));
+                Float2 nextUV = new Float2(isStart ? 0.0f : 1.0f, 0.5f + (Maths.Sin(nextAngle) * 0.5f));
 
                 if (isStart)
                     TriangleCache.Add(new Triangle(currentPoint, position, nextPoint, currentUV, fanConnectUV, nextUV, color));
@@ -591,37 +591,37 @@ namespace Prowl.Quill
             }
         }
 
-        private static int CalculateRoundSegments(double radius)
+        private static int CalculateRoundSegments(float radius)
         {
-            const double minDistance = 3.0; // Minimum screen space distance for arc segments
-            double arcLength = Math.PI * radius; // Semicircle arc length
+            const float minDistance = 3.0f; // Minimum screen space distance for arc segments
+            float arcLength = Maths.PI * radius; // Semicircle arc length
             int segments = Math.Max(6, (int)Math.Floor(arcLength / minDistance));
             return Math.Min(segments, 16);
         }
 
-        private static void CreateTriangleFan(Double2 connectTo, Double2 origin, Double2 start, Double2 end, Double2 centerUV, Double2 startUV, Double2 endUV, bool clockwise, Color32 color)
+        private static void CreateTriangleFan(Float2 connectTo, Float2 origin, Float2 start, Float2 end, Float2 centerUV, Float2 startUV, Float2 endUV, bool clockwise, Color32 color)
         {
-            Double2 point1 = start - origin;
-            Double2 point2 = end - origin;
-            double angle1 = Math.Atan2(point1.Y, point1.X);
-            double angle2 = Math.Atan2(point2.Y, point2.X);
+            Float2 point1 = start - origin;
+            Float2 point2 = end - origin;
+            float angle1 = Maths.Atan2(point1.Y, point1.X);
+            float angle2 = Maths.Atan2(point2.Y, point2.X);
 
-            if (clockwise && angle2 > angle1) angle2 -= 2 * Math.PI;
-            else if (!clockwise && angle1 > angle2) angle1 -= 2 * Math.PI;
+            if (clockwise && angle2 > angle1) angle2 -= 2 * Maths.PI;
+            else if (!clockwise && angle1 > angle2) angle1 -= 2 * Maths.PI;
 
-            double jointAngle = angle2 - angle1;
+            float jointAngle = angle2 - angle1;
             if (Math.Abs(jointAngle) < Epsilon) return;
 
-            int numTriangles = Math.Max(1, (int)Math.Floor(Math.Abs(jointAngle) / RoundMinAngle));
-            double triangleAngle = jointAngle / numTriangles;
-            double interpolationStep = 1.0 / numTriangles;
+            int numTriangles = Maths.Max(1, (int)Maths.Floor(Maths.Abs(jointAngle) / RoundMinAngle));
+            float triangleAngle = jointAngle / numTriangles;
+            float interpolationStep = 1.0f / numTriangles;
 
-            Double2 currentPoint = start;
-            Double2 currentUV = startUV;
+            Float2 currentPoint = start;
+            Float2 currentUV = startUV;
 
             for (int i = 0; i < numTriangles; i++)
             {
-                Double2 nextPoint, nextUV;
+                Float2 nextPoint, nextUV;
 
                 if (i + 1 == numTriangles)
                 {
@@ -630,8 +630,8 @@ namespace Prowl.Quill
                 }
                 else
                 {
-                    double rotation = angle1 + (i + 1) * triangleAngle;
-                    double magnitude = Double2.Length(point1);
+                    float rotation = angle1 + (i + 1) * triangleAngle;
+                    float magnitude = Float2.Length(point1);
 
                     if (magnitude < Epsilon)
                     {
@@ -639,8 +639,8 @@ namespace Prowl.Quill
                     }
                     else
                     {
-                        nextPoint = origin + new Double2((float)(Math.Cos(rotation) * magnitude),
-                                                       (float)(Math.Sin(rotation) * magnitude));
+                        nextPoint = origin + new Float2(Maths.Cos(rotation) * magnitude,
+                                                       Maths.Sin(rotation) * magnitude);
                     }
                     nextUV = Maths.Lerp(startUV, endUV, (float)((i + 1) * interpolationStep));
                 }
@@ -657,16 +657,16 @@ namespace Prowl.Quill
 
         private struct LineSegment
         {
-            public Double2 A { get; }
-            public Double2 B { get; }
+            public Float2 A { get; }
+            public Float2 B { get; }
 
-            private Double2? _cachedDirection;
-            private Double2? _cachedNormal;
+            private Float2? _cachedDirection;
+            private Float2? _cachedNormal;
 
-            public Double2 Direction => _cachedDirection ??= CalculateDirection();
-            public Double2 Normal => _cachedNormal ??= CalculateNormal();
+            public Float2 Direction => _cachedDirection ??= CalculateDirection();
+            public Float2 Normal => _cachedNormal ??= CalculateNormal();
 
-            public LineSegment(Double2 a, Double2 b)
+            public LineSegment(Float2 a, Float2 b)
             {
                 A = a;
                 B = b;
@@ -674,32 +674,32 @@ namespace Prowl.Quill
                 _cachedNormal = null;
             }
 
-            private Double2 CalculateDirection()
+            private Float2 CalculateDirection()
             {
-                Double2 dir = B - A;
-                double magSq = Double2.LengthSquared(dir);
-                return magSq <= 1e-12 ? Double2.Zero : dir / Math.Sqrt(magSq);
+                Float2 dir = B - A;
+                float magSq = Float2.LengthSquared(dir);
+                return magSq <= 1e-12 ? Float2.Zero : dir / Maths.Sqrt(magSq);
             }
 
-            private Double2 CalculateNormal()
+            private Float2 CalculateNormal()
             {
-                Double2 dir = Direction;
-                return new Double2(-dir.Y, dir.X);
+                Float2 dir = Direction;
+                return new Float2(-dir.Y, dir.X);
             }
 
-            public static Double2? Intersection(LineSegment a, LineSegment b, bool infiniteLines)
+            public static Float2? Intersection(LineSegment a, LineSegment b, bool infiniteLines)
             {
-                Double2 r = a.B - a.A;
-                Double2 s = b.B - b.A;
-                Double2 originDist = b.A - a.A;
+                Float2 r = a.B - a.A;
+                Float2 s = b.B - b.A;
+                Float2 originDist = b.A - a.A;
 
-                double uNumerator = Cross(originDist, r);
-                double denominator = Cross(r, s);
+                float uNumerator = Cross(originDist, r);
+                float denominator = Cross(r, s);
 
                 if (Math.Abs(denominator) < Epsilon) return null;
 
-                double u = uNumerator / denominator;
-                double t = Cross(originDist, s) / denominator;
+                float u = uNumerator / denominator;
+                float t = Cross(originDist, s) / denominator;
 
                 if (!infiniteLines && (t < -Epsilon || t > 1.0 + Epsilon || u < -Epsilon || u > 1.0 + Epsilon))
                     return null;
@@ -707,10 +707,10 @@ namespace Prowl.Quill
                 return a.A + r * t;
             }
 
-            public static LineSegment operator +(LineSegment segment, Double2 offset) =>
+            public static LineSegment operator +(LineSegment segment, Float2 offset) =>
                 new LineSegment(segment.A + offset, segment.B + offset);
 
-            public static LineSegment operator -(LineSegment segment, Double2 offset) =>
+            public static LineSegment operator -(LineSegment segment, Float2 offset) =>
                 new LineSegment(segment.A - offset, segment.B - offset);
         }
 
@@ -720,18 +720,18 @@ namespace Prowl.Quill
             public LineSegment Edge1 { get; }
             public LineSegment Edge2 { get; }
 
-            public PolySegment(LineSegment center, double thickness)
+            public PolySegment(LineSegment center, float thickness)
             {
                 Center = center;
 
-                if (Double2.LengthSquared(center.Direction) < EpsilonSqr)
+                if (Float2.LengthSquared(center.Direction) < EpsilonSqr)
                 {
                     Edge1 = new LineSegment(center.A, center.A);
                     Edge2 = new LineSegment(center.A, center.A);
                 }
                 else
                 {
-                    Double2 normalOffset = center.Normal * thickness;
+                    Float2 normalOffset = center.Normal * thickness;
                     Edge1 = center + normalOffset;
                     Edge2 = center - normalOffset;
                 }
@@ -739,20 +739,20 @@ namespace Prowl.Quill
         }
 
         // Utility methods
-        private static double Cross(Double2 a, Double2 b) => a.X * b.Y - a.Y * b.X;
+        private static float Cross(Float2 a, Float2 b) => a.X * b.Y - a.Y * b.X;
 
-        private static double Dot(Double2 a, Double2 b) => a.X * b.X + a.Y * b.Y;
+        private static float Dot(Float2 a, Float2 b) => a.X * b.X + a.Y * b.Y;
 
-        private static double CalculateAngle(Double2 a, Double2 b)
+        private static float CalculateAngle(Float2 a, Float2 b)
         {
-            double magASq = Double2.LengthSquared(a);
-            double magBSq = Double2.LengthSquared(b);
+            float magASq = Float2.LengthSquared(a);
+            float magBSq = Float2.LengthSquared(b);
 
             if (magASq * magBSq <= 1e-12) return 0;
 
-            double dot = Dot(a, b);
-            double cosAngle = dot / Math.Sqrt(magASq * magBSq);
-            return Math.Acos(Math.Max(-1.0, Math.Min(1.0, cosAngle)));
+            float dot = Dot(a, b);
+            float cosAngle = dot / Maths.Sqrt(magASq * magBSq);
+            return Maths.Acos(Maths.Max(-1.0f, Maths.Min(1.0f, cosAngle)));
         }
     }
 }

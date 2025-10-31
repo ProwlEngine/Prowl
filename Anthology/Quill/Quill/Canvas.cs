@@ -32,21 +32,21 @@ namespace Prowl.Quill
         public object Texture;
         public Brush Brush;
         internal Transform2D scissor;
-        internal Double2 scissorExtent;
+        internal Float2 scissorExtent;
 
-        public void GetScissor(out Double4x4 matrix, out Double2 extent)
+        public void GetScissor(out Float4x4 matrix, out Float2 extent)
         {
             if (scissorExtent.X < -0.5f || scissorExtent.Y < -0.5f)
             {
                 // Invalid scissor - disable it
-                matrix = new Double4x4();
-                extent = new Double2(1, 1);
+                matrix = new Float4x4();
+                extent = new Float2(1, 1);
             }
             else
             {
                 // Set up scissor transform and dimensions
                 matrix = scissor.Inverse().ToMatrix();
-                extent = new Double2(scissorExtent.X, scissorExtent.Y);
+                extent = new Float2(scissorExtent.X, scissorExtent.Y);
             }
         }
     }
@@ -56,8 +56,8 @@ namespace Prowl.Quill
     {
         public static int SizeInBytes => Marshal.SizeOf<Vertex>();
 
-        public Double2 Position => new Double2(x, y);
-        public Double2 UV => new Double2(u, v);
+        public Float2 Position => new Float2(x, y);
+        public Float2 UV => new Float2(u, v);
         public Color32 Color => Color32.FromArgb(a, r, g, b);
 
 
@@ -72,7 +72,7 @@ namespace Prowl.Quill
         public byte b;
         public byte a;
 
-        public Vertex(in Double2 position, in Double2 UV, in Color32 color)
+        public Vertex(in Float2 position, in Float2 UV, in Color32 color)
         {
             x = (float)position.X;
             y = (float)position.Y;
@@ -87,17 +87,17 @@ namespace Prowl.Quill
 
     public struct Brush
     {
-        public Double4x4 BrushMatrix => Transform.Inverse().ToMatrix();
+        public Float4x4 BrushMatrix => Transform.Inverse().ToMatrix();
 
         public Transform2D Transform;
 
         public BrushType Type;
         public Color32 Color1;
         public Color32 Color2;
-        public Double2 Point1;
-        public Double2 Point2; // or radius for radial, half-size for box
-        public double CornerRadii;
-        public double Feather;
+        public Float2 Point1;
+        public Float2 Point2; // or radius for radial, half-size for box
+        public float CornerRadii;
+        public float Feather;
 
         internal bool EqualsOther(in Brush gradient)
         {
@@ -120,17 +120,17 @@ namespace Prowl.Quill
         internal JointStyle strokeJoint;
         internal EndCapStyle strokeStartCap;
         internal EndCapStyle strokeEndCap;
-        internal double strokeWidth;
-        internal double strokeScale;
-        internal List<double> strokeDashPattern;
-        internal double strokeDashOffset;
-        internal double miterLimit;
-        internal double tess_tol;
-        internal double roundingMinDistance;
+        internal float strokeWidth;
+        internal float strokeScale;
+        internal List<float> strokeDashPattern;
+        internal float strokeDashOffset;
+        internal float miterLimit;
+        internal float tess_tol;
+        internal float roundingMinDistance;
 
         internal object? texture;
         internal Transform2D scissor;
-        internal Double2 scissorExtent;
+        internal Float2 scissorExtent;
         internal Brush brush;
 
 
@@ -147,9 +147,9 @@ namespace Prowl.Quill
             strokeWidth = 1f; // Default stroke width
             strokeScale = 1f; // Default stroke scale
             strokeDashPattern = null; // Default: solid line
-            strokeDashOffset = 0.0;   // Default: no offset
+            strokeDashOffset = 0.0f;   // Default: no offset
             miterLimit = 4; // Default miter limit
-            tess_tol = 0.5; // Default tessellation tolerance
+            tess_tol = 0.5f; // Default tessellation tolerance
             roundingMinDistance = 3; //Default _state.roundingMinDistance
             texture = null;
             scissor = Transform2D.Identity;
@@ -166,10 +166,10 @@ namespace Prowl.Quill
     {
         internal class SubPath
         {
-            internal List<Double2> Points { get; }
+            internal List<Float2> Points { get; }
             internal bool IsClosed { get; }
 
-            public SubPath(List<Double2> points, bool isClosed)
+            public SubPath(List<Float2> points, bool isClosed)
             {
                 Points = points;
                 IsClosed = isClosed;
@@ -179,9 +179,9 @@ namespace Prowl.Quill
         public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.AsReadOnly();
         public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
         public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
-        public Double2 CurrentPoint => _currentSubPath != null && _currentSubPath.Points.Count > 0 ? CurrentPointInternal : Double2.Zero;
+        public Float2 CurrentPoint => _currentSubPath != null && _currentSubPath.Points.Count > 0 ? CurrentPointInternal : Float2.Zero;
 
-        internal Double2 CurrentPointInternal => _currentSubPath.Points[_currentSubPath.Points.Count - 1];
+        internal Float2 CurrentPointInternal => _currentSubPath.Points[_currentSubPath.Points.Count - 1];
         internal ICanvasRenderer _renderer;
 
         internal bool _isNewDrawCallRequested = false;
@@ -197,18 +197,18 @@ namespace Prowl.Quill
 
         private readonly Stack<ProwlCanvasState> _savedStates = new Stack<ProwlCanvasState>();
         private ProwlCanvasState _state;
-        private double _globalAlpha;
+        private float _globalAlpha;
 
         private TextRenderer _scribeRenderer;
 
-        private double _pixelWidth = 1.0f;
-        private double _pixelHalf = 0.5f;
+        private float _pixelWidth = 1.0f;
+        private float _pixelHalf = 0.5f;
 
-        private double _scale = 1.0f;
+        private float _scale = 1.0f;
 
         private IMarkdownImageProvider? _markdownImageProvider = null;
 
-        public double Scale
+        public float Scale
         {
             get => _scale;
             set
@@ -220,7 +220,7 @@ namespace Prowl.Quill
             }
         }
 
-        public double PixelFraction => 1.0 / _scale;
+        public float PixelFraction => 1.0f / _scale;
 
         public TextRenderer Text => _scribeRenderer;
 
@@ -310,24 +310,24 @@ namespace Prowl.Quill
         }
         public void SetStrokeStartCap(EndCapStyle cap) => _state.strokeStartCap = cap;
         public void SetStrokeEndCap(EndCapStyle cap) => _state.strokeEndCap = cap;
-        public void SetStrokeWidth(double width = 2f) => _state.strokeWidth = width;
-        public void SetStrokeScale(double scale) => _state.strokeScale = scale;
+        public void SetStrokeWidth(float width = 2f) => _state.strokeWidth = width;
+        public void SetStrokeScale(float scale) => _state.strokeScale = scale;
 
 
         /// <summary>
         /// Sets the dash pattern for strokes.
         /// </summary>
-        /// <param name="pattern">A list of doubles representing the lengths of dashes and gaps (e.g., [dash1_len, gap1_len, dash2_len, ...]). 
+        /// <param name="pattern">A list of floats representing the lengths of dashes and gaps (e.g., [dash1_len, gap1_len, dash2_len, ...]). 
         /// If null or empty, a solid line will be drawn. If the number of elements in the array is odd, the elements of the array get copied and concatenated.</param>
         /// <param name="offset">The offset at which to start the dash pattern along the path.</param>
-        public void SetStrokeDash(List<double> pattern, double offset = 0.0)
+        public void SetStrokeDash(List<float> pattern, float offset = 0.0f)
         {
             int patternCount = pattern?.Count ?? 0;
 
             // if the count is odd, duplicate the entire pattern and concatenate it
             if (patternCount > 0 && patternCount % 2 != 0)
             {
-                var newPattern = new List<double>(pattern);
+                var newPattern = new List<float>(pattern);
                 newPattern.AddRange(pattern);
                 pattern = newPattern;
             }
@@ -342,14 +342,14 @@ namespace Prowl.Quill
         public void ClearStrokeDash()
         {
             _state.strokeDashPattern = null;
-            _state.strokeDashOffset = 0.0;
+            _state.strokeDashOffset = 0.0f;
         }
 
-        public void SetMiterLimit(double limit = 4) => _state.miterLimit = limit;
-        public void SetTessellationTolerance(double tolerance = 0.5) => _state.tess_tol = tolerance;
-        public void SetRoundingMinDistance(double distance = 3) => _state.roundingMinDistance = distance;
+        public void SetMiterLimit(float limit = 4) => _state.miterLimit = limit;
+        public void SetTessellationTolerance(float tolerance = 0.5f) => _state.tess_tol = tolerance;
+        public void SetRoundingMinDistance(float distance = 3) => _state.roundingMinDistance = distance;
         public void SetTexture(object texture) => _state.texture = texture;
-        public void SetLinearBrush(double x1, double y1, double x2, double y2, Color32 color1, Color32 color2)
+        public void SetLinearBrush(float x1, float y1, float x2, float y2, Color32 color1, Color32 color2)
         {
             // Premultiply
             color1 = Color32.FromArgb(
@@ -366,12 +366,12 @@ namespace Prowl.Quill
             _state.brush.Type = BrushType.Linear;
             _state.brush.Color1 = color1;
             _state.brush.Color2 = color2;
-            _state.brush.Point1 = new Double2(x1, y1);
-            _state.brush.Point2 = new Double2(x2, y2);
+            _state.brush.Point1 = new Float2(x1, y1);
+            _state.brush.Point2 = new Float2(x2, y2);
 
             _state.brush.Transform = _state.transform;
         }
-        public void SetRadialBrush(double centerX, double centerY, double innerRadius, double outerRadius, Color32 innerColor, Color32 outerColor)
+        public void SetRadialBrush(float centerX, float centerY, float innerRadius, float outerRadius, Color32 innerColor, Color32 outerColor)
         {
             // Premultiply
             innerColor = Color32.FromArgb(
@@ -388,12 +388,12 @@ namespace Prowl.Quill
             _state.brush.Type = BrushType.Radial;
             _state.brush.Color1 = innerColor;
             _state.brush.Color2 = outerColor;
-            _state.brush.Point1 = new Double2(centerX, centerY);
-            _state.brush.Point2 = new Double2(innerRadius, outerRadius); // Store radius
+            _state.brush.Point1 = new Float2(centerX, centerY);
+            _state.brush.Point2 = new Float2(innerRadius, outerRadius); // Store radius
 
             _state.brush.Transform = _state.transform;
         }
-        public void SetBoxBrush(double centerX, double centerY, double width, double height, float radi, float feather, Color32 innerColor, Color32 outerColor)
+        public void SetBoxBrush(float centerX, float centerY, float width, float height, float radi, float feather, Color32 innerColor, Color32 outerColor)
         {
             // Premultiply
             innerColor = Color32.FromArgb(
@@ -410,8 +410,8 @@ namespace Prowl.Quill
             _state.brush.Type = BrushType.Box;
             _state.brush.Color1 = innerColor;
             _state.brush.Color2 = outerColor;
-            _state.brush.Point1 = new Double2(centerX, centerY);
-            _state.brush.Point2 = new Double2(width / 2, height / 2); // Store half-size
+            _state.brush.Point1 = new Float2(centerX, centerY);
+            _state.brush.Point2 = new Float2(width / 2, height / 2); // Store half-size
             _state.brush.CornerRadii = radi;
             _state.brush.Feather = feather;
 
@@ -428,20 +428,20 @@ namespace Prowl.Quill
         /// <summary>
         /// Sets the scissor rectangle for clipping
         /// </summary>
-        public void Scissor(double x, double y, double w, double h)
+        public void Scissor(float x, float y, float w, float h)
         {
-            w = Math.Max(0.0, w);
-            h = Math.Max(0.0, h);
+            w = Maths.Max(0.0f, w);
+            h = Maths.Max(0.0f, h);
             // Work in unit space - conversion to pixels happens in TransformPoint
-            _state.scissor = _state.transform * Transform2D.CreateTranslation(x + w * 0.5, y + h * 0.5);
-            _state.scissorExtent.X = (w * 0.5) * _scale;
-            _state.scissorExtent.Y = (h * 0.5) * _scale;
+            _state.scissor = _state.transform * Transform2D.CreateTranslation(x + w * 0.5f, y + h * 0.5f);
+            _state.scissorExtent.X = (w * 0.5f) * _scale;
+            _state.scissorExtent.Y = (h * 0.5f) * _scale;
         }
 
         /// <summary>
         /// Intersects the current scissor rectangle with another rectangle
         /// </summary>
-        public void IntersectScissor(double x, double y, double w, double h)
+        public void IntersectScissor(float x, float y, float w, float h)
         {
             if (_state.scissorExtent.X < 0)
             {
@@ -456,8 +456,8 @@ namespace Prowl.Quill
             pxform = invxorm * pxform; // Or pxform * invxorm?
 
             // Calculate extent in current transform space
-            var tex = ex * Math.Abs(pxform.A) + ey * Math.Abs(pxform.C);
-            var tey = ex * Math.Abs(pxform.B) + ey * Math.Abs(pxform.D);
+            var tex = ex * Maths.Abs(pxform.A) + ey * Maths.Abs(pxform.C);
+            var tey = ex * Maths.Abs(pxform.B) + ey * Maths.Abs(pxform.D);
 
             // Find the intersection - work in unit space
             var rect = IntersectionOfRects(pxform.E - tex, pxform.F - tey, tex * 2, tey * 2, x, y, w, h);
@@ -467,14 +467,14 @@ namespace Prowl.Quill
         /// <summary>
         /// Calculates the intersection of two rectangles
         /// </summary>
-        private static Rect IntersectionOfRects(double ax, double ay, double aw, double ah, double bx, double by, double bw, double bh)
+        private static Rect IntersectionOfRects(float ax, float ay, float aw, float ah, float bx, float by, float bw, float bh)
         {
-            var minx = Math.Max(ax, bx);
-            var miny = Math.Max(ay, by);
-            var maxx = Math.Min(ax + aw, bx + bw);
-            var maxy = Math.Min(ay + ah, by + bh);
+            var minx = Maths.Max(ax, bx);
+            var miny = Maths.Max(ay, by);
+            var maxx = Maths.Min(ax + aw, bx + bw);
+            var maxy = Maths.Min(ay + ah, by + bh);
 
-            return new Rect(minx, miny, Math.Max(0.0, maxx - minx), Math.Max(0.0, maxy - miny));
+            return new Rect(minx, miny, Maths.Max(0.0f, maxx - minx), Maths.Max(0.0f, maxy - miny));
         }
 
         /// <summary>
@@ -489,7 +489,7 @@ namespace Prowl.Quill
         #endregion
 
         // Globals
-        public void SetGlobalAlpha(double alpha) => _globalAlpha = alpha;
+        public void SetGlobalAlpha(float alpha) => _globalAlpha = alpha;
 
         #endregion
 
@@ -499,10 +499,10 @@ namespace Prowl.Quill
         public void TransformBy(Transform2D t) => _state.transform = _state.transform * t;
         public void ResetTransform() => _state.transform = Transform2D.Identity;
         public void CurrentTransform(Transform2D xform) => _state.transform = xform;
-        public Double2 TransformPoint(in Double2 unitPoint)
+        public Float2 TransformPoint(in Float2 unitPoint)
         {
             // Apply transform in unit space, then convert to pixels
-            Double2 transformedUnitPoint = _state.transform.TransformPoint(unitPoint);
+            Float2 transformedUnitPoint = _state.transform.TransformPoint(unitPoint);
             return transformedUnitPoint * _scale;
         }
 
@@ -616,13 +616,13 @@ namespace Prowl.Quill
         /// It begins a new sub-path if one doesn't already exist. Subsequent calls to
         /// <see cref="LineTo"/> will draw lines from this position.
         /// </remarks>
-        public void MoveTo(double x, double y)
+        public void MoveTo(float x, float y)
         {
             if (!_isPathOpen)
                 BeginPath();
 
-            _currentSubPath = new SubPath(new List<Double2>(), false);
-            _currentSubPath.Points.Add(new Double2(x, y));
+            _currentSubPath = new SubPath(new List<Float2>(), false);
+            _currentSubPath.Points.Add(new Float2(x, y));
             _subPaths.Add(_currentSubPath);
         }
 
@@ -636,7 +636,7 @@ namespace Prowl.Quill
         /// After the line is drawn, the current position is updated to the ending point.
         /// If no position has been set previously, this method act as <see cref="MoveTo"/> with the specified coordinates.
         /// </remarks>
-        public void LineTo(double x, double y)
+        public void LineTo(float x, float y)
         {
             if (_currentSubPath == null)
             {
@@ -645,7 +645,7 @@ namespace Prowl.Quill
             }
             else
             {
-                _currentSubPath.Points.Add(new Double2(x, y));
+                _currentSubPath.Points.Add(new Float2(x, y));
             }
         }
 
@@ -662,7 +662,7 @@ namespace Prowl.Quill
             if (_currentSubPath != null && _currentSubPath.Points.Count >= 2)
             {
                 // Move to the first point of the current subpath to start a new one
-                Double2 firstPoint = _currentSubPath.Points[0];
+                Float2 firstPoint = _currentSubPath.Points[0];
                 //MoveTo(firstPoint.X, firstPoint.Y);
                 LineTo(firstPoint.X, firstPoint.Y);
             }
@@ -688,48 +688,48 @@ namespace Prowl.Quill
         /// By default, the arc is drawn clockwise, but can be drawn counter-clockwise by setting the counterclockwise parameter to true.
         /// If no path has been started, this method will first move to the starting point of the arc.
         /// </remarks>
-        public void Arc(double x, double y, double radius, double startAngle, double endAngle, bool counterclockwise = false)
+        public void Arc(float x, float y, float radius, float startAngle, float endAngle, bool counterclockwise = false)
         {
-            Double2 center = new Double2(x, y);
+            Float2 center = new Float2(x, y);
 
             // Calculate number of segments based on radius size
-            double distance = CalculateArcLength(radius, startAngle, endAngle);
-            int segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
+            float distance = CalculateArcLength(radius, startAngle, endAngle);
+            int segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
 
             if (counterclockwise && startAngle < endAngle)
             {
-                startAngle += Math.PI * 2;
+                startAngle += Maths.PI * 2;
             }
             else if (!counterclockwise && startAngle > endAngle)
             {
-                endAngle += Math.PI * 2;
+                endAngle += Maths.PI * 2;
             }
 
-            double step = counterclockwise ?
+            float step = counterclockwise ?
                 (startAngle - endAngle) / segments :
                 (endAngle - startAngle) / segments;
 
             // If no path has started yet, move to the first point of the arc
             if (!_isPathOpen)
             {
-                double firstX = x + Math.Cos(startAngle) * radius;
-                double firstY = y + Math.Sin(startAngle) * radius;
+                float firstX = x + Maths.Cos(startAngle) * radius;
+                float firstY = y + Maths.Sin(startAngle) * radius;
                 MoveTo(firstX, firstY);
             }
 
-            double startX = x + Math.Cos(startAngle) * radius;
-            double startY = y + Math.Sin(startAngle) * radius;
+            float startX = x + Maths.Cos(startAngle) * radius;
+            float startY = y + Maths.Sin(startAngle) * radius;
             LineTo(startX, startY);
 
             // Add arc points
             for (int i = 1; i <= segments; i++)
             {
-                double angle = counterclockwise ?
+                float angle = counterclockwise ?
                     startAngle - i * step :
                     startAngle + i * step;
 
-                double pointX = x + Math.Cos(angle) * radius;
-                double pointY = y + Math.Sin(angle) * radius;
+                float pointX = x + Maths.Cos(angle) * radius;
+                float pointY = y + Maths.Sin(angle) * radius;
 
                 LineTo(pointX, pointY);
             }
@@ -748,7 +748,7 @@ namespace Prowl.Quill
         /// and the line from (x1,y1) to (x2,y2) with the specified radius.
         /// If the path has not been started, this method will move to the position (x1,y1).
         /// </remarks>
-        public void ArcTo(double x1, double y1, double x2, double y2, double radius)
+        public void ArcTo(float x1, float y1, float x2, float y2, float radius)
         {
             if (!_isPathOpen)
             {
@@ -756,17 +756,17 @@ namespace Prowl.Quill
                 return;
             }
 
-            Double2 p0 = CurrentPointInternal;
-            Double2 p1 = new Double2(x1, y1);
-            Double2 p2 = new Double2(x2, y2);
+            Float2 p0 = CurrentPointInternal;
+            Float2 p1 = new Float2(x1, y1);
+            Float2 p2 = new Float2(x2, y2);
 
             // Calculate direction vectors
-            Double2 v1 = p0 - p1;
-            Double2 v2 = p2 - p1;
+            Float2 v1 = p0 - p1;
+            Float2 v2 = p2 - p1;
 
             // Normalize vectors
-            double len1 = Math.Sqrt(v1.X * v1.X + v1.Y * v1.Y);
-            double len2 = Math.Sqrt(v2.X * v2.X + v2.Y * v2.Y);
+            float len1 = Maths.Sqrt(v1.X * v1.X + v1.Y * v1.Y);
+            float len2 = Maths.Sqrt(v2.X * v2.X + v2.Y * v2.Y);
 
             if (len1 < 0.0001 || len2 < 0.0001)
             {
@@ -778,33 +778,33 @@ namespace Prowl.Quill
             v2 /= len2;
 
             // Calculate angle and tangent points
-            double angle = Math.Acos(v1.X * v2.X + v1.Y * v2.Y);
-            double tan = radius * Math.Tan(angle / 2);
+            float angle = Maths.Acos(v1.X * v2.X + v1.Y * v2.Y);
+            float tan = radius * Maths.Tan(angle / 2);
 
-            if (double.IsNaN(tan) || tan < 0.0001)
+            if (float.IsNaN(tan) || tan < 0.0001)
             {
                 LineTo(x1, y1);
                 return;
             }
 
             // Calculate tangent points
-            Double2 t1 = p1 + v1 * tan;
-            Double2 t2 = p1 + v2 * tan;
+            Float2 t1 = p1 + v1 * tan;
+            Float2 t2 = p1 + v2 * tan;
 
             // Draw line to first tangent point
             LineTo(t1.X, t1.Y);
 
             // Calculate arc center and angles
-            double d = radius / Math.Sin(angle / 2);
-            Double2 middle = (v1 + v2);
-            middle /= Math.Sqrt(middle.X * middle.X + middle.Y * middle.Y);
-            Double2 center = p1 + middle * d;
+            float d = radius / Maths.Sin(angle / 2);
+            Float2 middle = (v1 + v2);
+            middle /= Maths.Sqrt(middle.X * middle.X + middle.Y * middle.Y);
+            Float2 center = p1 + middle * d;
 
             // Calculate angles for the arc
-            Double2 a1 = t1 - center;
-            Double2 a2 = t2 - center;
-            double startAngle = Math.Atan2(a1.Y, a1.X);
-            double endAngle = Math.Atan2(a2.Y, a2.X);
+            Float2 a1 = t1 - center;
+            Float2 a2 = t2 - center;
+            float startAngle = Maths.Atan2(a1.Y, a1.X);
+            float endAngle = Maths.Atan2(a2.Y, a2.X);
 
             // Draw the arc
             Arc(center.X, center.Y, radius, startAngle, endAngle, (v1.X * v2.Y - v1.Y * v2.X) < 0);
@@ -823,14 +823,14 @@ namespace Prowl.Quill
         /// <remarks>
         /// This method creates an elliptical arc with radii (rx,ry) from current point to (x_end,y_end)
         /// </remarks>
-        public void EllipticalArcTo(double rx, double ry, double xAxisRotationDegrees, bool largeArcFlag, bool sweepFlag, double x_end, double y_end)
+        public void EllipticalArcTo(float rx, float ry, float xAxisRotationDegrees, bool largeArcFlag, bool sweepFlag, float x_end, float y_end)
         {
-            double x = CurrentPointInternal.X;
-            double y = CurrentPointInternal.Y;
+            float x = CurrentPointInternal.X;
+            float y = CurrentPointInternal.Y;
 
             // Ensure radii are positive
-            double rx_abs = Math.Abs(rx);
-            double ry_abs = Math.Abs(ry);
+            float rx_abs = Maths.Abs(rx);
+            float ry_abs = Maths.Abs(ry);
 
             // If rx or ry is zero, or if start and end points are the same, treat as a line segment (or do nothing if start=end)
             if (rx_abs == 0 || ry_abs == 0)
@@ -845,27 +845,27 @@ namespace Prowl.Quill
                 return;
             }
 
-            double phi = xAxisRotationDegrees * (Math.PI / 180.0); // Convert degrees to radians
-            double cosPhi = Math.Cos(phi);
-            double sinPhi = Math.Sin(phi);
+            float phi = xAxisRotationDegrees * (Maths.PI / 180.0f); // Convert degrees to radians
+            float cosPhi = Maths.Cos(phi);
+            float sinPhi = Maths.Sin(phi);
 
             // Step 1: Compute (x1', y1') - coordinates of p1 transformed relative to p_end
-            double dx_half = (x - x_end) / 2.0;
-            double dy_half = (y - y_end) / 2.0;
+            float dx_half = (x - x_end) / 2.0f;
+            float dy_half = (y - y_end) / 2.0f;
 
-            double x1_prime = cosPhi * dx_half + sinPhi * dy_half;
-            double y1_prime = -sinPhi * dx_half + cosPhi * dy_half;
+            float x1_prime = cosPhi * dx_half + sinPhi * dy_half;
+            float y1_prime = -sinPhi * dx_half + cosPhi * dy_half;
 
             // Step 2: Ensure radii are large enough
-            double rx_sq = rx_abs * rx_abs;
-            double ry_sq = ry_abs * ry_abs;
-            double x1_prime_sq = x1_prime * x1_prime;
-            double y1_prime_sq = y1_prime * y1_prime;
+            float rx_sq = rx_abs * rx_abs;
+            float ry_sq = ry_abs * ry_abs;
+            float x1_prime_sq = x1_prime * x1_prime;
+            float y1_prime_sq = y1_prime * y1_prime;
 
-            double radii_check = (x1_prime_sq / rx_sq) + (y1_prime_sq / ry_sq);
+            float radii_check = (x1_prime_sq / rx_sq) + (y1_prime_sq / ry_sq);
             if (radii_check > 1.0)
             {
-                double scaleFactor = Math.Sqrt(radii_check);
+                float scaleFactor = Maths.Sqrt(radii_check);
                 rx_abs *= scaleFactor;
                 ry_abs *= scaleFactor;
                 rx_sq = rx_abs * rx_abs; // Update squared radii
@@ -873,64 +873,64 @@ namespace Prowl.Quill
             }
 
             // Step 3: Compute (cx', cy') - center of ellipse in transformed (prime) coordinates
-            double term_numerator = (rx_sq * ry_sq) - (rx_sq * y1_prime_sq) - (ry_sq * x1_prime_sq);
-            double term_denominator = (rx_sq * y1_prime_sq) + (ry_sq * x1_prime_sq);
+            float term_numerator = (rx_sq * ry_sq) - (rx_sq * y1_prime_sq) - (ry_sq * x1_prime_sq);
+            float term_denominator = (rx_sq * y1_prime_sq) + (ry_sq * x1_prime_sq);
 
-            double term_sqrt_arg = 0;
+            float term_sqrt_arg = 0;
             if (term_denominator != 0) // Avoid division by zero
                 term_sqrt_arg = term_numerator / term_denominator;
 
-            term_sqrt_arg = Math.Max(0, term_sqrt_arg); // Clamp to avoid issues with floating point inaccuracies
+            term_sqrt_arg = Maths.Max(0, term_sqrt_arg); // Clamp to avoid issues with floating point inaccuracies
 
-            double sign_coef = (largeArcFlag == sweepFlag) ? -1.0 : 1.0;
-            double coef = sign_coef * Math.Sqrt(term_sqrt_arg);
+            float sign_coef = (largeArcFlag == sweepFlag) ? -1.0f : 1.0f;
+            float coef = sign_coef * Maths.Sqrt(term_sqrt_arg);
 
-            double cx_prime = coef * ((rx_abs * y1_prime) / ry_abs);
-            double cy_prime = coef * -((ry_abs * x1_prime) / rx_abs);
+            float cx_prime = coef * ((rx_abs * y1_prime) / ry_abs);
+            float cy_prime = coef * -((ry_abs * x1_prime) / rx_abs);
 
             // Step 4: Compute (cx, cy) - center of ellipse in original coordinates
-            double x_mid = (x + x_end) / 2.0;
-            double y_mid = (y + y_end) / 2.0;
+            float x_mid = (x + x_end) / 2.0f;
+            float y_mid = (y + y_end) / 2.0f;
 
-            double cx = cosPhi * cx_prime - sinPhi * cy_prime + x_mid;
-            double cy = sinPhi * cx_prime + cosPhi * cy_prime + y_mid;
+            float cx = cosPhi * cx_prime - sinPhi * cy_prime + x_mid;
+            float cy = sinPhi * cx_prime + cosPhi * cy_prime + y_mid;
 
             // Step 5: Compute startAngle (theta1) and extentAngle (deltaTheta)
-            double vec_start_x = (x1_prime - cx_prime) / rx_abs;
-            double vec_start_y = (y1_prime - cy_prime) / ry_abs;
-            double vec_end_x = (-x1_prime - cx_prime) / rx_abs;
-            double vec_end_y = (-y1_prime - cy_prime) / ry_abs;
+            float vec_start_x = (x1_prime - cx_prime) / rx_abs;
+            float vec_start_y = (y1_prime - cy_prime) / ry_abs;
+            float vec_end_x = (-x1_prime - cx_prime) / rx_abs;
+            float vec_end_y = (-y1_prime - cy_prime) / ry_abs;
 
-            double theta1 = CalculateVectorAngle(1, 0, vec_start_x, vec_start_y);
-            double deltaTheta = CalculateVectorAngle(vec_start_x, vec_start_y, vec_end_x, vec_end_y);
+            float theta1 = CalculateVectorAngle(1, 0, vec_start_x, vec_start_y);
+            float deltaTheta = CalculateVectorAngle(vec_start_x, vec_start_y, vec_end_x, vec_end_y);
 
             if (!sweepFlag && deltaTheta > 0)
             {
-                deltaTheta -= 2 * Math.PI;
+                deltaTheta -= 2 * Maths.PI;
             }
             else if (sweepFlag && deltaTheta < 0)
             {
-                deltaTheta += 2 * Math.PI;
+                deltaTheta += 2 * Maths.PI;
             }
 
             // Step 6: Draw the arc using line segments
-            double estimatedArcLength = Math.Abs(deltaTheta) * (rx_abs + ry_abs) / 2.0;
-            int segments = Math.Max(1, (int)Math.Ceiling(estimatedArcLength / _state.roundingMinDistance));
-            if (Math.Abs(deltaTheta) > 1e-9 && segments == 0) segments = 1; // Ensure at least one segment for tiny arcs
+            float estimatedArcLength = Maths.Abs(deltaTheta) * (rx_abs + ry_abs) / 2.0f;
+            int segments = Maths.Max(1, (int)Maths.Ceiling(estimatedArcLength / _state.roundingMinDistance));
+            if (Maths.Abs(deltaTheta) > 1e-9 && segments == 0) segments = 1; // Ensure at least one segment for tiny arcs
 
             for (int i = 1; i <= segments; i++)
             {
-                double t = (double)i / segments;
-                double angle = theta1 + deltaTheta * t;
+                float t = (float)i / segments;
+                float angle = theta1 + deltaTheta * t;
 
-                double cosAngle = Math.Cos(angle);
-                double sinAngle = Math.Sin(angle);
+                float cosAngle = Maths.Cos(angle);
+                float sinAngle = Maths.Sin(angle);
 
-                double ellipse_pt_x_prime = rx_abs * cosAngle;
-                double ellipse_pt_y_prime = ry_abs * sinAngle;
+                float ellipse_pt_x_prime = rx_abs * cosAngle;
+                float ellipse_pt_y_prime = ry_abs * sinAngle;
 
-                double final_x = cosPhi * ellipse_pt_x_prime - sinPhi * ellipse_pt_y_prime + cx;
-                double final_y = sinPhi * ellipse_pt_x_prime + cosPhi * ellipse_pt_y_prime + cy;
+                float final_x = cosPhi * ellipse_pt_x_prime - sinPhi * ellipse_pt_y_prime + cx;
+                float final_y = sinPhi * ellipse_pt_x_prime + cosPhi * ellipse_pt_y_prime + cy;
 
                 if (i == segments)
                 {
@@ -957,7 +957,7 @@ namespace Prowl.Quill
         /// The curve starts at the current position and ends at (x,y).
         /// If no current position exists, this method will move to the end point without drawing a curve.
         /// </remarks>
-        public void BezierCurveTo(double cp1x, double cp1y, double cp2x, double cp2y, double x, double y)
+        public void BezierCurveTo(float cp1x, float cp1y, float cp2x, float cp2y, float x, float y)
         {
             if (!_isPathOpen)
             {
@@ -965,36 +965,36 @@ namespace Prowl.Quill
                 return;
             }
 
-            //Double2 p1 = _currentSubPath!.Points[^1];
-            Double2 p1 = CurrentPointInternal;
-            Double2 p2 = new Double2(cp1x, cp1y);
-            Double2 p3 = new Double2(cp2x, cp2y);
-            Double2 p4 = new Double2(x, y);
+            //Float2 p1 = _currentSubPath!.Points[^1];
+            Float2 p1 = CurrentPointInternal;
+            Float2 p2 = new Float2(cp1x, cp1y);
+            Float2 p3 = new Float2(cp2x, cp2y);
+            Float2 p4 = new Float2(x, y);
 
             PathBezierToCasteljau(p1.X, p1.Y, p2.X, p2.Y, p3.X, p3.Y, p4.X, p4.Y, _state.tess_tol, 0);
         }
 
-        private void PathBezierToCasteljau(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, double tess_tol, int level)
+        private void PathBezierToCasteljau(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, float tess_tol, int level)
         {
-            double dx = x4 - x1;
-            double dy = y4 - y1;
-            double d2 = (x2 - x4) * dy - (y2 - y4) * dx;
-            double d3 = (x3 - x4) * dy - (y3 - y4) * dx;
+            float dx = x4 - x1;
+            float dy = y4 - y1;
+            float d2 = (x2 - x4) * dy - (y2 - y4) * dx;
+            float d3 = (x3 - x4) * dy - (y3 - y4) * dx;
 
             d2 = d2 >= 0 ? d2 : -d2;
             d3 = d3 >= 0 ? d3 : -d3;
             if ((d2 + d3) * (d2 + d3) < tess_tol * (dx * dx + dy * dy))
             {
-                _currentSubPath.Points.Add(new Double2(x4, y4));
+                _currentSubPath.Points.Add(new Float2(x4, y4));
             }
             else if (level < 10)
             {
-                double x12 = (x1 + x2) * 0.5f, y12 = (y1 + y2) * 0.5f;
-                double x23 = (x2 + x3) * 0.5f, y23 = (y2 + y3) * 0.5f;
-                double x34 = (x3 + x4) * 0.5f, y34 = (y3 + y4) * 0.5f;
-                double x123 = (x12 + x23) * 0.5f, y123 = (y12 + y23) * 0.5f;
-                double x234 = (x23 + x34) * 0.5f, y234 = (y23 + y34) * 0.5f;
-                double x1234 = (x123 + x234) * 0.5f, y1234 = (y123 + y234) * 0.5f;
+                float x12 = (x1 + x2) * 0.5f, y12 = (y1 + y2) * 0.5f;
+                float x23 = (x2 + x3) * 0.5f, y23 = (y2 + y3) * 0.5f;
+                float x34 = (x3 + x4) * 0.5f, y34 = (y3 + y4) * 0.5f;
+                float x123 = (x12 + x23) * 0.5f, y123 = (y12 + y23) * 0.5f;
+                float x234 = (x23 + x34) * 0.5f, y234 = (y23 + y34) * 0.5f;
+                float x1234 = (x123 + x234) * 0.5f, y1234 = (y123 + y234) * 0.5f;
 
                 PathBezierToCasteljau(x1, y1, x12, y12, x123, y123, x1234, y1234, tess_tol, level + 1);
                 PathBezierToCasteljau(x1234, y1234, x234, y234, x34, y34, x4, y4, tess_tol, level + 1);
@@ -1014,7 +1014,7 @@ namespace Prowl.Quill
         /// If no current position exists, this method will move to the end point without drawing a curve.
         /// Internally, this method converts the quadratic Bézier curve to a cubic Bézier curve.
         /// </remarks>
-        public void QuadraticCurveTo(double cpx, double cpy, double x, double y)
+        public void QuadraticCurveTo(float cpx, float cpy, float x, float y)
         {
             if (!_isPathOpen)
             {
@@ -1022,15 +1022,15 @@ namespace Prowl.Quill
                 return;
             }
 
-            Double2 p1 = CurrentPointInternal;
-            Double2 p2 = new Double2(cpx, cpy);
-            Double2 p3 = new Double2(x, y);
+            Float2 p1 = CurrentPointInternal;
+            Float2 p2 = new Float2(cpx, cpy);
+            Float2 p3 = new Float2(x, y);
 
             // Convert quadratic curve to cubic bezier
-            double cp1x = p1.X + 2.0 / 3.0 * (p2.X - p1.X);
-            double cp1y = p1.Y + 2.0 / 3.0 * (p2.Y - p1.Y);
-            double cp2x = p3.X + 2.0 / 3.0 * (p2.X - p3.X);
-            double cp2y = p3.Y + 2.0 / 3.0 * (p2.Y - p3.Y);
+            float cp1x = p1.X + 2.0f / 3.0f * (p2.X - p1.X);
+            float cp1y = p1.Y + 2.0f / 3.0f * (p2.Y - p1.Y);
+            float cp2x = p3.X + 2.0f / 3.0f * (p2.X - p3.X);
+            float cp2y = p3.Y + 2.0f / 3.0f * (p2.Y - p3.Y);
 
             BezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y);
         }
@@ -1074,7 +1074,7 @@ namespace Prowl.Quill
             {
                 var copy = path.Points.ToArray();
                 for (int i = 0; i < copy.Length; i++)
-                    copy[i] = TransformPoint(copy[i]) + new Double2(0.5, 0.5); // And offset by half a pixel to properly align it with Stroke()
+                    copy[i] = TransformPoint(copy[i]) + new Float2(0.5f, 0.5f); // And offset by half a pixel to properly align it with Stroke()
                 var points = copy.Select(v => new ContourVertex() { Position = new Vec3() { X = v.X, Y = v.Y } }).ToArray();
 
                 tess.AddContour(points, ContourOrientation.Original);
@@ -1089,8 +1089,8 @@ namespace Prowl.Quill
             for (int i = 0; i < vertices.Length; i++)
             {
                 var vertex = vertices[i];
-                Double2 pos = new Double2(vertex.Position.X, vertex.Position.Y);
-                AddVertex(new Vertex(pos, new Double2(0.5, 0.5), _state.fillColor));
+                Float2 pos = new Float2(vertex.Position.X, vertex.Position.Y);
+                AddVertex(new Vertex(pos, new Float2(0.5f, 0.5f), _state.fillColor));
             }
             // Create triangles
             for (int i = 0; i < indices.Length; i += 3)
@@ -1109,12 +1109,12 @@ namespace Prowl.Quill
                 return;
 
             // Transform each point
-            Double2 center = Double2.Zero;
+            Float2 center = Float2.Zero;
             var copy = subPath.Points.ToArray();
             for (int i = 0; i < copy.Length; i++)
             {
                 var point = copy[i];
-                point = TransformPoint(point) + new Double2(0.5, 0.5); // And offset by half a pixel to properly center it with Stroke()
+                point = TransformPoint(point) + new Float2(0.5f, 0.5f); // And offset by half a pixel to properly center it with Stroke()
                 center += point;
                 copy[i] = point;
             }
@@ -1124,14 +1124,14 @@ namespace Prowl.Quill
             uint startVertexIndex = (uint)_vertices.Count;
 
             // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-            AddVertex(new Vertex(center, new Double2(0.5f, 0.5f), _state.fillColor));
+            AddVertex(new Vertex(center, new Float2(0.5f, 0.5f), _state.fillColor));
 
             // Generate vertices around the path
             int segments = copy.Length;
             for (int i = 0; i < segments; i++) // Edge vertices have UV at 0,0 for anti-aliasing
             {
-                Double2 dirToPoint = Double2.Normalize(copy[i] - center);
-                AddVertex(new Vertex(copy[i] + (dirToPoint * _pixelWidth), new Double2(0, 0), _state.fillColor));
+                Float2 dirToPoint = Float2.Normalize(copy[i] - center);
+                AddVertex(new Vertex(copy[i] + (dirToPoint * _pixelWidth), new Float2(0, 0), _state.fillColor));
             }
 
             // Create triangles (fan from center to edges)
@@ -1140,11 +1140,11 @@ namespace Prowl.Quill
             uint first = (uint)(startVertexIndex + 1);
             uint second = (uint)(startVertexIndex + 2);
 
-            Double2 centerPos = _vertices[(int)centerIdx].Position;
-            Double2 firstPos = _vertices[(int)first].Position;
-            Double2 secondPos = _vertices[(int)second].Position;
+            Float2 centerPos = _vertices[(int)centerIdx].Position;
+            Float2 firstPos = _vertices[(int)first].Position;
+            Float2 secondPos = _vertices[(int)second].Position;
 
-            double cross = ((firstPos.X - centerPos.X) * (secondPos.Y - centerPos.Y)) -
+            float cross = ((firstPos.X - centerPos.X) * (secondPos.Y - centerPos.Y)) -
                            ((firstPos.Y - centerPos.Y) * (secondPos.X - centerPos.X));
 
             bool clockwise = cross <= 0;
@@ -1196,10 +1196,10 @@ namespace Prowl.Quill
 
             bool isClosed = subPath.IsClosed;
 
-            List<double> dashPattern = null;
+            List<float> dashPattern = null;
             if (_state.strokeDashPattern != null)
             {
-                dashPattern = new List<double>(_state.strokeDashPattern);
+                dashPattern = new List<float>(_state.strokeDashPattern);
                 for (int i = 0; i < dashPattern.Count; i++)
                 {
                     // Convert dash pattern from units to pixels
@@ -1208,8 +1208,8 @@ namespace Prowl.Quill
             }
 
             // Convert stroke width and dash offset from units to pixels
-            double pixelStrokeWidth = (_state.strokeWidth * _state.strokeScale) * _scale;
-            double pixelDashOffset = (_state.strokeDashOffset * _state.strokeScale) * _scale;
+            float pixelStrokeWidth = (_state.strokeWidth * _state.strokeScale) * _scale;
+            float pixelDashOffset = (_state.strokeDashOffset * _state.strokeScale) * _scale;
             var triangles = PolylineMesher.Create(subPath.Points, pixelStrokeWidth, _pixelWidth, _state.strokeColor, _state.strokeJoint, _state.miterLimit, false, _state.strokeStartCap, _state.strokeEndCap, dashPattern, pixelDashOffset);
 
 
@@ -1255,7 +1255,7 @@ namespace Prowl.Quill
         /// <param name="width">The width of the rectangle.</param>
         /// <param name="height">The height of the rectangle.</param>
         /// <param name="color">The color of the rectangle.</param>
-        public void Rect(double x, double y, double width, double height)
+        public void Rect(float x, float y, float width, float height)
         {
             if (width <= 0 || height <= 0)
                 return;
@@ -1276,7 +1276,7 @@ namespace Prowl.Quill
         /// <param name="width">The width of the rectangle.</param>
         /// <param name="height">The height of the rectangle.</param>
         /// <param name="radius">The radius of the corners.</param>
-        public void RoundedRect(double x, double y, double width, double height, double radius)
+        public void RoundedRect(float x, float y, float width, float height, float radius)
         {
             RoundedRect(x, y, width, height, radius, radius, radius, radius);
         }
@@ -1292,33 +1292,33 @@ namespace Prowl.Quill
         /// <param name="trRadii">The radius of the top-right corner.</param>
         /// <param name="brRadii">The radius of the bottom-right corner.</param>
         /// <param name="blRadii">The radius of the bottom-left corner.</param>
-        public void RoundedRect(double x, double y, double width, double height, double tlRadii, double trRadii, double brRadii, double blRadii)
+        public void RoundedRect(float x, float y, float width, float height, float tlRadii, float trRadii, float brRadii, float blRadii)
         {
             if (width <= 0 || height <= 0)
                 return;
 
             // Clamp radii to half of the smaller dimension to prevent overlap
-            double maxRadius = Math.Min(width, height) / 2;
-            tlRadii = Math.Min(tlRadii, maxRadius);
-            trRadii = Math.Min(trRadii, maxRadius);
-            brRadii = Math.Min(brRadii, maxRadius);
-            blRadii = Math.Min(blRadii, maxRadius);
+            float maxRadius = Maths.Min(width, height) / 2;
+            tlRadii = Maths.Min(tlRadii, maxRadius);
+            trRadii = Maths.Min(trRadii, maxRadius);
+            brRadii = Maths.Min(brRadii, maxRadius);
+            blRadii = Maths.Min(blRadii, maxRadius);
 
             BeginPath();
             // Top-left corner
             MoveTo(x + tlRadii, y);
             // Top edge and top-right corner
             LineTo(x + width - trRadii, y);
-            Arc(x + width - trRadii, y + trRadii, trRadii, -Math.PI / 2, 0, false);
+            Arc(x + width - trRadii, y + trRadii, trRadii, -Maths.PI / 2, 0, false);
             // Right edge and bottom-right corner
             LineTo(x + width, y + height - brRadii);
-            Arc(x + width - brRadii, y + height - brRadii, brRadii, 0, Math.PI / 2, false);
+            Arc(x + width - brRadii, y + height - brRadii, brRadii, 0, Maths.PI / 2, false);
             // Bottom edge and bottom-left corner
             LineTo(x + blRadii, y + height);
-            Arc(x + blRadii, y + height - blRadii, blRadii, Math.PI / 2, Math.PI, false);
+            Arc(x + blRadii, y + height - blRadii, blRadii, Maths.PI / 2, Maths.PI, false);
             // Left edge and top-left corner
             LineTo(x, y + tlRadii);
-            Arc(x + tlRadii, y + tlRadii, tlRadii, Math.PI, 3 * Math.PI / 2, false);
+            Arc(x + tlRadii, y + tlRadii, tlRadii, Maths.PI, 3 * Maths.PI / 2, false);
             ClosePath();
         }
 
@@ -1329,13 +1329,13 @@ namespace Prowl.Quill
         /// <param name="y">The y-coordinate of the center of the circle.</param>
         /// <param name="radius">The radius of the circle.</param>
         /// <param name="segments">The number of segments used to approximate the circle. Higher values create smoother circles.</param>
-        public void Circle(double x, double y, double radius, int segments = -1)
+        public void Circle(float x, float y, float radius, int segments = -1)
         {
             if (segments == -1)
             {
                 // Calculate number of segments based on radius size
-                double distance = Math.PI * 2 * radius;
-                segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
+                float distance = Maths.PI * 2 * radius;
+                segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
             }
 
             if (radius <= 0 || segments < 3)
@@ -1345,9 +1345,9 @@ namespace Prowl.Quill
 
             for (int i = 0; i <= segments; i++)
             {
-                double angle = 2 * Math.PI * i / segments;
-                double vx = x + radius * Math.Cos(angle);
-                double vy = y + radius * Math.Sin(angle);
+                float angle = 2 * Maths.PI * i / segments;
+                float vx = x + radius * Maths.Cos(angle);
+                float vy = y + radius * Maths.Sin(angle);
 
                 LineTo(vx, vy);
             }
@@ -1363,13 +1363,13 @@ namespace Prowl.Quill
         /// <param name="rx">The x-axis radius of the ellipse.</param>
         /// <param name="ry">The y-axis radius of the ellipse.</param>
         /// <param name="segments">The number of segments used to approximate the circle. Higher values create smoother circles.</param>
-        public void Ellipse(double x, double y, double rx, double ry, int segments = -1)
+        public void Ellipse(float x, float y, float rx, float ry, int segments = -1)
         {
             if (segments == -1)
             {
                 // Calculate number of segments based on radius size
-                double distance = Math.PI * 2 * Math.Max(rx, ry);
-                segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
+                float distance = Maths.PI * 2 * Maths.Max(rx, ry);
+                segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
             }
 
             if (rx <= 0 || ry <= 0 || segments < 3)
@@ -1379,9 +1379,9 @@ namespace Prowl.Quill
 
             for (int i = 0; i <= segments; i++)
             {
-                double angle = 2 * Math.PI * i / segments;
-                double vx = x + rx * Math.Cos(angle);
-                double vy = y + ry * Math.Sin(angle);
+                float angle = 2 * Maths.PI * i / segments;
+                float vx = x + rx * Maths.Cos(angle);
+                float vy = y + ry * Maths.Sin(angle);
 
                 LineTo(vx, vy);
             }
@@ -1398,12 +1398,12 @@ namespace Prowl.Quill
         /// <param name="startAngle">The starting angle in radians.</param>
         /// <param name="endAngle">The ending angle in radians.</param>
         /// <param name="segments">The number of segments used to approximate the curved edge. Higher values create smoother curves.</param>
-        public void Pie(double x, double y, double radius, double startAngle, double endAngle, int segments = -1)
+        public void Pie(float x, float y, float radius, float startAngle, float endAngle, int segments = -1)
         {
             if (segments == -1)
             {
-                double distance = CalculateArcLength(radius, startAngle, endAngle);
-                segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
+                float distance = CalculateArcLength(radius, startAngle, endAngle);
+                segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
             }
 
             if (radius <= 0 || segments < 1)
@@ -1411,11 +1411,11 @@ namespace Prowl.Quill
 
             // Ensure angles are ordered correctly
             if (endAngle < startAngle)
-                endAngle += 2 * Math.PI;
+                endAngle += 2 * Maths.PI;
 
             // Calculate angle range
-            double angleRange = endAngle - startAngle;
-            double segmentAngle = angleRange / segments;
+            float angleRange = endAngle - startAngle;
+            float segmentAngle = angleRange / segments;
 
             // Start path
             BeginPath();
@@ -1424,9 +1424,9 @@ namespace Prowl.Quill
             // Generate vertices around the arc plus the two radial endpoints
             for (int i = 0; i <= segments; i++)
             {
-                double angle = startAngle + i * segmentAngle;
-                double vx = x + radius * Math.Cos(angle);
-                double vy = y + radius * Math.Sin(angle);
+                float angle = startAngle + i * segmentAngle;
+                float vx = x + radius * Maths.Cos(angle);
+                float vy = y + radius * Maths.Sin(angle);
 
                 LineTo(vx, vy);
             }
@@ -1449,34 +1449,34 @@ namespace Prowl.Quill
         /// <param name="height">The height of the rectangle.</param>
         /// <param name="color">The color of the rectangle.</param>
         /// <remarks>This is significantly faster than using the path API to draw a rectangle.</remarks>
-        public void RectFilled(double x, double y, double width, double height, Color32 color)
+        public void RectFilled(float x, float y, float width, float height, Color32 color)
         {
             if (width <= 0 || height <= 0)
                 return;
 
             // Center it so it scales and sits properly with AA
             // Convert pixel adjustments to unit space since coordinates are in units
-            double unitPixelHalf = _pixelHalf / _scale;
-            double unitPixelWidth = _pixelWidth / _scale;
+            float unitPixelHalf = _pixelHalf / _scale;
+            float unitPixelWidth = _pixelWidth / _scale;
             x -= unitPixelHalf;
             y -= unitPixelHalf;
             width += unitPixelWidth;
             height += unitPixelWidth;
 
             // Apply transform to the four corners of the rectangle
-            Double2 topLeft = TransformPoint(new Double2(x, y));
-            Double2 topRight = TransformPoint(new Double2(x, y + height));
-            Double2 bottomRight = TransformPoint(new Double2(x + width, y + height));
-            Double2 bottomLeft = TransformPoint(new Double2(x + width, y));
+            Float2 topLeft = TransformPoint(new Float2(x, y));
+            Float2 topRight = TransformPoint(new Float2(x, y + height));
+            Float2 bottomRight = TransformPoint(new Float2(x + width, y + height));
+            Float2 bottomLeft = TransformPoint(new Float2(x + width, y));
 
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
 
             // Add all vertices with the transformed coordinates
-            AddVertex(new Vertex(topLeft, new Double2(0, 0), color));
-            AddVertex(new Vertex(topRight, new Double2(0, 1), color));
-            AddVertex(new Vertex(bottomRight, new Double2(1, 1), color));
-            AddVertex(new Vertex(bottomLeft, new Double2(1, 0), color));
+            AddVertex(new Vertex(topLeft, new Float2(0, 0), color));
+            AddVertex(new Vertex(topRight, new Float2(0, 1), color));
+            AddVertex(new Vertex(bottomRight, new Float2(1, 1), color));
+            AddVertex(new Vertex(bottomLeft, new Float2(1, 0), color));
 
             // Add indexes for fill
             _indices.Add(startVertexIndex);
@@ -1490,7 +1490,7 @@ namespace Prowl.Quill
             AddTriangleCount(2);
         }
 
-        public void Image(object texture, double x, double y, double width, double height, Color32 color)
+        public void Image(object texture, float x, float y, float width, float height, Color32 color)
         {
             if (width <= 0 || height <= 0)
                 return;
@@ -1511,8 +1511,8 @@ namespace Prowl.Quill
         /// <param name="radius">The radius of the corners.</param>
         /// <param name="color">The color of the rounded rectangle.</param>
         /// <remarks>This is significantly faster than using the path API to draw a rounded rectangle.</remarks>
-        public void RoundedRectFilled(double x, double y, double width, double height,
-                                     double radius, Color32 color)
+        public void RoundedRectFilled(float x, float y, float width, float height,
+                                     float radius, Color32 color)
         {
             RoundedRectFilled(x, y, width, height, radius, radius, radius, radius, color);
         }
@@ -1531,119 +1531,119 @@ namespace Prowl.Quill
         /// <param name="blRadii">The radius of the bottom-left corner.</param>
         /// <param name="color">The color of the rounded rectangle.</param>
         /// <remarks>This is significantly faster than using the path API to draw a rounded rectangle.</remarks>
-        public void RoundedRectFilled(double x, double y, double width, double height,
-                                     double tlRadii, double trRadii, double brRadii, double blRadii,
+        public void RoundedRectFilled(float x, float y, float width, float height,
+                                     float tlRadii, float trRadii, float brRadii, float blRadii,
                                      Color32 color)
         {
             if (width <= 0 || height <= 0)
                 return;
 
             // Clamp radii to half of the smaller dimension to prevent overlap
-            double maxRadius = Math.Min(width, height) / 2;
-            tlRadii = Math.Min(tlRadii, maxRadius);
-            trRadii = Math.Min(trRadii, maxRadius);
-            brRadii = Math.Min(brRadii, maxRadius);
-            blRadii = Math.Min(blRadii, maxRadius);
+            float maxRadius = Maths.Min(width, height) / 2;
+            tlRadii = Maths.Min(tlRadii, maxRadius);
+            trRadii = Maths.Min(trRadii, maxRadius);
+            brRadii = Maths.Min(brRadii, maxRadius);
+            blRadii = Maths.Min(blRadii, maxRadius);
 
             // Adjust for proper AA
             // Convert pixel adjustments to unit space since coordinates are in units
-            double unitPixelHalf = _pixelHalf / _scale;
-            double unitPixelWidth = _pixelWidth / _scale;
+            float unitPixelHalf = _pixelHalf / _scale;
+            float unitPixelWidth = _pixelWidth / _scale;
             x -= unitPixelHalf;
             y -= unitPixelHalf;
             width += unitPixelWidth;
             height += unitPixelWidth;
 
             // Calculate segment counts for each corner based on radius size
-            int tlSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * tlRadii / 2 / _state.roundingMinDistance));
-            int trSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * trRadii / 2 / _state.roundingMinDistance));
-            int brSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * brRadii / 2 / _state.roundingMinDistance));
-            int blSegments = Math.Max(1, (int)Math.Ceiling(Math.PI * blRadii / 2 / _state.roundingMinDistance));
+            int tlSegments = Maths.Max(1, (int)Maths.Ceiling(Maths.PI * tlRadii / 2 / _state.roundingMinDistance));
+            int trSegments = Maths.Max(1, (int)Maths.Ceiling(Maths.PI * trRadii / 2 / _state.roundingMinDistance));
+            int brSegments = Maths.Max(1, (int)Maths.Ceiling(Maths.PI * brRadii / 2 / _state.roundingMinDistance));
+            int blSegments = Maths.Max(1, (int)Maths.Ceiling(Maths.PI * blRadii / 2 / _state.roundingMinDistance));
 
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
 
             // Calculate the center point of the rectangle
-            Double2 center = TransformPoint(new Double2(x + width / 2, y + height / 2));
+            Float2 center = TransformPoint(new Float2(x + width / 2, y + height / 2));
 
             // Add center vertex with UV at 0.5,0.5 (no AA)
-            AddVertex(new Vertex(center, new Double2(0.5f, 0.5f), color));
+            AddVertex(new Vertex(center, new Float2(0.5f, 0.5f), color));
 
-            List<Double2> points = new List<Double2>();
+            List<Float2> points = new List<Float2>();
 
             // Top-left corner
             if (tlRadii > 0)
             {
-                Double2 tlCenter = new Double2(x + tlRadii, y + tlRadii);
+                Float2 tlCenter = new Float2(x + tlRadii, y + tlRadii);
                 for (int i = 0; i <= tlSegments; i++)
                 {
-                    double angle = Math.PI + (Math.PI / 2) * i / tlSegments;
-                    double vx = tlCenter.X + tlRadii * Math.Cos(angle);
-                    double vy = tlCenter.Y + tlRadii * Math.Sin(angle);
-                    points.Add(new Double2(vx, vy));
+                    float angle = Maths.PI + (Maths.PI / 2) * i / tlSegments;
+                    float vx = tlCenter.X + tlRadii * Maths.Cos(angle);
+                    float vy = tlCenter.Y + tlRadii * Maths.Sin(angle);
+                    points.Add(new Float2(vx, vy));
                 }
             }
             else
             {
-                points.Add(new Double2(x, y));
+                points.Add(new Float2(x, y));
             }
 
             // Top-right corner
             if (trRadii > 0)
             {
-                Double2 trCenter = new Double2(x + width - trRadii, y + trRadii);
+                Float2 trCenter = new Float2(x + width - trRadii, y + trRadii);
                 for (int i = 0; i <= trSegments; i++)
                 {
-                    double angle = Math.PI * 3 / 2 + (Math.PI / 2) * i / trSegments;
-                    double vx = trCenter.X + trRadii * Math.Cos(angle);
-                    double vy = trCenter.Y + trRadii * Math.Sin(angle);
-                    points.Add(new Double2(vx, vy));
+                    float angle = Maths.PI * 3 / 2 + (Maths.PI / 2) * i / trSegments;
+                    float vx = trCenter.X + trRadii * Maths.Cos(angle);
+                    float vy = trCenter.Y + trRadii * Maths.Sin(angle);
+                    points.Add(new Float2(vx, vy));
                 }
             }
             else
             {
-                points.Add(new Double2(x + width, y));
+                points.Add(new Float2(x + width, y));
             }
 
             // Bottom-right corner
             if (brRadii > 0)
             {
-                Double2 brCenter = new Double2(x + width - brRadii, y + height - brRadii);
+                Float2 brCenter = new Float2(x + width - brRadii, y + height - brRadii);
                 for (int i = 0; i <= brSegments; i++)
                 {
-                    double angle = 0 + (Math.PI / 2) * i / brSegments;
-                    double vx = brCenter.X + brRadii * Math.Cos(angle);
-                    double vy = brCenter.Y + brRadii * Math.Sin(angle);
-                    points.Add(new Double2(vx, vy));
+                    float angle = 0 + (Maths.PI / 2) * i / brSegments;
+                    float vx = brCenter.X + brRadii * Maths.Cos(angle);
+                    float vy = brCenter.Y + brRadii * Maths.Sin(angle);
+                    points.Add(new Float2(vx, vy));
                 }
             }
             else
             {
-                points.Add(new Double2(x + width, y + height));
+                points.Add(new Float2(x + width, y + height));
             }
 
             // Bottom-left corner
             if (blRadii > 0)
             {
-                Double2 blCenter = new Double2(x + blRadii, y + height - blRadii);
+                Float2 blCenter = new Float2(x + blRadii, y + height - blRadii);
                 for (int i = 0; i <= blSegments; i++)
                 {
-                    double angle = Math.PI / 2 + (Math.PI / 2) * i / blSegments;
-                    double vx = blCenter.X + blRadii * Math.Cos(angle);
-                    double vy = blCenter.Y + blRadii * Math.Sin(angle);
-                    points.Add(new Double2(vx, vy));
+                    float angle = Maths.PI / 2 + (Maths.PI / 2) * i / blSegments;
+                    float vx = blCenter.X + blRadii * Maths.Cos(angle);
+                    float vy = blCenter.Y + blRadii * Maths.Sin(angle);
+                    points.Add(new Float2(vx, vy));
                 }
             }
             else
             {
-                points.Add(new Double2(x, y + height));
+                points.Add(new Float2(x, y + height));
             }
 
             // Add all edge vertices
             for (int i = 0; i < points.Count; i++)
             {
-                Double2 transformedPoint = TransformPoint(points[i]);
-                AddVertex(new Vertex(transformedPoint, new Double2(0, 0), color));
+                Float2 transformedPoint = TransformPoint(points[i]);
+                AddVertex(new Vertex(transformedPoint, new Float2(0, 0), color));
             }
 
             // Create triangles (fan from center to edges)
@@ -1671,13 +1671,13 @@ namespace Prowl.Quill
         /// <param name="color">The color of the circle.</param>
         /// <param name="segments">The number of segments used to approximate the circle. Higher values create smoother circles.</param>
         /// <remarks>This is significantly faster than using the path API to draw a circle.</remarks>
-        public void CircleFilled(double x, double y, double radius, Color32 color, int segments = -1)
+        public void CircleFilled(float x, float y, float radius, Color32 color, int segments = -1)
         {
             if (segments == -1)
             {
                 // Calculate number of segments based on radius size
-                double distance = Math.PI * 2 * radius;
-                segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
+                float distance = Maths.PI * 2 * radius;
+                segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
             }
 
             if (radius <= 0 || segments < 3)
@@ -1690,24 +1690,24 @@ namespace Prowl.Quill
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
 
-            Double2 transformedCenter = TransformPoint(new Double2(x, y));
+            Float2 transformedCenter = TransformPoint(new Float2(x, y));
 
             // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-            AddVertex(new Vertex(transformedCenter, new Double2(0.5f, 0.5f), color));
+            AddVertex(new Vertex(transformedCenter, new Float2(0.5f, 0.5f), color));
 
             // Generate vertices around the circle
             for (int i = 0; i <= segments; i++)
             {
-                double angle = 2 * Math.PI * i / segments;
-                double vx = x + radius * Math.Cos(angle);
-                double vy = y + radius * Math.Sin(angle);
+                float angle = 2 * Maths.PI * i / segments;
+                float vx = x + radius * Maths.Cos(angle);
+                float vy = y + radius * Maths.Sin(angle);
 
-                Double2 transformedPoint = TransformPoint(new Double2(vx, vy));
+                Float2 transformedPoint = TransformPoint(new Float2(vx, vy));
 
                 // Edge vertices have UV at 0,0 for anti-aliasing
                 AddVertex(new Vertex(
                     transformedPoint,
-                    new Double2(0, 0),  // UV at edge for AA
+                    new Float2(0, 0),  // UV at edge for AA
                     color
                 ));
             }
@@ -1736,12 +1736,12 @@ namespace Prowl.Quill
         /// <param name="endAngle">The ending angle in radians.</param>
         /// <param name="color">The color of the pie.</param>
         /// <param name="segments">The number of segments used to approximate the curved edge. Higher values create smoother curves.</param>
-        public void PieFilled(double x, double y, double radius, double startAngle, double endAngle, Color32 color, int segments = -1)
+        public void PieFilled(float x, float y, float radius, float startAngle, float endAngle, Color32 color, int segments = -1)
         {
             if (segments == -1)
             {
-                double distance = CalculateArcLength(radius, startAngle, endAngle);
-                segments = Math.Max(1, (int)Math.Ceiling(distance / _state.roundingMinDistance));
+                float distance = CalculateArcLength(radius, startAngle, endAngle);
+                segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
             }
 
             if (radius <= 0 || segments < 1)
@@ -1750,52 +1750,52 @@ namespace Prowl.Quill
             // Ensure angles are ordered correctly
             if (endAngle < startAngle)
             {
-                endAngle += 2 * Math.PI;
+                endAngle += 2 * Maths.PI;
             }
 
             // Calculate angle range and segment size
-            double angleRange = endAngle - startAngle;
-            double segmentAngle = angleRange / segments;
+            float angleRange = endAngle - startAngle;
+            float segmentAngle = angleRange / segments;
 
             // Calculate the centroid of the pie section
             // For a pie section, the centroid is not at the circle center but at
             // a position ~2/3 toward the arc's midpoint
-            double midAngle = startAngle + angleRange / 2;
-            double centroidDistance = radius * 2 / 3 * Math.Sin(angleRange / 2) / (angleRange / 2);
-            double centroidX = x + centroidDistance * Math.Cos(midAngle);
-            double centroidY = y + centroidDistance * Math.Sin(midAngle);
+            float midAngle = startAngle + angleRange / 2;
+            float centroidDistance = radius * 2 / 3 * Maths.Sin(angleRange / 2) / (angleRange / 2);
+            float centroidX = x + centroidDistance * Maths.Cos(midAngle);
+            float centroidY = y + centroidDistance * Maths.Sin(midAngle);
 
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
 
-            Double2 transformedCenter = TransformPoint(new Double2(x, y));
-            Double2 transformedCentroid = TransformPoint(new Double2(centroidX, centroidY));
+            Float2 transformedCenter = TransformPoint(new Float2(x, y));
+            Float2 transformedCentroid = TransformPoint(new Float2(centroidX, centroidY));
 
             // Add centroid vertex with UV at 0.5,0.5 (fully opaque, no AA)
-            AddVertex(new Vertex(transformedCentroid, new Double2(0.5f, 0.5f), color));
+            AddVertex(new Vertex(transformedCentroid, new Float2(0.5f, 0.5f), color));
 
             // Start path
-            AddVertex(new Vertex(transformedCenter, new Double2(0.0f, 0.0f), color));
+            AddVertex(new Vertex(transformedCenter, new Float2(0.0f, 0.0f), color));
 
             // Generate vertices around the arc plus the two radial endpoints
             for (int i = 0; i <= segments; i++)
             {
-                double angle = startAngle + i * segmentAngle;
-                double vx = x + radius * Math.Cos(angle);
-                double vy = y + radius * Math.Sin(angle);
+                float angle = startAngle + i * segmentAngle;
+                float vx = x + radius * Maths.Cos(angle);
+                float vy = y + radius * Maths.Sin(angle);
 
-                Double2 transformedPoint = TransformPoint(new Double2(vx, vy));
+                Float2 transformedPoint = TransformPoint(new Float2(vx, vy));
 
                 // Offset for AA
-                var direction = Double2.Normalize(transformedPoint - transformedCenter);
+                var direction = Float2.Normalize(transformedPoint - transformedCenter);
                 transformedPoint += direction * _pixelWidth;
 
                 // Edge vertices have UV at 0,0 for anti-aliasing
-                AddVertex(new Vertex(transformedPoint, new Double2(0, 0), color));
+                AddVertex(new Vertex(transformedPoint, new Float2(0, 0), color));
             }
 
             // Close path
-            AddVertex(new Vertex(transformedCenter, new Double2(0.0f, 0.0f), color));
+            AddVertex(new Vertex(transformedCenter, new Float2(0.0f, 0.0f), color));
 
             // Create triangles (fan from centroid to each pair of edge points)
             for (int i = 0; i < segments + 2; i++)
@@ -1815,18 +1815,18 @@ namespace Prowl.Quill
 
         public void AddFallbackFont(FontFile font) => _scribeRenderer.FontEngine.AddFallbackFont(font);
         public IEnumerable<FontFile> EnumerateSystemFonts() => _scribeRenderer.FontEngine.EnumerateSystemFonts();
-        public Double2 MeasureText(string text, double pixelSize, FontFile font, double letterSpacing = 0f)
+        public Float2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0f)
         {
-            double actualPixelSize = pixelSize;// * _scale; // This is preferrable, but we also need a way to scale Scribes output quads down accordingly
-            Double2 pixelResult = (Float2)_scribeRenderer.FontEngine.MeasureText(text, (float)actualPixelSize, font, (float)letterSpacing);
+            float actualPixelSize = pixelSize;// * _scale; // This is preferrable, but we also need a way to scale Scribes output quads down accordingly
+            Float2 pixelResult = (Float2)_scribeRenderer.FontEngine.MeasureText(text, (float)actualPixelSize, font, (float)letterSpacing);
             return pixelResult / _scale;
         }
-        public Double2 MeasureText(string text, TextLayoutSettings settings) => (Float2)_scribeRenderer.FontEngine.MeasureText(text, settings);
+        public Float2 MeasureText(string text, TextLayoutSettings settings) => (Float2)_scribeRenderer.FontEngine.MeasureText(text, settings);
 
-        public void DrawText(string text, double x, double y, Color32 color, double pixelSize, FontFile font, double letterSpacing = 0f, Double2? origin = null)
+        public void DrawText(string text, float x, float y, Color32 color, float pixelSize, FontFile font, float letterSpacing = 0f, Float2? origin = null)
         {
-            Double2 position = new Double2(x, y);
-            double actualPixelSize = pixelSize;// * _scale; // This is preferrable, but we also need a way to scale Scribes output quads down accordingly
+            Float2 position = new Float2(x, y);
+            float actualPixelSize = pixelSize;// * _scale; // This is preferrable, but we also need a way to scale Scribes output quads down accordingly
             if (origin.HasValue)
             {
                 var textSize = _scribeRenderer.FontEngine.MeasureText(text, (float)actualPixelSize, font, (float)letterSpacing);
@@ -1836,9 +1836,9 @@ namespace Prowl.Quill
             _scribeRenderer.FontEngine.DrawText(text, (Float2)position, new FontColor(color.R, color.G, color.B, color.A), (float)actualPixelSize, font, (float)letterSpacing);
         }
 
-        public void DrawText(string text, double x, double y, Color32 color, TextLayoutSettings settings, Double2? origin = null)
+        public void DrawText(string text, float x, float y, Color32 color, TextLayoutSettings settings, Float2? origin = null)
         {
-            Double2 position = new Double2(x, y);
+            Float2 position = new Float2(x, y);
             if (origin.HasValue)
             {
                 var textSize = _scribeRenderer.FontEngine.MeasureText(text, settings);
@@ -1850,9 +1850,9 @@ namespace Prowl.Quill
 
         public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.CreateLayout(text, settings);
 
-        public void DrawLayout(TextLayout layout, double x, double y, Color32 color, Double2? origin = null)
+        public void DrawLayout(TextLayout layout, float x, float y, Color32 color, Float2? origin = null)
         {
-            Double2 position = new Double2(x, y);
+            Float2 position = new Float2(x, y);
             if (origin.HasValue)
             {
                 var layoutSize = layout.Size;
@@ -1869,7 +1869,7 @@ namespace Prowl.Quill
             internal MarkdownLayoutSettings Settings;
             internal MarkdownDisplayList List;
 
-            public readonly Double2 Size => (Float2)List.Size;
+            public readonly Float2 Size => (Float2)List.Size;
 
             internal QuillMarkdown(MarkdownLayoutSettings settings, MarkdownDisplayList list)
             {
@@ -1895,29 +1895,29 @@ namespace Prowl.Quill
             return md;
         }
 
-        public void DrawMarkdown(QuillMarkdown markdown, Double2 position)
+        public void DrawMarkdown(QuillMarkdown markdown, Float2 position)
         {
             // Convert units to pixels for position
-            Double2 pixelPosition = position * _scale;
+            Float2 pixelPosition = position * _scale;
             MarkdownLayoutEngine.Render(markdown.List, _scribeRenderer.FontEngine, _scribeRenderer, (Float2)pixelPosition, markdown.Settings);
         }
 
-        public bool GetMarkdownLinkAt(QuillMarkdown markdown, Double2 renderOffset, Double2 point, bool useScissor, out string href)
+        public bool GetMarkdownLinkAt(QuillMarkdown markdown, Float2 renderOffset, Float2 point, bool useScissor, out string href)
         {
             // Check if point is within scissor rect if enabled
             if (useScissor && _state.scissorExtent.X > 0)
             {
                 // Transform point to scissor space
                 var transformedPoint = _state.scissor.Inverse().TransformPoint(point);
-                //var transformedPoint = new Double2(
+                //var transformedPoint = new Float2(
                 //    (float)(scissorMatrix.M11 * point.X + scissorMatrix.M12 * point.Y + scissorMatrix.M14),
                 //    (float)(scissorMatrix.M21 * point.X + scissorMatrix.M22 * point.Y + scissorMatrix.M24)
                 //);
 
                 // Check if the point is within the scissor extent
-                var distanceFromEdges = new Double2(
-                    Math.Abs(transformedPoint.X) - _state.scissorExtent.X,
-                    Math.Abs(transformedPoint.Y) - _state.scissorExtent.Y
+                var distanceFromEdges = new Float2(
+                    Maths.Abs(transformedPoint.X) - _state.scissorExtent.X,
+                    Maths.Abs(transformedPoint.Y) - _state.scissorExtent.Y
                 );
 
                 // If either distance is positive, we're outside the scissor region
@@ -1930,8 +1930,8 @@ namespace Prowl.Quill
 
 
             // Convert units to pixels for point and render offset
-            Double2 pixelPoint = point * _scale;
-            Double2 pixelRenderOffset = renderOffset * _scale;
+            Float2 pixelPoint = point * _scale;
+            Float2 pixelRenderOffset = renderOffset * _scale;
             return MarkdownLayoutEngine.TryGetLinkAt(markdown.List, (Float2)pixelPoint, (Float2)pixelRenderOffset, out href);
         }
 
@@ -1941,20 +1941,20 @@ namespace Prowl.Quill
 
         #region Helpers
 
-        internal static double CalculateArcLength(double radius, double startAngle, double endAngle)
+        internal static float CalculateArcLength(float radius, float startAngle, float endAngle)
         {
             // Make sure end angle is greater than start angle
             if (endAngle < startAngle)
-                endAngle += 2 * Math.PI;
+                endAngle += 2 * Maths.PI;
             return radius * (endAngle - startAngle);
         }
 
         // Helper function to calculate the signed angle from vector u to vector v
-        internal static double CalculateVectorAngle(double ux, double uy, double vx, double vy)
+        internal static float CalculateVectorAngle(float ux, float uy, float vx, float vy)
         {
-            double dot = ux * vx + uy * vy;
-            double det = ux * vy - uy * vx; // 2D cross product
-            return Math.Atan2(det, dot); // Returns angle in radians from -PI to PI
+            float dot = ux * vx + uy * vy;
+            float det = ux * vy - uy * vx; // 2D cross product
+            return Maths.Atan2(det, dot); // Returns angle in radians from -PI to PI
         }
 
         #endregion

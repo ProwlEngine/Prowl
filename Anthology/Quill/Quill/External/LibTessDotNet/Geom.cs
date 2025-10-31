@@ -37,7 +37,7 @@ using System.Diagnostics;
 namespace Prowl.Quill.External
 {
 
-using Real = System.Double;
+using Real = System.Single;
 namespace LibTessDotNet
 {
     internal static class Geom

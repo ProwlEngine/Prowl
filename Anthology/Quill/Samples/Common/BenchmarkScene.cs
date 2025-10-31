@@ -11,24 +11,24 @@ namespace Common
     internal class BenchmarkScene : IDemo
     {
         private Canvas _canvas;
-        private double _width;
-        private double _height;
-        private double _time;
+        private float _width;
+        private float _height;
+        private float _time;
 
         // Benchmark parameters
         private const int RECT_COUNT = 79000;
         private const int CIRCLE_COUNT = 1000;
-        private const double MAX_SIZE = 20.0;
-        private const double MIN_SIZE = 5.0;
+        private const float MAX_SIZE = 20.0f;
+        private const float MIN_SIZE = 5.0f;
 
         // Performance tracking
-        private Queue<double> _frameTimeHistory = new Queue<double>();
+        private Queue<float> _frameTimeHistory = new Queue<float>();
         private const int MAX_HISTORY_SAMPLES = 60;
-        private double _averageFrameTime = 0;
+        private float _averageFrameTime = 0;
 
         private FontFile _font;
 
-        public BenchmarkScene(Canvas canvas, FontFile font, double width, double height)
+        public BenchmarkScene(Canvas canvas, FontFile font, float width, float height)
         {
             _canvas = canvas;
             _font = font;
@@ -37,7 +37,7 @@ namespace Common
             _height = height;
         }
 
-        public void RenderFrame(double deltaTime, Double2 offset, double zoom, double rotate)
+        public void RenderFrame(float deltaTime, Float2 offset, float zoom, float rotate)
         {
             _time += deltaTime;
 
@@ -75,15 +75,15 @@ namespace Common
             _randomState = 42;
 
             // Precompute time-dependent values once
-            double timeComponent = _time * 30;
-            double colorTimeR = _time * 2;
-            double colorTimeG = _time * 1.5;
-            double colorTimeB = _time * 1.8;
+            float timeComponent = _time * 30;
+            float colorTimeR = _time * 2;
+            float colorTimeG = _time * 1.5f;
+            float colorTimeB = _time * 1.8f;
 
             // Cache size range
-            double sizeRange = MAX_SIZE - MIN_SIZE;
-            double radiusMin = MIN_SIZE / 2;
-            double radiusRange = (MAX_SIZE - MIN_SIZE) / 2;
+            float sizeRange = MAX_SIZE - MIN_SIZE;
+            float radiusMin = MIN_SIZE / 2;
+            float radiusRange = (MAX_SIZE - MIN_SIZE) / 2;
 
             _canvas.SaveState();
             var curTransform = _canvas.GetTransform();
@@ -92,18 +92,18 @@ namespace Common
             for (int i = 0; i < RECT_COUNT; i++)
             {
                 // Precompute values instead of calling multiple times
-                double x = NextFloat() * _width;
-                double y = NextFloat() * _height;
-                double rotation = (NextFloat() * 360) + (timeComponent * (i % 10));
-                double scale = 0.5 + NextFloat() * 1.5;
-                double width = MIN_SIZE + NextFloat() * sizeRange;
-                double height = MIN_SIZE + NextFloat() * sizeRange;
+                float x = NextFloat() * _width;
+                float y = NextFloat() * _height;
+                float rotation = (NextFloat() * 360) + (timeComponent * (i % 10));
+                float scale = 0.5f + NextFloat() * 1.5f;
+                float width = MIN_SIZE + NextFloat() * sizeRange;
+                float height = MIN_SIZE + NextFloat() * sizeRange;
 
                 // Optimize color calculations
-                double iOffset = i * 0.01;
-                byte r = (byte)(128 + 127 * Math.Sin(colorTimeR + iOffset));
-                byte g = (byte)(128 + 127 * Math.Sin(colorTimeG + i * 0.015));
-                byte b = (byte)(128 + 127 * Math.Sin(colorTimeB + i * 0.008));
+                float iOffset = i * 0.01f;
+                byte r = (byte)(128 + 127 * Maths.Sin(colorTimeR + iOffset));
+                byte g = (byte)(128 + 127 * Maths.Sin(colorTimeG + i * 0.015));
+                byte b = (byte)(128 + 127 * Maths.Sin(colorTimeB + i * 0.008));
 
                 _canvas.CurrentTransform(curTransform);
                 _canvas.TransformBy(Transform2D.CreateTranslation(x, y));
@@ -112,24 +112,24 @@ namespace Common
                 _canvas.RectFilled(-width / 2, -height / 2, width, height, Color32.FromArgb(180, r, g, b));
             }
 
-            double circleColorTimeR = _time * 1.2;
-            double circleColorTimeG = _time * 2.1;
-            double circleColorTimeB = _time * 1.7;
-            double scaleTime = _time * 3;
+            float circleColorTimeR = _time * 1.2f;
+            float circleColorTimeG = _time * 2.1f;
+            float circleColorTimeB = _time * 1.7f;
+            float scaleTime = _time * 3;
 
             for (int i = 0; i < CIRCLE_COUNT; i++)
             {
-                double x = NextFloat() * _width;
-                double y = NextFloat() * _height;
-                double baseScale = 0.3 + NextFloat() * 1.2;
-                double animScale = 1.0 + 0.2 * Math.Sin(scaleTime + i * 0.02);
-                double totalScale = baseScale * animScale;
-                double radius = radiusMin + NextFloat() * radiusRange;
+                float x = NextFloat() * _width;
+                float y = NextFloat() * _height;
+                float baseScale = 0.3f + NextFloat() * 1.2f;
+                float animScale = 1.0f + 0.2f * Maths.Sin(scaleTime + i * 0.02f);
+                float totalScale = baseScale * animScale;
+                float radius = radiusMin + NextFloat() * radiusRange;
 
-                double iOffset = i * 0.012;
-                byte r = (byte)(128 + 127 * Math.Cos(circleColorTimeR + iOffset));
-                byte g = (byte)(128 + 127 * Math.Cos(circleColorTimeG + i * 0.008));
-                byte b = (byte)(128 + 127 * Math.Cos(circleColorTimeB + i * 0.020));
+                float iOffset = i * 0.012f;
+                byte r = (byte)(128 + 127 * Maths.Cos(circleColorTimeR + iOffset));
+                byte g = (byte)(128 + 127 * Maths.Cos(circleColorTimeG + i * 0.008));
+                byte b = (byte)(128 + 127 * Maths.Cos(circleColorTimeB + i * 0.020));
 
                 _canvas.CurrentTransform(curTransform);
                 _canvas.TransformBy(Transform2D.CreateTranslation(x, y));
@@ -140,7 +140,7 @@ namespace Common
             _canvas.RestoreState();
         }
 
-        private void UpdatePerformanceMetrics(double deltaTime)
+        private void UpdatePerformanceMetrics(float deltaTime)
         {
             _frameTimeHistory.Enqueue(deltaTime * 1000); // Convert to milliseconds
 
@@ -153,11 +153,11 @@ namespace Common
         private void DrawPerformanceOverlay()
         {
             // Performance overlay background
-            double overlayWidth = 300;
-            double overlayHeight = 80;
-            double padding = 10;
-            double x = _width - overlayWidth - padding;
-            double y = padding;
+            float overlayWidth = 300;
+            float overlayHeight = 80;
+            float padding = 10;
+            float x = _width - overlayWidth - padding;
+            float y = padding;
 
             _canvas.RectFilled(x, y, overlayWidth, overlayHeight, Color32.FromArgb(255, 0, 0, 0));
 
@@ -168,7 +168,7 @@ namespace Common
             _canvas.Stroke();
 
             // Performance text
-            double fps = _averageFrameTime > 0 ? 1000.0 / _averageFrameTime : 0;
+            float fps = _averageFrameTime > 0 ? 1000.0f / _averageFrameTime : 0f;
             string perfText = $"BENCHMARK: {RECT_COUNT + CIRCLE_COUNT} SHAPES";
             string fpsText = $"FPS: {fps:F1}";
             string frameTimeText = $"Frame Time: {_averageFrameTime:F2} ms";
@@ -180,7 +180,7 @@ namespace Common
             Console.Title = $"FPS: {fps:F1} | Frame Time: {_averageFrameTime:F2} ms | Shapes: {RECT_COUNT + CIRCLE_COUNT}";
         }
 
-        private void DrawSimpleText(string text, double x, double y, Color32 color)
+        private void DrawSimpleText(string text, float x, float y, Color32 color)
         {
             _canvas.DrawText(text, x, y, color, 17, _font);
         }
