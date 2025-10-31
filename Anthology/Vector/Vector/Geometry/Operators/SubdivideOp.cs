@@ -17,7 +17,7 @@ namespace Prowl.Vector.Geometry.Operators
             foreach (var e in mesh.Edges)
             {
                 edgeCenters[i] = mesh.AddVertex(e.Center());
-                GeometryOperators.AttributeLerp(mesh, edgeCenters[i], e.Vert1, e.Vert2, 0.5);
+                GeometryOperators.AttributeLerp(mesh, edgeCenters[i], e.Vert1, e.Vert2, 0.5f);
                 originalEdges[i] = e;
                 e.Id = i++;
             }
@@ -26,7 +26,7 @@ namespace Prowl.Vector.Geometry.Operators
             foreach (var f in originalFaces)
             {
                 var faceCenter = mesh.AddVertex(f.Center());
-                double w = 0;
+                float w = 0;
 
                 // Create one quad per loop in the original face
                 var it = f.Loop;
@@ -35,7 +35,7 @@ namespace Prowl.Vector.Geometry.Operators
                 do
                 {
                     w += 1;
-                    GeometryOperators.AttributeLerp(mesh, faceCenter, faceCenter, it.Vert, 1.0 / w);
+                    GeometryOperators.AttributeLerp(mesh, faceCenter, faceCenter, it.Vert, 1.0f / w);
 
                     var quad = new GeometryData.Vertex[]
                     {

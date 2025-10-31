@@ -164,7 +164,7 @@ public class RaylibDemo
             if (Raylib.IsKeyDown(KeyboardKey.E)) moveDir += Float3.UnitY; // Use world Up for Q/E
             if (Raylib.IsKeyDown(KeyboardKey.Q)) moveDir -= Float3.UnitY;
 
-            if (Float3.LengthSquared(moveDir) > Maths.EpsilonF) // Check if there's any movement input
+            if (Float3.LengthSquared(moveDir) > Maths.Epsilon) // Check if there's any movement input
             {
                 camera.Position += Float3.Normalize(moveDir) * moveSpeed * deltaTime;
             }

@@ -16,19 +16,19 @@ public class GJKFrustumSphereDemo : IDemo
 
         // Create animated frustum
         float rotation = timeInSeconds * 0.4f;
-        Double3 camPos = (Double3)position + new Double3(
-            Maths.Cos(rotation) * 0.3,
-            0.5,
-            Maths.Sin(rotation) * 0.3
+        Float3 camPos = position + new Float3(
+            Maths.Cos(rotation) * 0.3f,
+            0.5f,
+            Maths.Sin(rotation) * 0.3f
         );
-        Double3 lookAt = (Double3)position;
-        Double3 forward = Double3.Normalize(lookAt - camPos);
-        Double3 up = new Double3(0, 1, 0);
+        Float3 lookAt = position;
+        Float3 forward = Float3.Normalize(lookAt - camPos);
+        Float3 up = new Float3(0, 1, 0);
 
-        double fov = Maths.PI / 4 + Maths.Sin(timeInSeconds * 1.5) * 0.1;
-        double aspect = 1.2;
-        double nearDist = 0.2;
-        double farDist = 1.2;
+        float fov = Maths.PI / 4 + Maths.Sin(timeInSeconds * 1.5f) * 0.1f;
+        float aspect = 1.2f;
+        float nearDist = 0.2f;
+        float farDist = 1.2f;
 
         Frustum frustum = Frustum.FromCamera(camPos, forward, up, fov, aspect, nearDist, farDist);
 
@@ -41,7 +41,7 @@ public class GJKFrustumSphereDemo : IDemo
         );
 
         float radius = 0.25f + Maths.Sin(timeInSeconds * 2.5f) * 0.05f;
-        Sphere sphere = new Sphere((Double3)position + (Double3)sphereOffset, radius);
+        Sphere sphere = new Sphere(position + sphereOffset, radius);
 
         // Use GJK for collision detection
         bool intersects = GJK.Intersects(frustum, sphere);

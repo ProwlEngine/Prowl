@@ -10,15 +10,15 @@ namespace Prowl.Vector.Geometry.Operators
     internal static class SplitEdgeOp
     {
         internal static GeometryData.Vertex SplitEdge(GeometryData mesh, GeometryData.Edge edge,
-            GeometryData.Vertex fromVertex, double factor, out GeometryData.Edge newEdge)
+            GeometryData.Vertex fromVertex, float factor, out GeometryData.Edge newEdge)
         {
             Debug.Assert(edge.ContainsVertex(fromVertex));
-            Debug.Assert(factor >= 0.0 && factor <= 1.0);
+            Debug.Assert(factor >= 0.0f && factor <= 1.0f);
 
             GeometryData.Vertex otherVertex = edge.OtherVertex(fromVertex);
 
             // Create new vertex at interpolated position
-            Double3 newPos = Maths.Lerp(fromVertex.Point, otherVertex.Point, factor);
+            Float3 newPos = Maths.Lerp(fromVertex.Point, otherVertex.Point, factor);
             GeometryData.Vertex newVert = mesh.AddVertex(newPos);
 
             // Interpolate all vertex attributes
@@ -160,7 +160,7 @@ namespace Prowl.Vector.Geometry.Operators
                                                 val2 is GeometryData.FloatAttributeValue fval2)
                                             {
                                                 int n = fval1.Data.Length;
-                                                var val = new GeometryData.FloatAttributeValue { Data = new double[n] };
+                                                var val = new GeometryData.FloatAttributeValue { Data = new float[n] };
                                                 for (int i = 0; i < n; ++i)
                                                 {
                                                     val.Data[i] = Maths.Lerp(fval1.Data[i], fval2.Data[i], factor);

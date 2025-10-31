@@ -18,7 +18,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="center">Center position of the box</param>
         /// <param name="segments">Number of subdivisions per face (minimum 1)</param>
         /// <returns>GeometryData representing the box with quad faces</returns>
-        public static GeometryData Box(Double3 size, Double3 center = default, Int3 segments = default)
+        public static GeometryData Box(Float3 size, Float3 center = default, Int3 segments = default)
         {
             if (segments == default) segments = new Int3(1, 1, 1);
             segments = new Int3(
@@ -28,20 +28,20 @@ namespace Prowl.Vector.Geometry
             );
 
             var geometryData = new GeometryData();
-            Double3 halfSize = size * 0.5;
+            Float3 halfSize = size * 0.5f;
 
             // If no subdivisions, use a simple 8-vertex cube
             if (segments.X == 1 && segments.Y == 1 && segments.Z == 1)
             {
                 // Create 8 corner vertices
-                var v0 = geometryData.AddVertex(center + new Double3(-halfSize.X, -halfSize.Y, -halfSize.Z));
-                var v1 = geometryData.AddVertex(center + new Double3(halfSize.X, -halfSize.Y, -halfSize.Z));
-                var v2 = geometryData.AddVertex(center + new Double3(halfSize.X, halfSize.Y, -halfSize.Z));
-                var v3 = geometryData.AddVertex(center + new Double3(-halfSize.X, halfSize.Y, -halfSize.Z));
-                var v4 = geometryData.AddVertex(center + new Double3(-halfSize.X, -halfSize.Y, halfSize.Z));
-                var v5 = geometryData.AddVertex(center + new Double3(halfSize.X, -halfSize.Y, halfSize.Z));
-                var v6 = geometryData.AddVertex(center + new Double3(halfSize.X, halfSize.Y, halfSize.Z));
-                var v7 = geometryData.AddVertex(center + new Double3(-halfSize.X, halfSize.Y, halfSize.Z));
+                var v0 = geometryData.AddVertex(center + new Float3(-halfSize.X, -halfSize.Y, -halfSize.Z));
+                var v1 = geometryData.AddVertex(center + new Float3(halfSize.X, -halfSize.Y, -halfSize.Z));
+                var v2 = geometryData.AddVertex(center + new Float3(halfSize.X, halfSize.Y, -halfSize.Z));
+                var v3 = geometryData.AddVertex(center + new Float3(-halfSize.X, halfSize.Y, -halfSize.Z));
+                var v4 = geometryData.AddVertex(center + new Float3(-halfSize.X, -halfSize.Y, halfSize.Z));
+                var v5 = geometryData.AddVertex(center + new Float3(halfSize.X, -halfSize.Y, halfSize.Z));
+                var v6 = geometryData.AddVertex(center + new Float3(halfSize.X, halfSize.Y, halfSize.Z));
+                var v7 = geometryData.AddVertex(center + new Float3(-halfSize.X, halfSize.Y, halfSize.Z));
 
                 // Create 6 faces
                 geometryData.AddFace(v1, v0, v3, v2); // Front (-Z)
@@ -56,30 +56,30 @@ namespace Prowl.Vector.Geometry
                 // Use subdivided faces (original behavior)
                 // Front face (+Z)
                 AddBoxFace(geometryData, center, halfSize, segments.X, segments.Y,
-                    new Double3(-1, -1, 1), new Double3(1, 0, 0), new Double3(0, 1, 0));
+                    new Float3(-1, -1, 1), new Float3(1, 0, 0), new Float3(0, 1, 0));
 
                 // Back face (-Z)
                 AddBoxFace(geometryData, center, halfSize, segments.X, segments.Y,
-                    new Double3(1, -1, -1), new Double3(-1, 0, 0), new Double3(0, 1, 0));
+                    new Float3(1, -1, -1), new Float3(-1, 0, 0), new Float3(0, 1, 0));
 
                 // Right face (+X)
                 AddBoxFace(geometryData, center, halfSize, segments.Z, segments.Y,
-                    new Double3(1, -1, 1), new Double3(0, 0, -1), new Double3(0, 1, 0));
+                    new Float3(1, -1, 1), new Float3(0, 0, -1), new Float3(0, 1, 0));
 
                 // Left face (-X)
                 AddBoxFace(geometryData, center, halfSize, segments.Z, segments.Y,
-                    new Double3(-1, -1, -1), new Double3(0, 0, 1), new Double3(0, 1, 0));
+                    new Float3(-1, -1, -1), new Float3(0, 0, 1), new Float3(0, 1, 0));
 
                 // Top face (+Y)
                 AddBoxFace(geometryData, center, halfSize, segments.X, segments.Z,
-                    new Double3(-1, 1, 1), new Double3(1, 0, 0), new Double3(0, 0, -1));
+                    new Float3(-1, 1, 1), new Float3(1, 0, 0), new Float3(0, 0, -1));
 
                 // Bottom face (-Y)
                 AddBoxFace(geometryData, center, halfSize, segments.X, segments.Z,
-                    new Double3(-1, -1, -1), new Double3(1, 0, 0), new Double3(0, 0, 1));
+                    new Float3(-1, -1, -1), new Float3(1, 0, 0), new Float3(0, 0, 1));
 
                 // Weld vertices along edges to avoid duplicates
-                GeometryOperators.WeldVertices(geometryData, 0.0001);
+                GeometryOperators.WeldVertices(geometryData, 0.0001f);
             }
 
             return geometryData;
@@ -88,13 +88,13 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Creates a simple box with given size centered at origin.
         /// </summary>
-        public static GeometryData Box(double width, double height, double depth)
+        public static GeometryData Box(float width, float height, float depth)
         {
-            return Box(new Double3(width, height, depth));
+            return Box(new Float3(width, height, depth));
         }
 
-        private static void AddBoxFace(GeometryData mesh, Double3 center, Double3 halfSize,
-            int segmentsU, int segmentsV, Double3 corner, Double3 uDir, Double3 vDir)
+        private static void AddBoxFace(GeometryData mesh, Float3 center, Float3 halfSize,
+            int segmentsU, int segmentsV, Float3 corner, Float3 uDir, Float3 vDir)
         {
             var vertices = new GeometryData.Vertex[segmentsV + 1, segmentsU + 1];
 
@@ -102,10 +102,10 @@ namespace Prowl.Vector.Geometry
             {
                 for (int u = 0; u <= segmentsU; u++)
                 {
-                    double uf = (double)u / segmentsU;
-                    double vf = (double)v / segmentsV;
+                    float uf = (float)u / segmentsU;
+                    float vf = (float)v / segmentsV;
 
-                    Double3 pos = center + new Double3(
+                    Float3 pos = center + new Float3(
                         (corner.X + uDir.X * 2 * uf + vDir.X * 2 * vf) * halfSize.X,
                         (corner.Y + uDir.Y * 2 * uf + vDir.Y * 2 * vf) * halfSize.Y,
                         (corner.Z + uDir.Z * 2 * uf + vDir.Z * 2 * vf) * halfSize.Z
@@ -141,27 +141,27 @@ namespace Prowl.Vector.Geometry
         /// <param name="segments">Number of subdivisions (X and Z)</param>
         /// <param name="normal">Normal direction of the plane (default is up/+Y)</param>
         /// <returns>GeometryData representing the plane with quad faces</returns>
-        public static GeometryData Plane(Double2 size, Double3 center = default, Int2 segments = default, Double3 normal = default)
+        public static GeometryData Plane(Float2 size, Float3 center = default, Int2 segments = default, Float3 normal = default)
         {
             if (segments == default) segments = new Int2(1, 1);
-            if (normal == default) normal = Double3.UnitY;
+            if (normal == default) normal = Float3.UnitY;
 
             segments = new Int2(Maths.Max(1, segments.X), Maths.Max(1, segments.Y));
 
             var geometryData = new GeometryData();
-            Double2 halfSize = size * 0.5;
+            Float2 halfSize = size * 0.5f;
 
             // Create a coordinate system aligned with the normal
-            Double3 tangent, bitangent;
+            Float3 tangent, bitangent;
             if (Maths.Abs(normal.Y) < 0.999)
             {
-                tangent = Double3.Normalize(Double3.Cross(normal, Double3.UnitY));
+                tangent = Float3.Normalize(Float3.Cross(normal, Float3.UnitY));
             }
             else
             {
-                tangent = Double3.Normalize(Double3.Cross(normal, Double3.UnitZ));
+                tangent = Float3.Normalize(Float3.Cross(normal, Float3.UnitZ));
             }
-            bitangent = Double3.Normalize(Double3.Cross(normal, tangent));
+            bitangent = Float3.Normalize(Float3.Cross(normal, tangent));
 
             var vertices = new GeometryData.Vertex[segments.Y + 1, segments.X + 1];
 
@@ -169,10 +169,10 @@ namespace Prowl.Vector.Geometry
             {
                 for (int x = 0; x <= segments.X; x++)
                 {
-                    double u = (double)x / segments.X - 0.5;
-                    double v = (double)z / segments.Y - 0.5;
+                    float u = x / segments.X - 0.5f;
+                    float v = z / segments.Y - 0.5f;
 
-                    Double3 pos = center + tangent * (u * size.X) + bitangent * (v * size.Y);
+                    Float3 pos = center + tangent * (u * size.X) + bitangent * (v * size.Y);
                     vertices[z, x] = geometryData.AddVertex(pos);
                 }
             }
@@ -196,9 +196,9 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Creates a square plane with given size.
         /// </summary>
-        public static GeometryData Plane(double size, int segments = 1)
+        public static GeometryData Plane(float size, int segments = 1)
         {
-            return Plane(new Double2(size, size), segments: new Int2(segments, segments));
+            return Plane(new Float2(size, size), segments: new Int2(segments, segments));
         }
 
         #endregion
@@ -213,7 +213,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="segments">Number of horizontal segments (longitude)</param>
         /// <param name="rings">Number of vertical rings (latitude)</param>
         /// <returns>GeometryData representing the sphere with quad faces</returns>
-        public static GeometryData Sphere(double radius, Double3 center = default, int segments = 32, int rings = 16)
+        public static GeometryData Sphere(float radius, Float3 center = default, int segments = 32, int rings = 16)
         {
             segments = Maths.Max(3, segments);
             rings = Maths.Max(2, rings);
@@ -223,17 +223,17 @@ namespace Prowl.Vector.Geometry
 
             for (int lat = 0; lat <= rings; lat++)
             {
-                double theta = lat * Maths.PI / rings;
-                double sinTheta = Maths.Sin(theta);
-                double cosTheta = Maths.Cos(theta);
+                float theta = lat * (float)Maths.PI / rings;
+                float sinTheta = Maths.Sin(theta);
+                float cosTheta = Maths.Cos(theta);
 
                 for (int lon = 0; lon < segments; lon++)
                 {
-                    double phi = lon * 2.0 * Maths.PI / segments;
-                    double sinPhi = Maths.Sin(phi);
-                    double cosPhi = Maths.Cos(phi);
+                    float phi = lon * 2.0f * (float)Maths.PI / segments;
+                    float sinPhi = Maths.Sin(phi);
+                    float cosPhi = Maths.Cos(phi);
 
-                    Double3 position = center + new Double3(
+                    Float3 position = center + new Float3(
                         radius * sinTheta * cosPhi,
                         radius * cosTheta,
                         radius * sinTheta * sinPhi
@@ -272,29 +272,29 @@ namespace Prowl.Vector.Geometry
         /// <param name="center">Center position of the sphere</param>
         /// <param name="subdivisions">Number of subdivisions (0 = icosahedron, higher = smoother)</param>
         /// <returns>GeometryData representing the icosphere with triangular faces</returns>
-        public static GeometryData Icosphere(double radius, Double3 center = default, int subdivisions = 2)
+        public static GeometryData Icosphere(float radius, Float3 center = default, int subdivisions = 2)
         {
             subdivisions = Maths.Max(0, subdivisions);
 
             var geometryData = new GeometryData();
 
             // Create icosahedron vertices
-            double t = (1.0 + Maths.Sqrt(5.0)) / 2.0; // Golden ratio
+            float t = (1.0f + Maths.Sqrt(5.0f)) / 2.0f; // Golden ratio
 
-            List<Double3> positions = new List<Double3>
+            List<Float3> positions = new List<Float3>
             {
-                Double3.Normalize(new Double3(-1,  t,  0)) * radius + center,
-                Double3.Normalize(new Double3( 1,  t,  0)) * radius + center,
-                Double3.Normalize(new Double3(-1, -t,  0)) * radius + center,
-                Double3.Normalize(new Double3( 1, -t,  0)) * radius + center,
-                Double3.Normalize(new Double3( 0, -1,  t)) * radius + center,
-                Double3.Normalize(new Double3( 0,  1,  t)) * radius + center,
-                Double3.Normalize(new Double3( 0, -1, -t)) * radius + center,
-                Double3.Normalize(new Double3( 0,  1, -t)) * radius + center,
-                Double3.Normalize(new Double3( t,  0, -1)) * radius + center,
-                Double3.Normalize(new Double3( t,  0,  1)) * radius + center,
-                Double3.Normalize(new Double3(-t,  0, -1)) * radius + center,
-                Double3.Normalize(new Double3(-t,  0,  1)) * radius + center
+                Float3.Normalize(new Float3(-1,  t,  0)) * radius + center,
+                Float3.Normalize(new Float3( 1,  t,  0)) * radius + center,
+                Float3.Normalize(new Float3(-1, -t,  0)) * radius + center,
+                Float3.Normalize(new Float3( 1, -t,  0)) * radius + center,
+                Float3.Normalize(new Float3( 0, -1,  t)) * radius + center,
+                Float3.Normalize(new Float3( 0,  1,  t)) * radius + center,
+                Float3.Normalize(new Float3( 0, -1, -t)) * radius + center,
+                Float3.Normalize(new Float3( 0,  1, -t)) * radius + center,
+                Float3.Normalize(new Float3( t,  0, -1)) * radius + center,
+                Float3.Normalize(new Float3( t,  0,  1)) * radius + center,
+                Float3.Normalize(new Float3(-t,  0, -1)) * radius + center,
+                Float3.Normalize(new Float3(-t,  0,  1)) * radius + center
             };
 
             // Create icosahedron faces (20 triangles)
@@ -318,7 +318,7 @@ namespace Prowl.Vector.Geometry
                     if (midPointCache.TryGetValue(key, out int cached))
                         return cached;
 
-                    Double3 mid = Double3.Normalize((positions[i1] - center + positions[i2] - center) * 0.5) * radius + center;
+                    Float3 mid = Float3.Normalize((positions[i1] - center + positions[i2] - center) * 0.5f) * radius + center;
                     int index = positions.Count;
                     positions.Add(mid);
                     midPointCache[key] = index;
@@ -370,26 +370,26 @@ namespace Prowl.Vector.Geometry
         /// <param name="capTop">Include top cap</param>
         /// <param name="capBottom">Include bottom cap</param>
         /// <returns>GeometryData representing the cylinder</returns>
-        public static GeometryData Cylinder(double radius, double height, Double3 center = default,
+        public static GeometryData Cylinder(float radius, float height, Float3 center = default,
             int segments = 32, int rings = 1, bool capTop = true, bool capBottom = true)
         {
             segments = Maths.Max(3, segments);
             rings = Maths.Max(1, rings);
 
             var geometryData = new GeometryData();
-            double halfHeight = height * 0.5;
+            float halfHeight = height * 0.5f;
 
             // Side vertices (without wrapping duplicate at seg=segments)
             var sideVertices = new GeometryData.Vertex[rings + 1, segments];
 
             for (int ring = 0; ring <= rings; ring++)
             {
-                double y = -halfHeight + (height * ring / rings);
+                float y = -halfHeight + (height * ring / rings);
 
                 for (int seg = 0; seg < segments; seg++)
                 {
-                    double angle = seg * 2.0 * Maths.PI / segments;
-                    Double3 pos = center + new Double3(
+                    float angle = seg * 2.0f * (float)Maths.PI / segments;
+                    Float3 pos = center + new Float3(
                         Maths.Cos(angle) * radius,
                         y,
                         Maths.Sin(angle) * radius
@@ -417,7 +417,7 @@ namespace Prowl.Vector.Geometry
             // Top cap (reuse top ring vertices from side)
             if (capTop)
             {
-                var topCenter = geometryData.AddVertex(center + new Double3(0, halfHeight, 0));
+                var topCenter = geometryData.AddVertex(center + new Float3(0, halfHeight, 0));
 
                 for (int seg = 0; seg < segments; seg++)
                 {
@@ -429,7 +429,7 @@ namespace Prowl.Vector.Geometry
             // Bottom cap (reuse bottom ring vertices from side)
             if (capBottom)
             {
-                var bottomCenter = geometryData.AddVertex(center + new Double3(0, -halfHeight, 0));
+                var bottomCenter = geometryData.AddVertex(center + new Float3(0, -halfHeight, 0));
 
                 for (int seg = 0; seg < segments; seg++)
                 {
@@ -454,7 +454,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="segments">Number of radial segments</param>
         /// <param name="capBottom">Include bottom cap</param>
         /// <returns>GeometryData representing the cone</returns>
-        public static GeometryData Cone(double radius, double height, Double3 center = default,
+        public static GeometryData Cone(float radius, float height, Float3 center = default,
             int segments = 32, bool capBottom = true)
         {
             segments = Maths.Max(3, segments);
@@ -462,14 +462,14 @@ namespace Prowl.Vector.Geometry
             var geometryData = new GeometryData();
 
             // Apex
-            var apex = geometryData.AddVertex(center + new Double3(0, height, 0));
+            var apex = geometryData.AddVertex(center + new Float3(0, height, 0));
 
             // Base ring
             var baseRing = new GeometryData.Vertex[segments];
             for (int seg = 0; seg < segments; seg++)
             {
-                double angle = seg * 2.0 * Maths.PI / segments;
-                Double3 pos = center + new Double3(
+                float angle = seg * 2.0f * (float)Maths.PI / segments;
+                Float3 pos = center + new Float3(
                     Maths.Cos(angle) * radius,
                     0,
                     Maths.Sin(angle) * radius
@@ -506,7 +506,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="majorSegments">Number of segments around the major circle</param>
         /// <param name="minorSegments">Number of segments around the tube</param>
         /// <returns>GeometryData representing the torus with quad faces</returns>
-        public static GeometryData Torus(double majorRadius, double minorRadius, Double3 center = default,
+        public static GeometryData Torus(float majorRadius, float minorRadius, Float3 center = default,
             int majorSegments = 48, int minorSegments = 24)
         {
             majorSegments = Maths.Max(3, majorSegments);
@@ -517,17 +517,17 @@ namespace Prowl.Vector.Geometry
 
             for (int i = 0; i < majorSegments; i++)
             {
-                double u = (double)i / majorSegments * 2.0 * Maths.PI;
-                double cosU = Maths.Cos(u);
-                double sinU = Maths.Sin(u);
+                float u = (float)i / majorSegments * 2.0f * (float)Maths.PI;
+                float cosU = Maths.Cos(u);
+                float sinU = Maths.Sin(u);
 
                 for (int j = 0; j < minorSegments; j++)
                 {
-                    double v = (double)j / minorSegments * 2.0 * Maths.PI;
-                    double cosV = Maths.Cos(v);
-                    double sinV = Maths.Sin(v);
+                    float v = (float)j / minorSegments * 2.0f * (float)Maths.PI;
+                    float cosV = Maths.Cos(v);
+                    float sinV = Maths.Sin(v);
 
-                    Double3 pos = center + new Double3(
+                    Float3 pos = center + new Float3(
                         (majorRadius + minorRadius * cosV) * cosU,
                         minorRadius * sinV,
                         (majorRadius + minorRadius * cosV) * sinU
@@ -567,16 +567,16 @@ namespace Prowl.Vector.Geometry
         /// <param name="size">Size of the tetrahedron</param>
         /// <param name="center">Center position</param>
         /// <returns>GeometryData representing the tetrahedron</returns>
-        public static GeometryData Tetrahedron(double size, Double3 center = default)
+        public static GeometryData Tetrahedron(float size, Float3 center = default)
         {
             var geometryData = new GeometryData();
 
-            double a = size / Maths.Sqrt(3.0);
+            float a = size / Maths.Sqrt(3.0f);
 
-            var v0 = geometryData.AddVertex(center + new Double3(a, a, a));
-            var v1 = geometryData.AddVertex(center + new Double3(-a, -a, a));
-            var v2 = geometryData.AddVertex(center + new Double3(-a, a, -a));
-            var v3 = geometryData.AddVertex(center + new Double3(a, -a, -a));
+            var v0 = geometryData.AddVertex(center + new Float3(a, a, a));
+            var v1 = geometryData.AddVertex(center + new Float3(-a, -a, a));
+            var v2 = geometryData.AddVertex(center + new Float3(-a, a, -a));
+            var v3 = geometryData.AddVertex(center + new Float3(a, -a, -a));
 
             geometryData.AddFace(v0, v2, v1);
             geometryData.AddFace(v0, v1, v3);
@@ -592,18 +592,18 @@ namespace Prowl.Vector.Geometry
         /// <param name="size">Size of the octahedron</param>
         /// <param name="center">Center position</param>
         /// <returns>GeometryData representing the octahedron</returns>
-        public static GeometryData Octahedron(double size, Double3 center = default)
+        public static GeometryData Octahedron(float size, Float3 center = default)
         {
             var geometryData = new GeometryData();
 
-            double s = size / Maths.Sqrt(2.0);
+            float s = size / Maths.Sqrt(2.0f);
 
-            var v0 = geometryData.AddVertex(center + new Double3(s, 0, 0));
-            var v1 = geometryData.AddVertex(center + new Double3(-s, 0, 0));
-            var v2 = geometryData.AddVertex(center + new Double3(0, s, 0));
-            var v3 = geometryData.AddVertex(center + new Double3(0, -s, 0));
-            var v4 = geometryData.AddVertex(center + new Double3(0, 0, s));
-            var v5 = geometryData.AddVertex(center + new Double3(0, 0, -s));
+            var v0 = geometryData.AddVertex(center + new Float3(s, 0, 0));
+            var v1 = geometryData.AddVertex(center + new Float3(-s, 0, 0));
+            var v2 = geometryData.AddVertex(center + new Float3(0, s, 0));
+            var v3 = geometryData.AddVertex(center + new Float3(0, -s, 0));
+            var v4 = geometryData.AddVertex(center + new Float3(0, 0, s));
+            var v5 = geometryData.AddVertex(center + new Float3(0, 0, -s));
 
             // Upper pyramid
             geometryData.AddFace(v2, v4, v0);
@@ -626,45 +626,45 @@ namespace Prowl.Vector.Geometry
         /// <param name="size">Size of the dodecahedron</param>
         /// <param name="center">Center position</param>
         /// <returns>GeometryData representing the dodecahedron with pentagonal faces</returns>
-        public static GeometryData Dodecahedron(double size, Double3 center = default)
+        public static GeometryData Dodecahedron(float size, Float3 center = default)
         {
             var geometryData = new GeometryData();
 
-            double phi = (1.0 + Maths.Sqrt(5.0)) / 2.0; // Golden ratio
-            double a = size / Maths.Sqrt(3.0);
-            double b = a / phi;
-            double c = a * phi;
+            float phi = (1.0f + Maths.Sqrt(5.0f)) / 2.0f; // Golden ratio
+            float a = size / Maths.Sqrt(3.0f);
+            float b = a / phi;
+            float c = a * phi;
 
             // Create 20 vertices
             var vertices = new List<GeometryData.Vertex>
             {
                 // (±1, ±1, ±1)
-                geometryData.AddVertex(center + new Double3(a, a, a)),
-                geometryData.AddVertex(center + new Double3(a, a, -a)),
-                geometryData.AddVertex(center + new Double3(a, -a, a)),
-                geometryData.AddVertex(center + new Double3(a, -a, -a)),
-                geometryData.AddVertex(center + new Double3(-a, a, a)),
-                geometryData.AddVertex(center + new Double3(-a, a, -a)),
-                geometryData.AddVertex(center + new Double3(-a, -a, a)),
-                geometryData.AddVertex(center + new Double3(-a, -a, -a)),
+                geometryData.AddVertex(center + new Float3(a, a, a)),
+                geometryData.AddVertex(center + new Float3(a, a, -a)),
+                geometryData.AddVertex(center + new Float3(a, -a, a)),
+                geometryData.AddVertex(center + new Float3(a, -a, -a)),
+                geometryData.AddVertex(center + new Float3(-a, a, a)),
+                geometryData.AddVertex(center + new Float3(-a, a, -a)),
+                geometryData.AddVertex(center + new Float3(-a, -a, a)),
+                geometryData.AddVertex(center + new Float3(-a, -a, -a)),
 
                 // (0, ±1/φ, ±φ)
-                geometryData.AddVertex(center + new Double3(0, b, c)),
-                geometryData.AddVertex(center + new Double3(0, b, -c)),
-                geometryData.AddVertex(center + new Double3(0, -b, c)),
-                geometryData.AddVertex(center + new Double3(0, -b, -c)),
+                geometryData.AddVertex(center + new Float3(0, b, c)),
+                geometryData.AddVertex(center + new Float3(0, b, -c)),
+                geometryData.AddVertex(center + new Float3(0, -b, c)),
+                geometryData.AddVertex(center + new Float3(0, -b, -c)),
 
                 // (±1/φ, ±φ, 0)
-                geometryData.AddVertex(center + new Double3(b, c, 0)),
-                geometryData.AddVertex(center + new Double3(b, -c, 0)),
-                geometryData.AddVertex(center + new Double3(-b, c, 0)),
-                geometryData.AddVertex(center + new Double3(-b, -c, 0)),
+                geometryData.AddVertex(center + new Float3(b, c, 0)),
+                geometryData.AddVertex(center + new Float3(b, -c, 0)),
+                geometryData.AddVertex(center + new Float3(-b, c, 0)),
+                geometryData.AddVertex(center + new Float3(-b, -c, 0)),
 
                 // (±φ, 0, ±1/φ)
-                geometryData.AddVertex(center + new Double3(c, 0, b)),
-                geometryData.AddVertex(center + new Double3(c, 0, -b)),
-                geometryData.AddVertex(center + new Double3(-c, 0, b)),
-                geometryData.AddVertex(center + new Double3(-c, 0, -b))
+                geometryData.AddVertex(center + new Float3(c, 0, b)),
+                geometryData.AddVertex(center + new Float3(c, 0, -b)),
+                geometryData.AddVertex(center + new Float3(-c, 0, b)),
+                geometryData.AddVertex(center + new Float3(-c, 0, -b))
             };
 
             // Create 12 pentagonal faces
@@ -709,7 +709,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="indices">Array of face indices (flat array where each face can have variable vertex count)</param>
         /// <param name="faceSizes">Array specifying number of vertices per face (if null, assumes all triangles)</param>
         /// <returns>GeometryData created from the indexed data</returns>
-        public static GeometryData IndexedMesh(Double3[] vertices, int[] indices, int[]? faceSizes = null)
+        public static GeometryData IndexedMesh(Float3[] vertices, int[] indices, int[]? faceSizes = null)
         {
             var geometryData = new GeometryData();
 
@@ -758,7 +758,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="vertices">Array of vertex positions</param>
         /// <param name="triangles">Array of triangle indices (3 indices per triangle)</param>
         /// <returns>GeometryData created from the indexed data</returns>
-        public static GeometryData TriangleMesh(Double3[] vertices, int[] triangles)
+        public static GeometryData TriangleMesh(Float3[] vertices, int[] triangles)
         {
             return IndexedMesh(vertices, triangles, null);
         }

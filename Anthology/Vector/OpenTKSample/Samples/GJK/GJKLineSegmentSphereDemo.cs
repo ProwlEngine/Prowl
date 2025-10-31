@@ -33,7 +33,7 @@ public class GJKLineSegmentSphereDemo : IDemo
         Float3 segmentStart = position - segmentDir * (segmentLength * 0.5f);
         Float3 segmentEnd = position + segmentDir * (segmentLength * 0.5f);
 
-        LineSegment lineSegment = new LineSegment((Double3)segmentStart, (Double3)segmentEnd);
+        LineSegment lineSegment = new LineSegment(segmentStart, segmentEnd);
 
         // Orbiting sphere
         float sphereTime = timeInSeconds * 1.4f;
@@ -44,7 +44,7 @@ public class GJKLineSegmentSphereDemo : IDemo
         );
 
         float radius = 0.3f + Maths.Cos(timeInSeconds * 2.2f) * 0.08f;
-        Sphere sphere = new Sphere((Double3)position + (Double3)sphereOffset, radius);
+        Sphere sphere = new Sphere(position + sphereOffset, radius);
 
         // Use GJK for collision detection
         bool intersects = GJK.Intersects(lineSegment, sphere);

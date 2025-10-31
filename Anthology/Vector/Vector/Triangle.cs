@@ -15,13 +15,13 @@ namespace Prowl.Vector
     public struct Triangle : IEquatable<Triangle>, IFormattable, IBoundingShape
     {
         /// <summary>The first vertex of the triangle.</summary>
-        public Double3 V0;
+        public Float3 V0;
 
         /// <summary>The second vertex of the triangle.</summary>
-        public Double3 V1;
+        public Float3 V1;
 
         /// <summary>The third vertex of the triangle.</summary>
-        public Double3 V2;
+        public Float3 V2;
 
         /// <summary>
         /// Initializes a new triangle from three vertices.
@@ -30,7 +30,7 @@ namespace Prowl.Vector
         /// <param name="v1">Second vertex.</param>
         /// <param name="v2">Third vertex.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Triangle(Double3 v0, Double3 v1, Double3 v2)
+        public Triangle(Float3 v0, Float3 v1, Float3 v2)
         {
             V0 = v0;
             V1 = v1;
@@ -41,52 +41,52 @@ namespace Prowl.Vector
         /// Gets the normal vector of the triangle (not normalized).
         /// Direction follows right-hand rule based on vertex order.
         /// </summary>
-        public Double3 Normal
+        public Float3 Normal
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Double3.Cross(V1 - V0, V2 - V0);
+            get => Float3.Cross(V1 - V0, V2 - V0);
         }
 
         /// <summary>
         /// Gets the normalized normal vector of the triangle.
         /// </summary>
-        public Double3 NormalizedNormal
+        public Float3 NormalizedNormal
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Double3.Normalize(Normal);
+            get => Float3.Normalize(Normal);
         }
 
         /// <summary>
         /// Gets the area of the triangle.
         /// </summary>
-        public double Area
+        public float Area
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Double3.Length(Normal) / 2.0;
+            get => Float3.Length(Normal) / 2.0f;
         }
 
         /// <summary>
         /// Gets the centroid (center point) of the triangle.
         /// </summary>
-        public Double3 Centroid
+        public Float3 Centroid
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => (V0 + V1 + V2) / new Double3(3, 3, 3);
+            get => (V0 + V1 + V2) / new Float3(3, 3, 3);
         }
 
         /// <summary>
         /// Gets the perimeter of the triangle.
         /// </summary>
-        public double Perimeter
+        public float Perimeter
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Double3.Length(V1 - V0) + Double3.Length(V2 - V1) + Double3.Length(V0 - V2);
+            get => Float3.Length(V1 - V0) + Float3.Length(V2 - V1) + Float3.Length(V0 - V2);
         }
 
         /// <summary>
         /// Gets a vertex by index (0, 1, or 2).
         /// </summary>
-        public Double3 this[int index]
+        public Float3 this[int index]
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
@@ -120,19 +120,19 @@ namespace Prowl.Vector
         /// <param name="v">Barycentric coordinate v (weight for V2).</param>
         /// <remarks>w (weight for V0) = 1 - u - v.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void GetBarycentricCoordinates(Double3 point, out double u, out double v)
+        public void GetBarycentricCoordinates(Float3 point, out float u, out float v)
         {
-            Double3 v0v1 = V1 - V0;
-            Double3 v0v2 = V2 - V0;
-            Double3 v0p = point - V0;
+            Float3 v0v1 = V1 - V0;
+            Float3 v0v2 = V2 - V0;
+            Float3 v0p = point - V0;
 
-            double dot00 = Double3.Dot(v0v2, v0v2);
-            double dot01 = Double3.Dot(v0v2, v0v1);
-            double dot02 = Double3.Dot(v0v2, v0p);
-            double dot11 = Double3.Dot(v0v1, v0v1);
-            double dot12 = Double3.Dot(v0v1, v0p);
+            float dot00 = Float3.Dot(v0v2, v0v2);
+            float dot01 = Float3.Dot(v0v2, v0v1);
+            float dot02 = Float3.Dot(v0v2, v0p);
+            float dot11 = Float3.Dot(v0v1, v0v1);
+            float dot12 = Float3.Dot(v0v1, v0p);
 
-            double invDenom = 1.0 / (dot00 * dot11 - dot01 * dot01);
+            float invDenom = 1.0f / (dot00 * dot11 - dot01 * dot01);
             u = (dot11 * dot02 - dot01 * dot12) * invDenom;
             v = (dot00 * dot12 - dot01 * dot02) * invDenom;
         }
@@ -144,7 +144,7 @@ namespace Prowl.Vector
         /// <param name="v">Barycentric coordinate v.</param>
         /// <returns>True if the point is inside or on the edge of the triangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool IsPointInTriangle(double u, double v)
+        public static bool IsPointInTriangle(float u, float v)
         {
             return u >= 0.0 && v >= 0.0 && (u + v) <= 1.0;
         }
@@ -156,9 +156,9 @@ namespace Prowl.Vector
         /// <param name="v">Barycentric coordinate v (weight for V2).</param>
         /// <returns>The interpolated point on the triangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 GetPointFromBarycentric(double u, double v)
+        public Float3 GetPointFromBarycentric(float u, float v)
         {
-            double w = 1.0 - u - v;
+            float w = 1.0f - u - v;
             return V0 * w + V1 * u + V2 * v;
         }
 
@@ -168,16 +168,16 @@ namespace Prowl.Vector
         /// <param name="point">The point to find the closest point to.</param>
         /// <returns>The closest point on the triangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 ClosestPointTo(Double3 point)
+        public Float3 ClosestPointTo(Float3 point)
         {
-            GetBarycentricCoordinates(point, out double u, out double v);
+            GetBarycentricCoordinates(point, out float u, out float v);
             
             // Clamp barycentric coordinates to triangle bounds
-            if (u < 0.0) u = 0.0;
-            if (v < 0.0) v = 0.0;
+            if (u < 0.0) u = 0.0f;
+            if (v < 0.0) v = 0.0f;
             if (u + v > 1.0)
             {
-                double sum = u + v;
+                float sum = u + v;
                 u /= sum;
                 v /= sum;
             }
@@ -202,7 +202,7 @@ namespace Prowl.Vector
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsDegenerate()
         {
-            return Double3.LengthSquared(Normal) < double.Epsilon * double.Epsilon;
+            return Float3.LengthSquared(Normal) < float.Epsilon * float.Epsilon;
         }
 
         /// <summary>
@@ -211,12 +211,12 @@ namespace Prowl.Vector
         /// <param name="matrix">The transformation matrix.</param>
         /// <returns>The transformed triangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Triangle Transform(Double4x4 matrix)
+        public Triangle Transform(Float4x4 matrix)
         {
             return new Triangle(
-                Double4x4.TransformPoint(V0, matrix),
-                Double4x4.TransformPoint(V1, matrix),
-                Double4x4.TransformPoint(V2, matrix)
+                Float4x4.TransformPoint(V0, matrix),
+                Float4x4.TransformPoint(V1, matrix),
+                Float4x4.TransformPoint(V2, matrix)
             );
         }
 
@@ -227,9 +227,9 @@ namespace Prowl.Vector
         /// <param name="point">The point to test against.</param>
         /// <returns>The signed volume (positive if point is on normal side).</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double SignedVolumeToPoint(Double3 point)
+        public float SignedVolumeToPoint(Float3 point)
         {
-            return Double3.Dot(Normal, point - V0) / 6;
+            return Float3.Dot(Normal, point - V0) / 6;
         }
 
         /// <summary>
@@ -238,7 +238,7 @@ namespace Prowl.Vector
         /// <param name="edgeIndex">Edge index (0 = V0->V1, 1 = V1->V2, 2 = V2->V0).</param>
         /// <returns>The edge vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 GetEdge(int edgeIndex)
+        public Float3 GetEdge(int edgeIndex)
         {
             switch (edgeIndex)
             {
@@ -255,9 +255,9 @@ namespace Prowl.Vector
         /// <param name="edgeIndex">Edge index (0 = V0->V1, 1 = V1->V2, 2 = V2->V0).</param>
         /// <returns>The edge length.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double GetEdgeLength(int edgeIndex)
+        public float GetEdgeLength(int edgeIndex)
         {
-            return Double3.Length(GetEdge(edgeIndex));
+            return Float3.Length(GetEdge(edgeIndex));
         }
 
         /// <summary>
@@ -267,10 +267,10 @@ namespace Prowl.Vector
         /// <param name="tolerance">The tolerance for the test.</param>
         /// <returns>True if the point is coplanar.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool IsCoplanar(Double3 point, double tolerance = double.Epsilon)
+        public bool IsCoplanar(Float3 point, float tolerance = float.Epsilon)
         {
-            Double3 normal = NormalizedNormal;
-            double distance = Maths.Abs(Double3.Dot(normal, point - V0));
+            Float3 normal = NormalizedNormal;
+            float distance = Maths.Abs(Float3.Dot(normal, point - V0));
             return distance <= tolerance;
         }
 
@@ -289,18 +289,18 @@ namespace Prowl.Vector
         /// </summary>
         /// <returns>The circumcenter point.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 GetCircumcenter()
+        public Float3 GetCircumcenter()
         {
-            Double3 a = V1 - V0;
-            Double3 b = V2 - V0;
-            Double3 cross = Double3.Cross(a, b);
-            double denom = 2.0 * Double3.Dot(cross, cross);
+            Float3 a = V1 - V0;
+            Float3 b = V2 - V0;
+            Float3 cross = Float3.Cross(a, b);
+            float denom = 2.0f * Float3.Dot(cross, cross);
             
-            if (Maths.Abs(denom) < double.Epsilon)
+            if (Maths.Abs(denom) < float.Epsilon)
                 return Centroid; // Fallback for degenerate triangle
                 
-            Double3 result = Double3.Cross(Double3.Cross(cross, a) * Double3.LengthSquared(b) +
-                                                 Double3.Cross(b, cross) * Double3.LengthSquared(a), cross) / denom;
+            Float3 result = Float3.Cross(Float3.Cross(cross, a) * Float3.LengthSquared(b) +
+                                                 Float3.Cross(b, cross) * Float3.LengthSquared(a), cross) / denom;
             return V0 + result;
         }
 
@@ -309,15 +309,15 @@ namespace Prowl.Vector
         /// </summary>
         /// <returns>The circumradius.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double GetCircumradius()
+        public float GetCircumradius()
         {
-            double a = Double3.Length(V1 - V2);
-            double b = Double3.Length(V2 - V0);
-            double c = Double3.Length(V0 - V1);
-            double area = Area;
+            float a = Float3.Length(V1 - V2);
+            float b = Float3.Length(V2 - V0);
+            float c = Float3.Length(V0 - V1);
+            float area = Area;
             
-            if (area < double.Epsilon)
-                return 0.0; // Degenerate triangle
+            if (area < float.Epsilon)
+                return 0.0f; // Degenerate triangle
                 
             return (a * b * c) / (4 * area);
         }
@@ -327,14 +327,14 @@ namespace Prowl.Vector
         /// </summary>
         /// <returns>The incenter point.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 GetIncenter()
+        public Float3 GetIncenter()
         {
-            double a = Double3.Length(V1 - V2);
-            double b = Double3.Length(V2 - V0);
-            double c = Double3.Length(V0 - V1);
-            double perimeter = a + b + c;
+            float a = Float3.Length(V1 - V2);
+            float b = Float3.Length(V2 - V0);
+            float c = Float3.Length(V0 - V1);
+            float perimeter = a + b + c;
             
-            if (perimeter < double.Epsilon)
+            if (perimeter < float.Epsilon)
                 return Centroid; // Fallback for degenerate triangle
                 
             return (a * V0 + b * V1 + c * V2) / perimeter;
@@ -345,13 +345,13 @@ namespace Prowl.Vector
         /// </summary>
         /// <returns>The inradius.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double GetInradius()
+        public float GetInradius()
         {
-            double area = Area;
-            double semiperimeter = Perimeter / 2.0;
+            float area = Area;
+            float semiperimeter = Perimeter / 2.0f;
             
-            if (semiperimeter < double.Epsilon)
-                return 0.0; // Degenerate triangle
+            if (semiperimeter < float.Epsilon)
+                return 0.0f; // Degenerate triangle
                 
             return area / semiperimeter;
         }
@@ -366,9 +366,9 @@ namespace Prowl.Vector
         /// <param name="attribute2">Attribute value at V2.</param>
         /// <returns>The interpolated attribute value.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static double InterpolateAttribute(double u, double v, double attribute0, double attribute1, double attribute2)
+        public static float InterpolateAttribute(float u, float v, float attribute0, float attribute1, float attribute2)
         {
-            double w = 1.0 - u - v;
+            float w = 1.0f - u - v;
             return w * attribute0 + u * attribute1 + v * attribute2;
         }
 
@@ -382,9 +382,9 @@ namespace Prowl.Vector
         /// <param name="attribute2">Attribute value at V2.</param>
         /// <returns>The interpolated attribute value.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Double3 InterpolateAttribute(double u, double v, Double3 attribute0, Double3 attribute1, Double3 attribute2)
+        public static Float3 InterpolateAttribute(float u, float v, Float3 attribute0, Float3 attribute1, Float3 attribute2)
         {
-            double w = 1.0 - u - v;
+            float w = 1.0f - u - v;
             return w * attribute0 + u * attribute1 + v * attribute2;
         }
 
@@ -406,19 +406,19 @@ namespace Prowl.Vector
         /// <param name="v">Random value between 0 and 1.</param>
         /// <returns>A uniformly distributed point on the triangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 SampleUniform(double u, double v)
+        public Float3 SampleUniform(float u, float v)
         {
             // Transform uniform random variables to barycentric coordinates
-            double sqrtU = Maths.Sqrt(u);
-            double baryU = 1.0 - sqrtU;
-            double baryV = v * sqrtU;
+            float sqrtU = Maths.Sqrt(u);
+            float baryU = 1.0f - sqrtU;
+            float baryV = v * sqrtU;
             return GetPointFromBarycentric(baryU, baryV);
         }
 
         public AABB GetAABB() 
         {
-            Double3 min = Maths.Min(Maths.Min(V0, V1), V2);
-            Double3 max = Maths.Max(Maths.Max(V0, V1), V2);
+            Float3 min = Maths.Min(Maths.Min(V0, V1), V2);
+            Float3 max = Maths.Max(Maths.Max(V0, V1), V2);
             return new AABB(min, max);
         }
 
@@ -430,11 +430,11 @@ namespace Prowl.Vector
         /// <param name="direction">The direction to search in.</param>
         /// <returns>The farthest vertex in the given direction.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 SupportMap(Double3 direction)
+        public Float3 SupportMap(Float3 direction)
         {
-            double dot0 = Double3.Dot(V0, direction);
-            double dot1 = Double3.Dot(V1, direction);
-            double dot2 = Double3.Dot(V2, direction);
+            float dot0 = Float3.Dot(V0, direction);
+            float dot1 = Float3.Dot(V1, direction);
+            float dot2 = Float3.Dot(V2, direction);
 
             if (dot0 >= dot1 && dot0 >= dot2)
                 return V0;

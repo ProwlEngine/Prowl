@@ -72,7 +72,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="v2">Second source vertex.</param>
         /// <param name="t">Interpolation factor (0 = v1, 1 = v2).</param>
         public static void AttributeLerp(GeometryData mesh, GeometryData.Vertex destination,
-            GeometryData.Vertex v1, GeometryData.Vertex v2, double t)
+            GeometryData.Vertex v1, GeometryData.Vertex v2, float t)
         {
             foreach (var attr in mesh.VertexAttributes)
             {
@@ -89,7 +89,7 @@ namespace Prowl.Vector.Geometry
 
                             int n = val1.Data.Length;
                             Debug.Assert(val2.Data.Length == n);
-                            var val = new GeometryData.FloatAttributeValue { Data = new double[n] };
+                            var val = new GeometryData.FloatAttributeValue { Data = new float[n] };
                             for (int i = 0; i < n; ++i)
                             {
                                 val.Data[i] = Maths.Lerp(val1.Data[i], val2.Data[i], t);
@@ -127,7 +127,7 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="mesh">The mesh to scale.</param>
         /// <param name="scale">The scale factor.</param>
-        public static void Scale(GeometryData mesh, double scale)
+        public static void Scale(GeometryData mesh, float scale)
         {
             foreach (var v in mesh.Vertices)
             {
@@ -142,10 +142,10 @@ namespace Prowl.Vector.Geometry
         /// <param name="mesh">The mesh to scale.</param>
         /// <param name="faces">The faces to scale.</param>
         /// <param name="scale">The scale factor.</param>
-        public static void ScaleFace(GeometryData mesh, GeometryData.Face face, double scale)
+        public static void ScaleFace(GeometryData mesh, GeometryData.Face face, float scale)
         {
             // Calculate face center
-            Double3 center = Double3.Zero;
+            Float3 center = Float3.Zero;
             var verts = face.NeighborVertices();
             int count = verts.Count;
             foreach (var v in verts)
@@ -156,7 +156,7 @@ namespace Prowl.Vector.Geometry
             // Scale each vertex away from the center
             foreach (var v in verts)
             {
-                Double3 dir = v.Point - center;
+                Float3 dir = v.Point - center;
                 v.Point = center + dir * scale;
             }
         }
@@ -167,7 +167,7 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="mesh">The mesh to translate.</param>
         /// <param name="offset">The translation offset.</param>
-        public static void Translate(GeometryData mesh, Double3 offset)
+        public static void Translate(GeometryData mesh, Float3 offset)
         {
             foreach (var v in mesh.Vertices)
             {
@@ -181,7 +181,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="mesh">The mesh to translate.</param>
         /// <param name="faces">The faces to translate.</param>
         /// <param name="offset">The translation offset.</param>
-        public static void TranslateFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, Double3 offset)
+        public static void TranslateFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, Float3 offset)
         {
             var movedVertices = new HashSet<GeometryData.Vertex>();
             foreach (var face in faces)
@@ -202,11 +202,11 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="mesh">The mesh to transform.</param>
         /// <param name="transform">The transformation matrix.</param>
-        public static void Transform(GeometryData mesh, Double4x4 transform)
+        public static void Transform(GeometryData mesh, Float4x4 transform)
         {
             foreach (var v in mesh.Vertices)
             {
-                v.Point = Double4x4.TransformPoint(v.Point, transform);
+                v.Point = Float4x4.TransformPoint(v.Point, transform);
             }
         }
 
@@ -216,7 +216,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="mesh">The mesh to transform.</param>
         /// <param name="faces">The faces to transform.</param>
         /// <param name="transform">The transformation matrix.</param>
-        public static void TransformFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, Double4x4 transform)
+        public static void TransformFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, Float4x4 transform)
         {
             var transformedVertices = new HashSet<GeometryData.Vertex>();
             foreach (var face in faces)
@@ -225,7 +225,7 @@ namespace Prowl.Vector.Geometry
                 {
                     if (!transformedVertices.Contains(v))
                     {
-                        v.Point = Double4x4.TransformPoint(v.Point, transform);
+                        v.Point = Float4x4.TransformPoint(v.Point, transform);
                         transformedVertices.Add(v);
                     }
                 }
@@ -239,14 +239,14 @@ namespace Prowl.Vector.Geometry
         /// <param name="mesh">The mesh to modify.</param>
         /// <param name="plane">The plane to use for culling.</param>
         /// <param name="epsilon">Tolerance for considering a vertex on the plane.</param>
-        public static void RemoveVerticesOnPlanePositiveSide(GeometryData mesh, Plane plane, double epsilon = 0.0001)
+        public static void RemoveVerticesOnPlanePositiveSide(GeometryData mesh, Plane plane, float epsilon = 0.0001f)
         {
             // Classify vertices
             var verticesToRemove = new List<GeometryData.Vertex>();
 
             foreach (var v in mesh.Vertices.ToArray())
             {
-                double distance = plane.GetSignedDistanceToPoint(v.Point);
+                float distance = plane.GetSignedDistanceToPoint(v.Point);
                 if (distance > epsilon) // Positive side
                 {
                     verticesToRemove.Add(v);
@@ -268,14 +268,14 @@ namespace Prowl.Vector.Geometry
         /// <param name="mesh">The mesh to modify.</param>
         /// <param name="plane">The plane to use for culling.</param>
         /// <param name="epsilon">Tolerance for considering a vertex on the plane.</param>
-        public static void RemoveVerticesOnPlaneNegativeSide(GeometryData mesh, Plane plane, double epsilon = 0.0001)
+        public static void RemoveVerticesOnPlaneNegativeSide(GeometryData mesh, Plane plane, float epsilon = 0.0001f)
         {
             // Classify vertices
             var verticesToRemove = new List<GeometryData.Vertex>();
 
             foreach (var v in mesh.Vertices.ToArray())
             {
-                double distance = plane.GetSignedDistanceToPoint(v.Point);
+                float distance = plane.GetSignedDistanceToPoint(v.Point);
                 if (distance < -epsilon) // Negative side
                 {
                     verticesToRemove.Add(v);
@@ -310,7 +310,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="mesh">The mesh to squarify (must contain only quad faces).</param>
         /// <param name="rate">Speed at which faces are squarified. Higher is faster but may overshoot.</param>
         /// <param name="uniformLength">Whether to uniformize the size of all quads.</param>
-        public static void SquarifyQuads(GeometryData mesh, double rate = 1.0, bool uniformLength = false)
+        public static void SquarifyQuads(GeometryData mesh, float rate = 1.0f, bool uniformLength = false)
         {
             SquarifyOp.SquarifyQuads(mesh, rate, uniformLength);
         }
@@ -336,7 +336,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="factor">Interpolation factor (0.0 = at fromVertex, 1.0 = at the other vertex).</param>
         /// <param name="newEdge">Output: The newly created edge (from the new vertex to the non-fromVertex end).</param>
         /// <returns>The newly created vertex at the split point.</returns>
-        public static GeometryData.Vertex SplitEdge(GeometryData mesh, GeometryData.Edge edge, GeometryData.Vertex fromVertex, double factor, out GeometryData.Edge newEdge)
+        public static GeometryData.Vertex SplitEdge(GeometryData mesh, GeometryData.Edge edge, GeometryData.Vertex fromVertex, float factor, out GeometryData.Edge newEdge)
         {
             return SplitEdgeOp.SplitEdge(mesh, edge, fromVertex, factor, out newEdge);
         }
@@ -362,7 +362,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="plane">The plane to bisect with (Normal.X, Normal.Y, Normal.Z, Distance).</param>
         /// <param name="epsilon">Tolerance for considering a vertex on the plane.</param>
         /// <param name="snapToPlane">If true, snap vertices very close to the plane onto it.</param>
-        public static void BisectPlane(GeometryData mesh, Plane plane, double epsilon = 0.0001, bool snapToPlane = true)
+        public static void BisectPlane(GeometryData mesh, Plane plane, float epsilon = 0.0001f, bool snapToPlane = true)
         {
             BisectPlaneOp.BisectPlane(mesh, plane, epsilon, snapToPlane);
         }
@@ -383,14 +383,14 @@ namespace Prowl.Vector.Geometry
                 return null;
 
             GeometryData.Vertex? argmin = null;
-            double min = 0;
+            float min = 0;
 
             foreach (var v in mesh.Vertices)
             {
                 if (!v.Attributes.ContainsKey(attrName))
                     continue;
 
-                double d = Distance(v.Attributes[attrName], value);
+                float d = Distance(v.Attributes[attrName], value);
                 if (argmin == null || d < min)
                 {
                     argmin = v;
@@ -404,37 +404,37 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Calculate Euclidean distance between two attribute values.
         /// </summary>
-        private static double Distance(GeometryData.AttributeValue value1, GeometryData.AttributeValue value2)
+        private static float Distance(GeometryData.AttributeValue value1, GeometryData.AttributeValue value2)
         {
             if (value1 is GeometryData.IntAttributeValue ival1 && value2 is GeometryData.IntAttributeValue ival2)
             {
                 int n = ival1.Data.Length;
-                if (n != ival2.Data.Length) return double.PositiveInfinity;
+                if (n != ival2.Data.Length) return float.PositiveInfinity;
 
-                double s = 0;
+                float s = 0;
                 for (int i = 0; i < n; ++i)
                 {
-                    double diff = ival1.Data[i] - ival2.Data[i];
+                    float diff = ival1.Data[i] - ival2.Data[i];
                     s += diff * diff;
                 }
-                return Math.Sqrt(s);
+                return Maths.Sqrt(s);
             }
 
             if (value1 is GeometryData.FloatAttributeValue fval1 && value2 is GeometryData.FloatAttributeValue fval2)
             {
                 int n = fval1.Data.Length;
-                if (n != fval2.Data.Length) return double.PositiveInfinity;
+                if (n != fval2.Data.Length) return float.PositiveInfinity;
 
-                double s = 0;
+                float s = 0;
                 for (int i = 0; i < n; ++i)
                 {
-                    double diff = fval1.Data[i] - fval2.Data[i];
+                    float diff = fval1.Data[i] - fval2.Data[i];
                     s += diff * diff;
                 }
-                return Math.Sqrt(s);
+                return Maths.Sqrt(s);
             }
 
-            return double.PositiveInfinity;
+            return float.PositiveInfinity;
         }
 
         #endregion
@@ -467,13 +467,13 @@ namespace Prowl.Vector.Geometry
                 if (verts.Count < 3) continue;
 
                 // Calculate face normal using first three vertices
-                Double3 v0 = verts[0].Point;
-                Double3 v1 = verts[1].Point;
-                Double3 v2 = verts[2].Point;
+                Float3 v0 = verts[0].Point;
+                Float3 v1 = verts[1].Point;
+                Float3 v2 = verts[2].Point;
 
-                Double3 edge1 = v1 - v0;
-                Double3 edge2 = v2 - v0;
-                Double3 faceNormal = Double3.Normalize(Double3.Cross(edge1, edge2));
+                Float3 edge1 = v1 - v0;
+                Float3 edge2 = v2 - v0;
+                Float3 faceNormal = Float3.Normalize(Float3.Cross(edge1, edge2));
 
                 // Add to all vertices of this face
                 foreach (var vert in verts)
@@ -481,7 +481,7 @@ namespace Prowl.Vector.Geometry
                     var normal = vert.Attributes["normal"] as GeometryData.FloatAttributeValue;
                     if (normal != null)
                     {
-                        Double3 current = normal.AsVector3();
+                        Float3 current = normal.AsVector3();
                         current += faceNormal;
                         normal.FromVector3(current);
                     }
@@ -494,10 +494,10 @@ namespace Prowl.Vector.Geometry
                 var normal = v.Attributes["normal"] as GeometryData.FloatAttributeValue;
                 if (normal != null)
                 {
-                    Double3 n = normal.AsVector3();
-                    if (Double3.LengthSquared(n) > 0)
+                    Float3 n = normal.AsVector3();
+                    if (Float3.LengthSquared(n) > 0)
                     {
-                        normal.FromVector3(Double3.Normalize(n));
+                        normal.FromVector3(Float3.Normalize(n));
                     }
                 }
             }
@@ -622,7 +622,7 @@ namespace Prowl.Vector.Geometry
         /// AlongNormals - vertices move along averaged normals (shared vertices),
         /// AverageNormal - all vertices move along average of all face normals (shared vertices),
         /// PerFace - each face gets its own vertices (no sharing).</param>
-        public static void ExtrudeFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToExtrude, double distance, ExtrudeMode mode = ExtrudeMode.AlongNormals)
+        public static void ExtrudeFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToExtrude, float distance, ExtrudeMode mode = ExtrudeMode.AlongNormals)
         {
             ExtrudeOp.ExtrudeFaces(mesh, facesToExtrude, distance, mode);
         }
@@ -635,7 +635,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="facesToInset">The faces to inset.</param>
         /// <param name="thickness">The inset amount (0 = no change, 1 = full inset to face center).</param>
         /// <param name="mode">The inset mode (Shared or PerFace).</param>
-        public static void InsetFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToInset, double thickness, InsetMode mode = InsetMode.Shared)
+        public static void InsetFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToInset, float thickness, InsetMode mode = InsetMode.Shared)
         {
             InsetOp.InsetFaces(mesh, facesToInset, thickness, mode);
         }
@@ -648,7 +648,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="mesh">The mesh to weld vertices in.</param>
         /// <param name="threshold">Maximum distance between vertices to be welded together.</param>
         /// <returns>The number of vertices that were welded (removed).</returns>
-        public static int WeldVertices(GeometryData mesh, double threshold = 0.0001)
+        public static int WeldVertices(GeometryData mesh, float threshold = 0.0001f)
         {
             return VertexWeldOp.WeldVertices(mesh, threshold);
         }
@@ -661,7 +661,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="targetPositions">Positions around which to weld vertices.</param>
         /// <param name="threshold">Maximum distance from target positions to weld vertices.</param>
         /// <returns>The number of vertices that were welded (removed).</returns>
-        public static int WeldVerticesAtPositions(GeometryData mesh, IEnumerable<Double3> targetPositions, double threshold)
+        public static int WeldVerticesAtPositions(GeometryData mesh, IEnumerable<Float3> targetPositions, float threshold)
         {
             return VertexWeldOp.WeldVerticesAtPositions(mesh, targetPositions, threshold);
         }
@@ -674,7 +674,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="mesh">The mesh containing the vertices.</param>
         /// <param name="verticesToBevel">The vertices to bevel, in order.</param>
         /// <param name="offset">Distance along edges from the vertex to place new vertices (0.0 to 1.0, where 0.5 is midpoint).</param>
-        public static void BevelVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> verticesToBevel, double offset = 0.3)
+        public static void BevelVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> verticesToBevel, float offset = 0.3f)
         {
             BevelVertexOp.BevelVertices(mesh, verticesToBevel, offset);
         }

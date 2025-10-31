@@ -75,74 +75,74 @@ namespace Prowl.Vector.Geometry
 
         private class CSGBrush
         {
-            private static readonly double EPSILON_SQUARED = Intersection.INTERSECTION_EPSILON * Intersection.INTERSECTION_EPSILON;
+            private static readonly float EPSILON_SQUARED = Intersection.INTERSECTION_EPSILON * Intersection.INTERSECTION_EPSILON;
 
             public struct Face
             {
-                public List<Double3> Vertices;
-                public Double2[] UVs;
+                public List<Float3> Vertices;
+                public Float2[] UVs;
             }
 
             public Face[] Faces = Array.Empty<Face>();
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool IsEqualApprox(Double3 vec1, Double3 vec2)
+            public static bool IsEqualApprox(Float3 vec1, Float3 vec2)
             {
-                Double3 vec3 = vec1 - vec2;
+                Float3 vec3 = vec1 - vec2;
                 return vec3.X * vec3.X + vec3.Y * vec3.Y + vec3.Z * vec3.Z < EPSILON_SQUARED;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool IsEqualApprox(Double2 vec1, Double2 vec2)
+            public static bool IsEqualApprox(Float2 vec1, Float2 vec2)
             {
-                Double2 vec3 = vec1 - vec2;
+                Float2 vec3 = vec1 - vec2;
                 return vec3.X * vec3.X + vec3.Y * vec3.Y < EPSILON_SQUARED;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Double2 InterpolateSegmentUV(Double2[] segmentPoints, Double2[] uvs, Double2 interpolation)
+            public static Float2 InterpolateSegmentUV(Float2[] segmentPoints, Float2[] uvs, Float2 interpolation)
             {
                 if (IsEqualApprox(segmentPoints[0], segmentPoints[1]))
                     return uvs[0];
 
-                double segmentLength = Double2.Length(segmentPoints[1] - segmentPoints[0]);
-                double distance = Double2.Length(interpolation - segmentPoints[0]);
-                double fraction = distance / segmentLength;
+                float segmentLength = Float2.Length(segmentPoints[1] - segmentPoints[0]);
+                float distance = Float2.Length(interpolation - segmentPoints[0]);
+                float fraction = distance / segmentLength;
 
                 return Maths.Lerp(uvs[0], uvs[1], fraction);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Double2 InterpolateTriangleUV(Double2[] vertices, Double2[] uvs, Double2 interpolationPoint)
+            public static Float2 InterpolateTriangleUV(Float2[] vertices, Float2[] uvs, Float2 interpolationPoint)
             {
                 if (IsEqualApprox(interpolationPoint, vertices[0])) return uvs[0];
                 if (IsEqualApprox(interpolationPoint, vertices[1])) return uvs[1];
                 if (IsEqualApprox(interpolationPoint, vertices[2])) return uvs[2];
 
-                Double2 edge1 = vertices[1] - vertices[0];
-                Double2 edge2 = vertices[2] - vertices[0];
-                Double2 interpolation = interpolationPoint - vertices[0];
+                Float2 edge1 = vertices[1] - vertices[0];
+                Float2 edge2 = vertices[2] - vertices[0];
+                Float2 interpolation = interpolationPoint - vertices[0];
 
-                double edge1OnEdge1 = Double2.Dot(edge1, edge1);
-                double edge1OnEdge2 = Double2.Dot(edge1, edge2);
-                double edge2OnEdge2 = Double2.Dot(edge2, edge2);
-                double interOnEdge1 = Double2.Dot(interpolation, edge1);
-                double interOnEdge2 = Double2.Dot(interpolation, edge2);
-                double scale = (edge1OnEdge1 * edge2OnEdge2 - edge1OnEdge2 * edge1OnEdge2);
+                float edge1OnEdge1 = Float2.Dot(edge1, edge1);
+                float edge1OnEdge2 = Float2.Dot(edge1, edge2);
+                float edge2OnEdge2 = Float2.Dot(edge2, edge2);
+                float interOnEdge1 = Float2.Dot(interpolation, edge1);
+                float interOnEdge2 = Float2.Dot(interpolation, edge2);
+                float scale = (edge1OnEdge1 * edge2OnEdge2 - edge1OnEdge2 * edge1OnEdge2);
                 if (Maths.Abs(scale) < Intersection.INTERSECTION_EPSILON)
                     return uvs[0];
 
-                double v = (edge2OnEdge2 * interOnEdge1 - edge1OnEdge2 * interOnEdge2) / scale;
-                double w = (edge1OnEdge1 * interOnEdge2 - edge1OnEdge2 * interOnEdge1) / scale;
-                double u = 1.0 - v - w;
+                float v = (edge2OnEdge2 * interOnEdge1 - edge1OnEdge2 * interOnEdge2) / scale;
+                float w = (edge1OnEdge1 * interOnEdge2 - edge1OnEdge2 * interOnEdge1) / scale;
+                float u = 1.0f - v - w;
 
                 return uvs[0] * u + uvs[1] * v + uvs[2] * w;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool RayIntersectsTriangle(Double3 from, Double3 dir, Double3[] vertices, double tolerance, ref Double3 intersectionPoint)
+            public static bool RayIntersectsTriangle(Float3 from, Float3 dir, Float3[] vertices, float tolerance, ref Float3 intersectionPoint)
             {
-                if (Prowl.Vector.Geometry.Intersection.RayTriangle(from, dir, vertices[0], vertices[1], vertices[2], out double distance, out _, out _))
+                if (Prowl.Vector.Geometry.Intersection.RayTriangle(from, dir, vertices[0], vertices[1], vertices[2], out float distance, out _, out _))
                 {
                     intersectionPoint = from + dir * distance;
                     return true;
@@ -151,25 +151,25 @@ namespace Prowl.Vector.Geometry
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool IsPointInTriangle(Double3 point, Double3[] vertices, int shifted = 0)
+            public static bool IsPointInTriangle(Float3 point, Float3[] vertices, int shifted = 0)
             {
-                double det = Double3.Dot(vertices[0], Double3.Cross(vertices[1], vertices[2]));
+                float det = Float3.Dot(vertices[0], Float3.Cross(vertices[1], vertices[2]));
 
                 if (Maths.Abs(det) < Intersection.INTERSECTION_EPSILON)
                 {
                     if (shifted > 2)
                         return false;
-                    Double3 shiftBy = Double3.Zero;
+                    Float3 shiftBy = Float3.Zero;
                     shiftBy[shifted] = 1;
-                    Double3 shiftedPoint = point + shiftBy;
-                    Double3[] shiftedVertices = { vertices[0] + shiftBy, vertices[1] + shiftBy, vertices[2] + shiftBy };
+                    Float3 shiftedPoint = point + shiftBy;
+                    Float3[] shiftedVertices = { vertices[0] + shiftBy, vertices[1] + shiftBy, vertices[2] + shiftBy };
                     return IsPointInTriangle(shiftedPoint, shiftedVertices, shifted + 1);
                 }
 
-                double[] lambda = new double[3];
-                lambda[0] = Double3.Dot(point, Double3.Cross(vertices[1], vertices[2])) / det;
-                lambda[1] = Double3.Dot(point, Double3.Cross(vertices[2], vertices[0])) / det;
-                lambda[2] = Double3.Dot(point, Double3.Cross(vertices[0], vertices[1])) / det;
+                float[] lambda = new float[3];
+                lambda[0] = Float3.Dot(point, Float3.Cross(vertices[1], vertices[2])) / det;
+                lambda[1] = Float3.Dot(point, Float3.Cross(vertices[2], vertices[0])) / det;
+                lambda[2] = Float3.Dot(point, Float3.Cross(vertices[0], vertices[1])) / det;
 
                 if (Maths.Abs((lambda[0] + lambda[1] + lambda[2]) - 1) >= Intersection.INTERSECTION_EPSILON)
                     return false;
@@ -181,28 +181,28 @@ namespace Prowl.Vector.Geometry
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool IsTriangleDegenerate(Double2[] vertices, double tolerance)
+            public static bool IsTriangleDegenerate(Float2[] vertices, float tolerance)
             {
-                double det = vertices[0].X * vertices[1].Y - vertices[0].X * vertices[2].Y +
+                float det = vertices[0].X * vertices[1].Y - vertices[0].X * vertices[2].Y +
                         vertices[0].Y * vertices[2].X - vertices[0].Y * vertices[1].X +
                         vertices[1].X * vertices[2].Y - vertices[1].Y * vertices[2].X;
 
                 return Maths.Abs(det) < tolerance;
             }
 
-            public static bool AreSegmentsParallel(Double2[] segment1Points, Double2[] segment2Points, double tolerance)
+            public static bool AreSegmentsParallel(Float2[] segment1Points, Float2[] segment2Points, float tolerance)
             {
 
-                Double2 segment1 = segment1Points[1] - segment1Points[0];
-                Double2 segment2 = segment2Points[1] - segment2Points[0];
-                double segment1Length2 = Double2.Dot(segment1, segment1);
-                double segment2Length2 = Double2.Dot(segment2, segment2);
-                double segmentOntoSegment = Double2.Dot(segment2, segment1);
+                Float2 segment1 = segment1Points[1] - segment1Points[0];
+                Float2 segment2 = segment2Points[1] - segment2Points[0];
+                float segment1Length2 = Float2.Dot(segment1, segment1);
+                float segment2Length2 = Float2.Dot(segment2, segment2);
+                float segmentOntoSegment = Float2.Dot(segment2, segment1);
 
                 if (segment1Length2 < tolerance || segment2Length2 < tolerance)
                     return true;
 
-                double maxSeparation2;
+                float maxSeparation2;
                 if (segment1Length2 > segment2Length2)
                     maxSeparation2 = segment2Length2 - segmentOntoSegment * segmentOntoSegment / segment1Length2;
                 else
@@ -218,61 +218,61 @@ namespace Prowl.Vector.Geometry
 
         private class Transform2DFace
         {
-            private Double3 basisL1 = new Double3(1, 0, 0);
-            private Double3 basisL2 = new Double3(0, 1, 0);
-            private Double3 basisL3 = new Double3(0, 0, 1);
-            private Double3 position = Double3.Zero;
+            private Float3 basisL1 = new Float3(1, 0, 0);
+            private Float3 basisL2 = new Float3(0, 1, 0);
+            private Float3 basisL3 = new Float3(0, 0, 1);
+            private Float3 position = Float3.Zero;
 
-            public void SetBasisColumn(int col, Double3 value)
+            public void SetBasisColumn(int col, Float3 value)
             {
                 basisL1[col] = value[0];
                 basisL2[col] = value[1];
                 basisL3[col] = value[2];
             }
 
-            public Double3 GetBasisColumn(int col)
+            public Float3 GetBasisColumn(int col)
             {
-                return new Double3(basisL1[col], basisL2[col], basisL3[col]);
+                return new Float3(basisL1[col], basisL2[col], basisL3[col]);
             }
 
-            public void SetPosition(Double3 pos)
+            public void SetPosition(Float3 pos)
             {
                 position = pos;
             }
 
-            public Double3 Xform(Double3 vector)
+            public Float3 Xform(Float3 vector)
             {
-                return new Double3(
-                    Double3.Dot(basisL1, vector) + position.X,
-                    Double3.Dot(basisL2, vector) + position.Y,
-                    Double3.Dot(basisL3, vector) + position.Z);
+                return new Float3(
+                    Float3.Dot(basisL1, vector) + position.X,
+                    Float3.Dot(basisL2, vector) + position.Y,
+                    Float3.Dot(basisL3, vector) + position.Z);
             }
 
-            private Double3 BasisXform(Double3 vector)
+            private Float3 BasisXform(Float3 vector)
             {
-                return new Double3(
-                    Double3.Dot(basisL1, vector),
-                    Double3.Dot(basisL2, vector),
-                    Double3.Dot(basisL3, vector));
+                return new Float3(
+                    Float3.Dot(basisL1, vector),
+                    Float3.Dot(basisL2, vector),
+                    Float3.Dot(basisL3, vector));
             }
 
-            private double Cofac(ref Double3 row1, int col1, ref Double3 row2, int col2)
+            private float Cofac(ref Float3 row1, int col1, ref Float3 row2, int col2)
             {
                 return row1[col1] * row2[col2] - row1[col2] * row2[col1];
             }
 
             private void BasisInvert()
             {
-                double[] co = new double[3];
+                float[] co = new float[3];
                 co[0] = Cofac(ref basisL2, 1, ref basisL3, 2);
                 co[1] = Cofac(ref basisL2, 2, ref basisL3, 0);
                 co[2] = Cofac(ref basisL2, 0, ref basisL3, 1);
 
-                double det = basisL1[0] * co[0] + basisL1[1] * co[1] + basisL1[2] * co[2];
-                if (Maths.Abs(det) < double.Epsilon)
+                float det = basisL1[0] * co[0] + basisL1[1] * co[1] + basisL1[2] * co[2];
+                if (Maths.Abs(det) < float.Epsilon)
                     return;
 
-                double s = 1.0 / det;
+                float s = 1.0f / det;
 
                 SetBasis(
                     co[0] * s, Cofac(ref basisL1, 2, ref basisL3, 1) * s, Cofac(ref basisL1, 1, ref basisL2, 2) * s,
@@ -280,11 +280,11 @@ namespace Prowl.Vector.Geometry
                     co[2] * s, Cofac(ref basisL1, 1, ref basisL3, 0) * s, Cofac(ref basisL1, 0, ref basisL2, 1) * s);
             }
 
-            public void SetBasis(double xx, double xy, double xz, double yx, double yy, double yz, double zx, double zy, double zz)
+            public void SetBasis(float xx, float xy, float xz, float yx, float yy, float yz, float zx, float zy, float zz)
             {
-                basisL1 = new Double3(xx, xy, xz);
-                basisL2 = new Double3(yx, yy, yz);
-                basisL3 = new Double3(zx, zy, zz);
+                basisL1 = new Float3(xx, xy, xz);
+                basisL2 = new Float3(yx, yy, yz);
+                basisL3 = new Float3(zx, zy, zz);
             }
 
             public void AffineInvert()
@@ -313,8 +313,8 @@ namespace Prowl.Vector.Geometry
         {
             private struct Vertex2D
             {
-                public Double2 Point;
-                public Double2 UV;
+                public Float2 Point;
+                public Float2 UV;
             }
 
             private struct Face2D
@@ -324,7 +324,7 @@ namespace Prowl.Vector.Geometry
 
             private List<Vertex2D> vertices = new List<Vertex2D>();
             private List<Face2D> faces = new List<Face2D>();
-            private const double vertexTolerance = 1e-10;
+            private const float vertexTolerance = 1e-10f;
             private Transform2DFace to3D;
             private Transform2DFace to2D;
             private Plane plane;
@@ -333,7 +333,7 @@ namespace Prowl.Vector.Geometry
 
             public Build2DFaces(CSGBrush brush, int faceIdx)
             {
-                Double3[] points3D = new Double3[3];
+                Float3[] points3D = new Float3[3];
                 for (int i = 0; i < 3; i++)
                     points3D[i] = brush.Faces[faceIdx].Vertices[i];
 
@@ -341,11 +341,11 @@ namespace Prowl.Vector.Geometry
                 to3D = new Transform2DFace();
                 to3D.SetPosition(points3D[0]);
                 to3D.SetBasisColumn(2, plane.Normal);
-                Double3 temp = points3D[1] - points3D[2];
-                temp = Double3.Normalize(temp);
+                Float3 temp = points3D[1] - points3D[2];
+                temp = Float3.Normalize(temp);
                 to3D.SetBasisColumn(0, temp);
-                temp = Double3.Cross(to3D.GetBasisColumn(0), to3D.GetBasisColumn(2));
-                temp = Double3.Normalize(temp);
+                temp = Float3.Cross(to3D.GetBasisColumn(0), to3D.GetBasisColumn(2));
+                temp = Float3.Normalize(temp);
                 to3D.SetBasisColumn(1, temp);
                 to2D = to3D.AffineInverse();
 
@@ -353,8 +353,8 @@ namespace Prowl.Vector.Geometry
                 for (int i = 0; i < 3; i++)
                 {
                     Vertex2D vertex = new Vertex2D();
-                    Double3 point2D = to2D.Xform(points3D[i]);
-                    vertex.Point = new Double2(point2D.X, point2D.Y);
+                    Float3 point2D = to2D.Xform(points3D[i]);
+                    vertex.Point = new Float2(point2D.X, point2D.Y);
                     vertex.UV = brush.Faces[faceIdx].UVs[i];
                     vertices.Add(vertex);
                     face.VertexIdx[i] = i;
@@ -362,15 +362,15 @@ namespace Prowl.Vector.Geometry
                 faces.Add(face);
             }
 
-            private static Double2 GetClosestPointToSegment(Double2 point, Double2[] segment)
+            private static Float2 GetClosestPointToSegment(Float2 point, Float2[] segment)
             {
-                Double2 p = point - segment[0];
-                Double2 n = segment[1] - segment[0];
-                double l2 = Double2.LengthSquared(n);
+                Float2 p = point - segment[0];
+                Float2 n = segment[1] - segment[0];
+                float l2 = Float2.LengthSquared(n);
                 if (l2 < 1e-20)
                     return segment[0];
 
-                double d = Double2.Dot(n, p) / l2;
+                float d = Float2.Dot(n, p) / l2;
 
                 if (d <= 0.0)
                     return segment[0];
@@ -380,19 +380,19 @@ namespace Prowl.Vector.Geometry
                     return segment[0] + n * d;
             }
 
-            private static bool SegmentIntersectsSegment(Double2 fromA, Double2 toA, Double2 fromB, Double2 toB, ref Double2 result)
+            private static bool SegmentIntersectsSegment(Float2 fromA, Float2 toA, Float2 fromB, Float2 toB, ref Float2 result)
             {
-                Double2 AB = toA - fromA;
-                Double2 AC = fromB - fromA;
-                Double2 AD = toB - fromA;
+                Float2 AB = toA - fromA;
+                Float2 AC = fromB - fromA;
+                Float2 AD = toB - fromA;
 
-                double ABlen = Double2.Dot(AB, AB);
+                float ABlen = Float2.Dot(AB, AB);
                 if (ABlen <= 0)
                     return false;
 
-                Double2 ABNorm = AB / ABlen;
-                AC = new Double2(AC.X * ABNorm.X + AC.Y * ABNorm.Y, AC.Y * ABNorm.X - AC.X * ABNorm.Y);
-                AD = new Double2(AD.X * ABNorm.X + AD.Y * ABNorm.Y, AD.Y * ABNorm.X - AD.X * ABNorm.Y);
+                Float2 ABNorm = AB / ABlen;
+                AC = new Float2(AC.X * ABNorm.X + AC.Y * ABNorm.Y, AC.Y * ABNorm.X - AC.X * ABNorm.Y);
+                AD = new Float2(AD.X * ABNorm.X + AD.Y * ABNorm.Y, AD.Y * ABNorm.X - AD.X * ABNorm.Y);
 
                 if ((AC.Y < -Intersection.INTERSECTION_EPSILON && AD.Y < -Intersection.INTERSECTION_EPSILON) ||
                     (AC.Y > Intersection.INTERSECTION_EPSILON && AD.Y > Intersection.INTERSECTION_EPSILON))
@@ -401,7 +401,7 @@ namespace Prowl.Vector.Geometry
                 if (Maths.Abs(AD.Y - AC.Y) < Intersection.INTERSECTION_EPSILON)
                     return false;
 
-                double ABpos = AD.X + (AC.X - AD.X) * AD.Y / (AD.Y - AC.Y);
+                float ABpos = AD.X + (AC.X - AD.X) * AD.Y / (AD.Y - AC.Y);
 
                 if ((ABpos < 0) || (ABpos > 1))
                     return false;
@@ -410,11 +410,11 @@ namespace Prowl.Vector.Geometry
                 return true;
             }
 
-            private static bool IsPointInTriangle(Double2 point, Double2 a, Double2 b, Double2 c)
+            private static bool IsPointInTriangle(Float2 point, Float2 a, Float2 b, Float2 c)
             {
-                Double2 an = a - point;
-                Double2 bn = b - point;
-                Double2 cn = c - point;
+                Float2 an = a - point;
+                Float2 bn = b - point;
+                Float2 cn = c - point;
 
                 bool orientation = (an.X * bn.Y - an.Y * bn.X) > 0;
 
@@ -424,16 +424,16 @@ namespace Prowl.Vector.Geometry
                 return ((cn.X * an.Y - cn.Y * an.X) > 0) == orientation;
             }
 
-            private static bool PlaneIntersectsSegment(Plane plane, Double3 begin, Double3 end, ref Double3 result)
+            private static bool PlaneIntersectsSegment(Plane plane, Float3 begin, Float3 end, ref Float3 result)
             {
                 return Prowl.Vector.Geometry.Intersection.LineSegmentPlane(begin, end, plane.Normal, plane.D, out result);
             }
 
-            private int GetPointIdx(Double2 point)
+            private int GetPointIdx(Float2 point)
             {
                 for (int vertexIdx = 0; vertexIdx < vertices.Count; ++vertexIdx)
                 {
-                    if (Double2.LengthSquared(vertices[vertexIdx].Point - point) < vertexTolerance)
+                    if (Float2.LengthSquared(vertices[vertexIdx].Point - point) < vertexTolerance)
                         return vertexIdx;
                 }
                 return -1;
@@ -459,8 +459,8 @@ namespace Prowl.Vector.Geometry
                         return;
                     }
 
-                    Double2 firstPoint;
-                    Double2 newPoint;
+                    Float2 firstPoint;
+                    Float2 newPoint;
                     int axis;
                     if (vertexIndices.Count == 1)
                     {
@@ -480,7 +480,7 @@ namespace Prowl.Vector.Geometry
                     }
 
                     firstPoint = vertices[vertexIndices[0]].Point;
-                    Double2 lastPoint = vertices[vertexIndices[vertexIndices.Count - 1]].Point;
+                    Float2 lastPoint = vertices[vertexIndices[vertexIndices.Count - 1]].Point;
                     newPoint = vertices[newVertexIndex].Point;
 
                     axis = 0;
@@ -489,7 +489,7 @@ namespace Prowl.Vector.Geometry
 
                     for (int insertIdx = 0; insertIdx < vertexIndices.Count; ++insertIdx)
                     {
-                        Double2 insertPoint = vertices[vertexIndices[insertIdx]].Point;
+                        Float2 insertPoint = vertices[vertexIndices[insertIdx]].Point;
                         if (newPoint[axis] < insertPoint[axis])
                         {
                             vertexIndices.Insert(insertIdx, newVertexIndex);
@@ -545,8 +545,8 @@ namespace Prowl.Vector.Geometry
                         if (outerEdgeIdx[0] == segmentIndices[closestIdx] || outerEdgeIdx[1] == segmentIndices[closestIdx])
                             continue;
 
-                        Double2[] edge1 = { vertices[outerEdgeIdx[0]].Point, vertices[segmentIndices[closestIdx]].Point };
-                        Double2[] edge2 = { vertices[outerEdgeIdx[1]].Point, vertices[segmentIndices[closestIdx]].Point };
+                        Float2[] edge1 = { vertices[outerEdgeIdx[0]].Point, vertices[segmentIndices[closestIdx]].Point };
+                        Float2[] edge2 = { vertices[outerEdgeIdx[1]].Point, vertices[segmentIndices[closestIdx]].Point };
                         if (CSGBrush.AreSegmentsParallel(edge1, edge2, vertexTolerance))
                         {
                             if (!degeneratePoints.Contains(outerEdgeIdx[0]))
@@ -580,17 +580,17 @@ namespace Prowl.Vector.Geometry
                             vertices[face.VertexIdx[1]],
                             vertices[face.VertexIdx[2]]
                         };
-                        Double2[] facePoints = { faceVertices[0].Point, faceVertices[1].Point, faceVertices[2].Point };
+                        Float2[] facePoints = { faceVertices[0].Point, faceVertices[1].Point, faceVertices[2].Point };
 
                         for (int pointIdx = 0; pointIdx < degeneratePoints.Count; ++pointIdx)
                         {
                             int degenerateIdx = degeneratePoints[pointIdx];
-                            Double2 point2D = vertices[degenerateIdx].Point;
+                            Float2 point2D = vertices[degenerateIdx].Point;
 
                             bool existing = false;
                             for (int i = 0; i < 3; ++i)
                             {
-                                if (Double2.LengthSquared(faceVertices[i].Point - point2D) < vertexTolerance)
+                                if (Float2.LengthSquared(faceVertices[i].Point - point2D) < vertexTolerance)
                                 {
                                     existing = true;
                                     break;
@@ -601,10 +601,10 @@ namespace Prowl.Vector.Geometry
 
                             for (int faceEdgeIdx = 0; faceEdgeIdx < 3; ++faceEdgeIdx)
                             {
-                                Double2[] edgePoints = { facePoints[faceEdgeIdx], facePoints[(faceEdgeIdx + 1) % 3] };
-                                Double2 closestPoint = GetClosestPointToSegment(point2D, edgePoints);
+                                Float2[] edgePoints = { facePoints[faceEdgeIdx], facePoints[(faceEdgeIdx + 1) % 3] };
+                                Float2 closestPoint = GetClosestPointToSegment(point2D, edgePoints);
 
-                                if (Double2.LengthSquared(point2D - closestPoint) < vertexTolerance)
+                                if (Float2.LengthSquared(point2D - closestPoint) < vertexTolerance)
                                 {
                                     int oppositeVertexIdx = face.VertexIdx[(faceEdgeIdx + 2) % 3];
 
@@ -636,7 +636,7 @@ namespace Prowl.Vector.Geometry
                 }
             }
 
-            private void FindEdgeIntersections(Double2[] segmentPoints, ref List<int> segmentIndices)
+            private void FindEdgeIntersections(Float2[] segmentPoints, ref List<int> segmentIndices)
             {
                 for (int faceIdx = 0; faceIdx < faces.Count; ++faceIdx)
                 {
@@ -649,21 +649,21 @@ namespace Prowl.Vector.Geometry
 
                     for (int faceEdgeIdx = 0; faceEdgeIdx < 3; ++faceEdgeIdx)
                     {
-                        Double2[] edgePoints = {
+                        Float2[] edgePoints = {
                             faceVertices[faceEdgeIdx].Point,
                             faceVertices[(faceEdgeIdx + 1) % 3].Point
                         };
-                        Double2[] edgeUVs = {
+                        Float2[] edgeUVs = {
                             faceVertices[faceEdgeIdx].UV,
                             faceVertices[(faceEdgeIdx + 1) % 3].UV
                         };
-                        Double2 intersectionPoint = Double2.Zero;
+                        Float2 intersectionPoint = Float2.Zero;
 
                         bool onEdge = false;
                         for (int edgePointIdx = 0; edgePointIdx < 2; ++edgePointIdx)
                         {
                             intersectionPoint = GetClosestPointToSegment(segmentPoints[edgePointIdx], edgePoints);
-                            if (Double2.LengthSquared(segmentPoints[edgePointIdx] - intersectionPoint) < vertexTolerance)
+                            if (Float2.LengthSquared(segmentPoints[edgePointIdx] - intersectionPoint) < vertexTolerance)
                             {
                                 onEdge = true;
                                 break;
@@ -672,8 +672,8 @@ namespace Prowl.Vector.Geometry
 
                         if (onEdge || SegmentIntersectsSegment(segmentPoints[0], segmentPoints[1], edgePoints[0], edgePoints[1], ref intersectionPoint))
                         {
-                            if ((Double2.LengthSquared(edgePoints[0] - intersectionPoint) < vertexTolerance) ||
-                                (Double2.LengthSquared(edgePoints[1] - intersectionPoint) < vertexTolerance))
+                            if ((Float2.LengthSquared(edgePoints[0] - intersectionPoint) < vertexTolerance) ||
+                                (Float2.LengthSquared(edgePoints[1] - intersectionPoint) < vertexTolerance))
                                 continue;
 
                             if (CSGBrush.AreSegmentsParallel(segmentPoints, edgePoints, vertexTolerance))
@@ -695,8 +695,8 @@ namespace Prowl.Vector.Geometry
                                 break;
                             }
 
-                            Double2 closestPoint = GetClosestPointToSegment(vertices[oppositeVertexIdx].Point, segmentPoints);
-                            if (Double2.LengthSquared(vertices[oppositeVertexIdx].Point - closestPoint) < vertexTolerance)
+                            Float2 closestPoint = GetClosestPointToSegment(vertices[oppositeVertexIdx].Point, segmentPoints);
+                            if (Float2.LengthSquared(vertices[oppositeVertexIdx].Point - closestPoint) < vertexTolerance)
                                 AddVertexIdxSorted(segmentIndices, oppositeVertexIdx);
 
                             Face2D leftFace = new Face2D { VertexIdx = new int[3] };
@@ -718,7 +718,7 @@ namespace Prowl.Vector.Geometry
                 }
             }
 
-            private int InsertPoint(Double2 point)
+            private int InsertPoint(Float2 point)
             {
                 int newVertexIdx = -1;
 
@@ -730,26 +730,26 @@ namespace Prowl.Vector.Geometry
                         vertices[face.VertexIdx[1]],
                         vertices[face.VertexIdx[2]]
                     };
-                    Double2[] points = { faceVertices[0].Point, faceVertices[1].Point, faceVertices[2].Point };
-                    Double2[] uvs = { faceVertices[0].UV, faceVertices[1].UV, faceVertices[2].UV };
+                    Float2[] points = { faceVertices[0].Point, faceVertices[1].Point, faceVertices[2].Point };
+                    Float2[] uvs = { faceVertices[0].UV, faceVertices[1].UV, faceVertices[2].UV };
 
                     if (CSGBrush.IsTriangleDegenerate(points, vertexTolerance))
                         continue;
 
                     for (int i = 0; i < 3; ++i)
                     {
-                        if (Double2.LengthSquared(faceVertices[i].Point - point) < vertexTolerance)
+                        if (Float2.LengthSquared(faceVertices[i].Point - point) < vertexTolerance)
                             return face.VertexIdx[i];
                     }
 
                     bool onEdge = false;
                     for (int faceEdgeIdx = 0; faceEdgeIdx < 3; ++faceEdgeIdx)
                     {
-                        Double2[] edgePoints = { points[faceEdgeIdx], points[(faceEdgeIdx + 1) % 3] };
-                        Double2[] edgeUVs = { uvs[faceEdgeIdx], uvs[(faceEdgeIdx + 1) % 3] };
+                        Float2[] edgePoints = { points[faceEdgeIdx], points[(faceEdgeIdx + 1) % 3] };
+                        Float2[] edgeUVs = { uvs[faceEdgeIdx], uvs[(faceEdgeIdx + 1) % 3] };
 
-                        Double2 closestPoint = GetClosestPointToSegment(point, edgePoints);
-                        if (Double2.LengthSquared(point - closestPoint) < vertexTolerance)
+                        Float2 closestPoint = GetClosestPointToSegment(point, edgePoints);
+                        if (Float2.LengthSquared(point - closestPoint) < vertexTolerance)
                         {
                             onEdge = true;
 
@@ -768,9 +768,9 @@ namespace Prowl.Vector.Geometry
                                 break;
                             }
 
-                            Double2[] splitEdge1 = { vertices[newVertexIdx].Point, edgePoints[0] };
-                            Double2[] splitEdge2 = { vertices[newVertexIdx].Point, edgePoints[1] };
-                            Double2[] newEdge = { vertices[newVertexIdx].Point, vertices[oppositeVertexIdx].Point };
+                            Float2[] splitEdge1 = { vertices[newVertexIdx].Point, edgePoints[0] };
+                            Float2[] splitEdge2 = { vertices[newVertexIdx].Point, edgePoints[1] };
+                            Float2[] newEdge = { vertices[newVertexIdx].Point, vertices[oppositeVertexIdx].Point };
                             if (CSGBrush.AreSegmentsParallel(splitEdge1, newEdge, vertexTolerance) &&
                                 CSGBrush.AreSegmentsParallel(splitEdge2, newEdge, vertexTolerance))
                                 break;
@@ -803,7 +803,7 @@ namespace Prowl.Vector.Geometry
 
                         for (int i = 0; i < 3; ++i)
                         {
-                            Double2[] newPoints = { points[i], points[(i + 1) % 3], vertices[newVertexIdx].Point };
+                            Float2[] newPoints = { points[i], points[(i + 1) % 3], vertices[newVertexIdx].Point };
                             if (CSGBrush.IsTriangleDegenerate(newPoints, vertexTolerance))
                                 continue;
 
@@ -823,21 +823,21 @@ namespace Prowl.Vector.Geometry
 
             public void Insert(CSGBrush brush, int faceIdx)
             {
-                Double2[] points2D = new Double2[3];
+                Float2[] points2D = new Float2[3];
                 int pointsCount = 0;
 
                 for (int i = 0; i < 3; i++)
                 {
-                    Double3 point3D = brush.Faces[faceIdx].Vertices[i];
+                    Float3 point3D = brush.Faces[faceIdx].Vertices[i];
 
                     if (plane.GetDistanceToPoint(point3D) < Intersection.INTERSECTION_EPSILON)
                     {
-                        Double3 point2D = to2D.Xform(point3D);
-                        points2D[pointsCount++] = new Double2(point2D.X, point2D.Y);
+                        Float3 point2D = to2D.Xform(point3D);
+                        points2D[pointsCount++] = new Float2(point2D.X, point2D.Y);
                     }
                     else
                     {
-                        Double3 nextPoint3D = brush.Faces[faceIdx].Vertices[(i + 1) % 3];
+                        Float3 nextPoint3D = brush.Faces[faceIdx].Vertices[(i + 1) % 3];
 
                         if (plane.GetDistanceToPoint(nextPoint3D) >= Intersection.INTERSECTION_EPSILON)
                         {
@@ -846,11 +846,11 @@ namespace Prowl.Vector.Geometry
 
                             if (side1 != side2)
                             {
-                                Double3 point2D = Double3.Zero;
+                                Float3 point2D = Float3.Zero;
                                 if (PlaneIntersectsSegment(plane, point3D, nextPoint3D, ref point2D))
                                 {
                                     point2D = to2D.Xform(point2D);
-                                    points2D[pointsCount++] = new Double2(point2D.X, point2D.Y);
+                                    points2D[pointsCount++] = new Float2(point2D.X, point2D.Y);
                                 }
                             }
                         }
@@ -858,7 +858,7 @@ namespace Prowl.Vector.Geometry
                 }
 
                 List<int> segmentIndices = new List<int>();
-                Double2[] segment = new Double2[2];
+                Float2[] segment = new Float2[2];
                 int[] insertedIndex = { -1, -1, -1 };
 
                 for (int i = 0; i < pointsCount; ++i)
@@ -900,11 +900,11 @@ namespace Prowl.Vector.Geometry
                         vertices[face.VertexIdx[2]]
                     };
 
-                    Double3[] points3D = new Double3[3];
-                    Double2[] uvs = new Double2[3];
+                    Float3[] points3D = new Float3[3];
+                    Float2[] uvs = new Float2[3];
                     for (int i = 0; i < 3; ++i)
                     {
-                        Double3 point2D = new Double3(fv[i].Point.X, fv[i].Point.Y, 0);
+                        Float3 point2D = new Float3(fv[i].Point.X, fv[i].Point.Y, 0);
                         points3D[i] = to3D.Xform(point2D);
                         uvs[i] = fv[i].UV;
                     }
@@ -938,7 +938,7 @@ namespace Prowl.Vector.Geometry
                 public int Left;
                 public int Right;
                 public int Next;
-                public Double3 Center;
+                public Float3 Center;
                 public AABB Aabb;
             }
 
@@ -946,20 +946,20 @@ namespace Prowl.Vector.Geometry
             {
                 public bool FromB;
                 public int[] Points;
-                public Double2[] UVs;
+                public Float2[] UVs;
             }
 
-            public List<Double3> Points = new List<Double3>();
+            public List<Float3> Points = new List<Float3>();
             public List<Face> FacesA = new List<Face>();
             public List<Face> FacesB = new List<Face>();
-            public double VertexSnap = 0.0;
+            public float VertexSnap = 0.0f;
             private Dictionary<SnapKey, int> snapCache = new Dictionary<SnapKey, int>();
 
             private struct SnapKey : IEquatable<SnapKey>
             {
                 public int X, Y, Z;
 
-                public SnapKey(Double3 point, double snap)
+                public SnapKey(Float3 point, float snap)
                 {
                     X = (int)Math.Round(((point.X + snap) * 0.31234) / snap);
                     Y = (int)Math.Round(((point.Y + snap) * 0.31234) / snap);
@@ -970,7 +970,7 @@ namespace Prowl.Vector.Geometry
                 public override int GetHashCode() => HashCode.Combine(X, Y, Z);
             }
 
-            public void AddFace(Double3[] points, Double2[] uvs, bool fromB)
+            public void AddFace(Float3[] points, Float2[] uvs, bool fromB)
             {
                 int[] indices = new int[3];
                 for (int i = 0; i < 3; i++)
@@ -995,7 +995,7 @@ namespace Prowl.Vector.Geometry
                 {
                     FromB = fromB,
                     Points = indices,
-                    UVs = (Double2[])uvs.Clone()
+                    UVs = (Float2[])uvs.Clone()
                 };
 
                 if (fromB)
@@ -1094,11 +1094,11 @@ namespace Prowl.Vector.Geometry
                 return facebvh.Length - 1;
             }
 
-            private void AddDistance(ref List<double> intersectionsA, ref List<double> intersectionsB, bool fromB, double distance)
+            private void AddDistance(ref List<float> intersectionsA, ref List<float> intersectionsB, bool fromB, float distance)
             {
-                List<double> intersections = fromB ? intersectionsB : intersectionsA;
+                List<float> intersections = fromB ? intersectionsB : intersectionsA;
 
-                foreach (double E in intersections)
+                foreach (float E in intersections)
                 {
                     if (Maths.Abs(E - distance) < Intersection.INTERSECTION_EPSILON)
                         return;
@@ -1111,19 +1111,19 @@ namespace Prowl.Vector.Geometry
             {
                 Face face = fromFacesA ? FacesA[faceIdx] : FacesB[faceIdx];
 
-                Double3[] facePoints = {
+                Float3[] facePoints = {
                     Points[face.Points[0]],
                     Points[face.Points[1]],
                     Points[face.Points[2]]
                 };
-                Double3 faceCenter = (facePoints[0] + facePoints[1] + facePoints[2]) / 3.0;
+                Float3 faceCenter = (facePoints[0] + facePoints[1] + facePoints[2]) / 3.0f;
                 Plane facePlane = new Plane(facePoints[0], facePoints[1], facePoints[2]);
-                Double3 faceNormal = facePlane.Normal;
+                Float3 faceNormal = facePlane.Normal;
 
                 int[] stack = new int[maxDepth];
 
-                List<double> intersectionsA = new List<double>();
-                List<double> intersectionsB = new List<double>();
+                List<float> intersectionsA = new List<float>();
+                List<float> intersectionsB = new List<float>();
 
                 int level = 0;
                 stack[0] = bvhFirst;
@@ -1147,14 +1147,14 @@ namespace Prowl.Vector.Geometry
                                         if (RayIntersectsAABB(faceCenter, faceNormal, current.Aabb))
                                         {
                                             Face currentFace = fromFacesA ? FacesB[current.Face] : FacesA[current.Face];
-                                            Double3[] currentPoints = {
+                                            Float3[] currentPoints = {
                                                 Points[currentFace.Points[0]],
                                                 Points[currentFace.Points[1]],
                                                 Points[currentFace.Points[2]]
                                             };
                                             Plane currentPlane = new Plane(currentPoints[0], currentPoints[1], currentPoints[2]);
-                                            Double3 currentNormal = currentPlane.Normal;
-                                            Double3 intersectionPoint = Double3.Zero;
+                                            Float3 currentNormal = currentPlane.Normal;
+                                            Float3 intersectionPoint = Float3.Zero;
 
                                             if (CSGBrush.IsEqualApprox(currentNormal, faceNormal) &&
                                                 CSGBrush.IsPointInTriangle(faceCenter, currentPoints))
@@ -1164,7 +1164,7 @@ namespace Prowl.Vector.Geometry
                                             }
                                             else if (CSGBrush.RayIntersectsTriangle(faceCenter, faceNormal, currentPoints, Intersection.INTERSECTION_EPSILON, ref intersectionPoint))
                                             {
-                                                double distance = Double3.Length(faceCenter - intersectionPoint);
+                                                float distance = Float3.Length(faceCenter - intersectionPoint);
                                                 AddDistance(ref intersectionsA, ref intersectionsB, currentFace.FromB, distance);
                                             }
                                         }
@@ -1228,7 +1228,7 @@ namespace Prowl.Vector.Geometry
                 return res != 0;
             }
 
-            private bool RayIntersectsAABB(Double3 origin, Double3 direction, AABB aabb)
+            private bool RayIntersectsAABB(Float3 origin, Float3 direction, AABB aabb)
             {
                 return Prowl.Vector.Geometry.Intersection.RayAABB(origin, direction, aabb.Min, aabb.Max, out _, out _);
             }
@@ -1326,22 +1326,22 @@ namespace Prowl.Vector.Geometry
                             {
                                 if (!intersectionAabb.Intersects(facebvhA[i].Aabb))
                                 {
-                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Float3>(3);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[0]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[1]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[2]]);
-                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
+                                    mergedBrush.Faces[facesCount].UVs = new Float2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
                                     facesCount++;
                                     continue;
                                 }
 
                                 if (!BVHInside(ref facebvhB, maxDepthB, maxAllocB - 1, i, true))
                                 {
-                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Float3>(3);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[0]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[1]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[2]]);
-                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
+                                    mergedBrush.Faces[facesCount].UVs = new Float2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
                                     facesCount++;
                                 }
                             }
@@ -1350,22 +1350,22 @@ namespace Prowl.Vector.Geometry
                             {
                                 if (!intersectionAabb.Intersects(facebvhB[i].Aabb))
                                 {
-                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Float3>(3);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[0]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[1]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[2]]);
-                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
+                                    mergedBrush.Faces[facesCount].UVs = new Float2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
                                     facesCount++;
                                     continue;
                                 }
 
                                 if (!BVHInside(ref facebvhA, maxDepthA, maxAllocA - 1, i, false))
                                 {
-                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Float3>(3);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[0]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[1]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[2]]);
-                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
+                                    mergedBrush.Faces[facesCount].UVs = new Float2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
                                     facesCount++;
                                 }
                             }
@@ -1385,11 +1385,11 @@ namespace Prowl.Vector.Geometry
 
                                 if (BVHInside(ref facebvhB, maxDepthB, maxAllocB - 1, i, true))
                                 {
-                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Float3>(3);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[0]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[1]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[2]]);
-                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
+                                    mergedBrush.Faces[facesCount].UVs = new Float2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
                                     facesCount++;
                                 }
                             }
@@ -1401,11 +1401,11 @@ namespace Prowl.Vector.Geometry
 
                                 if (BVHInside(ref facebvhA, maxDepthA, maxAllocA - 1, i, false))
                                 {
-                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Float3>(3);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[0]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[1]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[2]]);
-                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
+                                    mergedBrush.Faces[facesCount].UVs = new Float2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
                                     facesCount++;
                                 }
                             }
@@ -1422,22 +1422,22 @@ namespace Prowl.Vector.Geometry
                             {
                                 if (!intersectionAabb.Intersects(facebvhA[i].Aabb))
                                 {
-                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Float3>(3);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[0]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[1]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[2]]);
-                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
+                                    mergedBrush.Faces[facesCount].UVs = new Float2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
                                     facesCount++;
                                     continue;
                                 }
 
                                 if (!BVHInside(ref facebvhB, maxDepthB, maxAllocB - 1, i, true))
                                 {
-                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Float3>(3);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[0]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[1]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesA[i].Points[2]]);
-                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
+                                    mergedBrush.Faces[facesCount].UVs = new Float2[3] { FacesA[i].UVs[0], FacesA[i].UVs[1], FacesA[i].UVs[2] };
                                     facesCount++;
                                 }
                             }
@@ -1449,12 +1449,12 @@ namespace Prowl.Vector.Geometry
 
                                 if (BVHInside(ref facebvhA, maxDepthA, maxAllocA - 1, i, false))
                                 {
-                                    mergedBrush.Faces[facesCount].Vertices = new List<Double3>(3);
+                                    mergedBrush.Faces[facesCount].Vertices = new List<Float3>(3);
                                     // Flip winding order for subtraction
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[1]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[0]]);
                                     mergedBrush.Faces[facesCount].Vertices.Add(Points[FacesB[i].Points[2]]);
-                                    mergedBrush.Faces[facesCount].UVs = new Double2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
+                                    mergedBrush.Faces[facesCount].UVs = new Float2[3] { FacesB[i].UVs[0], FacesB[i].UVs[1], FacesB[i].UVs[2] };
                                     facesCount++;
                                 }
                             }
@@ -1705,8 +1705,8 @@ namespace Prowl.Vector.Geometry
                     }
                     else
                     {
-                        Double3[] points = new Double3[3];
-                        Double2[] uvs = new Double2[3];
+                        Float3[] points = new Float3[3];
+                        Float2[] uvs = new Float2[3];
                         for (int j = 0; j < 3; j++)
                         {
                             points[j] = brushA.Faces[i].Vertices[j];
@@ -1724,8 +1724,8 @@ namespace Prowl.Vector.Geometry
                     }
                     else
                     {
-                        Double3[] points = new Double3[3];
-                        Double2[] uvs = new Double2[3];
+                        Float3[] points = new Float3[3];
+                        Float2[] uvs = new Float2[3];
                         for (int j = 0; j < 3; j++)
                         {
                             points[j] = brushB.Faces[i].Vertices[j];
@@ -1738,25 +1738,25 @@ namespace Prowl.Vector.Geometry
                 meshMerge.DoOperation(operation, ref mergedBrush);
             }
 
-            private void UpdateFaces(ref CSGBrush brushA, int fIdxA, ref CSGBrush brushB, int fIdxB, ref Build2DFaceCollection collection, double vertexSnap)
+            private void UpdateFaces(ref CSGBrush brushA, int fIdxA, ref CSGBrush brushB, int fIdxB, ref Build2DFaceCollection collection, float vertexSnap)
             {
                 var vA = brushA.Faces[fIdxA].Vertices;
                 var vB = brushB.Faces[fIdxB].Vertices;
 
                 // Check if triangle A is degenerate
-                double snapSq = vertexSnap * vertexSnap; // Compute once instead of 6 times
-                if (Double3.LengthSquared(vA[0] - vA[1]) < snapSq ||
-                    Double3.LengthSquared(vA[0] - vA[2]) < snapSq ||
-                    Double3.LengthSquared(vA[1] - vA[2]) < snapSq)
+                float snapSq = vertexSnap * vertexSnap; // Compute once instead of 6 times
+                if (Float3.LengthSquared(vA[0] - vA[1]) < snapSq ||
+                    Float3.LengthSquared(vA[0] - vA[2]) < snapSq ||
+                    Float3.LengthSquared(vA[1] - vA[2]) < snapSq)
                 {
                     collection.Build2DFacesA[fIdxA] = new Build2DFaces();
                     return;
                 }
 
                 // Check if triangle B is degenerate
-                if (Double3.LengthSquared(vB[0] - vB[1]) < snapSq ||
-                    Double3.LengthSquared(vB[0] - vB[2]) < snapSq ||
-                    Double3.LengthSquared(vB[1] - vB[2]) < snapSq)
+                if (Float3.LengthSquared(vB[0] - vB[1]) < snapSq ||
+                    Float3.LengthSquared(vB[0] - vB[2]) < snapSq ||
+                    Float3.LengthSquared(vB[1] - vB[2]) < snapSq)
                 {
                     collection.Build2DFacesB[fIdxB] = new Build2DFaces();
                     return;
@@ -1792,7 +1792,7 @@ namespace Prowl.Vector.Geometry
                 var triangleData = GetTriangleData(face);
 
                 CSGBrush.Face brushFace = new CSGBrush.Face();
-                brushFace.Vertices = new List<Double3>(triangleData.Vertices);
+                brushFace.Vertices = new List<Float3>(triangleData.Vertices);
                 brushFace.UVs = triangleData.UVs;
                 facesList.Add(brushFace);
             }
@@ -1809,11 +1809,11 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         public struct TriangleData
         {
-            public Double3[] Vertices; // Always 3 vertices
-            public Double2[] UVs;      // Always 3 UVs
+            public Float3[] Vertices; // Always 3 vertices
+            public Float2[] UVs;      // Always 3 UVs
             public GeometryData.Face Face;
 
-            public TriangleData(Double3[] vertices, Double2[] uvs, GeometryData.Face face)
+            public TriangleData(Float3[] vertices, Float2[] uvs, GeometryData.Face face)
             {
                 Vertices = vertices;
                 UVs = uvs;
@@ -1830,8 +1830,8 @@ namespace Prowl.Vector.Geometry
                 throw new InvalidOperationException("Face must be a triangle");
 
             var verts = face.NeighborVertices();
-            var vertices = new Double3[3];
-            var uvs = new Double2[3];
+            var vertices = new Float3[3];
+            var uvs = new Float2[3];
 
             for (int i = 0; i < 3; i++)
             {
@@ -1843,12 +1843,12 @@ namespace Prowl.Vector.Geometry
                     var floatAttr = uvAttr.AsFloat();
                     if (floatAttr != null && floatAttr.Data.Length >= 2)
                     {
-                        uvs[i] = new Double2(floatAttr.Data[0], floatAttr.Data[1]);
+                        uvs[i] = new Float2(floatAttr.Data[0], floatAttr.Data[1]);
                     }
                 }
                 else
                 {
-                    uvs[i] = Double2.Zero;
+                    uvs[i] = Float2.Zero;
                 }
             }
 
@@ -1860,7 +1860,7 @@ namespace Prowl.Vector.Geometry
             var geom = new GeometryData();
             geom.AddLoopAttribute("uv", GeometryData.AttributeBaseType.Float, 2);
 
-            var vertexMap = new Dictionary<Double3, GeometryData.Vertex>();
+            var vertexMap = new Dictionary<Float3, GeometryData.Vertex>();
 
             foreach (var face in brush.Faces)
             {

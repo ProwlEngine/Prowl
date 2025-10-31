@@ -73,9 +73,9 @@ var scaled = v3 * 2.0;
 var normalized = v3.normalized;
 
 // Vector operations
-double dot = Vector3.Dot(v3, normalized);
+float dot = Vector3.Dot(v3, normalized);
 Vector3 cross = Vector3.Cross(v3, normalized);
-double distance = Vector3.Distance(v3, normalized);
+float distance = Vector3.Distance(v3, normalized);
 ```
 
 ### Matrix transformations
@@ -111,14 +111,14 @@ var rotated = Vector3.Transform(v3, rotation);
 
 ```csharp
 // Generate random values
-double value = Random.Value;                // Range [0,1]
+float value = Random.Value;                // Range [0,1]
 Vector2 circle = Random.OnUnitCircle;       // Point on circle
 Vector3 sphere = Random.InUnitSphere;       // Point in sphere
 Quaternion rotation = Random.Rotation;      // Random rotation
 
 // Quick conversions between Radiens and Degrees
-double degree = radian.ToDeg();
-double radian = degree.ToRad();
+float degree = radian.ToDeg();
+float radian = degree.ToRad();
 
 // Line intersection
 bool intersects = MathD.DoesLineIntersectLine(start1, end1, start2, end2, out Vector2 intersection);

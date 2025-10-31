@@ -15,10 +15,10 @@ namespace Prowl.Vector
     public struct Rect : IEquatable<Rect>, IFormattable
     {
         /// <summary>The minimum corner of the rectangle.</summary>
-        public Double2 Min;
+        public Float2 Min;
 
         /// <summary>The maximum corner of the rectangle.</summary>
-        public Double2 Max;
+        public Float2 Max;
 
         /// <summary>
         /// Initializes a new rectangle with the specified min and max corners.
@@ -26,13 +26,13 @@ namespace Prowl.Vector
         /// <param name="min">The minimum corner.</param>
         /// <param name="max">The maximum corner.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Rect(Double2 min, Double2 max)
+        public Rect(Float2 min, Float2 max)
         {
-            Min = new Double2(
+            Min = new Float2(
                 Maths.Min(min.X, max.X),
                 Maths.Min(min.Y, max.Y)
             );
-            Max = new Double2(
+            Max = new Float2(
                 Maths.Max(min.X, max.X),
                 Maths.Max(min.Y, max.Y)
             );
@@ -46,8 +46,8 @@ namespace Prowl.Vector
         /// <param name="maxX">Maximum X coordinate.</param>
         /// <param name="maxY">Maximum Y coordinate.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Rect(double minX, double minY, double maxX, double maxY)
-            : this(new Double2(minX, minY), new Double2(maxX, maxY))
+        public Rect(float minX, float minY, float maxX, float maxY)
+            : this(new Float2(minX, minY), new Float2(maxX, maxY))
         {
         }
 
@@ -57,25 +57,25 @@ namespace Prowl.Vector
         /// <param name="center">The center point.</param>
         /// <param name="size">The size (width, height).</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Rect FromCenterAndSize(Double2 center, Double2 size)
+        public static Rect FromCenterAndSize(Float2 center, Float2 size)
         {
-            Double2 halfSize = size / 2.0;
+            Float2 halfSize = size / 2.0f;
             return new Rect(center - halfSize, center + halfSize);
         }
 
         /// <summary>
         /// Gets the center point of the rectangle.
         /// </summary>
-        public Double2 Center
+        public Float2 Center
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => (Min + Max) / 2.0;
+            get => (Min + Max) / 2.0f;
         }
 
         /// <summary>
         /// Gets the size (width, height) of the rectangle.
         /// </summary>
-        public Double2 Size
+        public Float2 Size
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => Max - Min;
@@ -84,21 +84,21 @@ namespace Prowl.Vector
         /// <summary>
         /// Gets the extents (half-size) of the rectangle.
         /// </summary>
-        public Double2 Extents
+        public Float2 Extents
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Size / 2.0;
+            get => Size / 2.0f;
         }
 
         /// <summary>
         /// Gets the area of the rectangle.
         /// </summary>
-        public double Area
+        public float Area
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                Double2 size = Size;
+                Float2 size = Size;
                 return size.X * size.Y;
             }
         }
@@ -108,14 +108,14 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="index">Corner index (0-3).</param>
         /// <returns>The corner position.</returns>
-        public Double2 GetCorner(int index)
+        public Float2 GetCorner(int index)
         {
             switch (index)
             {
-                case 0: return new Double2(Min.X, Min.Y);
-                case 1: return new Double2(Max.X, Min.Y);
-                case 2: return new Double2(Max.X, Max.Y);
-                case 3: return new Double2(Min.X, Max.Y);
+                case 0: return new Float2(Min.X, Min.Y);
+                case 1: return new Float2(Max.X, Min.Y);
+                case 2: return new Float2(Max.X, Max.Y);
+                case 3: return new Float2(Min.X, Max.Y);
                 default: throw new IndexOutOfRangeException("Rect corner index must be between 0 and 3.");
             }
         }
@@ -125,14 +125,14 @@ namespace Prowl.Vector
         /// </summary>
         /// <returns>Array of 4 corner positions.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double2[] GetCorners()
+        public Float2[] GetCorners()
         {
-            return new Double2[]
+            return new Float2[]
             {
-                new Double2(Min.X, Min.Y),
-                new Double2(Max.X, Min.Y),
-                new Double2(Max.X, Max.Y),
-                new Double2(Min.X, Max.Y)
+                new Float2(Min.X, Min.Y),
+                new Float2(Max.X, Min.Y),
+                new Float2(Max.X, Max.Y),
+                new Float2(Min.X, Max.Y)
             };
         }
 
@@ -142,10 +142,10 @@ namespace Prowl.Vector
         /// <param name="point">The point to test.</param>
         /// <returns>True if the point is inside or on the rectangle boundary.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Contains(Double2 point)
+        public bool Contains(Float2 point)
         {
-            return point.X >= Min.X - double.Epsilon && point.X <= Max.X + double.Epsilon &&
-                   point.Y >= Min.Y - double.Epsilon && point.Y <= Max.Y + double.Epsilon;
+            return point.X >= Min.X - float.Epsilon && point.X <= Max.X + float.Epsilon &&
+                   point.Y >= Min.Y - float.Epsilon && point.Y <= Max.Y + float.Epsilon;
         }
 
         /// <summary>
@@ -156,8 +156,8 @@ namespace Prowl.Vector
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(Rect other)
         {
-            return other.Min.X >= Min.X - double.Epsilon && other.Max.X <= Max.X + double.Epsilon &&
-                   other.Min.Y >= Min.Y - double.Epsilon && other.Max.Y <= Max.Y + double.Epsilon;
+            return other.Min.X >= Min.X - float.Epsilon && other.Max.X <= Max.X + float.Epsilon &&
+                   other.Min.Y >= Min.Y - float.Epsilon && other.Max.Y <= Max.Y + float.Epsilon;
         }
 
         /// <summary>
@@ -178,9 +178,9 @@ namespace Prowl.Vector
         /// <param name="point">The point to find the closest point to.</param>
         /// <returns>The closest point on the rectangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double2 ClosestPointTo(Double2 point)
+        public Float2 ClosestPointTo(Float2 point)
         {
-            return new Double2(
+            return new Float2(
                 Maths.Clamp(point.X, Min.X, Max.X),
                 Maths.Clamp(point.Y, Min.Y, Max.Y)
             );
@@ -192,10 +192,10 @@ namespace Prowl.Vector
         /// <param name="point">The point to test.</param>
         /// <returns>The squared distance (0 if point is inside).</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double GetSqrDistanceToPoint(Double2 point)
+        public float GetSqrDistanceToPoint(Float2 point)
         {
-            Double2 closest = ClosestPointTo(point);
-            Double2 diff = point - closest;
+            Float2 closest = ClosestPointTo(point);
+            Float2 diff = point - closest;
             return diff.X * diff.X + diff.Y * diff.Y;
         }
 
@@ -205,7 +205,7 @@ namespace Prowl.Vector
         /// <param name="point">The point to test.</param>
         /// <returns>The distance (0 if point is inside).</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double GetDistanceToPoint(Double2 point)
+        public float GetDistanceToPoint(Float2 point)
         {
             return Maths.Sqrt(GetSqrDistanceToPoint(point));
         }
@@ -215,13 +215,13 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="point">The point to include.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Encapsulate(Double2 point)
+        public void Encapsulate(Float2 point)
         {
-            Min = new Double2(
+            Min = new Float2(
                 Maths.Min(Min.X, point.X),
                 Maths.Min(Min.Y, point.Y)
             );
-            Max = new Double2(
+            Max = new Float2(
                 Maths.Max(Max.X, point.X),
                 Maths.Max(Max.Y, point.Y)
             );
@@ -234,11 +234,11 @@ namespace Prowl.Vector
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Encapsulate(Rect other)
         {
-            Min = new Double2(
+            Min = new Float2(
                 Maths.Min(Min.X, other.Min.X),
                 Maths.Min(Min.Y, other.Min.Y)
             );
-            Max = new Double2(
+            Max = new Float2(
                 Maths.Max(Max.X, other.Max.X),
                 Maths.Max(Max.Y, other.Max.Y)
             );
@@ -250,7 +250,7 @@ namespace Prowl.Vector
         /// <param name="point">The point to include.</param>
         /// <returns>The encapsulating rectangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Rect Encapsulating(Double2 point)
+        public Rect Encapsulating(Float2 point)
         {
             var result = this;
             result.Encapsulate(point);
@@ -275,9 +275,9 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="amount">The amount to expand by.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Expand(double amount)
+        public void Expand(float amount)
         {
-            Double2 expansion = new Double2(amount, amount);
+            Float2 expansion = new Float2(amount, amount);
             Min -= expansion;
             Max += expansion;
         }
@@ -287,7 +287,7 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="expansion">The amount to expand by in each direction.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Expand(Double2 expansion)
+        public void Expand(Float2 expansion)
         {
             Min -= expansion;
             Max += expansion;
@@ -299,7 +299,7 @@ namespace Prowl.Vector
         /// <param name="amount">The amount to expand by.</param>
         /// <returns>The expanded rectangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Rect Expanded(double amount)
+        public Rect Expanded(float amount)
         {
             var result = this;
             result.Expand(amount);
@@ -312,7 +312,7 @@ namespace Prowl.Vector
         /// <param name="expansion">The amount to expand by in each direction.</param>
         /// <returns>The expanded rectangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Rect Expanded(Double2 expansion)
+        public Rect Expanded(Float2 expansion)
         {
             var result = this;
             result.Expand(expansion);
@@ -336,7 +336,7 @@ namespace Prowl.Vector
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsEmpty()
         {
-            return Maths.Abs(Area) < double.Epsilon;
+            return Maths.Abs(Area) < float.Epsilon;
         }
 
         // --- IEquatable & IFormattable Implementation ---

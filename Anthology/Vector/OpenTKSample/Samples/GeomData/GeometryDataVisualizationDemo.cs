@@ -19,7 +19,7 @@ public class GeometryDataVisualizationDemo : IDemo
     public GeometryDataVisualizationDemo()
     {
         // Create a subdivided cube for better visualization
-        var aabb = new AABB(new Double3(-0.4, -0.4, -0.4), new Double3(0.4, 0.4, 0.4));
+        var aabb = new AABB(new Float3(-0.4f, -0.4f, -0.4f), new Float3(0.4f, 0.4f, 0.4f));
         _mesh = aabb.GetGeometryData();
         GeometryOperators.Subdivide(_mesh);
 
@@ -35,8 +35,8 @@ public class GeometryDataVisualizationDemo : IDemo
 
         // Create a rotating mesh
         float rotation = timeInSeconds * 0.3f;
-        var quat = Quaternion.AxisAngle(Double3.Normalize(new Double3(1, 1, 0)), rotation);
-        var rotationMatrix = Double4x4.CreateFromQuaternion(quat);
+        var quat = Quaternion.AxisAngle(Float3.Normalize(new Float3(1, 1, 0)), rotation);
+        var rotationMatrix = Float4x4.CreateFromQuaternion(quat);
         var rotated = CopyAndTransform(_mesh, position, rotationMatrix);
 
         // Different visualization modes
@@ -79,7 +79,7 @@ public class GeometryDataVisualizationDemo : IDemo
         }
     }
 
-    private GeometryData CopyAndTransform(GeometryData source, Float3 position, Double4x4 rotation)
+    private GeometryData CopyAndTransform(GeometryData source, Float3 position, Float4x4 rotation)
     {
         var copy = new GeometryData();
 
@@ -87,8 +87,8 @@ public class GeometryDataVisualizationDemo : IDemo
         var vertexMap = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
         foreach (var v in source.Vertices)
         {
-            var transformed = Double4x4.TransformPoint(v.Point, rotation);
-            var newV = copy.AddVertex(transformed + (Double3)position);
+            var transformed = Float4x4.TransformPoint(v.Point, rotation);
+            var newV = copy.AddVertex(transformed + position);
             newV.Id = v.Id;
             vertexMap[v] = newV;
 
@@ -98,8 +98,8 @@ public class GeometryDataVisualizationDemo : IDemo
                 if (attr.Key == "normal" && attr.Value is GeometryData.FloatAttributeValue floatAttr && floatAttr.Data.Length >= 3)
                 {
                     // Transform normal by rotation (now that TransformNormal is fixed)
-                    var normal = new Double3(floatAttr.Data[0], floatAttr.Data[1], floatAttr.Data[2]);
-                    var transformedNormal = Double4x4.TransformNormal(normal, rotation);
+                    var normal = new Float3(floatAttr.Data[0], floatAttr.Data[1], floatAttr.Data[2]);
+                    var transformedNormal = Float4x4.TransformNormal(normal, rotation);
 
                     newV.Attributes[attr.Key] = new GeometryData.FloatAttributeValue(
                         transformedNormal.X,

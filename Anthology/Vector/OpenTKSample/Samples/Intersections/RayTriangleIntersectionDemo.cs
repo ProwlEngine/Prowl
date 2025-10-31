@@ -72,7 +72,7 @@ public class RayTriangleIntersectionDemo : IDemo
         Ray ray = new Ray(rayStart, rayDir);
 
         // Check for intersection
-        bool hasHit = ray.Intersects(triangle, out double hitDistance, out double u, out double v);
+        bool hasHit = ray.Intersects(triangle, out float hitDistance, out float u, out float v);
 
         // Set ray color and length based on hit
         Float4 rayColor;

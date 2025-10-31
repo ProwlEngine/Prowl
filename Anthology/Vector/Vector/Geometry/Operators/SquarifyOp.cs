@@ -14,75 +14,75 @@ namespace Prowl.Vector.Geometry.Operators
         /// <summary>
         /// Compute a local coordinate system for a quad face.
         /// </summary>
-        private static Double4x4 ComputeLocalAxis(Double3 r0, Double3 r1, Double3 r2, Double3 r3)
+        private static Float4x4 ComputeLocalAxis(Float3 r0, Float3 r1, Float3 r2, Float3 r3)
         {
-            Double3 Z = Double3.Normalize(
-                Double3.Normalize(Double3.Cross(r0, r1)) +
-                Double3.Normalize(Double3.Cross(r1, r2)) +
-                Double3.Normalize(Double3.Cross(r2, r3)) +
-                Double3.Normalize(Double3.Cross(r3, r0))
+            Float3 Z = Float3.Normalize(
+                Float3.Normalize(Float3.Cross(r0, r1)) +
+                Float3.Normalize(Float3.Cross(r1, r2)) +
+                Float3.Normalize(Float3.Cross(r2, r3)) +
+                Float3.Normalize(Float3.Cross(r3, r0))
             );
-            Double3 X = Double3.Normalize(r0);
-            Double3 Y = Double3.Cross(Z, X);
+            Float3 X = Float3.Normalize(r0);
+            Float3 Y = Float3.Cross(Z, X);
 
             // Build transformation matrix
-            return new Double4x4(
-                new Double4(X.X, X.Y, X.Z, 0),
-                new Double4(Y.X, Y.Y, Y.Z, 0),
-                new Double4(Z.X, Z.Y, Z.Z, 0),
-                new Double4(0, 0, 0, 1)
+            return new Float4x4(
+                new Float4(X.X, X.Y, X.Z, 0),
+                new Float4(Y.X, Y.Y, Y.Z, 0),
+                new Float4(Z.X, Z.Y, Z.Z, 0),
+                new Float4(0, 0, 0, 1)
             );
         }
 
         /// <summary>
         /// Calculate average radius length of all quads in the mesh.
         /// </summary>
-        private static double AverageRadiusLength(GeometryData mesh)
+        private static float AverageRadiusLength(GeometryData mesh)
         {
-            double lengthSum = 0;
-            double weightSum = 0;
+            float lengthSum = 0;
+            float weightSum = 0;
 
             foreach (var f in mesh.Faces)
             {
                 var verts = f.NeighborVertices();
                 if (verts.Count != 4) continue;
 
-                Double3 c = f.Center();
-                Double3 r0 = verts[0].Point - c;
-                Double3 r1 = verts[1].Point - c;
-                Double3 r2 = verts[2].Point - c;
-                Double3 r3 = verts[3].Point - c;
+                Float3 c = f.Center();
+                Float3 r0 = verts[0].Point - c;
+                Float3 r1 = verts[1].Point - c;
+                Float3 r2 = verts[2].Point - c;
+                Float3 r3 = verts[3].Point - c;
 
                 var localToGlobal = ComputeLocalAxis(r0, r1, r2, r3);
-                var globalToLocal = Double4x4.Transpose(localToGlobal);
+                var globalToLocal = Float4x4.Transpose(localToGlobal);
 
                 // Transform to local coordinates
-                Double3 l0 = Double4x4.TransformPoint(r0, globalToLocal);
-                Double3 l1 = Double4x4.TransformPoint(r1, globalToLocal);
-                Double3 l2 = Double4x4.TransformPoint(r2, globalToLocal);
-                Double3 l3 = Double4x4.TransformPoint(r3, globalToLocal);
+                Float3 l0 = Float4x4.TransformPoint(r0, globalToLocal);
+                Float3 l1 = Float4x4.TransformPoint(r1, globalToLocal);
+                Float3 l2 = Float4x4.TransformPoint(r2, globalToLocal);
+                Float3 l3 = Float4x4.TransformPoint(r3, globalToLocal);
 
                 // Rotate vectors to align
-                Double3 rl0 = l0;
-                Double3 rl1 = new Double3(l1.Y, -l1.X, l1.Z);
-                Double3 rl2 = new Double3(-l2.X, -l2.Y, l2.Z);
-                Double3 rl3 = new Double3(-l3.Y, l3.X, l3.Z);
+                Float3 rl0 = l0;
+                Float3 rl1 = new Float3(l1.Y, -l1.X, l1.Z);
+                Float3 rl2 = new Float3(-l2.X, -l2.Y, l2.Z);
+                Float3 rl3 = new Float3(-l3.Y, l3.X, l3.Z);
 
-                Double3 average = (rl0 + rl1 + rl2 + rl3) * 0.25;
+                Float3 average = (rl0 + rl1 + rl2 + rl3) * 0.25f;
 
-                lengthSum += Double3.Length(average);
+                lengthSum += Float3.Length(average);
                 weightSum += 1;
             }
 
-            return weightSum > 0 ? lengthSum / weightSum : 1.0;
+            return weightSum > 0f ? lengthSum / weightSum : 1.0f;
         }
 
-        internal static void SquarifyQuads(GeometryData mesh, double rate = 1.0, bool uniformLength = false)
+        internal static void SquarifyQuads(GeometryData mesh, float rate = 1.0f, bool uniformLength = false)
         {
-            double avg = uniformLength ? AverageRadiusLength(mesh) : 0;
+            float avg = uniformLength ? AverageRadiusLength(mesh) : 0;
 
-            var pointUpdates = new Double3[mesh.Vertices.Count];
-            var weights = new double[mesh.Vertices.Count];
+            var pointUpdates = new Float3[mesh.Vertices.Count];
+            var weights = new float[mesh.Vertices.Count];
 
             // Initialize with rest positions if available
             int i = 0;
@@ -91,15 +91,15 @@ namespace Prowl.Vector.Geometry.Operators
                 if (mesh.HasVertexAttribute("restpos"))
                 {
                     weights[i] = mesh.HasVertexAttribute("weight")
-                        ? (v.Attributes["weight"] as GeometryData.FloatAttributeValue)?.Data[0] ?? 1.0
-                        : 1.0;
+                        ? (v.Attributes["weight"] as GeometryData.FloatAttributeValue)?.Data[0] ?? 1.0f
+                        : 1.0f;
 
                     var restpos = (v.Attributes["restpos"] as GeometryData.FloatAttributeValue)?.AsVector3() ?? v.Point;
                     pointUpdates[i] = (restpos - v.Point) * weights[i];
                 }
                 else
                 {
-                    pointUpdates[i] = Double3.Zero;
+                    pointUpdates[i] = Float3.Zero;
                     weights[i] = 0;
                 }
                 v.Id = i++;
@@ -111,24 +111,24 @@ namespace Prowl.Vector.Geometry.Operators
                 var verts = f.NeighborVertices();
                 if (verts.Count != 4) continue;
 
-                Double3 c = f.Center();
-                Double3 r0 = verts[0].Point - c;
-                Double3 r1 = verts[1].Point - c;
-                Double3 r2 = verts[2].Point - c;
-                Double3 r3 = verts[3].Point - c;
+                Float3 c = f.Center();
+                Float3 r0 = verts[0].Point - c;
+                Float3 r1 = verts[1].Point - c;
+                Float3 r2 = verts[2].Point - c;
+                Float3 r3 = verts[3].Point - c;
 
                 var localToGlobal = ComputeLocalAxis(r0, r1, r2, r3);
-                var globalToLocal = Double4x4.Transpose(localToGlobal);
+                var globalToLocal = Float4x4.Transpose(localToGlobal);
 
                 // Transform to local coordinates
-                Double3 l0 = Double4x4.TransformPoint(r0, globalToLocal);
-                Double3 l1 = Double4x4.TransformPoint(r1, globalToLocal);
-                Double3 l2 = Double4x4.TransformPoint(r2, globalToLocal);
-                Double3 l3 = Double4x4.TransformPoint(r3, globalToLocal);
+                Float3 l0 = Float4x4.TransformPoint(r0, globalToLocal);
+                Float3 l1 = Float4x4.TransformPoint(r1, globalToLocal);
+                Float3 l2 = Float4x4.TransformPoint(r2, globalToLocal);
+                Float3 l3 = Float4x4.TransformPoint(r3, globalToLocal);
 
                 // Ensure proper winding order
                 bool switch03 = false;
-                if (Double3.Normalize(l1).Y < Double3.Normalize(l3).Y)
+                if (Float3.Normalize(l1).Y < Float3.Normalize(l3).Y)
                 {
                     switch03 = true;
                     var tmp = l3;
@@ -137,22 +137,22 @@ namespace Prowl.Vector.Geometry.Operators
                 }
 
                 // Rotate vectors to align
-                Double3 rl0 = l0;
-                Double3 rl1 = new Double3(l1.Y, -l1.X, l1.Z);
-                Double3 rl2 = new Double3(-l2.X, -l2.Y, l2.Z);
-                Double3 rl3 = new Double3(-l3.Y, l3.X, l3.Z);
+                Float3 rl0 = l0;
+                Float3 rl1 = new Float3(l1.Y, -l1.X, l1.Z);
+                Float3 rl2 = new Float3(-l2.X, -l2.Y, l2.Z);
+                Float3 rl3 = new Float3(-l3.Y, l3.X, l3.Z);
 
-                Double3 average = (rl0 + rl1 + rl2 + rl3) * 0.25;
+                Float3 average = (rl0 + rl1 + rl2 + rl3) * 0.25f;
                 if (uniformLength)
                 {
-                    average = Double3.Normalize(average) * avg;
+                    average = Float3.Normalize(average) * avg;
                 }
 
                 // Rotate back to get target positions
-                Double3 lt0 = average;
-                Double3 lt1 = new Double3(-average.Y, average.X, average.Z);
-                Double3 lt2 = new Double3(-average.X, -average.Y, average.Z);
-                Double3 lt3 = new Double3(average.Y, -average.X, average.Z);
+                Float3 lt0 = average;
+                Float3 lt1 = new Float3(-average.Y, average.X, average.Z);
+                Float3 lt2 = new Float3(-average.X, -average.Y, average.Z);
+                Float3 lt3 = new Float3(average.Y, -average.X, average.Z);
 
                 if (switch03)
                 {
@@ -162,10 +162,10 @@ namespace Prowl.Vector.Geometry.Operators
                 }
 
                 // Transform back to global coordinates
-                Double3 t0 = Double4x4.TransformPoint(lt0, localToGlobal);
-                Double3 t1 = Double4x4.TransformPoint(lt1, localToGlobal);
-                Double3 t2 = Double4x4.TransformPoint(lt2, localToGlobal);
-                Double3 t3 = Double4x4.TransformPoint(lt3, localToGlobal);
+                Float3 t0 = Float4x4.TransformPoint(lt0, localToGlobal);
+                Float3 t1 = Float4x4.TransformPoint(lt1, localToGlobal);
+                Float3 t2 = Float4x4.TransformPoint(lt2, localToGlobal);
+                Float3 t3 = Float4x4.TransformPoint(lt3, localToGlobal);
 
                 // Accumulate updates
                 pointUpdates[verts[0].Id] += t0 - r0;

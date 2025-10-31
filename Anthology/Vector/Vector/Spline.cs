@@ -21,24 +21,24 @@ namespace Prowl.Vector
         public struct SplineFrame
         {
             /// <summary>The position on the spline.</summary>
-            public Double3 Position;
+            public Float3 Position;
             
             /// <summary>The forward direction (tangent to the spline).</summary>
-            public Double3 Forward;
+            public Float3 Forward;
             
             /// <summary>The up direction (binormal or twist-controlled up vector).</summary>
-            public Double3 Up;
+            public Float3 Up;
             
             /// <summary>The right direction (cross product of forward and up).</summary>
-            public Double3 Right;
+            public Float3 Right;
             
             /// <summary>The curvature at this point.</summary>
-            public double Curvature;
+            public float Curvature;
             
             /// <summary>The torsion (twist) at this point.</summary>
-            public double Torsion;
+            public float Torsion;
 
-            public SplineFrame(Double3 position, Double3 forward, Double3 up, Double3 right, double curvature = 0.0, double torsion = 0.0)
+            public SplineFrame(Float3 position, Float3 forward, Float3 up, Float3 right, float curvature = 0.0f, float torsion = 0.0f)
             {
                 Position = position;
                 Forward = forward;
@@ -80,10 +80,10 @@ namespace Prowl.Vector
         }
 
         /// <summary>The control points of the spline.</summary>
-        public Double3[] ControlPoints;
+        public Float3[] ControlPoints;
 
         /// <summary>The tangent vectors for Hermite splines.</summary>
-        public Double3[]? Tangents;
+        public Float3[]? Tangents;
 
         /// <summary>The type of spline interpolation.</summary>
         public SplineType Type;
@@ -92,13 +92,13 @@ namespace Prowl.Vector
         public bool IsClosed;
 
         /// <summary>Tension parameter for cardinal splines (0 = Catmull-Rom).</summary>
-        public double Tension;
+        public float Tension;
 
         /// <summary>Custom up vectors for UpVectorMethod.Custom.</summary>
-        public Double3[]? CustomUpVectors;
+        public Float3[]? CustomUpVectors;
 
         /// <summary>Fixed world up vector for UpVectorMethod.FixedWorldUp.</summary>
-        public Double3 WorldUpVector;
+        public Float3 WorldUpVector;
 
         /// <summary>
         /// Initializes a new spline with the specified control points and type.
@@ -108,7 +108,7 @@ namespace Prowl.Vector
         /// <param name="closed">Whether the spline should be closed.</param>
         /// <param name="tension">Tension parameter for cardinal splines.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Spline(Double3[] controlPoints, SplineType type = SplineType.CatmullRom, bool closed = false, double tension = 0.0)
+        public Spline(Float3[] controlPoints, SplineType type = SplineType.CatmullRom, bool closed = false, float tension = 0.0f)
         {
             ControlPoints = controlPoints ?? throw new ArgumentNullException(nameof(controlPoints));
             Tangents = null;
@@ -116,7 +116,7 @@ namespace Prowl.Vector
             IsClosed = closed;
             Tension = tension;
             CustomUpVectors = null;
-            WorldUpVector = Double3.UnitY;
+            WorldUpVector = Float3.UnitY;
 
             if (type == SplineType.Hermite)
             {
@@ -132,15 +132,15 @@ namespace Prowl.Vector
         /// <param name="tangents">The tangent vectors at each control point.</param>
         /// <param name="closed">Whether the spline should be closed.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Spline(Double3[] controlPoints, Double3[] tangents, bool closed = false)
+        public Spline(Float3[] controlPoints, Float3[] tangents, bool closed = false)
         {
             ControlPoints = controlPoints ?? throw new ArgumentNullException(nameof(controlPoints));
             Tangents = tangents ?? throw new ArgumentNullException(nameof(tangents));
             Type = SplineType.Hermite;
             IsClosed = closed;
-            Tension = 0.0;
+            Tension = 0.0f;
             CustomUpVectors = null;
-            WorldUpVector = Double3.UnitY;
+            WorldUpVector = Float3.UnitY;
 
             if (controlPoints.Length != tangents.Length)
                 throw new ArgumentException("Control points and tangents arrays must have the same length.");
@@ -179,16 +179,16 @@ namespace Prowl.Vector
         /// <param name="t">Parameter value (0 to 1 for the entire spline).</param>
         /// <returns>The position on the spline at parameter t.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 Evaluate(double t)
+        public Float3 Evaluate(float t)
         {
             if (ControlPoints == null || ControlPoints.Length == 0)
-                return Double3.Zero;
+                return Float3.Zero;
 
             if (ControlPoints.Length == 1)
                 return ControlPoints[0];
 
             // Clamp t to [0, 1]
-            t = Maths.Clamp(t, 0.0, 1.0);
+            t = Maths.Clamp(t, 0.0f, 1.0f);
 
             return Type switch
             {
@@ -207,12 +207,12 @@ namespace Prowl.Vector
         /// <param name="t">Parameter value (0 to 1).</param>
         /// <returns>The tangent vector at parameter t.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 EvaluateDerivative(double t)
+        public Float3 EvaluateDerivative(float t)
         {
             if (ControlPoints == null || ControlPoints.Length < 2)
-                return Double3.Zero;
+                return Float3.Zero;
 
-            t = Maths.Clamp(t, 0.0, 1.0);
+            t = Maths.Clamp(t, 0.0f, 1.0f);
 
             return Type switch
             {
@@ -231,86 +231,86 @@ namespace Prowl.Vector
         /// <param name="t">Parameter value (0 to 1).</param>
         /// <param name="upMethod">Method for calculating the up vector.</param>
         /// <returns>A complete coordinate frame at parameter t.</returns>
-        public SplineFrame EvaluateFrame(double t, UpVectorMethod upMethod = UpVectorMethod.FixedWorldUp)
+        public SplineFrame EvaluateFrame(float t, UpVectorMethod upMethod = UpVectorMethod.FixedWorldUp)
         {
             if (ControlPoints == null || ControlPoints.Length < 2)
-                return new SplineFrame(Double3.Zero, Double3.UnitZ, Double3.UnitY, Double3.UnitX);
+                return new SplineFrame(Float3.Zero, Float3.UnitZ, Float3.UnitY, Float3.UnitX);
 
-            t = Maths.Clamp(t, 0.0, 1.0);
+            t = Maths.Clamp(t, 0.0f, 1.0f);
 
             // Get position and first derivative (tangent)
-            Double3 position = Evaluate(t);
-            Double3 firstDerivative = EvaluateDerivative(t);
+            Float3 position = Evaluate(t);
+            Float3 firstDerivative = EvaluateDerivative(t);
             
             // Normalize the forward direction
-            Double3 forward = Double3.Normalize(firstDerivative);
+            Float3 forward = Float3.Normalize(firstDerivative);
             
             // Handle degenerate case
-            if (Double3.LengthSquared(forward) < double.Epsilon * double.Epsilon)
+            if (Float3.LengthSquared(forward) < float.Epsilon * float.Epsilon)
             {
-                forward = Double3.UnitZ;
+                forward = Float3.UnitZ;
             }
 
-            Double3 up, right;
-            double curvature = 0.0;
-            double torsion = 0.0;
+            Float3 up, right;
+            float curvature = 0.0f;
+            float torsion = 0.0f;
 
             switch (upMethod)
             {
                 case UpVectorMethod.FixedWorldUp:
                     {
-                        Double3 worldUp = WorldUpVector.Equals(Double3.Zero) ? Double3.UnitY : Double3.Normalize(WorldUpVector);
-                        right = Double3.Normalize(Double3.Cross(forward, worldUp));
+                        Float3 worldUp = WorldUpVector.Equals(Float3.Zero) ? Float3.UnitY : Float3.Normalize(WorldUpVector);
+                        right = Float3.Normalize(Float3.Cross(forward, worldUp));
                         
                         // Handle case where forward is parallel to world up
-                        if (Double3.LengthSquared(right) < double.Epsilon * double.Epsilon)
+                        if (Float3.LengthSquared(right) < float.Epsilon * float.Epsilon)
                         {
                             // Choose an arbitrary perpendicular vector
-                            Double3 arbitrary = Maths.Abs(forward.X) < (double)0.9 ? Double3.UnitX : Double3.UnitZ;
-                            right = Double3.Normalize(Double3.Cross(forward, arbitrary));
+                            Float3 arbitrary = Maths.Abs(forward.X) < (float)0.9 ? Float3.UnitX : Float3.UnitZ;
+                            right = Float3.Normalize(Float3.Cross(forward, arbitrary));
                         }
                         
-                        up = Double3.Cross(right, forward);
+                        up = Float3.Cross(right, forward);
                     }
                     break;
 
                 case UpVectorMethod.FrenetFrame:
                     {
                         // Calculate second derivative for curvature
-                        Double3 secondDerivative = EvaluateSecondDerivative(t);
-                        Double3 normal = secondDerivative - Double3.Dot(secondDerivative, forward) * forward;
+                        Float3 secondDerivative = EvaluateSecondDerivative(t);
+                        Float3 normal = secondDerivative - Float3.Dot(secondDerivative, forward) * forward;
                         
-                        double normalLength = Double3.Length(normal);
-                        if (normalLength > double.Epsilon)
+                        float normalLength = Float3.Length(normal);
+                        if (normalLength > float.Epsilon)
                         {
                             up = normal / normalLength;
-                            curvature = normalLength / Maths.Max(Double3.LengthSquared(firstDerivative), double.Epsilon);
+                            curvature = normalLength / Maths.Max(Float3.LengthSquared(firstDerivative), float.Epsilon);
                         }
                         else
                         {
                             // Fallback to world up when curvature is zero
-                            Double3 worldUp = Double3.UnitY;
-                            up = worldUp - Double3.Dot(worldUp, forward) * forward;
-                            if (Double3.LengthSquared(up) < double.Epsilon * double.Epsilon)
+                            Float3 worldUp = Float3.UnitY;
+                            up = worldUp - Float3.Dot(worldUp, forward) * forward;
+                            if (Float3.LengthSquared(up) < float.Epsilon * float.Epsilon)
                             {
-                                Double3 arbitrary = Maths.Abs(forward.X) < (double)0.9 ? Double3.UnitX : Double3.UnitZ;
-                                up = Double3.Normalize(Double3.Cross(Double3.Cross(forward, arbitrary), forward));
+                                Float3 arbitrary = Maths.Abs(forward.X) < (float)0.9 ? Float3.UnitX : Float3.UnitZ;
+                                up = Float3.Normalize(Float3.Cross(Float3.Cross(forward, arbitrary), forward));
                             }
                             else
                             {
-                                up = Double3.Normalize(up);
+                                up = Float3.Normalize(up);
                             }
                         }
                         
-                        right = Double3.Cross(forward, up);
+                        right = Float3.Cross(forward, up);
                         
                         // Calculate torsion if we have enough derivatives
-                        Double3 thirdDerivative = EvaluateThirdDerivative(t);
-                        Double3 crossFirstSecond = Double3.Cross(firstDerivative, secondDerivative);
-                        double crossLength = Double3.Length(crossFirstSecond);
-                        if (crossLength > double.Epsilon)
+                        Float3 thirdDerivative = EvaluateThirdDerivative(t);
+                        Float3 crossFirstSecond = Float3.Cross(firstDerivative, secondDerivative);
+                        float crossLength = Float3.Length(crossFirstSecond);
+                        if (crossLength > float.Epsilon)
                         {
-                            torsion = Double3.Dot(crossFirstSecond, thirdDerivative) / (crossLength * crossLength);
+                            torsion = Float3.Dot(crossFirstSecond, thirdDerivative) / (crossLength * crossLength);
                         }
                     }
                     break;
@@ -319,39 +319,39 @@ namespace Prowl.Vector
                     {
                         if (CustomUpVectors != null && CustomUpVectors.Length > 0)
                         {
-                            Double3 customUp = InterpolateCustomUpVector(t);
+                            Float3 customUp = InterpolateCustomUpVector(t);
                             // Project custom up vector onto plane perpendicular to forward
-                            up = customUp - Double3.Dot(customUp, forward) * forward;
-                            if (Double3.LengthSquared(up) < double.Epsilon * double.Epsilon)
+                            up = customUp - Float3.Dot(customUp, forward) * forward;
+                            if (Float3.LengthSquared(up) < float.Epsilon * float.Epsilon)
                             {
                                 // Fallback if custom up is parallel to forward
-                                Double3 arbitrary = Maths.Abs(forward.X) < (double)0.9 ? Double3.UnitX : Double3.UnitZ;
-                                up = Double3.Normalize(Double3.Cross(Double3.Cross(forward, arbitrary), forward));
+                                Float3 arbitrary = Maths.Abs(forward.X) < (float)0.9 ? Float3.UnitX : Float3.UnitZ;
+                                up = Float3.Normalize(Float3.Cross(Float3.Cross(forward, arbitrary), forward));
                             }
                             else
                             {
-                                up = Double3.Normalize(up);
+                                up = Float3.Normalize(up);
                             }
-                            right = Double3.Cross(forward, up);
+                            right = Float3.Cross(forward, up);
                         }
                         else
                         {
                             // Fallback to fixed world up
-                            Double3 worldUp = Double3.UnitY;
-                            right = Double3.Normalize(Double3.Cross(forward, worldUp));
-                            if (Double3.LengthSquared(right) < double.Epsilon * double.Epsilon)
+                            Float3 worldUp = Float3.UnitY;
+                            right = Float3.Normalize(Float3.Cross(forward, worldUp));
+                            if (Float3.LengthSquared(right) < float.Epsilon * float.Epsilon)
                             {
-                                Double3 arbitrary = Maths.Abs(forward.X) < (double)0.9 ? Double3.UnitX : Double3.UnitZ;
-                                right = Double3.Normalize(Double3.Cross(forward, arbitrary));
+                                Float3 arbitrary = Maths.Abs(forward.X) < (float)0.9 ? Float3.UnitX : Float3.UnitZ;
+                                right = Float3.Normalize(Float3.Cross(forward, arbitrary));
                             }
-                            up = Double3.Cross(right, forward);
+                            up = Float3.Cross(right, forward);
                         }
                     }
                     break;
 
                 default:
-                    up = Double3.UnitY;
-                    right = Double3.UnitX;
+                    up = Float3.UnitY;
+                    right = Float3.UnitX;
                     break;
             }
 
@@ -372,7 +372,7 @@ namespace Prowl.Vector
             var frames = new SplineFrame[sampleCount];
             for (int i = 0; i < sampleCount; i++)
             {
-                double t = i / (double)(sampleCount - 1);
+                float t = i / (float)(sampleCount - 1);
                 frames[i] = EvaluateFrame(t, upMethod);
             }
 
@@ -383,7 +383,7 @@ namespace Prowl.Vector
         /// Sets custom up vectors for UpVectorMethod.Custom.
         /// </summary>
         /// <param name="upVectors">Up vectors corresponding to control points.</param>
-        public void SetCustomUpVectors(Double3[] upVectors)
+        public void SetCustomUpVectors(Float3[] upVectors)
         {
             if (upVectors == null)
             {
@@ -391,7 +391,7 @@ namespace Prowl.Vector
                 return;
             }
 
-            CustomUpVectors = new Double3[upVectors.Length];
+            CustomUpVectors = new Float3[upVectors.Length];
             Array.Copy(upVectors, CustomUpVectors, upVectors.Length);
         }
 
@@ -399,51 +399,51 @@ namespace Prowl.Vector
         /// Sets the world up vector for UpVectorMethod.FixedWorldUp.
         /// </summary>
         /// <param name="worldUp">The world up vector.</param>
-        public void SetWorldUpVector(Double3 worldUp)
+        public void SetWorldUpVector(Float3 worldUp)
         {
             WorldUpVector = worldUp;
         }
 
         #region Private Frame Calculation Methods
 
-        private Double3 EvaluateSecondDerivative(double t)
+        private Float3 EvaluateSecondDerivative(float t)
         {
             // Numerical approximation of second derivative
-            const double h = double.Epsilon * 1000; // Small step
-            double t1 = Maths.Max(t - h, 0.0);
-            double t2 = Maths.Min(t + h, 1.0);
+            const float h = float.Epsilon * 1000; // Small step
+            float t1 = Maths.Max(t - h, 0.0f);
+            float t2 = Maths.Min(t + h, 1.0f);
             
-            Double3 d1 = EvaluateDerivative(t1);
-            Double3 d2 = EvaluateDerivative(t2);
+            Float3 d1 = EvaluateDerivative(t1);
+            Float3 d2 = EvaluateDerivative(t2);
             
             return (d2 - d1) / (t2 - t1);
         }
 
-        private Double3 EvaluateThirdDerivative(double t)
+        private Float3 EvaluateThirdDerivative(float t)
         {
             // Numerical approximation of third derivative
-            const double h = double.Epsilon * 1000;
-            double t1 = Maths.Max(t - h, 0.0);
-            double t2 = Maths.Min(t + h, 1.0);
+            const float h = float.Epsilon * 1000;
+            float t1 = Maths.Max(t - h, 0.0f);
+            float t2 = Maths.Min(t + h, 1.0f);
             
-            Double3 d1 = EvaluateSecondDerivative(t1);
-            Double3 d2 = EvaluateSecondDerivative(t2);
+            Float3 d1 = EvaluateSecondDerivative(t1);
+            Float3 d2 = EvaluateSecondDerivative(t2);
             
             return (d2 - d1) / (t2 - t1);
         }
 
-        private Double3 InterpolateCustomUpVector(double t)
+        private Float3 InterpolateCustomUpVector(float t)
         {
             if (CustomUpVectors == null || CustomUpVectors.Length == 0)
-                return Double3.UnitY;
+                return Float3.UnitY;
 
             if (CustomUpVectors.Length == 1)
                 return CustomUpVectors[0];
 
             // Interpolate between custom up vectors based on control point positions
-            double scaledT = t * (CustomUpVectors.Length - 1);
+            float scaledT = t * (CustomUpVectors.Length - 1);
             int index = (int)Maths.Floor(scaledT);
-            double localT = scaledT - index;
+            float localT = scaledT - index;
 
             if (index >= CustomUpVectors.Length - 1)
                 return CustomUpVectors[CustomUpVectors.Length - 1];
@@ -452,27 +452,27 @@ namespace Prowl.Vector
             return Slerp(CustomUpVectors[index], CustomUpVectors[index + 1], localT);
         }
 
-        private Double3 Slerp(Double3 a, Double3 b, double t)
+        private Float3 Slerp(Float3 a, Float3 b, float t)
         {
             // Spherical linear interpolation
-            double dot = Maths.Clamp(Double3.Dot(a, b), -1.0, 1.0);
+            float dot = Maths.Clamp(Float3.Dot(a, b), -1.0f, 1.0f);
             
-            if (Maths.Abs(dot) > (double)0.9995)
+            if (Maths.Abs(dot) > (float)0.9995)
             {
                 // Vectors are nearly parallel, use linear interpolation
-                return Double3.Normalize(Maths.Lerp(a, b, t));
+                return Float3.Normalize(Maths.Lerp(a, b, t));
             }
             
-            double theta = Maths.Acos(Maths.Abs(dot));
-            double sinTheta = Maths.Sin(theta);
+            float theta = Maths.Acos(Maths.Abs(dot));
+            float sinTheta = Maths.Sin(theta);
             
-            double wa = Maths.Sin((1.0 - t) * theta) / sinTheta;
-            double wb = Maths.Sin(t * theta) / sinTheta;
+            float wa = Maths.Sin((1.0f - t) * theta) / sinTheta;
+            float wb = Maths.Sin(t * theta) / sinTheta;
             
             if (dot < 0.0)
                 wb = -wb;
                 
-            return Double3.Normalize(a * wa + b * wb);
+            return Float3.Normalize(a * wa + b * wb);
         }
 
         #endregion
@@ -482,13 +482,13 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="frame">The spline frame.</param>
         /// <returns>A 4x4 transformation matrix.</returns>
-        public static Double4x4 FrameToMatrix(SplineFrame frame)
+        public static Float4x4 FrameToMatrix(SplineFrame frame)
         {
-            return new Double4x4(
+            return new Float4x4(
                 frame.Right.X, frame.Up.X, frame.Forward.X, frame.Position.X,
                 frame.Right.Y, frame.Up.Y, frame.Forward.Y, frame.Position.Y,
                 frame.Right.Z, frame.Up.Z, frame.Forward.Z, frame.Position.Z,
-                0.0, 0.0, 0.0, 1.0
+                0.0f, 0.0f, 0.0f, 1.0f
             );
         }
 
@@ -498,7 +498,7 @@ namespace Prowl.Vector
         /// <param name="frame">The spline frame.</param>
         /// <param name="localOffset">Local offset (X=right, Y=up, Z=forward).</param>
         /// <returns>World space position.</returns>
-        public static Double3 TransformByFrame(SplineFrame frame, Double3 localOffset)
+        public static Float3 TransformByFrame(SplineFrame frame, Float3 localOffset)
         {
             return frame.Position + 
                    frame.Right * localOffset.X + 
@@ -511,19 +511,19 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="subdivisions">Number of subdivisions for length calculation.</param>
         /// <returns>The approximate length of the spline.</returns>
-        public double GetLength(int subdivisions = 100)
+        public float GetLength(int subdivisions = 100)
         {
             if (ControlPoints == null || ControlPoints.Length < 2)
-                return 0.0;
+                return 0.0f;
 
-            double length = 0.0;
-            Double3 previousPoint = Evaluate(0.0);
+            float length = 0.0f;
+            Float3 previousPoint = Evaluate(0.0f);
 
             for (int i = 1; i <= subdivisions; i++)
             {
-                double t = i / (double)subdivisions;
-                Double3 currentPoint = Evaluate(t);
-                length += Double3.Length(currentPoint - previousPoint);
+                float t = i / (float)subdivisions;
+                Float3 currentPoint = Evaluate(t);
+                length += Float3.Length(currentPoint - previousPoint);
                 previousPoint = currentPoint;
             }
 
@@ -536,22 +536,22 @@ namespace Prowl.Vector
         /// <param name="targetLength">The target arc length.</param>
         /// <param name="tolerance">Tolerance for the binary search.</param>
         /// <returns>The parameter t corresponding to the target length.</returns>
-        public double GetParameterAtLength(double targetLength, double tolerance = double.Epsilon * 1000)
+        public float GetParameterAtLength(float targetLength, float tolerance = float.Epsilon * 1000)
         {
-            if (targetLength <= 0.0) return 0.0;
+            if (targetLength <= 0.0) return 0.0f;
 
-            double totalLength = GetLength();
-            if (targetLength >= totalLength) return 1.0;
+            float totalLength = GetLength();
+            if (targetLength >= totalLength) return 1.0f;
 
             // Binary search for the parameter
-            double tMin = 0.0;
-            double tMax = 1.0;
-            double t = targetLength / totalLength; // Initial guess
+            float tMin = 0.0f;
+            float tMax = 1.0f;
+            float t = targetLength / totalLength; // Initial guess
 
             for (int iteration = 0; iteration < 50; iteration++) // Max iterations
             {
-                double currentLength = GetLengthUpToParameter(t);
-                double error = currentLength - targetLength;
+                float currentLength = GetLengthUpToParameter(t);
+                float error = currentLength - targetLength;
 
                 if (Maths.Abs(error) < tolerance)
                     break;
@@ -561,7 +561,7 @@ namespace Prowl.Vector
                 else
                     tMin = t;
 
-                t = (tMin + tMax) / 2.0;
+                t = (tMin + tMax) / 2.0f;
             }
 
             return t;
@@ -573,20 +573,20 @@ namespace Prowl.Vector
         /// <param name="t">The parameter to measure length to.</param>
         /// <param name="subdivisions">Number of subdivisions for calculation.</param>
         /// <returns>The length from start to parameter t.</returns>
-        public double GetLengthUpToParameter(double t, int subdivisions = 100)
+        public float GetLengthUpToParameter(float t, int subdivisions = 100)
         {
-            if (t <= 0.0) return 0.0;
+            if (t <= 0.0) return 0.0f;
             if (t >= 1.0) return GetLength(subdivisions);
 
-            double length = 0.0;
-            Double3 previousPoint = Evaluate(0.0);
+            float length = 0.0f;
+            Float3 previousPoint = Evaluate(0.0f);
             int steps = (int)(subdivisions * t);
 
             for (int i = 1; i <= steps; i++)
             {
-                double currentT = (i / (double)subdivisions);
-                Double3 currentPoint = Evaluate(currentT);
-                length += Double3.Length(currentPoint - previousPoint);
+                float currentT = (i / (float)subdivisions);
+                Float3 currentPoint = Evaluate(currentT);
+                length += Float3.Length(currentPoint - previousPoint);
                 previousPoint = currentPoint;
             }
 
@@ -598,15 +598,15 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="sampleCount">Number of samples to generate.</param>
         /// <returns>Array of sampled points.</returns>
-        public Double3[] SampleUniform(int sampleCount)
+        public Float3[] SampleUniform(int sampleCount)
         {
             if (sampleCount < 2)
                 throw new ArgumentException("Sample count must be at least 2", nameof(sampleCount));
 
-            var samples = new Double3[sampleCount];
+            var samples = new Float3[sampleCount];
             for (int i = 0; i < sampleCount; i++)
             {
-                double t = i / (double)(sampleCount - 1);
+                float t = i / (float)(sampleCount - 1);
                 samples[i] = Evaluate(t);
             }
 
@@ -618,18 +618,18 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="sampleCount">Number of samples to generate.</param>
         /// <returns>Array of sampled points with uniform spacing.</returns>
-        public Double3[] SampleUniformLength(int sampleCount)
+        public Float3[] SampleUniformLength(int sampleCount)
         {
             if (sampleCount < 2)
                 throw new ArgumentException("Sample count must be at least 2", nameof(sampleCount));
 
-            var samples = new Double3[sampleCount];
-            double totalLength = GetLength();
+            var samples = new Float3[sampleCount];
+            float totalLength = GetLength();
 
             for (int i = 0; i < sampleCount; i++)
             {
-                double targetLength = (i / (double)(sampleCount - 1)) * totalLength;
-                double t = GetParameterAtLength(targetLength);
+                float targetLength = (i / (float)(sampleCount - 1)) * totalLength;
+                float t = GetParameterAtLength(targetLength);
                 samples[i] = Evaluate(t);
             }
 
@@ -642,18 +642,18 @@ namespace Prowl.Vector
         /// <param name="point">The point to find the closest point to.</param>
         /// <param name="subdivisions">Number of subdivisions for the search.</param>
         /// <returns>The closest point on the spline and its parameter.</returns>
-        public (Double3 Point, double Parameter) GetClosestPoint(Double3 point, int subdivisions = 100)
+        public (Float3 Point, float Parameter) GetClosestPoint(Float3 point, int subdivisions = 100)
         {
-            double minDistance = double.MaxValue;
-            double closestT = 0.0;
-            Double3 closestPoint = Double3.Zero;
+            float minDistance = float.MaxValue;
+            float closestT = 0.0f;
+            Float3 closestPoint = Float3.Zero;
 
             // Coarse search
             for (int i = 0; i <= subdivisions; i++)
             {
-                double t = i / (double)subdivisions;
-                Double3 splinePoint = Evaluate(t);
-                double distance = Double3.LengthSquared(point - splinePoint);
+                float t = i / (float)subdivisions;
+                Float3 splinePoint = Evaluate(t);
+                float distance = Float3.LengthSquared(point - splinePoint);
 
                 if (distance < minDistance)
                 {
@@ -668,20 +668,20 @@ namespace Prowl.Vector
             {
                 for (int iteration = 0; iteration < 10; iteration++)
                 {
-                    Double3 splinePoint = Evaluate(closestT);
-                    Double3 derivative = EvaluateDerivative(closestT);
+                    Float3 splinePoint = Evaluate(closestT);
+                    Float3 derivative = EvaluateDerivative(closestT);
                     
-                    Double3 diff = splinePoint - point;
-                    double numerator = Double3.Dot(diff, derivative);
-                    double denominator = Double3.Dot(derivative, derivative);
+                    Float3 diff = splinePoint - point;
+                    float numerator = Float3.Dot(diff, derivative);
+                    float denominator = Float3.Dot(derivative, derivative);
 
-                    if (Maths.Abs(denominator) < double.Epsilon)
+                    if (Maths.Abs(denominator) < float.Epsilon)
                         break;
 
-                    double newT = closestT - numerator / denominator;
-                    newT = Maths.Clamp(newT, 0.0, 1.0);
+                    float newT = closestT - numerator / denominator;
+                    newT = Maths.Clamp(newT, 0.0f, 1.0f);
 
-                    if (Maths.Abs(newT - closestT) < double.Epsilon)
+                    if (Maths.Abs(newT - closestT) < float.Epsilon)
                         break;
 
                     closestT = newT;
@@ -694,13 +694,13 @@ namespace Prowl.Vector
 
         #region Private Evaluation Methods
 
-        private Double3 EvaluateLinear(double t)
+        private Float3 EvaluateLinear(float t)
         {
             if (ControlPoints.Length == 1) return ControlPoints[0];
 
-            double scaledT = t * (ControlPoints.Length - 1);
+            float scaledT = t * (ControlPoints.Length - 1);
             int index = (int)Maths.Floor(scaledT);
-            double localT = scaledT - index;
+            float localT = scaledT - index;
 
             if (index >= ControlPoints.Length - 1)
             {
@@ -709,206 +709,206 @@ namespace Prowl.Vector
                     ControlPoints[ControlPoints.Length - 1];
             }
 
-            Double3 p0 = ControlPoints[index];
-            Double3 p1 = ControlPoints[index + 1];
+            Float3 p0 = ControlPoints[index];
+            Float3 p1 = ControlPoints[index + 1];
             return Maths.Lerp(p0, p1, localT);
         }
 
-        private Double3 EvaluateCatmullRom(double t)
+        private Float3 EvaluateCatmullRom(float t)
         {
             int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 1;
-            double scaledT = t * segmentCount;
+            float scaledT = t * segmentCount;
             int segment = (int)Maths.Floor(scaledT);
-            double localT = scaledT - segment;
+            float localT = scaledT - segment;
 
             if (segment >= segmentCount)
             {
                 segment = segmentCount - 1;
-                localT = 1.0;
+                localT = 1.0f;
             }
 
             // Get the four control points for Catmull-Rom
-            Double3 p0, p1, p2, p3;
+            Float3 p0, p1, p2, p3;
             GetCatmullRomPoints(segment, out p0, out p1, out p2, out p3);
 
             // Catmull-Rom interpolation
-            double t2 = localT * localT;
-            double t3 = t2 * localT;
+            float t2 = localT * localT;
+            float t3 = t2 * localT;
 
-            double b0 = -Tension * t3 + 2.0 * Tension * t2 - Tension * localT;
-            double b1 = (2.0 - Tension) * t3 + (Tension - 3) * t2 + 1.0;
-            double b2 = (Tension - 2.0) * t3 + (3 - 2.0 * Tension) * t2 + Tension * localT;
-            double b3 = Tension * t3 - Tension * t2;
+            float b0 = -Tension * t3 + 2.0f * Tension * t2 - Tension * localT;
+            float b1 = (2.0f - Tension) * t3 + (Tension - 3f) * t2 + 1.0f;
+            float b2 = (Tension - 2.0f) * t3 + (3f - 2.0f * Tension) * t2 + Tension * localT;
+            float b3 = Tension * t3 - Tension * t2;
 
             return p0 * b0 + p1 * b1 + p2 * b2 + p3 * b3;
         }
 
-        private Double3 EvaluateBezier(double t)
+        private Float3 EvaluateBezier(float t)
         {
             int segmentCount = (ControlPoints.Length - 1) / 3;
             if (segmentCount == 0) return ControlPoints[0];
 
-            double scaledT = t * segmentCount;
+            float scaledT = t * segmentCount;
             int segment = (int)Maths.Floor(scaledT);
-            double localT = scaledT - segment;
+            float localT = scaledT - segment;
 
             if (segment >= segmentCount)
             {
                 segment = segmentCount - 1;
-                localT = 1.0;
+                localT = 1.0f;
             }
 
             int baseIndex = segment * 3;
-            Double3 p0 = ControlPoints[baseIndex];
-            Double3 p1 = ControlPoints[baseIndex + 1];
-            Double3 p2 = ControlPoints[baseIndex + 2];
-            Double3 p3 = ControlPoints[baseIndex + 3];
+            Float3 p0 = ControlPoints[baseIndex];
+            Float3 p1 = ControlPoints[baseIndex + 1];
+            Float3 p2 = ControlPoints[baseIndex + 2];
+            Float3 p3 = ControlPoints[baseIndex + 3];
 
             // Cubic Bezier evaluation
-            double invT = 1.0 - localT;
-            double invT2 = invT * invT;
-            double invT3 = invT2 * invT;
-            double t2 = localT * localT;
-            double t3 = t2 * localT;
+            float invT = 1.0f - localT;
+            float invT2 = invT * invT;
+            float invT3 = invT2 * invT;
+            float t2 = localT * localT;
+            float t3 = t2 * localT;
 
             return p0 * invT3 + p1 * (3 * invT2 * localT) + p2 * (3 * invT * t2) + p3 * t3;
         }
 
-        private Double3 EvaluateBSpline(double t)
+        private Float3 EvaluateBSpline(float t)
         {
             if (ControlPoints.Length < 4) return EvaluateLinear(t);
 
             int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 3;
-            double scaledT = t * segmentCount;
+            float scaledT = t * segmentCount;
             int segment = (int)Maths.Floor(scaledT);
-            double localT = scaledT - segment;
+            float localT = scaledT - segment;
 
             if (segment >= segmentCount)
             {
                 segment = segmentCount - 1;
-                localT = 1.0;
+                localT = 1.0f;
             }
 
             // Get four control points for B-spline
-            Double3 p0, p1, p2, p3;
+            Float3 p0, p1, p2, p3;
             GetBSplinePoints(segment, out p0, out p1, out p2, out p3);
 
             // Uniform cubic B-spline basis functions
-            double t2 = localT * localT;
-            double t3 = t2 * localT;
-            double invT = 1.0 - localT;
-            double invT2 = invT * invT;
-            double invT3 = invT2 * invT;
+            float t2 = localT * localT;
+            float t3 = t2 * localT;
+            float invT = 1.0f - localT;
+            float invT2 = invT * invT;
+            float invT3 = invT2 * invT;
 
-            double b0 = invT3 / 6;
-            double b1 = (3 * t3 - 6 * t2 + 4) / 6;
-            double b2 = (-3 * t3 + 3 * t2 + 3 * localT + 1.0) / 6;
-            double b3 = t3 / 6;
+            float b0 = invT3 / 6;
+            float b1 = (3f * t3 - 6f * t2 + 4f) / 6f;
+            float b2 = (-3f * t3 + 3f * t2 + 3f * localT + 1.0f) / 6f;
+            float b3 = t3 / 6;
 
             return p0 * b0 + p1 * b1 + p2 * b2 + p3 * b3;
         }
 
-        private Double3 EvaluateHermite(double t)
+        private Float3 EvaluateHermite(float t)
         {
             if (Tangents == null) return EvaluateLinear(t);
 
             int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 1;
-            double scaledT = t * segmentCount;
+            float scaledT = t * segmentCount;
             int segment = (int)Maths.Floor(scaledT);
-            double localT = scaledT - segment;
+            float localT = scaledT - segment;
 
             if (segment >= segmentCount)
             {
                 segment = segmentCount - 1;
-                localT = 1.0;
+                localT = 1.0f;
             }
 
-            Double3 p0 = ControlPoints[segment];
-            Double3 p1 = ControlPoints[(segment + 1) % ControlPoints.Length];
-            Double3 t0 = Tangents[segment];
-            Double3 t1 = Tangents[(segment + 1) % Tangents.Length];
+            Float3 p0 = ControlPoints[segment];
+            Float3 p1 = ControlPoints[(segment + 1) % ControlPoints.Length];
+            Float3 t0 = Tangents[segment];
+            Float3 t1 = Tangents[(segment + 1) % Tangents.Length];
 
             // Hermite basis functions
-            double t2 = localT * localT;
-            double t3 = t2 * localT;
+            float t2 = localT * localT;
+            float t3 = t2 * localT;
 
-            double h00 = 2.0 * t3 - 3 * t2 + 1.0;
-            double h10 = t3 - 2.0 * t2 + localT;
-            double h01 = -2.0 * t3 + 3 * t2;
-            double h11 = t3 - t2;
+            float h00 = 2.0f * t3 - 3f * t2 + 1.0f;
+            float h10 = t3 - 2.0f * t2 + localT;
+            float h01 = -2.0f * t3 + 3f * t2;
+            float h11 = t3 - t2;
 
             return p0 * h00 + t0 * h10 + p1 * h01 + t1 * h11;
         }
 
-        private Double3 EvaluateLinearDerivative(double t)
+        private Float3 EvaluateLinearDerivative(float t)
         {
-            if (ControlPoints.Length < 2) return Double3.Zero;
+            if (ControlPoints.Length < 2) return Float3.Zero;
 
-            double scaledT = t * (ControlPoints.Length - 1);
+            float scaledT = t * (ControlPoints.Length - 1);
             int index = (int)Maths.Floor(scaledT);
 
             if (index >= ControlPoints.Length - 1)
             {
                 return IsClosed ?
                     (ControlPoints[0] - ControlPoints[ControlPoints.Length - 1]) * (ControlPoints.Length - 1) :
-                    Double3.Zero;
+                    Float3.Zero;
             }
 
             return (ControlPoints[index + 1] - ControlPoints[index]) * (ControlPoints.Length - 1);
         }
 
-        private Double3 EvaluateCatmullRomDerivative(double t)
+        private Float3 EvaluateCatmullRomDerivative(float t)
         {
             int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 1;
-            double scaledT = t * segmentCount;
+            float scaledT = t * segmentCount;
             int segment = (int)Maths.Floor(scaledT);
-            double localT = scaledT - segment;
+            float localT = scaledT - segment;
 
             if (segment >= segmentCount)
             {
                 segment = segmentCount - 1;
-                localT = 1.0;
+                localT = 1.0f;
             }
 
-            Double3 p0, p1, p2, p3;
+            Float3 p0, p1, p2, p3;
             GetCatmullRomPoints(segment, out p0, out p1, out p2, out p3);
 
-            double t2 = localT * localT;
+            float t2 = localT * localT;
 
-            double db0 = -3 * Tension * t2 + 4 * Tension * localT - Tension;
-            double db1 = 3 * (2.0 - Tension) * t2 + 2.0 * (Tension - 3) * localT;
-            double db2 = 3 * (Tension - 2.0) * t2 + 2.0 * (3 - 2.0 * Tension) * localT + Tension;
-            double db3 = 3 * Tension * t2 - 2.0 * Tension * localT;
+            float db0 = -3f * Tension * t2 + 4 * Tension * localT - Tension;
+            float db1 = 3f * (2.0f - Tension) * t2 + 2.0f * (Tension - 3f) * localT;
+            float db2 = 3f * (Tension - 2.0f) * t2 + 2.0f * (3f - 2.0f * Tension) * localT + Tension;
+            float db3 = 3f * Tension * t2 - 2.0f * Tension * localT;
 
             return (p0 * db0 + p1 * db1 + p2 * db2 + p3 * db3) * segmentCount;
         }
 
-        private Double3 EvaluateBezierDerivative(double t)
+        private Float3 EvaluateBezierDerivative(float t)
         {
             int segmentCount = (ControlPoints.Length - 1) / 3;
-            if (segmentCount == 0) return Double3.Zero;
+            if (segmentCount == 0) return Float3.Zero;
 
-            double scaledT = t * segmentCount;
+            float scaledT = t * segmentCount;
             int segment = (int)Maths.Floor(scaledT);
-            double localT = scaledT - segment;
+            float localT = scaledT - segment;
 
             if (segment >= segmentCount)
             {
                 segment = segmentCount - 1;
-                localT = 1.0;
+                localT = 1.0f;
             }
 
             int baseIndex = segment * 3;
-            Double3 p0 = ControlPoints[baseIndex];
-            Double3 p1 = ControlPoints[baseIndex + 1];
-            Double3 p2 = ControlPoints[baseIndex + 2];
-            Double3 p3 = ControlPoints[baseIndex + 3];
+            Float3 p0 = ControlPoints[baseIndex];
+            Float3 p1 = ControlPoints[baseIndex + 1];
+            Float3 p2 = ControlPoints[baseIndex + 2];
+            Float3 p3 = ControlPoints[baseIndex + 3];
 
-            double invT = 1.0 - localT;
-            double invT2 = invT * invT;
-            double t2 = localT * localT;
+            float invT = 1.0f - localT;
+            float invT2 = invT * invT;
+            float t2 = localT * localT;
 
-            Double3 derivative = 
+            Float3 derivative = 
                 p0 * (-3 * invT2) +
                 p1 * (3 * invT2 - 6 * invT * localT) +
                 p2 * (6 * invT * localT - 3 * t2) +
@@ -917,65 +917,65 @@ namespace Prowl.Vector
             return derivative * segmentCount;
         }
 
-        private Double3 EvaluateBSplineDerivative(double t)
+        private Float3 EvaluateBSplineDerivative(float t)
         {
             if (ControlPoints.Length < 4) return EvaluateLinearDerivative(t);
 
             int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 3;
-            double scaledT = t * segmentCount;
+            float scaledT = t * segmentCount;
             int segment = (int)Maths.Floor(scaledT);
-            double localT = scaledT - segment;
+            float localT = scaledT - segment;
 
             if (segment >= segmentCount)
             {
                 segment = segmentCount - 1;
-                localT = 1.0;
+                localT = 1.0f;
             }
 
-            Double3 p0, p1, p2, p3;
+            Float3 p0, p1, p2, p3;
             GetBSplinePoints(segment, out p0, out p1, out p2, out p3);
 
-            double t2 = localT * localT;
+            float t2 = localT * localT;
 
-            double db0 = -t2 / 2.0;
-            double db1 = (3 * t2 - 4 * localT) / 2.0;
-            double db2 = (-3 * t2 + 2.0 * localT + 1.0) / 2.0;
-            double db3 = t2 / 2.0;
+            float db0 = -t2 / 2.0f;
+            float db1 = (3f * t2 - 4f * localT) / 2.0f;
+            float db2 = (-3f * t2 + 2.0f * localT + 1.0f) / 2.0f;
+            float db3 = t2 / 2.0f;
 
             return (p0 * db0 + p1 * db1 + p2 * db2 + p3 * db3) * segmentCount;
         }
 
-        private Double3 EvaluateHermiteDerivative(double t)
+        private Float3 EvaluateHermiteDerivative(float t)
         {
             if (Tangents == null) return EvaluateLinearDerivative(t);
 
             int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 1;
-            double scaledT = t * segmentCount;
+            float scaledT = t * segmentCount;
             int segment = (int)Maths.Floor(scaledT);
-            double localT = scaledT - segment;
+            float localT = scaledT - segment;
 
             if (segment >= segmentCount)
             {
                 segment = segmentCount - 1;
-                localT = 1.0;
+                localT = 1.0f;
             }
 
-            Double3 p0 = ControlPoints[segment];
-            Double3 p1 = ControlPoints[(segment + 1) % ControlPoints.Length];
-            Double3 t0 = Tangents[segment];
-            Double3 t1 = Tangents[(segment + 1) % Tangents.Length];
+            Float3 p0 = ControlPoints[segment];
+            Float3 p1 = ControlPoints[(segment + 1) % ControlPoints.Length];
+            Float3 t0 = Tangents[segment];
+            Float3 t1 = Tangents[(segment + 1) % Tangents.Length];
 
-            double t2 = localT * localT;
+            float t2 = localT * localT;
 
-            double dh00 = 6 * t2 - 6 * localT;
-            double dh10 = 3 * t2 - 4 * localT + 1.0;
-            double dh01 = -6 * t2 + 6 * localT;
-            double dh11 = 3 * t2 - 2.0 * localT;
+            float dh00 = 6f * t2 - 6f * localT;
+            float dh10 = 3f * t2 - 4f * localT + 1.0f;
+            float dh01 = -6f * t2 + 6f * localT;
+            float dh11 = 3f * t2 - 2.0f * localT;
 
             return (p0 * dh00 + t0 * dh10 + p1 * dh01 + t1 * dh11) * segmentCount;
         }
 
-        private void GetCatmullRomPoints(int segment, out Double3 p0, out Double3 p1, out Double3 p2, out Double3 p3)
+        private void GetCatmullRomPoints(int segment, out Float3 p0, out Float3 p1, out Float3 p2, out Float3 p3)
         {
             int count = ControlPoints.Length;
             
@@ -989,12 +989,12 @@ namespace Prowl.Vector
             }
             else
             {
-                p0 = segment > 0 ? ControlPoints[segment - 1] : ControlPoints[0] * 2.0 - ControlPoints[1];
-                p3 = segment < count - 2 ? ControlPoints[segment + 2] : ControlPoints[count - 1] * 2.0 - ControlPoints[count - 2];
+                p0 = segment > 0 ? ControlPoints[segment - 1] : ControlPoints[0] * 2.0f - ControlPoints[1];
+                p3 = segment < count - 2 ? ControlPoints[segment + 2] : ControlPoints[count - 1] * 2.0f - ControlPoints[count - 2];
             }
         }
 
-        private void GetBSplinePoints(int segment, out Double3 p0, out Double3 p1, out Double3 p2, out Double3 p3)
+        private void GetBSplinePoints(int segment, out Float3 p0, out Float3 p1, out Float3 p2, out Float3 p3)
         {
             int count = ControlPoints.Length;
 
@@ -1017,11 +1017,11 @@ namespace Prowl.Vector
         private void GenerateDefaultTangents()
         {
             int count = ControlPoints.Length;
-            Tangents = new Double3[count];
+            Tangents = new Float3[count];
 
             for (int i = 0; i < count; i++)
             {
-                Double3 prev, next;
+                Float3 prev, next;
 
                 if (IsClosed)
                 {
@@ -1035,7 +1035,7 @@ namespace Prowl.Vector
                }
 
                // Generate tangent as the difference between next and previous points
-               Tangents[i] = (next - prev) / 2.0;
+               Tangents[i] = (next - prev) / 2.0f;
            }
        }
 
@@ -1047,15 +1047,15 @@ namespace Prowl.Vector
        /// Adds a control point to the spline.
        /// </summary>
        /// <param name="point">The control point to add.</param>
-       public void AddControlPoint(Double3 point)
+       public void AddControlPoint(Float3 point)
        {
            if (ControlPoints == null)
            {
-               ControlPoints = new Double3[] { point };
+               ControlPoints = new Float3[] { point };
            }
            else
            {
-               var newArray = new Double3[ControlPoints.Length + 1];
+               var newArray = new Float3[ControlPoints.Length + 1];
                Array.Copy(ControlPoints, newArray, ControlPoints.Length);
                newArray[ControlPoints.Length] = point;
                ControlPoints = newArray;
@@ -1072,18 +1072,18 @@ namespace Prowl.Vector
        /// </summary>
        /// <param name="index">The index to insert at.</param>
        /// <param name="point">The control point to insert.</param>
-       public void InsertControlPoint(int index, Double3 point)
+       public void InsertControlPoint(int index, Float3 point)
        {
            if (ControlPoints == null)
            {
-               ControlPoints = new Double3[] { point };
+               ControlPoints = new Float3[] { point };
                return;
            }
 
            if (index < 0 || index > ControlPoints.Length)
                throw new ArgumentOutOfRangeException(nameof(index));
 
-           var newArray = new Double3[ControlPoints.Length + 1];
+           var newArray = new Float3[ControlPoints.Length + 1];
            Array.Copy(ControlPoints, 0, newArray, 0, index);
            newArray[index] = point;
            Array.Copy(ControlPoints, index, newArray, index + 1, ControlPoints.Length - index);
@@ -1111,7 +1111,7 @@ namespace Prowl.Vector
                return;
            }
 
-           var newArray = new Double3[ControlPoints.Length - 1];
+           var newArray = new Float3[ControlPoints.Length - 1];
            Array.Copy(ControlPoints, 0, newArray, 0, index);
            Array.Copy(ControlPoints, index + 1, newArray, index, ControlPoints.Length - index - 1);
            ControlPoints = newArray;
@@ -1127,7 +1127,7 @@ namespace Prowl.Vector
        /// </summary>
        /// <param name="index">The control point index.</param>
        /// <param name="tangent">The tangent vector.</param>
-       public void SetTangent(int index, Double3 tangent)
+       public void SetTangent(int index, Float3 tangent)
        {
            if (Type != SplineType.Hermite)
                throw new InvalidOperationException("Tangents can only be set for Hermite splines");
@@ -1143,10 +1143,10 @@ namespace Prowl.Vector
        /// </summary>
        /// <param name="index">The control point index.</param>
        /// <returns>The tangent vector at the specified index.</returns>
-       public Double3 GetTangent(int index)
+       public Float3 GetTangent(int index)
        {
            if (Type != SplineType.Hermite || Tangents == null)
-               return EvaluateDerivative(index / (double)(ControlPointCount - 1));
+               return EvaluateDerivative(index / (float)(ControlPointCount - 1));
 
            if (index < 0 || index >= Tangents.Length)
                throw new ArgumentOutOfRangeException(nameof(index));
@@ -1193,19 +1193,19 @@ namespace Prowl.Vector
        {
            if (ControlPoints == null || subdivisionsPerSegment < 1) return;
 
-           var newPoints = new List<Double3>();
+           var newPoints = new List<Float3>();
            int segmentCount = IsClosed ? ControlPoints.Length : ControlPoints.Length - 1;
 
            for (int segment = 0; segment < segmentCount; segment++)
            {
-               double segmentStart = segment / (double)segmentCount;
-               double segmentEnd = (segment + 1) / (double)segmentCount;
+               float segmentStart = segment / (float)segmentCount;
+               float segmentEnd = (segment + 1) / (float)segmentCount;
 
                newPoints.Add(ControlPoints[segment]);
 
                for (int sub = 1; sub <= subdivisionsPerSegment; sub++)
                {
-                   double t = segmentStart + (segmentEnd - segmentStart) * (sub / (double)(subdivisionsPerSegment + 1));
+                   float t = segmentStart + (segmentEnd - segmentStart) * (sub / (float)(subdivisionsPerSegment + 1));
                    newPoints.Add(Evaluate(t));
                }
            }
@@ -1228,19 +1228,19 @@ namespace Prowl.Vector
        /// </summary>
        /// <param name="iterations">Number of smoothing iterations.</param>
        /// <param name="strength">Smoothing strength (0 = no smoothing, 1 = full averaging).</param>
-       public void Smooth(int iterations = 1, double strength = (double)0.5)
+       public void Smooth(int iterations = 1, float strength = (float)0.5)
        {
            if (ControlPoints == null || ControlPoints.Length < 3) return;
 
-           strength = Maths.Clamp(strength, 0.0, 1.0);
+           strength = Maths.Clamp(strength, 0.0f, 1.0f);
 
            for (int iter = 0; iter < iterations; iter++)
            {
-               var smoothedPoints = new Double3[ControlPoints.Length];
+               var smoothedPoints = new Float3[ControlPoints.Length];
 
                for (int i = 0; i < ControlPoints.Length; i++)
                {
-                   Double3 prev, next;
+                   Float3 prev, next;
 
                    if (IsClosed)
                    {
@@ -1253,7 +1253,7 @@ namespace Prowl.Vector
                        next = i < ControlPoints.Length - 1 ? ControlPoints[i + 1] : ControlPoints[i];
                    }
 
-                   Double3 averaged = (prev + ControlPoints[i] + next) / 3;
+                   Float3 averaged = (prev + ControlPoints[i] + next) / 3;
                    smoothedPoints[i] = Maths.Lerp(ControlPoints[i], averaged, strength);
                }
 
@@ -1274,20 +1274,20 @@ namespace Prowl.Vector
        public AABB GetBounds(int subdivisions = 100)
        {
            if (ControlPoints == null || ControlPoints.Length == 0)
-               return new AABB(Double3.Zero, Double3.Zero);
+               return new AABB(Float3.Zero, Float3.Zero);
 
-           Double3 min = ControlPoints[0];
-           Double3 max = ControlPoints[0];
+           Float3 min = ControlPoints[0];
+           Float3 max = ControlPoints[0];
 
            // Include all control points
            foreach (var point in ControlPoints)
            {
-               min = new Double3(
+               min = new Float3(
                    Maths.Min(min.X, point.X),
                    Maths.Min(min.Y, point.Y),
                    Maths.Min(min.Z, point.Z)
                );
-               max = new Double3(
+               max = new Float3(
                    Maths.Max(max.X, point.X),
                    Maths.Max(max.Y, point.Y),
                    Maths.Max(max.Z, point.Z)
@@ -1297,15 +1297,15 @@ namespace Prowl.Vector
            // Sample the spline for curves that might extend beyond control points
            for (int i = 0; i <= subdivisions; i++)
            {
-               double t = i / (double)subdivisions;
-               Double3 point = Evaluate(t);
+               float t = i / (float)subdivisions;
+               Float3 point = Evaluate(t);
 
-               min = new Double3(
+               min = new Float3(
                    Maths.Min(min.X, point.X),
                    Maths.Min(min.Y, point.Y),
                    Maths.Min(min.Z, point.Z)
                );
-               max = new Double3(
+               max = new Float3(
                    Maths.Max(max.X, point.X),
                    Maths.Max(max.Y, point.Y),
                    Maths.Max(max.Z, point.Z)
@@ -1325,7 +1325,7 @@ namespace Prowl.Vector
        /// <param name="points">The control points.</param>
        /// <param name="closed">Whether the spline should be closed.</param>
        /// <returns>A linear spline.</returns>
-       public static Spline CreateLinear(Double3[] points, bool closed = false)
+       public static Spline CreateLinear(Float3[] points, bool closed = false)
        {
            return new Spline(points, SplineType.Linear, closed);
        }
@@ -1337,7 +1337,7 @@ namespace Prowl.Vector
        /// <param name="closed">Whether the spline should be closed.</param>
        /// <param name="tension">Tension parameter (0 = standard Catmull-Rom).</param>
        /// <returns>A Catmull-Rom spline.</returns>
-       public static Spline CreateCatmullRom(Double3[] points, bool closed = false, double tension = 0.0)
+       public static Spline CreateCatmullRom(Float3[] points, bool closed = false, float tension = 0.0f)
        {
            return new Spline(points, SplineType.CatmullRom, closed, tension);
        }
@@ -1348,7 +1348,7 @@ namespace Prowl.Vector
        /// </summary>
        /// <param name="points">The control points (must be 3n+1 points).</param>
        /// <returns>A Bezier spline.</returns>
-       public static Spline CreateBezier(Double3[] points)
+       public static Spline CreateBezier(Float3[] points)
        {
            if ((points.Length - 1) % 3 != 0)
                throw new ArgumentException("Bezier splines require 3n+1 control points for n segments");
@@ -1362,7 +1362,7 @@ namespace Prowl.Vector
        /// <param name="points">The control points.</param>
        /// <param name="closed">Whether the spline should be closed.</param>
        /// <returns>A B-spline.</returns>
-       public static Spline CreateBSpline(Double3[] points, bool closed = false)
+       public static Spline CreateBSpline(Float3[] points, bool closed = false)
        {
            return new Spline(points, SplineType.BSpline, closed);
        }
@@ -1373,7 +1373,7 @@ namespace Prowl.Vector
        /// <param name="points">The control points.</param>
        /// <param name="closed">Whether the spline should be closed.</param>
        /// <returns>A Hermite spline with auto-generated tangents.</returns>
-       public static Spline CreateHermite(Double3[] points, bool closed = false)
+       public static Spline CreateHermite(Float3[] points, bool closed = false)
        {
            return new Spline(points, SplineType.Hermite, closed);
        }
@@ -1385,7 +1385,7 @@ namespace Prowl.Vector
        /// <param name="tangents">The tangent vectors at each control point.</param>
        /// <param name="closed">Whether the spline should be closed.</param>
        /// <returns>A Hermite spline with specified tangents.</returns>
-       public static Spline CreateHermiteWithTangents(Double3[] points, Double3[] tangents, bool closed = false)
+       public static Spline CreateHermiteWithTangents(Float3[] points, Float3[] tangents, bool closed = false)
        {
            return new Spline(points, tangents, closed);
        }
@@ -1399,18 +1399,18 @@ namespace Prowl.Vector
        /// <param name="endAngle">End angle in radians.</param>
        /// <param name="segments">Number of segments to approximate the arc.</param>
        /// <returns>A spline approximating the circular arc.</returns>
-       public static Spline CreateCircularArc(Double3 center, double radius, double startAngle, double endAngle, int segments = 16)
+       public static Spline CreateCircularArc(Float3 center, float radius, float startAngle, float endAngle, int segments = 16)
        {
-           var points = new Double3[segments + 1];
-           double angleStep = (endAngle - startAngle) / segments;
+           var points = new Float3[segments + 1];
+           float angleStep = (endAngle - startAngle) / segments;
 
            for (int i = 0; i <= segments; i++)
            {
-               double angle = startAngle + i * angleStep;
-               points[i] = center + new Double3(
+               float angle = startAngle + i * angleStep;
+               points[i] = center + new Float3(
                    radius * Maths.Cos(angle),
                    radius * Maths.Sin(angle),
-                   0.0
+                   0.0f
                );
            }
 
@@ -1426,18 +1426,18 @@ namespace Prowl.Vector
        /// <param name="turns">Number of turns.</param>
        /// <param name="segments">Number of segments per turn.</param>
        /// <returns>A spline representing a helix.</returns>
-       public static Spline CreateHelix(Double3 center, double radius, double pitch, double turns, int segments = 16)
+       public static Spline CreateHelix(Float3 center, float radius, float pitch, float turns, int segments = 16)
        {
            int totalPoints = (int)(segments * turns) + 1;
-           var points = new Double3[totalPoints];
-           double angleStep = 2.0 * (double)Maths.PI / segments;
-           double heightStep = pitch / segments;
+           var points = new Float3[totalPoints];
+           float angleStep = 2.0f * (float)Maths.PI / segments;
+           float heightStep = pitch / segments;
 
            for (int i = 0; i < totalPoints; i++)
            {
-               double angle = i * angleStep;
-               double height = i * heightStep;
-               points[i] = center + new Double3(
+               float angle = i * angleStep;
+               float height = i * heightStep;
+               points[i] = center + new Float3(
                    radius * Maths.Cos(angle),
                    radius * Maths.Sin(angle),
                    height

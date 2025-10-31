@@ -21,10 +21,10 @@ public class FaceExtrusionDemo : IDemo
 
     public FaceExtrusionDemo()
     {
-        _originalCube = GeometryGenerator.Box(Double3.One * 0.5);
+        _originalCube = GeometryGenerator.Box(Float3.One * 0.5f);
 
-        _originalCylinder = GeometryGenerator.Sphere(0.5);
-        GeometryOperators.WeldVertices(_originalCylinder, 0.0001);
+        _originalCylinder = GeometryGenerator.Sphere(0.5f);
+        GeometryOperators.WeldVertices(_originalCylinder, 0.0001f);
     }
 
     public void Draw(Float3 position, float timeInSeconds)
@@ -48,7 +48,7 @@ public class FaceExtrusionDemo : IDemo
                     var v0 = verts[0].Point;
                     var v1 = verts[1].Point;
                     var v2 = verts[2].Point;
-                    var normal = Double3.Normalize(Double3.Cross(v1 - v0, v2 - v0));
+                    var normal = Float3.Normalize(Float3.Cross(v1 - v0, v2 - v0));
 
                     // Top face or front face
                     if (normal.Y > 0.9 || normal.Z < -0.9)
@@ -60,7 +60,7 @@ public class FaceExtrusionDemo : IDemo
 
             if (facesToExtrude.Count > 0)
             {
-                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.7, ExtrudeMode.AverageNormal);
+                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.7f, ExtrudeMode.AverageNormal);
             }
 
             Float3 leftPos = position + new Float3(-1.5f, 0, 0);
@@ -82,7 +82,7 @@ public class FaceExtrusionDemo : IDemo
                     var v0 = verts[0].Point;
                     var v1 = verts[1].Point;
                     var v2 = verts[2].Point;
-                    var normal = Double3.Normalize(Double3.Cross(v1 - v0, v2 - v0));
+                    var normal = Float3.Normalize(Float3.Cross(v1 - v0, v2 - v0));
 
                     // Top face or front face
                     if (normal.Y > 0.9 || normal.Z < -0.9)
@@ -94,7 +94,7 @@ public class FaceExtrusionDemo : IDemo
 
             if (facesToExtrude.Count > 0)
             {
-                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.7, ExtrudeMode.AlongNormals);
+                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.7f, ExtrudeMode.AlongNormals);
             }
 
             DrawMesh(mesh, position, new Float4(1.0f, 0.5f, 0.2f, 0.8f), MeshMode.Wireframe);
@@ -118,7 +118,7 @@ public class FaceExtrusionDemo : IDemo
 
             if (facesToExtrude.Count > 0)
             {
-                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.5, ExtrudeMode.AlongNormals);
+                GeometryOperators.ExtrudeFaces(mesh, facesToExtrude, extrudeAmount * 0.5f, ExtrudeMode.AlongNormals);
             }
 
             Float3 rightPos = position + new Float3(1.5f, 0, 0);
@@ -141,7 +141,7 @@ public class FaceExtrusionDemo : IDemo
                     var v0 = verts[0].Point;
                     var v1 = verts[1].Point;
                     var v2 = verts[2].Point;
-                    var normal = Double3.Normalize(Double3.Cross(v1 - v0, v2 - v0));
+                    var normal = Float3.Normalize(Float3.Cross(v1 - v0, v2 - v0));
 
                     if (normal.Y > 0.9)
                     {
@@ -154,7 +154,7 @@ public class FaceExtrusionDemo : IDemo
             if (topFace != null)
             {
                 // Negative distance for inward extrusion - AverageNormal mode
-                GeometryOperators.ExtrudeFaces(mesh, new[] { topFace }, -extrudeAmount * 0.8, ExtrudeMode.AverageNormal);
+                GeometryOperators.ExtrudeFaces(mesh, new[] { topFace }, -extrudeAmount * 0.8f, ExtrudeMode.AverageNormal);
             }
 
             Float3 bottomLeftPos = position + new Float3(-1.5f, bottomY, 0);
@@ -176,7 +176,7 @@ public class FaceExtrusionDemo : IDemo
             var mesh = CopyGeometryData(_originalCube);
 
             var allFaces = mesh.Faces.ToList();
-            GeometryOperators.ExtrudeFaces(mesh, allFaces, extrudeAmount * 0.4, ExtrudeMode.PerFace);
+            GeometryOperators.ExtrudeFaces(mesh, allFaces, extrudeAmount * 0.4f, ExtrudeMode.PerFace);
 
             Float3 bottomRightPos = position + new Float3(1.5f, bottomY, 0);
             DrawMesh(mesh, bottomRightPos, new Float4(1.0f, 1.0f, 0.3f, 0.8f), MeshMode.Wireframe);
@@ -188,7 +188,7 @@ public class FaceExtrusionDemo : IDemo
     {
         // Transform the mesh to the desired position
         var transformed = CopyGeometryData(mesh);
-        GeometryOperators.Translate(transformed, (Double3)position);
+        GeometryOperators.Translate(transformed, (Float3)position);
 
         // Draw using the Gizmo system
         if (mode == MeshMode.Wireframe)

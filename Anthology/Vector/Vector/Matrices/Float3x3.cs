@@ -284,13 +284,13 @@ namespace Prowl.Vector
         /// <summary>Creates a 3x3 view rotation matrix. Assumes forward and up are normalized and not collinear.</summary>
         public static Float3x3 CreateLookRotation(Float3 forward, Float3 up)
         {
-            if (Float3.LengthSquared(forward) < Maths.EpsilonF || Float3.LengthSquared(up) < Maths.EpsilonF)
+            if (Float3.LengthSquared(forward) < Maths.Epsilon || Float3.LengthSquared(up) < Maths.Epsilon)
                 return Float3x3.Identity;
 
             Float3 zaxis = Float3.Normalize(forward);
             Float3 xaxis = Float3.Cross(up, zaxis);
 
-            if (Float3.LengthSquared(xaxis) < Maths.EpsilonF) // Collinear (degenerate)
+            if (Float3.LengthSquared(xaxis) < Maths.Epsilon) // Collinear (degenerate)
             {
                 return Float3x3.Identity;
             }

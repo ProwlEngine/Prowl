@@ -16,20 +16,20 @@ public class FrustumDemo : IDemo
         float heightOscillation = Maths.Sin(timeInSeconds * 0.5f) * 0.2f;
 
         // Camera positioned close to the grid cell, looking at the center
-        Double3 camPos = (Double3)position + new Double3(
+        Float3 camPos = position + new Float3(
             Maths.Cos(rotationAngle) * 1.2f,
             0.8f + heightOscillation,
             Maths.Sin(rotationAngle) * 1.2f
         );
-        Double3 lookAt = (Double3)position;
-        Double3 forward = Double3.Normalize(lookAt - camPos);
-        Double3 up = new Double3(0, 1, 0);
+        Float3 lookAt = position;
+        Float3 forward = Float3.Normalize(lookAt - camPos);
+        Float3 up = new Float3(0, 1, 0);
 
         // Animate field of view
-        double fov = Maths.PI / 3 + Maths.Sin(timeInSeconds * 0.8f) * 0.15;
-        double aspect = 1.3;
-        double nearDist = 0.3;
-        double farDist = 1.5f + Maths.Sin(timeInSeconds * 0.4f) * 0.3f;
+        float fov = Maths.PI / 3 + Maths.Sin(timeInSeconds * 0.8f) * 0.15f;
+        float aspect = 1.3f;
+        float nearDist = 0.3f;
+        float farDist = 1.5f + Maths.Sin(timeInSeconds * 0.4f) * 0.3f;
 
         // Create frustum from camera parameters
         Frustum frustum = Frustum.FromCamera(camPos, forward, up, fov, aspect, nearDist, farDist);
@@ -38,10 +38,10 @@ public class FrustumDemo : IDemo
         Gizmo.DrawFrustum(frustum, new Float4(1, 1, 0, 1));
 
         // Draw camera position
-        Gizmo.DrawIntersectionPoint((Float3)camPos, new Float4(0, 1, 1, 1), 0.08f);
+        Gizmo.DrawIntersectionPoint(camPos, new Float4(0, 1, 1, 1), 0.08f);
 
         // Draw look-at target
-        Gizmo.DrawIntersectionPoint((Float3)lookAt, new Float4(1, 0, 1, 1), 0.06f);
+        Gizmo.DrawIntersectionPoint(lookAt, new Float4(1, 0, 1, 1), 0.06f);
     }
 
     public Float3 GetBounds() => new Float3(3.0f, 2.5f, 3.0f);

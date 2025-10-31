@@ -14,14 +14,14 @@ namespace Prowl.Vector.Spatial
     public struct Transform2D : IEquatable<Transform2D>, IFormattable
     {
         /// <summary>A transform with default values, representing no transformation.</summary>
-        public static readonly Transform2D Identity = new Transform2D(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        public static readonly Transform2D Identity = new Transform2D(1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
 
 
-        public double A, B, C, D, E, F;
+        public float A, B, C, D, E, F;
 
 
         /// <summary>Initializes a new transform with the specified coefficients.</summary>
-        public Transform2D(double a, double b, double c, double d, double e, double f)
+        public Transform2D(float a, float b, float c, float d, float e, float f)
         {
             A = a; B = b; C = c; D = d; E = e; F = f;
         }
@@ -32,9 +32,9 @@ namespace Prowl.Vector.Spatial
         /// <summary>
         /// Gets or sets the position (translation) of the transform.
         /// </summary>
-        public Double2 Position
+        public Float2 Position
         {
-            get => new Double2(E, F);
+            get => new Float2(E, F);
             set { E = value.X; F = value.Y; }
         }
 
@@ -42,15 +42,15 @@ namespace Prowl.Vector.Spatial
         /// Gets or sets the rotation of the transform in degrees.
         /// When setting, this preserves the existing scale and translation.
         /// </summary>
-        public double Rotation
+        public float Rotation
         {
-            get => Maths.Atan2(B, A) * (double)Maths.Rad2Deg;
+            get => Maths.Atan2(B, A) * (float)Maths.Rad2Deg;
             set
             {
                 // Preserve scale and translation
                 var scale = this.Scale;
                 var position = this.Position;
-                var rad = value * (double)Maths.Deg2Rad;
+                var rad = value * (float)Maths.Deg2Rad;
                 var cs = Maths.Cos(rad);
                 var sn = Maths.Sin(rad);
 
@@ -67,15 +67,15 @@ namespace Prowl.Vector.Spatial
         /// Gets or sets the scale of the transform.
         /// When setting, this preserves the existing rotation and translation.
         /// </summary>
-        public Double2 Scale
+        public Float2 Scale
         {
-            get => new Double2(Maths.Sqrt(A * A + B * B), Maths.Sqrt(C * C + D * D));
+            get => new Float2(Maths.Sqrt(A * A + B * B), Maths.Sqrt(C * C + D * D));
             set
             {
                 // Preserve rotation and translation
                 var rotation = this.Rotation;
                 var position = this.Position;
-                var rad = rotation * (double)Maths.Deg2Rad;
+                var rad = rotation * (float)Maths.Deg2Rad;
                 var cs = Maths.Cos(rad);
                 var sn = Maths.Sin(rad);
 
@@ -91,12 +91,12 @@ namespace Prowl.Vector.Spatial
         /// <summary>
         /// Gets the normalized right-facing direction vector of the transform's local space (+X axis).
         /// </summary>
-        public Double2 Right => Double2.Normalize(new Double2(A, B));
+        public Float2 Right => Float2.Normalize(new Float2(A, B));
 
         /// <summary>
         /// Gets the normalized up-facing direction vector of the transform's local space (+Y axis).
         /// </summary>
-        public Double2 Up => Double2.Normalize(new Double2(C, D));
+        public Float2 Up => Float2.Normalize(new Float2(C, D));
 
         /// <summary>Checks if this transform is the identity matrix.</summary>
         public bool IsIdentity => A == 1.0 && B == 0.0 && C == 0.0 && D == 1.0 && E == 0.0 && F == 0.0;
@@ -105,7 +105,7 @@ namespace Prowl.Vector.Spatial
         public bool IsIdentityOrTranslation => A == 1.0 && B == 0.0 && C == 0.0 && D == 1.0;
 
         /// <summary>Checks if this transform can be inverted.</summary>
-        public bool IsInvertible => Maths.Abs(A * D - C * B) > double.Epsilon;
+        public bool IsInvertible => Maths.Abs(A * D - C * B) > float.Epsilon;
 
         #endregion
 
@@ -114,14 +114,14 @@ namespace Prowl.Vector.Spatial
 
         /// <summary>Applies a translation to the current transform.</summary>
         /// <param name="translation">The vector to translate by.</param>
-        public void Translate(Double2 translation)
+        public void Translate(Float2 translation)
         {
             this = this * CreateTranslation(translation.X, translation.Y);
         }
 
         /// <summary>Applies a rotation (in degrees) to the current transform, relative to its own origin.</summary>
         /// <param name="degrees">The angle to rotate by, in degrees.</param>
-        public void Rotate(double degrees)
+        public void Rotate(float degrees)
         {
             this = this * CreateRotation(degrees);
         }
@@ -129,14 +129,14 @@ namespace Prowl.Vector.Spatial
         /// <summary>Applies a rotation (in degrees) to the current transform around a world-space pivot point.</summary>
         /// <param name="pivot">The world-space point to rotate around.</param>
         /// <param name="degrees">The angle to rotate by, in degrees.</param>
-        public void RotateAround(Double2 pivot, double degrees)
+        public void RotateAround(Float2 pivot, float degrees)
         {
             this = CreateTranslation(pivot) * CreateRotation(degrees) * CreateTranslation(-pivot) * this;
         }
         
         /// <summary>Applies a scale to the current transform, relative to its own origin.</summary>
         /// <param name="scale">The vector to scale by.</param>
-        public void AddScale(Double2 scale)
+        public void AddScale(Float2 scale)
         {
             this = this * CreateScale(scale.X, scale.Y);
         }
@@ -144,7 +144,7 @@ namespace Prowl.Vector.Spatial
         /// <summary>Applies a scale to the current transform around a world-space pivot point.</summary>
         /// <param name="pivot">The world-space point to scale around.</param>
         /// <param name="scale">The vector to scale by.</param>
-        public void ScaleAround(Double2 pivot, Double2 scale)
+        public void ScaleAround(Float2 pivot, Float2 scale)
         {
             this = CreateTranslation(pivot) * CreateScale(scale.X, scale.Y) * CreateTranslation(-pivot) * this;
         }
@@ -154,10 +154,10 @@ namespace Prowl.Vector.Spatial
         /// The local right-facing axis (+X) will point towards the target.
         /// </summary>
         /// <param name="worldTarget">The world-space position to look at.</param>
-        public void LookAt(Double2 worldTarget)
+        public void LookAt(Float2 worldTarget)
         {
-            var direction = Double2.Normalize(worldTarget - this.Position);
-            this.Rotation = Maths.Atan2(direction.Y, direction.X) * (double)Maths.Rad2Deg;
+            var direction = Float2.Normalize(worldTarget - this.Position);
+            this.Rotation = Maths.Atan2(direction.Y, direction.X) * (float)Maths.Rad2Deg;
         }
 
         /// <summary>
@@ -165,26 +165,26 @@ namespace Prowl.Vector.Spatial
         /// </summary>
         /// <param name="worldTarget">The world-space position.</param>
         /// <returns>The angle in degrees.</returns>
-        public double GetAngleTo(Double2 worldTarget)
+        public float GetAngleTo(Float2 worldTarget)
         {
-            var direction = Double2.Normalize(worldTarget - this.Position);
-            return Maths.Atan2(direction.Y, direction.X) * (double)Maths.Rad2Deg;
+            var direction = Float2.Normalize(worldTarget - this.Position);
+            return Maths.Atan2(direction.Y, direction.X) * (float)Maths.Rad2Deg;
         }
         
         /// <summary>Transforms a point from local space to world space.</summary>
-        public Double2 TransformPoint(Double2 localPoint) => new Double2(localPoint.X * A + localPoint.Y * C + E, localPoint.X * B + localPoint.Y * D + F);
+        public Float2 TransformPoint(Float2 localPoint) => new Float2(localPoint.X * A + localPoint.Y * C + E, localPoint.X * B + localPoint.Y * D + F);
         
         /// <summary>Transforms a point from world space to local space.</summary>
-        public Double2 InverseTransformPoint(Double2 worldPoint) => this.Inverse() * worldPoint;
+        public Float2 InverseTransformPoint(Float2 worldPoint) => this.Inverse() * worldPoint;
 
         /// <summary>Transforms a direction from local space to world space (ignoring translation).</summary>
-        public Double2 TransformDirection(Double2 localDirection) => new Double2(localDirection.X * A + localDirection.Y * C, localDirection.X * B + localDirection.Y * D);
+        public Float2 TransformDirection(Float2 localDirection) => new Float2(localDirection.X * A + localDirection.Y * C, localDirection.X * B + localDirection.Y * D);
 
         /// <summary>Transforms a direction from world space to local space (ignoring translation).</summary>
-        public Double2 InverseTransformDirection(Double2 worldDirection)
+        public Float2 InverseTransformDirection(Float2 worldDirection)
         {
             var inv = this.Inverse();
-            return new Double2(worldDirection.X * inv.A + worldDirection.Y * inv.C, worldDirection.X * inv.B + worldDirection.Y * inv.D);
+            return new Float2(worldDirection.X * inv.A + worldDirection.Y * inv.C, worldDirection.X * inv.B + worldDirection.Y * inv.D);
         }
 
         /// <summary>Returns the inverse of this transform.</summary>
@@ -194,10 +194,10 @@ namespace Prowl.Vector.Spatial
                 return CreateTranslation(-E, -F);
 
             var det = A * D - C * B;
-            if (Maths.Abs(det) <= double.Epsilon)
+            if (Maths.Abs(det) <= float.Epsilon)
                 return Identity;
 
-            var invDet = 1.0 / det;
+            var invDet = 1.0f / det;
             return new Transform2D(
                 D * invDet, -B * invDet,
                 -C * invDet, A * invDet,
@@ -207,13 +207,13 @@ namespace Prowl.Vector.Spatial
         }
 
         /// <summary>Converts this 2D transform to a 4x4 matrix, suitable for 3D rendering pipelines.</summary>
-        public Double4x4 ToMatrix()
+        public Float4x4 ToMatrix()
         {
-            return new Double4x4(
-                new Double4(A, B, 0.0, 0.0),
-                new Double4(C, D, 0.0, 0.0),
-                new Double4(0.0, 0.0, 1.0, 0.0),
-                new Double4(E, F, 0.0, 1.0)
+            return new Float4x4(
+                new Float4(A, B, 0.0f, 0.0f),
+                new Float4(C, D, 0.0f, 0.0f),
+                new Float4(0.0f, 0.0f, 1.0f, 0.0f),
+                new Float4(E, F, 0.0f, 1.0f)
             );
         }
 
@@ -241,7 +241,7 @@ namespace Prowl.Vector.Spatial
         }
 
         /// <summary>Transforms a 2D vector by a transform.</summary>
-        public static Double2 operator *(Transform2D transform, Double2 point) => transform.TransformPoint(point);
+        public static Float2 operator *(Transform2D transform, Float2 point) => transform.TransformPoint(point);
 
         #endregion
 
@@ -249,9 +249,9 @@ namespace Prowl.Vector.Spatial
         #region Static Methods
 
         /// <summary>Linearly interpolates between two transforms.</summary>
-        public static Transform2D Lerp(Transform2D start, Transform2D end, double amount)
+        public static Transform2D Lerp(Transform2D start, Transform2D end, float amount)
         {
-            amount = Maths.Clamp(amount, 0.0, 1.0);
+            amount = Maths.Clamp(amount, 0.0f, 1.0f);
             return new Transform2D(
                 start.A + (end.A - start.A) * amount,
                 start.B + (end.B - start.B) * amount,
@@ -263,50 +263,50 @@ namespace Prowl.Vector.Spatial
         }
 
         /// <summary>Creates a translation transform.</summary>
-        public static Transform2D CreateTranslation(Double2 translation) => new Transform2D(1.0, 0.0, 0.0, 1.0, translation.X, translation.Y);
+        public static Transform2D CreateTranslation(Float2 translation) => new Transform2D(1.0f, 0.0f, 0.0f, 1.0f, translation.X, translation.Y);
 
         /// <summary>Creates a translation transform.</summary>
-        public static Transform2D CreateTranslation(double tx, double ty) => new Transform2D(1.0, 0.0, 0.0, 1.0, tx, ty);
+        public static Transform2D CreateTranslation(float tx, float ty) => new Transform2D(1.0f, 0.0f, 0.0f, 1.0f, tx, ty);
 
         /// <summary>Creates a rotation transform with the angle specified in degrees.</summary>
-        public static Transform2D CreateRotation(double angleInDegrees) => CreateRotationRadians(angleInDegrees * (double)Maths.Deg2Rad);
+        public static Transform2D CreateRotation(float angleInDegrees) => CreateRotationRadians(angleInDegrees * (float)Maths.Deg2Rad);
 
         /// <summary>Creates a rotation transform with the angle specified in radians.</summary>
-        public static Transform2D CreateRotationRadians(double angleInRadians)
+        public static Transform2D CreateRotationRadians(float angleInRadians)
         {
             var cs = Maths.Cos(angleInRadians);
             var sn = Maths.Sin(angleInRadians);
-            return new Transform2D(cs, sn, -sn, cs, 0.0, 0.0);
+            return new Transform2D(cs, sn, -sn, cs, 0.0f, 0.0f);
         }
 
         /// <summary>Creates a uniform scale transform.</summary>
-        public static Transform2D CreateScale(double s) => new Transform2D(s, 0.0, 0.0, s, 0.0, 0.0);
+        public static Transform2D CreateScale(float s) => new Transform2D(s, 0.0f, 0.0f, s, 0.0f, 0.0f);
 
         /// <summary>Creates a non-uniform scale transform.</summary>
-        public static Transform2D CreateScale(double sx, double sy) => new Transform2D(sx, 0.0, 0.0, sy, 0.0, 0.0);
+        public static Transform2D CreateScale(float sx, float sy) => new Transform2D(sx, 0.0f, 0.0f, sy, 0.0f, 0.0f);
 
         /// <summary>Creates a skew transform along the X-axis.</summary>
         /// <param name="angleInDegrees">The angle in degrees to skew by.</param>
-        public static Transform2D CreateSkewX(double angleInDegrees)
+        public static Transform2D CreateSkewX(float angleInDegrees)
         {
-            return new Transform2D(1.0, 0.0, Maths.Tan(angleInDegrees * (double)Maths.Deg2Rad), 1.0, 0.0, 0.0);
+            return new Transform2D(1.0f, 0.0f, Maths.Tan(angleInDegrees * (float)Maths.Deg2Rad), 1.0f, 0.0f, 0.0f);
         }
 
         /// <summary>Creates a skew transform along the Y-axis.</summary>
         /// <param name="angleInDegrees">The angle in degrees to skew by.</param>
-        public static Transform2D CreateSkewY(double angleInDegrees)
+        public static Transform2D CreateSkewY(float angleInDegrees)
         {
-            return new Transform2D(1.0, Maths.Tan(angleInDegrees * (double)Maths.Deg2Rad), 0.0, 1.0, 0.0, 0.0);
+            return new Transform2D(1.0f, Maths.Tan(angleInDegrees * (float)Maths.Deg2Rad), 0.0f, 1.0f, 0.0f, 0.0f);
         }
 
         /// <summary>Creates a skew transform along the X-axis around a pivot point.</summary>
-        public static Transform2D CreateSkewX(double angleInDegrees, Double2 origin)
+        public static Transform2D CreateSkewX(float angleInDegrees, Float2 origin)
         {
             return CreateTranslation(origin) * CreateSkewX(angleInDegrees) * CreateTranslation(-origin);
         }
 
         /// <summary>Creates a skew transform along the Y-axis around a pivot point.</summary>
-        public static Transform2D CreateSkewY(double angleInDegrees, Double2 origin)
+        public static Transform2D CreateSkewY(float angleInDegrees, Float2 origin)
         {
             return CreateTranslation(origin) * CreateSkewY(angleInDegrees) * CreateTranslation(-origin);
         }

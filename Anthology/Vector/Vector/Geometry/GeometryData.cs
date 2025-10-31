@@ -37,11 +37,11 @@ namespace Prowl.Vector.Geometry
         public class Vertex
         {
             public int Id; // User-defined ID
-            public Double3 Point; // Position in space
+            public Float3 Point; // Position in space
             public Dictionary<string, AttributeValue> Attributes = new Dictionary<string, AttributeValue>();
             public Edge? Edge; // One of the edges using this vertex, navigate others using edge.Next()
 
-            public Vertex(Double3 point)
+            public Vertex(Float3 point)
             {
                 Point = point;
             }
@@ -154,7 +154,7 @@ namespace Prowl.Vector.Geometry
                 return faces;
             }
 
-            public Double3 Center() => (Vert1.Point + Vert2.Point) * 0.5;
+            public Float3 Center() => (Vert1.Point + Vert2.Point) * 0.5f;
         }
 
         /// <summary>
@@ -247,24 +247,24 @@ namespace Prowl.Vector.Geometry
                 return edges;
             }
 
-            public Double3 Center()
+            public Float3 Center()
             {
-                var p = Double3.Zero;
-                double sum = 0;
+                var p = Float3.Zero;
+                float sum = 0;
                 foreach (var v in NeighborVertices())
                 {
                     p += v.Point;
                     sum += 1;
                 }
-                return sum > 0 ? p / sum : Double3.Zero;
+                return sum > 0 ? p / sum : Float3.Zero;
             }
 
-            public Double3 Normal()
+            public Float3 Normal()
             {
                 var verts = NeighborVertices();
                 if (verts.Count < 3)
-                    return Double3.Zero;
-                Double3 normal = Double3.Zero;
+                    return Float3.Zero;
+                Float3 normal = Float3.Zero;
                 for (int i = 0; i < verts.Count; i++)
                 {
                     var current = verts[i].Point;
@@ -273,7 +273,7 @@ namespace Prowl.Vector.Geometry
                     normal.Y += (current.Z - next.Z) * (current.X + next.X);
                     normal.Z += (current.X - next.X) * (current.Y + next.Y);
                 }
-                return Double3.Normalize(normal);
+                return Float3.Normalize(normal);
             }
 
             /// <summary>
@@ -303,8 +303,8 @@ namespace Prowl.Vector.Geometry
             return vert;
         }
 
-        public Vertex AddVertex(Double3 point) => AddVertex(new Vertex(point));
-        public Vertex AddVertex(double x, double y, double z) => AddVertex(new Double3(x, y, z));
+        public Vertex AddVertex(Float3 point) => AddVertex(new Vertex(point));
+        public Vertex AddVertex(float x, float y, float z) => AddVertex(new Float3(x, y, z));
 
         /// <summary>
         /// Add a new edge between two vertices. If there is already such an edge, return it.
@@ -544,7 +544,7 @@ namespace Prowl.Vector.Geometry
                 }
                 if (value is FloatAttributeValue fval)
                 {
-                    var data = new double[fval.Data.Length];
+                    var data = new float[fval.Data.Length];
                     fval.Data.CopyTo(data, 0);
                     return new FloatAttributeValue { Data = data };
                 }
@@ -565,18 +565,18 @@ namespace Prowl.Vector.Geometry
 
         public class FloatAttributeValue : AttributeValue
         {
-            public double[] Data = Array.Empty<double>();
+            public float[] Data = Array.Empty<float>();
 
             public FloatAttributeValue() { }
-            public FloatAttributeValue(params double[] values) { Data = values; }
+            public FloatAttributeValue(params float[] values) { Data = values; }
 
-            public Double3 AsVector3() => new Double3(
+            public Float3 AsVector3() => new Float3(
                 Data.Length > 0 ? Data[0] : 0,
                 Data.Length > 1 ? Data[1] : 0,
                 Data.Length > 2 ? Data[2] : 0
             );
 
-            public void FromVector3(Double3 v)
+            public void FromVector3(Float3 v)
             {
                 if (Data.Length >= 3)
                 {
@@ -605,7 +605,7 @@ namespace Prowl.Vector.Geometry
                 return Type.BaseType switch
                 {
                     AttributeBaseType.Int => new IntAttributeValue { Data = new int[Type.Dimensions] },
-                    AttributeBaseType.Float => new FloatAttributeValue { Data = new double[Type.Dimensions] },
+                    AttributeBaseType.Float => new FloatAttributeValue { Data = new float[Type.Dimensions] },
                     _ => throw new InvalidOperationException()
                 };
             }
@@ -712,12 +712,12 @@ namespace Prowl.Vector.Geometry
 
             foreach (var vertex in Vertices)
             {
-                min = new Double3(
+                min = new Float3(
                     Maths.Min(min.X, vertex.Point.X),
                     Maths.Min(min.Y, vertex.Point.Y),
                     Maths.Min(min.Z, vertex.Point.Z)
                 );
-                max = new Double3(
+                max = new Float3(
                     Maths.Max(max.X, vertex.Point.X),
                     Maths.Max(max.Y, vertex.Point.Y),
                     Maths.Max(max.Z, vertex.Point.Z)
@@ -736,7 +736,7 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         public struct TriangleMesh
         {
-            public Double3[] Vertices;
+            public Float3[] Vertices;
             public uint[] Indices;
         }
 
@@ -745,7 +745,7 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         public struct LineMesh
         {
-            public Double3[] Vertices;
+            public Float3[] Vertices;
             public uint[] Indices;
         }
 
@@ -755,7 +755,7 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         public TriangleMesh ToTriangleMesh()
         {
-            var vertices = new List<Double3>();
+            var vertices = new List<Float3>();
             var indices = new List<uint>();
 
             foreach (var face in Faces)
@@ -785,7 +785,7 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         public LineMesh ToLineMesh()
         {
-            var vertices = new List<Double3>();
+            var vertices = new List<Float3>();
             var indices = new List<uint>();
 
             foreach (var edge in Edges)

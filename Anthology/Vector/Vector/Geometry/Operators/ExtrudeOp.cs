@@ -8,31 +8,31 @@ namespace Prowl.Vector.Geometry.Operators
 {
     internal static class ExtrudeOp
     {
-        internal static void ExtrudeFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToExtrude, double distance, ExtrudeMode mode = ExtrudeMode.AlongNormals)
+        internal static void ExtrudeFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToExtrude, float distance, ExtrudeMode mode = ExtrudeMode.AlongNormals)
         {
             var facesToExtrudeList = facesToExtrude.ToList();
             if (facesToExtrudeList.Count == 0) return;
 
             // Calculate face normals for all faces
-            var faceNormals = new Dictionary<GeometryData.Face, Double3>();
+            var faceNormals = new Dictionary<GeometryData.Face, Float3>();
             foreach (var face in facesToExtrudeList)
             {
                 var verts = face.NeighborVertices();
                 if (verts.Count >= 3)
                 {
-                    Double3 v0 = verts[0].Point;
-                    Double3 v1 = verts[1].Point;
-                    Double3 v2 = verts[2].Point;
-                    faceNormals[face] = Double3.Normalize(Double3.Cross(v1 - v0, v2 - v0));
+                    Float3 v0 = verts[0].Point;
+                    Float3 v1 = verts[1].Point;
+                    Float3 v2 = verts[2].Point;
+                    faceNormals[face] = Float3.Normalize(Float3.Cross(v1 - v0, v2 - v0));
                 }
                 else
                 {
-                    faceNormals[face] = Double3.Zero;
+                    faceNormals[face] = Float3.Zero;
                 }
             }
 
             // Calculate average normal for AverageNormal mode
-            Double3 averageNormal = Double3.Zero;
+            Float3 averageNormal = Float3.Zero;
             if (mode == ExtrudeMode.AverageNormal)
             {
                 foreach (var normal in faceNormals.Values)
@@ -41,12 +41,12 @@ namespace Prowl.Vector.Geometry.Operators
                 }
                 if (facesToExtrudeList.Count > 0)
                 {
-                    averageNormal = Double3.Normalize(averageNormal);
+                    averageNormal = Float3.Normalize(averageNormal);
                 }
             }
 
             // For AlongNormals mode, calculate averaged vertex normals
-            var vertexNormals = new Dictionary<GeometryData.Vertex, Double3>();
+            var vertexNormals = new Dictionary<GeometryData.Vertex, Float3>();
             if (mode == ExtrudeMode.AlongNormals)
             {
                 // For each vertex, average the normals of all selected faces using it
@@ -59,7 +59,7 @@ namespace Prowl.Vector.Geometry.Operators
                     {
                         if (!vertexNormals.ContainsKey(vert))
                         {
-                            vertexNormals[vert] = Double3.Zero;
+                            vertexNormals[vert] = Float3.Zero;
                         }
                         vertexNormals[vert] += faceNormal;
                     }
@@ -68,7 +68,7 @@ namespace Prowl.Vector.Geometry.Operators
                 // Normalize the accumulated normals
                 foreach (var vert in vertexNormals.Keys.ToList())
                 {
-                    vertexNormals[vert] = Double3.Normalize(vertexNormals[vert]);
+                    vertexNormals[vert] = Float3.Normalize(vertexNormals[vert]);
                 }
             }
 
@@ -121,16 +121,16 @@ namespace Prowl.Vector.Geometry.Operators
                     if (mode == ExtrudeMode.PerFace)
                     {
                         // PerFace: Always create new vertices for this face
-                        Double3 normal = faceNormals[face];
-                        Double3 newPos = vert.Point + normal * distance;
+                        Float3 normal = faceNormals[face];
+                        Float3 newPos = vert.Point + normal * distance;
                         newVert = mesh.AddVertex(newPos);
-                        GeometryOperators.AttributeLerp(mesh, newVert, vert, vert, 1.0);
+                        GeometryOperators.AttributeLerp(mesh, newVert, vert, vert, 1.0f);
                         perFaceMapping[vert] = newVert;
                     }
                     else if (!vertexMapping.ContainsKey(vert))
                     {
                         // AlongNormals or AverageNormal: Create shared vertices
-                        Double3 normal;
+                        Float3 normal;
                         if (mode == ExtrudeMode.AlongNormals)
                         {
                             normal = vertexNormals[vert];
@@ -140,9 +140,9 @@ namespace Prowl.Vector.Geometry.Operators
                             normal = averageNormal;
                         }
 
-                        Double3 newPos = vert.Point + normal * distance;
+                        Float3 newPos = vert.Point + normal * distance;
                         newVert = mesh.AddVertex(newPos);
-                        GeometryOperators.AttributeLerp(mesh, newVert, vert, vert, 1.0);
+                        GeometryOperators.AttributeLerp(mesh, newVert, vert, vert, 1.0f);
                         vertexMapping[vert] = newVert;
                     }
                 }

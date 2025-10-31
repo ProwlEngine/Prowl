@@ -9,9 +9,9 @@ namespace Prowl.Vector.Geometry.Operators
 {
     internal static class BevelVertexOp
     {
-        internal static void BevelVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> verticesToBevel, double offset = 0.3)
+        internal static void BevelVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> verticesToBevel, float offset = 0.3f)
         {
-            if (offset <= 0.0 || offset >= 1.0)
+            if (offset <= 0.0f || offset >= 1.0f)
                 throw new ArgumentException("Offset must be between 0.0 and 1.0", nameof(offset));
 
             verticesToBevel = verticesToBevel.Where(v => mesh.Vertices.Contains(v));
@@ -48,7 +48,7 @@ namespace Prowl.Vector.Geometry.Operators
                     var otherVertex = edge.OtherVertex(vertex);
 
                     // Create new vertex at offset distance from the vertex being beveled
-                    Double3 newPos = Maths.Lerp(vertex.Point, otherVertex.Point, offset);
+                    Float3 newPos = Maths.Lerp(vertex.Point, otherVertex.Point, offset);
                     var newVert = mesh.AddVertex(newPos);
                     GeometryOperators.AttributeLerp(mesh, newVert, vertex, otherVertex, offset);
 
@@ -147,7 +147,7 @@ namespace Prowl.Vector.Geometry.Operators
                 {
                     // Calculate face normal to determine correct winding order
                     // Use average of connected face normals
-                    Double3 avgNormal = Double3.Zero;
+                    Float3 avgNormal = Float3.Zero;
                     foreach (var face in connectedFaces)
                     {
                         var faceVerts = face.NeighborVertices();
@@ -156,20 +156,20 @@ namespace Prowl.Vector.Geometry.Operators
                             var v0 = faceVerts[0].Point;
                             var v1 = faceVerts[1].Point;
                             var v2 = faceVerts[2].Point;
-                            avgNormal += Double3.Normalize(Double3.Cross(v1 - v0, v2 - v0));
+                            avgNormal += Float3.Normalize(Float3.Cross(v1 - v0, v2 - v0));
                         }
                     }
-                    if (avgNormal != Double3.Zero)
-                        avgNormal = Double3.Normalize(avgNormal);
+                    if (avgNormal != Float3.Zero)
+                        avgNormal = Float3.Normalize(avgNormal);
 
                     // Calculate the normal of the bevel face as currently ordered
                     var bevelV0 = newVertices[0].Point;
                     var bevelV1 = newVertices[1].Point;
                     var bevelV2 = newVertices[2].Point;
-                    var bevelNormal = Double3.Normalize(Double3.Cross(bevelV1 - bevelV0, bevelV2 - bevelV0));
+                    var bevelNormal = Float3.Normalize(Float3.Cross(bevelV1 - bevelV0, bevelV2 - bevelV0));
 
                     // If the normals are in opposite directions, reverse the vertex order
-                    if (Double3.Dot(bevelNormal, avgNormal) < 0)
+                    if (Float3.Dot(bevelNormal, avgNormal) < 0)
                     {
                         newVertices.Reverse();
                     }

@@ -15,10 +15,10 @@ namespace Prowl.Vector
     public struct Ray : IEquatable<Ray>, IFormattable
     {
         /// <summary>The origin point of the ray.</summary>
-        public Double3 Origin;
+        public Float3 Origin;
 
         /// <summary>The normalized direction vector of the ray.</summary>
-        public Double3 Direction;
+        public Float3 Direction;
 
         /// <summary>
         /// Initializes a new instance of the RayD struct.
@@ -27,10 +27,10 @@ namespace Prowl.Vector
         /// <param name="origin">The origin point of the ray.</param>
         /// <param name="direction">The direction vector of the ray (will be normalized).</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Ray(Double3 origin, Double3 direction)
+        public Ray(Float3 origin, Float3 direction)
         {
             Origin = origin;
-            Direction = Double3.Normalize(direction);
+            Direction = Float3.Normalize(direction);
         }
 
         /// <summary>
@@ -39,7 +39,7 @@ namespace Prowl.Vector
         /// <param name="distance">The distance along the ray.</param>
         /// <returns>A point on the ray.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 GetPoint(double distance)
+        public Float3 GetPoint(float distance)
         {
             return Origin + Direction * distance;
         }
@@ -53,7 +53,7 @@ namespace Prowl.Vector
         /// <param name="distance">The distance along the ray to the intersection point.</param>
         /// <returns>True if the ray intersects the plane in the forward direction.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Intersects(Plane plane, out double distance)
+        public bool Intersects(Plane plane, out float distance)
         {
             return Intersection.RayPlane(Origin, Direction, plane.Normal, plane.D, out distance);
         }
@@ -67,7 +67,7 @@ namespace Prowl.Vector
         /// <param name="v">Barycentric coordinate v.</param>
         /// <returns>True if the ray intersects the triangle.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Intersects(Triangle triangle, out double distance, out double u, out double v)
+        public bool Intersects(Triangle triangle, out float distance, out float u, out float v)
         {
             return Intersection.RayTriangle(Origin, Direction, triangle.V0, triangle.V1, triangle.V2, out distance, out u, out v);
         }
@@ -80,7 +80,7 @@ namespace Prowl.Vector
         /// <param name="tMax">The exit distance.</param>
         /// <returns>True if the ray intersects the AABB.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Intersects(AABB aabb, out double tMin, out double tMax)
+        public bool Intersects(AABB aabb, out float tMin, out float tMax)
         {
             return Intersection.RayAABB(Origin, Direction, aabb.Min, aabb.Max, out tMin, out tMax);
         }
@@ -93,7 +93,7 @@ namespace Prowl.Vector
         /// <param name="t1">The second intersection distance.</param>
         /// <returns>True if the ray intersects the sphere.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Intersects(Sphere sphere, out double t0, out double t1)
+        public bool Intersects(Sphere sphere, out float t0, out float t1)
         {
             return Intersection.RaySphere(Origin, Direction, sphere.Center, sphere.Radius, out t0, out t1);
         }
@@ -113,19 +113,19 @@ namespace Prowl.Vector
         /// <param name="viewportWidth">The width of the viewport in pixels.</param>
         /// <param name="viewportHeight">The height of the viewport in pixels.</param>
         /// <returns>A Ray originating from the near plane and pointing into the scene.</returns>
-        public static Ray ScreenPointToRay(Double2 screenPosition, Double4x4 viewMatrix, Double4x4 projectionMatrix, double viewportWidth, double viewportHeight)
+        public static Ray ScreenPointToRay(Float2 screenPosition, Float4x4 viewMatrix, Float4x4 projectionMatrix, float viewportWidth, float viewportHeight)
         {
             // 1. Convert screen coordinates to Normalized Device Coordinates (NDC)
-            double ndcX = (2.0 * screenPosition.X) / viewportWidth - 1.0;
-            double ndcY = 1.0 - (2.0 * screenPosition.Y) / viewportHeight; // Y is often flipped screen -> NDC
+            float ndcX = (2.0f * screenPosition.X) / viewportWidth - 1.0f;
+            float ndcY = 1.0f - (2.0f * screenPosition.Y) / viewportHeight; // Y is often flipped screen -> NDC
 
             // 2. Define points in NDC space on the near and far clip planes (DirectX-style Z)
-            Double4 nearPointNDC = new Double4(ndcX, ndcY, 0.0, 1.0); // Point on the near plane (Z=0 for DX)
-            Double4 farPointNDC = new Double4(ndcX, ndcY, 1.0, 1.0); // Point on the far plane (Z=1 for DX)
+            Float4 nearPointNDC = new Float4(ndcX, ndcY, 0.0f, 1.0f); // Point on the near plane (Z=0 for DX)
+            Float4 farPointNDC = new Float4(ndcX, ndcY, 1.0f, 1.0f); // Point on the far plane (Z=1 for DX)
 
             // 3. Calculate the inverse of the combined view-projection matrix
-            Double4x4 viewProjectionMatrix = projectionMatrix * viewMatrix;
-            Double4x4 inverseViewProjectionMatrix;
+            Float4x4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+            Float4x4 inverseViewProjectionMatrix;
             try
             {
                 inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
@@ -133,22 +133,22 @@ namespace Prowl.Vector
             catch (ArgumentException ex)
             {
                 System.Diagnostics.Debug.WriteLine("ScreenPointToRay Error: View-Projection matrix is singular. " + ex.Message);
-                return new Ray(Double3.Zero, new Double3(0.0, 0.0, -1.0)); // Fallback ray
+                return new Ray(Float3.Zero, new Float3(0.0f, 0.0f, -1.0f)); // Fallback ray
             }
 
             // 4. Transform NDC points to world space
-            Double4 nearPointWorld = inverseViewProjectionMatrix * nearPointNDC;
-            Double4 farPointWorld = inverseViewProjectionMatrix * farPointNDC;
+            Float4 nearPointWorld = inverseViewProjectionMatrix * nearPointNDC;
+            Float4 farPointWorld = inverseViewProjectionMatrix * farPointNDC;
 
             // 5. Perform perspective division (divide by W component)
-            const double wEpsilon = double.Epsilon * 1000; // Local epsilon for W component check
-            if (Maths.Abs(nearPointWorld.W) > wEpsilon) nearPointWorld /= nearPointWorld.W; else nearPointWorld.W = 1.0; // Avoid division by zero/small W
-            if (Maths.Abs(farPointWorld.W) > wEpsilon) farPointWorld /= farPointWorld.W; else farPointWorld.W = 1.0; // Avoid division by zero/small W
+            const float wEpsilon = float.Epsilon * 1000; // Local epsilon for W component check
+            if (Maths.Abs(nearPointWorld.W) > wEpsilon) nearPointWorld /= nearPointWorld.W; else nearPointWorld.W = 1.0f; // Avoid division by zero/small W
+            if (Maths.Abs(farPointWorld.W) > wEpsilon) farPointWorld /= farPointWorld.W; else farPointWorld.W = 1.0f; // Avoid division by zero/small W
 
             // 6. Create the ray
-            Double3 rayOrigin = new Double3(nearPointWorld.X, nearPointWorld.Y, nearPointWorld.Z);
-            Double3 rayDirectionTarget = new Double3(farPointWorld.X, farPointWorld.Y, farPointWorld.Z);
-            Double3 rayDirection = rayDirectionTarget - rayOrigin;
+            Float3 rayOrigin = new Float3(nearPointWorld.X, nearPointWorld.Y, nearPointWorld.Z);
+            Float3 rayDirectionTarget = new Float3(farPointWorld.X, farPointWorld.Y, farPointWorld.Z);
+            Float3 rayDirection = rayDirectionTarget - rayOrigin;
 
             // Direction should be normalized by the Ray constructor
             return new Ray(rayOrigin, rayDirection);
@@ -166,17 +166,17 @@ namespace Prowl.Vector
         /// <param name="viewportWidth">The width of the viewport.</param>
         /// <param name="viewportHeight">The height of the viewport.</param>
         /// <returns>A Ray starting from the camera's world position.</returns>
-        public static Ray ScreenPointToRayFromCamera(Double2 screenPosition, Double3 cameraWorldPosition, Double4x4 viewMatrix, Double4x4 projectionMatrix, double viewportWidth, double viewportHeight)
+        public static Ray ScreenPointToRayFromCamera(Float2 screenPosition, Float3 cameraWorldPosition, Float4x4 viewMatrix, Float4x4 projectionMatrix, float viewportWidth, float viewportHeight)
         {
-            double ndcX = (2.0 * screenPosition.X) / viewportWidth - 1.0;
-            double ndcY = 1.0 - (2.0 * screenPosition.Y) / viewportHeight; // Y is often flipped
+            float ndcX = (2.0f * screenPosition.X) / viewportWidth - 1.0f;
+            float ndcY = 1.0f - (2.0f * screenPosition.Y) / viewportHeight; // Y is often flipped
 
             // For direction, unprojecting a point on the far plane is standard.
             // Using Z=1 for far plane in DirectX-style NDC.
-            Double4 farPointNDC = new Double4(ndcX, ndcY, 1.0, 1.0);
+            Float4 farPointNDC = new Float4(ndcX, ndcY, 1.0f, 1.0f);
 
-            Double4x4 viewProjectionMatrix = projectionMatrix * viewMatrix;
-            Double4x4 inverseViewProjectionMatrix;
+            Float4x4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+            Float4x4 inverseViewProjectionMatrix;
             try
             {
                 inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
@@ -184,16 +184,16 @@ namespace Prowl.Vector
             catch (ArgumentException ex)
             {
                 System.Diagnostics.Debug.WriteLine("ScreenPointToRayFromCamera Error: View-Projection matrix is singular. " + ex.Message);
-                return new Ray(cameraWorldPosition, new Double3(0.0, 0.0, -1.0)); // Fallback ray
+                return new Ray(cameraWorldPosition, new Float3(0.0f, 0.0f, -1.0f)); // Fallback ray
             }
 
-            Double4 farPointWorldH = inverseViewProjectionMatrix * farPointNDC;
+            Float4 farPointWorldH = inverseViewProjectionMatrix * farPointNDC;
 
-            const double wEpsilon = double.Epsilon * 1000;
-            if (Maths.Abs(farPointWorldH.W) > wEpsilon) farPointWorldH /= farPointWorldH.W; else farPointWorldH.W = 1.0;
+            const float wEpsilon = float.Epsilon * 1000;
+            if (Maths.Abs(farPointWorldH.W) > wEpsilon) farPointWorldH /= farPointWorldH.W; else farPointWorldH.W = 1.0f;
 
-            Double3 worldPointOnFarPlane = new Double3(farPointWorldH.X, farPointWorldH.Y, farPointWorldH.Z);
-            Double3 direction = worldPointOnFarPlane - cameraWorldPosition;
+            Float3 worldPointOnFarPlane = new Float3(farPointWorldH.X, farPointWorldH.Y, farPointWorldH.Z);
+            Float3 direction = worldPointOnFarPlane - cameraWorldPosition;
 
             // Direction will be normalized by the Ray constructor
             return new Ray(cameraWorldPosition, direction);

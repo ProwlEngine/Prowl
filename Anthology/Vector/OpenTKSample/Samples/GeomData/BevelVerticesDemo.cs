@@ -20,10 +20,10 @@ public class BevelVerticesDemo : IDemo
     public BevelVerticesDemo()
     {
         // Create a simple cube
-        _originalCube = GeometryGenerator.Box(Double3.One);
+        _originalCube = GeometryGenerator.Box(Float3.One);
 
         // Create a pyramid (4-sided)
-        _originalPyramid = GeometryGenerator.Cone(0.5, 1, default, 6);
+        _originalPyramid = GeometryGenerator.Cone(0.5f, 1, default, 6);
     }
 
     public void Draw(Float3 position, float timeInSeconds)
@@ -75,7 +75,7 @@ public class BevelVerticesDemo : IDemo
         
             // Get all vertices (all corners)
             var allVertices = mesh.Vertices.ToList();
-            GeometryOperators.BevelVertices(mesh, allVertices, bevelOffset * 0.8);
+            GeometryOperators.BevelVertices(mesh, allVertices, bevelOffset * 0.8f);
         
             Float3 topRightPos = position + new Float3(2.5f, 1.5f, 0);
             DrawMesh(mesh, topRightPos, new Float4(0.2f, 1.0f, 0.5f, 0.8f), MeshMode.Wireframe);
@@ -98,7 +98,7 @@ public class BevelVerticesDemo : IDemo
         
             // Find the apex (highest Y coordinate)
             GeometryData.Vertex? apex = null;
-            double maxY = double.MinValue;
+            float maxY = float.MinValue;
             foreach (var v in mesh.Vertices)
             {
                 if (v.Point.Y > maxY)
@@ -183,7 +183,7 @@ public class BevelVerticesDemo : IDemo
     {
         // Transform the mesh to the desired position
         var transformed = CopyGeometryData(mesh);
-        GeometryOperators.Translate(transformed, (Double3)position);
+        GeometryOperators.Translate(transformed, (Float3)position);
 
         // Draw using the Gizmo system
         if (mode == MeshMode.Wireframe)

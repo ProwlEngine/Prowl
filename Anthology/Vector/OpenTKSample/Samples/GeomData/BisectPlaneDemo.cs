@@ -17,12 +17,12 @@ public class BisectPlaneDemo : IDemo
     private GeometryData? _originalMesh;
     private Plane _cuttingPlane;
     private readonly float _planeSpeed = 0.5f;
-    private readonly double _sphereRadius = 0.8;
+    private readonly float _sphereRadius = 0.8f;
 
     public BisectPlaneDemo()
     {
         // Create a subdivided sphere for better cutting demonstration
-        var sphere = new Sphere(Double3.Zero, _sphereRadius);
+        var sphere = new Sphere(Float3.Zero, _sphereRadius);
         _originalMesh = sphere.GetGeometryData(8);
     }
 
@@ -34,14 +34,14 @@ public class BisectPlaneDemo : IDemo
         float planeOffset = (float)Math.Sin(timeInSeconds * _planeSpeed);
 
         // Create cutting plane (horizontal plane moving up and down)
-        Double3 planeNormal = Double3.UnitY;
-        Double3 planePoint = new Double3(0, planeOffset, 0);
+        Float3 planeNormal = Float3.UnitY;
+        Float3 planePoint = new Float3(0, planeOffset, 0);
         _cuttingPlane = Plane.FromNormalAndPoint(planeNormal, planePoint);
 
         // LEFT: Show full bisected mesh
         {
             var mesh = CopyGeometryData(_originalMesh);
-            GeometryOperators.BisectPlane(mesh, _cuttingPlane, epsilon: 0.001, snapToPlane: true);
+            GeometryOperators.BisectPlane(mesh, _cuttingPlane, epsilon: 0.001f, snapToPlane: true);
 
             Float3 leftPos = position + new Float3(-1.5f, 0, 0);
             DrawMesh(mesh, leftPos, new Float4(0.3f, 0.8f, 1.0f, 0.8f), MeshMode.Wireframe);
@@ -51,8 +51,8 @@ public class BisectPlaneDemo : IDemo
         // CENTER: Show only negative side (below plane)
         {
             var mesh = CopyGeometryData(_originalMesh);
-            GeometryOperators.BisectPlane(mesh, _cuttingPlane, epsilon: 0.001, snapToPlane: true);
-            GeometryOperators.RemoveVerticesOnPlanePositiveSide(mesh, _cuttingPlane, epsilon: 0.001);
+            GeometryOperators.BisectPlane(mesh, _cuttingPlane, epsilon: 0.001f, snapToPlane: true);
+            GeometryOperators.RemoveVerticesOnPlanePositiveSide(mesh, _cuttingPlane, epsilon: 0.001f);
 
             DrawMesh(mesh, position, new Float4(1.0f, 0.5f, 0.2f, 0.8f), MeshMode.Wireframe);
             DrawMesh(mesh, position, new Float4(1.0f, 0.6f, 0.3f, 0.5f), MeshMode.Solid);
@@ -61,8 +61,8 @@ public class BisectPlaneDemo : IDemo
         // RIGHT: Show only positive side (above plane)
         {
             var mesh = CopyGeometryData(_originalMesh);
-            GeometryOperators.BisectPlane(mesh, _cuttingPlane, epsilon: 0.001, snapToPlane: true);
-            GeometryOperators.RemoveVerticesOnPlaneNegativeSide(mesh, _cuttingPlane, epsilon: 0.001);
+            GeometryOperators.BisectPlane(mesh, _cuttingPlane, epsilon: 0.001f, snapToPlane: true);
+            GeometryOperators.RemoveVerticesOnPlaneNegativeSide(mesh, _cuttingPlane, epsilon: 0.001f);
 
             Float3 rightPos = position + new Float3(1.5f, 0, 0);
             DrawMesh(mesh, rightPos, new Float4(0.2f, 1.0f, 0.5f, 0.8f), MeshMode.Wireframe);
@@ -116,7 +116,7 @@ public class BisectPlaneDemo : IDemo
     {
         // Transform the mesh to the desired position
         var transformed = CopyGeometryData(mesh);
-        GeometryOperators.Translate(transformed, (Double3)position);
+        GeometryOperators.Translate(transformed, (Float3)position);
 
         // Draw using the Gizmo system
         if (mode == MeshMode.Wireframe)

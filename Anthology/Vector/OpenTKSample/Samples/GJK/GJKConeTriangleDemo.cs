@@ -25,7 +25,7 @@ public class GJKConeTriangleDemo : IDemo
         float height = 1.0f + Maths.Sin(timeInSeconds * 1.5f) * 0.1f;
         float baseRadius = 0.45f;
 
-        Cone cone = Cone.FromAxisDirection((Double3)coneApex, (Double3)axisDir, height, baseRadius);
+        Cone cone = Cone.FromAxisDirection(coneApex, axisDir, height, baseRadius);
 
         // Rotating triangle
         float triRotation = timeInSeconds * 0.6f;
@@ -57,7 +57,7 @@ public class GJKConeTriangleDemo : IDemo
             verts[i] = position + triOffset + new Float3(x, y, z);
         }
 
-        Triangle triangle = new Triangle((Double3)verts[0], (Double3)verts[1], (Double3)verts[2]);
+        Triangle triangle = new Triangle(verts[0], verts[1], verts[2]);
 
         // Use GJK for collision detection
         bool intersects = GJK.Intersects(cone, triangle);

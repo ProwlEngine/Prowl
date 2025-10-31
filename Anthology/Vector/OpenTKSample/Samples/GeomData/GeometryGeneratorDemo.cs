@@ -20,20 +20,20 @@ namespace OpenTKSample.Samples
             _geometries = new GeometryData[]
             {
                 // Basic shapes
-                GeometryGenerator.Box(new Double3(1, 1, 1)),
-                GeometryGenerator.Plane(2.0, 4),
-                GeometryGenerator.Sphere(0.6, segments: 8, rings: 8),
+                GeometryGenerator.Box(new Float3(1, 1, 1)),
+                GeometryGenerator.Plane(2.0f, 4),
+                GeometryGenerator.Sphere(0.6f, segments: 8, rings: 8),
 
                 // Advanced shapes
-                GeometryGenerator.Icosphere(0.6, subdivisions: 1),
-                GeometryGenerator.Cylinder(0.5, 1.5, segments: 8, rings: 1),
-                GeometryGenerator.Cone(0.6, 1.2, segments: 8),
-                GeometryGenerator.Torus(0.6, 0.2, majorSegments: 8, minorSegments: 8),
+                GeometryGenerator.Icosphere(0.6f, subdivisions: 1),
+                GeometryGenerator.Cylinder(0.5f, 1.5f, segments: 8, rings: 1),
+                GeometryGenerator.Cone(0.6f, 1.2f, segments: 8),
+                GeometryGenerator.Torus(0.6f, 0.2f, majorSegments: 8, minorSegments: 8),
 
                 // Platonic solids
-                GeometryGenerator.Tetrahedron(1.0),
-                GeometryGenerator.Octahedron(0.8),
-                GeometryGenerator.Dodecahedron(0.7)
+                GeometryGenerator.Tetrahedron(1.0f),
+                GeometryGenerator.Octahedron(0.8f),
+                GeometryGenerator.Dodecahedron(0.7f)
             };
 
             _names = new string[]
@@ -76,13 +76,13 @@ namespace OpenTKSample.Samples
                 var copy = CopyGeometryData(_geometries[i]);
 
                 // Rotate based on time for visual interest
-                double rotationY = timeInSeconds * 0.5 + i * 0.3;
-                var rotation = Quaternion.AxisAngle(Double3.UnitY, rotationY);
-                var transform = Double4x4.CreateFromQuaternion(rotation);
+                float rotationY = timeInSeconds * 0.5f + i * 0.3f;
+                var rotation = Quaternion.AxisAngle(Float3.UnitY, rotationY);
+                var transform = Float4x4.CreateFromQuaternion(rotation);
                 GeometryOperators.Transform(copy, transform);
 
                 // Translate to final position
-                GeometryOperators.Translate(copy, (Double3)offset);
+                GeometryOperators.Translate(copy, (Float3)offset);
 
                 // Draw with solid faces and edges
                 Gizmo.DrawGeometryData(copy,

@@ -14,14 +14,14 @@ public class SplineDemo : IDemo
         timeInSeconds *= 0.25f; // Slow down time for better visibility
 
         // Create control points for a complex 3D path
-        Double3[] controlPoints = {
-            (Double3)position + new Double3(-2, -1, -1.5f),
-            (Double3)position + new Double3(-1, 0.5f, -0.5f),
-            (Double3)position + new Double3(0, -0.5f, 1),
-            (Double3)position + new Double3(1.5f, 1, 0.5f),
-            (Double3)position + new Double3(2, -0.5f, -1),
-            (Double3)position + new Double3(0.5f, -1.5f, 0),
-            (Double3)position + new Double3(-1.5f, -0.5f, 1.5f)
+        Float3[] controlPoints = {
+            position + new Float3(-2, -1, -1.5f),
+            position + new Float3(-1, 0.5f, -0.5f),
+            position + new Float3(0, -0.5f, 1),
+            position + new Float3(1.5f, 1, 0.5f),
+            position + new Float3(2, -0.5f, -1),
+            position + new Float3(0.5f, -1.5f, 0),
+            position + new Float3(-1.5f, -0.5f, 1.5f)
         };
 
         // Create different types of splines
@@ -42,8 +42,8 @@ public class SplineDemo : IDemo
 
         // Draw a small cube at the position
         AABB cube1 = new AABB(
-            (Double3)frame1.Position + new Double3(-0.1f, -0.1f, -0.1f),
-            (Double3)frame1.Position + new Double3(0.1f, 0.1f, 0.1f)
+            frame1.Position + new Float3(-0.1f, -0.1f, -0.1f),
+            frame1.Position + new Float3(0.1f, 0.1f, 0.1f)
         );
         Gizmo.DrawAABBSolid(cube1, new Float4(0, 1, 0.5f, 0.9f));
 
@@ -51,7 +51,7 @@ public class SplineDemo : IDemo
         Float3 pos2 = (Float3)bSpline.Evaluate(t2);
         
         // Draw a small sphere
-        Sphere sphere2 = new Sphere((Double3)pos2, 0.12f);
+        Sphere sphere2 = new Sphere(pos2, 0.12f);
         Gizmo.DrawSphereWireframe(sphere2, new Float4(1, 0.5f, 0, 1), 8);
     }
 
@@ -62,8 +62,8 @@ public class SplineDemo : IDemo
             float t1 = i / (float)segments;
             float t2 = (i + 1) / (float)segments;
 
-            Float3 p1 = (Float3)spline.Evaluate(t1);
-            Float3 p2 = (Float3)spline.Evaluate(t2);
+            Float3 p1 = spline.Evaluate(t1);
+            Float3 p2 = spline.Evaluate(t2);
 
             Gizmo.DrawLine(p1, p2, color);
         }
@@ -72,9 +72,9 @@ public class SplineDemo : IDemo
     private void DrawSplineFrame(Spline.SplineFrame frame, float size)
     {
         // Draw coordinate frame
-        Gizmo.DrawLine((Float3)frame.Position, (Float3)frame.Position + (Float3)frame.Right * size, new Float4(1, 0, 0, 0.8f)); // Red = Right
-        Gizmo.DrawLine((Float3)frame.Position, (Float3)frame.Position + (Float3)frame.Up * size, new Float4(0, 1, 0, 0.8f));    // Green = Up
-        Gizmo.DrawLine((Float3)frame.Position, (Float3)frame.Position + (Float3)frame.Forward * size, new Float4(0, 0, 1, 0.8f)); // Blue = Forward
+        Gizmo.DrawLine(frame.Position, frame.Position + frame.Right * size, new Float4(1, 0, 0, 0.8f)); // Red = Right
+        Gizmo.DrawLine(frame.Position, frame.Position + frame.Up * size, new Float4(0, 1, 0, 0.8f));    // Green = Up
+        Gizmo.DrawLine(frame.Position, frame.Position + frame.Forward * size, new Float4(0, 0, 1, 0.8f)); // Blue = Forward
     }
 
     public Float3 GetBounds() => new Float3(5.5f, 4.0f, 4.0f);

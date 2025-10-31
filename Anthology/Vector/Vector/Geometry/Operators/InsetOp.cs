@@ -42,7 +42,7 @@ namespace Prowl.Vector.Geometry.Operators
             public GeometryData.Vertex Vertex { get; set; }
             public List<GeometryData.Face> Faces { get; set; } = new List<GeometryData.Face>();
             public HashSet<GeometryData.Vertex> SharedEdgeNeighbors { get; set; } = new HashSet<GeometryData.Vertex>();
-            public Double3 TargetPosition { get; set; }
+            public Float3 TargetPosition { get; set; }
             public bool IsShared => Faces.Count > 1;
         }
 
@@ -50,26 +50,26 @@ namespace Prowl.Vector.Geometry.Operators
         {
             public GeometryData.Face OriginalFace { get; set; }
             public List<GeometryData.Vertex> Vertices { get; set; }
-            public Double3 FaceCenter { get; set; }
+            public Float3 FaceCenter { get; set; }
             public Dictionary<string, GeometryData.AttributeValue> FaceAttributes { get; set; }
             public List<Dictionary<string, GeometryData.AttributeValue>> LoopAttributes { get; set; }
             public Dictionary<GeometryData.Vertex, GeometryData.Vertex> PerFaceMapping { get; set; }
         }
 
 
-        internal static void InsetFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToInset, double thickness, InsetMode mode = InsetMode.Shared)
+        internal static void InsetFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToInset, float thickness, InsetMode mode = InsetMode.Shared)
         {
             var facesToInsetList = facesToInset.ToList();
             if (facesToInsetList.Count == 0) return;
 
             // Clamp amount to valid range
-            thickness = Math.Max(0.0, Math.Min(1.0, thickness));
+            thickness = Maths.Max(0.0f, Maths.Min(1.0f, thickness));
 
             // Early exit for zero inset
             if (Math.Abs(thickness) < 1e-10) return;
 
             // Calculate face centers and normals
-            var faceCenters = new Dictionary<GeometryData.Face, Double3>();
+            var faceCenters = new Dictionary<GeometryData.Face, Float3>();
             foreach (var face in facesToInsetList)
             {
                 faceCenters[face] = face.Center();
@@ -141,9 +141,9 @@ namespace Prowl.Vector.Geometry.Operators
                     if (mode == InsetMode.PerFace)
                     {
                         // PerFace: Always create new vertices
-                        Double3 newPos = Maths.Lerp(vert.Point, faceData.FaceCenter, thickness);
+                        Float3 newPos = Maths.Lerp(vert.Point, faceData.FaceCenter, thickness);
                         newVert = mesh.AddVertex(newPos);
-                        GeometryOperators.AttributeLerp(mesh, newVert, vert, vert, 1.0);
+                        GeometryOperators.AttributeLerp(mesh, newVert, vert, vert, 1.0f);
                         faceData.PerFaceMapping[vert] = newVert;
                     }
                     else if (!vertexMapping.ContainsKey(vert))
@@ -152,7 +152,7 @@ namespace Prowl.Vector.Geometry.Operators
                         if (vertexInfoMap.TryGetValue(vert, out var vertInfo))
                         {
                             newVert = mesh.AddVertex(vertInfo.TargetPosition);
-                            GeometryOperators.AttributeLerp(mesh, newVert, vert, vert, 1.0);
+                            GeometryOperators.AttributeLerp(mesh, newVert, vert, vert, 1.0f);
                             vertexMapping[vert] = newVert;
                         }
                     }
@@ -298,8 +298,8 @@ namespace Prowl.Vector.Geometry.Operators
 
         private static void CalculateSharedTargetPositions(
             Dictionary<GeometryData.Vertex, VertexInfo> vertexInfoMap,
-            Dictionary<GeometryData.Face, Double3> faceCenters,
-            double amount)
+            Dictionary<GeometryData.Face, Float3> faceCenters,
+            float amount)
         {
             foreach (var kvp in vertexInfoMap)
             {
@@ -326,14 +326,14 @@ namespace Prowl.Vector.Geometry.Operators
                     {
                         // End of chain: move along the single shared edge
                         var edgePartner = connectedSharedVerts[0];
-                        var edgeMidpoint = (vert.Point + edgePartner.Point) * 0.5;
+                        var edgeMidpoint = (vert.Point + edgePartner.Point) * 0.5f;
                         vertInfo.TargetPosition = Maths.Lerp(vert.Point, edgeMidpoint, amount);
                     }
                     else if (connectedSharedVerts.Count == 2)
                     {
                         // Middle of chain: move towards average of neighbors
                         // This preserves the edge flow
-                        var avgPos = Double3.Zero;
+                        var avgPos = Float3.Zero;
                         foreach (var neighbor in connectedSharedVerts)
                         {
                             avgPos += neighbor.Point;

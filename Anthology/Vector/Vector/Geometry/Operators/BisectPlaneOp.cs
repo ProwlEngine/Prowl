@@ -11,16 +11,16 @@ namespace Prowl.Vector.Geometry.Operators
 {
     internal static class BisectPlaneOp
     {
-        internal static void BisectPlane(GeometryData mesh, Plane plane, double epsilon = 0.0001, bool snapToPlane = true)
+        internal static void BisectPlane(GeometryData mesh, Plane plane, float epsilon = 0.0001f, bool snapToPlane = true)
         {
             // Store which side of the plane each vertex is on
             var vertexSide = new Dictionary<GeometryData.Vertex, int>(); // -1 = negative side, 0 = on plane, 1 = positive side
-            var vertexDistance = new Dictionary<GeometryData.Vertex, double>();
+            var vertexDistance = new Dictionary<GeometryData.Vertex, float>();
 
             // Classify all vertices
             foreach (var v in mesh.Vertices.ToArray())
             {
-                double distance = plane.GetSignedDistanceToPoint(v.Point);
+                float distance = plane.GetSignedDistanceToPoint(v.Point);
                 vertexDistance[v] = distance;
 
                 if (distance <= -epsilon)
@@ -51,7 +51,7 @@ namespace Prowl.Vector.Geometry.Operators
             }
 
             // Split edges that cross the plane
-            var edgesToSplit = new List<(GeometryData.Edge edge, double factor)>();
+            var edgesToSplit = new List<(GeometryData.Edge edge, float factor)>();
             foreach (var edge in mesh.Edges.ToArray())
             {
                 if (!vertexSide.ContainsKey(edge.Vert1) || !vertexSide.ContainsKey(edge.Vert2))
@@ -63,11 +63,11 @@ namespace Prowl.Vector.Geometry.Operators
                 // Edge crosses the plane if vertices are on opposite sides
                 if (side1 != 0 && side2 != 0 && side1 != side2)
                 {
-                    double dist1 = vertexDistance[edge.Vert1];
-                    double dist2 = vertexDistance[edge.Vert2];
+                    float dist1 = vertexDistance[edge.Vert1];
+                    float dist2 = vertexDistance[edge.Vert2];
 
                     // Calculate interpolation factor for the intersection point
-                    double factor = dist1 / (dist1 - dist2);
+                    float factor = dist1 / (dist1 - dist2);
                     edgesToSplit.Add((edge, factor));
                 }
             }
@@ -78,7 +78,7 @@ namespace Prowl.Vector.Geometry.Operators
                 var newVertex = SplitEdgeOp.SplitEdge(mesh, edge, edge.Vert1, factor, out var newEdge);
                 verticesOnPlane.Add(newVertex);
                 vertexSide[newVertex] = 0;
-                vertexDistance[newVertex] = 0.0;
+                vertexDistance[newVertex] = 0.0f;
             }
 
             // Now split faces that have vertices on both sides of the plane

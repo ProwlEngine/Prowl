@@ -92,7 +92,7 @@ public static class GeometryDemo
     private static (int rows, int cols) CalculateOptimalGrid(int itemCount)
     {
         int cols = (int)Maths.Ceiling(Maths.Sqrt(itemCount));
-        int rows = (int)Maths.Ceiling((double)itemCount / cols);
+        int rows = (int)Maths.Ceiling((float)itemCount / cols);
         return (rows, cols);
     }
 

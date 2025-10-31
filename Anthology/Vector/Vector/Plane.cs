@@ -14,10 +14,10 @@ namespace Prowl.Vector
     public struct Plane : IEquatable<Plane>, IFormattable
     {
         /// <summary>The normalized normal vector of the plane.</summary>
-        public Double3 Normal;
+        public Float3 Normal;
 
         /// <summary>The distance from the origin to the plane along the normal.</summary>
-        public double D;
+        public float D;
 
         /// <summary>
         /// Initializes a new plane from a normal vector and distance.
@@ -27,17 +27,17 @@ namespace Prowl.Vector
         /// <param name="normal">The normal vector (will be normalized).</param>
         /// <param name="d">The distance from origin (will be scaled by the normalization factor).</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Plane(Double3 normal, double d)
+        public Plane(Float3 normal, float d)
         {
-            double length = Double3.Length(normal);
-            if (length > double.Epsilon)
+            float length = Float3.Length(normal);
+            if (length > float.Epsilon)
             {
                 Normal = normal / length;
                 D = d / length;
             }
             else
             {
-                Normal = Double3.UnitZ;
+                Normal = Float3.UnitZ;
                 D = 0;
             }
         }
@@ -50,12 +50,12 @@ namespace Prowl.Vector
         /// <param name="point2">Second point on the plane.</param>
         /// <param name="point3">Third point on the plane.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Plane(Double3 point1, Double3 point2, Double3 point3)
+        public Plane(Float3 point1, Float3 point2, Float3 point3)
         {
-            Double3 edge1 = point2 - point1;
-            Double3 edge2 = point3 - point1;
-            Normal = Double3.Normalize(Double3.Cross(edge1, edge2));
-            D = Double3.Dot(Normal, point1);
+            Float3 edge1 = point2 - point1;
+            Float3 edge2 = point3 - point1;
+            Normal = Float3.Normalize(Float3.Cross(edge1, edge2));
+            D = Float3.Dot(Normal, point1);
         }
 
         /// <summary>
@@ -63,7 +63,7 @@ namespace Prowl.Vector
         /// Bypasses normalization for performance.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Plane(Double3 normalizedNormal, double d, bool skipNormalization)
+        private Plane(Float3 normalizedNormal, float d, bool skipNormalization)
         {
             Normal = normalizedNormal;
             D = d;
@@ -75,10 +75,10 @@ namespace Prowl.Vector
         /// <param name="normal">The normal vector (will be normalized).</param>
         /// <param name="pointOnPlane">A point that lies on the plane.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Plane FromNormalAndPoint(Double3 normal, Double3 pointOnPlane)
+        public static Plane FromNormalAndPoint(Float3 normal, Float3 pointOnPlane)
         {
-            Double3 normalizedNormal = Double3.Normalize(normal);
-            return new Plane(normalizedNormal, Double3.Dot(normalizedNormal, pointOnPlane), true);
+            Float3 normalizedNormal = Float3.Normalize(normal);
+            return new Plane(normalizedNormal, Float3.Dot(normalizedNormal, pointOnPlane), true);
         }
 
         /// <summary>
@@ -88,9 +88,9 @@ namespace Prowl.Vector
         /// <param name="point">The point to test.</param>
         /// <returns>The signed distance.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double GetSignedDistanceToPoint(Double3 point)
+        public float GetSignedDistanceToPoint(Float3 point)
         {
-            return Double3.Dot(Normal, point) - D;
+            return Float3.Dot(Normal, point) - D;
         }
 
         /// <summary>
@@ -99,7 +99,7 @@ namespace Prowl.Vector
         /// <param name="point">The point to test.</param>
         /// <returns>The absolute distance.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double GetDistanceToPoint(Double3 point)
+        public float GetDistanceToPoint(Float3 point)
         {
             return Maths.Abs(GetSignedDistanceToPoint(point));
         }
@@ -110,9 +110,9 @@ namespace Prowl.Vector
         /// <param name="point">The point to project.</param>
         /// <returns>The closest point on the plane.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 ClosestPointOnPlane(Double3 point)
+        public Float3 ClosestPointOnPlane(Float3 point)
         {
-            double distance = GetSignedDistanceToPoint(point);
+            float distance = GetSignedDistanceToPoint(point);
             return point - Normal * distance;
         }
 
@@ -122,7 +122,7 @@ namespace Prowl.Vector
         /// <param name="point">The point to test.</param>
         /// <returns>True if the point is on the positive side (normal side) of the plane.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool GetSide(Double3 point)
+        public bool GetSide(Float3 point)
         {
             return GetSignedDistanceToPoint(point) > 0.0;
         }
@@ -134,10 +134,10 @@ namespace Prowl.Vector
         /// <param name="point2">Second point.</param>
         /// <returns>True if both points are on the same side.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool SameSide(Double3 point1, Double3 point2)
+        public bool SameSide(Float3 point1, Float3 point2)
         {
-            double d1 = GetSignedDistanceToPoint(point1);
-            double d2 = GetSignedDistanceToPoint(point2);
+            float d1 = GetSignedDistanceToPoint(point1);
+            float d2 = GetSignedDistanceToPoint(point2);
             return (d1 > 0.0) == (d2 > 0.0);
         }
 
@@ -166,9 +166,9 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="translation">The translation vector.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Translate(Double3 translation)
+        public void Translate(Float3 translation)
         {
-            D += Double3.Dot(Normal, translation);
+            D += Float3.Dot(Normal, translation);
         }
 
         /// <summary>
@@ -177,9 +177,9 @@ namespace Prowl.Vector
         /// <param name="translation">The translation vector.</param>
         /// <returns>The translated plane.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Plane Translated(Double3 translation)
+        public Plane Translated(Float3 translation)
         {
-            return new Plane(Normal, D + Double3.Dot(Normal, translation), true);
+            return new Plane(Normal, D + Float3.Dot(Normal, translation), true);
         }
 
         // --- IEquatable & IFormattable Implementation ---

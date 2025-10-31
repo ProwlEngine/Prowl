@@ -13,7 +13,7 @@ namespace Prowl.Vector.Geometry
     public static class GJK
     {
         private const int MaxIterations = 64;
-        private const double Epsilon = 1e-10;
+        private const float Epsilon = 1e-10f;
 
         /// <summary>
         /// Tests if two bounding shapes intersect using the GJK algorithm.
@@ -25,10 +25,10 @@ namespace Prowl.Vector.Geometry
         public static bool Intersects(IBoundingShape shapeA, IBoundingShape shapeB)
         {
             // Initial search direction (arbitrary)
-            Double3 direction = new Double3(1, 0, 0);
+            Float3 direction = new Float3(1, 0, 0);
 
             // Get initial support point
-            Double3 support = GetSupport(shapeA, shapeB, direction);
+            Float3 support = GetSupport(shapeA, shapeB, direction);
 
             // Initialize simplex with first point
             Simplex simplex = new Simplex();
@@ -44,7 +44,7 @@ namespace Prowl.Vector.Geometry
 
                 // If the support point is not past the origin in the direction,
                 // then the Minkowski difference cannot contain the origin
-                if (Double3.Dot(support, direction) < 0)
+                if (Float3.Dot(support, direction) < 0)
                 {
                     return false; // No collision
                 }
@@ -66,7 +66,7 @@ namespace Prowl.Vector.Geometry
         /// Gets the support point in the Minkowski difference (A - B).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static Double3 GetSupport(IBoundingShape shapeA, IBoundingShape shapeB, Double3 direction)
+        private static Float3 GetSupport(IBoundingShape shapeA, IBoundingShape shapeB, Float3 direction)
         {
             return shapeA.SupportMap(direction) - shapeB.SupportMap(-direction);
         }
@@ -76,7 +76,7 @@ namespace Prowl.Vector.Geometry
         /// Updates the simplex and search direction accordingly.
         /// </summary>
         /// <returns>True if the origin is contained in the simplex.</returns>
-        private static bool HandleSimplex(ref Simplex simplex, ref Double3 direction)
+        private static bool HandleSimplex(ref Simplex simplex, ref Float3 direction)
         {
             switch (simplex.Count)
             {
@@ -94,22 +94,22 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Handles a line simplex (2 points).
         /// </summary>
-        private static bool HandleLine(ref Simplex simplex, ref Double3 direction)
+        private static bool HandleLine(ref Simplex simplex, ref Float3 direction)
         {
-            Double3 a = simplex[0]; // Most recently added point
-            Double3 b = simplex[1];
+            Float3 a = simplex[0]; // Most recently added point
+            Float3 b = simplex[1];
 
-            Double3 ab = b - a;
-            Double3 ao = -a; // Direction to origin from a
+            Float3 ab = b - a;
+            Float3 ao = -a; // Direction to origin from a
 
             // Check if origin is in the direction of b from a
-            if (Double3.Dot(ab, ao) > 0)
+            if (Float3.Dot(ab, ao) > 0)
             {
                 // Origin is between a and b, search perpendicular to ab towards origin
-                direction = Double3.Cross(Double3.Cross(ab, ao), ab);
+                direction = Float3.Cross(Float3.Cross(ab, ao), ab);
 
                 // Handle degenerate case where direction becomes zero
-                if (Double3.LengthSquared(direction) < Epsilon)
+                if (Float3.LengthSquared(direction) < Epsilon)
                 {
                     direction = GetPerpendicularDirection(ab);
                 }
@@ -127,30 +127,30 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Handles a triangle simplex (3 points).
         /// </summary>
-        private static bool HandleTriangle(ref Simplex simplex, ref Double3 direction)
+        private static bool HandleTriangle(ref Simplex simplex, ref Float3 direction)
         {
-            Double3 a = simplex[0]; // Most recently added point
-            Double3 b = simplex[1];
-            Double3 c = simplex[2];
+            Float3 a = simplex[0]; // Most recently added point
+            Float3 b = simplex[1];
+            Float3 c = simplex[2];
 
-            Double3 ab = b - a;
-            Double3 ac = c - a;
-            Double3 ao = -a;
+            Float3 ab = b - a;
+            Float3 ac = c - a;
+            Float3 ao = -a;
 
-            Double3 abc = Double3.Cross(ab, ac); // Triangle normal
+            Float3 abc = Float3.Cross(ab, ac); // Triangle normal
 
             // Check if origin is outside edge AC
-            Double3 acPerp = Double3.Cross(abc, ac);
-            if (Double3.Dot(acPerp, ao) > 0)
+            Float3 acPerp = Float3.Cross(abc, ac);
+            if (Float3.Dot(acPerp, ao) > 0)
             {
                 // Origin is on the AC side
-                if (Double3.Dot(ac, ao) > 0)
+                if (Float3.Dot(ac, ao) > 0)
                 {
                     // Origin is in AC region
                     simplex.Set(a, c);
-                    direction = Double3.Cross(Double3.Cross(ac, ao), ac);
+                    direction = Float3.Cross(Float3.Cross(ac, ao), ac);
 
-                    if (Double3.LengthSquared(direction) < Epsilon)
+                    if (Float3.LengthSquared(direction) < Epsilon)
                     {
                         direction = GetPerpendicularDirection(ac);
                     }
@@ -165,17 +165,17 @@ namespace Prowl.Vector.Geometry
             }
 
             // Check if origin is outside edge AB
-            Double3 abPerp = Double3.Cross(ab, abc);
-            if (Double3.Dot(abPerp, ao) > 0)
+            Float3 abPerp = Float3.Cross(ab, abc);
+            if (Float3.Dot(abPerp, ao) > 0)
             {
                 // Origin is on the AB side
-                if (Double3.Dot(ab, ao) > 0)
+                if (Float3.Dot(ab, ao) > 0)
                 {
                     // Origin is in AB region
                     simplex.Set(a, b);
-                    direction = Double3.Cross(Double3.Cross(ab, ao), ab);
+                    direction = Float3.Cross(Float3.Cross(ab, ao), ab);
 
-                    if (Double3.LengthSquared(direction) < Epsilon)
+                    if (Float3.LengthSquared(direction) < Epsilon)
                     {
                         direction = GetPerpendicularDirection(ab);
                     }
@@ -191,7 +191,7 @@ namespace Prowl.Vector.Geometry
 
             // Origin is on the triangle
             // Check if origin is above or below the triangle
-            if (Double3.Dot(abc, ao) > 0)
+            if (Float3.Dot(abc, ao) > 0)
             {
                 // Origin is above the triangle
                 direction = abc;
@@ -209,39 +209,39 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Handles a tetrahedron simplex (4 points).
         /// </summary>
-        private static bool HandleTetrahedron(ref Simplex simplex, ref Double3 direction)
+        private static bool HandleTetrahedron(ref Simplex simplex, ref Float3 direction)
         {
-            Double3 a = simplex[0]; // Most recently added point
-            Double3 b = simplex[1];
-            Double3 c = simplex[2];
-            Double3 d = simplex[3];
+            Float3 a = simplex[0]; // Most recently added point
+            Float3 b = simplex[1];
+            Float3 c = simplex[2];
+            Float3 d = simplex[3];
 
-            Double3 ab = b - a;
-            Double3 ac = c - a;
-            Double3 ad = d - a;
-            Double3 ao = -a;
+            Float3 ab = b - a;
+            Float3 ac = c - a;
+            Float3 ad = d - a;
+            Float3 ao = -a;
 
             // Compute normals for each face (pointing outward)
-            Double3 abc = Double3.Cross(ab, ac);
-            Double3 acd = Double3.Cross(ac, ad);
-            Double3 adb = Double3.Cross(ad, ab);
+            Float3 abc = Float3.Cross(ab, ac);
+            Float3 acd = Float3.Cross(ac, ad);
+            Float3 adb = Float3.Cross(ad, ab);
 
             // Check face ABC
-            if (Double3.Dot(abc, ao) > 0)
+            if (Float3.Dot(abc, ao) > 0)
             {
                 simplex.Set(a, b, c);
                 return HandleTriangle(ref simplex, ref direction);
             }
 
             // Check face ACD
-            if (Double3.Dot(acd, ao) > 0)
+            if (Float3.Dot(acd, ao) > 0)
             {
                 simplex.Set(a, c, d);
                 return HandleTriangle(ref simplex, ref direction);
             }
 
             // Check face ADB
-            if (Double3.Dot(adb, ao) > 0)
+            if (Float3.Dot(adb, ao) > 0)
             {
                 simplex.Set(a, d, b);
                 return HandleTriangle(ref simplex, ref direction);
@@ -256,11 +256,11 @@ namespace Prowl.Vector.Geometry
         /// Used as a fallback for degenerate cases.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static Double3 GetPerpendicularDirection(Double3 v)
+        private static Float3 GetPerpendicularDirection(Float3 v)
         {
             // Choose an axis that's not parallel to v
-            Double3 axis = Maths.Abs(v.X) < 0.9 ? new Double3(1, 0, 0) : new Double3(0, 1, 0);
-            return Double3.Cross(v, axis);
+            Float3 axis = Maths.Abs(v.X) < 0.9 ? new Float3(1, 0, 0) : new Float3(0, 1, 0);
+            return Float3.Cross(v, axis);
         }
 
         /// <summary>
@@ -269,12 +269,12 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         private struct Simplex
         {
-            private Double3 _p0, _p1, _p2, _p3;
+            private Float3 _p0, _p1, _p2, _p3;
             private int _count;
 
             public int Count => _count;
 
-            public Double3 this[int index]
+            public Float3 this[int index]
             {
                 get
                 {
@@ -289,7 +289,7 @@ namespace Prowl.Vector.Geometry
                 }
             }
 
-            public void Add(Double3 point)
+            public void Add(Float3 point)
             {
                 // Add point at the front (most recent)
                 switch (_count)
@@ -316,20 +316,20 @@ namespace Prowl.Vector.Geometry
                 _count = Maths.Min(_count + 1, 4);
             }
 
-            public void Set(Double3 a)
+            public void Set(Float3 a)
             {
                 _p0 = a;
                 _count = 1;
             }
 
-            public void Set(Double3 a, Double3 b)
+            public void Set(Float3 a, Float3 b)
             {
                 _p0 = a;
                 _p1 = b;
                 _count = 2;
             }
 
-            public void Set(Double3 a, Double3 b, Double3 c)
+            public void Set(Float3 a, Float3 b, Float3 c)
             {
                 _p0 = a;
                 _p1 = b;

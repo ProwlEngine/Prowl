@@ -16,8 +16,8 @@ public class AABBDemo : IDemo
         float scale = 1.0f + scaleWave * 0.9f;
 
         Gizmo.DrawAABB(new AABB(
-            (Double3)position + new Double3(-0.75f * scale, -0.75f, -0.75f * scale),
-            (Double3)position + new Double3(0.75f * scale, 0.75f, 0.75f * scale)
+            position + new Float3(-0.75f * scale, -0.75f, -0.75f * scale),
+            position + new Float3(0.75f * scale, 0.75f, 0.75f * scale)
         ), new Float4(0, 1, 0, 1));
     }
 

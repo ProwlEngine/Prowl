@@ -57,7 +57,7 @@ public class RaySphereIntersectionDemo : IDemo
         Ray ray = new Ray(rayStart, rayDir);
 
         // Check for intersection
-        bool hasHit = ray.Intersects(sphere, out double t0, out double t1);
+        bool hasHit = ray.Intersects(sphere, out float t0, out float t1);
 
         // Dynamic ray properties based on intersection
         Float4 rayColor;
@@ -88,8 +88,8 @@ public class RaySphereIntersectionDemo : IDemo
         // intersection visualization
         if (hasHit)
         {
-            Float3 hitPoint1 = (Float3)ray.GetPoint(t0);
-            Float3 hitPoint2 = (Float3)ray.GetPoint(t1);
+            Float3 hitPoint1 = ray.GetPoint(t0);
+            Float3 hitPoint2 = ray.GetPoint(t1);
 
             // hit points
             Gizmo.DrawIntersectionPoint(hitPoint1, new Float4(1, 1, 0, 1), 0.06f);
@@ -103,8 +103,8 @@ public class RaySphereIntersectionDemo : IDemo
             }
 
             // Draw normal vectors at hit points
-            Float3 normal1 = Float3.Normalize((Float3)hitPoint1 - (Float3)sphere.Center);
-            Float3 normal2 = Float3.Normalize((Float3)hitPoint2 - (Float3)sphere.Center);
+            Float3 normal1 = Float3.Normalize(hitPoint1 - sphere.Center);
+            Float3 normal2 = Float3.Normalize(hitPoint2 - sphere.Center);
 
             Gizmo.DrawLine(hitPoint1, hitPoint1 + normal1 * 0.3f, new Float4(0, 1, 1, 0.8f));
             if (Maths.Abs(t1 - t0) > 0.001f)

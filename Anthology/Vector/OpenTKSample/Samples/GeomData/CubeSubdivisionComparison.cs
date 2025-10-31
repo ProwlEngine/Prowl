@@ -20,11 +20,11 @@ public class CubeSubdivisionComparison : IDemo
     public CubeSubdivisionComparison()
     {
         // Create original cube
-        var aabb = new AABB(new Double3(-0.4, -0.4, -0.4), new Double3(0.4, 0.4, 0.4));
+        var aabb = new AABB(new Float3(-0.4f, -0.4f, -0.4f), new Float3(0.4f, 0.4f, 0.4f));
         _originalCube = aabb.GetGeometryData();
 
         // Create subdivided version
-        var aabb2 = new AABB(new Double3(-0.4, -0.4, -0.4), new Double3(0.4, 0.4, 0.4));
+        var aabb2 = new AABB(new Float3(-0.4f, -0.4f, -0.4f), new Float3(0.4f, 0.4f, 0.4f));
         _subdividedCube = aabb2.GetGeometryData();
         GeometryOperators.Subdivide(_subdividedCube);
     }
@@ -33,8 +33,8 @@ public class CubeSubdivisionComparison : IDemo
     {
         // Gentle rotation using quaternion
         float rotation = timeInSeconds * 0.3f;
-        var quat = Quaternion.AxisAngle(Double3.UnitY, rotation);
-        var rotationMatrix = Double4x4.CreateFromQuaternion(quat);
+        var quat = Quaternion.AxisAngle(Float3.UnitY, rotation);
+        var rotationMatrix = Float4x4.CreateFromQuaternion(quat);
 
         // Left: Original cube (wireframe + solid)
         DrawCube(_originalCube, position + new Float3(-0.9f, 0, 0), rotationMatrix,
@@ -47,7 +47,7 @@ public class CubeSubdivisionComparison : IDemo
             new Float4(1.0f, 0.5f, 0.2f, 1.0f));
     }
 
-    private void DrawCube(GeometryData mesh, Float3 position, Double4x4 rotation, Float4 solidColor, Float4 wireColor)
+    private void DrawCube(GeometryData mesh, Float3 position, Float4x4 rotation, Float4 solidColor, Float4 wireColor)
     {
         // Apply transformations
         var transformed = CopyAndTransform(mesh, position, rotation);
@@ -61,7 +61,7 @@ public class CubeSubdivisionComparison : IDemo
         Gizmo.DrawLineMesh(lineMesh, wireColor);
     }
 
-    private GeometryData CopyAndTransform(GeometryData source, Float3 position, Double4x4 rotation)
+    private GeometryData CopyAndTransform(GeometryData source, Float3 position, Float4x4 rotation)
     {
         var copy = new GeometryData();
 
@@ -69,8 +69,8 @@ public class CubeSubdivisionComparison : IDemo
         var vertexMap = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
         foreach (var v in source.Vertices)
         {
-            var transformed = Double4x4.TransformPoint(v.Point, rotation);
-            var newV = copy.AddVertex(transformed + (Double3)position);
+            var transformed = Float4x4.TransformPoint(v.Point, rotation);
+            var newV = copy.AddVertex(transformed + position);
             vertexMap[v] = newV;
         }
 

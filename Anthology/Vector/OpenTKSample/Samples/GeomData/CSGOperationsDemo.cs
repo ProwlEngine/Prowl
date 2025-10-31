@@ -24,9 +24,9 @@ namespace OpenTKSample.Samples
         public CSGOperationsDemo()
         {
             // Create two base spheres (we'll animate their positions)
-            _baseSphereA = GeometryGenerator.Icosphere(0.6, subdivisions: 0);
+            _baseSphereA = GeometryGenerator.Icosphere(0.6f, subdivisions: 0);
             //_baseSphereB = GeometryGenerator.Icosphere(0.6, subdivisions: 1);
-            _baseSphereB = GeometryGenerator.Box(new Double3(0.6));
+            _baseSphereB = GeometryGenerator.Box(new Float3(0.6f));
             GeometryOperators.Triangulate(_baseSphereB);
         }
 
@@ -35,13 +35,13 @@ namespace OpenTKSample.Samples
             // Calculate animated offset for sphere B (smooth back and forth motion)
             float animationSpeed = 1.2f; // Speed of animation
             float animationAmplitude = 0.8f; // How far it moves
-            double offsetX = System.Math.Sin(timeInSeconds * animationSpeed) * animationAmplitude;
-            double offsetY = System.Math.Cos(timeInSeconds * animationSpeed) * animationAmplitude;
+            float offsetX = Maths.Sin(timeInSeconds * animationSpeed) * animationAmplitude;
+            float offsetY = Maths.Cos(timeInSeconds * animationSpeed) * animationAmplitude;
 
             // Create positioned copies of the base spheres
             var sphereA = CopyGeometryData(_baseSphereA);
             var sphereB = CopyGeometryData(_baseSphereB);
-            GeometryOperators.Translate(sphereB, new Double3(offsetX, offsetY * 0.5, 0));
+            GeometryOperators.Translate(sphereB, new Float3(offsetX, offsetY * 0.5f, 0));
 
             // Perform CSG operations with current positions
             GeometryData unionResult = null;
@@ -58,7 +58,7 @@ namespace OpenTKSample.Samples
 
                 var time = Stopwatch.GetTimestamp();
 
-                double elapsedMs = (time - timeStamp) * 1000.0 / Stopwatch.Frequency;
+                float elapsedMs = (time - timeStamp) * 1000.0f / Stopwatch.Frequency;
                 System.Console.WriteLine($"CSG operations completed in {elapsedMs:F2}ms");
             }
             catch (System.Exception ex)
@@ -94,10 +94,10 @@ namespace OpenTKSample.Samples
         {
             // Draw both animated spheres at the specified position
             var sphereACopy = CopyGeometryData(sphereA);
-            GeometryOperators.Translate(sphereACopy, (Double3)position);
+            GeometryOperators.Translate(sphereACopy, (Float3)position);
 
             var sphereBCopy = CopyGeometryData(sphereB);
-            GeometryOperators.Translate(sphereBCopy, (Double3)position);
+            GeometryOperators.Translate(sphereBCopy, (Float3)position);
 
             // Draw with transparency to show overlap
             Gizmo.DrawGeometryData(sphereACopy, GeometryDataVisualization.Solid | GeometryDataVisualization.Edges);
@@ -110,7 +110,7 @@ namespace OpenTKSample.Samples
                 return;
 
             var copy = CopyGeometryData(result);
-            GeometryOperators.Translate(copy, (Double3)position);
+            GeometryOperators.Translate(copy, (Float3)position);
 
             // Draw result with solid faces and edges
             Gizmo.DrawGeometryData(copy, GeometryDataVisualization.Solid | GeometryDataVisualization.Edges);

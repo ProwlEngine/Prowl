@@ -14,15 +14,15 @@ public class FrustumAABBIntersectionDemo : IDemo
         timeInSeconds *= 0.75f; // Slow down time for better visibility
 
         // Create a frustum centered in the grid cell
-        Double3 camPos = (Double3)position + new Double3(0, 0.6, 1.0);
-        Double3 lookAt = (Double3)position + new Double3(0, 0, -0.3);
-        Double3 forward = Double3.Normalize(lookAt - camPos);
-        Double3 up = new Double3(0, 1, 0);
+        Float3 camPos = position + new Float3(0, 0.6f, 1.0f);
+        Float3 lookAt = position + new Float3(0, 0, -0.3f);
+        Float3 forward = Float3.Normalize(lookAt - camPos);
+        Float3 up = new Float3(0, 1, 0);
 
-        double fov = Maths.PI / 5.5;
-        double aspect = 1.3;
-        double nearDist = 0.2;
-        double farDist = 1.8;
+        float fov = Maths.PI / 5.5f;
+        float aspect = 1.3f;
+        float nearDist = 0.2f;
+        float farDist = 1.8f;
 
         Frustum frustum = Frustum.FromCamera(camPos, forward, up, fov, aspect, nearDist, farDist);
 
@@ -37,8 +37,8 @@ public class FrustumAABBIntersectionDemo : IDemo
         float scale = 0.2f + Maths.Sin(timeInSeconds * 1.5f) * 0.05f;
 
         AABB aabb = new AABB(
-            (Double3)position + (Double3)aabbOffset + new Double3(-scale, -scale, -scale),
-            (Double3)position + (Double3)aabbOffset + new Double3(scale, scale, scale)
+            position + aabbOffset + new Float3(-scale, -scale, -scale),
+            position + aabbOffset + new Float3(scale, scale, scale)
         );
 
         bool intersects = frustum.Intersects(aabb);
@@ -53,7 +53,7 @@ public class FrustumAABBIntersectionDemo : IDemo
         Gizmo.DrawAABB(aabb, aabbColor);
 
         // Draw a line from AABB center to frustum origin for debugging
-        Gizmo.DrawLine((Float3)aabb.Center, (Float3)camPos, new Float4(1, 1, 0, 0.3f));
+        Gizmo.DrawLine(aabb.Center, camPos, new Float4(1, 1, 0, 0.3f));
     }
 
     public Float3 GetBounds() => new Float3(2.5f, 2.0f, 2.5f);

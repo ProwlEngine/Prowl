@@ -426,8 +426,8 @@ public partial class GraphicsDevice
 
     private readonly Plane[] s_planes = new Plane[]
     {
-        new Plane { Normal = new Double3(0, 0, 1), D = -0.1f },   // Near plane
-        new Plane { Normal = new Double3(0, 0, -1), D = 100f }    // Far plane
+        new Plane { Normal = new Float3(0, 0, 1), D = -0.1f },   // Near plane
+        new Plane { Normal = new Float3(0, 0, -1), D = 100f }    // Far plane
     };
 
     private List<RasterTriangle> ClipTriangleAgainstPlanes(RasterTriangle triangle)

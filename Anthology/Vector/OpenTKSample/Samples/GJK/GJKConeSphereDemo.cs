@@ -28,7 +28,7 @@ public class GJKConeSphereDemo : IDemo
         float height = 0.8f + Maths.Sin(timeInSeconds * 1.2f) * 0.1f;
         float baseRadius = 0.4f + Maths.Cos(timeInSeconds * 1.8f) * 0.08f;
 
-        Cone cone = Cone.FromAxisDirection((Double3)coneApex, (Double3)axisDir, height, baseRadius);
+        Cone cone = Cone.FromAxisDirection(coneApex, axisDir, height, baseRadius);
 
         // Orbiting sphere
         float sphereTime = timeInSeconds * 1.1f;
@@ -39,7 +39,7 @@ public class GJKConeSphereDemo : IDemo
         );
 
         float radius = 0.25f + Maths.Sin(timeInSeconds * 2.2f) * 0.05f;
-        Sphere sphere = new Sphere((Double3)position + (Double3)sphereOffset, radius);
+        Sphere sphere = new Sphere(position + sphereOffset, radius);
 
         // Use GJK for collision detection
         bool intersects = GJK.Intersects(cone, sphere);

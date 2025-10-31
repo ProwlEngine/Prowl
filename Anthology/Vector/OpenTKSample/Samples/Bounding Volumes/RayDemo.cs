@@ -15,7 +15,7 @@ public class RayDemo : IDemo
         float slowWave = Maths.Sin(timeInSeconds * 0.5f) * 0.2f;
 
         Float3 rayDir = Float3.Normalize(new Float3(0.5f + fastWave * 10f, 1, 0.2f + slowWave * 10f));
-        Ray ray = new Ray((Double3)position + new Double3(0, -1, 0), (Double3)rayDir);
+        Ray ray = new Ray(position + new Float3(0, -1, 0), rayDir);
 
         Gizmo.DrawRay(ray, 3.0f, new Float4(1, 1, 0, 1));
     }

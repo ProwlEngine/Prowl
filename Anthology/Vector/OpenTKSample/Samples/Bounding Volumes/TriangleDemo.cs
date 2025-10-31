@@ -16,9 +16,9 @@ public class TriangleDemo : IDemo
         float sinRot = Maths.Sin(rotation);
 
         Triangle triangle = new Triangle(
-            (Double3)position + new Double3(cosRot * 0 - sinRot * (-1), -1, cosRot * (-0.5f) - sinRot * 0),
-            (Double3)position + new Double3(cosRot * 1 - sinRot * 1, 1, cosRot * (-0.5f) - sinRot * 1),
-            (Double3)position + new Double3(cosRot * (-1) - sinRot * 1, 1, cosRot * 0.5f - sinRot * (-1))
+            position + new Float3(cosRot * 0 - sinRot * (-1), -1, cosRot * (-0.5f) - sinRot * 0),
+            position + new Float3(cosRot * 1 - sinRot * 1, 1, cosRot * (-0.5f) - sinRot * 1),
+            position + new Float3(cosRot * (-1) - sinRot * 1, 1, cosRot * 0.5f - sinRot * (-1))
         );
 
         Gizmo.DrawTriangle(triangle, new Float4(0.5f, 0.5f, 1, 1f), true);

@@ -16,7 +16,7 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="direction">The direction to search in (doesn't need to be normalized).</param>
         /// <returns>The farthest point on the shape in the given direction.</returns>
-        Double3 SupportMap(Double3 direction);
+        Float3 SupportMap(Float3 direction);
 
         /// <summary>
         /// Generates geometry data for this shape as a BMesh-like structure.

@@ -26,7 +26,7 @@ public class GJKConeAABBDemo : IDemo
         float height = 1.0f;
         float baseRadius = 0.4f + Maths.Sin(timeInSeconds * 1.5f) * 0.1f;
 
-        Cone cone = Cone.FromAxisDirection((Double3)coneApex, (Double3)axisDir, height, baseRadius);
+        Cone cone = Cone.FromAxisDirection(coneApex, axisDir, height, baseRadius);
 
         // Rotating AABB
         float aabbRot = timeInSeconds * 0.8f;
@@ -39,8 +39,8 @@ public class GJKConeAABBDemo : IDemo
         );
 
         AABB aabb = new AABB(
-            (Double3)position + (Double3)aabbOffset - new Double3(scale, scale, scale),
-            (Double3)position + (Double3)aabbOffset + new Double3(scale, scale, scale)
+            position + aabbOffset - new Float3(scale, scale, scale),
+            position + aabbOffset + new Float3(scale, scale, scale)
         );
 
         // Use GJK for collision detection

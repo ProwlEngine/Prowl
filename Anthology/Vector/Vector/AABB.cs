@@ -14,10 +14,10 @@ namespace Prowl.Vector
     public struct AABB : IEquatable<AABB>, IFormattable, IBoundingShape
     {
         /// <summary>The minimum corner of the AABB.</summary>
-        public Double3 Min;
+        public Float3 Min;
 
         /// <summary>The maximum corner of the AABB.</summary>
-        public Double3 Max;
+        public Float3 Max;
 
         /// <summary>
         /// Initializes a new AABB with the specified min and max corners.
@@ -25,14 +25,14 @@ namespace Prowl.Vector
         /// <param name="min">The minimum corner.</param>
         /// <param name="max">The maximum corner.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public AABB(Double3 min, Double3 max)
+        public AABB(Float3 min, Float3 max)
         {
-            Min = new Double3(
+            Min = new Float3(
                 Maths.Min(min.X, max.X),
                 Maths.Min(min.Y, max.Y),
                 Maths.Min(min.Z, max.Z)
             );
-            Max = new Double3(
+            Max = new Float3(
                 Maths.Max(min.X, max.X),
                 Maths.Max(min.Y, max.Y),
                 Maths.Max(min.Z, max.Z)
@@ -49,8 +49,8 @@ namespace Prowl.Vector
         /// <param name="maxY">Maximum Y coordinate.</param>
         /// <param name="maxZ">Maximum Z coordinate.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public AABB(double minX, double minY, double minZ, double maxX, double maxY, double maxZ)
-            : this(new Double3(minX, minY, minZ), new Double3(maxX, maxY, maxZ))
+        public AABB(float minX, float minY, float minZ, float maxX, float maxY, float maxZ)
+            : this(new Float3(minX, minY, minZ), new Float3(maxX, maxY, maxZ))
         {
         }
 
@@ -60,25 +60,25 @@ namespace Prowl.Vector
         /// <param name="center">The center point.</param>
         /// <param name="size">The size (width, height, depth).</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static AABB FromCenterAndSize(Double3 center, Double3 size)
+        public static AABB FromCenterAndSize(Float3 center, Float3 size)
         {
-            Double3 halfSize = size / 2.0;
+            Float3 halfSize = size / 2.0f;
             return new AABB(center - halfSize, center + halfSize);
         }
 
         /// <summary>
         /// Gets the center point of the AABB.
         /// </summary>
-        public Double3 Center
+        public Float3 Center
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => (Min + Max) / 2.0;
+            get => (Min + Max) / 2.0f;
         }
 
         /// <summary>
         /// Gets the size (width, height, depth) of the AABB.
         /// </summary>
-        public Double3 Size
+        public Float3 Size
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => Max - Min;
@@ -87,21 +87,21 @@ namespace Prowl.Vector
         /// <summary>
         /// Gets the extents (half-size) of the AABB.
         /// </summary>
-        public Double3 Extents
+        public Float3 Extents
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Size / 2.0;
+            get => Size / 2.0f;
         }
 
         /// <summary>
         /// Gets the volume of the AABB.
         /// </summary>
-        public double Volume
+        public float Volume
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                Double3 size = Size;
+                Float3 size = Size;
                 return size.X * size.Y * size.Z;
             }
         }
@@ -109,13 +109,13 @@ namespace Prowl.Vector
         /// <summary>
         /// Gets the surface area of the AABB.
         /// </summary>
-        public double SurfaceArea
+        public float SurfaceArea
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                Double3 size = Size;
-                return 2.0 * (size.X * size.Y + size.Y * size.Z + size.Z * size.X);
+                Float3 size = Size;
+                return 2.0f * (size.X * size.Y + size.Y * size.Z + size.Z * size.X);
             }
         }
 
@@ -124,18 +124,18 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="index">Corner index (0-7).</param>
         /// <returns>The corner position.</returns>
-        public Double3 GetCorner(int index)
+        public Float3 GetCorner(int index)
         {
             switch (index)
             {
-                case 0: return new Double3(Min.X, Min.Y, Min.Z);
-                case 1: return new Double3(Max.X, Min.Y, Min.Z);
-                case 2: return new Double3(Min.X, Max.Y, Min.Z);
-                case 3: return new Double3(Max.X, Max.Y, Min.Z);
-                case 4: return new Double3(Min.X, Min.Y, Max.Z);
-                case 5: return new Double3(Max.X, Min.Y, Max.Z);
-                case 6: return new Double3(Min.X, Max.Y, Max.Z);
-                case 7: return new Double3(Max.X, Max.Y, Max.Z);
+                case 0: return new Float3(Min.X, Min.Y, Min.Z);
+                case 1: return new Float3(Max.X, Min.Y, Min.Z);
+                case 2: return new Float3(Min.X, Max.Y, Min.Z);
+                case 3: return new Float3(Max.X, Max.Y, Min.Z);
+                case 4: return new Float3(Min.X, Min.Y, Max.Z);
+                case 5: return new Float3(Max.X, Min.Y, Max.Z);
+                case 6: return new Float3(Min.X, Max.Y, Max.Z);
+                case 7: return new Float3(Max.X, Max.Y, Max.Z);
                 default: throw new IndexOutOfRangeException("AABB corner index must be between 0 and 7.");
             }
         }
@@ -145,18 +145,18 @@ namespace Prowl.Vector
         /// </summary>
         /// <returns>Array of 8 corner positions.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3[] GetCorners()
+        public Float3[] GetCorners()
         {
-            return new Double3[]
+            return new Float3[]
             {
-                new Double3(Min.X, Min.Y, Min.Z),
-                new Double3(Max.X, Min.Y, Min.Z),
-                new Double3(Min.X, Max.Y, Min.Z),
-                new Double3(Max.X, Max.Y, Min.Z),
-                new Double3(Min.X, Min.Y, Max.Z),
-                new Double3(Max.X, Min.Y, Max.Z),
-                new Double3(Min.X, Max.Y, Max.Z),
-                new Double3(Max.X, Max.Y, Max.Z)
+                new Float3(Min.X, Min.Y, Min.Z),
+                new Float3(Max.X, Min.Y, Min.Z),
+                new Float3(Min.X, Max.Y, Min.Z),
+                new Float3(Max.X, Max.Y, Min.Z),
+                new Float3(Min.X, Min.Y, Max.Z),
+                new Float3(Max.X, Min.Y, Max.Z),
+                new Float3(Min.X, Max.Y, Max.Z),
+                new Float3(Max.X, Max.Y, Max.Z)
             };
         }
 
@@ -166,11 +166,11 @@ namespace Prowl.Vector
         /// <param name="point">The point to test.</param>
         /// <returns>True if the point is inside or on the AABB boundary.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Contains(Double3 point)
+        public bool Contains(Float3 point)
         {
-            return point.X >= Min.X - double.Epsilon && point.X <= Max.X + double.Epsilon &&
-                   point.Y >= Min.Y - double.Epsilon && point.Y <= Max.Y + double.Epsilon &&
-                   point.Z >= Min.Z - double.Epsilon && point.Z <= Max.Z + double.Epsilon;
+            return point.X >= Min.X - float.Epsilon && point.X <= Max.X + float.Epsilon &&
+                   point.Y >= Min.Y - float.Epsilon && point.Y <= Max.Y + float.Epsilon &&
+                   point.Z >= Min.Z - float.Epsilon && point.Z <= Max.Z + float.Epsilon;
         }
 
         /// <summary>
@@ -181,9 +181,9 @@ namespace Prowl.Vector
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(AABB other)
         {
-            return other.Min.X >= Min.X - double.Epsilon && other.Max.X <= Max.X + double.Epsilon &&
-                   other.Min.Y >= Min.Y - double.Epsilon && other.Max.Y <= Max.Y + double.Epsilon &&
-                   other.Min.Z >= Min.Z - double.Epsilon && other.Max.Z <= Max.Z + double.Epsilon;
+            return other.Min.X >= Min.X - float.Epsilon && other.Max.X <= Max.X + float.Epsilon &&
+                   other.Min.Y >= Min.Y - float.Epsilon && other.Max.Y <= Max.Y + float.Epsilon &&
+                   other.Min.Z >= Min.Z - float.Epsilon && other.Max.Z <= Max.Z + float.Epsilon;
         }
 
         /// <summary>
@@ -214,9 +214,9 @@ namespace Prowl.Vector
         /// <param name="point">The point to find the closest point to.</param>
         /// <returns>The closest point on the AABB.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Double3 ClosestPointTo(Double3 point)
+        public Float3 ClosestPointTo(Float3 point)
         {
-            Double3 closestPoint;
+            Float3 closestPoint;
             Intersection.ClosestPointOnAABBToPoint(point, Min, Max, out closestPoint);
             return closestPoint;
         }
@@ -227,10 +227,10 @@ namespace Prowl.Vector
         /// <param name="point">The point to test.</param>
         /// <returns>The squared distance (0 if point is inside).</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double GetSqrDistanceToPoint(Double3 point)
+        public float GetSqrDistanceToPoint(Float3 point)
         {
-            Double3 closest = ClosestPointTo(point);
-            return Double3.LengthSquared(point - closest);
+            Float3 closest = ClosestPointTo(point);
+            return Float3.LengthSquared(point - closest);
         }
 
         /// <summary>
@@ -239,7 +239,7 @@ namespace Prowl.Vector
         /// <param name="point">The point to test.</param>
         /// <returns>The distance (0 if point is inside).</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double GetDistanceToPoint(Double3 point)
+        public float GetDistanceToPoint(Float3 point)
         {
             return Maths.Sqrt(GetSqrDistanceToPoint(point));
         }
@@ -249,14 +249,14 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="point">The point to include.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Encapsulate(Double3 point)
+        public void Encapsulate(Float3 point)
         {
-            Min = new Double3(
+            Min = new Float3(
                 Maths.Min(Min.X, point.X),
                 Maths.Min(Min.Y, point.Y),
                 Maths.Min(Min.Z, point.Z)
             );
-            Max = new Double3(
+            Max = new Float3(
                 Maths.Max(Max.X, point.X),
                 Maths.Max(Max.Y, point.Y),
                 Maths.Max(Max.Z, point.Z)
@@ -270,12 +270,12 @@ namespace Prowl.Vector
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Encapsulate(AABB other)
         {
-            Min = new Double3(
+            Min = new Float3(
                 Maths.Min(Min.X, other.Min.X),
                 Maths.Min(Min.Y, other.Min.Y),
                 Maths.Min(Min.Z, other.Min.Z)
             );
-            Max = new Double3(
+            Max = new Float3(
                 Maths.Max(Max.X, other.Max.X),
                 Maths.Max(Max.Y, other.Max.Y),
                 Maths.Max(Max.Z, other.Max.Z)
@@ -288,7 +288,7 @@ namespace Prowl.Vector
         /// <param name="point">The point to include.</param>
         /// <returns>The encapsulating AABB.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public AABB Encapsulating(Double3 point)
+        public AABB Encapsulating(Float3 point)
         {
             var result = this;
             result.Encapsulate(point);
@@ -313,9 +313,9 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="amount">The amount to expand by.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Expand(double amount)
+        public void Expand(float amount)
         {
-            Double3 expansion = new Double3(amount, amount, amount);
+            Float3 expansion = new Float3(amount, amount, amount);
             Min -= expansion;
             Max += expansion;
         }
@@ -325,7 +325,7 @@ namespace Prowl.Vector
         /// </summary>
         /// <param name="expansion">The amount to expand by in each direction.</param>
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-       public void Expand(Double3 expansion)
+       public void Expand(Float3 expansion)
        {
            Min -= expansion;
            Max += expansion;
@@ -337,7 +337,7 @@ namespace Prowl.Vector
        /// <param name="amount">The amount to expand by.</param>
        /// <returns>The expanded AABB.</returns>
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-       public AABB Expanded(double amount)
+       public AABB Expanded(float amount)
        {
            var result = this;
            result.Expand(amount);
@@ -350,7 +350,7 @@ namespace Prowl.Vector
        /// <param name="expansion">The amount to expand by in each direction.</param>
        /// <returns>The expanded AABB.</returns>
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-       public AABB Expanded(Double3 expansion)
+       public AABB Expanded(Float3 expansion)
        {
            var result = this;
            result.Expand(expansion);
@@ -364,22 +364,22 @@ namespace Prowl.Vector
        /// <param name="matrix">The transformation matrix.</param>
        /// <returns>The transformed AABB.</returns>
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-       public AABB TransformBy(Double4x4 matrix)
+       public AABB TransformBy(Float4x4 matrix)
        {
            // Transform all 8 corners and find the new AABB
-           Double3[] corners = GetCorners();
-           Double3 newMin = Double4x4.TransformPoint(corners[0], matrix);
-           Double3 newMax = newMin;
+           Float3[] corners = GetCorners();
+           Float3 newMin = Float4x4.TransformPoint(corners[0], matrix);
+           Float3 newMax = newMin;
 
            for (int i = 1; i < 8; i++)
            {
-               Double3 transformedCorner = Double4x4.TransformPoint(corners[i], matrix);
-               newMin = new Double3(
+               Float3 transformedCorner = Float4x4.TransformPoint(corners[i], matrix);
+               newMin = new Float3(
                    Maths.Min(newMin.X, transformedCorner.X),
                    Maths.Min(newMin.Y, transformedCorner.Y),
                    Maths.Min(newMin.Z, transformedCorner.Z)
                );
-               newMax = new Double3(
+               newMax = new Float3(
                    Maths.Max(newMax.X, transformedCorner.X),
                    Maths.Max(newMax.Y, transformedCorner.Y),
                    Maths.Max(newMax.Z, transformedCorner.Z)
@@ -397,12 +397,12 @@ namespace Prowl.Vector
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
        public AABB ClippedBy(AABB other)
        {
-           Double3 newMin = new Double3(
+           Float3 newMin = new Float3(
                Maths.Max(Min.X, other.Min.X),
                Maths.Max(Min.Y, other.Min.Y),
                Maths.Max(Min.Z, other.Min.Z)
            );
-           Double3 newMax = new Double3(
+           Float3 newMax = new Float3(
                Maths.Min(Max.X, other.Max.X),
                Maths.Min(Max.Y, other.Max.Y),
                Maths.Min(Max.Z, other.Max.Z)
@@ -411,7 +411,7 @@ namespace Prowl.Vector
            // If any dimension is invalid, return an empty AABB
            if (newMin.X > newMax.X || newMin.Y > newMax.Y || newMin.Z > newMax.Z)
            {
-               return new AABB(Double3.Zero, Double3.Zero);
+               return new AABB(Float3.Zero, Float3.Zero);
            }
 
            return new AABB(newMin, newMax);
@@ -434,7 +434,7 @@ namespace Prowl.Vector
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
        public bool IsEmpty()
        {
-           return Maths.Abs(Volume) < double.Epsilon;
+           return Maths.Abs(Volume) < float.Epsilon;
        }
 
        /// <summary>
@@ -442,12 +442,12 @@ namespace Prowl.Vector
        /// </summary>
        /// <returns>A uniformly distributed point inside the AABB.</returns>
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-       public Double3 SampleVolume()
+       public Float3 SampleVolume()
        {
-            double u = RNG.Shared.NextDouble();
-            double v = RNG.Shared.NextDouble();
-            double w = RNG.Shared.NextDouble();
-           return new Double3(
+            float u = RNG.Shared.NextFloat();
+            float v = RNG.Shared.NextFloat();
+            float w = RNG.Shared.NextFloat();
+           return new Float3(
                Maths.Lerp(Min.X, Max.X, u),
                Maths.Lerp(Min.Y, Max.Y, v),
                Maths.Lerp(Min.Z, Max.Z, w)
@@ -459,16 +459,16 @@ namespace Prowl.Vector
        /// </summary>
        /// <param name="faceIndex">Face index (0-5): -X, +X, -Y, +Y, -Z, +Z.</param>
        /// <returns>The face normal vector.</returns>
-       public Double3 GetFaceNormal(int faceIndex)
+       public Float3 GetFaceNormal(int faceIndex)
        {
            switch (faceIndex)
            {
-               case 0: return new Double3(-1.0, 0.0, 0.0);  // -X face
-               case 1: return new Double3(1.0, 0.0, 0.0);   // +X face
-               case 2: return new Double3(0.0, -1.0, 0.0);  // -Y face
-               case 3: return new Double3(0.0, 1.0, 0.0);   // +Y face
-               case 4: return new Double3(0.0, 0.0, -1.0);  // -Z face
-               case 5: return new Double3(0.0, 0.0, 1.0);   // +Z face
+               case 0: return new Float3(-1.0f, 0.0f, 0.0f);  // -X face
+               case 1: return new Float3(1.0f, 0.0f, 0.0f);   // +X face
+               case 2: return new Float3(0.0f, -1.0f, 0.0f);  // -Y face
+               case 3: return new Float3(0.0f, 1.0f, 0.0f);   // +Y face
+               case 4: return new Float3(0.0f, 0.0f, -1.0f);  // -Z face
+               case 5: return new Float3(0.0f, 0.0f, 1.0f);   // +Z face
                default: throw new IndexOutOfRangeException("AABB face index must be between 0 and 5.");
            }
        }
@@ -478,17 +478,17 @@ namespace Prowl.Vector
        /// </summary>
        /// <param name="faceIndex">Face index (0-5): -X, +X, -Y, +Y, -Z, +Z.</param>
        /// <returns>The face center point.</returns>
-       public Double3 GetFaceCenter(int faceIndex)
+       public Float3 GetFaceCenter(int faceIndex)
        {
-           Double3 center = Center;
+           Float3 center = Center;
            switch (faceIndex)
            {
-               case 0: return new Double3(Min.X, center.Y, center.Z);  // -X face
-               case 1: return new Double3(Max.X, center.Y, center.Z);  // +X face
-               case 2: return new Double3(center.X, Min.Y, center.Z);  // -Y face
-               case 3: return new Double3(center.X, Max.Y, center.Z);  // +Y face
-               case 4: return new Double3(center.X, center.Y, Min.Z);  // -Z face
-               case 5: return new Double3(center.X, center.Y, Max.Z);  // +Z face
+               case 0: return new Float3(Min.X, center.Y, center.Z);  // -X face
+               case 1: return new Float3(Max.X, center.Y, center.Z);  // +X face
+               case 2: return new Float3(center.X, Min.Y, center.Z);  // -Y face
+               case 3: return new Float3(center.X, Max.Y, center.Z);  // +Y face
+               case 4: return new Float3(center.X, center.Y, Min.Z);  // -Z face
+               case 5: return new Float3(center.X, center.Y, Max.Z);  // +Z face
                default: throw new IndexOutOfRangeException("AABB face index must be between 0 and 5.");
            }
        }
@@ -498,22 +498,22 @@ namespace Prowl.Vector
        /// </summary>
        /// <param name="points">The points to encapsulate.</param>
        /// <returns>The smallest AABB that contains all points.</returns>
-       public static AABB FromPoints(Double3[] points)
+       public static AABB FromPoints(Float3[] points)
        {
            if (points == null || points.Length == 0)
-               return new AABB(Double3.Zero, Double3.Zero);
+               return new AABB(Float3.Zero, Float3.Zero);
 
-           Double3 min = points[0];
-           Double3 max = points[0];
+           Float3 min = points[0];
+           Float3 max = points[0];
 
            for (int i = 1; i < points.Length; i++)
            {
-               min = new Double3(
+               min = new Float3(
                    Maths.Min(min.X, points[i].X),
                    Maths.Min(min.Y, points[i].Y),
                    Maths.Min(min.Z, points[i].Z)
                );
-               max = new Double3(
+               max = new Float3(
                    Maths.Max(max.X, points[i].X),
                    Maths.Max(max.Y, points[i].Y),
                    Maths.Max(max.Z, points[i].Z)
@@ -531,7 +531,7 @@ namespace Prowl.Vector
        public static AABB FromAABBs(AABB[] aabbs)
        {
            if (aabbs == null || aabbs.Length == 0)
-               return new AABB(Double3.Zero, Double3.Zero);
+               return new AABB(Float3.Zero, Float3.Zero);
 
            AABB result = aabbs[0];
            for (int i = 1; i < aabbs.Length; i++)
@@ -550,7 +550,7 @@ namespace Prowl.Vector
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
        public static AABB FromSphere(Sphere sphere)
        {
-           Double3 radiusVector = new Double3(sphere.Radius, sphere.Radius, sphere.Radius);
+           Float3 radiusVector = new Float3(sphere.Radius, sphere.Radius, sphere.Radius);
            return new AABB(sphere.Center - radiusVector, sphere.Center + radiusVector);
        }
 
@@ -562,9 +562,9 @@ namespace Prowl.Vector
        /// <param name="direction">The direction to search in.</param>
        /// <returns>The farthest corner in the given direction.</returns>
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-       public Double3 SupportMap(Double3 direction)
+       public Float3 SupportMap(Float3 direction)
        {
-           return new Double3(
+           return new Float3(
                direction.X >= 0 ? Max.X : Min.X,
                direction.Y >= 0 ? Max.Y : Min.Y,
                direction.Z >= 0 ? Max.Z : Min.Z
@@ -579,7 +579,7 @@ namespace Prowl.Vector
        public GeometryData GetGeometryData(int resolution = 16)
        {
            var geometryData = new GeometryData();
-           Double3[] corners = GetCorners();
+           Float3[] corners = GetCorners();
 
            // Add 8 vertices
            var verts = new GeometryData.Vertex[8];

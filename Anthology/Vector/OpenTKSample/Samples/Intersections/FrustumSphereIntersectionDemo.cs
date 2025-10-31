@@ -15,19 +15,19 @@ public class FrustumSphereIntersectionDemo : IDemo
 
         // Create a frustum centered in the grid cell
         float frustumRotation = timeInSeconds * 0.2f;
-        Double3 camPos = (Double3)position + new Double3(
+        Float3 camPos = position + new Float3(
             Maths.Sin(frustumRotation) * 0.15f,
-            0.7,
-            0.9 + Maths.Cos(frustumRotation) * 0.1f
+            0.7f,
+            0.9f + Maths.Cos(frustumRotation) * 0.1f
         );
-        Double3 lookAt = (Double3)position + new Double3(0, 0, -0.2);
-        Double3 forward = Double3.Normalize(lookAt - camPos);
-        Double3 up = new Double3(0, 1, 0);
+        Float3 lookAt = (Float3)position + new Float3(0, 0, -0.2f);
+        Float3 forward = Float3.Normalize(lookAt - camPos);
+        Float3 up = new Float3(0, 1, 0);
 
-        double fov = Maths.PI / 5.5;
-        double aspect = 1.3;
-        double nearDist = 0.2;
-        double farDist = 1.6;
+        float fov = Maths.PI / 5.5f;
+        float aspect = 1.3f;
+        float nearDist = 0.2f;
+        float farDist = 1.6f;
 
         Frustum frustum = Frustum.FromCamera(camPos, forward, up, fov, aspect, nearDist, farDist);
 
@@ -40,7 +40,7 @@ public class FrustumSphereIntersectionDemo : IDemo
         );
 
         float radius = 0.25f + Maths.Sin(timeInSeconds * 2.0f) * 0.05f;
-        Sphere sphere = new Sphere((Double3)position + (Double3)sphereOffset, radius);
+        Sphere sphere = new Sphere(position + sphereOffset, radius);
 
         bool intersects = frustum.Intersects(sphere);
 

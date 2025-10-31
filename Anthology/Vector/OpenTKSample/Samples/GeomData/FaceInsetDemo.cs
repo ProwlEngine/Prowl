@@ -20,10 +20,10 @@ public class FaceInsetDemo : IDemo
 
     public FaceInsetDemo()
     {
-        _originalCube = GeometryGenerator.Box(Double3.One * 0.5);
+        _originalCube = GeometryGenerator.Box(Float3.One * 0.5f);
 
-        _originalSphere = GeometryGenerator.Sphere(0.5);
-        GeometryOperators.WeldVertices(_originalSphere, 0.0001);
+        _originalSphere = GeometryGenerator.Sphere(0.5f);
+        GeometryOperators.WeldVertices(_originalSphere, 0.0001f);
     }
 
     public void Draw(Float3 position, float timeInSeconds)
@@ -48,7 +48,7 @@ public class FaceInsetDemo : IDemo
                     var v0 = verts[0].Point;
                     var v1 = verts[1].Point;
                     var v2 = verts[2].Point;
-                    var normal = Double3.Normalize(Double3.Cross(v1 - v0, v2 - v0));
+                    var normal = Float3.Normalize(Float3.Cross(v1 - v0, v2 - v0));
 
                     // Top face or front face
                     if (normal.Y > 0.9 || normal.Z < -0.9)
@@ -82,7 +82,7 @@ public class FaceInsetDemo : IDemo
                     var v0 = verts[0].Point;
                     var v1 = verts[1].Point;
                     var v2 = verts[2].Point;
-                    var normal = Double3.Normalize(Double3.Cross(v1 - v0, v2 - v0));
+                    var normal = Float3.Normalize(Float3.Cross(v1 - v0, v2 - v0));
 
                     // Top face or front face
                     if (normal.Y > 0.9 || normal.Z < -0.9 || normal.X < -0.9)
@@ -118,7 +118,7 @@ public class FaceInsetDemo : IDemo
 
             if (facesToInset.Count > 0)
             {
-                GeometryOperators.InsetFaces(mesh, facesToInset, insetAmount * 0.7, InsetMode.Shared);
+                GeometryOperators.InsetFaces(mesh, facesToInset, insetAmount * 0.7f, InsetMode.Shared);
             }
 
             Float3 rightPos = position + new Float3(1.5f, 0, 0);
@@ -141,7 +141,7 @@ public class FaceInsetDemo : IDemo
                     var v0 = verts[0].Point;
                     var v1 = verts[1].Point;
                     var v2 = verts[2].Point;
-                    var normal = Double3.Normalize(Double3.Cross(v1 - v0, v2 - v0));
+                    var normal = Float3.Normalize(Float3.Cross(v1 - v0, v2 - v0));
 
                     if (normal.Y > 0.9)
                     {
@@ -175,7 +175,7 @@ public class FaceInsetDemo : IDemo
             var mesh = CopyGeometryData(_originalCube);
 
             var allFaces = mesh.Faces.ToList();
-            GeometryOperators.InsetFaces(mesh, allFaces, insetAmount * 0.6, InsetMode.PerFace);
+            GeometryOperators.InsetFaces(mesh, allFaces, insetAmount * 0.6f, InsetMode.PerFace);
 
             Float3 bottomRightPos = position + new Float3(1.5f, bottomY, 0);
             DrawMesh(mesh, bottomRightPos, new Float4(1.0f, 1.0f, 0.3f, 0.8f), MeshMode.Wireframe);
@@ -187,7 +187,7 @@ public class FaceInsetDemo : IDemo
     {
         // Transform the mesh to the desired position
         var transformed = CopyGeometryData(mesh);
-        GeometryOperators.Translate(transformed, (Double3)position);
+        GeometryOperators.Translate(transformed, (Float3)position);
 
         // Draw using the Gizmo system
         if (mode == MeshMode.Wireframe)

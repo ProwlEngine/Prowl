@@ -9,7 +9,7 @@ namespace Prowl.Vector.Geometry.Operators
 {
     internal static class VertexWeldOp
     {
-        internal static int WeldVertices(GeometryData mesh, double threshold = 0.0001)
+        internal static int WeldVertices(GeometryData mesh, float threshold = 0.0001f)
         {
             if (threshold <= 0)
                 return 0;
@@ -41,7 +41,7 @@ namespace Prowl.Vector.Geometry.Operators
                     if (verticesToRemove.Contains(v2))
                         continue;
 
-                    double distance = Double3.Distance(v1.Point, v2.Point);
+                    float distance = Float3.Distance(v1.Point, v2.Point);
                     if (distance <= threshold)
                     {
                         cluster.Add(v2);
@@ -52,7 +52,7 @@ namespace Prowl.Vector.Geometry.Operators
                 if (cluster.Count > 1)
                 {
                     // Calculate average position
-                    Double3 avgPosition = Double3.Zero;
+                    Float3 avgPosition = Float3.Zero;
                     foreach (var v in cluster)
                     {
                         avgPosition += v.Point;
@@ -80,10 +80,10 @@ namespace Prowl.Vector.Geometry.Operators
                             if (floatAttrs.Count > 0)
                             {
                                 int n = floatAttrs[0].Data.Length;
-                                var avgData = new double[n];
+                                var avgData = new float[n];
                                 for (int k = 0; k < n; k++)
                                 {
-                                    double sum = 0;
+                                    float sum = 0;
                                     foreach (var fval in floatAttrs)
                                     {
                                         if (k < fval.Data.Length)
@@ -112,7 +112,7 @@ namespace Prowl.Vector.Geometry.Operators
                                 var avgData = new int[n];
                                 for (int k = 0; k < n; k++)
                                 {
-                                    double sum = 0;
+                                    float sum = 0;
                                     foreach (var ival in intAttrs)
                                     {
                                         if (k < ival.Data.Length)
@@ -279,7 +279,7 @@ namespace Prowl.Vector.Geometry.Operators
             return weldedCount;
         }
 
-        internal static int WeldVerticesAtPositions(GeometryData mesh, IEnumerable<Double3> targetPositions, double threshold)
+        internal static int WeldVerticesAtPositions(GeometryData mesh, IEnumerable<Float3> targetPositions, float threshold)
         {
             if (threshold <= 0)
                 return 0;
@@ -292,7 +292,7 @@ namespace Prowl.Vector.Geometry.Operators
             {
                 foreach (var v in allVertices)
                 {
-                    if (Double3.Distance(v.Point, targetPos) <= threshold)
+                    if (Float3.Distance(v.Point, targetPos) <= threshold)
                     {
                         verticesToWeld.Add(v);
                     }
@@ -326,7 +326,7 @@ namespace Prowl.Vector.Geometry.Operators
                     if (verticesToRemove.Contains(v2))
                         continue;
 
-                    if (Double3.Distance(v1.Point, v2.Point) <= threshold)
+                    if (Float3.Distance(v1.Point, v2.Point) <= threshold)
                     {
                         cluster.Add(v2);
                     }
@@ -335,7 +335,7 @@ namespace Prowl.Vector.Geometry.Operators
                 if (cluster.Count > 1)
                 {
                     // Average position
-                    Double3 avgPos = Double3.Zero;
+                    Float3 avgPos = Float3.Zero;
                     foreach (var v in cluster)
                         avgPos += v.Point;
                     avgPos /= cluster.Count;

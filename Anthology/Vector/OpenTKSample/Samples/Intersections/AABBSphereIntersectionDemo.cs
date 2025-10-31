@@ -25,20 +25,20 @@ public class AABBSphereIntersectionDemo : IDemo
         float scale = 1.0f + Maths.Sin(timeInSeconds * 1.5f) * 0.2f;
 
         AABB aabb = new AABB(
-            (Double3)position + (Double3)aabbOffset + new Double3(-0.3f * scale, -0.3f * scale, -0.3f * scale),
-            (Double3)position + (Double3)aabbOffset + new Double3(0.3f * scale, 0.3f * scale, 0.3f * scale)
+            position + aabbOffset + new Float3(-0.3f * scale, -0.3f * scale, -0.3f * scale),
+            position + aabbOffset + new Float3(0.3f * scale, 0.3f * scale, 0.3f * scale)
         );
 
         // Sphere follows a different complex path - lemniscate (infinity symbol) in 3D
         float lemnTime = timeInSeconds * 0.9f;
         float sphereRadius = 0.6f + Maths.Sin(timeInSeconds * 2.5f) * 0.1f;
         Float3 sphereOffset = new Float3(
-            (float)(Maths.Sin(lemnTime) / (1 + Maths.Cos(lemnTime) * Maths.Cos(lemnTime))) * 0.5f,
+            (Maths.Sin(lemnTime) / (1 + Maths.Cos(lemnTime) * Maths.Cos(lemnTime))) * 0.5f,
             Maths.Cos(timeInSeconds * 1.8f) * 0.2f,
-            (float)(Maths.Sin(lemnTime) * Maths.Cos(lemnTime) / (1 + Maths.Cos(lemnTime) * Maths.Cos(lemnTime))) * 0.5f
+            (Maths.Sin(lemnTime) * Maths.Cos(lemnTime) / (1 + Maths.Cos(lemnTime) * Maths.Cos(lemnTime))) * 0.5f
         ) * 2f;
 
-        Sphere sphere = new Sphere((Double3)position + (Double3)sphereOffset, sphereRadius);
+        Sphere sphere = new Sphere(position + sphereOffset, sphereRadius);
         bool intersects = aabb.Intersects(sphere);
 
         Float4 color = intersects ? new Float4(0, 1, 0, 1) : new Float4(1, 0, 0, 1);

@@ -18,7 +18,7 @@ public class SphereDemo : IDemo
 
         Float3 spherePos = position + new Float3(0, bounce, 0);
         Gizmo.DrawSphereWireframe(
-            new Sphere((Double3)spherePos, 1.0f + sizeWave * 0.2f),
+            new Sphere(spherePos, 1.0f + sizeWave * 0.2f),
             new Float4(0, 0, 1, 1),
             12
         );

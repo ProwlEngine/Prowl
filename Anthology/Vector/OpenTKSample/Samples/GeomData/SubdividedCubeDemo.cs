@@ -20,7 +20,7 @@ public class SubdividedCubeDemo : IDemo
     public SubdividedCubeDemo()
     {
         // Create base cube
-        var aabb = new AABB(new Double3(-0.5, -0.5, -0.5), new Double3(0.5, 0.5, 0.5));
+        var aabb = new AABB(new Float3(-0.5f, -0.5f, -0.5f), new Float3(0.5f, 0.5f, 0.5f));
         _baseCube = aabb.GetGeometryData();
 
         // Pre-generate subdivision levels for smooth animation
@@ -73,7 +73,7 @@ public class SubdividedCubeDemo : IDemo
     {
         // Transform the mesh to the desired position
         var transformed = CopyGeometryData(mesh);
-        GeometryOperators.Translate(transformed, (Double3)position);
+        GeometryOperators.Translate(transformed, (Float3)position);
 
         // Draw using the Gizmo system
         if (mode == MeshMode.Wireframe)

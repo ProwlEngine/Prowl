@@ -391,23 +391,23 @@ void main() {
         // where det = dot(n1, cross(n2,n3))
         // Plane equation: dot(normal, point) = D
 
-        Double3 n1 = p1.Normal;
-        Double3 n2 = p2.Normal;
-        Double3 n3 = p3.Normal;
-        double d1 = p1.D;
-        double d2 = p2.D;
-        double d3 = p3.D;
+        Float3 n1 = p1.Normal;
+        Float3 n2 = p2.Normal;
+        Float3 n3 = p3.Normal;
+        float d1 = p1.D;
+        float d2 = p2.D;
+        float d3 = p3.D;
 
-        Double3 cross23 = Double3.Cross(n2, n3);
-        Double3 cross31 = Double3.Cross(n3, n1);
-        Double3 cross12 = Double3.Cross(n1, n2);
+        Float3 cross23 = Float3.Cross(n2, n3);
+        Float3 cross31 = Float3.Cross(n3, n1);
+        Float3 cross12 = Float3.Cross(n1, n2);
 
-        double det = Double3.Dot(n1, cross23);
+        float det = Float3.Dot(n1, cross23);
 
-        if (Math.Abs(det) < 1e-6)
+        if (Math.Abs(det) < 1e-6f)
             return Float3.Zero; // Planes don't intersect at a single point
 
-        Double3 intersection = (cross23 * d1 + cross31 * d2 + cross12 * d3) / det;
+        Float3 intersection = (cross23 * d1 + cross31 * d2 + cross12 * d3) / det;
         return (Float3)intersection;
     }
 
@@ -474,8 +474,8 @@ void main() {
                 {
                     // Calculate face normal and center for offsetting arrows inward
                     var verts = face.NeighborVertices();
-                    Double3 faceNormal = Double3.UnitY;
-                    Double3 faceCenter = face.Center();
+                    Float3 faceNormal = Float3.UnitY;
+                    Float3 faceCenter = face.Center();
 
                     if (verts.Count >= 3)
                     {
@@ -484,9 +484,9 @@ void main() {
                         var v2 = verts[2].Point;
                         var edge1 = v1 - v0;
                         var edge2 = v2 - v0;
-                        var normal = Double3.Cross(edge1, edge2);
-                        if (Double3.LengthSquared(normal) > 1e-6)
-                            faceNormal = Double3.Normalize(normal);
+                        var normal = Float3.Cross(edge1, edge2);
+                        if (Float3.LengthSquared(normal) > 1e-6)
+                            faceNormal = Float3.Normalize(normal);
                     }
 
                     var it = face.Loop;
@@ -496,29 +496,29 @@ void main() {
                         var nextLoop = it.Next;
                         if (nextLoop != null && nextLoop != it)
                         {
-                            Double3 edgeStart = it.Vert.Point;
-                            Double3 edgeEnd = nextLoop.Vert.Point;
-                            Double3 edgeDir = Double3.Normalize(edgeEnd - edgeStart);
-                            double edgeLength = Double3.Distance(edgeStart, edgeEnd);
+                            Float3 edgeStart = it.Vert.Point;
+                            Float3 edgeEnd = nextLoop.Vert.Point;
+                            Float3 edgeDir = Float3.Normalize(edgeEnd - edgeStart);
+                            float edgeLength = Float3.Distance(edgeStart, edgeEnd);
 
                             // Position arrow slightly along the edge and offset inward toward face center
-                            double arrowT = 0.4; // Position along edge
-                            Double3 arrowBase = Maths.Lerp(edgeStart, edgeEnd, arrowT);
+                            float arrowT = 0.4f; // Position along edge
+                            Float3 arrowBase = Maths.Lerp(edgeStart, edgeEnd, arrowT);
 
                             // Offset slightly inward (toward face center) and up along normal
-                            Double3 toCenter = Double3.Normalize(faceCenter - arrowBase);
-                            arrowBase += toCenter * (edgeLength * 0.15) + faceNormal * loopSize;
+                            Float3 toCenter = Float3.Normalize(faceCenter - arrowBase);
+                            arrowBase += toCenter * (edgeLength * 0.15f) + faceNormal * loopSize;
 
                             // Arrow points along edge direction
-                            Double3 arrowTip = arrowBase + edgeDir * (edgeLength * 0.2);
+                            Float3 arrowTip = arrowBase + edgeDir * (edgeLength * 0.2f);
 
                             // Draw arrow shaft
                             DrawLine((Float3)arrowBase, (Float3)arrowTip, loopColor.Value);
 
                             // Draw arrowhead
-                            Double3 perpendicular = Double3.Normalize(Double3.Cross(edgeDir, faceNormal));
-                            Double3 arrowLeft = arrowTip - edgeDir * (edgeLength * 0.08) + perpendicular * (edgeLength * 0.05);
-                            Double3 arrowRight = arrowTip - edgeDir * (edgeLength * 0.08) - perpendicular * (edgeLength * 0.05);
+                            Float3 perpendicular = Float3.Normalize(Float3.Cross(edgeDir, faceNormal));
+                            Float3 arrowLeft = arrowTip - edgeDir * (edgeLength * 0.08f) + perpendicular * (edgeLength * 0.05f);
+                            Float3 arrowRight = arrowTip - edgeDir * (edgeLength * 0.08f) - perpendicular * (edgeLength * 0.05f);
 
                             DrawLine((Float3)arrowTip, (Float3)arrowLeft, loopColor.Value);
                             DrawLine((Float3)arrowTip, (Float3)arrowRight, loopColor.Value);
@@ -545,18 +545,18 @@ void main() {
             foreach (var vertex in geometryData.Vertices)
             {
                 // Try to get normal from vertex attributes
-                Double3 normal = Double3.UnitY; // Default normal
+                Float3 normal = Float3.UnitY; // Default normal
                 bool hasNormal = false;
 
                 if (vertex.Attributes.TryGetValue("normal", out var normalAttr))
                 {
                     if (normalAttr is GeometryData.FloatAttributeValue floatAttr && floatAttr.Data.Length >= 3)
                     {
-                        normal = new Double3(floatAttr.Data[0], floatAttr.Data[1], floatAttr.Data[2]);
+                        normal = new Float3(floatAttr.Data[0], floatAttr.Data[1], floatAttr.Data[2]);
                         // Ensure normal is normalized
-                        if (Double3.LengthSquared(normal) > 1e-6)
+                        if (Float3.LengthSquared(normal) > 1e-6)
                         {
-                            normal = Double3.Normalize(normal);
+                            normal = Float3.Normalize(normal);
                             hasNormal = true;
                         }
                     }
@@ -568,7 +568,7 @@ void main() {
                     var adjacentFaces = vertex.NeighborFaces().ToArray();
                     if (adjacentFaces.Length > 0)
                     {
-                        normal = Double3.Zero;
+                        normal = Float3.Zero;
                         foreach (var face in adjacentFaces)
                         {
                             // Calculate face normal
@@ -580,20 +580,20 @@ void main() {
                                 var v2 = verts[2].Point;
                                 var edge1 = v1 - v0;
                                 var edge2 = v2 - v0;
-                                var faceNormal = Double3.Cross(edge1, edge2);
-                                if (Double3.LengthSquared(faceNormal) > 1e-6)
+                                var faceNormal = Float3.Cross(edge1, edge2);
+                                if (Float3.LengthSquared(faceNormal) > 1e-6)
                                 {
-                                    normal += Double3.Normalize(faceNormal);
+                                    normal += Float3.Normalize(faceNormal);
                                 }
                             }
                         }
-                        if (Double3.LengthSquared(normal) > 1e-6)
+                        if (Float3.LengthSquared(normal) > 1e-6)
                         {
-                            normal = Double3.Normalize(normal);
+                            normal = Float3.Normalize(normal);
                         }
                         else
                         {
-                            normal = Double3.UnitY;
+                            normal = Float3.UnitY;
                         }
                     }
                 }

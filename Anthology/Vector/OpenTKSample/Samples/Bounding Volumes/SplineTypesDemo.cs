@@ -12,24 +12,24 @@ public class SplineTypesDemo : IDemo
     public void Draw(Float3 position, float timeInSeconds)
     {
         // Animated control points in X-Z plane
-        Double3[] baseControlPoints = {
-            new Double3(-1.5f, 0, -0.5f),
-            new Double3(-0.5f, 0, 1),
-            new Double3(0.5f, 0, -0.8f),
-            new Double3(1.5f, 0, 0.5f)
+        Float3[] baseControlPoints = {
+            new Float3(-1.5f, 0, -0.5f),
+            new Float3(-0.5f, 0, 1),
+            new Float3(0.5f, 0, -0.8f),
+            new Float3(1.5f, 0, 0.5f)
         };
 
         // Add animation to control points
-        Double3[] animatedPoints = new Double3[baseControlPoints.Length];
+        Float3[] animatedPoints = new Float3[baseControlPoints.Length];
         for (int i = 0; i < baseControlPoints.Length; i++)
         {
             float phase = timeInSeconds * 0.5f + i * 0.7f;
-            Double3 animation = new Double3(
+            Float3 animation = new Float3(
                 (float)Math.Sin(phase) * 0.1f,
                 (float)Math.Cos(phase * 1.3f) * 0.05f, // Small Y movement for visual interest
                 (float)Math.Sin(phase * 0.8f) * 0.1f
             );
-            animatedPoints[i] = (Double3)(position + (Float3)baseControlPoints[i] + (Float3)animation);
+            animatedPoints[i] = (position + baseControlPoints[i] + animation);
         }
 
         // Create different spline types
@@ -59,14 +59,14 @@ public class SplineTypesDemo : IDemo
                 float t1 = i / 100.0f;
                 float t2 = (i + 1) / 100.0f;
 
-                Float3 p1 = (Float3)spline.Evaluate(t1) + new Float3(0, 0, zOffset);
-                Float3 p2 = (Float3)spline.Evaluate(t2) + new Float3(0, 0, zOffset);
+                Float3 p1 = spline.Evaluate(t1) + new Float3(0, 0, zOffset);
+                Float3 p2 = spline.Evaluate(t2) + new Float3(0, 0, zOffset);
 
                 Gizmo.DrawLine(p1, p2, color);
             }
 
             // Draw control points for this spline
-            Float3[] controlPoints = animatedPoints.Select(p => (Float3)p).ToArray();
+            Float3[] controlPoints = animatedPoints.Select(p => p).ToArray();
             for (int i = 0; i < controlPoints.Length; i++)
             {
                 Float3 pointPos = controlPoints[i] + new Float3(0, 0, zOffset);
@@ -82,8 +82,8 @@ public class SplineTypesDemo : IDemo
 
             // Animate a point along each spline
             float t = (timeInSeconds * 0.4f) % 1.0f;
-            Float3 currentPos = (Float3)spline.Evaluate(t) + new Float3(0, 0, zOffset);
-            Float3 tangent = Float3.Normalize((Float3)spline.EvaluateDerivative(t));
+            Float3 currentPos = spline.Evaluate(t) + new Float3(0, 0, zOffset);
+            Float3 tangent = Float3.Normalize(spline.EvaluateDerivative(t));
 
             // Draw point
             Gizmo.DrawIntersectionPoint(currentPos, color, 0.07f);

@@ -37,8 +37,8 @@ public class SphereSphereIntersectionDemo : IDemo
         float size1 = 0.7f + proximityEffect * 0.2f + Maths.Sin(timeInSeconds * 4) * 0.05f;
         float size2 = 0.7f + proximityEffect * 0.15f + Maths.Cos(timeInSeconds * 3.5f) * 0.05f;
 
-        Sphere sphere1 = new Sphere((Double3)position + (Double3)sphere1Offset, size1);
-        Sphere sphere2 = new Sphere((Double3)position + (Double3)sphere2Offset, size2);
+        Sphere sphere1 = new Sphere((Float3)position + (Float3)sphere1Offset, size1);
+        Sphere sphere2 = new Sphere((Float3)position + (Float3)sphere2Offset, size2);
         bool intersects = sphere1.Intersects(sphere2);
 
         // Color changes based on intersection and proximity
