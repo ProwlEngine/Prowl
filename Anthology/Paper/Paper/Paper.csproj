@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageId>Prowl.$(AssemblyName)</PackageId>
-    <Version>0.6.2</Version>
+    <Version>0.7.0</Version>
     <Authors>Wulferis</Authors>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Title>Prowl.Paper</Title>
@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Prowl.Quill" Version="0.8.0" />
+    <PackageReference Include="Prowl.Quill" Version="0.8.1" />
   </ItemGroup>
 
 </Project>
