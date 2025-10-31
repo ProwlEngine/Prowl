@@ -11,7 +11,7 @@ public class ClickEvent : ElementEvent
 {
     public PaperMouseBtn Button { get; }
 
-    public ClickEvent(ElementHandle source, Rect elementRect, Double2 pointerPos, PaperMouseBtn button)
+    public ClickEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, PaperMouseBtn button)
         : base(source, elementRect, pointerPos)
     {
         Button = button;

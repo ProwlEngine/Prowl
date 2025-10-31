@@ -9,11 +9,11 @@ namespace Prowl.PaperUI.Events;
 
 public class DragEvent : ElementEvent
 {
-    public Double2 StartPosition { get; }
-    public Double2 Delta { get; }
-    public Double2 TotalDelta { get; }
+    public Float2 StartPosition { get; }
+    public Float2 Delta { get; }
+    public Float2 TotalDelta { get; }
 
-    public DragEvent(ElementHandle source, Rect elementRect, Double2 pointerPos, Double2 startPos, Double2 delta, Double2 totalDelta)
+    public DragEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, Float2 startPos, Float2 delta, Float2 totalDelta)
         : base(source, elementRect, pointerPos)
     {
         StartPosition = startPos;

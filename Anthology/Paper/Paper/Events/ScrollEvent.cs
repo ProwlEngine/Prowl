@@ -9,9 +9,9 @@ namespace Prowl.PaperUI.Events;
 
 public class ScrollEvent : ElementEvent
 {
-    public double Delta { get; }
+    public float Delta { get; }
 
-    public ScrollEvent(ElementHandle source, Rect elementRect, Double2 pointerPos, double delta)
+    public ScrollEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, float delta)
         : base(source, elementRect, pointerPos)
     {
         Delta = delta;

@@ -48,7 +48,7 @@ public class RotationSubGizmo : ISubGizmo
         var tangent = Tangent();
 
         var (planeT, distFromGizmoOrigin) = GizmoUtils.RayToPlaneOrigin(normal, origin, ray.origin, ray.direction);
-        var distFromGizmoEdge = Math.Abs(distFromGizmoOrigin - radius);
+        var distFromGizmoEdge = Maths.Abs(distFromGizmoOrigin - radius);
 
         var hitPos = ray.origin + ray.direction * planeT;
         var dirToOrigin = Vector3.Normalize(origin - hitPos);
@@ -75,7 +75,7 @@ public class RotationSubGizmo : ISubGizmo
         _state.CurrentDelta = 0;
 
         t = planeT;
-        return distFromGizmoEdge <= _gizmo.FocusDistance && Math.Abs(angle) < ArcAngle();
+        return distFromGizmoEdge <= _gizmo.FocusDistance && Maths.Abs(angle) < ArcAngle();
     }
 
     public GizmoResult? Update(Ray ray, Vector2 screenPos)
@@ -92,9 +92,9 @@ public class RotationSubGizmo : ISubGizmo
 
         var angleDelta = rotationAngle.Value - _state.LastRotationAngle;
 
-        if (angleDelta > Math.PI)
+        if (angleDelta > Maths.PI)
             angleDelta -= MathF.Tau;
-        else if (angleDelta < -Math.PI)
+        else if (angleDelta < -Maths.PI)
             angleDelta += MathF.Tau;
 
         _state.LastRotationAngle = rotationAngle.Value;
@@ -140,7 +140,7 @@ public class RotationSubGizmo : ISubGizmo
                 endAngle += 1e-5f;
 
                 var totalAngle = endAngle - startAngle;
-                var fullCircles = (int)Math.Abs(totalAngle / MathF.Tau);
+                var fullCircles = (int)Maths.Abs(totalAngle / MathF.Tau);
 
                 endAngle -= MathF.Tau * fullCircles;
 
@@ -162,11 +162,11 @@ public class RotationSubGizmo : ISubGizmo
                 var w = stroke;
                 if (fullCircles > 0)
                 {
-                    w.Color.a = (byte)(stroke.Color.a * Math.Min(0.25f * fullCircles, 1f));
+                    w.Color.a = (byte)(stroke.Color.a * Maths.Min(0.25f * fullCircles, 1f));
                     _gizmo._gui.Draw3D.Sector(radius, startAngle2 * MathUtilities.Rad2Deg, endAngle2 * MathUtilities.Rad2Deg, w);
                 }
 
-                w.Color.a = (byte)(stroke.Color.a * Math.Min(0.25f * (fullCircles + 1), 1f));
+                w.Color.a = (byte)(stroke.Color.a * Maths.Min(0.25f * (fullCircles + 1), 1f));
                 _gizmo._gui.Draw3D.Sector(radius, startAngle * MathUtilities.Rad2Deg, endAngle * MathUtilities.Rad2Deg, w);
 
                 _gizmo._gui.Draw3D.Circle(radius, stroke);
@@ -174,7 +174,7 @@ public class RotationSubGizmo : ISubGizmo
                 if (_gizmo.Snapping)
                 {
                     var strokeWidth = stroke.Thickness / 2;
-                    for (int i = 0; i <= Math.Tau / (_gizmo.SnapAngle * MathUtilities.Deg2Rad); i++)
+                    for (int i = 0; i <= Maths.Tau / (_gizmo.SnapAngle * MathUtilities.Deg2Rad); i++)
                     {
                         var angle = i * (_gizmo.SnapAngle * MathUtilities.Deg2Rad) + endAngle;
                         var pos = new Vector3(MathF.Cos(angle), 0, MathF.Sin(angle));
@@ -187,7 +187,7 @@ public class RotationSubGizmo : ISubGizmo
 
     private float ArcAngle()
     {
-        var dot = Math.Abs(Vector3.Dot(GizmoUtils.GizmoNormal(_gizmo, _params.Direction), _gizmo.ViewForward));
+        var dot = Maths.Abs(Vector3.Dot(GizmoUtils.GizmoNormal(_gizmo, _params.Direction), _gizmo.ViewForward));
         const float minDot = 0.990f;
         const float maxDot = 0.995f;
 
@@ -224,7 +224,7 @@ public class RotationSubGizmo : ISubGizmo
         }
 
         // Calculate the angle between the vectors
-        float angle = (float)Math.Acos(Vector3.Dot(fromVector, toVector));
+        float angle = (float)Maths.Acos(Vector3.Dot(fromVector, toVector));
 
         // Create the rotation matrix using axis-angle rotation
         return Matrix4x4.CreateFromAxisAngle(axis, angle);

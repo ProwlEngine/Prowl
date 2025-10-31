@@ -35,15 +35,15 @@ namespace Prowl.PaperUI
         public T BackgroundColor(Color color) => SetStyleProperty(GuiProp.BackgroundColor, color);
 
         /// <summary>Sets a linear gradient background gradient.</summary>
-        public T BackgroundLinearGradient(double x1, double y1, double x2, double y2, Color color1, Color color2) =>
+        public T BackgroundLinearGradient(float x1, float y1, float x2, float y2, Color color1, Color color2) =>
             SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Linear(x1, y1, x2, y2, color1, color2));
 
         /// <summary>Sets a radial gradient background gradient.</summary>
-        public T BackgroundRadialGradient(double centerX, double centerY, double innerRadius, double outerRadius, Color innerColor, Color outerColor) =>
+        public T BackgroundRadialGradient(float centerX, float centerY, float innerRadius, float outerRadius, Color innerColor, Color outerColor) =>
             SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Radial(centerX, centerY, innerRadius, outerRadius, innerColor, outerColor));
 
         /// <summary>Sets a box gradient background gradient.</summary>
-        public T BackgroundBoxGradient(double centerX, double centerY, double width, double height, float radius, float feather, Color innerColor, Color outerColor) =>
+        public T BackgroundBoxGradient(float centerX, float centerY, float width, float height, float radius, float feather, Color innerColor, Color outerColor) =>
             SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Box(centerX, centerY, width, height, radius, feather, innerColor, outerColor));
 
         /// <summary>Clears any background gradient on the element.</summary>
@@ -53,10 +53,10 @@ namespace Prowl.PaperUI
         public T BorderColor(Color color) => SetStyleProperty(GuiProp.BorderColor, color);
 
         /// <summary>Sets the border width of the element.</summary>
-        public T BorderWidth(double width) => SetStyleProperty(GuiProp.BorderWidth, width);
+        public T BorderWidth(float width) => SetStyleProperty(GuiProp.BorderWidth, width);
 
         /// <summary>Sets a box shadow on the element.</summary>
-        public T BoxShadow(double offsetX, double offsetY, double blur, double spread, Color color) =>
+        public T BoxShadow(float offsetX, float offsetY, float blur, float spread, Color color) =>
             SetStyleProperty(GuiProp.BoxShadow, new BoxShadow(offsetX, offsetY, blur, spread, color));
 
         /// <summary>Sets a box shadow on the element.</summary>
@@ -67,34 +67,34 @@ namespace Prowl.PaperUI
         #region Corner Rounding
 
         /// <summary>Rounds the top corners of the element.</summary>
-        public T RoundedTop(double radius) => SetStyleProperty(GuiProp.Rounded, new Double4(radius, radius, 0, 0));
+        public T RoundedTop(float radius) => SetStyleProperty(GuiProp.Rounded, new Float4(radius, radius, 0, 0));
 
         /// <summary>Rounds the bottom corners of the element.</summary>
-        public T RoundedBottom(double radius) => SetStyleProperty(GuiProp.Rounded, new Double4(0, 0, radius, radius));
+        public T RoundedBottom(float radius) => SetStyleProperty(GuiProp.Rounded, new Float4(0, 0, radius, radius));
 
         /// <summary>Rounds the left corners of the element.</summary>
-        public T RoundedLeft(double radius) => SetStyleProperty(GuiProp.Rounded, new Double4(radius, 0, 0, radius));
+        public T RoundedLeft(float radius) => SetStyleProperty(GuiProp.Rounded, new Float4(radius, 0, 0, radius));
 
         /// <summary>Rounds the right corners of the element.</summary>
-        public T RoundedRight(double radius) => SetStyleProperty(GuiProp.Rounded, new Double4(0, radius, radius, 0));
+        public T RoundedRight(float radius) => SetStyleProperty(GuiProp.Rounded, new Float4(0, radius, radius, 0));
 
         /// <summary>Rounds all corners of the element with the same radius.</summary>
-        public T Rounded(double radius) => SetStyleProperty(GuiProp.Rounded, new Double4(radius, radius, radius, radius));
+        public T Rounded(float radius) => SetStyleProperty(GuiProp.Rounded, new Float4(radius, radius, radius, radius));
 
         /// <summary>Rounds each corner of the element with individual radii.</summary>
         /// <param name="tlRadius">Top-left radius</param>
         /// <param name="trRadius">Top-right radius</param>
         /// <param name="brRadius">Bottom-right radius</param>
         /// <param name="blRadius">Bottom-left radius</param>
-        public T Rounded(double tlRadius, double trRadius, double brRadius, double blRadius) =>
-            SetStyleProperty(GuiProp.Rounded, new Double4(tlRadius, trRadius, brRadius, blRadius));
+        public T Rounded(float tlRadius, float trRadius, float brRadius, float blRadius) =>
+            SetStyleProperty(GuiProp.Rounded, new Float4(tlRadius, trRadius, brRadius, blRadius));
 
         #endregion
 
         #region Layout Properties
 
         /// <summary>Sets the aspect ratio (width/height) of the element.</summary>
-        public T AspectRatio(double ratio) => SetStyleProperty(GuiProp.AspectRatio, ratio);
+        public T AspectRatio(float ratio) => SetStyleProperty(GuiProp.AspectRatio, ratio);
 
         /// <summary>Sets both width and height to the same value.</summary>
         public T Size(in UnitValue sizeUniform) => Size(sizeUniform, sizeUniform);
@@ -237,68 +237,68 @@ namespace Prowl.PaperUI
         public T TextColor(Color color) => SetStyleProperty(GuiProp.TextColor, color);
 
         /// <summary>Sets the spacing between words in text.</summary>
-        public T WordSpacing(double spacing) => SetStyleProperty(GuiProp.WordSpacing, spacing);
+        public T WordSpacing(float spacing) => SetStyleProperty(GuiProp.WordSpacing, spacing);
         /// <summary>Sets the spacing between letters in text.</summary>
-        public T LetterSpacing(double spacing) => SetStyleProperty(GuiProp.LetterSpacing, spacing);
+        public T LetterSpacing(float spacing) => SetStyleProperty(GuiProp.LetterSpacing, spacing);
         /// <summary>Sets the height of a line in text.</summary>
-        public T LineHeight(double height) => SetStyleProperty(GuiProp.LineHeight, height);
+        public T LineHeight(float height) => SetStyleProperty(GuiProp.LineHeight, height);
 
         /// <summary>Sets the size of a Tab character in spaces.</summary>
         public T TabSize(int size) => SetStyleProperty(GuiProp.TabSize, size);
         /// <summary>Sets the size of text in pixels.</summary>
-        public T FontSize(double size) => SetStyleProperty(GuiProp.FontSize, size);
+        public T FontSize(float size) => SetStyleProperty(GuiProp.FontSize, size);
 
         #endregion
 
         #region Transform Properties
 
         /// <summary>Sets horizontal translation.</summary>
-        public T TranslateX(double x) => SetStyleProperty(GuiProp.TranslateX, x);
+        public T TranslateX(float x) => SetStyleProperty(GuiProp.TranslateX, x);
 
         /// <summary>Sets vertical translation.</summary>
-        public T TranslateY(double y) => SetStyleProperty(GuiProp.TranslateY, y);
+        public T TranslateY(float y) => SetStyleProperty(GuiProp.TranslateY, y);
 
         /// <summary>Sets both horizontal and vertical translation.</summary>
-        public T Translate(double x, double y)
+        public T Translate(float x, float y)
         {
             SetStyleProperty(GuiProp.TranslateX, x);
             return SetStyleProperty(GuiProp.TranslateY, y);
         }
 
         /// <summary>Sets horizontal scaling factor.</summary>
-        public T ScaleX(double x) => SetStyleProperty(GuiProp.ScaleX, x);
+        public T ScaleX(float x) => SetStyleProperty(GuiProp.ScaleX, x);
 
         /// <summary>Sets vertical scaling factor.</summary>
-        public T ScaleY(double y) => SetStyleProperty(GuiProp.ScaleY, y);
+        public T ScaleY(float y) => SetStyleProperty(GuiProp.ScaleY, y);
 
         /// <summary>Sets uniform scaling in both directions.</summary>
-        public T Scale(double scale) => Scale(scale, scale);
+        public T Scale(float scale) => Scale(scale, scale);
 
         /// <summary>Sets individual scaling factors for each axis.</summary>
-        public T Scale(double x, double y)
+        public T Scale(float x, float y)
         {
             SetStyleProperty(GuiProp.ScaleX, x);
             return SetStyleProperty(GuiProp.ScaleY, y);
         }
 
         /// <summary>Sets rotation angle in degrees.</summary>
-        public T Rotate(double angleInDegrees) => SetStyleProperty(GuiProp.Rotate, angleInDegrees);
+        public T Rotate(float angleInDegrees) => SetStyleProperty(GuiProp.Rotate, angleInDegrees);
 
         /// <summary>Sets horizontal skew angle.</summary>
-        public T SkewX(double angle) => SetStyleProperty(GuiProp.SkewX, angle);
+        public T SkewX(float angle) => SetStyleProperty(GuiProp.SkewX, angle);
 
         /// <summary>Sets vertical skew angle.</summary>
-        public T SkewY(double angle) => SetStyleProperty(GuiProp.SkewY, angle);
+        public T SkewY(float angle) => SetStyleProperty(GuiProp.SkewY, angle);
 
         /// <summary>Sets both horizontal and vertical skew angles.</summary>
-        public T Skew(double x, double y)
+        public T Skew(float x, float y)
         {
             SetStyleProperty(GuiProp.SkewX, x);
             return SetStyleProperty(GuiProp.SkewY, y);
         }
 
         /// <summary>Sets the origin point for transformations.</summary>
-        public T TransformOrigin(double x, double y)
+        public T TransformOrigin(float x, float y)
         {
             SetStyleProperty(GuiProp.OriginX, x);
             return SetStyleProperty(GuiProp.OriginY, y);
@@ -317,12 +317,12 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        public T Transition(GuiProp property, double duration, Func<double, double> easing = null) => SetTransition(property, duration, easing);
+        public T Transition(GuiProp property, float duration, Func<float, float> easing = null) => SetTransition(property, duration, easing);
 
         /// <summary>
         /// Abstract method to handle transition setting - implemented by derived classes
         /// </summary>
-        protected abstract T SetTransition(GuiProp property, double duration, Func<double, double> easing);
+        protected abstract T SetTransition(GuiProp property, float duration, Func<float, float> easing);
 
         #endregion
     }
@@ -414,7 +414,7 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        protected override StateDrivenStyle SetTransition(GuiProp property, double duration, Func<double, double> easing)
+        protected override StateDrivenStyle SetTransition(GuiProp property, float duration, Func<float, float> easing)
         {
             if (_isActive)
                 _owner._paper.SetTransitionConfig(_handle.Data.ID, property, duration, easing);
@@ -439,7 +439,7 @@ namespace Prowl.PaperUI
     public class StyleTemplate : StyleSetterBase<StyleTemplate>
     {
         private readonly Dictionary<GuiProp, object> _styleProperties = new Dictionary<GuiProp, object>();
-        private readonly Dictionary<GuiProp, (double duration, Func<double, double> easing)> _transitions = new Dictionary<GuiProp, (double, Func<double, double>)>();
+        private readonly Dictionary<GuiProp, (float duration, Func<float, float> easing)> _transitions = new Dictionary<GuiProp, (float, Func<float, float>)>();
 
         /// <summary>
         /// Creates a new style template
@@ -461,7 +461,7 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        protected override StyleTemplate SetTransition(GuiProp property, double duration, Func<double, double> easing)
+        protected override StyleTemplate SetTransition(GuiProp property, float duration, Func<float, float> easing)
         {
             _transitions[property] = (duration, easing);
             return this;
@@ -561,7 +561,7 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        protected override ElementBuilder SetTransition(GuiProp property, double duration, Func<double, double> easing)
+        protected override ElementBuilder SetTransition(GuiProp property, float duration, Func<float, float> easing)
         {
             _paper.SetTransitionConfig(_handle.Data.ID, property, duration, easing);
             return this;
@@ -739,14 +739,14 @@ namespace Prowl.PaperUI
         public ElementBuilder OnRelease<T>(T capturedValue, Action<T, ClickEvent> handler) =>
             OnRelease((e) => handler(capturedValue, e));
 
-        /// <summary>Sets a callback that runs when the element is double-clicked.</summary>
+        /// <summary>Sets a callback that runs when the element is float-clicked.</summary>
         public ElementBuilder OnDoubleClick(Action<ClickEvent> handler)
         {
             _handle.Data.OnDoubleClick += handler;
             return this;
         }
 
-        /// <summary>Sets a callback that runs when the element is double-clicked, with a captured value.</summary>
+        /// <summary>Sets a callback that runs when the element is float-clicked, with a captured value.</summary>
         public ElementBuilder OnDoubleClick<T>(T capturedValue, Action<T, ClickEvent> handler) =>
             OnDoubleClick((e) => handler(capturedValue, e));
 
@@ -899,7 +899,7 @@ namespace Prowl.PaperUI
         /// 
         /// // Example: Aspect ratio sizing
         /// .ContentSizer((maxWidth, maxHeight) => {
-        ///     const double aspectRatio = 16.0 / 9.0;
+        ///     const float aspectRatio = 16.0 / 9.0;
         ///     if (maxWidth.HasValue) {
         ///         return (maxWidth.Value, maxWidth.Value / aspectRatio);
         ///     }
@@ -909,7 +909,7 @@ namespace Prowl.PaperUI
         ///     return (320, 180); // Default size
         /// })
         /// </example>
-        public ElementBuilder ContentSizer(Func<double?, double?, (double, double)?> sizer)
+        public ElementBuilder ContentSizer(Func<float?, float?, (float, float)?> sizer)
         {
             _handle.Data.ContentSizer = sizer;
             return this;
@@ -921,7 +921,7 @@ namespace Prowl.PaperUI
         /// <param name="width">Fixed preferred width</param>
         /// <param name="height">Fixed preferred height</param>
         /// <returns>This builder for method chaining</returns>
-        public ElementBuilder ContentSizer(double width, double height)
+        public ElementBuilder ContentSizer(float width, float height)
         {
             _handle.Data.ContentSizer = (_, _) => (width, height);
             return this;
@@ -1028,7 +1028,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the scroll position of the element.
         /// </summary>
-        public ElementBuilder SetScrollPosition(Double2 position)
+        public ElementBuilder SetScrollPosition(Float2 position)
         {
             var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
             state.Position = position;
@@ -1056,21 +1056,21 @@ namespace Prowl.PaperUI
                 var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
 
                 // Set viewport size to current element size
-                state.ViewportSize = new Double2(rect.Size.X, rect.Size.Y);
+                state.ViewportSize = new Float2(rect.Size.X, rect.Size.Y);
 
                 // For content size, we need to measure all children
                 // Here we're assuming content size is the max bounds of all children
-                double maxX = 0;
-                double maxY = 0;
+                float maxX = 0;
+                float maxY = 0;
 
                 foreach (var childIndex in element.Data.ChildIndices)
                 {
                     ref var child = ref element.Owner!.GetElementData(childIndex);
-                    maxX = Math.Max(maxX, child.RelativeX + child.LayoutWidth);
-                    maxY = Math.Max(maxY, child.RelativeY + child.LayoutHeight);
+                    maxX = Maths.Max(maxX, child.RelativeX + child.LayoutWidth);
+                    maxY = Maths.Max(maxY, child.RelativeY + child.LayoutHeight);
                 }
 
-                state.ContentSize = new Double2(maxX, maxY);
+                state.ContentSize = new Float2(maxX, maxY);
                 state.ClampScrollPosition();
 
                 _paper.SetElementStorage(_handle, "ScrollState", state);
@@ -1079,7 +1079,7 @@ namespace Prowl.PaperUI
             // Handle hover events to detect when cursor is over scrollbars
             OnHover((e) => {
                 var state = _paper.GetElementStorage<ScrollState>(_handle, "ScrollState", new ScrollState());
-                Double2 mousePos = _paper.PointerPos;
+                Float2 mousePos = _paper.PointerPos;
 
                 // Check if pointer is over scrollbars
                 state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
@@ -1106,14 +1106,14 @@ namespace Prowl.PaperUI
 
                 if ((_handle.Data.ScrollFlags & Scroll.ScrollY) != 0)
                 {
-                    state.Position = new Double2(
+                    state.Position = new Float2(
                         state.Position.X,
                         state.Position.Y - e.Delta * 30  // Adjust scroll speed as needed
                     );
                 }
                 else if ((_handle.Data.ScrollFlags & Scroll.ScrollX) != 0)
                 {
-                    state.Position = new Double2(
+                    state.Position = new Float2(
                         state.Position.X - e.Delta * 30,
                         state.Position.Y
                     );
@@ -1129,7 +1129,7 @@ namespace Prowl.PaperUI
 
                 if (state.AreScrollbarsHidden(_handle.Data.ScrollFlags)) return;
 
-                Double2 mousePos = _paper.PointerPos;
+                Float2 mousePos = _paper.PointerPos;
 
                 // Check if click is on a scrollbar
                 bool onVertical = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
@@ -1158,7 +1158,7 @@ namespace Prowl.PaperUI
 
                 if (state.AreScrollbarsHidden(_handle.Data.ScrollFlags)) return;
 
-                Double2 mousePos = _paper.PointerPos;
+                Float2 mousePos = _paper.PointerPos;
 
                 // Handle scrollbar dragging
                 if (state.IsDraggingVertical)
@@ -1183,7 +1183,7 @@ namespace Prowl.PaperUI
                 state.IsDraggingHorizontal = false;
 
                 // Update hover state on release
-                Double2 mousePos = _paper.PointerPos;
+                Float2 mousePos = _paper.PointerPos;
                 state.IsVerticalScrollbarHovered = state.IsPointOverVerticalScrollbar(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
                 state.IsHorizontalScrollbarHovered = state.IsPointOverHorizontalScrollbar(mousePos, e.ElementRect, _handle.Data.ScrollFlags);
 
@@ -1244,8 +1244,8 @@ namespace Prowl.PaperUI
             public int CursorPosition;
             public int SelectionStart;
             public int SelectionEnd;
-            public double ScrollOffsetX;
-            public double ScrollOffsetY;
+            public float ScrollOffsetX;
+            public float ScrollOffsetY;
             public bool IsFocused;
             public bool IsMultiLine;
 
@@ -1261,8 +1261,8 @@ namespace Prowl.PaperUI
             {
                 if (!HasSelection) return;
                 
-                int start = Math.Min(SelectionStart, SelectionEnd);
-                int end = Math.Max(SelectionStart, SelectionEnd);
+                int start = Maths.Min(SelectionStart, SelectionEnd);
+                int end = Maths.Max(SelectionStart, SelectionEnd);
                 Value = Value.Remove(start, end - start);
                 CursorPosition = start;
                 ClearSelection();
@@ -1270,9 +1270,9 @@ namespace Prowl.PaperUI
             
             public void ClampValues()
             {
-                CursorPosition = Math.Clamp(CursorPosition, 0, Value.Length);
-                SelectionStart = SelectionStart < 0 ? -1 : Math.Clamp(SelectionStart, 0, Value.Length);
-                SelectionEnd = SelectionEnd < 0 ? -1 : Math.Clamp(SelectionEnd, 0, Value.Length);
+                CursorPosition = Maths.Clamp(CursorPosition, 0, Value.Length);
+                SelectionStart = SelectionStart < 0 ? -1 : Maths.Clamp(SelectionStart, 0, Value.Length);
+                SelectionEnd = SelectionEnd < 0 ? -1 : Maths.Clamp(SelectionEnd, 0, Value.Length);
             }
             
             /// <summary>Gets the current line that contains the cursor</summary>
@@ -1301,18 +1301,18 @@ namespace Prowl.PaperUI
                 if (string.IsNullOrEmpty(Value)) return 0;
                 if (CursorPosition == 0) return 0;
                 
-                int lastNewline = Value.LastIndexOf('\n', Math.Min(CursorPosition - 1, Value.Length - 1));
+                int lastNewline = Value.LastIndexOf('\n', Maths.Min(CursorPosition - 1, Value.Length - 1));
                 return CursorPosition - (lastNewline + 1);
             }
             
             /// <summary>Clamps scroll offsets to valid ranges for text input</summary>
-            public void ClampScrollOffsets(double contentWidth, double contentHeight, double visibleWidth, double visibleHeight)
+            public void ClampScrollOffsets(float contentWidth, float contentHeight, float visibleWidth, float visibleHeight)
             {
-                double maxScrollX = Math.Max(0, contentWidth - visibleWidth);
-                double maxScrollY = Math.Max(0, contentHeight - visibleHeight);
+                float maxScrollX = Maths.Max(0, contentWidth - visibleWidth);
+                float maxScrollY = Maths.Max(0, contentHeight - visibleHeight);
                 
-                ScrollOffsetX = Math.Clamp(ScrollOffsetX, 0, maxScrollX);
-                ScrollOffsetY = Math.Clamp(ScrollOffsetY, 0, maxScrollY);
+                ScrollOffsetX = Maths.Clamp(ScrollOffsetX, 0, maxScrollX);
+                ScrollOffsetY = Maths.Clamp(ScrollOffsetY, 0, maxScrollY);
             }
         }
 
@@ -1327,8 +1327,8 @@ namespace Prowl.PaperUI
                 CursorPosition = (initialValue ?? "").Length,
                 SelectionStart = -1,
                 SelectionEnd = -1,
-                ScrollOffsetX = 0.0,
-                ScrollOffsetY = 0.0,
+                ScrollOffsetX = 0.0f,
+                ScrollOffsetY = 0.0f,
                 IsFocused = false,
                 IsMultiLine = isMultiLine
             };
@@ -1345,10 +1345,10 @@ namespace Prowl.PaperUI
             _paper.SetElementStorage(_handle, "TextInputState", state);
         }
         
-        private TextLayoutSettings CreateTextLayoutSettings(TextInputSettings inputSettings, bool isMultiLine, double maxWidth = float.MaxValue)
+        private TextLayoutSettings CreateTextLayoutSettings(TextInputSettings inputSettings, bool isMultiLine, float maxWidth = float.MaxValue)
         {
-            var fontSize = (double)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
-            var letterSpacing = (double)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
+            var fontSize = (float)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
+            var letterSpacing = (float)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
 
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = (float)fontSize;
@@ -1371,7 +1371,7 @@ namespace Prowl.PaperUI
         {
             if (string.IsNullOrEmpty(text) || position <= 0) return 0;
             
-            int pos = Math.Min(position - 1, text.Length - 1);
+            int pos = Maths.Min(position - 1, text.Length - 1);
             
             // Skip whitespace
             while (pos > 0 && char.IsWhiteSpace(text[pos]))
@@ -1440,14 +1440,14 @@ namespace Prowl.PaperUI
             
             var lines = state.GetLines();
             int currentLine = state.GetCursorLine();
-            int targetLine = Math.Clamp(currentLine + direction, 0, lines.Length - 1);
+            int targetLine = Maths.Clamp(currentLine + direction, 0, lines.Length - 1);
             
             if (targetLine == currentLine) return;
 
             int currentColumn = state.GetCursorColumn();
 
             // Move to the same column in the target line, or end of line if shorter
-            int targetColumn = Math.Min(currentColumn, lines[targetLine].Length);
+            int targetColumn = Maths.Min(currentColumn, lines[targetLine].Length);
             
             // Calculate new cursor position
             int newPosition = 0;
@@ -1526,15 +1526,15 @@ namespace Prowl.PaperUI
                     else if (IsShiftPressed())
                     {
                         if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
-                        state.CursorPosition = Math.Max(0, state.CursorPosition - 1);
+                        state.CursorPosition = Maths.Max(0, state.CursorPosition - 1);
                         state.SelectionEnd = state.CursorPosition;
                     }
                     else
                     {
                         if (state.HasSelection)
-                            state.CursorPosition = Math.Min(state.SelectionStart, state.SelectionEnd);
+                            state.CursorPosition = Maths.Min(state.SelectionStart, state.SelectionEnd);
                         else
-                            state.CursorPosition = Math.Max(0, state.CursorPosition - 1);
+                            state.CursorPosition = Maths.Max(0, state.CursorPosition - 1);
                         state.ClearSelection();
                     }
                     break;
@@ -1559,15 +1559,15 @@ namespace Prowl.PaperUI
                     else if (IsShiftPressed())
                     {
                         if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
-                        state.CursorPosition = Math.Min(state.Value.Length, state.CursorPosition + 1);
+                        state.CursorPosition = Maths.Min(state.Value.Length, state.CursorPosition + 1);
                         state.SelectionEnd = state.CursorPosition;
                     }
                     else
                     {
                         if (state.HasSelection)
-                            state.CursorPosition = Math.Max(state.SelectionStart, state.SelectionEnd);
+                            state.CursorPosition = Maths.Max(state.SelectionStart, state.SelectionEnd);
                         else
-                            state.CursorPosition = Math.Min(state.Value.Length, state.CursorPosition + 1);
+                            state.CursorPosition = Maths.Min(state.Value.Length, state.CursorPosition + 1);
                         state.ClearSelection();
                     }
                     break;
@@ -1608,16 +1608,16 @@ namespace Prowl.PaperUI
                     
                 case PaperKey.C when IsControlPressed() && state.HasSelection:
                     {
-                        int start = Math.Min(state.SelectionStart, state.SelectionEnd);
-                        int end = Math.Max(state.SelectionStart, state.SelectionEnd);
+                        int start = Maths.Min(state.SelectionStart, state.SelectionEnd);
+                        int end = Maths.Max(state.SelectionStart, state.SelectionEnd);
                         _paper.SetClipboard(state.Value.Substring(start, end - start));
                     }
                     break;
                     
                 case PaperKey.X when IsControlPressed() && state.HasSelection:
                     {
-                        int start = Math.Min(state.SelectionStart, state.SelectionEnd);
-                        int end = Math.Max(state.SelectionStart, state.SelectionEnd);
+                        int start = Maths.Min(state.SelectionStart, state.SelectionEnd);
+                        int end = Maths.Max(state.SelectionStart, state.SelectionEnd);
                         _paper.SetClipboard(state.Value.Substring(start, end - start));
                         state.DeleteSelection();
                         valueChanged = true;
@@ -1639,7 +1639,7 @@ namespace Prowl.PaperUI
                                 int availableLength = settings.MaxLength - state.Value.Length;
                                 if (state.HasSelection)
                                 {
-                                    int selectionLength = Math.Abs(state.SelectionEnd - state.SelectionStart);
+                                    int selectionLength = Maths.Abs(state.SelectionEnd - state.SelectionStart);
                                     availableLength += selectionLength;
                                 }
                                 if (availableLength > 0 && clipText.Length > availableLength)
@@ -1819,7 +1819,7 @@ namespace Prowl.PaperUI
                     var textSettings = CreateTextLayoutSettings(settings, true, (float)(width ?? float.MaxValue));
                     var textLayout = _paper.CreateLayout(currentState.Value, textSettings);
 
-                    return (width ?? textSettings.PixelSize, Math.Max(height ?? textSettings.PixelSize * textSettings.LineHeight, textLayout.Size.Y));
+                    return (width ?? textSettings.PixelSize, Maths.Max(height ?? textSettings.PixelSize * textSettings.LineHeight, textLayout.Size.Y));
                 });
             }
 
@@ -1845,7 +1845,7 @@ namespace Prowl.PaperUI
                 var currentState = LoadTextInputState(value, isMultiLine);
                 var clickPos = e.RelativePosition.X + currentState.ScrollOffsetX;
                 var clickPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
-                var newPosition = Math.Clamp(
+                var newPosition = Maths.Clamp(
                     CalculateTextPosition(currentState.Value, settings, isMultiLine, clickPos, clickPosY),
                     0, currentState.Value.Length);
 
@@ -1871,13 +1871,13 @@ namespace Prowl.PaperUI
                 SaveTextInputState(currentState);
             });
 
-            // Handle double-click for word selection
+            // Handle float-click for word selection
             OnDoubleClick((ClickEvent e) =>
             {
                 var currentState = LoadTextInputState(value, isMultiLine);
                 var clickPos = e.RelativePosition.X + currentState.ScrollOffsetX;
                 var clickPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
-                var clickPosition = Math.Clamp(
+                var clickPosition = Maths.Clamp(
                     CalculateTextPosition(currentState.Value, settings, isMultiLine, clickPos, clickPosY),
                     0, currentState.Value.Length);
 
@@ -1899,7 +1899,7 @@ namespace Prowl.PaperUI
                 var currentState = LoadTextInputState(value, isMultiLine);
                 var dragPos = e.RelativePosition.X + currentState.ScrollOffsetX;
                 var dragPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
-                var pos = Math.Clamp(CalculateTextPosition(currentState.Value, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
+                var pos = Maths.Clamp(CalculateTextPosition(currentState.Value, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
                 
                 currentState.CursorPosition = pos;
                 currentState.SelectionStart = pos;
@@ -1914,18 +1914,18 @@ namespace Prowl.PaperUI
                 if (currentState.SelectionStart < 0) return;
                 
                 // Auto-scroll when dragging near edges
-                const double edgeScrollSensitivity = 20.0;
-                const double scrollSpeed = 2.0;
+                const float edgeScrollSensitivity = 20.0f;
+                const float scrollSpeed = 2.0f;
                 
                 if (e.RelativePosition.X < edgeScrollSensitivity)
-                    currentState.ScrollOffsetX = Math.Max(0, currentState.ScrollOffsetX - scrollSpeed);
+                    currentState.ScrollOffsetX = Maths.Max(0, currentState.ScrollOffsetX - scrollSpeed);
                 else if (e.RelativePosition.X > e.ElementRect.Size.X - edgeScrollSensitivity)
                     currentState.ScrollOffsetX += scrollSpeed;
                 
                 if (isMultiLine)
                 {
                     if (e.RelativePosition.Y < edgeScrollSensitivity)
-                        currentState.ScrollOffsetY = Math.Max(0, currentState.ScrollOffsetY - scrollSpeed);
+                        currentState.ScrollOffsetY = Maths.Max(0, currentState.ScrollOffsetY - scrollSpeed);
                     else if (e.RelativePosition.Y > e.ElementRect.Size.Y - edgeScrollSensitivity)
                         currentState.ScrollOffsetY += scrollSpeed;
                 }
@@ -1933,13 +1933,13 @@ namespace Prowl.PaperUI
                 // Clamp scroll offsets after auto-scroll
                 var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, e.ElementRect.Size.X);
                 var textLayout = _paper.CreateLayout(currentState.Value, layoutSettings);
-                double visibleWidth = e.ElementRect.Size.X;
-                double visibleHeight = e.ElementRect.Size.Y;
+                float visibleWidth = e.ElementRect.Size.X;
+                float visibleHeight = e.ElementRect.Size.Y;
                 currentState.ClampScrollOffsets(textLayout.Size.X, textLayout.Size.Y, visibleWidth, visibleHeight);
                 
                 var dragPos = e.RelativePosition.X + currentState.ScrollOffsetX;
                 var dragPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
-                var pos = Math.Clamp(CalculateTextPosition(currentState.Value, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
+                var pos = Maths.Clamp(CalculateTextPosition(currentState.Value, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
                 
                 currentState.CursorPosition = pos;
                 currentState.SelectionEnd = pos;
@@ -1997,7 +1997,7 @@ namespace Prowl.PaperUI
                     canvas.SaveState();
                     canvas.TransformBy(Transform2D.CreateTranslation(-renderState.ScrollOffsetX, -renderState.ScrollOffsetY));
 
-                    var fontSize = (double)elHandle.Data._elementStyle.GetValue(GuiProp.FontSize);
+                    var fontSize = (float)elHandle.Data._elementStyle.GetValue(GuiProp.FontSize);
 
                     // Draw text or placeholder
                     if (string.IsNullOrEmpty(renderState.Value))
@@ -2017,8 +2017,8 @@ namespace Prowl.PaperUI
                         // Draw selection background
                         if (renderState.HasSelection)
                         {
-                            int start = Math.Min(renderState.SelectionStart, renderState.SelectionEnd);
-                            int end = Math.Max(renderState.SelectionStart, renderState.SelectionEnd);
+                            int start = Maths.Min(renderState.SelectionStart, renderState.SelectionEnd);
+                            int end = Maths.Max(renderState.SelectionStart, renderState.SelectionEnd);
                             
                             var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
                             var startPos = textLayout.GetCursorPosition(start);
@@ -2026,18 +2026,18 @@ namespace Prowl.PaperUI
                             
                             canvas.SetFillColor(Color32.FromArgb(100, 100, 150, 255));
                             
-                            if (isMultiLine && Math.Abs(endPos.Y - startPos.Y) > fontSize / 2)
+                            if (isMultiLine && Maths.Abs(endPos.Y - startPos.Y) > fontSize / 2)
                             {
                                 // Multi-line selection: Draw rectangles for each line
-                                double lineHeight = fontSize * layoutSettings.LineHeight;
-                                double currentY = startPos.Y;
+                                float lineHeight = fontSize * layoutSettings.LineHeight;
+                                float currentY = startPos.Y;
                                 
                                 // Get line indices from Y positions
                                 int startLineIndex = (int)(startPos.Y / lineHeight);
                                 int endLineIndex = (int)(endPos.Y / lineHeight);
 
                                 // First line: from start position to end of line
-                                double firstLineWidth = startLineIndex < textLayout.Lines.Count ? textLayout.Lines[startLineIndex].Width : 0;
+                                float firstLineWidth = startLineIndex < textLayout.Lines.Count ? textLayout.Lines[startLineIndex].Width : 0;
                                 
                                 canvas.BeginPath();
                                 canvas.RoundedRect(
@@ -2099,8 +2099,8 @@ namespace Prowl.PaperUI
                         {
                             var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
                             var cursorPos = textLayout.GetCursorPosition(renderState.CursorPosition);
-                            double cursorX = r.Min.X + cursorPos.X;
-                            double cursorY = r.Min.Y + cursorPos.Y;
+                            float cursorX = r.Min.X + cursorPos.X;
+                            float cursorY = r.Min.Y + cursorPos.Y;
                             
                             canvas.BeginPath();
                             canvas.MoveTo(cursorX, cursorY);
@@ -2131,20 +2131,20 @@ namespace Prowl.PaperUI
                 var textLayout = _paper.CreateLayout(state.Value, CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth));
                 var cursorPos = textLayout.GetCursorPosition(state.CursorPosition);
                 
-                double visibleWidth = _handle.Data.LayoutWidth;
-                double visibleHeight = _handle.Data.LayoutHeight;
+                float visibleWidth = _handle.Data.LayoutWidth;
+                float visibleHeight = _handle.Data.LayoutHeight;
                 
-                const double margin = 10.0;
+                const float margin = 10.0f;
                 
                 // Horizontal scrolling
                 if (cursorPos.X < state.ScrollOffsetX + margin)
-                    state.ScrollOffsetX = Math.Max(0, cursorPos.X - margin);
+                    state.ScrollOffsetX = Maths.Max(0, cursorPos.X - margin);
                 else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
                     state.ScrollOffsetX = cursorPos.X - visibleWidth + margin;
                 
                 // Vertical scrolling
                 if (cursorPos.Y < state.ScrollOffsetY + margin)
-                    state.ScrollOffsetY = Math.Max(0, cursorPos.Y - margin);
+                    state.ScrollOffsetY = Maths.Max(0, cursorPos.Y - margin);
                 else if (cursorPos.Y > state.ScrollOffsetY + visibleHeight - margin)
                     state.ScrollOffsetY = cursorPos.Y - visibleHeight + margin;
 
@@ -2154,20 +2154,20 @@ namespace Prowl.PaperUI
             else
             {
                 // Single-line horizontal scrolling only
-                var fontSize = (double)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
-                var letterSpacing = (double)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
+                var fontSize = (float)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
+                var letterSpacing = (float)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
                 var cursorPos = GetCursorPositionFromIndex(state.Value, settings.Font, fontSize, letterSpacing, state.CursorPosition);
                 
-                double visibleWidth = _handle.Data.LayoutWidth;
-                const double margin = 20.0;
+                float visibleWidth = _handle.Data.LayoutWidth;
+                const float margin = 20.0f;
                 
                 if (cursorPos.X < state.ScrollOffsetX + margin)
-                    state.ScrollOffsetX = Math.Max(0, cursorPos.X - margin);
+                    state.ScrollOffsetX = Maths.Max(0, cursorPos.X - margin);
                 else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
                     state.ScrollOffsetX = cursorPos.X - visibleWidth + margin;
 
                 // Clamp horizontal scroll offset for single-line
-                var textSize = _paper.MeasureText(state.Value, CreateTextLayoutSettings(settings, false, double.MaxValue));
+                var textSize = _paper.MeasureText(state.Value, CreateTextLayoutSettings(settings, false, float.MaxValue));
                 state.ClampScrollOffsets(textSize.X, textSize.Y, visibleWidth, _handle.Data.LayoutHeight);
             }
         }
@@ -2175,10 +2175,10 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Calculates the closest text position based on coordinates using TextLayout.
         /// </summary>
-        private int CalculateTextPosition(string text, TextInputSettings settings, bool isMultiLine, double x, double y = 0)
+        private int CalculateTextPosition(string text, TextInputSettings settings, bool isMultiLine, float x, float y = 0)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            var maxWidth = isMultiLine ? _handle.Data.LayoutWidth : double.MaxValue;
+            var maxWidth = isMultiLine ? _handle.Data.LayoutWidth : float.MaxValue;
             var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, maxWidth));
             return textLayout.GetCursorIndex(new((float)x, (float)y));
         }
@@ -2186,9 +2186,9 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Calculates the cursor position for a specific character index using TextLayout.
         /// </summary>
-        private Double2 GetCursorPositionFromIndex(string text, FontFile font, double fontSize, double letterSpacing, int index)
+        private Float2 GetCursorPositionFromIndex(string text, FontFile font, float fontSize, float letterSpacing, int index)
         {
-            if (string.IsNullOrEmpty(text) || index <= 0) return Double2.Zero;
+            if (string.IsNullOrEmpty(text) || index <= 0) return Float2.Zero;
             var settings = TextLayoutSettings.Default;
             settings.Font = font;
             settings.PixelSize = (float)fontSize;

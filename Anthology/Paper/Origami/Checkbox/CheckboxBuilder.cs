@@ -237,8 +237,8 @@ public class CheckboxBuilder
                 .Width(dimensions.CheckboxSize)
                 .Height(dimensions.CheckboxSize)
                 .Rounded(theme.GetRadius(_radius))
-                .Transition(GuiProp.BackgroundColor, 0.15)
-                .Transition(GuiProp.BorderColor, 0.15);
+                .Transition(GuiProp.BackgroundColor, 0.15f)
+                .Transition(GuiProp.BorderColor, 0.15f);
 
             // Apply checkbox styling
             ApplyCheckboxStyling(checkbox, theme, dimensions);
@@ -307,7 +307,7 @@ public class CheckboxBuilder
     private void ApplyCheckboxStyling(ElementBuilder checkbox, OrigamiTheme theme, CheckboxDimensions dimensions)
     {
         var themeColor = theme.GetColor(_color);
-        double opacity = _isDisabled ? theme.DisableOpacity : 1.0;
+        float opacity = _isDisabled ? theme.DisableOpacity : 1.0f;
 
         // Determine state colors
         if (_isChecked || _isIndeterminate)
@@ -376,9 +376,9 @@ public class CheckboxBuilder
 
     private struct CheckboxDimensions
     {
-        public double CheckboxSize;
-        public double Height;
-        public double IconSize;
+        public float CheckboxSize;
+        public float Height;
+        public float IconSize;
     }
 
     private CheckboxDimensions GetCheckboxDimensions(OrigamiSize size)

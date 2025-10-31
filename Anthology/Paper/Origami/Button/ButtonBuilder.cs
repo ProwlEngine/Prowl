@@ -246,11 +246,11 @@ public class ButtonBuilder
         // Create the button element
         var button = _paper.Box(_stringId, _intId, _lineId)
             .LayoutType(LayoutType.Row)
-            .Transition(GuiProp.BackgroundColor, 0.2)
-            .Transition(GuiProp.ScaleX, 0.1)
-            .Transition(GuiProp.ScaleY, 0.1)
+            .Transition(GuiProp.BackgroundColor, 0.2f)
+            .Transition(GuiProp.ScaleX, 0.1f)
+            .Transition(GuiProp.ScaleY, 0.1f)
             .Active
-                .Scale(0.95)
+                .Scale(0.95f)
                 .End();
 
         // Apply size-specific height
@@ -303,7 +303,7 @@ public class ButtonBuilder
     private void ApplyBackground(OrigamiTheme theme, ButtonVariant variant, ElementBuilder button)
     {
         var bg = theme.GetColor(_color).Base;
-        double opacity = _isDisabled || _isLoading ? theme.DisableOpacity : 1.0;
+        float opacity = _isDisabled || _isLoading ? theme.DisableOpacity : 1.0f;
         bg = System.Drawing.Color.FromArgb((int)(255 * opacity), bg);
 
         if (variant == ButtonVariant.Solid)
@@ -371,7 +371,7 @@ public class ButtonBuilder
 
         var textColor = theme.Foreground.Base;
 
-        double opacity = _isDisabled || _isLoading ? theme.DisableOpacity : 1.0;
+        float opacity = _isDisabled || _isLoading ? theme.DisableOpacity : 1.0f;
         textColor = System.Drawing.Color.FromArgb((int)(255 * opacity), textColor);
 
         // Handle spinner placement
@@ -474,7 +474,7 @@ public class ButtonBuilder
     /// <summary>
     /// Gets the height for the specified size.
     /// </summary>
-    private static double GetHeightForSize(OrigamiSize size)
+    private static float GetHeightForSize(OrigamiSize size)
     {
         return size switch
         {
@@ -488,7 +488,7 @@ public class ButtonBuilder
     /// <summary>
     /// Gets the min width for the specified size.
     /// </summary>
-    private static double GetMinWidthForSize(OrigamiSize size)
+    private static float GetMinWidthForSize(OrigamiSize size)
     {
         return size switch
         {

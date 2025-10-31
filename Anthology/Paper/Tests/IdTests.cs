@@ -40,12 +40,12 @@ public class IdTests
 
         public object CreateTexture(uint width, uint height)
         {
-            return new Vector2Int((int)width, (int)height);
+            return new Int2((int)width, (int)height);
         }
 
-        public Vector2Int GetTextureSize(object texture)
+        public Int2 GetTextureSize(object texture)
         {
-            return (Vector2Int)texture;
+            return (Int2)texture;
         }
 
         public void SetTextureData(object texture, IntRect bounds, byte[] data) {}

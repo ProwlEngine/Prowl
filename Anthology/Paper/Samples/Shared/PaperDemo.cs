@@ -9,17 +9,17 @@ namespace Shared
     public static partial class PaperDemo
     {
         // Track state for interactive elements
-        static double sliderValue = 0.5f;
+        static float sliderValue = 0.5f;
         static int selectedTabIndex = 0;
-        static Double2 chartPosition = new Double2(0, 0);
-        static double zoomLevel = 1.0f;
+        static Float2 chartPosition = new Float2(0, 0);
+        static float zoomLevel = 1.0f;
         static bool[] toggleState = { true, false, true, false, true };
 
         // Sample data for visualization
-        static double[] dataPoints = { 0.2f, 0.5f, 0.3f, 0.8f, 0.4f, 0.7f, 0.6f };
+        static float[] dataPoints = { 0.2f, 0.5f, 0.3f, 0.8f, 0.4f, 0.7f, 0.6f };
         static readonly string[] tabNames = { "Dashboard", "Analytics", "Profile", "Settings" }; //, "Windows" };
 
-        static double time = 0;
+        static float time = 0;
 
         static string searchText = "";
         // static bool searchFocused = false;
@@ -124,8 +124,8 @@ namespace Shared
         //    //var myWindowB = ImGui.CreateWindow(
         //    //    fontMedium,
         //    //    "My OtherWindow",
-        //    //    new Double2(100, 400),
-        //    //    new Double2(200, 100),
+        //    //    new Float2(100, 400),
+        //    //    new Float2(200, 100),
         //    //    (window) => {
         //    //        // Window content rendering
         //    //        using (ImGui.Column("WindowInnerContent")
@@ -293,7 +293,7 @@ namespace Shared
                     int index = i;
                     bool isSelected = i == selectedTabIndex;
                     Color tabColor = isSelected ? Themes.primaryColor : Themes.lightTextColor;
-                    double tabWidth = 1.0f / tabNames.Length;
+                    float tabWidth = 1.0f / tabNames.Length;
 
                     using (Gui.Box("Tab", i)
                         .Width(Gui.Stretch(tabWidth))
@@ -344,7 +344,7 @@ namespace Shared
                             .If(Gui.IsParentHovered)
                                 .Rounded(20)
                                 .End()
-                            .Transition(GuiProp.Rounded, 0.3, Easing.QuartOut)
+                            .Transition(GuiProp.Rounded, 0.3f, Easing.QuartOut)
                             .Margin(15, 0, 15, 0)
                             .IsNotInteractable();
 
@@ -414,7 +414,7 @@ namespace Shared
                     using (Gui.Box("Chart")
                         .Margin(20)
                         .OnDragging((e) => chartPosition += e.Delta)
-                        .OnScroll((e) => zoomLevel = Math.Clamp(zoomLevel + e.Delta * 0.1f, 0.5f, 2.0f))
+                        .OnScroll((e) => zoomLevel = Maths.Clamp(zoomLevel + e.Delta * 0.1f, 0.5f, 2.0f))
                         .Clip()
                         .Enter())
                     {
@@ -429,7 +429,7 @@ namespace Shared
                                 // Draw grid lines
                                 for (int i = 0; i <= 5; i++)
                                 {
-                                    double y = rect.Min.Y + (rect.Size.Y / 5) * i;
+                                    float y = rect.Min.Y + (rect.Size.Y / 5) * i;
                                     vg.BeginPath();
                                     vg.MoveTo(rect.Min.X, y);
                                     vg.LineTo(rect.Min.X + rect.Size.X, y);
@@ -440,20 +440,20 @@ namespace Shared
 
                                 // Draw animated data points
                                 vg.BeginPath();
-                                double pointSpacing = rect.Size.X / (dataPoints.Length - 1);
-                                double animatedValue;
+                                float pointSpacing = rect.Size.X / (dataPoints.Length - 1);
+                                float animatedValue;
 
                                 // Draw fill
                                 vg.MoveTo(rect.Min.X, rect.Min.Y + rect.Size.Y);
 
                                 for (int i = 0; i < dataPoints.Length; i++)
                                 {
-                                    animatedValue = dataPoints[i] + Math.Sin(time * 0.25f + i * 0.5f) * 0.1f;
-                                    //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
-                                    animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
+                                    animatedValue = dataPoints[i] + Maths.Sin(time * 0.25f + i * 0.5f) * 0.1f;
+                                    //animatedValue = Maths.Clamp(animatedValue, 0.1f, 0.9f);
+                                    animatedValue = Maths.Min(Maths.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    double x = rect.Min.X + i * pointSpacing;
-                                    double y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
+                                    float x = rect.Min.X + i * pointSpacing;
+                                    float y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
 
                                     if (i == 0)
                                         vg.MoveTo(x, y);
@@ -483,12 +483,12 @@ namespace Shared
                                 vg.BeginPath();
                                 for (int i = 0; i < dataPoints.Length; i++)
                                 {
-                                    animatedValue = dataPoints[i] + Math.Sin(time * 0.25f + i * 0.5f) * 0.1f;
-                                    //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
-                                    animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
+                                    animatedValue = dataPoints[i] + Maths.Sin(time * 0.25f + i * 0.5f) * 0.1f;
+                                    //animatedValue = Maths.Clamp(animatedValue, 0.1f, 0.9f);
+                                    animatedValue = Maths.Min(Maths.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    double x = rect.Min.X + i * pointSpacing;
-                                    double y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
+                                    float x = rect.Min.X + i * pointSpacing;
+                                    float y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
 
                                     if (i == 0)
                                         vg.MoveTo(x, y);
@@ -503,12 +503,12 @@ namespace Shared
                                 // Draw points
                                 for (int i = 0; i < dataPoints.Length; i++)
                                 {
-                                    animatedValue = dataPoints[i] + Math.Sin(time * 0.25f + i * 0.5f) * 0.1f;
-                                    //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
-                                    animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
+                                    animatedValue = dataPoints[i] + Maths.Sin(time * 0.25f + i * 0.5f) * 0.1f;
+                                    //animatedValue = Maths.Clamp(animatedValue, 0.1f, 0.9f);
+                                    animatedValue = Maths.Min(Maths.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    double x = rect.Min.X + i * pointSpacing;
-                                    double y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
+                                    float x = rect.Min.X + i * pointSpacing;
+                                    float y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
 
                                     vg.BeginPath();
                                     vg.Circle(x, y, 6);
@@ -639,7 +639,7 @@ namespace Shared
                         Slider.Primary("SliderTrack", sliderValue, newValue => sliderValue = newValue);
                     }
 
-                    double[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
+                    float[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
                     PieChart.Primary("PieChart", values, 0);
                 }
 
@@ -650,7 +650,7 @@ namespace Shared
                     .Enter())
                 {
                     // Dynamic content amount based on time
-                    int amount = (int)(Math.Abs(Math.Sin(time * 0.25)) * 25) + 10;
+                    int amount = (int)(Maths.Abs(Maths.Sin(time * 0.25)) * 25) + 10;
 
                     // Create a grid layout for items
                     using (Gui.Row("GridContainer")
@@ -658,28 +658,28 @@ namespace Shared
                     {
                         // Left column - cards
                         using (Gui.Column("LeftColumn")
-                            .Width(Gui.Stretch(0.6))
+                            .Width(Gui.Stretch(0.6f))
                             .SetScroll(Scroll.ScrollY)
                             .Enter())
                         {
-                            double scrollState = Gui.GetElementStorage<ScrollState>(Gui.CurrentParent, "ScrollState", new ScrollState()).Position.Y;
+                            float scrollState = Gui.GetElementStorage<ScrollState>(Gui.CurrentParent, "ScrollState", new ScrollState()).Position.Y;
 
                             for (int i = 0; i < 10; i++)
                             {
                                 // Calculate animations based on time and index
-                                double hue = (i * 25 + time * 20) % 360;
-                                double saturation = 0.7;
-                                double value = 0.8;
+                                float hue = (i * 25 + time * 20) % 360;
+                                float saturation = 0.7f;
+                                float value = 0.8f;
 
                                 // Convert HSV to RGB
-                                double h = hue / 60;
-                                int hi = (int)Math.Floor(h) % 6;
-                                double f = h - Math.Floor(h);
-                                double p = value * (1 - saturation);
-                                double q = value * (1 - f * saturation);
-                                double t = value * (1 - (1 - f) * saturation);
+                                float h = hue / 60;
+                                int hi = (int)Maths.Floor(h) % 6;
+                                float f = h - Maths.Floor(h);
+                                float p = value * (1 - saturation);
+                                float q = value * (1 - f * saturation);
+                                float t = value * (1 - (1 - f) * saturation);
 
-                                double r, g, b;
+                                float r, g, b;
 
                                 switch (hi)
                                 {
@@ -899,22 +899,22 @@ namespace Shared
                             Gui.AddActionElement((vg, rect) => {
                                 int days = 7;
                                 int weeks = 4;
-                                double cellWidth = rect.Size.X / days;
-                                double cellHeight = rect.Size.Y / weeks;
-                                double cellSize = Math.Min(cellWidth, cellHeight) * 0.8f;
-                                double cellMargin = Math.Min(cellWidth, cellHeight) * 0.1f;
+                                float cellWidth = rect.Size.X / days;
+                                float cellHeight = rect.Size.Y / weeks;
+                                float cellSize = Maths.Min(cellWidth, cellHeight) * 0.8f;
+                                float cellMargin = Maths.Min(cellWidth, cellHeight) * 0.1f;
 
                                 for (int week = 0; week < days; week++)
                                 {
                                     for (int day = 0; day < weeks; day++)
                                     {
                                         // Calculate position
-                                        double x = rect.Min.X + week * cellWidth + cellMargin;
-                                        double y = rect.Min.Y + day * cellHeight + cellMargin;
+                                        float x = rect.Min.X + week * cellWidth + cellMargin;
+                                        float y = rect.Min.Y + day * cellHeight + cellMargin;
 
                                         // Generate intensity based on position and time
-                                        double value = Math.Sin(week * 0.4f + day * 0.7f + time) * 0.5f + 0.5f;
-                                        value = Math.Pow(value, 1.5f);
+                                        float value = Maths.Sin(week * 0.4f + day * 0.7f + time) * 0.5f + 0.5f;
+                                        value = Maths.Pow(value, 1.5f);
 
                                         // Draw cell
                                         vg.BeginPath();
@@ -947,7 +947,7 @@ namespace Shared
 
                         // Skill bars
                         string[] skills = { "Programming", "Design", "Communication", "Leadership", "Problem Solving" };
-                        double[] skillLevels = { 0.9f, 0.75f, 0.8f, 0.6f, 0.85f };
+                        float[] skillLevels = { 0.9f, 0.75f, 0.8f, 0.6f, 0.85f };
 
                         using (Gui.Column("SkillBars")
                             .Margin(20)
@@ -974,7 +974,7 @@ namespace Shared
                                         .Enter())
                                     {
                                         // Animate the skill level with time
-                                        double animatedLevel = skillLevels[i];
+                                        float animatedLevel = skillLevels[i];
 
                                         using (Gui.Box("SkillBarFg", i)
                                             .Width(Gui.Percent(animatedLevel * 100f))

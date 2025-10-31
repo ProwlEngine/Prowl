@@ -137,7 +137,7 @@ namespace Prowl.PaperUI
 
         // State tracking collections
         private Dictionary<int, bool> _wasHoveredState = new Dictionary<int, bool>();
-        private Dictionary<int, Double2> _dragStartPos = new Dictionary<int, Double2>();
+        private Dictionary<int, Float2> _dragStartPos = new Dictionary<int, Float2>();
         private HashSet<int> _elementsInBubblePath = new HashSet<int>();
         private Dictionary<int, bool> _isDragging = new Dictionary<int, bool>();
 
@@ -278,7 +278,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Tests if a point in local coordinates is within an element.
         /// </summary>
-        private bool IsPointOverElementData(in ElementData data, double localX, double localY)
+        private bool IsPointOverElementData(in ElementData data, float localX, float localY)
         {
             return  localX >= data.X &&
                     localX <= data.X + data.LayoutWidth &&
@@ -511,9 +511,9 @@ namespace Prowl.PaperUI
                         // Handle drag end if element was being dragged
                         if (wasDragging)
                         {
-                            Double2 startPos = _dragStartPos[_activeElementId];
-                            Double2 endPos = PointerPos;
-                            Double2 delta = endPos - startPos;
+                            Float2 startPos = _dragStartPos[_activeElementId];
+                            Float2 endPos = PointerPos;
+                            Float2 delta = endPos - startPos;
 
                             // Direct event
                             data.OnDragEnd?.Invoke(new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, delta));
@@ -589,7 +589,7 @@ namespace Prowl.PaperUI
                 }
             }
 
-            // Handle double-click
+            // Handle float-click
             if (IsPointerDoubleClick(PaperMouseBtn.Left))
             {
                 if (_theHoveredElementId != 0)
@@ -601,7 +601,7 @@ namespace Prowl.PaperUI
                         // Direct event
                         data.OnDoubleClick?.Invoke(new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
-                        // Propagate double-click to hooked children
+                        // Propagate float-click to hooked children
                         PropagateEventToHookedChildren(hoveredElement, child => {
                             ref ElementData childData = ref child.Data;
                             childData.OnDoubleClick?.Invoke(new ClickEvent(child, childData.LayoutRect, PointerPos, PaperMouseBtn.Left));
@@ -642,9 +642,9 @@ namespace Prowl.PaperUI
                     if (IsPointerMoving)
                     {
                         bool wasDragging = _isDragging.TryGetValue(_activeElementId, out bool isDragging) && isDragging;
-                        Double2 startPos = _dragStartPos[_activeElementId];
-                        Double2 currentPos = PointerPos;
-                        double distanceMoved = Double2.Length(currentPos - startPos);
+                        Float2 startPos = _dragStartPos[_activeElementId];
+                        Float2 currentPos = PointerPos;
+                        float distanceMoved = Float2.Length(currentPos - startPos);
                         Rect layoutRect = data.LayoutRect;
 
                         // Only start dragging if we've moved beyond the threshold

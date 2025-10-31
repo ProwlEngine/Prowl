@@ -33,16 +33,16 @@ public static class SpinnerUtil
     public struct SpinnerConfig
     {
         /// <summary>Size of the spinner in pixels.</summary>
-        public double Size { get; set; }
+        public float Size { get; set; }
         
         /// <summary>Color of the spinner.</summary>
         public Color Color { get; set; }
         
         /// <summary>Width of the spinner stroke.</summary>
-        public double StrokeWidth { get; set; }
+        public float StrokeWidth { get; set; }
         
         /// <summary>Animation speed multiplier (1.0 = normal speed).</summary>
-        public double Speed { get; set; }
+        public float Speed { get; set; }
 
         /// <summary>Creates a default spinner configuration.</summary>
         public static SpinnerConfig Default => new()
@@ -50,7 +50,7 @@ public static class SpinnerUtil
             Size = 16,
             Color = Color32.FromArgb(255, 100, 116, 139), // slate-500
             StrokeWidth = 2,
-            Speed = 1.0
+            Speed = 1.0f
         };
 
         /// <summary>Creates a small spinner configuration.</summary>
@@ -58,8 +58,8 @@ public static class SpinnerUtil
         {
             Size = 12,
             Color = Color32.FromArgb(255, 100, 116, 139),
-            StrokeWidth = 1.5,
-            Speed = 1.0
+            StrokeWidth = 1.5f,
+            Speed = 1.0f
         };
 
         /// <summary>Creates a large spinner configuration.</summary>
@@ -68,7 +68,7 @@ public static class SpinnerUtil
             Size = 24,
             Color = Color32.FromArgb(255, 100, 116, 139),
             StrokeWidth = 3,
-            Speed = 1.0
+            Speed = 1.0f
         };
     }
 
@@ -88,7 +88,7 @@ public static class SpinnerUtil
             
             // Calculate rotation based on time
             var time = paper.Time;
-            var rotation = (time * config.Speed * 2) % (Math.PI * 2); // Full rotation every second at speed 1.0
+            var rotation = (time * config.Speed * 2) % (Maths.PI * 2); // Full rotation every second at speed 1.0
             var rotDegrees = Maths.ToDegrees(rotation);
 
             canvas.SaveState();
@@ -99,7 +99,7 @@ public static class SpinnerUtil
 
             // Draw the spinner arc
             canvas.BeginPath();
-            canvas.Arc(0, 0, radius, 0, Math.PI * 1.5); // 3/4 circle
+            canvas.Arc(0, 0, radius, 0, Maths.PI * 1.5f); // 3/4 circle
             canvas.SetStrokeColor(config.Color);
             canvas.SetStrokeWidth(config.StrokeWidth);
             canvas.Stroke();
@@ -176,8 +176,8 @@ public static class SpinnerUtil
                 
                 // Animate opacity based on time and dot index
                 var animationOffset = i * 0.3; // Stagger the animation
-                var opacity = (Math.Sin(time * 3 + animationOffset) + 1) / 2; // 0 to 1
-                opacity = Math.Max(0.3, opacity); // Minimum visibility
+                var opacity = (Maths.Sin(time * 3 + animationOffset) + 1) / 2; // 0 to 1
+                opacity = Maths.Max(0.3, opacity); // Minimum visibility
                 
                 var dotColor = Color32.FromArgb((int)(255 * opacity), config.Color);
 
@@ -206,10 +206,10 @@ public static class SpinnerUtil
             
             // Pulsing radius
             var baseRadius = config.Size / 3;
-            var pulseRadius = baseRadius + (Math.Sin(time * 4) + 1) / 2 * baseRadius * 0.5;
+            var pulseRadius = baseRadius + (Maths.Sin(time * 4) + 1) / 2 * baseRadius * 0.5f;
             
             // Pulsing opacity
-            var opacity = (Math.Sin(time * 4) + 1) / 2 * 0.7 + 0.3; // 0.3 to 1.0
+            var opacity = (Maths.Sin(time * 4) + 1) / 2 * 0.7f + 0.3f; // 0.3 to 1.0
             var pulseColor = Color32.FromArgb((int)(255 * opacity), config.Color);
 
             canvas.SaveState();
@@ -228,7 +228,7 @@ public static class SpinnerUtil
     /// </summary>
     /// <param name="size">The size variant</param>
     /// <returns>Spinner size in pixels</returns>
-    public static double GetSpinnerSize(OrigamiSize size)
+    public static float GetSpinnerSize(OrigamiSize size)
     {
         return size switch
         {

@@ -296,12 +296,12 @@
 //                    var viewport = new Rect(0, 0, node.Parent.LayoutWidth, node.Parent.LayoutHeight);
 //
 //                    // If window is larger than viewport, scale it down to fit
-//                    double windowWidth = Math.Min(state.Size.x, viewport.width);
-//                    double windowHeight = Math.Min(state.Size.y, viewport.height);
+//                    float windowWidth = Maths.Min(state.Size.x, viewport.width);
+//                    float windowHeight = Maths.Min(state.Size.y, viewport.height);
 //
 //                    // Calculate window position to keep it in bounds
-//                    double x = state.Position.x;
-//                    double y = state.Position.y;
+//                    float x = state.Position.x;
+//                    float y = state.Position.y;
 //
 //                    // Adjust horizontal position to keep window inside viewport
 //                    if (x < viewport.x)
@@ -425,7 +425,7 @@
 //            const int handleSize = 8;
 //
 //            // Create an array of resize handle definitions
-//            (WindowState.ResizeDirection dir, double l, double t, double w, double h)[] handles = [
+//            (WindowState.ResizeDirection dir, float l, float t, float w, float h)[] handles = [
 //                (dir: WindowState.ResizeDirection.North, l: handleSize*2, t: 0, w: state.Size.x-handleSize*4, h: handleSize),
 //                (dir: WindowState.ResizeDirection.South, l: handleSize*2, t: state.Size.y-handleSize, w: state.Size.x-handleSize*4, h: handleSize),
 //                (dir: WindowState.ResizeDirection.East, l: state.Size.x-handleSize, t: handleSize*2, w: handleSize, h: state.Size.y-handleSize*4),
@@ -509,8 +509,8 @@
 //            if (state.WindowNode != null)
 //            {
 //                _paper.AddActionElement(state.WindowNode, (vg, rect) => {
-//                    const double lineThickness = 4.0f;
-//                    const double linePadding = 10.0f;
+//                    const float lineThickness = 4.0f;
+//                    const float linePadding = 10.0f;
 //                    vg.SetStrokeColor(style.ResizeHandleIndicatorColor);
 //                    vg.SetStrokeWidth(lineThickness);
 //

@@ -85,15 +85,15 @@ namespace Prowl.PaperUI.LayoutEngine
 
         // Layout results
         public bool ProcessedText;
-        public double X;
-        public double Y;
-        public double LayoutWidth;
-        public double LayoutHeight;
-        public double RelativeX;
-        public double RelativeY;
+        public float X;
+        public float Y;
+        public float LayoutWidth;
+        public float LayoutHeight;
+        public float RelativeX;
+        public float RelativeY;
 
         // Content sizing for auto-sized elements
-        public Func<double?, double?, (double, double)?> ContentSizer;
+        public Func<float?, float?, (float, float)?> ContentSizer;
 
         public readonly Rect LayoutRect => new Rect(X, Y, LayoutWidth, LayoutHeight);
 

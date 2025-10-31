@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Runtime.CompilerServices;
 
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI.Themes.Origami.Divider;
 
@@ -54,7 +55,7 @@ public class DividerBuilder
     /// <returns>This builder for method chaining</returns>
     public DividerBuilder Thickness(int thickness)
     {
-        _thickness = Math.Clamp(thickness, 1, 4);
+        _thickness = Maths.Clamp(thickness, 1, 4);
         return this;
     }
 

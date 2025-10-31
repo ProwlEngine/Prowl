@@ -5,9 +5,9 @@ namespace Prowl.PaperUI.LayoutEngine
 {
     public static class ElementLayout
     {
-        private const double DEFAULT_MIN = double.MinValue;
-        private const double DEFAULT_MAX = double.MaxValue;
-        private const double DEFAULT_BORDER_WIDTH = 0f;
+        private const float DEFAULT_MIN = float.MinValue;
+        private const float DEFAULT_MAX = float.MaxValue;
+        private const float DEFAULT_BORDER_WIDTH = 0f;
 
         internal static UISize Layout(ElementHandle elementHandle, Paper gui)
         {
@@ -15,8 +15,8 @@ namespace Prowl.PaperUI.LayoutEngine
 
             var wValue = (UnitValue)data._elementStyle.GetValue(GuiProp.Width);
             var hValue = (UnitValue)data._elementStyle.GetValue(GuiProp.Height);
-            double width = wValue.IsPixels ? wValue.Value : throw new Exception("Root element must have fixed width");
-            double height = hValue.IsPixels ? hValue.Value : throw new Exception("Root element must have fixed height");
+            float width = wValue.IsPixels ? wValue.Value : throw new Exception("Root element must have fixed width");
+            float height = hValue.IsPixels ? hValue.Value : throw new Exception("Root element must have fixed height");
 
             data.RelativeX = 0;
             data.RelativeY = 0;
@@ -70,7 +70,7 @@ namespace Prowl.PaperUI.LayoutEngine
         private static UnitValue GetBorderCrossBefore(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.BorderTop, GuiProp.BorderLeft);
         private static UnitValue GetBorderCrossAfter(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.BorderBottom, GuiProp.BorderRight);
 
-        private static (double, double)? ContentSizing(ElementHandle elementHandle, LayoutType parentLayoutType, double? parentMain, double? parentCross)
+        private static (float, float)? ContentSizing(ElementHandle elementHandle, LayoutType parentLayoutType, float? parentMain, float? parentCross)
         {
             ref var element = ref elementHandle.Data;
             if (element.ContentSizer == null)
@@ -90,7 +90,7 @@ namespace Prowl.PaperUI.LayoutEngine
 
         // CHANGE 05/09/2025: New method that handles both ContentSizing and text processing
         // This ensures both min constraints and auto sizing consider all content types
-        private static (double, double)? GetContentSize(ElementHandle elementHandle, LayoutType parentLayoutType, double? parentMain, double? parentCross)
+        private static (float, float)? GetContentSize(ElementHandle elementHandle, LayoutType parentLayoutType, float? parentMain, float? parentCross)
         {
             ref var element = ref elementHandle.Data;
 
@@ -101,9 +101,9 @@ namespace Prowl.PaperUI.LayoutEngine
             if (!contentSize.HasValue && !string.IsNullOrEmpty(element.Paragraph))
             {
                 // Available width = parent's main, respecting constraints
-                double availableWidth = parentLayoutType == LayoutType.Row
-                    ? (parentMain ?? double.MaxValue)
-                    : (parentCross ?? double.MaxValue);
+                float availableWidth = parentLayoutType == LayoutType.Row
+                    ? (parentMain ?? float.MaxValue)
+                    : (parentCross ?? float.MaxValue);
 
                 var textSize = element.ProcessText(elementHandle.Owner, (float)availableWidth);
 
@@ -119,7 +119,7 @@ namespace Prowl.PaperUI.LayoutEngine
             return contentSize;
         }
 
-        private static UISize DoLayout(ElementHandle elementHandle, LayoutType parentLayoutType, double parentMain, double parentCross)
+        private static UISize DoLayout(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross)
         {
             ref var element = ref elementHandle.Data;
             LayoutType layoutType = element.LayoutType;
@@ -127,24 +127,24 @@ namespace Prowl.PaperUI.LayoutEngine
             UnitValue main = GetMain(ref element, parentLayoutType);
             UnitValue cross = GetCross(ref element, parentLayoutType);
 
-            double minMain = main.IsStretch
+            float minMain = main.IsStretch
                 ? DEFAULT_MIN
                 : GetMinMain(ref element, parentLayoutType).ToPx(parentMain, DEFAULT_MIN);
 
-            double maxMain = main.IsStretch
+            float maxMain = main.IsStretch
                 ? DEFAULT_MAX
                 : GetMaxMain(ref element, parentLayoutType).ToPx(parentMain, DEFAULT_MAX);
 
-            double minCross = cross.IsStretch
+            float minCross = cross.IsStretch
                 ? DEFAULT_MIN
                 : GetMinCross(ref element, parentLayoutType).ToPx(parentCross, DEFAULT_MIN);
 
-            double maxCross = cross.IsStretch
+            float maxCross = cross.IsStretch
                 ? DEFAULT_MAX
                 : GetMaxCross(ref element, parentLayoutType).ToPx(parentCross, DEFAULT_MAX);
 
             // Compute main-axis size
-            double computedMain = 0;
+            float computedMain = 0;
             if (main.IsStretch)
                 computedMain = parentMain;
             else if (main.IsPixels || main.IsPercentage)
@@ -152,7 +152,7 @@ namespace Prowl.PaperUI.LayoutEngine
             // Auto stays at 0
 
             // Compute cross-axis size
-            double computedCross = 0;
+            float computedCross = 0;
             if(cross.IsStretch)
                 computedCross = parentCross;
             else if (cross.IsPixels || cross.IsPercentage)
@@ -161,29 +161,29 @@ namespace Prowl.PaperUI.LayoutEngine
 
 
             // Apply aspect ratio if set
-            var aspectRatio = (double)element._elementStyle.GetValue(GuiProp.AspectRatio);
+            var aspectRatio = (float)element._elementStyle.GetValue(GuiProp.AspectRatio);
             if (aspectRatio >= 0)
             {
-                aspectRatio = Math.Max(0.001, aspectRatio); // Prevent divide-by-zero
+                aspectRatio = Maths.Max(0.001f, aspectRatio); // Prevent divide-by-zero
 
                 // Handle aspect ratio differently based on which dimension is more constrained
                 if (main.IsAuto && !cross.IsAuto)
                 {
                     // Cross is fixed, calculate main from it
-                    double newMain = computedCross * aspectRatio;
-                    computedMain = Math.Min(maxMain, Math.Max(minMain, newMain));
+                    float newMain = computedCross * aspectRatio;
+                    computedMain = Maths.Min(maxMain, Maths.Max(minMain, newMain));
                 }
                 else if (!main.IsAuto && cross.IsAuto)
                 {
                     // Main is fixed, calculate cross from it
-                    double newCross = computedMain / aspectRatio;
-                    computedCross = Math.Min(maxCross, Math.Max(minCross, newCross));
+                    float newCross = computedMain / aspectRatio;
+                    computedCross = Maths.Min(maxCross, Maths.Max(minCross, newCross));
                 }
                 else if (main.IsAuto && cross.IsAuto)
                 {
                     // Both auto, use the parent constraints to determine the limiting factor
-                    double byWidth = parentMain;
-                    double byHeight = parentCross * aspectRatio;
+                    float byWidth = parentMain;
+                    float byHeight = parentCross * aspectRatio;
 
                     if (byWidth <= byHeight)
                     {
@@ -207,13 +207,13 @@ namespace Prowl.PaperUI.LayoutEngine
             }
 
             var borderMainBeforeUnit = GetBorderMainBefore(ref element, parentLayoutType);
-            double borderMainBefore = borderMainBeforeUnit.ToPx(computedMain, DEFAULT_BORDER_WIDTH);
+            float borderMainBefore = borderMainBeforeUnit.ToPx(computedMain, DEFAULT_BORDER_WIDTH);
             var borderMainAfterUnit = GetBorderMainAfter(ref element, parentLayoutType);
-            double borderMainAfter = borderMainAfterUnit.ToPx(computedMain, DEFAULT_BORDER_WIDTH);
+            float borderMainAfter = borderMainAfterUnit.ToPx(computedMain, DEFAULT_BORDER_WIDTH);
             var borderCrossBeforeUnit = GetBorderCrossBefore(ref element, parentLayoutType);
-            double borderCrossBefore = borderCrossBeforeUnit.ToPx(computedCross, DEFAULT_BORDER_WIDTH);
+            float borderCrossBefore = borderCrossBeforeUnit.ToPx(computedCross, DEFAULT_BORDER_WIDTH);
             var borderCrossAfterUnit = GetBorderCrossAfter(ref element, parentLayoutType);
-            double borderCrossAfter = borderCrossAfterUnit.ToPx(computedCross, DEFAULT_BORDER_WIDTH);
+            float borderCrossAfter = borderCrossAfterUnit.ToPx(computedCross, DEFAULT_BORDER_WIDTH);
 
             // Pre-allocate and filter in single pass to avoid LINQ overhead
             var visibleChildren = new List<int>();
@@ -233,14 +233,14 @@ namespace Prowl.PaperUI.LayoutEngine
             int numChildren = visibleChildren.Count;
             int numParentDirectedChildren = parentDirectedChildren.Count;
 
-            double mainSum = 0f;
-            double crossMax = 0f;
+            float mainSum = 0f;
+            float crossMax = 0f;
 
             // Apply content sizing for elements with no children
             if ((main.IsAuto || cross.IsAuto) && numParentDirectedChildren == 0)
             {
-                double? pMain = main.IsAuto ? null : (double?)computedMain;
-                double? pCross = cross.IsAuto ? null : (double?)computedCross;
+                float? pMain = main.IsAuto ? null : (float?)computedMain;
+                float? pCross = cross.IsAuto ? null : (float?)computedCross;
 
                 var contentSize = GetContentSize(elementHandle, parentLayoutType, pMain, pCross);
 
@@ -256,8 +256,8 @@ namespace Prowl.PaperUI.LayoutEngine
             if ((GetMinMain(ref element, parentLayoutType).IsAuto || GetMinCross(ref element, parentLayoutType).IsAuto)
                 && numParentDirectedChildren == 0)
             {
-                double? pMain = GetMinMain(ref element, parentLayoutType).IsAuto ? null : (double?)computedMain;
-                double? pCross = GetMinCross(ref element, parentLayoutType).IsAuto ? null : (double?)computedCross;
+                float? pMain = GetMinMain(ref element, parentLayoutType).IsAuto ? null : (float?)computedMain;
+                float? pCross = GetMinCross(ref element, parentLayoutType).IsAuto ? null : (float?)computedCross;
 
                 var contentSize = GetContentSize(elementHandle, parentLayoutType, pMain, pCross);
                 if (contentSize.HasValue)
@@ -268,16 +268,16 @@ namespace Prowl.PaperUI.LayoutEngine
             }
 
             // Apply size constraints
-            computedMain = Math.Min(maxMain, Math.Max(minMain, computedMain));
-            computedCross = Math.Min(maxCross, Math.Max(minCross, computedCross));
+            computedMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
+            computedCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
 
             // Determine parent sizes for children based on layout types
-            (double actualParentMain, double actualParentCross) = parentLayoutType == layoutType
+            (float actualParentMain, float actualParentCross) = parentLayoutType == layoutType
                 ? (computedMain, computedCross)
                 : (computedCross, computedMain);
 
             // Sum of all space and size flex factors on the main-axis
-            double mainFlexSum = 0f;
+            float mainFlexSum = 0f;
 
             // Lists for layout calculations
             var children = new List<ChildElementInfo>(numChildren);
@@ -394,22 +394,22 @@ namespace Prowl.PaperUI.LayoutEngine
                 }
 
                 // Compute fixed-size child spaces
-                double computedChildCrossBefore = childCrossBefore.ToPxClamped(
+                float computedChildCrossBefore = childCrossBefore.ToPxClamped(
                     actualParentCross, 0f, childMinCrossBefore, childMaxCrossBefore);
-                double computedChildCrossAfter = childCrossAfter.ToPxClamped(
+                float computedChildCrossAfter = childCrossAfter.ToPxClamped(
                     actualParentCross, 0f, childMinCrossAfter, childMaxCrossAfter);
-                double computedChildMainBefore = childMainBefore.ToPxClamped(
+                float computedChildMainBefore = childMainBefore.ToPxClamped(
                     actualParentMain, 0f, childMinMainBefore, childMaxMainBefore);
-                double computedChildMainAfter = childMainAfter.ToPxClamped(
+                float computedChildMainAfter = childMainAfter.ToPxClamped(
                     actualParentMain, 0f, childMinMainAfter, childMaxMainAfter);
 
-                double computedChildMain = 0f;
-                double computedChildCross = childCross.ToPx(actualParentCross, 0f);
+                float computedChildMain = 0f;
+                float computedChildCross = childCross.ToPx(actualParentCross, 0f);
 
                 // Get auto min cross size if needed
                 if (GetMinCross(ref child, layoutType).IsAuto)
                 {
-                    double? pCross = GetMinCross(ref child, layoutType).IsAuto ? null : (double?)actualParentCross;
+                    float? pCross = GetMinCross(ref child, layoutType).IsAuto ? null : (float?)actualParentCross;
                     var contentSize = ContentSizing(childHandle, layoutType, pCross, pCross);
                     if (contentSize.HasValue)
                     {
@@ -426,7 +426,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 }
 
                 mainSum += computedChildMain + computedChildMainBefore + computedChildMainAfter;
-                crossMax = Math.Max(crossMax, computedChildCrossBefore + computedChildCross + computedChildCrossAfter);
+                crossMax = Maths.Max(crossMax, computedChildCrossBefore + computedChildCross + computedChildCrossAfter);
 
                 children.Add(new ChildElementInfo(childHandle) {
                     CrossBefore = computedChildCrossBefore,
@@ -446,12 +446,12 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (parentLayoutType == layoutType)
                     {
                         minMain = mainSum + borderMainBefore + borderMainAfter;
-                        actualParentMain = Math.Min(maxMain, Math.Max(minMain, actualParentMain));
+                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
                     }
                     else
                     {
                         minMain = crossMax + borderMainBefore + borderMainAfter;
-                        actualParentCross = Math.Min(maxMain, Math.Max(minMain, actualParentCross));
+                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
                     }
                 }
 
@@ -460,18 +460,18 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (parentLayoutType == layoutType)
                     {
                         minCross = crossMax + borderCrossBefore + borderCrossAfter;
-                        actualParentCross = Math.Min(maxCross, Math.Max(minCross, actualParentCross));
+                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
                     }
                     else
                     {
                         minCross = mainSum + borderCrossBefore + borderCrossAfter;
-                        actualParentMain = Math.Min(maxCross, Math.Max(minCross, actualParentMain));
+                        actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, actualParentMain));
                     }
                 }
             }
 
-            computedMain = Math.Min(maxMain, Math.Max(minMain, computedMain));
-            computedCross = Math.Min(maxCross, Math.Max(minCross, computedCross));
+            computedMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
+            computedCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
 
             // Process cross-axis stretching for parent-directed children
             for (int i = 0; i < children.Count; i++)
@@ -491,15 +491,15 @@ namespace Prowl.PaperUI.LayoutEngine
                 if (childCrossAfter.IsAuto)
                     childCrossAfter = elementChildCrossAfter;
 
-                double crossFlexSum = 0f;
+                float crossFlexSum = 0f;
                 var crossAxis = new List<StretchItem>();
 
                 // Collect stretch cross items
                 if (childCrossBefore.IsStretch)
                 {
-                    double childMinCrossBefore = GetMinCrossBefore(ref child.Element.Data, layoutType)
+                    float childMinCrossBefore = GetMinCrossBefore(ref child.Element.Data, layoutType)
                         .ToPx(actualParentCross, DEFAULT_MIN);
-                    double childMaxCrossBefore = GetMaxCrossBefore(ref child.Element.Data, layoutType)
+                    float childMaxCrossBefore = GetMaxCrossBefore(ref child.Element.Data, layoutType)
                         .ToPx(actualParentCross, DEFAULT_MAX);
 
                     crossFlexSum += childCrossBefore.Value;
@@ -516,9 +516,9 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 if (childCross.IsStretch)
                 {
-                    double childMinCross = GetMinCross(ref child.Element.Data, layoutType)
+                    float childMinCross = GetMinCross(ref child.Element.Data, layoutType)
                         .ToPx(actualParentCross, DEFAULT_MIN);
-                    double childMaxCross = GetMaxCross(ref child.Element.Data, layoutType)
+                    float childMaxCross = GetMaxCross(ref child.Element.Data, layoutType)
                         .ToPx(actualParentCross, DEFAULT_MAX);
 
                     crossFlexSum += childCross.Value;
@@ -535,9 +535,9 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 if (childCrossAfter.IsStretch)
                 {
-                    double childMinCrossAfter = GetMinCrossAfter(ref child.Element.Data, layoutType)
+                    float childMinCrossAfter = GetMinCrossAfter(ref child.Element.Data, layoutType)
                         .ToPx(actualParentCross, DEFAULT_MIN);
-                    double childMaxCrossAfter = GetMaxCrossAfter(ref child.Element.Data, layoutType)
+                    float childMaxCrossAfter = GetMaxCrossAfter(ref child.Element.Data, layoutType)
                         .ToPx(actualParentCross, DEFAULT_MAX);
 
                     crossFlexSum += childCrossAfter.Value;
@@ -556,19 +556,19 @@ namespace Prowl.PaperUI.LayoutEngine
                 int unfrozenCrossCount = crossAxis.Count;
                 while (unfrozenCrossCount > 0)
                 {
-                    double childCrossFreeSpace = actualParentCross
+                    float childCrossFreeSpace = actualParentCross
                         - borderCrossBefore
                         - borderCrossAfter
                         - child.CrossBefore
                         - child.Cross
                         - child.CrossAfter;
 
-                    double totalViolation = 0f;
+                    float totalViolation = 0f;
 
                     foreach (var item in crossAxis)
                     {
                         if (item.Frozen) continue;
-                        double actualCross = (item.Factor * childCrossFreeSpace / crossFlexSum);
+                        float actualCross = (item.Factor * childCrossFreeSpace / crossFlexSum);
 
                         if (item.ItemType == StretchItem.ItemTypes.Size && !GetMain(ref child.Element.Data, layoutType).IsStretch)
                         {
@@ -583,7 +583,7 @@ namespace Prowl.PaperUI.LayoutEngine
                             mainSum += child.Main;
                         }
 
-                        double clamped = Math.Min(item.Max, Math.Max(item.Min, actualCross));
+                        float clamped = Maths.Min(item.Max, Maths.Max(item.Min, actualCross));
                         item.Violation = clamped - actualCross;
                         totalViolation += item.Violation;
 
@@ -622,7 +622,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     }
                 }
 
-                crossMax = Math.Max(crossMax, child.CrossBefore + child.Cross + child.CrossAfter);
+                crossMax = Maths.Max(crossMax, child.CrossBefore + child.Cross + child.CrossAfter);
             }
 
             // Update auto sizes based on children
@@ -633,12 +633,12 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (parentLayoutType == layoutType)
                     {
                         minMain = mainSum + borderMainBefore + borderMainAfter;
-                        actualParentMain = Math.Min(maxMain, Math.Max(minMain, actualParentMain));
+                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
                     }
                     else
                     {
                         minMain = crossMax + borderMainBefore + borderMainAfter;
-                        actualParentCross = Math.Min(maxMain, Math.Max(minMain, actualParentCross));
+                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
                     }
                 }
 
@@ -647,18 +647,18 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (parentLayoutType == layoutType)
                     {
                         minCross = crossMax + borderCrossBefore + borderCrossAfter;
-                        actualParentCross = Math.Min(maxCross, Math.Max(minCross, actualParentCross));
+                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
                     }
                     else
                     {
                         minCross = mainSum + borderCrossBefore + borderCrossAfter;
-                        actualParentMain = Math.Min(maxCross, Math.Max(minCross, actualParentMain));
+                        actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, actualParentMain));
                     }
                 }
             }
 
-            computedMain = Math.Min(maxMain, Math.Max(minMain, computedMain));
-            computedCross = Math.Min(maxCross, Math.Max(minCross, computedCross));
+            computedMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
+            computedCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
 
             // Calculate main-axis stretching for parent-directed children
             if (mainAxis.Count > 0)
@@ -666,23 +666,23 @@ namespace Prowl.PaperUI.LayoutEngine
                 int unfrozenMainCount = mainAxis.Count;
                 while (unfrozenMainCount > 0)
                 {
-                    double freeMainSpace = actualParentMain - mainSum - borderMainBefore - borderMainAfter;
-                    double totalViolation = 0f;
+                    float freeMainSpace = actualParentMain - mainSum - borderMainBefore - borderMainAfter;
+                    float totalViolation = 0f;
 
                     foreach (var item in mainAxis)
                     {
                         if (item.Frozen) continue;
-                        double actualMain = (item.Factor * freeMainSpace / mainFlexSum);
+                        float actualMain = (item.Factor * freeMainSpace / mainFlexSum);
                         var child = children[item.Index];
 
                         if (item.ItemType == StretchItem.ItemTypes.Size)
                         {
-                            double childCross = GetCross(ref child.Element.Data, layoutType).IsStretch ?
+                            float childCross = GetCross(ref child.Element.Data, layoutType).IsStretch ?
                                 child.Cross : actualParentCross;
 
                             var childSize = DoLayout(child.Element, layoutType, actualMain, childCross);
                             child.Cross = childSize.Cross;
-                            crossMax = Math.Max(crossMax, child.CrossBefore + child.Cross + child.CrossAfter);
+                            crossMax = Maths.Max(crossMax, child.CrossBefore + child.Cross + child.CrossAfter);
 
                             if (GetMinMain(ref child.Element.Data, layoutType).IsAuto)
                             {
@@ -690,7 +690,7 @@ namespace Prowl.PaperUI.LayoutEngine
                             }
                         }
 
-                        double clamped = Math.Min(item.Max, Math.Max(item.Min, actualMain));
+                        float clamped = Maths.Min(item.Max, Maths.Max(item.Min, actualMain));
                         item.Violation = clamped - actualMain;
                         totalViolation += item.Violation;
                         item.Computed = clamped;
@@ -740,12 +740,12 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (parentLayoutType == layoutType)
                     {
                         minMain = mainSum + borderMainBefore + borderMainAfter;
-                        actualParentMain = Math.Min(maxMain, Math.Max(minMain, actualParentMain));
+                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
                     }
                     else
                     {
                         minMain = crossMax + borderMainBefore + borderMainAfter;
-                        actualParentCross = Math.Min(maxMain, Math.Max(minMain, actualParentCross));
+                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
                     }
                 }
 
@@ -754,18 +754,18 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (parentLayoutType == layoutType)
                     {
                         minCross = crossMax + borderCrossBefore + borderCrossAfter;
-                        actualParentCross = Math.Min(maxCross, Math.Max(minCross, actualParentCross));
+                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
                     }
                     else
                     {
                         minCross = mainSum + borderCrossBefore + borderCrossAfter;
-                        actualParentMain = Math.Min(maxCross, Math.Max(minCross, actualParentMain));
+                        actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, actualParentMain));
                     }
                 }
             }
 
-            computedMain = Math.Min(maxMain, Math.Max(minMain, computedMain));
-            computedCross = Math.Min(maxCross, Math.Max(minCross, computedCross));
+            computedMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
+            computedCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
 
             // Handle self-directed children
             foreach (var childHandle in GetChildren(elementHandle))
@@ -789,17 +789,17 @@ namespace Prowl.PaperUI.LayoutEngine
                     childCrossAfter = elementChildCrossAfter;
 
                 // Compute fixed spaces
-                double computedChildCrossBefore = childCrossBefore.ToPxClamped(
+                float computedChildCrossBefore = childCrossBefore.ToPxClamped(
                     actualParentCross, 0f, GetMinCrossBefore(ref childHandle.Data, layoutType), GetMaxCrossBefore(ref childHandle.Data, layoutType));
-                double computedChildCrossAfter = childCrossAfter.ToPxClamped(
+                float computedChildCrossAfter = childCrossAfter.ToPxClamped(
                     actualParentCross, 0f, GetMinCrossAfter(ref childHandle.Data, layoutType), GetMaxCrossAfter(ref childHandle.Data, layoutType));
-                double computedChildMainBefore = childMainBefore.ToPxClamped(
+                float computedChildMainBefore = childMainBefore.ToPxClamped(
                     actualParentMain, 0f, GetMinMainBefore(ref childHandle.Data, layoutType), GetMaxMainBefore(ref childHandle.Data, layoutType));
-                double computedChildMainAfter = childMainAfter.ToPxClamped(
+                float computedChildMainAfter = childMainAfter.ToPxClamped(
                     actualParentMain, 0f, GetMinMainAfter(ref childHandle.Data, layoutType), GetMaxMainAfter(ref childHandle.Data, layoutType));
 
-                double computedChildMain = 0f;
-                double computedChildCross = 0f;
+                float computedChildMain = 0f;
+                float computedChildCross = 0f;
 
                 // Compute fixed-size child sizes
                 if (!childMain.IsStretch && !childCross.IsStretch)
@@ -844,13 +844,13 @@ namespace Prowl.PaperUI.LayoutEngine
 
             if (aspectRatio >= 0)
             {
-                aspectRatio = Math.Max(0.001, aspectRatio); // Prevent divide-by-zero
+                aspectRatio = Maths.Max(0.001f, aspectRatio); // Prevent divide-by-zero
 
                 if (main.IsStretch && cross.IsStretch)
                 {
                     // Both stretch - constrain by the smaller dimension
-                    double byWidth = computedMain;
-                    double byHeight = computedCross * aspectRatio;
+                    float byWidth = computedMain;
+                    float byHeight = computedCross * aspectRatio;
 
                     if (byHeight < byWidth)
                     {
@@ -873,12 +873,12 @@ namespace Prowl.PaperUI.LayoutEngine
                 }
 
                 // Ensure we're still respecting min/max constraints
-                computedMain = Math.Min(maxMain, Math.Max(minMain, computedMain));
-                computedCross = Math.Min(maxCross, Math.Max(minCross, computedCross));
+                computedMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
+                computedCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
             }
 
             // Set bounds for all children
-            double mainPos = 0f;
+            float mainPos = 0f;
             foreach (var child in children)
             {
                 if (child.Element.Data.PositionType == PositionType.SelfDirected)
@@ -913,10 +913,10 @@ namespace Prowl.PaperUI.LayoutEngine
         private static void ProcessChildCrossStretching(
             ChildElementInfo child,
             LayoutType layoutType,
-            double parentCross,
-            double parentMain,
-            double borderCrossBefore,
-            double borderCrossAfter,
+            float parentCross,
+            float parentMain,
+            float borderCrossBefore,
+            float borderCrossAfter,
             UnitValue elementChildCrossBefore,
             UnitValue elementChildCrossAfter,
             int childIndex)
@@ -931,14 +931,14 @@ namespace Prowl.PaperUI.LayoutEngine
             if (childCrossAfter.IsAuto)
                 childCrossAfter = elementChildCrossAfter;
 
-            double crossFlexSum = 0f;
+            float crossFlexSum = 0f;
             var crossAxis = new List<StretchItem>();
 
             // Collect stretch cross items
             if (childCrossBefore.IsStretch)
             {
-                double min = GetMinCrossBefore(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MIN);
-                double max = GetMaxCrossBefore(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MAX);
+                float min = GetMinCrossBefore(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MIN);
+                float max = GetMaxCrossBefore(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MAX);
 
                 crossFlexSum += childCrossBefore.Value;
                 child.CrossBefore = 0f;
@@ -948,8 +948,8 @@ namespace Prowl.PaperUI.LayoutEngine
 
             if (childCross.IsStretch)
             {
-                double min = GetMinCross(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MIN);
-                double max = GetMaxCross(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MAX);
+                float min = GetMinCross(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MIN);
+                float max = GetMaxCross(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MAX);
 
                 crossFlexSum += childCross.Value;
                 child.Cross = 0f;
@@ -959,8 +959,8 @@ namespace Prowl.PaperUI.LayoutEngine
 
             if (childCrossAfter.IsStretch)
             {
-                double min = GetMinCrossAfter(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MIN);
-                double max = GetMaxCrossAfter(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MAX);
+                float min = GetMinCrossAfter(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MIN);
+                float max = GetMaxCrossAfter(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MAX);
 
                 crossFlexSum += childCrossAfter.Value;
                 child.CrossAfter = 0f;
@@ -971,15 +971,15 @@ namespace Prowl.PaperUI.LayoutEngine
             int unfrozenCrossCount = crossAxis.Count;
             while (unfrozenCrossCount > 0)
             {
-                double crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
+                float crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
                     - child.CrossBefore - child.Cross - child.CrossAfter;
 
-                double totalViolation = 0f;
+                float totalViolation = 0f;
 
                 foreach (var item in crossAxis)
                 {
                     if (item.Frozen) continue;
-                    double actualCross = (item.Factor * crossFreeSpace / crossFlexSum);
+                    float actualCross = (item.Factor * crossFreeSpace / crossFlexSum);
 
                     if (item.ItemType == StretchItem.ItemTypes.Size && !GetMain(ref child.Element.Data, layoutType).IsStretch)
                     {
@@ -991,7 +991,7 @@ namespace Prowl.PaperUI.LayoutEngine
                         child.Main = childSize.Main;
                     }
 
-                    double clamped = Math.Min(item.Max, Math.Max(item.Min, actualCross));
+                    float clamped = Maths.Min(item.Max, Maths.Max(item.Min, actualCross));
                     item.Violation = clamped - actualCross;
                     totalViolation += item.Violation;
                     item.Computed = clamped;
@@ -1033,10 +1033,10 @@ namespace Prowl.PaperUI.LayoutEngine
         private static void ProcessChildMainStretching(
             ChildElementInfo child,
             LayoutType layoutType,
-            double parentMain,
-            double parentCross,
-            double borderMainBefore,
-            double borderMainAfter,
+            float parentMain,
+            float parentCross,
+            float borderMainBefore,
+            float borderMainAfter,
             UnitValue elementChildMainBefore,
             UnitValue elementChildMainAfter,
             int childIndex)
@@ -1051,14 +1051,14 @@ namespace Prowl.PaperUI.LayoutEngine
             if (childMainAfter.IsAuto)
                 childMainAfter = elementChildMainAfter;
 
-            double mainFlexSum = 0f;
+            float mainFlexSum = 0f;
             var mainAxis = new List<StretchItem>();
 
             // Collect stretch main items
             if (childMainBefore.IsStretch)
             {
-                double min = GetMinMainBefore(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MIN);
-                double max = GetMaxMainBefore(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MAX);
+                float min = GetMinMainBefore(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MIN);
+                float max = GetMaxMainBefore(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MAX);
 
                 mainFlexSum += childMainBefore.Value;
                 mainAxis.Add(new StretchItem(childIndex, childMainBefore.Value, StretchItem.ItemTypes.Before, min, max));
@@ -1066,8 +1066,8 @@ namespace Prowl.PaperUI.LayoutEngine
 
             if (childMain.IsStretch)
             {
-                double min = GetMinMain(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MIN);
-                double max = GetMaxMain(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MAX);
+                float min = GetMinMain(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MIN);
+                float max = GetMaxMain(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MAX);
 
                 mainFlexSum += childMain.Value;
                 mainAxis.Add(new StretchItem(childIndex, childMain.Value, StretchItem.ItemTypes.Size, min, max));
@@ -1075,8 +1075,8 @@ namespace Prowl.PaperUI.LayoutEngine
 
             if (childMainAfter.IsStretch)
             {
-                double min = GetMinMainAfter(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MIN);
-                double max = GetMaxMainAfter(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MAX);
+                float min = GetMinMainAfter(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MIN);
+                float max = GetMaxMainAfter(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MAX);
 
                 mainFlexSum += childMainAfter.Value;
                 mainAxis.Add(new StretchItem(childIndex, childMainAfter.Value, StretchItem.ItemTypes.After, min, max));
@@ -1085,19 +1085,19 @@ namespace Prowl.PaperUI.LayoutEngine
             int unfrozenMainCount = mainAxis.Count;
             while (unfrozenMainCount > 0)
             {
-                double mainFreeSpace = parentMain - borderMainBefore - borderMainAfter
+                float mainFreeSpace = parentMain - borderMainBefore - borderMainAfter
                     - child.MainBefore - child.Main - child.MainAfter;
 
-                double totalViolation = 0f;
+                float totalViolation = 0f;
 
                 foreach (var item in mainAxis)
                 {
                     if (item.Frozen) continue;
-                    double actualMain = (item.Factor * mainFreeSpace / mainFlexSum);
+                    float actualMain = (item.Factor * mainFreeSpace / mainFlexSum);
 
                     if (item.ItemType == StretchItem.ItemTypes.Size)
                     {
-                        double childCross = GetCross(ref child.Element.Data, layoutType).IsStretch ?
+                        float childCross = GetCross(ref child.Element.Data, layoutType).IsStretch ?
                             child.Cross : parentCross;
 
                         var childSize = DoLayout(child.Element, layoutType, actualMain, childCross);
@@ -1109,7 +1109,7 @@ namespace Prowl.PaperUI.LayoutEngine
                         }
                     }
 
-                    double clamped = Math.Min(item.Max, Math.Max(item.Min, actualMain));
+                    float clamped = Maths.Min(item.Max, Maths.Max(item.Min, actualMain));
                     item.Violation = clamped - actualMain;
                     totalViolation += item.Violation;
                     item.Computed = clamped;
@@ -1151,9 +1151,9 @@ namespace Prowl.PaperUI.LayoutEngine
         private static void ProcessChildCrossSpacing(
             ChildElementInfo child,
             LayoutType layoutType,
-            double parentCross,
-            double borderCrossBefore,
-            double borderCrossAfter,
+            float parentCross,
+            float borderCrossBefore,
+            float borderCrossAfter,
             UnitValue elementChildCrossBefore,
             UnitValue elementChildCrossAfter)
         {
@@ -1170,15 +1170,15 @@ namespace Prowl.PaperUI.LayoutEngine
             if (!childCrossBefore.IsStretch && !childCrossAfter.IsStretch)
                 return;
 
-            double crossFlexSum = 0f;
+            float crossFlexSum = 0f;
             var crossAxis = new List<StretchItem>();
             int childIndex = 0; // Just a placeholder since we're only dealing with this specific child
 
             // Collect stretch cross items
             if (childCrossBefore.IsStretch)
             {
-                double min = GetMinCrossBefore(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MIN);
-                double max = GetMaxCrossBefore(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MAX);
+                float min = GetMinCrossBefore(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MIN);
+                float max = GetMaxCrossBefore(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MAX);
 
                 crossFlexSum += childCrossBefore.Value;
                 child.CrossBefore = 0f;
@@ -1188,8 +1188,8 @@ namespace Prowl.PaperUI.LayoutEngine
 
             if (childCrossAfter.IsStretch)
             {
-                double min = GetMinCrossAfter(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MIN);
-                double max = GetMaxCrossAfter(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MAX);
+                float min = GetMinCrossAfter(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MIN);
+                float max = GetMaxCrossAfter(ref child.Element.Data, layoutType).ToPx(parentCross, DEFAULT_MAX);
 
                 crossFlexSum += childCrossAfter.Value;
                 child.CrossAfter = 0f;
@@ -1200,17 +1200,17 @@ namespace Prowl.PaperUI.LayoutEngine
             int unfrozenCrossCount = crossAxis.Count;
             while (unfrozenCrossCount > 0)
             {
-                double crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
+                float crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
                     - child.CrossBefore - child.Cross - child.CrossAfter;
 
-                double totalViolation = 0f;
+                float totalViolation = 0f;
 
                 foreach (var item in crossAxis)
                 {
                     if (item.Frozen) continue;
-                    double actualCross = (item.Factor * crossFreeSpace / crossFlexSum);
+                    float actualCross = (item.Factor * crossFreeSpace / crossFlexSum);
 
-                    double clamped = Math.Min(item.Max, Math.Max(item.Min, actualCross));
+                    float clamped = Maths.Min(item.Max, Maths.Max(item.Min, actualCross));
                     item.Violation = clamped - actualCross;
                     totalViolation += item.Violation;
                     item.Computed = clamped;
@@ -1246,7 +1246,7 @@ namespace Prowl.PaperUI.LayoutEngine
             }
         }
 
-        private static UISize DoLayout(ElementHandle elementHandle, LayoutType parentLayoutType, double parentMain, double parentCross, double? fixedCross)
+        private static UISize DoLayout(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross, float? fixedCross)
         {
             var size = DoLayout(elementHandle, parentLayoutType, parentMain, parentCross);
 
@@ -1266,7 +1266,7 @@ namespace Prowl.PaperUI.LayoutEngine
 
             return size;
         }
-        private static void SetElementBounds(ElementHandle elementHandle, LayoutType layoutType, double mainPos, double crossPos, double main, double cross)
+        private static void SetElementBounds(ElementHandle elementHandle, LayoutType layoutType, float mainPos, float crossPos, float main, float cross)
         {
             ref ElementData element = ref elementHandle.Data;
             if (layoutType == LayoutType.Row)
@@ -1286,11 +1286,11 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
 
-        internal static Double2 ProcessText(this ref ElementData element, Paper gui, float availableWidth)
+        internal static Float2 ProcessText(this ref ElementData element, Paper gui, float availableWidth)
         {
             //if (element.ProcessedText) return Vector2.zero;
 
-            if (string.IsNullOrWhiteSpace(element.Paragraph)) return Double2.Zero;
+            if (string.IsNullOrWhiteSpace(element.Paragraph)) return Float2.Zero;
 
             element.ProcessedText = true;
 
@@ -1334,11 +1334,11 @@ namespace Prowl.PaperUI.LayoutEngine
                 element._quillMarkdown = canvas.CreateMarkdown(element.Paragraph, settings);
 
                 var markdownResult = element._quillMarkdown;
-                return markdownResult?.Size ?? Double2.Zero;
+                return markdownResult?.Size ?? Float2.Zero;
             }
         }
 
-        private static void ComputeAbsolutePositions(ref ElementData element, Paper gui, double parentX = 0f, double parentY = 0f)
+        private static void ComputeAbsolutePositions(ref ElementData element, Paper gui, float parentX = 0f, float parentY = 0f)
         {
             // Set absolute position based on parent's position
             element.X = parentX + element.RelativeX;

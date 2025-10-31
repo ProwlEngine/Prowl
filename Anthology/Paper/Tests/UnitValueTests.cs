@@ -52,7 +52,7 @@ public class UnitValueTests
     {
         var uv = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5);
 
-        double result = uv.ToPx(200, 0);
+        float result = uv.ToPx(200, 0);
 
         Assert.Equal(55, result, 5);
     }

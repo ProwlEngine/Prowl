@@ -12,7 +12,7 @@ public static class GizmoUtils
     public static bool IntersectPlane(Vector3 planeNormal, Vector3 planeOrigin, Vector3 rayOrigin, Vector3 rayDirection, out float t)
     {
         var denom = Vector3.Dot(planeNormal, rayDirection);
-        if (Math.Abs(denom) < 1e-8)
+        if (Maths.Abs(denom) < 1e-8)
         {
             t = 0;
             return false;
@@ -244,7 +244,7 @@ public static class GizmoUtils
         var (t, distFromGizmoOrigin) = RayToPlaneOrigin(-gizmo.ViewForward, gizmo.Translation, ray.origin, ray.direction);
         var hitPos = ray.origin + ray.direction * t;
         var picked = filled ? distFromGizmoOrigin <= radius + gizmo.FocusDistance
-            : Math.Abs(distFromGizmoOrigin - radius) <= radius + gizmo.FocusDistance;
+            : Maths.Abs(distFromGizmoOrigin - radius) <= radius + gizmo.FocusDistance;
 
         return new PickResult
         {

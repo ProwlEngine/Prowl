@@ -16,28 +16,28 @@ public class ElementEvent
     public Rect ElementRect { get; }
 
     // The raw pointer position in screen coordinates
-    public Double2 PointerPosition { get; }
+    public Float2 PointerPosition { get; }
 
     // The pointer position normalized to the element (0,0 = top-left, 1,1 = bottom-right)
-    public Double2 NormalizedPosition { get; }
+    public Float2 NormalizedPosition { get; }
 
     // The pointer position relative to the element's top-left corner
-    public Double2 RelativePosition { get; }
+    public Float2 RelativePosition { get; }
 
-    public ElementEvent(ElementHandle source, Rect elementRect, Double2 pointerPos)
+    public ElementEvent(ElementHandle source, Rect elementRect, Float2 pointerPos)
     {
         Source = source;
         ElementRect = elementRect;
         PointerPosition = pointerPos;
 
         // Calculate relative position (pointer position relative to element's origin)
-        RelativePosition = new Double2(
+        RelativePosition = new Float2(
             pointerPos.X - elementRect.Min.X,
             pointerPos.Y - elementRect.Min.Y
         );
 
         // Calculate normalized position (0-1 range within the element)
-        NormalizedPosition = new Double2(
+        NormalizedPosition = new Float2(
             elementRect.Size.X > 0 ? RelativePosition.X / elementRect.Size.X : 0,
             elementRect.Size.Y > 0 ? RelativePosition.Y / elementRect.Size.Y : 0
         );

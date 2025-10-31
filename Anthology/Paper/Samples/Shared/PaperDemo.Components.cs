@@ -1,8 +1,8 @@
-using System.Drawing;
 using System.Runtime.CompilerServices;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Vector;
 
 namespace Shared
 {
@@ -27,14 +27,14 @@ namespace Shared
                     .Height(40)
                     .Rounded(8)
                     .BackgroundColor(Themes.primaryColor)
-                    .Transition(GuiProp.BackgroundColor, 0.2)
-                    .Transition(GuiProp.ScaleX, 0.1)
-                    .Transition(GuiProp.ScaleY, 0.1))
+                    .Transition(GuiProp.BackgroundColor, 0.2f)
+                    .Transition(GuiProp.ScaleX, 0.1f)
+                    .Transition(GuiProp.ScaleY, 0.1f))
                 .Hovered(new StyleTemplate()
-                    .BackgroundColor(Color.FromArgb(150, Themes.primaryColor)))
+                    .BackgroundColor(Color32.FromArgb(150, Themes.primaryColor)))
                 .Active(new StyleTemplate()
-                    .Scale(0.95)
-                    .BackgroundColor(Color.FromArgb(200, Themes.primaryColor)))
+                    .Scale(0.95f)
+                    .BackgroundColor(Color32.FromArgb(200, Themes.primaryColor)))
                 .Register();
 
             // Secondary button variant
@@ -43,14 +43,14 @@ namespace Shared
                     .Height(40)
                     .Rounded(8)
                     .BackgroundColor(Themes.secondaryColor)
-                    .Transition(GuiProp.BackgroundColor, 0.2)
-                    .Transition(GuiProp.ScaleX, 0.1)
-                    .Transition(GuiProp.ScaleY, 0.1))
+                    .Transition(GuiProp.BackgroundColor, 0.2f)
+                    .Transition(GuiProp.ScaleX, 0.1f)
+                    .Transition(GuiProp.ScaleY, 0.1f))
                 .Hovered(new StyleTemplate()
-                    .BackgroundColor(Color.FromArgb(150, Themes.secondaryColor)))
+                    .BackgroundColor(Color32.FromArgb(150, Themes.secondaryColor)))
                 .Active(new StyleTemplate()
-                    .Scale(0.95)
-                    .BackgroundColor(Color.FromArgb(200, Themes.primaryColor)))
+                    .Scale(0.95f)
+                    .BackgroundColor(Color32.FromArgb(200, Themes.primaryColor)))
                 .Register();
 
             // Outline button variant
@@ -61,14 +61,14 @@ namespace Shared
                     .BackgroundColor(Themes.backgroundColor)
                     .BorderColor(Themes.secondaryColor)
                     .BorderWidth(1)
-                    .Transition(GuiProp.BackgroundColor, 0.2)
-                    .Transition(GuiProp.ScaleX, 0.1)
-                    .Transition(GuiProp.ScaleY, 0.1))
+                    .Transition(GuiProp.BackgroundColor, 0.2f)
+                    .Transition(GuiProp.ScaleX, 0.1f)
+                    .Transition(GuiProp.ScaleY, 0.1f))
                 .Hovered(new StyleTemplate()
-                    .BackgroundColor(Color.FromArgb(150, Themes.backgroundColor)))
+                    .BackgroundColor(Color32.FromArgb(150, Themes.backgroundColor)))
                 .Active(new StyleTemplate()
-                    .Scale(0.95)
-                    .BackgroundColor(Color.FromArgb(200, Themes.primaryColor)))
+                    .Scale(0.95f)
+                    .BackgroundColor(Color32.FromArgb(200, Themes.primaryColor)))
                 .Register();
 
             // Icon button styles
@@ -78,10 +78,10 @@ namespace Shared
                     .Height(40)
                     .Rounded(8)
                     .BackgroundColor(Themes.primaryColor)
-                    // .Transition(GuiProp.BackgroundColor, 0.2)
-                    .Transition(GuiProp.Rounded, 0.2))
+                    // .Transition(GuiProp.BackgroundColor, 0.2f)
+                    .Transition(GuiProp.Rounded, 0.2f))
                 .Hovered(new StyleTemplate()
-                    .BackgroundColor(Color.FromArgb(100, Themes.primaryColor))
+                    .BackgroundColor(Color32.FromArgb(100, Themes.primaryColor))
                     .Rounded(20))
                 .Register();
 
@@ -92,10 +92,10 @@ namespace Shared
                     .Height(40)
                     .Rounded(8)
                     .BackgroundColor(Themes.secondaryColor)
-                    // .Transition(GuiProp.BackgroundColor, 0.2)
-                    .Transition(GuiProp.Rounded, 0.2))
+                    // .Transition(GuiProp.BackgroundColor, 0.2f)
+                    .Transition(GuiProp.Rounded, 0.2f))
                 .Hovered(new StyleTemplate()
-                    .BackgroundColor(Color.FromArgb(100, Themes.secondaryColor))
+                    .BackgroundColor(Color32.FromArgb(100, Themes.secondaryColor))
                     .Rounded(20))
                 .Register();
         }
@@ -149,8 +149,8 @@ namespace Shared
                     .BackgroundColor(Themes.secondaryColor)
                     .BorderColor(Color.Transparent)
                     .BorderWidth(0)
-                    .Transition(GuiProp.BorderColor, 0.2)
-                    .Transition(GuiProp.BorderWidth, 0.2))
+                    .Transition(GuiProp.BorderColor, 0.2f)
+                    .Transition(GuiProp.BorderWidth, 0.2f))
                 .Focused(new StyleTemplate()
                     .BorderColor(Themes.primaryColor)
                     .BorderWidth(1)
@@ -170,7 +170,7 @@ namespace Shared
                     .Width(UnitValue.StretchOne)
                     .Height(19)
                     .FontSize(19)
-                    .TextField(value, Fonts.arial, onChange, Themes.textColor, placeholder, Color.FromArgb(100, Themes.textColor));
+                    .TextField(value, Fonts.arial, onChange, Themes.textColor, placeholder, Color32.FromArgb(100, Themes.textColor));
             }
             return parent;
 
@@ -195,8 +195,8 @@ namespace Shared
                     .BackgroundColor(Themes.secondaryColor)
                     .BorderColor(Color.Transparent)
                     .BorderWidth(0)
-                    .Transition(GuiProp.BorderColor, 0.2)
-                    .Transition(GuiProp.BorderWidth, 0.2))
+                    .Transition(GuiProp.BorderColor, 0.2f)
+                    .Transition(GuiProp.BorderWidth, 0.2f))
                 .Focused(new StyleTemplate()
                     .BorderColor(Themes.primaryColor)
                     .BorderWidth(1)
@@ -216,7 +216,7 @@ namespace Shared
                     .Width(UnitValue.StretchOne)
                     .Height(UnitValue.Auto)
                     .FontSize(19)
-                    .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color.FromArgb(100, Themes.textColor));
+                    .TextArea(value, Fonts.arial, onChange, placeholder, Themes.textColor, Color32.FromArgb(100, Themes.textColor));
             }
             return parent;
         }
@@ -224,7 +224,7 @@ namespace Shared
 
     public static class Slider
     {
-        public static ElementBuilder Primary(string stringID, double sliderValue, Action<double> onChange, int intID = 0, [CallerLineNumber] int lineID = 0)
+        public static ElementBuilder Primary(string stringID, float sliderValue, Action<float> onChange, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
             var parent = PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Height(20)
@@ -234,11 +234,11 @@ namespace Shared
                 .Margin(0, 0, 20, 0)
                 .OnHeld((e) =>
                 {
-                    double parentWidth = e.ElementRect.Size.X;
-                    double pointerX = e.PointerPosition.X - e.ElementRect.Min.X;
+                    float parentWidth = e.ElementRect.Size.X;
+                    float pointerX = e.PointerPosition.X - e.ElementRect.Min.X;
 
                     // Calculate new slider value based on pointer position
-                    sliderValue = Math.Clamp(pointerX / parentWidth, 0f, 1f);
+                    sliderValue = Maths.Clamp(pointerX / parentWidth, 0f, 1f);
                     onChange.Invoke(sliderValue);
                 });
 
@@ -276,11 +276,11 @@ namespace Shared
             //                 .Margin(0, 0, 20, 0)
             //                 .OnHeld((e) =>
             //                 {
-            //                     double parentWidth = e.ElementRect.width;
-            //                     double pointerX = e.PointerPosition.x - e.ElementRect.x;
+            //                     float parentWidth = e.ElementRect.width;
+            //                     float pointerX = e.PointerPosition.x - e.ElementRect.x;
 
             //                     // Calculate new slider value based on pointer position
-            //                     sliderValue = Math.Clamp(pointerX / parentWidth, 0f, 1f);
+            //                     sliderValue = Maths.Clamp(pointerX / parentWidth, 0f, 1f);
             //                 })
             //                 .Enter())
             // {
@@ -304,7 +304,7 @@ namespace Shared
             // }
         }
 
-        public static ElementBuilder Secondary(string stringID, double sliderValue, Action<double> onChange, int intID = 0, [CallerLineNumber] int lineID = 0)
+        public static ElementBuilder Secondary(string stringID, float sliderValue, Action<float> onChange, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
             var parent = PaperDemo.Gui.Box(stringID, intID, lineID)
                 .Height(20)
@@ -314,11 +314,11 @@ namespace Shared
                 .Margin(0, 0, 20, 0)
                 .OnHeld((e) =>
                 {
-                    double parentWidth = e.ElementRect.Size.X;
-                    double pointerX = e.PointerPosition.X - e.ElementRect.Min.X;
+                    float parentWidth = e.ElementRect.Size.X;
+                    float pointerX = e.PointerPosition.X - e.ElementRect.Min.X;
 
                     // Calculate new slider value based on pointer position
-                    sliderValue = Math.Clamp(pointerX / parentWidth, 0f, 1f);
+                    sliderValue = Maths.Clamp(pointerX / parentWidth, 0f, 1f);
                     onChange.Invoke(sliderValue);
                 });
 
@@ -362,14 +362,14 @@ namespace Shared
                     .Width(60)
                     .Height(30)
                     .Rounded(20)
-                    .Transition(GuiProp.BackgroundColor, 0.25, Easing.CubicInOut))
+                    .Transition(GuiProp.BackgroundColor, 0.25f, Easing.CubicInOut))
                 .Register();
 
             PaperDemo.Gui.RegisterStyle("toggle-on", new StyleTemplate()
                 .BackgroundColor(Themes.primaryColor));
 
             PaperDemo.Gui.RegisterStyle("toggle-off", new StyleTemplate()
-                .BackgroundColor(Color.FromArgb(100, Themes.secondaryColor)));
+                .BackgroundColor(Color32.FromArgb(100, Themes.secondaryColor)));
 
             PaperDemo.Gui.RegisterStyle("toggle-dot", new StyleTemplate()
                 .Width(24)
@@ -378,7 +378,7 @@ namespace Shared
                 .BackgroundColor(Color.White)
                 //.PositionType(PositionType.SelfDirected)
                 .Top(PaperDemo.Gui.Pixels(3))
-                .Transition(GuiProp.Left, 0.25, Easing.CubicInOut));
+                .Transition(GuiProp.Left, 0.25f, Easing.CubicInOut));
         }
 
         public static ElementBuilder Primary(string stringID, bool isOn, int intID = 0, [CallerLineNumber] int lineID = 0)
@@ -403,7 +403,7 @@ namespace Shared
 
     public static class PieChart
     {
-        public static ElementBuilder Primary(string stringID, double[] values, double startAngle, int intID = 0, [CallerLineNumber] int lineID = 0)
+        public static ElementBuilder Primary(string stringID, float[] values, float startAngle, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
             // "Analysis" mock content
             ElementBuilder builder;
@@ -414,15 +414,15 @@ namespace Shared
                 // Add a simple pie chart visualization
                 PaperDemo.Gui.AddActionElement((vg, rect) =>
                 {
-                    double centerX = rect.Min.X + rect.Size.X / 2;
-                    double centerY = rect.Min.Y + rect.Size.Y / 2;
-                    double radius = Math.Min(rect.Size.X, rect.Size.Y) * 0.4f;
+                    float centerX = rect.Min.X + rect.Size.X / 2;
+                    float centerY = rect.Min.Y + rect.Size.Y / 2;
+                    float radius = Maths.Min(rect.Size.X, rect.Size.Y) * 0.4f;
 
-                    // double startAngle = 0;
-                    // double[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
+                    // float startAngle = 0;
+                    // float[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
 
                     // Normalize Values
-                    double total = values.Sum();
+                    float total = values.Sum();
                     for (int i = 0; i < values.Length; i++)
                         values[i] /= total;
 
@@ -430,8 +430,8 @@ namespace Shared
                     for (int i = 0; i < values.Length; i++)
                     {
                         // Calculate angles
-                        double angle = values[i] * Math.PI * 2;
-                        double endAngle = startAngle + angle;
+                        float angle = values[i] * Maths.PI * 2;
+                        float endAngle = startAngle + angle;
 
                         // Draw pie slice
                         vg.BeginPath();
@@ -451,10 +451,10 @@ namespace Shared
                         vg.Stroke();
 
                         // Draw percentage labels
-                        double labelAngle = startAngle + angle / 2;
-                        double labelRadius = radius * 0.7f;
-                        double labelX = centerX + Math.Cos(labelAngle) * labelRadius;
-                        double labelY = centerY + Math.Sin(labelAngle) * labelRadius;
+                        float labelAngle = startAngle + angle / 2;
+                        float labelRadius = radius * 0.7f;
+                        float labelX = centerX + Maths.Cos(labelAngle) * labelRadius;
+                        float labelY = centerY + Maths.Sin(labelAngle) * labelRadius;
 
                         string label = $"{values[i] * 100:F0}%";
                         vg.SetFillColor(Color.White);
@@ -493,15 +493,15 @@ namespace Shared
         // {
         //     // Add a simple pie chart visualization
         //     Gui.AddActionElement((vg, rect) => {
-        //         double centerX = rect.x + rect.width / 2;
-        //         double centerY = rect.y + rect.height / 2;
-        //         double radius = Math.Min(rect.width, rect.height) * 0.4f;
+        //         float centerX = rect.x + rect.width / 2;
+        //         float centerY = rect.y + rect.height / 2;
+        //         float radius = Maths.Min(rect.width, rect.height) * 0.4f;
 
-        //         double startAngle = 0;
-        //         double[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
+        //         float startAngle = 0;
+        //         float[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
 
         //         // Normalize Values
-        //         double total = values.Sum();
+        //         float total = values.Sum();
         //         for (int i = 0; i < values.Length; i++)
         //             values[i] /= total;
 
@@ -509,8 +509,8 @@ namespace Shared
         //         for (int i = 0; i < values.Length; i++)
         //         {
         //             // Calculate angles
-        //             double angle = values[i] * Math.PI * 2;
-        //             double endAngle = startAngle + angle;
+        //             float angle = values[i] * Maths.PI * 2;
+        //             float endAngle = startAngle + angle;
 
         //             // Draw pie slice
         //             vg.BeginPath();
@@ -530,10 +530,10 @@ namespace Shared
         //             vg.Stroke();
 
         //             // Draw percentage labels
-        //             double labelAngle = startAngle + angle / 2;
-        //             double labelRadius = radius * 0.7f;
-        //             double labelX = centerX + Math.Cos(labelAngle) * labelRadius;
-        //             double labelY = centerY + Math.Sin(labelAngle) * labelRadius;
+        //             float labelAngle = startAngle + angle / 2;
+        //             float labelRadius = radius * 0.7f;
+        //             float labelX = centerX + Maths.Cos(labelAngle) * labelRadius;
+        //             float labelY = centerY + Maths.Sin(labelAngle) * labelRadius;
 
         //             string label = $"{values[i] * 100:F0}%";
         //             vg.SetFillColor(Color.White);

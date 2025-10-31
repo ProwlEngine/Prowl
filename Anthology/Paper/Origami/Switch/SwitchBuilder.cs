@@ -1,7 +1,7 @@
-using System.Drawing;
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Scribe;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI.Themes.Origami.Switch;
 
@@ -186,7 +186,7 @@ public class SwitchBuilder
             {
                 var fontSize = theme.GetFontSize(_size);
                 var labelColor = _isDisabled ? 
-                    System.Drawing.Color.FromArgb((int)(255 * theme.DisableOpacity), theme.Foreground.Base) : 
+                    Color32.FromArgb((int)(255 * theme.DisableOpacity), theme.Foreground.Base) : 
                     theme.Foreground.Base;
 
                 _paper.Box($"origami-switch-label-{_id}")
@@ -206,7 +206,7 @@ public class SwitchBuilder
                 .Height(dimensions.TrackHeight)
                 .Rounded(dimensions.TrackHeight / 2)
                 .LayoutType(LayoutType.Row)
-                .Transition(GuiProp.BackgroundColor, 0.25, Easing.CubicInOut);
+                .Transition(GuiProp.BackgroundColor, 0.25f, Easing.CubicInOut);
 
             // Apply track styling
             ApplyTrackStyling(track, theme);
@@ -249,7 +249,7 @@ public class SwitchBuilder
     private void ApplyTrackStyling(ElementBuilder track, OrigamiTheme theme)
     {
         var themeColor = theme.GetColor(_color);
-        double opacity = _isDisabled ? theme.DisableOpacity : 1.0;
+        float opacity = _isDisabled ? theme.DisableOpacity : 1.0f;
 
         if (_isOn)
         {
@@ -277,30 +277,30 @@ public class SwitchBuilder
     {
         if (!string.IsNullOrEmpty(_onIcon) && _iconFont != null)
         {
-            var iconColor = _isOn ? theme.Foreground.Base : System.Drawing.Color.Transparent;
-            if (_isDisabled) iconColor = System.Drawing.Color.FromArgb((int)(255 * theme.DisableOpacity), iconColor);
+            var iconColor = _isOn ? theme.Foreground.Base : Prowl.Vector.Color.Transparent;
+            if (_isDisabled) iconColor = Prowl.Vector.Color32.FromArgb((int)(255 * theme.DisableOpacity), iconColor);
 
             _paper.Box($"origami-switch-on-icon-{_id}")
                 .Text(_onIcon, _iconFont)
                 .TextColor(iconColor)
                 .Alignment(TextAlignment.MiddleCenter)
                 .FontSize(dimensions.IconSize)
-                .Transition(GuiProp.TextColor, 0.25, Easing.CubicInOut)
+                .Transition(GuiProp.TextColor, 0.25f, Easing.CubicInOut)
                 .IsNotInteractable()
                 .IsNotFocusable();
         }
 
         if (!string.IsNullOrEmpty(_offIcon) && _iconFont != null)
         {
-            var iconColor = !_isOn ? theme.Content4.Base : System.Drawing.Color.Transparent;
-            if (_isDisabled) iconColor = System.Drawing.Color.FromArgb((int)(255 * theme.DisableOpacity), iconColor);
+            var iconColor = !_isOn ? theme.Content4.Base : Prowl.Vector.Color.Transparent;
+            if (_isDisabled) iconColor = Prowl.Vector.Color32.FromArgb((int)(255 * theme.DisableOpacity), iconColor);
 
             _paper.Box($"origami-switch-off-icon-{_id}")
                 .Text(_offIcon, _iconFont)
                 .TextColor(iconColor)
                 .Alignment(TextAlignment.MiddleCenter)
                 .FontSize(dimensions.IconSize)
-                .Transition(GuiProp.TextColor, 0.25, Easing.CubicInOut)
+                .Transition(GuiProp.TextColor, 0.25f, Easing.CubicInOut)
                 .IsNotInteractable()
                 .IsNotFocusable();
         }
@@ -316,13 +316,13 @@ public class SwitchBuilder
             .PositionType(PositionType.SelfDirected)
             .Top((dimensions.TrackHeight - dimensions.ThumbSize) / 2)
             .Left(_isOn ? dimensions.TrackWidth - dimensions.ThumbSize - dimensions.ThumbMargin : dimensions.ThumbMargin)
-            .Transition(GuiProp.Left, 0.25, Easing.CubicInOut)
+            .Transition(GuiProp.Left, 0.25f, Easing.CubicInOut)
             .IsNotInteractable()
             .IsNotFocusable();
 
         if (_isDisabled)
         {
-            thumb.BackgroundColor(System.Drawing.Color.FromArgb((int)(255 * theme.DisableOpacity), theme.Foreground.Base));
+            thumb.BackgroundColor(Prowl.Vector.Color32.FromArgb((int)(255 * theme.DisableOpacity), theme.Foreground.Base));
         }
 
         // Add thumb icon if provided
@@ -331,7 +331,7 @@ public class SwitchBuilder
             using (thumb.Enter())
             {
                 var thumbIconColor = _isDisabled ?
-                    System.Drawing.Color.FromArgb((int)(255 * theme.DisableOpacity), theme.Content1.Base) : 
+                    Prowl.Vector.Color32.FromArgb((int)(255 * theme.DisableOpacity), theme.Content1.Base) : 
                     theme.Content1.Base;
 
                 _paper.Box($"origami-switch-thumb-icon-{_id}")
@@ -347,12 +347,12 @@ public class SwitchBuilder
 
     private struct SwitchDimensions
     {
-        public double TrackWidth;
-        public double TrackHeight;
-        public double ThumbSize;
-        public double ThumbMargin;
-        public double Height;
-        public double IconSize;
+        public float TrackWidth;
+        public float TrackHeight;
+        public float ThumbSize;
+        public float ThumbMargin;
+        public float Height;
+        public float IconSize;
     }
 
     private SwitchDimensions GetSwitchDimensions(OrigamiSize size)

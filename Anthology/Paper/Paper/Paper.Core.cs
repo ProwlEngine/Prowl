@@ -26,8 +26,8 @@ namespace Prowl.PaperUI
         // Rendering context
         private Canvas _canvas;
         private ICanvasRenderer _renderer;
-        private double _width;
-        private double _height;
+        private float _width;
+        private float _height;
         private Stopwatch _timer = new();
 
         // Events
@@ -35,7 +35,7 @@ namespace Prowl.PaperUI
         public Action? OnEndOfFramePostLayout = null;
 
         // Performance metrics
-        public double MillisecondsSpent { get; private set; }
+        public float MillisecondsSpent { get; private set; }
         public uint CountOfAllElements { get; private set; }
 
         // Public properties
@@ -59,7 +59,7 @@ namespace Prowl.PaperUI
         /// <param name="width">Viewport width</param>
         /// <param name="height">Viewport height</param>
         /// <param name="fontAtlas">Font atlas settings for text rendering</param>
-        public Paper(ICanvasRenderer renderer, double width, double height, FontAtlasSettings fontAtlas)
+        public Paper(ICanvasRenderer renderer, float width, float height, FontAtlasSettings fontAtlas)
         {
             _width = width;
             _height = height;
@@ -87,7 +87,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Updates the viewport resolution.
         /// </summary>
-        public void SetResolution(double width, double height)
+        public void SetResolution(float width, float height)
         {
             _width = width;
             _height = height;
@@ -97,9 +97,9 @@ namespace Prowl.PaperUI
 
         public IEnumerable<FontFile> EnumerateSystemFonts() => _canvas.EnumerateSystemFonts();
 
-        public Double2 MeasureText(string text, double pixelSize, FontFile font, double letterSpacing = 0.0) => _canvas.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
+        public Float2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0.0f) => _canvas.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
 
-        public Double2 MeasureText(string text, TextLayoutSettings settings) => _canvas.MeasureText(text, settings);
+        public Float2 MeasureText(string text, TextLayoutSettings settings) => _canvas.MeasureText(text, settings);
 
         public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _canvas.CreateLayout(text, settings);
 
@@ -108,7 +108,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="deltaTime">Time elapsed since the last frame</param>
         /// <param name="frameBufferScale">Optional framebuffer scaling factor</param>
-        public void BeginFrame(double deltaTime, Double2? frameBufferScale = null)
+        public void BeginFrame(float deltaTime, Float2? frameBufferScale = null)
         {
             _timer.Restart();
             SetTime(deltaTime);
@@ -129,7 +129,7 @@ namespace Prowl.PaperUI
             // Reset Canvas
             _canvas.Clear();
 
-            StartInputFrame(frameBufferScale ?? new Double2(1, 1));
+            StartInputFrame(frameBufferScale ?? new Float2(1, 1));
         }
 
         /// <summary>
@@ -176,7 +176,7 @@ namespace Prowl.PaperUI
 
             // Performance measurement
             _timer.Stop();
-            MillisecondsSpent = _timer.Elapsed.TotalMilliseconds;
+            MillisecondsSpent = (float)_timer.Elapsed.TotalMilliseconds;
         }
 
         /// <summary>
@@ -246,17 +246,17 @@ namespace Prowl.PaperUI
             _canvas.TransformBy(styleTransform);
 
             // Draw box shadow before background
-            var rounded = (Double4)data._elementStyle.GetValue(GuiProp.Rounded);
+            var rounded = (Float4)data._elementStyle.GetValue(GuiProp.Rounded);
             bool hasRounding = rounded.X > 0 || rounded.Y > 0 || rounded.Z > 0 || rounded.W > 0;
             var boxShadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
             if (boxShadow.IsVisible)
             {
-                double buffer = boxShadow.Blur * 0.5;
-                double sx = rect.Min.X + boxShadow.OffsetX - buffer - boxShadow.Spread;
-                double sy = rect.Min.Y + boxShadow.OffsetY - buffer - boxShadow.Spread;
-                double sw = rect.Size.X + (buffer * 2) + (boxShadow.Spread * 2);
-                double sh = rect.Size.Y + (buffer * 2) + (boxShadow.Spread * 2);
-                float radi = (float)(Math.Max(Math.Max(rounded.X, rounded.Y), Math.Max(rounded.Z, rounded.W)));
+                float buffer = boxShadow.Blur * 0.5f;
+                float sx = rect.Min.X + boxShadow.OffsetX - buffer - boxShadow.Spread;
+                float sy = rect.Min.Y + boxShadow.OffsetY - buffer - boxShadow.Spread;
+                float sw = rect.Size.X + (buffer * 2) + (boxShadow.Spread * 2);
+                float sh = rect.Size.Y + (buffer * 2) + (boxShadow.Spread * 2);
+                float radi = (float)(Maths.Max(Maths.Max(rounded.X, rounded.Y), Maths.Max(rounded.Z, rounded.W)));
                 _canvas.SetBoxBrush(
                     sx + sw / 2,
                     sy + sh / 2,
@@ -267,7 +267,7 @@ namespace Prowl.PaperUI
                     boxShadow.Color,
                     Color32.FromArgb(0, boxShadow.Color));
 
-                buffer = (boxShadow.Blur) * 1.0;
+                buffer = (boxShadow.Blur) * 1.0f;
                 sx = rect.Min.X + boxShadow.OffsetX - buffer - boxShadow.Spread;
                 sy = rect.Min.Y + boxShadow.OffsetY - buffer - boxShadow.Spread;
                 sw = rect.Size.X + (buffer * 2) + (boxShadow.Spread * 2);
@@ -288,26 +288,26 @@ namespace Prowl.PaperUI
                 switch (gradient.Type)
                 {
                     case GradientType.Linear:
-                        double lx1 = rect.Min.X + gradient.X1 * rect.Size.X;
-                        double ly1 = rect.Min.Y + gradient.Y1 * rect.Size.Y;
-                        double lx2 = rect.Min.X + gradient.X2 * rect.Size.X;
-                        double ly2 = rect.Min.Y + gradient.Y2 * rect.Size.Y;
+                        float lx1 = rect.Min.X + gradient.X1 * rect.Size.X;
+                        float ly1 = rect.Min.Y + gradient.Y1 * rect.Size.Y;
+                        float lx2 = rect.Min.X + gradient.X2 * rect.Size.X;
+                        float ly2 = rect.Min.Y + gradient.Y2 * rect.Size.Y;
                         _canvas.SetLinearBrush(lx1, ly1, lx2, ly2, gradient.Color1, gradient.Color2);
                         break;
                     case GradientType.Radial:
-                        double rcx = rect.Min.X + gradient.X1 * rect.Size.X;
-                        double rcy = rect.Min.Y + gradient.Y1 * rect.Size.Y;
-                        double ir = gradient.InnerRadius * Math.Min(rect.Size.X, rect.Size.Y);
-                        double or = gradient.OuterRadius * Math.Min(rect.Size.X, rect.Size.Y);
+                        float rcx = rect.Min.X + gradient.X1 * rect.Size.X;
+                        float rcy = rect.Min.Y + gradient.Y1 * rect.Size.Y;
+                        float ir = gradient.InnerRadius * Maths.Min(rect.Size.X, rect.Size.Y);
+                        float or = gradient.OuterRadius * Maths.Min(rect.Size.X, rect.Size.Y);
                         _canvas.SetRadialBrush(rcx, rcy, ir, or, gradient.Color1, gradient.Color2);
                         break;
                     case GradientType.Box:
-                        double bcx = rect.Min.X + gradient.X1 * rect.Size.X;
-                        double bcy = rect.Min.Y + gradient.Y1 * rect.Size.Y;
-                        double bw = gradient.Width * rect.Size.X;
-                        double bh = gradient.Height * rect.Size.Y;
-                        float brad = gradient.Radius * (float)Math.Min(rect.Size.X, rect.Size.Y);
-                        float bfeather = gradient.Feather * (float)Math.Min(rect.Size.X, rect.Size.Y);
+                        float bcx = rect.Min.X + gradient.X1 * rect.Size.X;
+                        float bcy = rect.Min.Y + gradient.Y1 * rect.Size.Y;
+                        float bw = gradient.Width * rect.Size.X;
+                        float bh = gradient.Height * rect.Size.Y;
+                        float brad = gradient.Radius * (float)Maths.Min(rect.Size.X, rect.Size.Y);
+                        float bfeather = gradient.Feather * (float)Maths.Min(rect.Size.X, rect.Size.Y);
                         _canvas.SetBoxBrush(bcx, bcy, bw, bh, brad, bfeather, gradient.Color1, gradient.Color2);
                         break;
                 }
@@ -335,7 +335,7 @@ namespace Prowl.PaperUI
 
             // Draw border if needed
             var borderColor = (Color)data._elementStyle.GetValue(GuiProp.BorderColor);
-            var borderWidth = (double)data._elementStyle.GetValue(GuiProp.BorderWidth);
+            var borderWidth = (float)data._elementStyle.GetValue(GuiProp.BorderWidth);
             if (borderWidth > 0.0f && borderColor.A > 0)
             {
                 _canvas.BeginPath();
@@ -433,7 +433,7 @@ namespace Prowl.PaperUI
             _canvas.RestoreState();
         }
 
-        private void DrawText(in ElementHandle handle, double x, double y, float availableWidth, float availableHeight)
+        private void DrawText(in ElementHandle handle, float x, float y, float availableWidth, float availableHeight)
         {
             if (string.IsNullOrWhiteSpace(handle.Data.Paragraph)) return;
 
@@ -445,8 +445,8 @@ namespace Prowl.PaperUI
             var color = (Color32)(Color)handle.Data._elementStyle.GetValue(GuiProp.TextColor);
 
             // Calculate vertical alignment offset
-            double yOffset = 0;
-            Double2 textSize;
+            float yOffset = 0;
+            Float2 textSize;
 
             if (handle.Data.IsMarkdown == false)
             {
@@ -459,7 +459,7 @@ namespace Prowl.PaperUI
                 if (handle.Data._quillMarkdown == null) throw new InvalidOperationException("Markdown layout is not processed.");
 
                 var markdownResult = handle.Data._quillMarkdown as dynamic;
-                textSize = markdownResult?.Size ?? Double2.Zero;
+                textSize = markdownResult?.Size ?? Float2.Zero;
             }
 
             // Apply vertical alignment based on TextAlignment
@@ -468,7 +468,7 @@ namespace Prowl.PaperUI
                 case TextAlignment.MiddleLeft:
                 case TextAlignment.MiddleCenter:
                 case TextAlignment.MiddleRight:
-                    yOffset = (availableHeight - textSize.Y) / 2.0;
+                    yOffset = (availableHeight - textSize.Y) / 2.0f;
                     break;
 
                 case TextAlignment.BottomLeft:
@@ -486,7 +486,7 @@ namespace Prowl.PaperUI
             }
 
             // Apply the calculated offset to the y position
-            double finalY = y + yOffset;
+            float finalY = y + yOffset;
 
             if (handle.Data.IsMarkdown == false)
             {
@@ -495,7 +495,7 @@ namespace Prowl.PaperUI
             else
             {
                 var markdownResult = handle.Data._quillMarkdown;
-                canvas.DrawMarkdown(markdownResult ?? new(), new Double2(x, finalY));
+                canvas.DrawMarkdown(markdownResult ?? new(), new Float2(x, finalY));
             }
         }
 
@@ -733,17 +733,17 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a stretch unit value with the specified factor.
         /// </summary>
-        public UnitValue Stretch(double factor = 1f) => UnitValue.Stretch(factor);
+        public UnitValue Stretch(float factor = 1f) => UnitValue.Stretch(factor);
 
         /// <summary>
         /// Creates a pixel-based unit value.
         /// </summary>
-        public UnitValue Pixels(double value) => UnitValue.Pixels(value);
+        public UnitValue Pixels(float value) => UnitValue.Pixels(value);
 
         /// <summary>
         /// Creates a percentage-based unit value with optional pixel offset.
         /// </summary>
-        public UnitValue Percent(double value, double pixelOffset = 0f) => UnitValue.Percentage(value, pixelOffset);
+        public UnitValue Percent(float value, float pixelOffset = 0f) => UnitValue.Percentage(value, pixelOffset);
 
         /// <summary>
         /// Creates an auto-sized unit value.

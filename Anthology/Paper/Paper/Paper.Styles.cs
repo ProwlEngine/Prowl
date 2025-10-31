@@ -93,15 +93,15 @@ namespace Prowl.PaperUI
     {
         #region Fields
 
-        private double _translateX = 0;
-        private double _translateY = 0;
-        private double _scaleX = 1;
-        private double _scaleY = 1;
-        private double _rotate = 0;
-        private double _skewX = 0;
-        private double _skewY = 0;
-        private double _originX = 0.5f; // Default to center (50%)
-        private double _originY = 0.5f; // Default to center (50%)
+        private float _translateX = 0;
+        private float _translateY = 0;
+        private float _scaleX = 1;
+        private float _scaleY = 1;
+        private float _rotate = 0;
+        private float _skewX = 0;
+        private float _skewY = 0;
+        private float _originX = 0.5f; // Default to center (50%)
+        private float _originY = 0.5f; // Default to center (50%)
         private Transform2D? _customTransform = null;
 
         #endregion
@@ -111,7 +111,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the X translation.
         /// </summary>
-        public TransformBuilder SetTranslateX(double x)
+        public TransformBuilder SetTranslateX(float x)
         {
             _translateX = x;
             return this;
@@ -120,7 +120,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the Y translation.
         /// </summary>
-        public TransformBuilder SetTranslateY(double y)
+        public TransformBuilder SetTranslateY(float y)
         {
             _translateY = y;
             return this;
@@ -129,7 +129,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the X scale factor.
         /// </summary>
-        public TransformBuilder SetScaleX(double x)
+        public TransformBuilder SetScaleX(float x)
         {
             _scaleX = x;
             return this;
@@ -138,7 +138,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the Y scale factor.
         /// </summary>
-        public TransformBuilder SetScaleY(double y)
+        public TransformBuilder SetScaleY(float y)
         {
             _scaleY = y;
             return this;
@@ -147,7 +147,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the rotation angle in degrees.
         /// </summary>
-        public TransformBuilder SetRotate(double angleInDegrees)
+        public TransformBuilder SetRotate(float angleInDegrees)
         {
             _rotate = angleInDegrees;
             return this;
@@ -156,7 +156,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the X skew angle.
         /// </summary>
-        public TransformBuilder SetSkewX(double angle)
+        public TransformBuilder SetSkewX(float angle)
         {
             _skewX = angle;
             return this;
@@ -165,7 +165,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the Y skew angle.
         /// </summary>
-        public TransformBuilder SetSkewY(double angle)
+        public TransformBuilder SetSkewY(float angle)
         {
             _skewY = angle;
             return this;
@@ -174,7 +174,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the X origin point (0-1 range).
         /// </summary>
-        public TransformBuilder SetOriginX(double x)
+        public TransformBuilder SetOriginX(float x)
         {
             _originX = x;
             return this;
@@ -183,7 +183,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Sets the Y origin point (0-1 range).
         /// </summary>
-        public TransformBuilder SetOriginY(double y)
+        public TransformBuilder SetOriginY(float y)
         {
             _originY = y;
             return this;
@@ -210,8 +210,8 @@ namespace Prowl.PaperUI
         public Transform2D Build(Rect rect)
         {
             // Calculate origin in actual pixels
-            double originX = rect.Min.X + _originX * rect.Size.X;
-            double originY = rect.Min.Y + _originY * rect.Size.Y;
+            float originX = rect.Min.X + _originX * rect.Size.X;
+            float originY = rect.Min.Y + _originY * rect.Size.Y;
 
             // Create transformation matrix
             Transform2D result = Transform2D.Identity;
@@ -261,10 +261,10 @@ namespace Prowl.PaperUI
     public class TransitionConfig
     {
         /// <summary>Duration of the transition in seconds.</summary>
-        public double Duration { get; set; }
+        public float Duration { get; set; }
 
         /// <summary>Optional easing function to control transition timing.</summary>
-        public Func<double, double>? EasingFunction { get; set; }
+        public Func<float, float>? EasingFunction { get; set; }
     }
 
     /// <summary>
@@ -363,7 +363,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Configures a transition for a property.
         /// </summary>
-        public void SetTransitionConfig(GuiProp property, double duration, Func<double, double>? easing = null)
+        public void SetTransitionConfig(GuiProp property, float duration, Func<float, float>? easing = null)
         {
             // Store the transition configuration for this property
             _transitionConfigs[property] = new TransitionConfig {
@@ -389,7 +389,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Updates all property transitions for the current frame.
         /// </summary>
-        public void Update(double deltaTime)
+        public void Update(float deltaTime)
         {
             if (!_firstFrame)
             {
@@ -437,31 +437,31 @@ namespace Prowl.PaperUI
 
             // Set transform properties from the current values
             if (_currentValues.TryGetValue(GuiProp.TranslateX, out var translateX))
-                builder.SetTranslateX((double)translateX);
+                builder.SetTranslateX((float)translateX);
 
             if (_currentValues.TryGetValue(GuiProp.TranslateY, out var translateY))
-                builder.SetTranslateY((double)translateY);
+                builder.SetTranslateY((float)translateY);
 
             if (_currentValues.TryGetValue(GuiProp.ScaleX, out var scaleX))
-                builder.SetScaleX((double)scaleX);
+                builder.SetScaleX((float)scaleX);
 
             if (_currentValues.TryGetValue(GuiProp.ScaleY, out var scaleY))
-                builder.SetScaleY((double)scaleY);
+                builder.SetScaleY((float)scaleY);
 
             if (_currentValues.TryGetValue(GuiProp.Rotate, out var rotate))
-                builder.SetRotate((double)rotate);
+                builder.SetRotate((float)rotate);
 
             if (_currentValues.TryGetValue(GuiProp.SkewX, out var skewX))
-                builder.SetSkewX((double)skewX);
+                builder.SetSkewX((float)skewX);
 
             if (_currentValues.TryGetValue(GuiProp.SkewY, out var skewY))
-                builder.SetSkewY((double)skewY);
+                builder.SetSkewY((float)skewY);
 
             if (_currentValues.TryGetValue(GuiProp.OriginX, out var originX))
-                builder.SetOriginX((double)originX);
+                builder.SetOriginX((float)originX);
 
             if (_currentValues.TryGetValue(GuiProp.OriginY, out var originY))
-                builder.SetOriginY((double)originY);
+                builder.SetOriginY((float)originY);
 
             if (_currentValues.TryGetValue(GuiProp.Transform, out var customTransform))
                 builder.SetCustomTransform((Transform2D)customTransform);
@@ -509,7 +509,7 @@ namespace Prowl.PaperUI
         /// Processes transitions for a property.
         /// </summary>
         private void ProcessPropertyWithTransition(GuiProp property, object targetValue, TransitionConfig config,
-            double deltaTime, List<GuiProp> completedInterpolations)
+            float deltaTime, List<GuiProp> completedInterpolations)
         {
             // If we don't have a current value yet, initialize it immediately
             if (!_currentValues.TryGetValue(property, out object? currentValue))
@@ -557,7 +557,7 @@ namespace Prowl.PaperUI
             else
             {
                 // Calculate interpolated value
-                double t = state.CurrentTime / state.Duration;
+                float t = state.CurrentTime / state.Duration;
                 if (state.EasingFunction != null)
                     t = state.EasingFunction(t);
 
@@ -568,15 +568,15 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Interpolates between two values based on their type.
         /// </summary>
-        private object Interpolate(object start, object end, double t)
+        private object Interpolate(object start, object end, float t)
         {
-            if (start is double doubleStart && end is double doubleEnd)
-            {
-                return doubleStart + (doubleEnd - doubleStart) * t;
-            }
-            else if(start is float floatStart && end is float floatEnd)
+            if (start is float floatStart && end is float floatEnd)
             {
                 return floatStart + (floatEnd - floatStart) * t;
+            }
+            else if(start is double doubleStart && end is double doubleEnd)
+            {
+                return doubleStart + (doubleEnd - doubleStart) * t;
             }
             else if (start is int intStart && end is int intEnd)
             {
@@ -586,15 +586,15 @@ namespace Prowl.PaperUI
             {
                 return InterpolateColor(colorStart, colorEnd, t);
             }
-            else if (start is Double2 vectorStart && end is Double2 vectorEnd)
+            else if (start is Float2 vectorStart && end is Float2 vectorEnd)
             {
                 return Maths.Lerp(vectorStart, vectorEnd, t);
             }
-            else if (start is Double3 vector3Start && end is Double3 vector3End)
+            else if (start is Float3 vector3Start && end is Float3 vector3End)
             {
                 return Maths.Lerp(vector3Start, vector3End, t);
             }
-            else if (start is Double4 vector4Start && end is Double4 vector4End)
+            else if (start is Float4 vector4Start && end is Float4 vector4End)
             {
                 return Maths.Lerp(vector4Start, vector4End, t);
             }
@@ -626,7 +626,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Interpolates between two colors.
         /// </summary>
-        private Color InterpolateColor(Color start, Color end, double t)
+        private Color InterpolateColor(Color start, Color end, float t)
         {
             // If start is fully transparent, replace its RGB with end's RGB
             if (start.A == 0)
@@ -667,32 +667,32 @@ namespace Prowl.PaperUI
             _defaultValues[(int)GuiProp.BackgroundColor] = Color.Transparent;
             _defaultValues[(int)GuiProp.BackgroundGradient] = Gradient.None;
             _defaultValues[(int)GuiProp.BorderColor] = Color.Transparent;
-            _defaultValues[(int)GuiProp.BorderWidth] = 0.0;
-            _defaultValues[(int)GuiProp.Rounded] = new Double4(0, 0, 0, 0);
+            _defaultValues[(int)GuiProp.BorderWidth] = 0.0f;
+            _defaultValues[(int)GuiProp.Rounded] = new Float4(0, 0, 0, 0);
             _defaultValues[(int)GuiProp.BoxShadow] = BoxShadow.None;
 
             // Core Layout Properties
-            _defaultValues[(int)GuiProp.AspectRatio] = -1.0;
+            _defaultValues[(int)GuiProp.AspectRatio] = -1.0f;
             _defaultValues[(int)GuiProp.Width] = UnitValue.Stretch();
             _defaultValues[(int)GuiProp.Height] = UnitValue.Stretch();
             _defaultValues[(int)GuiProp.MinWidth] = UnitValue.Pixels(0);
-            _defaultValues[(int)GuiProp.MaxWidth] = UnitValue.Pixels(double.MaxValue);
+            _defaultValues[(int)GuiProp.MaxWidth] = UnitValue.Pixels(float.MaxValue);
             _defaultValues[(int)GuiProp.MinHeight] = UnitValue.Pixels(0);
-            _defaultValues[(int)GuiProp.MaxHeight] = UnitValue.Pixels(double.MaxValue);
+            _defaultValues[(int)GuiProp.MaxHeight] = UnitValue.Pixels(float.MaxValue);
 
             // Positioning Properties
             _defaultValues[(int)GuiProp.Left] = UnitValue.Auto;
             _defaultValues[(int)GuiProp.Right] = UnitValue.Auto;
             _defaultValues[(int)GuiProp.Top] = UnitValue.Auto;
             _defaultValues[(int)GuiProp.Bottom] = UnitValue.Auto;
-            _defaultValues[(int)GuiProp.MinLeft] = UnitValue.Pixels(double.MinValue);
-            _defaultValues[(int)GuiProp.MaxLeft] = UnitValue.Pixels(double.MaxValue);
-            _defaultValues[(int)GuiProp.MinRight] = UnitValue.Pixels(double.MinValue);
-            _defaultValues[(int)GuiProp.MaxRight] = UnitValue.Pixels(double.MaxValue);
-            _defaultValues[(int)GuiProp.MinTop] = UnitValue.Pixels(double.MinValue);
-            _defaultValues[(int)GuiProp.MaxTop] = UnitValue.Pixels(double.MaxValue);
-            _defaultValues[(int)GuiProp.MinBottom] = UnitValue.Pixels(double.MinValue);
-            _defaultValues[(int)GuiProp.MaxBottom] = UnitValue.Pixels(double.MaxValue);
+            _defaultValues[(int)GuiProp.MinLeft] = UnitValue.Pixels(float.MinValue);
+            _defaultValues[(int)GuiProp.MaxLeft] = UnitValue.Pixels(float.MaxValue);
+            _defaultValues[(int)GuiProp.MinRight] = UnitValue.Pixels(float.MinValue);
+            _defaultValues[(int)GuiProp.MaxRight] = UnitValue.Pixels(float.MaxValue);
+            _defaultValues[(int)GuiProp.MinTop] = UnitValue.Pixels(float.MinValue);
+            _defaultValues[(int)GuiProp.MaxTop] = UnitValue.Pixels(float.MaxValue);
+            _defaultValues[(int)GuiProp.MinBottom] = UnitValue.Pixels(float.MinValue);
+            _defaultValues[(int)GuiProp.MaxBottom] = UnitValue.Pixels(float.MaxValue);
 
             // Child Layout Properties
             _defaultValues[(int)GuiProp.ChildLeft] = UnitValue.Auto;
@@ -707,24 +707,24 @@ namespace Prowl.PaperUI
             _defaultValues[(int)GuiProp.BorderBottom] = UnitValue.Pixels(0);
 
             // Transform Properties
-            _defaultValues[(int)GuiProp.TranslateX] = 0.0;
-            _defaultValues[(int)GuiProp.TranslateY] = 0.0;
-            _defaultValues[(int)GuiProp.ScaleX] = 1.0;
-            _defaultValues[(int)GuiProp.ScaleY] = 1.0;
-            _defaultValues[(int)GuiProp.Rotate] = 0.0;
-            _defaultValues[(int)GuiProp.SkewX] = 0.0;
-            _defaultValues[(int)GuiProp.SkewY] = 0.0;
-            _defaultValues[(int)GuiProp.OriginX] = 0.5;
-            _defaultValues[(int)GuiProp.OriginY] = 0.5;
+            _defaultValues[(int)GuiProp.TranslateX] = 0.0f;
+            _defaultValues[(int)GuiProp.TranslateY] = 0.0f;
+            _defaultValues[(int)GuiProp.ScaleX] = 1.0f;
+            _defaultValues[(int)GuiProp.ScaleY] = 1.0f;
+            _defaultValues[(int)GuiProp.Rotate] = 0.0f;
+            _defaultValues[(int)GuiProp.SkewX] = 0.0f;
+            _defaultValues[(int)GuiProp.SkewY] = 0.0f;
+            _defaultValues[(int)GuiProp.OriginX] = 0.5f;
+            _defaultValues[(int)GuiProp.OriginY] = 0.5f;
             _defaultValues[(int)GuiProp.Transform] = Transform2D.Identity;
 
             // Text Properties
             _defaultValues[(int)GuiProp.TextColor] = Color.White;
-            _defaultValues[(int)GuiProp.WordSpacing] = 0.0;
-            _defaultValues[(int)GuiProp.LetterSpacing] = 0.0;
-            _defaultValues[(int)GuiProp.LineHeight] = 1.0;
+            _defaultValues[(int)GuiProp.WordSpacing] = 0.0f;
+            _defaultValues[(int)GuiProp.LetterSpacing] = 0.0f;
+            _defaultValues[(int)GuiProp.LineHeight] = 1.0f;
             _defaultValues[(int)GuiProp.TabSize] = 4;
-            _defaultValues[(int)GuiProp.FontSize] = 16.0;
+            _defaultValues[(int)GuiProp.FontSize] = 16.0f;
 
             _initialized = true;
         }
@@ -740,9 +740,9 @@ namespace Prowl.PaperUI
         {
             public object StartValue { get; set; }
             public object TargetValue { get; set; }
-            public double Duration { get; set; }
-            public Func<double, double>? EasingFunction { get; set; }
-            public double CurrentTime { get; set; }
+            public float Duration { get; set; }
+            public Func<float, float>? EasingFunction { get; set; }
+            public float CurrentTime { get; set; }
         }
 
         #endregion
@@ -762,7 +762,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="deltaTime">The time since the last frame.</param>
         /// <param name="element">The root element to start updating from.</param>
-        private void UpdateStyles(double deltaTime, ElementHandle element)
+        private void UpdateStyles(float deltaTime, ElementHandle element)
         {
             int id = element.Data.ID;
             if (_activeStyles.TryGetValue(id, out var style))
@@ -806,7 +806,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Configure a transition for a property.
         /// </summary>
-        internal void SetTransitionConfig(int elementID, GuiProp property, double duration, Func<double, double>? easing = null)
+        internal void SetTransitionConfig(int elementID, GuiProp property, float duration, Func<float, float>? easing = null)
         {
             if (!_activeStyles.TryGetValue(elementID, out var style))
             {

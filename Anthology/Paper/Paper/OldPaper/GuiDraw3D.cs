@@ -158,7 +158,7 @@ public class GuiDraw3D(Paper gui)
         var endRad = endAngle * MathUtilities.Deg2Rad;
 
         float angleDelta = endRad - startRad;
-        int stepCount = Steps(Math.Abs(angleDelta));
+        int stepCount = Steps(Maths.Abs(angleDelta));
 
         if (stepCount < 2)
             return;
@@ -167,7 +167,7 @@ public class GuiDraw3D(Paper gui)
 
         float stepSize = angleDelta / (stepCount - 1);
 
-        if (Math.Abs(Math.Abs(startRad - endRad) - Math.PI * 2) < Math.Abs(stepSize))
+        if (Maths.Abs(Maths.Abs(startRad - endRad) - Maths.PI * 2) < Maths.Abs(stepSize))
         {
             FilledCircle(radius, stroke);
             return;
@@ -315,7 +315,7 @@ public class GuiDraw3D(Paper gui)
 
     private List<Vector2> ArcPoints(float radius, float startRad, float endRad)
     {
-        float angle = (float)Math.Clamp(endRad - startRad, -Math.PI * 2f, Math.PI * 2f);
+        float angle = (float)Maths.Clamp(endRad - startRad, -Maths.PI * 2f, Maths.PI * 2f);
 
         int stepCount = Steps(angle);
         var points = new List<Vector2>();
@@ -365,7 +365,7 @@ public class GuiDraw3D(Paper gui)
     }
 
 
-    private static int Steps(float angle) => Math.Max(1, (int)Math.Ceiling(20.0 * Math.Abs(angle)));
+    private static int Steps(float angle) => Maths.Max(1, (int)Maths.Ceiling(20.0 * Maths.Abs(angle)));
     private static (float sin, float cos) SinCos(float angle) => (MathF.Sin(angle), MathF.Cos(angle));
 
     private bool WorldToScreen(Vector3 vec, out Vector2 pos) => WorldToScreen(_viewport, _mvp, vec, out pos);

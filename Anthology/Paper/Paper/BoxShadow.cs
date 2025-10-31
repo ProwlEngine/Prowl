@@ -7,13 +7,13 @@ namespace Prowl.PaperUI
     /// </summary>
     public struct BoxShadow
     {
-        public double OffsetX;
-        public double OffsetY;
-        public double Blur;
-        public double Spread;
+        public float OffsetX;
+        public float OffsetY;
+        public float Blur;
+        public float Spread;
         public Color Color;
 
-        public BoxShadow(double offsetX, double offsetY, double blur, double spread, Color color)
+        public BoxShadow(float offsetX, float offsetY, float blur, float spread, Color color)
         {
             OffsetX = offsetX;
             OffsetY = offsetY;
@@ -31,7 +31,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Interpolates between two box shadows.
         /// </summary>
-        public static BoxShadow Lerp(BoxShadow start, BoxShadow end, double t)
+        public static BoxShadow Lerp(BoxShadow start, BoxShadow end, float t)
         {
             Color LerpColor(Color a, Color b)
             {

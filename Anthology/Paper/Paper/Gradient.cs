@@ -15,24 +15,24 @@ namespace Prowl.PaperUI
         public Color Color2;
 
         // Linear gradient parameters (relative start/end points)
-        public double X1;
-        public double Y1;
-        public double X2;
-        public double Y2;
+        public float X1;
+        public float Y1;
+        public float X2;
+        public float Y2;
 
         // Radial gradient parameters (relative center, radii are relative to min(width, height))
-        public double InnerRadius;
-        public double OuterRadius;
+        public float InnerRadius;
+        public float OuterRadius;
 
         // Box gradient parameters (relative center, size and radii relative to element size)
-        public double Width;
-        public double Height;
+        public float Width;
+        public float Height;
         public float Radius;
         public float Feather;
 
         public static readonly Gradient None = new Gradient { Type = GradientType.None };
 
-        public static Gradient Linear(double x1, double y1, double x2, double y2, Color color1, Color color2)
+        public static Gradient Linear(float x1, float y1, float x2, float y2, Color color1, Color color2)
         {
             return new Gradient
             {
@@ -46,7 +46,7 @@ namespace Prowl.PaperUI
             };
         }
 
-        public static Gradient Radial(double centerX, double centerY, double innerRadius, double outerRadius, Color innerColor, Color outerColor)
+        public static Gradient Radial(float centerX, float centerY, float innerRadius, float outerRadius, Color innerColor, Color outerColor)
         {
             return new Gradient
             {
@@ -60,7 +60,7 @@ namespace Prowl.PaperUI
             };
         }
 
-        public static Gradient Box(double centerX, double centerY, double width, double height, float radius, float feather, Color innerColor, Color outerColor)
+        public static Gradient Box(float centerX, float centerY, float width, float height, float radius, float feather, Color innerColor, Color outerColor)
         {
             return new Gradient
             {
@@ -80,7 +80,7 @@ namespace Prowl.PaperUI
         /// Interpolates between two gradients. If the gradient types differ the
         /// transition snaps to the end gradient when complete.
         /// </summary>
-        public static Gradient Lerp(Gradient start, Gradient end, double t)
+        public static Gradient Lerp(Gradient start, Gradient end, float t)
         {
             if (t >= 1) return end;
 

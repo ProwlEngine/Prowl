@@ -79,7 +79,7 @@ namespace Prowl.PaperUI
             return new ElementHandle(this, _rootElementIndex);
         }
 
-        internal void InitializeRootElement(double width, double height)
+        internal void InitializeRootElement(float width, float height)
         {
             var rootHandle = CreateElement(0);
             _rootElementIndex = rootHandle.Index;

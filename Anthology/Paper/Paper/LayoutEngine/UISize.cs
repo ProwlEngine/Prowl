@@ -2,10 +2,10 @@
 {
     internal struct UISize
     {
-        public double Main;
-        public double Cross;
+        public float Main;
+        public float Cross;
 
-        public UISize(double main, double cross)
+        public UISize(float main, float cross)
         {
             Main = main;
             Cross = cross;

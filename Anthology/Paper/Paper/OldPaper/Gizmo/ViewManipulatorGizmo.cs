@@ -158,7 +158,7 @@ public class ViewManipulatorGizmo
             int[] face = cubeFaces[i];
             Vector3 faceNormal = Vector3.Normalize(faceNormals[i]);
 
-            double dotProduct = Vector3.Dot(faceNormal, -camForward);
+            float dotProduct = Vector3.Dot(faceNormal, -camForward);
             if (dotProduct > 0.01)
             {
                 List<Vector2> screenPoints = new List<Vector2>();
