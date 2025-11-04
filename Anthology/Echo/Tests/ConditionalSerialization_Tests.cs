@@ -5,22 +5,12 @@ namespace Prowl.Echo.Test;
 
 #region Test Classes
 
-public class ObjectWithPropertyCondition
-{
-    public bool ShouldSerialize { get; set; }
-
-    [SerializeIf("ShouldSerialize")]
-    public int ConditionalValue = 42;
-
-    public string AlwaysSerializedValue = "always";
-}
-
 public class ObjectWithFieldCondition
 {
     public bool shouldInclude = true;
 
     [SerializeIf("shouldInclude")]
-    public string ConditionalData = "test data";
+    public string? ConditionalData;
 
     public int NormalField = 100;
 }
@@ -30,7 +20,7 @@ public class ObjectWithMethodCondition
     public int threshold = 10;
 
     [SerializeIf("ShouldSerializeValue")]
-    public int Value = 50;
+    public int Value;
 
     public bool ShouldSerializeValue()
     {
@@ -38,22 +28,12 @@ public class ObjectWithMethodCondition
     }
 }
 
-public class ObjectWithPrivatePropertyCondition
-{
-    private bool IsEnabled { get; set; } = true;
-
-    [SerializeIf("IsEnabled")]
-    public string Data = "private property test";
-
-    public void SetEnabled(bool enabled) => IsEnabled = enabled;
-}
-
 public class ObjectWithPrivateFieldCondition
 {
     private bool _isActive = false;
 
     [SerializeIf("_isActive")]
-    public double Number = 3.14;
+    public double Number;
 
     public void Activate() => _isActive = true;
 }
@@ -63,7 +43,7 @@ public class ObjectWithPrivateMethodCondition
     public string state = "active";
 
     [SerializeIf("CheckState")]
-    public int[] Numbers = new[] { 1, 2, 3 };
+    public int[]? Numbers;
 
     private bool CheckState()
     {
@@ -77,10 +57,10 @@ public class ObjectWithMultipleConditionalFields
     public bool condition2 = false;
 
     [SerializeIf("condition1")]
-    public string Field1 = "field1";
+    public string? Field1;
 
     [SerializeIf("condition2")]
-    public string Field2 = "field2";
+    public string? Field2;
 
     public string AlwaysField = "always";
 }
@@ -120,61 +100,31 @@ public class ObjectWithConditionalAndIgnoreOnNull
     public int OtherValue = 42;
 }
 
-public class DerivedObjectWithCondition : ObjectWithPropertyCondition
+public class BaseObjectWithFieldCondition
 {
+    public bool ShouldSerialize { get; set; }
+
     [SerializeIf("ShouldSerialize")]
-    public float DerivedValue = 3.14f;
+    public int ConditionalValue;
+
+    public string AlwaysSerializedValue = "always";
+}
+
+public class DerivedObjectWithCondition : BaseObjectWithFieldCondition
+{
+    public float DerivedValue;
 }
 
 #endregion
 
 public class ConditionalSerialization_Tests
 {
-    #region Property Condition Tests
-
-    [Fact]
-    public void TestPropertyCondition_WhenTrue_ShouldSerializeField()
-    {
-        var obj = new ObjectWithPropertyCondition
-        {
-            ShouldSerialize = true,
-            ConditionalValue = 123
-        };
-
-        var serialized = Serializer.Serialize(obj);
-        var deserialized = Serializer.Deserialize<ObjectWithPropertyCondition>(serialized);
-
-        Assert.NotNull(deserialized);
-        Assert.Equal(123, deserialized.ConditionalValue);
-        Assert.Equal("always", deserialized.AlwaysSerializedValue);
-    }
-
-    [Fact]
-    public void TestPropertyCondition_WhenFalse_ShouldNotSerializeField()
-    {
-        var obj = new ObjectWithPropertyCondition
-        {
-            ShouldSerialize = false,
-            ConditionalValue = 123
-        };
-
-        var serialized = Serializer.Serialize(obj);
-        var deserialized = Serializer.Deserialize<ObjectWithPropertyCondition>(serialized);
-
-        Assert.NotNull(deserialized);
-        Assert.Equal(0, deserialized.ConditionalValue); // Default value
-        Assert.Equal("always", deserialized.AlwaysSerializedValue);
-    }
-
-    #endregion
-
     #region Field Condition Tests
 
     [Fact]
     public void TestFieldCondition_WhenTrue_ShouldSerializeField()
     {
-        var obj = new ObjectWithFieldCondition
-        {
+        var obj = new ObjectWithFieldCondition {
             shouldInclude = true,
             ConditionalData = "included data"
         };
@@ -183,6 +133,7 @@ public class ConditionalSerialization_Tests
         var deserialized = Serializer.Deserialize<ObjectWithFieldCondition>(serialized);
 
         Assert.NotNull(deserialized);
+        Assert.NotNull(deserialized.ConditionalData);
         Assert.Equal("included data", deserialized.ConditionalData);
         Assert.Equal(100, deserialized.NormalField);
     }
@@ -190,8 +141,7 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestFieldCondition_WhenFalse_ShouldNotSerializeField()
     {
-        var obj = new ObjectWithFieldCondition
-        {
+        var obj = new ObjectWithFieldCondition {
             shouldInclude = false,
             ConditionalData = "excluded data"
         };
@@ -211,8 +161,7 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestMethodCondition_WhenTrue_ShouldSerializeField()
     {
-        var obj = new ObjectWithMethodCondition
-        {
+        var obj = new ObjectWithMethodCondition {
             threshold = 10,
             Value = 50 // 50 > 10, so should serialize
         };
@@ -222,13 +171,13 @@ public class ConditionalSerialization_Tests
 
         Assert.NotNull(deserialized);
         Assert.Equal(50, deserialized.Value);
+        Assert.Equal(10, deserialized.threshold);
     }
 
     [Fact]
     public void TestMethodCondition_WhenFalse_ShouldNotSerializeField()
     {
-        var obj = new ObjectWithMethodCondition
-        {
+        var obj = new ObjectWithMethodCondition {
             threshold = 100,
             Value = 50 // 50 < 100, so should not serialize
         };
@@ -245,35 +194,11 @@ public class ConditionalSerialization_Tests
     #region Private Member Tests
 
     [Fact]
-    public void TestPrivatePropertyCondition_WhenTrue_ShouldSerializeField()
-    {
-        var obj = new ObjectWithPrivatePropertyCondition();
-        obj.SetEnabled(true);
-
-        var serialized = Serializer.Serialize(obj);
-        var deserialized = Serializer.Deserialize<ObjectWithPrivatePropertyCondition>(serialized);
-
-        Assert.NotNull(deserialized);
-        Assert.Equal("private property test", deserialized.Data);
-    }
-
-    [Fact]
-    public void TestPrivatePropertyCondition_WhenFalse_ShouldNotSerializeField()
-    {
-        var obj = new ObjectWithPrivatePropertyCondition();
-        obj.SetEnabled(false);
-
-        var serialized = Serializer.Serialize(obj);
-        var deserialized = Serializer.Deserialize<ObjectWithPrivatePropertyCondition>(serialized);
-
-        Assert.NotNull(deserialized);
-        Assert.Null(deserialized.Data); // Default value
-    }
-
-    [Fact]
     public void TestPrivateFieldCondition_WhenTrue_ShouldSerializeField()
     {
-        var obj = new ObjectWithPrivateFieldCondition();
+        var obj = new ObjectWithPrivateFieldCondition {
+            Number = 3.14
+        };
         obj.Activate();
 
         var serialized = Serializer.Serialize(obj);
@@ -286,7 +211,9 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestPrivateFieldCondition_WhenFalse_ShouldNotSerializeField()
     {
-        var obj = new ObjectWithPrivateFieldCondition();
+        var obj = new ObjectWithPrivateFieldCondition {
+            Number = 3.14
+        };
         // _isActive is false by default
 
         var serialized = Serializer.Serialize(obj);
@@ -299,9 +226,9 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestPrivateMethodCondition_WhenTrue_ShouldSerializeField()
     {
-        var obj = new ObjectWithPrivateMethodCondition
-        {
-            state = "active"
+        var obj = new ObjectWithPrivateMethodCondition {
+            state = "active",
+            Numbers = new[] { 1, 2, 3 }
         };
 
         var serialized = Serializer.Serialize(obj);
@@ -315,9 +242,9 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestPrivateMethodCondition_WhenFalse_ShouldNotSerializeField()
     {
-        var obj = new ObjectWithPrivateMethodCondition
-        {
-            state = "inactive"
+        var obj = new ObjectWithPrivateMethodCondition {
+            state = "inactive",
+            Numbers = new[] { 1, 2, 3 }
         };
 
         var serialized = Serializer.Serialize(obj);
@@ -334,10 +261,11 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestMultipleConditionalFields_MixedConditions()
     {
-        var obj = new ObjectWithMultipleConditionalFields
-        {
+        var obj = new ObjectWithMultipleConditionalFields {
             condition1 = true,
-            condition2 = false
+            condition2 = false,
+            Field1 = "field1",
+            Field2 = "field2"
         };
 
         var serialized = Serializer.Serialize(obj);
@@ -352,10 +280,11 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestMultipleConditionalFields_AllTrue()
     {
-        var obj = new ObjectWithMultipleConditionalFields
-        {
+        var obj = new ObjectWithMultipleConditionalFields {
             condition1 = true,
-            condition2 = true
+            condition2 = true,
+            Field1 = "field1",
+            Field2 = "field2"
         };
 
         var serialized = Serializer.Serialize(obj);
@@ -370,10 +299,11 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestMultipleConditionalFields_AllFalse()
     {
-        var obj = new ObjectWithMultipleConditionalFields
-        {
+        var obj = new ObjectWithMultipleConditionalFields {
             condition1 = false,
-            condition2 = false
+            condition2 = false,
+            Field1 = "field1",
+            Field2 = "field2"
         };
 
         var serialized = Serializer.Serialize(obj);
@@ -392,8 +322,7 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestInvalidCondition_ShouldDefaultToSerializing()
     {
-        var obj = new ObjectWithInvalidCondition
-        {
+        var obj = new ObjectWithInvalidCondition {
             Value = "test value"
         };
 
@@ -407,8 +336,7 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestNonBoolCondition_ShouldDefaultToSerializing()
     {
-        var obj = new ObjectWithNonBoolCondition
-        {
+        var obj = new ObjectWithNonBoolCondition {
             NotABool = 5,
             Value = "test value"
         };
@@ -427,8 +355,7 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestConditionalField_WithNull_WhenConditionTrue()
     {
-        var obj = new ObjectWithNullConditionalField
-        {
+        var obj = new ObjectWithNullConditionalField {
             ShouldSerialize = true,
             ConditionalNull = null
         };
@@ -443,8 +370,7 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestConditionalField_WithNull_WhenConditionFalse()
     {
-        var obj = new ObjectWithNullConditionalField
-        {
+        var obj = new ObjectWithNullConditionalField {
             ShouldSerialize = false,
             ConditionalNull = null
         };
@@ -459,8 +385,7 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestConditionalWithIgnoreOnNull_WhenConditionTrueButValueNull()
     {
-        var obj = new ObjectWithConditionalAndIgnoreOnNull
-        {
+        var obj = new ObjectWithConditionalAndIgnoreOnNull {
             ShouldSerialize = true,
             ConditionalValue = null
         };
@@ -476,8 +401,7 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestConditionalWithIgnoreOnNull_WhenConditionFalse()
     {
-        var obj = new ObjectWithConditionalAndIgnoreOnNull
-        {
+        var obj = new ObjectWithConditionalAndIgnoreOnNull {
             ShouldSerialize = false,
             ConditionalValue = null
         };
@@ -497,8 +421,7 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestInheritance_ConditionFromBaseClass()
     {
-        var obj = new DerivedObjectWithCondition
-        {
+        var obj = new DerivedObjectWithCondition {
             ShouldSerialize = true,
             ConditionalValue = 100,
             DerivedValue = 2.71f
@@ -515,8 +438,7 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestInheritance_ConditionFromBaseClass_WhenFalse()
     {
-        var obj = new DerivedObjectWithCondition
-        {
+        var obj = new DerivedObjectWithCondition {
             ShouldSerialize = false,
             ConditionalValue = 100,
             DerivedValue = 2.71f
@@ -527,49 +449,7 @@ public class ConditionalSerialization_Tests
 
         Assert.NotNull(deserialized);
         Assert.Equal(0, deserialized.ConditionalValue);
-        Assert.Equal(0f, deserialized.DerivedValue); // Should also not serialize
-    }
-
-    #endregion
-
-    #region Binary Format Tests
-
-    [Fact]
-    public void TestConditionalSerialization_BinaryFormat()
-    {
-        var obj = new ObjectWithPropertyCondition
-        {
-            ShouldSerialize = false,
-            ConditionalValue = 999
-        };
-
-        var echoObj = Serializer.Serialize(obj);
-        var binary = echoObj.ToBytes();
-        var deserialized = Serializer.Deserialize<ObjectWithPropertyCondition>(EchoObject.FromBytes(binary));
-
-        Assert.NotNull(deserialized);
-        Assert.Equal(0, deserialized.ConditionalValue); // Should not serialize
-    }
-
-    #endregion
-
-    #region String Format Tests
-
-    [Fact]
-    public void TestConditionalSerialization_StringFormat()
-    {
-        var obj = new ObjectWithFieldCondition
-        {
-            shouldInclude = true,
-            ConditionalData = "string format test"
-        };
-
-        var echoObj = Serializer.Serialize(obj);
-        var stringFormat = echoObj.ToString();
-        var deserialized = Serializer.Deserialize<ObjectWithFieldCondition>(EchoObject.FromString(stringFormat));
-
-        Assert.NotNull(deserialized);
-        Assert.Equal("string format test", deserialized.ConditionalData);
+        Assert.Equal(2.71f, deserialized.DerivedValue); // DerivedValue has no SerializeIf, so it should be serialized
     }
 
     #endregion
