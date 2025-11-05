@@ -17,7 +17,7 @@
     <Description>A lightweight, flexible .net serializer, with support for complex object graphs, circular references, polymorphism, and much more.
 It has over 260 tests to ensure its reliable, It also serializes objects into an In-Memory graph. 
 These Graphs can be used independantly from the serializer, and can be queried.</Description>
-    <Version>1.7.0</Version>
+    <Version>1.8.0</Version>
     <PackageReleaseNotes>Fixed bug in Abstract classes and Private [SerializeField] fields.</PackageReleaseNotes>
   </PropertyGroup>
 
