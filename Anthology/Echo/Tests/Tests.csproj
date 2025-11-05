@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Echo\Echo.csproj" />
+    <ProjectReference Include="..\Echo.SourceGenerator\Echo.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

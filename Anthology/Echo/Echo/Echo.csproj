@@ -32,4 +32,10 @@ These Graphs can be used independantly from the serializer, and can be queried.<
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Include the source generator in the NuGet package -->
+    <!-- Note: Build the Echo.SourceGenerator project before packing Echo -->
+    <None Include="..\Echo.SourceGenerator\bin\$(Configuration)\netstandard2.0\Echo.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" Condition="Exists('..\Echo.SourceGenerator\bin\$(Configuration)\netstandard2.0\Echo.SourceGenerator.dll')" />
+  </ItemGroup>
+
 </Project>
