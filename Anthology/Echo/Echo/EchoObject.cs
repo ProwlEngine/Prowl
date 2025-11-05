@@ -245,25 +245,23 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
 
     private void OnPropertyChanged(EchoChangeEventArgs e)
     {
-        // Create a new event with the path relative to this object
-        var localEvent = new EchoChangeEventArgs(
-            this,  // Source is this object
-            e.Property,
-            e.OldValue,
-            e.NewValue,
-            e.Type);
+        if (PropertyChanged != null)
+        {
+            // Create a new event with the path relative to this object
+            var localEvent = new EchoChangeEventArgs(
+                this,  // Source is this object
+                e.Property,
+                e.OldValue,
+                e.NewValue,
+                e.Type);
 
-        // Fire local event
-        PropertyChanged?.Invoke(this, localEvent);
-
+            // Fire local event
+            PropertyChanged.Invoke(this, localEvent);
+        }
+        
         // If we have a parent, propagate upwards
         if (Parent != null)
         {
-            // For parent events, we need to include our key in the path
-            string parentPath = Parent.TagType == EchoType.List
-                ? ListIndex.ToString()
-                : CompoundKey ?? "";
-
             var parentEvent = new EchoChangeEventArgs(
                 Parent,  // Source is the parent
                 e.Property,

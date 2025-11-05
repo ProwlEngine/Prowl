@@ -142,23 +142,25 @@ public sealed partial class EchoObject
         else if (object.ReferenceEquals(newTag, this))
             throw new ArgumentException("Cannot add tag to self", nameof(newTag));
 
-        // Make sure we dont already have this tag
-        if (Tags.ContainsKey(name))
-            throw new ArgumentException("Tag with this name already exists", nameof(name));
-
         if (newTag.Parent != null)
             throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(newTag));
 
-        Tags.Add(name, newTag);
-        newTag.Parent = this;
-        newTag.CompoundKey = name;
+        if (Tags.TryAdd(name, newTag))
+        {
+            newTag.Parent = this;
+            newTag.CompoundKey = name;
 
-        OnPropertyChanged(new EchoChangeEventArgs(
-            this,           // Source is this compound
-            newTag,         // Property is the new tag
-            null,           // Old value null since it's an add
-            newTag.Value,   // New value is the tag's value
-            ChangeType.TagAdded));
+            OnPropertyChanged(new EchoChangeEventArgs(
+                this,           // Source is this compound
+                newTag,         // Property is the new tag
+                null,           // Old value null since it's an add
+                newTag.Value,   // New value is the tag's value
+                ChangeType.TagAdded));
+        }
+        else
+        {
+            throw new ArgumentException("Tag with this name already exists", nameof(name));
+        }
     }
 
     /// <summary>
@@ -175,10 +177,8 @@ public sealed partial class EchoObject
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentNullException(nameof(name));
 
-        if (Tags.TryGetValue(name, out var tag))
+        if (Tags.Remove(name, out var tag))
         {
-            Tags.Remove(name);
-
             // Fire change event before clearing parent/key
             OnPropertyChanged(new EchoChangeEventArgs(
                 this,       // Source is this compound

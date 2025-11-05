@@ -15,7 +15,7 @@ internal sealed class ListFormat : ISerializationFormat
         var elementType = targetType!.GetGenericArguments()[0];
         var list = value as IList ?? throw new InvalidOperationException("Expected IList type");
 
-        List<EchoObject> tags = new();
+        List<EchoObject> tags = new(list.Count);
         foreach (var item in list)
             tags.Add(Serializer.Serialize(elementType, item, context));
         return new EchoObject(tags);

@@ -25,7 +25,6 @@ public class SerializationContext
     public HashSet<Guid> dependencies = new();
 
     private int dependencyCounter = 0;
-    private readonly Stack<bool> _polymorphicContextStack = new();
 
     public SerializationContext(TypeMode typeMode = TypeMode.Auto)
     {
