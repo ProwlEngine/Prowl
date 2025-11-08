@@ -3,18 +3,19 @@
 
 using Prowl.PaperUI.LayoutEngine;
 
-namespace Prowl.PaperUI.Events;
-
-public class KeyEvent
+namespace Prowl.PaperUI.Events
 {
-    public ElementHandle Source { get; }
-    public PaperKey Key { get; }
-    public bool IsRepeat { get; }
-
-    public KeyEvent(ElementHandle source, PaperKey key, bool isRepeat)
+    public class KeyEvent
     {
-        Source = source;
-        Key = key;
-        IsRepeat = isRepeat;
+        public ElementHandle Source { get; }
+        public PaperKey Key { get; }
+        public bool IsRepeat { get; }
+
+        public KeyEvent(ElementHandle source, PaperKey key, bool isRepeat)
+        {
+            Source = source;
+            Key = key;
+            IsRepeat = isRepeat;
+        }
     }
 }

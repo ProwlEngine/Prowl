@@ -3,16 +3,17 @@
 
 using Prowl.PaperUI.LayoutEngine;
 
-namespace Prowl.PaperUI.Events;
-
-public class FocusEvent
+namespace Prowl.PaperUI.Events
 {
-    public ElementHandle Source { get; }
-    public bool IsFocused { get; }
-
-    public FocusEvent(ElementHandle source, bool isFocused)
+    public class FocusEvent
     {
-        Source = source;
-        IsFocused = isFocused;
+        public ElementHandle Source { get; }
+        public bool IsFocused { get; }
+
+        public FocusEvent(ElementHandle source, bool isFocused)
+        {
+            Source = source;
+            IsFocused = isFocused;
+        }
     }
 }
