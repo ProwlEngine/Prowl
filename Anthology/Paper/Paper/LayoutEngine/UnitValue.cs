@@ -29,21 +29,16 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
         /// <summary>The unit type of this value</summary>
-        public Units Type { get; set; } = Units.Auto;
+        public Units Type { get; set; }
 
         /// <summary>The numeric value in the specified units</summary>
-        public float Value { get; set; } = 0f;
+        public float Value { get; set; }
 
         /// <summary>Additional pixel offset when using percentage units</summary>
-        public float PercentPixelOffset { get; set; } = 0f;
+        public float PercentPixelOffset { get; set; }
 
         /// <summary>Data for interpolation between two UnitValues (null when not interpolating)</summary>
-        private LerpData? _lerpData = null;
-
-        /// <summary>
-        /// Creates a default UnitValue with Auto units.
-        /// </summary>
-        public UnitValue() { }
+        private LerpData? _lerpData;
 
         /// <summary>
         /// Creates a UnitValue with the specified type and value.
@@ -56,6 +51,8 @@ namespace Prowl.PaperUI.LayoutEngine
             Type = type;
             Value = value;
             PercentPixelOffset = offset;
+            
+            _lerpData = null;
         }
 
         #region Factory Methods
