@@ -1,4 +1,7 @@
-﻿namespace Prowl.PaperUI.Utilities
+﻿using System;
+using System.Collections.Generic;
+
+namespace Prowl.PaperUI.Utilities
 {
     /// <summary>
     /// Generic object pool for reusing objects

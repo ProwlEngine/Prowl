@@ -1,3 +1,5 @@
+using System;
+
 namespace Prowl.PaperUI.LayoutEngine
 {
     public readonly struct ElementHandle : IEquatable<ElementHandle>

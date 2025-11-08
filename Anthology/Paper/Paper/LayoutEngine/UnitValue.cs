@@ -1,4 +1,5 @@
-﻿using Prowl.PaperUI;
+﻿using System;
+using Prowl.PaperUI;
 using Prowl.Vector;
 
 namespace Prowl.PaperUI.LayoutEngine
@@ -16,7 +17,7 @@ namespace Prowl.PaperUI.LayoutEngine
         private class LerpData
         {
             public readonly UnitValue Start;
-            public readonly UnitValue End; 
+            public readonly UnitValue End;
             public readonly float Progress;
 
             public LerpData(UnitValue start, UnitValue end, float progress)

@@ -1,4 +1,6 @@
-﻿using Prowl.Scribe;
+﻿using System;
+using System.Collections.Generic;
+using Prowl.Scribe;
 using Prowl.Vector;
 
 namespace Prowl.PaperUI.LayoutEngine
@@ -31,7 +33,7 @@ namespace Prowl.PaperUI.LayoutEngine
             return size;
         }
 
-        private static UnitValue GetProp(ref ElementData element, LayoutType parentType, GuiProp row, GuiProp column) 
+        private static UnitValue GetProp(ref ElementData element, LayoutType parentType, GuiProp row, GuiProp column)
             => (UnitValue)element._elementStyle.GetValue(parentType == LayoutType.Row ? row : column);
 
         private static UnitValue GetMain(ref ElementData element, LayoutType parentType) => GetProp(ref element, parentType, GuiProp.Width, GuiProp.Height);
@@ -218,7 +220,7 @@ namespace Prowl.PaperUI.LayoutEngine
             // Pre-allocate and filter in single pass to avoid LINQ overhead
             var visibleChildren = new List<int>();
             var parentDirectedChildren = new List<int>();
-            
+
             foreach (int childIdx in element.ChildIndices)
             {
                 var childData = elementHandle.Owner.GetElementData(childIdx);
@@ -229,7 +231,7 @@ namespace Prowl.PaperUI.LayoutEngine
                         parentDirectedChildren.Add(childIdx);
                 }
             }
-            
+
             int numChildren = visibleChildren.Count;
             int numParentDirectedChildren = parentDirectedChildren.Count;
 
