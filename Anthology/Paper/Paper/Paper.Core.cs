@@ -22,9 +22,9 @@ namespace Prowl.PaperUI
         private ElementHandle _rootElementHandle;
         internal Stack<ElementHandle> _elementStack = new Stack<ElementHandle>();
         private readonly Stack<int> _IDStack = new();
-        private readonly HashSet<int> _createdElements = [];
+        private readonly HashSet<int> _createdElements = new HashSet<int>();
 
-        private readonly Dictionary<int, Hashtable> _storage = [];
+        private readonly Dictionary<int, Hashtable> _storage = new Dictionary<int, Hashtable>();
 
         // Rendering context
         private Canvas _canvas;
@@ -711,7 +711,7 @@ namespace Prowl.PaperUI
         public void SetElementStorage<T>(ElementHandle el, string key, T value)
         {
             if (!_storage.TryGetValue(el.Data.ID, out var storage))
-                _storage[el.Data.ID] = storage = [];
+                _storage[el.Data.ID] = storage = new Hashtable();
 
             storage[key] = value;
         }
