@@ -293,7 +293,7 @@ namespace Prowl.PaperUI.LayoutEngine
             UnitValue elementChildMainBetween = GetMainBetween(ref element, layoutType);
 
             // Get first and last parent-directed children for spacing
-            int? first = parentDirectedChildren.Count > 0 ? 0 : null;
+            int? first = parentDirectedChildren.Count > 0 ? 0 : default(int?);
             int? last = parentDirectedChildren.Count > 0 ? parentDirectedChildren.Count - 1 : first;
 
             // Process each parent-directed child
