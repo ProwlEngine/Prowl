@@ -20,7 +20,7 @@ public class UnitValueTests
     [Fact]
     public void Equals_InterpolatingVsNonInterpolating_ReturnsFalse()
     {
-        var interpolating = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5);
+        var interpolating = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5f);
         var plain = UnitValue.Pixels(10);
 
         Assert.False(interpolating.Equals(plain));
@@ -30,8 +30,8 @@ public class UnitValueTests
     [Fact]
     public void Equals_InterpolatingBothWithSameData_ReturnsTrue()
     {
-        var first = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5);
-        var second = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5);
+        var first = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5f);
+        var second = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5f);
 
         Assert.True(first.Equals(second));
         Assert.True(second.Equals(first));
@@ -40,8 +40,8 @@ public class UnitValueTests
     [Fact]
     public void Equals_InterpolatingDifferentProgress_ReturnsFalse()
     {
-        var first = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5);
-        var second = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.25);
+        var first = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5f);
+        var second = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.25f);
 
         Assert.False(first.Equals(second));
         Assert.False(second.Equals(first));
@@ -50,7 +50,7 @@ public class UnitValueTests
     [Fact]
     public void ToPx_WithInterpolation_ComputesExpectedValue()
     {
-        var uv = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5);
+        var uv = UnitValue.Lerp(UnitValue.Pixels(10), UnitValue.Percentage(50), 0.5f);
 
         float result = uv.ToPx(200, 0);
 
