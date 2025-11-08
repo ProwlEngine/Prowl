@@ -1,4 +1,7 @@
-﻿using Prowl.Vector;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {
@@ -10,8 +13,8 @@ namespace Prowl.PaperUI
         public bool WantsCaptureKeyboard { get; private set; }
 
         // Enums
-        public readonly PaperKey[] KeyValues = Enum.GetValues<PaperKey>();
-        public readonly PaperMouseBtn[] MouseValues = Enum.GetValues<PaperMouseBtn>();
+        public readonly PaperKey[] KeyValues = Enum.GetValues(typeof(PaperKey)).Cast<PaperKey>().ToArray();
+        public readonly PaperMouseBtn[] MouseValues = Enum.GetValues(typeof(PaperMouseBtn)).Cast<PaperMouseBtn>().ToArray();
 
         // Events
         public event Action<Float2> OnPointerPosSet;
@@ -131,7 +134,7 @@ namespace Prowl.PaperUI
             _keyPressedTime = new float[KeyValues.Length];
             _keyRepeatTimer = new float[KeyValues.Length];
             _keyRepeating = new bool[KeyValues.Length];
-            
+
             // Initialize keyboard arrays
             _keyCurState = new bool[KeyValues.Length];
             _keyPrevState = new bool[KeyValues.Length];

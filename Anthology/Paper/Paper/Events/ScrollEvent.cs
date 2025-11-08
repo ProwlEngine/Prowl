@@ -5,15 +5,16 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
-namespace Prowl.PaperUI.Events;
-
-public class ScrollEvent : ElementEvent
+namespace Prowl.PaperUI.Events
 {
-    public float Delta { get; }
-
-    public ScrollEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, float delta)
-        : base(source, elementRect, pointerPos)
+    public class ScrollEvent : ElementEvent
     {
-        Delta = delta;
+        public float Delta { get; }
+
+        public ScrollEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, float delta)
+            : base(source, elementRect, pointerPos)
+        {
+            Delta = delta;
+        }
     }
 }

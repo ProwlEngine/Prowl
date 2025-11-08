@@ -1,4 +1,6 @@
-﻿namespace Prowl.PaperUI.Utilities
+﻿using System;
+
+namespace Prowl.PaperUI.Utilities
 {
     /// <summary>
     /// A high-performance alternative to List<T> for VertexArray operations.

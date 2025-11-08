@@ -1,4 +1,7 @@
-﻿using Prowl.PaperUI.LayoutEngine;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.PaperUI.Utilities;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
@@ -275,17 +278,17 @@ namespace Prowl.PaperUI
         #region Fields
 
         // State tracking
-        private HashSet<GuiProp> _propertiesSetThisFrame = new();
-        private HashSet<GuiProp> _propertiesWithTransitions = new();
+        private HashSet<GuiProp> _propertiesSetThisFrame = new HashSet<GuiProp>();
+        private HashSet<GuiProp> _propertiesWithTransitions = new HashSet<GuiProp>();
         private bool _firstFrame = true;
 
         // Property values
-        private Dictionary<GuiProp, object> _currentValues = new();
-        private Dictionary<GuiProp, object> _targetValues = new();
+        private Dictionary<GuiProp, object> _currentValues = new Dictionary<GuiProp, object>();
+        private Dictionary<GuiProp, object> _targetValues = new Dictionary<GuiProp, object>();
 
         // Transition state
-        private Dictionary<GuiProp, TransitionConfig> _transitionConfigs = new();
-        private Dictionary<GuiProp, InterpolationState> _interpolations = new();
+        private Dictionary<GuiProp, TransitionConfig> _transitionConfigs = new Dictionary<GuiProp, TransitionConfig>();
+        private Dictionary<GuiProp, InterpolationState> _interpolations = new Dictionary<GuiProp, InterpolationState>();
 
         // Inheritance
         private ElementStyle? _parent;
@@ -660,7 +663,7 @@ namespace Prowl.PaperUI
             if (_initialized) return;
 
             // Assuming GuiProp enum values are contiguous starting from 0
-            int maxEnumValue = Enum.GetValues<GuiProp>().Max(x => (int)x);
+            int maxEnumValue = Enum.GetValues(typeof(GuiProp)).Cast<GuiProp>().Max(x => (int)x);
             _defaultValues = new object[maxEnumValue + 1];
 
             // Visual Properties
@@ -755,7 +758,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// A dictionary to keep track of active styles for each element.
         /// </summary>
-        Dictionary<int, ElementStyle> _activeStyles = new();
+        Dictionary<int, ElementStyle> _activeStyles = new Dictionary<int, ElementStyle>();
 
         /// <summary>
         /// Update the styles for all active elements.

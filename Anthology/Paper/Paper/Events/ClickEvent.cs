@@ -5,15 +5,16 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
-namespace Prowl.PaperUI.Events;
-
-public class ClickEvent : ElementEvent
+namespace Prowl.PaperUI.Events
 {
-    public PaperMouseBtn Button { get; }
-
-    public ClickEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, PaperMouseBtn button)
-        : base(source, elementRect, pointerPos)
+    public class ClickEvent : ElementEvent
     {
-        Button = button;
+        public PaperMouseBtn Button { get; }
+
+        public ClickEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, PaperMouseBtn button)
+            : base(source, elementRect, pointerPos)
+        {
+            Button = button;
+        }
     }
 }

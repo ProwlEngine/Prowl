@@ -1,4 +1,5 @@
-﻿using Prowl.PaperUI;
+﻿using System;
+using Prowl.PaperUI;
 using Prowl.Vector;
 
 namespace Prowl.PaperUI.LayoutEngine
@@ -16,7 +17,7 @@ namespace Prowl.PaperUI.LayoutEngine
         private class LerpData
         {
             public readonly UnitValue Start;
-            public readonly UnitValue End; 
+            public readonly UnitValue End;
             public readonly float Progress;
 
             public LerpData(UnitValue start, UnitValue end, float progress)
@@ -28,21 +29,16 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
         /// <summary>The unit type of this value</summary>
-        public Units Type { get; set; } = Units.Auto;
+        public Units Type { get; set; }
 
         /// <summary>The numeric value in the specified units</summary>
-        public float Value { get; set; } = 0f;
+        public float Value { get; set; }
 
         /// <summary>Additional pixel offset when using percentage units</summary>
-        public float PercentPixelOffset { get; set; } = 0f;
+        public float PercentPixelOffset { get; set; }
 
         /// <summary>Data for interpolation between two UnitValues (null when not interpolating)</summary>
-        private LerpData? _lerpData = null;
-
-        /// <summary>
-        /// Creates a default UnitValue with Auto units.
-        /// </summary>
-        public UnitValue() { }
+        private LerpData? _lerpData;
 
         /// <summary>
         /// Creates a UnitValue with the specified type and value.
@@ -55,6 +51,8 @@ namespace Prowl.PaperUI.LayoutEngine
             Type = type;
             Value = value;
             PercentPixelOffset = offset;
+            
+            _lerpData = null;
         }
 
         #region Factory Methods

@@ -1,5 +1,8 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 using Prowl.PaperUI.LayoutEngine;
@@ -18,17 +21,17 @@ namespace Prowl.PaperUI
         // Layout and hierarchy management
         private ElementHandle _rootElementHandle;
         internal Stack<ElementHandle> _elementStack = new Stack<ElementHandle>();
-        private readonly Stack<int> _IDStack = new();
-        private readonly HashSet<int> _createdElements = [];
+        private readonly Stack<int> _IDStack = new Stack<int>();
+        private readonly HashSet<int> _createdElements = new HashSet<int>();
 
-        private readonly Dictionary<int, Hashtable> _storage = [];
+        private readonly Dictionary<int, Hashtable> _storage = new Dictionary<int, Hashtable>();
 
         // Rendering context
         private Canvas _canvas;
         private ICanvasRenderer _renderer;
         private float _width;
         private float _height;
-        private Stopwatch _timer = new();
+        private Stopwatch _timer = new Stopwatch();
 
         // Events
         public Action? OnEndOfFramePreLayout = null;
@@ -155,8 +158,8 @@ namespace Prowl.PaperUI
             HandleInteractions();
 
             // Render all elements
-            List<ElementHandle> overlayElements = new();
-            List<ElementHandle> modalElements = new();
+            List<ElementHandle> overlayElements = new List<ElementHandle>();
+            List<ElementHandle> modalElements = new List<ElementHandle>();
             RenderElement(_rootElementHandle, Layer.Base, overlayElements, modalElements);
             foreach (var overlay in overlayElements)
                 RenderElement(overlay, Layer.Overlay, null, modalElements);
@@ -384,7 +387,7 @@ namespace Prowl.PaperUI
 
             // Scrollbars offset the position of children
             bool hasScrollState = this.HasElementStorage(handle, "ScrollState");
-            ScrollState scrollState = new();
+            ScrollState scrollState = new ScrollState();
             if (hasScrollState)
             {
                 _canvas.SaveState();
@@ -458,7 +461,7 @@ namespace Prowl.PaperUI
             {
                 if (handle.Data._quillMarkdown == null) throw new InvalidOperationException("Markdown layout is not processed.");
 
-                var markdownResult = handle.Data._quillMarkdown as dynamic;
+                var markdownResult = handle.Data._quillMarkdown;
                 textSize = markdownResult?.Size ?? Float2.Zero;
             }
 
@@ -495,7 +498,7 @@ namespace Prowl.PaperUI
             else
             {
                 var markdownResult = handle.Data._quillMarkdown;
-                canvas.DrawMarkdown(markdownResult ?? new(), new Float2(x, finalY));
+                canvas.DrawMarkdown(markdownResult ?? new Canvas.QuillMarkdown(), new Float2(x, finalY));
             }
         }
 
@@ -564,7 +567,10 @@ namespace Prowl.PaperUI
         /// <returns>A builder for configuring the element</returns>
         public ElementBuilder Box(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            ArgumentNullException.ThrowIfNull(stringID);
+            if (stringID == null)
+            {
+                throw new ArgumentException(nameof(stringID));
+            }
 
             int storageHash = HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID, lineID);
 
@@ -634,10 +640,12 @@ namespace Prowl.PaperUI
         /// </summary>
         public void AddActionElement(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
         {
-            ArgumentNullException.ThrowIfNull(handle);
-            ArgumentNullException.ThrowIfNull(renderAction);
+            if (renderAction == null)
+            {
+                throw new ArgumentException(nameof(renderAction));
+            }
 
-            handle.Data._renderCommands ??= new();
+            handle.Data._renderCommands ??= new List<ElementRenderCommand>();
             handle.Data._renderCommands.Add(new ElementRenderCommand {
                 Element = handle,
                 RenderAction = renderAction,
@@ -708,7 +716,7 @@ namespace Prowl.PaperUI
         public void SetElementStorage<T>(ElementHandle el, string key, T value)
         {
             if (!_storage.TryGetValue(el.Data.ID, out var storage))
-                _storage[el.Data.ID] = storage = [];
+                _storage[el.Data.ID] = storage = new Hashtable();
 
             storage[key] = value;
         }
