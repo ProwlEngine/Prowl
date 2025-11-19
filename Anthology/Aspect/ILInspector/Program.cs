@@ -10,6 +10,59 @@ if (args.Length == 0)
 var assemblyPath = args[0];
 var module = ModuleDefinition.ReadModule(assemblyPath);
 
+// Check Arguments type
+var argsType = module.Types.FirstOrDefault(t => t.FullName == "Aspect.Arguments");
+if (argsType != null)
+{
+    Console.WriteLine("=== Arguments Type ===\n");
+    Console.WriteLine($"Properties: {argsType.Properties.Count}");
+    foreach (var prop in argsType.Properties)
+    {
+        Console.WriteLine($"  Property: {prop.Name} ({prop.PropertyType.Name})");
+        Console.WriteLine($"    Has getter: {prop.GetMethod != null}");
+        Console.WriteLine($"    Has setter: {prop.SetMethod != null}");
+        if (prop.Parameters.Count > 0)
+        {
+            Console.Write($"    Parameters:");
+            foreach (var param in prop.Parameters)
+            {
+                Console.Write($" {param.Name}:{param.ParameterType.Name}");
+            }
+            Console.WriteLine();
+        }
+    }
+    Console.WriteLine();
+}
+
+// Check TestClassWithArgumentDoubler type
+var testType = module.Types.FirstOrDefault(t => t.Name == "TestClassWithArgumentDoubler");
+if (testType != null)
+{
+    Console.WriteLine("=== TestClassWithArgumentDoubler.AddNumbers ===\n");
+    var addMethod = testType.Methods.FirstOrDefault(m => m.Name == "AddNumbers");
+    if (addMethod != null)
+    {
+        Console.WriteLine($"Method: {addMethod.FullName}");
+        Console.WriteLine($"Parameters: {addMethod.Parameters.Count}");
+        for (int i = 0; i < addMethod.Parameters.Count; i++)
+        {
+            Console.WriteLine($"  Param {i}: {addMethod.Parameters[i].Name} ({addMethod.Parameters[i].ParameterType})");
+        }
+        Console.WriteLine($"Variables: {addMethod.Body.Variables.Count}");
+        for (int i = 0; i < addMethod.Body.Variables.Count; i++)
+        {
+            Console.WriteLine($"  Var {i}: {addMethod.Body.Variables[i].VariableType}");
+        }
+        Console.WriteLine("\nInstructions:");
+        for (int i = 0; i < Math.Min(100, addMethod.Body.Instructions.Count); i++)
+        {
+            var instr = addMethod.Body.Instructions[i];
+            Console.WriteLine($"  IL_{i:X4}: {instr.OpCode,-12} {instr.Operand}");
+        }
+    }
+    Console.WriteLine();
+}
+
 // Check Product type for field transformation
 var productType = module.Types.FirstOrDefault(t => t.Name == "Product");
 if (productType != null)

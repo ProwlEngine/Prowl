@@ -63,12 +63,8 @@ public class MethodBoundaryAspectWeaver
             : null;
         var exceptionVar = new VariableDefinition(_module.ImportReference(typeof(System.Exception)));
 
-        // Temp variable for swapping Arguments property (if method has parameters)
-        VariableDefinition? tempArgumentsVar = null;
-        if (method.Parameters.Count > 0)
-        {
-            tempArgumentsVar = new VariableDefinition(_module.ImportReference(FindType("Aspect.Arguments")));
-        }
+        // Temp variable for swapping Arguments property (always needed for all methods)
+        var tempArgumentsVar = new VariableDefinition(_module.ImportReference(FindType("Aspect.Arguments")));
 
         // Add all variables to method body
         method.Body.Variables.Add(aspectVar);
@@ -78,10 +74,7 @@ public class MethodBoundaryAspectWeaver
             method.Body.Variables.Add(returnVar);
         }
         method.Body.Variables.Add(exceptionVar);
-        if (tempArgumentsVar != null)
-        {
-            method.Body.Variables.Add(tempArgumentsVar);
-        }
+        method.Body.Variables.Add(tempArgumentsVar);
 
         // Save the original first instruction (this will be tryStart)
         var originalFirstInstruction = method.Body.Instructions.First();
@@ -130,7 +123,13 @@ public class MethodBoundaryAspectWeaver
             InsertNext(Instruction.Create(OpCodes.Callvirt, _module.ImportReference(onEntryMethod)));
         }
 
-        // 5. Check FlowBehavior after OnEntry
+        // 5. Copy modified arguments back to method parameters
+        if (method.Parameters.Count > 0)
+        {
+            lastInserted = EmitCopyModifiedArgumentsToParameters(processor, method, argsVar, lastInserted, originalFirstInstruction);
+        }
+
+        // 6. Check FlowBehavior after OnEntry
         // This handles Return (skip method) and ThrowException cases
         EmitCheckFlowBehaviorAfterOnEntry(processor, method, argsVar, returnVar, aspectVar, exceptionVar, ref lastInserted, originalFirstInstruction);
 
@@ -195,54 +194,107 @@ public class MethodBoundaryAspectWeaver
             }
         }
 
-        // Set Arguments property
-        if (method.Parameters.Count > 0)
+        // Set Arguments property (always, even if there are no parameters)
+        var argumentsProperty = argsType.Properties.FirstOrDefault(p => p.Name == "Arguments");
+        var argumentsTypeDef = FindType("Aspect.Arguments");
+        var argumentsCtor = argumentsTypeDef.GetConstructors()
+            .FirstOrDefault(c => !c.IsStatic && c.Parameters.Count == 1);
+
+        if (argumentsProperty?.SetMethod != null && argumentsCtor != null)
         {
-            var argumentsProperty = argsType.Properties.FirstOrDefault(p => p.Name == "Arguments");
-            var argumentsTypeDef = FindType("Aspect.Arguments");
-            var argumentsCtor = argumentsTypeDef.GetConstructors()
-                .FirstOrDefault(c => !c.IsStatic && c.Parameters.Count == 1);
+            var setArgumentsRef = _module.ImportReference(argumentsProperty.SetMethod);
+            var argumentsCtorRef = _module.ImportReference(argumentsCtor);
 
-            if (argumentsProperty?.SetMethod != null && argumentsCtor != null)
+            // Create object array for arguments
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldc_I4, method.Parameters.Count));
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Newarr, _module.TypeSystem.Object));
+
+            // Fill array with arguments (if there are any)
+            for (int i = 0; i < method.Parameters.Count; i++)
             {
-                var setArgumentsRef = _module.ImportReference(argumentsProperty.SetMethod);
-                var argumentsCtorRef = _module.ImportReference(argumentsCtor);
+                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Dup));
+                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldc_I4, i));
+                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldarg, method.Parameters[i]));
 
-                // Create object array for arguments
-                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldc_I4, method.Parameters.Count));
-                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Newarr, _module.TypeSystem.Object));
-
-                // Fill array with arguments
-                for (int i = 0; i < method.Parameters.Count; i++)
+                // Box value types
+                var paramType = method.Parameters[i].ParameterType;
+                if (paramType.IsValueType)
                 {
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Dup));
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldc_I4, i));
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldarg, method.Parameters[i]));
-
-                    // Box value types
-                    var paramType = method.Parameters[i].ParameterType;
-                    if (paramType.IsValueType)
-                    {
-                        InsertNext(ref lastInserted, Instruction.Create(OpCodes.Box, paramType));
-                    }
-
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Stelem_Ref));
+                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Box, paramType));
                 }
 
-                // Create Arguments instance
-                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Newobj, argumentsCtorRef));
-
-                // Set Arguments property
-                if (tempArgumentsVar != null)
-                {
-                    // After Newobj, stack has Arguments instance
-                    // We need [argsVar, Arguments] for the setter call
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Stloc, tempArgumentsVar));  // Save Arguments
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldloc, argsVar));  // Load MethodExecutionArgs
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldloc, tempArgumentsVar));  // Load Arguments
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Callvirt, setArgumentsRef));  // Call setter
-                }
+                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Stelem_Ref));
             }
+
+            // Create Arguments instance
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Newobj, argumentsCtorRef));
+
+            // Set Arguments property
+            // After Newobj, stack has Arguments instance
+            // We need [argsVar, Arguments] for the setter call
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Stloc, tempArgumentsVar));  // Save Arguments
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldloc, argsVar));  // Load MethodExecutionArgs
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldloc, tempArgumentsVar));  // Load Arguments
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Callvirt, setArgumentsRef));  // Call setter
+        }
+
+        return lastInserted;
+    }
+
+    private Instruction EmitCopyModifiedArgumentsToParameters(ILProcessor processor, MethodDefinition method, VariableDefinition argsVar, Instruction? lastInserted, Instruction originalFirstInstruction)
+    {
+        void InsertNext(ref Instruction? last, Instruction instr)
+        {
+            if (last == null)
+                processor.InsertBefore(originalFirstInstruction, instr);
+            else
+                processor.InsertAfter(last, instr);
+            last = instr;
+        }
+
+        var argsType = FindType("Aspect.MethodExecutionArgs");
+        var argumentsProperty = argsType.Properties.FirstOrDefault(p => p.Name == "Arguments");
+        if (argumentsProperty?.GetMethod == null)
+            return lastInserted;
+
+        var argumentsTypeDef = FindType("Aspect.Arguments");
+        var indexerProperty = argumentsTypeDef.Properties.FirstOrDefault(p => p.Name == "Item");
+        if (indexerProperty?.GetMethod == null)
+            return lastInserted;
+
+        var getArgumentsRef = _module.ImportReference(argumentsProperty.GetMethod);
+        var getItemRef = _module.ImportReference(indexerProperty.GetMethod);
+
+        // For each parameter, copy args.Arguments[i] back to the parameter
+        for (int i = 0; i < method.Parameters.Count; i++)
+        {
+            var parameter = method.Parameters[i];
+
+            // Load args
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldloc, argsVar));
+
+            // Get Arguments property
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Callvirt, getArgumentsRef));
+
+            // Load index
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldc_I4, i));
+
+            // Call Arguments[i] getter
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Callvirt, getItemRef));
+
+            // Unbox/cast to parameter type
+            var paramType = parameter.ParameterType;
+            if (paramType.IsValueType)
+            {
+                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Unbox_Any, paramType));
+            }
+            else if (paramType.FullName != "System.Object")
+            {
+                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Castclass, paramType));
+            }
+
+            // Store to parameter
+            InsertNext(ref lastInserted, Instruction.Create(OpCodes.Starg, parameter));
         }
 
         return lastInserted;
