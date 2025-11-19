@@ -47,6 +47,10 @@ public class MethodBoundaryAspectWeaver
 
     private void WeaveMethodWithAspect(MethodDefinition method, CustomAttribute aspectAttribute)
     {
+        // Skip methods without bodies (abstract, interface methods, etc.)
+        if (method.Body == null || !method.HasBody)
+            return;
+
         var processor = method.Body.GetILProcessor();
         method.Body.SimplifyMacros(); // Need this for branching instructions
         method.Body.InitLocals = true;
@@ -128,7 +132,7 @@ public class MethodBoundaryAspectWeaver
 
         // 5. Check FlowBehavior after OnEntry
         // This handles Return (skip method) and ThrowException cases
-        EmitCheckFlowBehaviorAfterOnEntry(processor, method, argsVar, returnVar, aspectVar, ref lastInserted, originalFirstInstruction);
+        EmitCheckFlowBehaviorAfterOnEntry(processor, method, argsVar, returnVar, aspectVar, exceptionVar, ref lastInserted, originalFirstInstruction);
 
         // Wrap method in try-catch-finally (protect original method code starting from originalFirstInstruction)
         EmitTryCatchFinally(processor, method, aspectAttribute.AttributeType, aspectVar, argsVar, returnVar, exceptionVar, originalFirstInstruction);
@@ -231,12 +235,12 @@ public class MethodBoundaryAspectWeaver
                 // Set Arguments property
                 if (tempArgumentsVar != null)
                 {
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldloc, argsVar));
-
-                    // Swap args and Arguments instance on stack using temp variable
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Stloc, tempArgumentsVar));
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldloc, tempArgumentsVar));
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Callvirt, setArgumentsRef));
+                    // After Newobj, stack has Arguments instance
+                    // We need [argsVar, Arguments] for the setter call
+                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Stloc, tempArgumentsVar));  // Save Arguments
+                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldloc, argsVar));  // Load MethodExecutionArgs
+                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldloc, tempArgumentsVar));  // Load Arguments
+                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Callvirt, setArgumentsRef));  // Call setter
                 }
             }
         }
@@ -409,7 +413,7 @@ public class MethodBoundaryAspectWeaver
         }
     }
 
-    private void EmitCheckFlowBehaviorAfterOnEntry(ILProcessor processor, MethodDefinition method, VariableDefinition argsVar, VariableDefinition? returnVar, VariableDefinition aspectVar, ref Instruction? lastInserted, Instruction originalFirstInstruction)
+    private void EmitCheckFlowBehaviorAfterOnEntry(ILProcessor processor, MethodDefinition method, VariableDefinition argsVar, VariableDefinition? returnVar, VariableDefinition aspectVar, VariableDefinition exceptionVar, ref Instruction? lastInserted, Instruction originalFirstInstruction)
     {
         var argsType = FindType("Aspect.MethodExecutionArgs");
         var flowBehaviorProperty = argsType.Properties.FirstOrDefault(p => p.Name == "FlowBehavior");
@@ -565,7 +569,7 @@ public class MethodBoundaryAspectWeaver
         processor.InsertAfter(lastInserted, handleThrow);
         lastInserted = handleThrow;
 
-        // Get exception from args and throw it
+        // Get exception from args and store it
         if (getExceptionRef != null)
         {
             var ldArgsForEx = Instruction.Create(OpCodes.Ldloc, argsVar);
@@ -576,13 +580,13 @@ public class MethodBoundaryAspectWeaver
             processor.InsertAfter(lastInserted, callGetEx);
             lastInserted = callGetEx;
 
-            var throwInstr = Instruction.Create(OpCodes.Throw);
-            processor.InsertAfter(lastInserted, throwInstr);
-            lastInserted = throwInstr;
+            var stlocEx = Instruction.Create(OpCodes.Stloc, exceptionVar);
+            processor.InsertAfter(lastInserted, stlocEx);
+            lastInserted = stlocEx;
         }
         else
         {
-            // Fallback: throw generic exception
+            // Fallback: create generic exception
             var exceptionCtor = _module.ImportReference(typeof(System.Exception).GetConstructor(new[] { typeof(string) }));
 
             var ldstr = Instruction.Create(OpCodes.Ldstr, "FlowBehavior.ThrowException but args.Exception is null");
@@ -593,10 +597,75 @@ public class MethodBoundaryAspectWeaver
             processor.InsertAfter(lastInserted, newobj);
             lastInserted = newobj;
 
-            var throwInstr = Instruction.Create(OpCodes.Throw);
-            processor.InsertAfter(lastInserted, throwInstr);
-            lastInserted = throwInstr;
+            var stlocEx = Instruction.Create(OpCodes.Stloc, exceptionVar);
+            processor.InsertAfter(lastInserted, stlocEx);
+            lastInserted = stlocEx;
         }
+
+        // Set args.Exception from exceptionVar
+        var exceptionProp = argsType.Properties.FirstOrDefault(p => p.Name == "Exception");
+        if (exceptionProp?.SetMethod != null)
+        {
+            var setExceptionRef2 = _module.ImportReference(exceptionProp.SetMethod);
+            var ldArgs2 = Instruction.Create(OpCodes.Ldloc, argsVar);
+            processor.InsertAfter(lastInserted, ldArgs2);
+            lastInserted = ldArgs2;
+
+            var ldEx = Instruction.Create(OpCodes.Ldloc, exceptionVar);
+            processor.InsertAfter(lastInserted, ldEx);
+            lastInserted = ldEx;
+
+            var setEx = Instruction.Create(OpCodes.Callvirt, setExceptionRef2);
+            processor.InsertAfter(lastInserted, setEx);
+            lastInserted = setEx;
+        }
+
+        // Call OnException
+        var aspectType2 = aspectVar.VariableType.Resolve();
+        var onExceptionMethod = aspectType2.Methods.FirstOrDefault(m => m.Name == "OnException");
+        if (onExceptionMethod != null)
+        {
+            var ldAspect2 = Instruction.Create(OpCodes.Ldloc, aspectVar);
+            processor.InsertAfter(lastInserted, ldAspect2);
+            lastInserted = ldAspect2;
+
+            var ldArgs3 = Instruction.Create(OpCodes.Ldloc, argsVar);
+            processor.InsertAfter(lastInserted, ldArgs3);
+            lastInserted = ldArgs3;
+
+            var callOnException = Instruction.Create(OpCodes.Callvirt, _module.ImportReference(onExceptionMethod));
+            processor.InsertAfter(lastInserted, callOnException);
+            lastInserted = callOnException;
+        }
+
+        // TODO: Check FlowBehavior after OnException to see if exception should be thrown or suppressed
+        // For now, we always throw after OnException
+
+        // Call OnExit before throwing/returning
+        var onExitMethod2 = aspectType2.Methods.FirstOrDefault(m => m.Name == "OnExit");
+        if (onExitMethod2 != null)
+        {
+            var ldAspect3 = Instruction.Create(OpCodes.Ldloc, aspectVar);
+            processor.InsertAfter(lastInserted, ldAspect3);
+            lastInserted = ldAspect3;
+
+            var ldArgs4 = Instruction.Create(OpCodes.Ldloc, argsVar);
+            processor.InsertAfter(lastInserted, ldArgs4);
+            lastInserted = ldArgs4;
+
+            var callExit2 = Instruction.Create(OpCodes.Callvirt, _module.ImportReference(onExitMethod2));
+            processor.InsertAfter(lastInserted, callExit2);
+            lastInserted = callExit2;
+        }
+
+        // Throw the exception (which may have been modified in OnException)
+        var ldExToThrow = Instruction.Create(OpCodes.Ldloc, exceptionVar);
+        processor.InsertAfter(lastInserted, ldExToThrow);
+        lastInserted = ldExToThrow;
+
+        var throwInstr = Instruction.Create(OpCodes.Throw);
+        processor.InsertAfter(lastInserted, throwInstr);
+        lastInserted = throwInstr;
 
         // === CONTINUE NORMAL (FlowBehavior.Continue) ===
         // Execution branches directly to originalFirstInstruction (try block start)
@@ -669,7 +738,7 @@ public class MethodBoundaryAspectWeaver
         // === CATCH BLOCK ===
         processor.Append(catchStart);
 
-        // Store exception in local variable
+        // Store exception in local variable (from runtime exception)
         processor.Append(Instruction.Create(OpCodes.Stloc, exceptionVar));
 
         // Set args.Exception
@@ -677,6 +746,9 @@ public class MethodBoundaryAspectWeaver
 
         // Call OnException
         EmitCallAspectMethod(processor, aspectType, "OnException", aspectVar, argsVar, null);
+
+        // Reload exception from args.Exception (it may have been modified in OnException)
+        EmitGetException(processor, argsVar, exceptionVar, null);
 
         // Check FlowBehavior after OnException
         EmitCheckFlowBehaviorAfterOnException(processor, method, argsVar, returnVar, exceptionVar, null);
@@ -795,6 +867,31 @@ public class MethodBoundaryAspectWeaver
         }
     }
 
+    private void EmitGetException(ILProcessor processor, VariableDefinition argsVar, VariableDefinition exceptionVar, Instruction? insertBefore)
+    {
+        var argsType = FindType("Aspect.MethodExecutionArgs");
+        var exceptionProperty = argsType.Properties.FirstOrDefault(p => p.Name == "Exception");
+
+        if (exceptionProperty?.GetMethod != null)
+        {
+            var getExceptionRef = _module.ImportReference(exceptionProperty.GetMethod);
+            var instructions = new[]
+            {
+                Instruction.Create(OpCodes.Ldloc, argsVar),
+                Instruction.Create(OpCodes.Callvirt, getExceptionRef),
+                Instruction.Create(OpCodes.Stloc, exceptionVar)
+            };
+
+            foreach (var instr in instructions)
+            {
+                if (insertBefore != null)
+                    processor.InsertBefore(insertBefore, instr);
+                else
+                    processor.Append(instr);
+            }
+        }
+    }
+
     private void EmitCheckFlowBehaviorAfterOnException(ILProcessor processor, MethodDefinition method, VariableDefinition argsVar, VariableDefinition? returnVar, VariableDefinition exceptionVar, Instruction? insertBefore)
     {
         var argsType = FindType("Aspect.MethodExecutionArgs");
@@ -835,33 +932,47 @@ public class MethodBoundaryAspectWeaver
         {
             processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Br_S, afterRethrow));
             processor.InsertBefore(insertBefore, continueLabel);
-            processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Rethrow));
+
+            // Load exception from exceptionVar (it may have been modified in OnException)
+            processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Ldloc, exceptionVar));
+            processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Throw));
             processor.InsertBefore(insertBefore, afterRethrow);
         }
         else
         {
             processor.Append(Instruction.Create(OpCodes.Br_S, afterRethrow));
             processor.Append(continueLabel);
-            processor.Append(Instruction.Create(OpCodes.Rethrow));
+
+            // Load exception from exceptionVar (it may have been modified in OnException)
+            processor.Append(Instruction.Create(OpCodes.Ldloc, exceptionVar));
+            processor.Append(Instruction.Create(OpCodes.Throw));
             processor.Append(afterRethrow);
         }
     }
 
     private bool IsMethodBoundaryAspect(TypeReference typeRef)
     {
-        var typeDef = typeRef.Resolve();
-        if (typeDef == null) return false;
-
-        var current = typeDef;
-        while (current != null)
+        try
         {
-            if (current.FullName == "Aspect.OnMethodBoundaryAspect")
-                return true;
+            var typeDef = typeRef.Resolve();
+            if (typeDef == null) return false;
 
-            current = current.BaseType?.Resolve();
+            var current = typeDef;
+            while (current != null)
+            {
+                if (current.FullName == "Aspect.OnMethodBoundaryAspect")
+                    return true;
+
+                current = current.BaseType?.Resolve();
+            }
+
+            return false;
         }
-
-        return false;
+        catch
+        {
+            // If we can't resolve the type (missing assembly), it's not an aspect
+            return false;
+        }
     }
 
     private TypeDefinition FindType(string fullName)
