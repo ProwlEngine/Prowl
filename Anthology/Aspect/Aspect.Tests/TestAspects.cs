@@ -351,10 +351,12 @@ public class ChangeTrackerAttribute : LocationInterceptionAspect
 
     public override void OnSetValue(LocationInterceptionArgs args)
     {
-        args.ProceedGetValue();
-        ChangeTrackingAspect.OldValue = args.Value;
+        var newValue = args.Value; // Save the new incoming value
+        args.ProceedGetValue(); // Get the current (old) value
+        ChangeTrackingAspect.OldValue = args.Value; // Save old value
 
-        ChangeTrackingAspect.NewValue = args.Value;
+        ChangeTrackingAspect.NewValue = newValue; // Use the saved new value
+        args.Value = newValue; // Restore for ProceedSetValue
         args.ProceedSetValue();
     }
 }
