@@ -542,28 +542,31 @@ public class NotifyPropertyChangedAttribute : LocationInterceptionAspect
 }
 
 [AttributeUsage(AttributeTargets.Method)]
-public class RetryAttribute : OnMethodBoundaryAspect
+public class RetryAttribute : MethodInterceptionAspect
 {
     public int MaxRetries { get; set; } = 3;
-    private int _currentAttempt = 0;
 
-    public override void OnEntry(MethodExecutionArgs args)
+    public override void OnInvoke(MethodInterceptionArgs args)
     {
-        _currentAttempt = 0;
-    }
+        Exception? lastException = null;
 
-    public override void OnException(MethodExecutionArgs args)
-    {
-        _currentAttempt++;
+        for (int attempt = 0; attempt < MaxRetries; attempt++)
+        {
+            try
+            {
+                args.Proceed();
+                return; // Success
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+                // Continue to next attempt
+            }
+        }
 
-        if (_currentAttempt < MaxRetries)
-        {
-            args.FlowBehavior = FlowBehavior.Continue;
-        }
-        else
-        {
-            args.FlowBehavior = FlowBehavior.Continue;
-        }
+        // All retries failed, throw the last exception
+        if (lastException != null)
+            throw lastException;
     }
 }
 

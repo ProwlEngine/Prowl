@@ -29,10 +29,11 @@ public class ModuleWeaver
         // Find and weave all methods with aspects
         var methodWeaver = new MethodBoundaryAspectWeaver(_module);
         var propertyWeaver = new LocationInterceptionAspectWeaver(_module);
+        var methodInterceptionWeaver = new MethodInterceptionAspectWeaver(_module);
 
         foreach (var type in _module.Types.ToList())
         {
-            WeaveType(type, methodWeaver, propertyWeaver);
+            WeaveType(type, methodWeaver, propertyWeaver, methodInterceptionWeaver);
         }
 
         // Save the modified assembly
@@ -53,7 +54,7 @@ public class ModuleWeaver
         Console.WriteLine("Weaving completed successfully!");
     }
 
-    private void WeaveType(TypeDefinition type, MethodBoundaryAspectWeaver methodWeaver, LocationInterceptionAspectWeaver propertyWeaver)
+    private void WeaveType(TypeDefinition type, MethodBoundaryAspectWeaver methodWeaver, LocationInterceptionAspectWeaver propertyWeaver, MethodInterceptionAspectWeaver methodInterceptionWeaver)
     {
         // Skip compiler-generated types
         if (type.Name.Contains("<") || type.Name.Contains(">"))
@@ -70,6 +71,9 @@ public class ModuleWeaver
             if (method.IsConstructor || method.IsGetter || method.IsSetter)
                 continue;
 
+            // Check for method interception aspects first
+            methodInterceptionWeaver.WeaveMethod(method);
+            // Then check for boundary aspects
             methodWeaver.WeaveMethod(method);
         }
 
@@ -82,7 +86,7 @@ public class ModuleWeaver
         // Process nested types
         foreach (var nestedType in type.NestedTypes.ToList())
         {
-            WeaveType(nestedType, methodWeaver, propertyWeaver);
+            WeaveType(nestedType, methodWeaver, propertyWeaver, methodInterceptionWeaver);
         }
     }
 

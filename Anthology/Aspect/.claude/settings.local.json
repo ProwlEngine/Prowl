@@ -22,7 +22,8 @@
       "Bash(\"Aspect.Example/bin/Debug/net10.0/Aspect.Example.exe\")",
       "Bash($null)",
       "Bash(Select-String -Pattern \"Calculator\" -Context 20)",
-      "Bash(Select-String -Pattern \"WARNING|AddNumbers\" -Context 2)"
+      "Bash(Select-String -Pattern \"WARNING|AddNumbers\" -Context 2)",
+      "Bash(timeout 30 bash -c 'dotnet build Aspect.Weaver.Host > /dev/null 2>&1 && dotnet build Aspect.Tests > /dev/null 2>&1 && \"\"Aspect.Weaver.Host/bin/Debug/net10.0/Aspect.Weaver.Host.exe\"\" \"\"Aspect.Tests/bin/Debug/net10.0/Aspect.Tests.dll\"\" > /dev/null 2>&1 && dotnet test Aspect.Tests --no-build 2>&1 | tail -5')"
     ],
     "deny": [],
     "ask": []
