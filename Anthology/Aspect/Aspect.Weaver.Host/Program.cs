@@ -7,7 +7,7 @@ class Program
     static void Main(string[] args)
     {
         Console.WriteLine("==============================================");
-        Console.WriteLine("   Aspect IL Weaver - PostSharp Alternative");
+        Console.WriteLine("               Aspect IL Weaver               ");
         Console.WriteLine("==============================================");
         Console.WriteLine();
 
