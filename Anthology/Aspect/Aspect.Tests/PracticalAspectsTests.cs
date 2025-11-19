@@ -126,7 +126,7 @@ public class PracticalAspectsTests
 
     #region NotifyPropertyChanged Tests
 
-    [Fact(Skip = "Complex properties (manual backing fields) not supported")]
+    [Fact]
     public void NotifyPropertyChangedAspect_ShouldRaisePropertyChanged()
     {
         // Arrange
@@ -148,7 +148,7 @@ public class PracticalAspectsTests
         Assert.Equal("Name", changedPropertyName);
     }
 
-    [Fact(Skip = "Complex properties (manual backing fields) not supported")]
+    [Fact]
     public void NotifyPropertyChangedAspect_ShouldNotRaiseIfValueUnchanged()
     {
         // Arrange
@@ -164,7 +164,7 @@ public class PracticalAspectsTests
         Assert.Equal(0, eventRaiseCount);
     }
 
-    [Fact(Skip = "Complex properties (manual backing fields) not supported")]
+    [Fact]
     public void NotifyPropertyChangedAspect_ShouldProvideOldAndNewValues()
     {
         // Arrange

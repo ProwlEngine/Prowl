@@ -510,14 +510,16 @@ public class NotifyPropertyChangedAttribute : LocationInterceptionAspect
 {
     public override void OnSetValue(LocationInterceptionArgs args)
     {
-        args.ProceedGetValue();
-        var oldValue = args.Value;
+        var newValue = args.Value; // Save the new incoming value
+        args.ProceedGetValue(); // Get the current (old) value
+        var oldValue = args.Value; // Save old value
 
-        if (!Equals(oldValue, args.Value))
+        if (!Equals(oldValue, newValue))
         {
             NotifyPropertyChangedAspect.LastOldValue = oldValue;
-            NotifyPropertyChangedAspect.LastNewValue = args.Value;
+            NotifyPropertyChangedAspect.LastNewValue = newValue;
 
+            args.Value = newValue; // Restore for ProceedSetValue
             args.ProceedSetValue();
 
             if (args.Instance is INotifyPropertyChanged inpc)

@@ -276,16 +276,6 @@ public class LocationInterceptionAspectWeaver
         if (setter.Body == null || !setter.HasBody)
             return;
 
-        // Check if this is a complex property BEFORE clearing the body
-        var backingFieldName = $"<{property.Name}>k__BackingField";
-        var backingField = property.DeclaringType.Fields.FirstOrDefault(f => f.Name == backingFieldName);
-
-        if (backingField == null)
-        {
-            // Complex property - throw before modifying the body
-            throw new NotImplementedException($"Property {property.Name} does not have an auto-property backing field. Complex property setters are not yet supported.");
-        }
-
         var processor = setter.Body.GetILProcessor();
         setter.Body.InitLocals = true;
 
@@ -742,9 +732,89 @@ public class LocationInterceptionAspectWeaver
         }
         else
         {
-            // Complex property - need to clone original setter logic
-            // This is more complex and we'll handle it later
-            throw new NotImplementedException($"Property {property.Name} does not have an auto-property backing field. Complex property setters are not yet supported.");
+            // Complex property - clone original setter logic
+            // Clone the original setter instructions, but replace the value parameter with args.Value
+            var instructionMap = new Dictionary<Instruction, Instruction>();
+
+            // First pass: create all instructions
+            foreach (var originalInstr in originalInstructions)
+            {
+                Instruction newInstr;
+
+                // Replace ldarg for the value parameter with loading from args.Value
+                if (originalInstr.OpCode == OpCodes.Ldarg_1 && !setter.IsStatic)
+                {
+                    // For non-static setters, ldarg.1 is the value parameter
+                    // Replace with: ldloc argsLocal, call get_Value, unbox/cast
+                    newInstr = Instruction.Create(OpCodes.Ldloc, argsLocal);
+                    processor.Append(newInstr);
+                    instructionMap[originalInstr] = newInstr;
+
+                    // Call args.Value getter
+                    var getValue = Instruction.Create(OpCodes.Callvirt, _module.ImportReference(valueProp.GetMethod));
+                    processor.Append(getValue);
+
+                    // Unbox/cast to property type
+                    if (property.PropertyType.IsValueType || property.PropertyType.IsGenericParameter)
+                    {
+                        processor.Append(Instruction.Create(OpCodes.Unbox_Any, _module.ImportReference(property.PropertyType)));
+                    }
+                    else if (property.PropertyType.FullName != "System.Object")
+                    {
+                        processor.Append(Instruction.Create(OpCodes.Castclass, _module.ImportReference(property.PropertyType)));
+                    }
+                    continue;
+                }
+                else if (originalInstr.OpCode == OpCodes.Ldarg_0 && setter.IsStatic)
+                {
+                    // For static setters, ldarg.0 is the value parameter
+                    newInstr = Instruction.Create(OpCodes.Ldloc, argsLocal);
+                    processor.Append(newInstr);
+                    instructionMap[originalInstr] = newInstr;
+
+                    // Call args.Value getter
+                    var getValue = Instruction.Create(OpCodes.Callvirt, _module.ImportReference(valueProp.GetMethod));
+                    processor.Append(getValue);
+
+                    // Unbox/cast to property type
+                    if (property.PropertyType.IsValueType || property.PropertyType.IsGenericParameter)
+                    {
+                        processor.Append(Instruction.Create(OpCodes.Unbox_Any, _module.ImportReference(property.PropertyType)));
+                    }
+                    else if (property.PropertyType.FullName != "System.Object")
+                    {
+                        processor.Append(Instruction.Create(OpCodes.Castclass, _module.ImportReference(property.PropertyType)));
+                    }
+                    continue;
+                }
+                else
+                {
+                    newInstr = CloneInstruction(originalInstr, helper);
+                }
+
+                instructionMap[originalInstr] = newInstr;
+                processor.Append(newInstr);
+            }
+
+            // Second pass: fix branch targets
+            foreach (var kvp in instructionMap)
+            {
+                var newInstr = kvp.Value;
+                if (newInstr.Operand is Instruction targetInstr && instructionMap.ContainsKey(targetInstr))
+                {
+                    newInstr.Operand = instructionMap[targetInstr];
+                }
+                else if (newInstr.Operand is Instruction[] targetArray)
+                {
+                    var newTargets = new Instruction[targetArray.Length];
+                    for (int i = 0; i < targetArray.Length; i++)
+                    {
+                        if (instructionMap.ContainsKey(targetArray[i]))
+                            newTargets[i] = instructionMap[targetArray[i]];
+                    }
+                    newInstr.Operand = newTargets;
+                }
+            }
         }
 
         property.DeclaringType.Methods.Add(helper);

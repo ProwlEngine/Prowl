@@ -180,7 +180,7 @@ public class PropertyInterceptionTests
         Assert.DoesNotContain("OnSetValue", PropertyAccessTracker.Events);
     }
 
-    [Fact(Skip = "Complex properties (manual backing fields) not supported")]
+    [Fact]
     public void PropertyAspect_ShouldWorkWithWriteOnlyProperties()
     {
         // Arrange
