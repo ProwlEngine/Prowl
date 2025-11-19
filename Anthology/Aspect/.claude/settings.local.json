@@ -7,7 +7,13 @@
       "Bash(del \"Aspect.Tests\\UnitTest1.cs\")",
       "Bash(rm:*)",
       "Bash(dotnet build:*)",
-      "Bash(dotnet test:*)"
+      "Bash(dotnet test:*)",
+      "Bash(test:*)",
+      "Bash(dotnet run:*)",
+      "Bash(dotnet:*)",
+      "Bash(Aspect.Weaver.HostbinDebugnet10.0Aspect.Weaver.Host.exe Aspect.ExamplebinDebugnet10.0Aspect.Example.dll)",
+      "Bash(\"Aspect.Weaver.Host/bin/Debug/net10.0/Aspect.Weaver.Host.exe\" \"Aspect.Example/bin/Debug/net10.0/Aspect.Example.dll\")",
+      "Bash(\"Aspect.Weaver.Host/bin/Debug/net10.0/Aspect.Weaver.Host.exe\" \"Aspect.Tests/bin/Debug/net10.0/Aspect.Tests.dll\")"
     ],
     "deny": [],
     "ask": []

@@ -10,19 +10,19 @@ public class MethodExecutionArgs
     /// <summary>
     /// Gets the method being executed.
     /// </summary>
-    public MethodBase Method { get; internal set; } = null!;
+    public MethodBase Method { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the instance on which the method is being executed.
     /// Null for static methods.
     /// </summary>
-    public object? Instance { get; internal set; }
+    public object? Instance { get; set; }
 
     /// <summary>
     /// Gets the arguments passed to the method.
     /// Arguments can be modified in OnEntry to change what the method receives.
     /// </summary>
-    public Arguments Arguments { get; internal set; } = null!;
+    public Arguments Arguments { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the return value of the method.
