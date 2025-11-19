@@ -8,13 +8,10 @@ namespace Aspect.Weaver;
 /// <summary>
 /// Weaves OnMethodBoundaryAspect interceptors into methods.
 /// </summary>
-public class MethodBoundaryAspectWeaver
+public class MethodBoundaryAspectWeaver : WeaverBase
 {
-    private readonly ModuleDefinition _module;
-
-    public MethodBoundaryAspectWeaver(ModuleDefinition module)
+    public MethodBoundaryAspectWeaver(ModuleDefinition module) : base(module)
     {
-        _module = module;
     }
 
     public void WeaveMethod(MethodDefinition method)
@@ -1025,30 +1022,6 @@ public class MethodBoundaryAspectWeaver
             // If we can't resolve the type (missing assembly), it's not an aspect
             return false;
         }
-    }
-
-    private TypeDefinition FindType(string fullName)
-    {
-        // Try current module
-        var type = _module.Types.FirstOrDefault(t => t.FullName == fullName);
-        if (type != null) return type;
-
-        // Try referenced assemblies
-        foreach (var assemblyRef in _module.AssemblyReferences)
-        {
-            try
-            {
-                var assembly = _module.AssemblyResolver.Resolve(assemblyRef);
-                type = assembly.MainModule.Types.FirstOrDefault(t => t.FullName == fullName);
-                if (type != null) return type;
-            }
-            catch
-            {
-                // Continue
-            }
-        }
-
-        throw new InvalidOperationException($"Could not find type: {fullName}");
     }
 
     private MethodDefinition? FindMethodInHierarchy(TypeDefinition type, string methodName)

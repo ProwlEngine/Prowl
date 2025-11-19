@@ -8,13 +8,10 @@ namespace Aspect.Weaver;
 /// <summary>
 /// Weaves MethodInterceptionAspect interceptors into methods.
 /// </summary>
-public class MethodInterceptionAspectWeaver
+public class MethodInterceptionAspectWeaver : WeaverBase
 {
-    private readonly ModuleDefinition _module;
-
-    public MethodInterceptionAspectWeaver(ModuleDefinition module)
+    public MethodInterceptionAspectWeaver(ModuleDefinition module) : base(module)
     {
-        _module = module;
     }
 
     public void WeaveMethod(MethodDefinition method)
@@ -132,14 +129,7 @@ public class MethodInterceptionAspectWeaver
             processor.Emit(OpCodes.Callvirt, _module.ImportReference(indexerProp.GetMethod));
 
             var paramType = originalMethod.Parameters[i].ParameterType;
-            if (paramType.IsValueType)
-            {
-                processor.Emit(OpCodes.Unbox_Any, paramType);
-            }
-            else if (paramType.FullName != "System.Object")
-            {
-                processor.Emit(OpCodes.Castclass, paramType);
-            }
+            EmitUnboxOrCast(processor, paramType);
         }
 
         // Call the cloned original method
@@ -150,10 +140,7 @@ public class MethodInterceptionAspectWeaver
         {
             var returnValueProp = argsType.Properties.FirstOrDefault(p => p.Name == "ReturnValue");
 
-            if (originalMethod.ReturnType.IsValueType)
-            {
-                processor.Emit(OpCodes.Box, originalMethod.ReturnType);
-            }
+            EmitBoxIfNeeded(processor, originalMethod.ReturnType);
 
             processor.Emit(OpCodes.Stloc_0); // temp store
             processor.Emit(OpCodes.Ldarg_0); // args
@@ -257,14 +244,7 @@ public class MethodInterceptionAspectWeaver
             processor.Emit(OpCodes.Ldloc, argsVar);
             processor.Emit(OpCodes.Callvirt, _module.ImportReference(returnValueProp.GetMethod));
 
-            if (method.ReturnType.IsValueType)
-            {
-                processor.Emit(OpCodes.Unbox_Any, method.ReturnType);
-            }
-            else if (method.ReturnType.FullName != "System.Object")
-            {
-                processor.Emit(OpCodes.Castclass, method.ReturnType);
-            }
+            EmitUnboxOrCast(processor, method.ReturnType);
 
             processor.Emit(OpCodes.Stloc, returnVar);
             processor.Emit(OpCodes.Ldloc, returnVar);
@@ -334,10 +314,7 @@ public class MethodInterceptionAspectWeaver
                 processor.Emit(OpCodes.Ldc_I4, i);
                 processor.Emit(OpCodes.Ldarg, method.Parameters[i]);
 
-                if (method.Parameters[i].ParameterType.IsValueType)
-                {
-                    processor.Emit(OpCodes.Box, method.Parameters[i].ParameterType);
-                }
+                EmitBoxIfNeeded(processor, method.Parameters[i].ParameterType);
 
                 processor.Emit(OpCodes.Stelem_Ref);
             }
@@ -379,22 +356,4 @@ public class MethodInterceptionAspectWeaver
         }
     }
 
-    private TypeDefinition FindType(string fullName)
-    {
-        var type = _module.Types.FirstOrDefault(t => t.FullName == fullName);
-        if (type != null) return type;
-
-        foreach (var assemblyRef in _module.AssemblyReferences)
-        {
-            try
-            {
-                var assembly = _module.AssemblyResolver.Resolve(assemblyRef);
-                type = assembly.MainModule.Types.FirstOrDefault(t => t.FullName == fullName);
-                if (type != null) return type;
-            }
-            catch { }
-        }
-
-        throw new InvalidOperationException($"Could not find type: {fullName}");
-    }
 }

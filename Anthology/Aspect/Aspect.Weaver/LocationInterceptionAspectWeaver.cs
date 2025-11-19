@@ -8,13 +8,10 @@ namespace Aspect.Weaver;
 /// <summary>
 /// Weaves LocationInterceptionAspect interceptors into property getters and setters.
 /// </summary>
-public class LocationInterceptionAspectWeaver
+public class LocationInterceptionAspectWeaver : WeaverBase
 {
-    private readonly ModuleDefinition _module;
-
-    public LocationInterceptionAspectWeaver(ModuleDefinition module)
+    public LocationInterceptionAspectWeaver(ModuleDefinition module) : base(module)
     {
-        _module = module;
     }
 
     /// <summary>
@@ -258,14 +255,7 @@ public class LocationInterceptionAspectWeaver
             processor.Emit(OpCodes.Callvirt, _module.ImportReference(valueProperty.GetMethod));
 
             // Unbox or cast to property type
-            if (property.PropertyType.IsValueType)
-            {
-                processor.Emit(OpCodes.Unbox_Any, _module.ImportReference(property.PropertyType));
-            }
-            else if (property.PropertyType.FullName != "System.Object")
-            {
-                processor.Emit(OpCodes.Castclass, _module.ImportReference(property.PropertyType));
-            }
+            EmitUnboxOrCast(processor, property.PropertyType);
         }
 
         processor.Emit(OpCodes.Ret);
@@ -331,10 +321,7 @@ public class LocationInterceptionAspectWeaver
             processor.Emit(setter.IsStatic ? OpCodes.Ldarg_0 : OpCodes.Ldarg_1); // Load value parameter
 
             // Box if value type
-            if (property.PropertyType.IsValueType)
-            {
-                processor.Emit(OpCodes.Box, _module.ImportReference(property.PropertyType));
-            }
+            EmitBoxIfNeeded(processor, property.PropertyType);
 
             processor.Emit(OpCodes.Callvirt, _module.ImportReference(valueProperty.SetMethod));
         }
@@ -378,34 +365,6 @@ public class LocationInterceptionAspectWeaver
         }
 
         return false;
-    }
-
-    private TypeDefinition FindType(string fullName)
-    {
-        // Try current module first
-        var type = _module.Types.FirstOrDefault(t => t.FullName == fullName)
-            ?? _module.GetType(fullName);
-
-        if (type != null)
-            return type;
-
-        // Search in referenced assemblies
-        foreach (var assemblyRef in _module.AssemblyReferences)
-        {
-            try
-            {
-                var assembly = _module.AssemblyResolver.Resolve(assemblyRef);
-                type = assembly.MainModule.GetType(fullName);
-                if (type != null)
-                    return type;
-            }
-            catch
-            {
-                // Skip assemblies that can't be resolved
-            }
-        }
-
-        throw new InvalidOperationException($"Type {fullName} not found");
     }
 
     private MethodDefinition CreateGetValueHelper(PropertyDefinition property, MethodDefinition getter, List<Instruction> originalInstructions)
@@ -526,58 +485,6 @@ public class LocationInterceptionAspectWeaver
 
         property.DeclaringType.Fields.Add(field);
         return field;
-    }
-
-    private Instruction CloneInstruction(Instruction instr, MethodDefinition targetMethod)
-    {
-        var newInstr = Instruction.Create(OpCodes.Nop);
-        newInstr.OpCode = instr.OpCode;
-
-        // Import operands that reference members from other modules
-        if (instr.Operand is FieldReference fieldRef)
-        {
-            // Only import if from a different module or if it's not a FieldDefinition
-            if (fieldRef.Module != _module || fieldRef is not FieldDefinition)
-            {
-                newInstr.Operand = _module.ImportReference(fieldRef);
-            }
-            else
-            {
-                newInstr.Operand = fieldRef;
-            }
-        }
-        else if (instr.Operand is MethodReference methodRef)
-        {
-            // Only import if from a different module or if it's not a MethodDefinition
-            if (methodRef.Module != _module || methodRef is not MethodDefinition)
-            {
-                newInstr.Operand = _module.ImportReference(methodRef);
-            }
-            else
-            {
-                newInstr.Operand = methodRef;
-            }
-        }
-        else if (instr.Operand is TypeReference typeRef)
-        {
-            // Only import if from a different module or if it's not a TypeDefinition
-            if (typeRef.Module != _module || typeRef is not TypeDefinition)
-            {
-                newInstr.Operand = _module.ImportReference(typeRef);
-            }
-            else
-            {
-                newInstr.Operand = typeRef;
-            }
-        }
-        else
-        {
-            // For instructions, parameters, variables, etc., keep as-is
-            // Branch targets will be fixed in the second pass
-            newInstr.Operand = instr.Operand;
-        }
-
-        return newInstr;
     }
 
     private void EmitSetProperty(ILProcessor processor, VariableDefinition argsVar, PropertyDefinition property)
@@ -709,14 +616,7 @@ public class LocationInterceptionAspectWeaver
             processor.Emit(OpCodes.Callvirt, _module.ImportReference(valueProp.GetMethod));
 
             // Unbox/cast to property type
-            if (property.PropertyType.IsValueType)
-            {
-                processor.Emit(OpCodes.Unbox_Any, _module.ImportReference(property.PropertyType));
-            }
-            else if (property.PropertyType.FullName != "System.Object")
-            {
-                processor.Emit(OpCodes.Castclass, _module.ImportReference(property.PropertyType));
-            }
+            EmitUnboxOrCast(processor, property.PropertyType);
 
             // Store to backing field
             if (setter.IsStatic)
