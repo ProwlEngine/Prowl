@@ -13,13 +13,13 @@ public class LocationInterceptionArgs
     /// <summary>
     /// Gets the property being accessed.
     /// </summary>
-    public PropertyInfo Property { get; internal set; } = null!;
+    public PropertyInfo Property { get; set; } = null!;
 
     /// <summary>
     /// Gets the instance on which the property is being accessed.
     /// Null for static properties.
     /// </summary>
-    public object? Instance { get; internal set; }
+    public object? Instance { get; set; }
 
     /// <summary>
     /// Gets or sets the property value.
@@ -34,17 +34,17 @@ public class LocationInterceptionArgs
     public Type PropertyType => Property.PropertyType;
 
     /// <summary>
-    /// Internal setter for the get value action.
+    /// Sets the action to execute when ProceedGetValue is called.
     /// </summary>
-    internal Action GetValueAction
+    public Action GetValueAction
     {
         set => _getValueAction = value;
     }
 
     /// <summary>
-    /// Internal setter for the set value action.
+    /// Sets the action to execute when ProceedSetValue is called.
     /// </summary>
-    internal Action SetValueAction
+    public Action SetValueAction
     {
         set => _setValueAction = value;
     }

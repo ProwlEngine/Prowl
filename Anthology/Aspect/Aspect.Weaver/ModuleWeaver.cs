@@ -48,6 +48,9 @@ public class ModuleWeaver
         if (type.Name.Contains("<") || type.Name.Contains(">"))
             return;
 
+        // Transform fields with LocationInterceptionAspect to properties (must run before property weaving)
+        propertyWeaver.TransformFieldsToProperties(type);
+
         // Weave methods
         foreach (var method in type.Methods.ToList())
         {

@@ -1,0 +1,157 @@
+
+========== CreateSetValueHelper called for Name ==========
+DEBUG: Original setter instructions for Name:
+  [0] ldarg.0 
+  [1] ldarg.1 
+  [2] stfld System.String Person::<Name>k__BackingField
+  [3] ret 
+
+========== CreateSetValueHelper called for Age ==========
+DEBUG: Original setter instructions for Age:
+  [0] ldarg.0 
+  [1] ldarg.1 
+  [2] stfld System.Int32 Person::<Age>k__BackingField
+  [3] ret 
+
+========== CreateSetValueHelper called for Name ==========
+DEBUG: Original setter instructions for Name:
+  [0] ldarg.0 
+  [1] ldarg.1 
+  [2] stfld System.String Aspect.Tests.ObservableModel::_name
+  [3] ret 
+
+========== CreateSetValueHelper called for Name ==========
+DEBUG: Original setter instructions for Name:
+  [0] ldarg.0 
+  [1] ldarg.1 
+  [2] stfld System.String Person::<Name>k__BackingField
+  [3] ret 
+
+========== CreateSetValueHelper called for Age ==========
+DEBUG: Original setter instructions for Age:
+  [0] ldarg.0 
+  [1] ldarg.1 
+  [2] stfld System.Int32 Person::<Age>k__BackingField
+  [3] ret 
+
+========== CreateSetValueHelper called for Name ==========
+DEBUG: Original setter instructions for Name:
+  [0] newobj System.Void PropertyLoggingAttribute::.ctor()
+  [1] stloc V_0
+  [2] newobj System.Void Aspect.LocationInterceptionArgs::.ctor()
+  [3] stloc V_1
+  [4] ldloc V_1
+  [5] ldtoken Person
+  [6] call System.Type System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)
+  [7] ldstr Name
+  [8] callvirt System.Reflection.PropertyInfo System.Type::GetProperty(System.String)
+  [9] callvirt System.Void Aspect.LocationInterceptionArgs::set_Property(System.Reflection.PropertyInfo)
+  [10] ldloc V_1
+  [11] ldarg.0 
+  [12] callvirt System.Void Aspect.LocationInterceptionArgs::set_Instance(System.Object)
+  [13] ldloc V_1
+  [14] ldarg.1 
+  [15] callvirt System.Void Aspect.LocationInterceptionArgs::set_Value(System.Object)
+  [16] ldloc V_1
+  [17] stsfld Aspect.LocationInterceptionArgs Person::<Name>__args
+  [18] ldloc V_1
+  [19] ldarg.0 
+  [20] ldftn System.Void Person::<Name>__SetValueHelper()
+  [21] newobj System.Void System.Action::.ctor(System.Object,System.IntPtr)
+  [22] callvirt System.Void Aspect.LocationInterceptionArgs::set_SetValueAction(System.Action)
+  [23] ldloc V_0
+  [24] ldloc V_1
+  [25] callvirt System.Void PropertyLoggingAttribute::OnSetValue(Aspect.LocationInterceptionArgs)
+  [26] ret 
+
+========== CreateSetValueHelper called for Age ==========
+DEBUG: Original setter instructions for Age:
+  [0] newobj System.Void PropertyLoggingAttribute::.ctor()
+  [1] stloc V_0
+  [2] newobj System.Void Aspect.LocationInterceptionArgs::.ctor()
+  [3] stloc V_1
+  [4] ldloc V_1
+  [5] ldtoken Person
+  [6] call System.Type System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)
+  [7] ldstr Age
+  [8] callvirt System.Reflection.PropertyInfo System.Type::GetProperty(System.String)
+  [9] callvirt System.Void Aspect.LocationInterceptionArgs::set_Property(System.Reflection.PropertyInfo)
+  [10] ldloc V_1
+  [11] ldarg.0 
+  [12] callvirt System.Void Aspect.LocationInterceptionArgs::set_Instance(System.Object)
+  [13] ldloc V_1
+  [14] ldarg.1 
+  [15] box System.Int32
+  [16] callvirt System.Void Aspect.LocationInterceptionArgs::set_Value(System.Object)
+  [17] ldloc V_1
+  [18] stsfld Aspect.LocationInterceptionArgs Person::<Age>__args
+  [19] ldloc V_1
+  [20] ldarg.0 
+  [21] ldftn System.Void Person::<Age>__SetValueHelper()
+  [22] newobj System.Void System.Action::.ctor(System.Object,System.IntPtr)
+  [23] callvirt System.Void Aspect.LocationInterceptionArgs::set_SetValueAction(System.Action)
+  [24] ldloc V_0
+  [25] ldloc V_1
+  [26] callvirt System.Void PropertyLoggingAttribute::OnSetValue(Aspect.LocationInterceptionArgs)
+  [27] ret 
+
+========== CreateSetValueHelper called for Name ==========
+DEBUG: Original setter instructions for Name:
+  [0] newobj System.Void PropertyLoggingAttribute::.ctor()
+  [1] stloc V_2
+  [2] newobj System.Void Aspect.LocationInterceptionArgs::.ctor()
+  [3] stloc V_3
+  [4] ldloc V_3
+  [5] ldtoken Person
+  [6] call System.Type System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)
+  [7] ldstr Name
+  [8] callvirt System.Reflection.PropertyInfo System.Type::GetProperty(System.String)
+  [9] callvirt System.Void Aspect.LocationInterceptionArgs::set_Property(System.Reflection.PropertyInfo)
+  [10] ldloc V_3
+  [11] ldarg.0 
+  [12] callvirt System.Void Aspect.LocationInterceptionArgs::set_Instance(System.Object)
+  [13] ldloc V_3
+  [14] ldarg.1 
+  [15] callvirt System.Void Aspect.LocationInterceptionArgs::set_Value(System.Object)
+  [16] ldloc V_3
+  [17] stsfld Aspect.LocationInterceptionArgs Person::<Name>__args
+  [18] ldloc V_3
+  [19] ldarg.0 
+  [20] ldftn System.Void Person::<Name>__SetValueHelper()
+  [21] newobj System.Void System.Action::.ctor(System.Object,System.IntPtr)
+  [22] callvirt System.Void Aspect.LocationInterceptionArgs::set_SetValueAction(System.Action)
+  [23] ldloc V_2
+  [24] ldloc V_3
+  [25] callvirt System.Void PropertyLoggingAttribute::OnSetValue(Aspect.LocationInterceptionArgs)
+  [26] ret 
+
+========== CreateSetValueHelper called for Age ==========
+DEBUG: Original setter instructions for Age:
+  [0] newobj System.Void PropertyLoggingAttribute::.ctor()
+  [1] stloc V_2
+  [2] newobj System.Void Aspect.LocationInterceptionArgs::.ctor()
+  [3] stloc V_3
+  [4] ldloc V_3
+  [5] ldtoken Person
+  [6] call System.Type System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)
+  [7] ldstr Age
+  [8] callvirt System.Reflection.PropertyInfo System.Type::GetProperty(System.String)
+  [9] callvirt System.Void Aspect.LocationInterceptionArgs::set_Property(System.Reflection.PropertyInfo)
+  [10] ldloc V_3
+  [11] ldarg.0 
+  [12] callvirt System.Void Aspect.LocationInterceptionArgs::set_Instance(System.Object)
+  [13] ldloc V_3
+  [14] ldarg.1 
+  [15] box System.Int32
+  [16] callvirt System.Void Aspect.LocationInterceptionArgs::set_Value(System.Object)
+  [17] ldloc V_3
+  [18] stsfld Aspect.LocationInterceptionArgs Person::<Age>__args
+  [19] ldloc V_3
+  [20] ldarg.0 
+  [21] ldftn System.Void Person::<Age>__SetValueHelper()
+  [22] newobj System.Void System.Action::.ctor(System.Object,System.IntPtr)
+  [23] callvirt System.Void Aspect.LocationInterceptionArgs::set_SetValueAction(System.Action)
+  [24] ldloc V_2
+  [25] ldloc V_3
+  [26] callvirt System.Void PropertyLoggingAttribute::OnSetValue(Aspect.LocationInterceptionArgs)
+  [27] ret 
