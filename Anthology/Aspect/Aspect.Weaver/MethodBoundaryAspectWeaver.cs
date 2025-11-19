@@ -216,9 +216,9 @@ public class MethodBoundaryAspectWeaver
                 InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldc_I4, i));
                 InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldarg, method.Parameters[i]));
 
-                // Box value types
+                // Box value types and generic parameters
                 var paramType = method.Parameters[i].ParameterType;
-                if (paramType.IsValueType)
+                if (paramType.IsValueType || paramType.IsGenericParameter)
                 {
                     InsertNext(ref lastInserted, Instruction.Create(OpCodes.Box, paramType));
                 }
@@ -284,7 +284,7 @@ public class MethodBoundaryAspectWeaver
 
             // Unbox/cast to parameter type
             var paramType = parameter.ParameterType;
-            if (paramType.IsValueType)
+            if (paramType.IsValueType || paramType.IsGenericParameter)
             {
                 InsertNext(ref lastInserted, Instruction.Create(OpCodes.Unbox_Any, paramType));
             }
@@ -410,9 +410,9 @@ public class MethodBoundaryAspectWeaver
             // Load argument using parameter definition
             processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Ldarg, method.Parameters[i]));
 
-            // Box value types
+            // Box value types and generic parameters
             var paramType = method.Parameters[i].ParameterType;
-            if (paramType.IsValueType)
+            if (paramType.IsValueType || paramType.IsGenericParameter)
             {
                 processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Box, paramType));
             }
@@ -568,7 +568,7 @@ public class MethodBoundaryAspectWeaver
                 lastInserted = callGet;
 
                 // Unbox/cast to return type
-                if (method.ReturnType.IsValueType)
+                if (method.ReturnType.IsValueType || method.ReturnType.IsGenericParameter)
                 {
                     var unbox = Instruction.Create(OpCodes.Unbox_Any, method.ReturnType);
                     processor.InsertAfter(lastInserted, unbox);
@@ -767,7 +767,7 @@ public class MethodBoundaryAspectWeaver
                 var setReturnValueRef = _module.ImportReference(returnValueProperty.SetMethod);
                 processor.Append(Instruction.Create(OpCodes.Ldloc, argsVar));
                 processor.Append(Instruction.Create(OpCodes.Ldloc, returnVar));
-                if (method.ReturnType.IsValueType)
+                if (method.ReturnType.IsValueType || method.ReturnType.IsGenericParameter)
                 {
                     processor.Append(Instruction.Create(OpCodes.Box, method.ReturnType));
                 }
@@ -872,7 +872,7 @@ public class MethodBoundaryAspectWeaver
             };
 
             // Unbox/cast to return type
-            if (method.ReturnType.IsValueType)
+            if (method.ReturnType.IsValueType || method.ReturnType.IsGenericParameter)
             {
                 instructions.Add(Instruction.Create(OpCodes.Unbox_Any, method.ReturnType));
             }

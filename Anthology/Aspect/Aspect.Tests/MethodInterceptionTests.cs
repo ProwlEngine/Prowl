@@ -174,7 +174,7 @@ public class MethodInterceptionTests
         Assert.Equal(new[] { "OnEntry", "VoidMethod", "OnSuccess", "OnExit" }, MethodLifecycleTracker.Events);
     }
 
-    [Fact(Skip = "Generic methods not fully supported yet")]
+    [Fact]
     public void GenericMethod_ShouldBeIntercepted()
     {
         // Arrange
