@@ -27,7 +27,10 @@
       "Bash(Select-String -Pattern \"error|warning\")",
       "Bash(Select-Object -First 10)",
       "Bash(echo:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(\"Aspect.Weaver.Host/bin/Debug/net6.0/Aspect.Weaver.Host.exe\" \"Aspect.Tests/bin/Debug/net6.0/Aspect.Tests.dll\")",
+      "Bash(\"Aspect.Weaver.Host/bin/Debug/net8.0/Aspect.Weaver.Host.exe\" \"Aspect.Tests/bin/Debug/net8.0/Aspect.Tests.dll\")",
+      "Bash(\"Aspect.Weaver.Host/bin/Debug/net9.0/Aspect.Weaver.Host.exe\" \"Aspect.Tests/bin/Debug/net9.0/Aspect.Tests.dll\")"
     ],
     "deny": [],
     "ask": []

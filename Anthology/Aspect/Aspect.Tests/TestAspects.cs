@@ -1056,11 +1056,6 @@ public class AlsoNotifyAttribute : Attribute
     }
 }
 
-// Note: AlsoNotify is fully implemented and working!
-// It uses runtime reflection in NotifyPropertyChangedAttribute.RaisePropertyChanged()
-// to discover dependent properties and raise additional PropertyChanged events.
-// No additional weaving logic is required.
-
 #endregion
 
 #region Validation
@@ -1076,10 +1071,6 @@ public class ValidateRangeAttribute : Attribute
     public int Min { get; set; }
     public int Max { get; set; }
 }
-
-// Note: Parameter validation aspects would need MethodInterceptionAspect
-// or a specialized parameter validation weaver
-// For now, we'll implement these with method-level aspects
 
 [AttributeUsage(AttributeTargets.Method)]
 public class ValidateParametersAttribute : OnMethodBoundaryAspect
