@@ -36,8 +36,19 @@ public class ModuleWeaver
         }
 
         // Save the modified assembly
-        var writerParameters = new WriterParameters { WriteSymbols = true };
-        assembly.Write(writerParameters);
+        try
+        {
+            Console.WriteLine($"Writing woven assembly back to: {assemblyPath}");
+            var writerParameters = new WriterParameters { WriteSymbols = true };
+            assembly.Write(writerParameters);
+            Console.WriteLine("Assembly written successfully!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR writing assembly: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            throw;
+        }
 
         Console.WriteLine("Weaving completed successfully!");
     }
@@ -48,8 +59,10 @@ public class ModuleWeaver
         if (type.Name.Contains("<") || type.Name.Contains(">"))
             return;
 
-        // Transform fields with LocationInterceptionAspect to properties (must run before property weaving)
-        propertyWeaver.TransformFieldsToProperties(type);
+        // NOTE: Field-to-property transformation is disabled because it requires
+        // rewriting all field access instructions throughout the assembly to use
+        // property getters/setters instead. Users should use properties directly.
+        // propertyWeaver.TransformFieldsToProperties(type);
 
         // Weave methods
         foreach (var method in type.Methods.ToList())

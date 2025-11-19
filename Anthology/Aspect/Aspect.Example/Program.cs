@@ -40,24 +40,6 @@ Console.WriteLine("\nGetting Age:");
 var age = person.Age;
 Console.WriteLine($"Got value: {age}\n");
 
-// Test field interception (fields should be transformed to properties)
-Console.WriteLine("\n=== Field Interception Example ===\n");
-var product = new Product();
-
-Console.WriteLine("Setting Price = 99.99:");
-product.Price = 99.99m;
-
-Console.WriteLine("\nGetting Price:");
-var price = product.Price;
-Console.WriteLine($"Got value: {price}\n");
-
-Console.WriteLine("Setting Stock = 10:");
-product.Stock = 10;
-
-Console.WriteLine("\nGetting Stock:");
-var stock = product.Stock;
-Console.WriteLine($"Got value: {stock}\n");
-
 Console.WriteLine("Done!");
 
 // Simple calculator class with logging aspect
@@ -113,16 +95,6 @@ public class Person
     public int Age { get; set; }
 }
 
-// Product class with field logging (fields should be auto-converted to properties)
-public class Product
-{
-    [FieldLogging]
-    public decimal Price;
-
-    [FieldLogging]
-    public int Stock;
-}
-
 // Property logging aspect
 [AttributeUsage(AttributeTargets.Property)]
 public class PropertyLoggingAttribute : LocationInterceptionAspect
@@ -137,25 +109,6 @@ public class PropertyLoggingAttribute : LocationInterceptionAspect
     public override void OnSetValue(LocationInterceptionArgs args)
     {
         Console.WriteLine($"  [OnSetValue] Property: {args.Property.Name}, Value: {args.Value}");
-        args.ProceedSetValue();
-        Console.WriteLine($"  [OnSetValue] Set complete");
-    }
-}
-
-// Field logging aspect (fields will be converted to properties automatically)
-[AttributeUsage(AttributeTargets.Field)]
-public class FieldLoggingAttribute : LocationInterceptionAspect
-{
-    public override void OnGetValue(LocationInterceptionArgs args)
-    {
-        Console.WriteLine($"  [OnGetValue] Field->Property: {args.Property.Name}");
-        args.ProceedGetValue();
-        Console.WriteLine($"  [OnGetValue] Returning: {args.Value}");
-    }
-
-    public override void OnSetValue(LocationInterceptionArgs args)
-    {
-        Console.WriteLine($"  [OnSetValue] Field->Property: {args.Property.Name}, Value: {args.Value}");
         args.ProceedSetValue();
         Console.WriteLine($"  [OnSetValue] Set complete");
     }

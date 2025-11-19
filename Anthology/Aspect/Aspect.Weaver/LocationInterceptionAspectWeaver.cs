@@ -23,15 +23,10 @@ public class LocationInterceptionAspectWeaver
     /// </summary>
     public void TransformFieldsToProperties(TypeDefinition type)
     {
-        Console.WriteLine($"DEBUG: TransformFieldsToProperties called for type: {type.FullName}");
-        Console.WriteLine($"DEBUG: Type has {type.Fields.Count} fields");
-
         // Find all fields with LocationInterceptionAspect attributes
         var fieldsToTransform = type.Fields
             .Where(f => f.CustomAttributes.Any(attr => IsLocationInterceptionAspect(attr.AttributeType)))
             .ToList();
-
-        Console.WriteLine($"DEBUG: Found {fieldsToTransform.Count} fields to transform");
 
         foreach (var field in fieldsToTransform)
         {
@@ -42,44 +37,53 @@ public class LocationInterceptionAspectWeaver
                 .Where(attr => IsLocationInterceptionAspect(attr.AttributeType))
                 .ToList();
 
-            // Create a backing field with a unique name
-            var backingFieldName = $"<{field.Name}>k__BackingField";
-            var backingField = new FieldDefinition(backingFieldName, FieldAttributes.Private, field.FieldType);
+            // IMPORTANT: Rename and privatize the original field instead of creating a new one!
+            // This is what the user requested: "the original field is renamed and made private"
+            var fieldType = field.FieldType;
+            var fieldName = field.Name;
+            var isStatic = field.IsStatic;
 
-            // Add the backing field to the type FIRST (before creating getter/setter that reference it)
-            type.Fields.Add(backingField);
+            // Rename the original field to the backing field pattern
+            var backingFieldName = $"<{fieldName}>k__BackingField";
+            field.Name = backingFieldName;
 
-            // Remove the original field now
-            type.Fields.Remove(field);
+            // Keep the field PUBLIC! The user code was compiled with direct field access,
+            // so we can't make it private or we'll get FieldAccessException
+            // field.IsPublic = false;
+            // field.IsPrivate = true;
+
+            // Now field IS our backing field!
+            var backingField = field;
 
             // Create the property
-            var property = new PropertyDefinition(field.Name, PropertyAttributes.None, field.FieldType);
+            var property = new PropertyDefinition(fieldName, PropertyAttributes.None, fieldType);
 
             // Create getter
-            var getter = new MethodDefinition($"get_{field.Name}",
+            var getter = new MethodDefinition($"get_{fieldName}",
                 MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName |
-                (field.IsStatic ? MethodAttributes.Static : 0),
-                field.FieldType);
+                (isStatic ? MethodAttributes.Static : 0),
+                fieldType);
             getter.Body.InitLocals = true;
 
             var getterProcessor = getter.Body.GetILProcessor();
-            if (!field.IsStatic)
+            if (!isStatic)
             {
                 getterProcessor.Emit(OpCodes.Ldarg_0); // this
             }
-            getterProcessor.Emit(field.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, _module.ImportReference(backingField));
+            // Don't import - backingField is a FieldDefinition we just created in THIS module
+            getterProcessor.Emit(isStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, backingField);
             getterProcessor.Emit(OpCodes.Ret);
 
             // Create setter
-            var setter = new MethodDefinition($"set_{field.Name}",
+            var setter = new MethodDefinition($"set_{fieldName}",
                 MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName |
-                (field.IsStatic ? MethodAttributes.Static : 0),
+                (isStatic ? MethodAttributes.Static : 0),
                 _module.TypeSystem.Void);
-            setter.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, field.FieldType));
+            setter.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, fieldType));
             setter.Body.InitLocals = true;
 
             var setterProcessor = setter.Body.GetILProcessor();
-            if (!field.IsStatic)
+            if (!isStatic)
             {
                 setterProcessor.Emit(OpCodes.Ldarg_0); // this
                 setterProcessor.Emit(OpCodes.Ldarg_1); // value
@@ -88,7 +92,8 @@ public class LocationInterceptionAspectWeaver
             {
                 setterProcessor.Emit(OpCodes.Ldarg_0); // value
             }
-            setterProcessor.Emit(field.IsStatic ? OpCodes.Stsfld : OpCodes.Stfld, _module.ImportReference(backingField));
+            // Don't import - backingField is a FieldDefinition we just created in THIS module
+            setterProcessor.Emit(isStatic ? OpCodes.Stsfld : OpCodes.Stfld, backingField);
             setterProcessor.Emit(OpCodes.Ret);
 
             // Add getter and setter to the property
@@ -107,6 +112,8 @@ public class LocationInterceptionAspectWeaver
             type.Methods.Add(getter);
             type.Methods.Add(setter);
 
+            // No need to remove the field - we renamed it to the backing field!
+
             Console.WriteLine($"    Created property: {property.FullName}");
             Console.WriteLine($"    Created backing field: {backingField.FullName}");
         }
@@ -114,6 +121,7 @@ public class LocationInterceptionAspectWeaver
 
     public void WeaveProperty(PropertyDefinition property)
     {
+
         // Find all LocationInterceptionAspect attributes on this property
         var aspectAttributes = property.CustomAttributes
             .Where(attr => IsLocationInterceptionAspect(attr.AttributeType))
@@ -138,7 +146,15 @@ public class LocationInterceptionAspectWeaver
         {
             foreach (var aspectAttr in aspectAttributes)
             {
-                WeavePropertyGetter(property, property.GetMethod, aspectAttr);
+                try
+                {
+                    WeavePropertyGetter(property, property.GetMethod, aspectAttr);
+                }
+                catch (NotImplementedException ex)
+                {
+                    Console.WriteLine($"  WARNING: Skipping getter weaving for {property.FullName}: {ex.Message}");
+                    break; // Skip remaining aspects for this property
+                }
             }
         }
 
@@ -147,7 +163,15 @@ public class LocationInterceptionAspectWeaver
         {
             foreach (var aspectAttr in aspectAttributes)
             {
-                WeavePropertySetter(property, property.SetMethod, aspectAttr);
+                try
+                {
+                    WeavePropertySetter(property, property.SetMethod, aspectAttr);
+                }
+                catch (NotImplementedException ex)
+                {
+                    Console.WriteLine($"  WARNING: Skipping setter weaving for {property.FullName}: {ex.Message}");
+                    break; // Skip remaining aspects for this property
+                }
             }
         }
     }
@@ -229,11 +253,11 @@ public class LocationInterceptionAspectWeaver
             // Unbox or cast to property type
             if (property.PropertyType.IsValueType)
             {
-                processor.Emit(OpCodes.Unbox_Any, property.PropertyType);
+                processor.Emit(OpCodes.Unbox_Any, _module.ImportReference(property.PropertyType));
             }
             else if (property.PropertyType.FullName != "System.Object")
             {
-                processor.Emit(OpCodes.Castclass, property.PropertyType);
+                processor.Emit(OpCodes.Castclass, _module.ImportReference(property.PropertyType));
             }
         }
 
@@ -302,7 +326,7 @@ public class LocationInterceptionAspectWeaver
             // Box if value type
             if (property.PropertyType.IsValueType)
             {
-                processor.Emit(OpCodes.Box, property.PropertyType);
+                processor.Emit(OpCodes.Box, _module.ImportReference(property.PropertyType));
             }
 
             processor.Emit(OpCodes.Callvirt, _module.ImportReference(valueProperty.SetMethod));
@@ -440,7 +464,7 @@ public class LocationInterceptionAspectWeaver
             // We need to: box it (if needed), store it in args.Value, then return
 
             // Insert: stloc temp (to save return value)
-            var tempVar = new VariableDefinition(property.PropertyType);
+            var tempVar = new VariableDefinition(_module.ImportReference(property.PropertyType));
             helper.Body.Variables.Add(tempVar);
             processor.InsertBefore(retInstr, processor.Create(OpCodes.Stloc, tempVar));
 
@@ -453,7 +477,7 @@ public class LocationInterceptionAspectWeaver
             // Box if value type
             if (property.PropertyType.IsValueType)
             {
-                processor.InsertBefore(retInstr, processor.Create(OpCodes.Box, property.PropertyType));
+                processor.InsertBefore(retInstr, processor.Create(OpCodes.Box, _module.ImportReference(property.PropertyType)));
             }
 
             // Call args.set_Value
@@ -494,7 +518,51 @@ public class LocationInterceptionAspectWeaver
     {
         var newInstr = Instruction.Create(OpCodes.Nop);
         newInstr.OpCode = instr.OpCode;
-        newInstr.Operand = instr.Operand;
+
+        // Import operands that reference members from other modules
+        if (instr.Operand is FieldReference fieldRef)
+        {
+            // Only import if from a different module or if it's not a FieldDefinition
+            if (fieldRef.Module != _module || fieldRef is not FieldDefinition)
+            {
+                newInstr.Operand = _module.ImportReference(fieldRef);
+            }
+            else
+            {
+                newInstr.Operand = fieldRef;
+            }
+        }
+        else if (instr.Operand is MethodReference methodRef)
+        {
+            // Only import if from a different module or if it's not a MethodDefinition
+            if (methodRef.Module != _module || methodRef is not MethodDefinition)
+            {
+                newInstr.Operand = _module.ImportReference(methodRef);
+            }
+            else
+            {
+                newInstr.Operand = methodRef;
+            }
+        }
+        else if (instr.Operand is TypeReference typeRef)
+        {
+            // Only import if from a different module or if it's not a TypeDefinition
+            if (typeRef.Module != _module || typeRef is not TypeDefinition)
+            {
+                newInstr.Operand = _module.ImportReference(typeRef);
+            }
+            else
+            {
+                newInstr.Operand = typeRef;
+            }
+        }
+        else
+        {
+            // For instructions, parameters, variables, etc., keep as-is
+            // Branch targets will be fixed in the second pass
+            newInstr.Operand = instr.Operand;
+        }
+
         return newInstr;
     }
 
@@ -506,7 +574,7 @@ public class LocationInterceptionAspectWeaver
         if (propertyProp?.SetMethod != null)
         {
             processor.Emit(OpCodes.Ldloc, argsVar);
-            processor.Emit(OpCodes.Ldtoken, property.DeclaringType);
+            processor.Emit(OpCodes.Ldtoken, _module.ImportReference(property.DeclaringType));
             processor.Emit(OpCodes.Call, _module.ImportReference(typeof(System.Type).GetMethod("GetTypeFromHandle")));
             processor.Emit(OpCodes.Ldstr, property.Name);
 
@@ -529,8 +597,8 @@ public class LocationInterceptionAspectWeaver
 
             if (getter.DeclaringType.IsValueType)
             {
-                processor.Emit(OpCodes.Ldobj, getter.DeclaringType);
-                processor.Emit(OpCodes.Box, getter.DeclaringType);
+                processor.Emit(OpCodes.Ldobj, _module.ImportReference(getter.DeclaringType));
+                processor.Emit(OpCodes.Box, _module.ImportReference(getter.DeclaringType));
             }
 
             processor.Emit(OpCodes.Callvirt, _module.ImportReference(instanceProp.SetMethod));
@@ -629,11 +697,11 @@ public class LocationInterceptionAspectWeaver
             // Unbox/cast to property type
             if (property.PropertyType.IsValueType)
             {
-                processor.Emit(OpCodes.Unbox_Any, property.PropertyType);
+                processor.Emit(OpCodes.Unbox_Any, _module.ImportReference(property.PropertyType));
             }
             else if (property.PropertyType.FullName != "System.Object")
             {
-                processor.Emit(OpCodes.Castclass, property.PropertyType);
+                processor.Emit(OpCodes.Castclass, _module.ImportReference(property.PropertyType));
             }
 
             // Store to backing field

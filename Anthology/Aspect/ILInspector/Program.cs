@@ -31,6 +31,16 @@ if (productType != null)
         Console.WriteLine($"  Property: {prop.Name} ({prop.PropertyType.Name})");
         Console.WriteLine($"    Has getter: {prop.GetMethod != null}");
         Console.WriteLine($"    Has setter: {prop.SetMethod != null}");
+        Console.WriteLine($"    Attributes: {prop.CustomAttributes.Count}");
+    }
+
+    Console.WriteLine($"\nMethods: {productType.Methods.Count}");
+    foreach (var method in productType.Methods)
+    {
+        if (method.Name.Contains("Helper") || method.Name.Contains("get_") || method.Name.Contains("set_"))
+        {
+            Console.WriteLine($"  Method: {method.Name}");
+        }
     }
     Console.WriteLine();
 }

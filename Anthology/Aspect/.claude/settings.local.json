@@ -18,7 +18,10 @@
       "Bash(where ildasm:*)",
       "Bash(Select-String -Pattern \"DEBUG|TrackedProperty\" -Context 2)",
       "Bash(Aspect.Weaver.Host/bin/Debug/net10.0/Aspect.Weaver.Host.exe Aspect.Tests/bin/Debug/net10.0/Aspect.Tests.dll)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(\"Aspect.Example/bin/Debug/net10.0/Aspect.Example.exe\")",
+      "Bash($null)",
+      "Bash(Select-String -Pattern \"Calculator\" -Context 20)"
     ],
     "deny": [],
     "ask": []
