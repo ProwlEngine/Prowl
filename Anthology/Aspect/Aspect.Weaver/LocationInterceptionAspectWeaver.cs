@@ -141,6 +141,13 @@ public class LocationInterceptionAspectWeaver
 
         Console.WriteLine($"  Weaving property: {property.FullName} with {aspectAttributes.Count} aspect(s)");
 
+        // Save original getter instructions BEFORE weaving (needed for ProceedGetValue in setter)
+        List<Instruction>? originalGetterInstructions = null;
+        if (property.GetMethod != null && property.GetMethod.HasBody)
+        {
+            originalGetterInstructions = property.GetMethod.Body.Instructions.ToList();
+        }
+
         // Weave getter if it exists
         if (property.GetMethod != null)
         {
@@ -165,7 +172,7 @@ public class LocationInterceptionAspectWeaver
             {
                 try
                 {
-                    WeavePropertySetter(property, property.SetMethod, aspectAttr);
+                    WeavePropertySetter(property, property.SetMethod, aspectAttr, originalGetterInstructions);
                 }
                 catch (NotImplementedException ex)
                 {
@@ -264,10 +271,20 @@ public class LocationInterceptionAspectWeaver
         processor.Emit(OpCodes.Ret);
     }
 
-    private void WeavePropertySetter(PropertyDefinition property, MethodDefinition setter, CustomAttribute aspectAttribute)
+    private void WeavePropertySetter(PropertyDefinition property, MethodDefinition setter, CustomAttribute aspectAttribute, List<Instruction>? originalGetterInstructions = null)
     {
         if (setter.Body == null || !setter.HasBody)
             return;
+
+        // Check if this is a complex property BEFORE clearing the body
+        var backingFieldName = $"<{property.Name}>k__BackingField";
+        var backingField = property.DeclaringType.Fields.FirstOrDefault(f => f.Name == backingFieldName);
+
+        if (backingField == null)
+        {
+            // Complex property - throw before modifying the body
+            throw new NotImplementedException($"Property {property.Name} does not have an auto-property backing field. Complex property setters are not yet supported.");
+        }
 
         var processor = setter.Body.GetILProcessor();
         setter.Body.InitLocals = true;
@@ -332,11 +349,18 @@ public class LocationInterceptionAspectWeaver
             processor.Emit(OpCodes.Callvirt, _module.ImportReference(valueProperty.SetMethod));
         }
 
-        // 6. Create helper and set SetValueAction
+        // 6. Create GetValueHelper and set GetValueAction (so aspects can call ProceedGetValue from OnSetValue)
+        if (property.GetMethod != null && originalGetterInstructions != null)
+        {
+            var getValueHelper = CreateGetValueHelper(property, property.GetMethod, originalGetterInstructions);
+            EmitSetGetValueAction(processor, argsVar, getValueHelper, setter.IsStatic);
+        }
+
+        // 7. Create helper and set SetValueAction
         var helperMethod = CreateSetValueHelper(property, setter, originalInstructions);
         EmitSetSetValueAction(processor, argsVar, helperMethod, setter.IsStatic);
 
-        // 7. Call aspect.OnSetValue(args)
+        // 8. Call aspect.OnSetValue(args)
         var onSetValueMethod = aspectTypeDef.Methods.FirstOrDefault(m => m.Name == "OnSetValue");
         if (onSetValueMethod != null)
         {
