@@ -184,8 +184,9 @@ public class MethodBoundaryAspectWeaver : WeaverBase
                 InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldarg_0)); // this
                 if (method.DeclaringType.IsValueType)
                 {
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldobj, method.DeclaringType));
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Box, method.DeclaringType));
+                    var declaringTypeRef = _module.ImportReference(method.DeclaringType);
+                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Ldobj, declaringTypeRef));
+                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Box, declaringTypeRef));
                 }
                 InsertNext(ref lastInserted, Instruction.Create(OpCodes.Callvirt, setInstanceRef));
             }
@@ -217,7 +218,8 @@ public class MethodBoundaryAspectWeaver : WeaverBase
                 var paramType = method.Parameters[i].ParameterType;
                 if (paramType.IsValueType || paramType.IsGenericParameter)
                 {
-                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Box, paramType));
+                    var paramTypeRef = _module.ImportReference(paramType);
+                    InsertNext(ref lastInserted, Instruction.Create(OpCodes.Box, paramTypeRef));
                 }
 
                 InsertNext(ref lastInserted, Instruction.Create(OpCodes.Stelem_Ref));
@@ -281,13 +283,14 @@ public class MethodBoundaryAspectWeaver : WeaverBase
 
             // Unbox/cast to parameter type
             var paramType = parameter.ParameterType;
+            var paramTypeRef = _module.ImportReference(paramType);
             if (paramType.IsValueType || paramType.IsGenericParameter)
             {
-                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Unbox_Any, paramType));
+                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Unbox_Any, paramTypeRef));
             }
             else if (paramType.FullName != "System.Object")
             {
-                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Castclass, paramType));
+                InsertNext(ref lastInserted, Instruction.Create(OpCodes.Castclass, paramTypeRef));
             }
 
             // Store to parameter
@@ -362,8 +365,9 @@ public class MethodBoundaryAspectWeaver : WeaverBase
                 processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Ldarg_0)); // this
                 if (method.DeclaringType.IsValueType)
                 {
-                    processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Ldobj, method.DeclaringType));
-                    processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Box, method.DeclaringType));
+                    var declaringTypeRef = _module.ImportReference(method.DeclaringType);
+                    processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Ldobj, declaringTypeRef));
+                    processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Box, declaringTypeRef));
                 }
                 processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Callvirt, setInstanceRef));
             }
@@ -565,15 +569,16 @@ public class MethodBoundaryAspectWeaver : WeaverBase
                 lastInserted = callGet;
 
                 // Unbox/cast to return type
+                var returnTypeRef = _module.ImportReference(method.ReturnType);
                 if (method.ReturnType.IsValueType || method.ReturnType.IsGenericParameter)
                 {
-                    var unbox = Instruction.Create(OpCodes.Unbox_Any, method.ReturnType);
+                    var unbox = Instruction.Create(OpCodes.Unbox_Any, returnTypeRef);
                     processor.InsertAfter(lastInserted, unbox);
                     lastInserted = unbox;
                 }
                 else if (method.ReturnType.FullName != "System.Object")
                 {
-                    var cast = Instruction.Create(OpCodes.Castclass, method.ReturnType);
+                    var cast = Instruction.Create(OpCodes.Castclass, returnTypeRef);
                     processor.InsertAfter(lastInserted, cast);
                     lastInserted = cast;
                 }
@@ -766,7 +771,8 @@ public class MethodBoundaryAspectWeaver : WeaverBase
                 processor.Append(Instruction.Create(OpCodes.Ldloc, returnVar));
                 if (method.ReturnType.IsValueType || method.ReturnType.IsGenericParameter)
                 {
-                    processor.Append(Instruction.Create(OpCodes.Box, method.ReturnType));
+                    var returnTypeRef = _module.ImportReference(method.ReturnType);
+                    processor.Append(Instruction.Create(OpCodes.Box, returnTypeRef));
                 }
                 processor.Append(Instruction.Create(OpCodes.Callvirt, setReturnValueRef));
             }
@@ -869,13 +875,14 @@ public class MethodBoundaryAspectWeaver : WeaverBase
             };
 
             // Unbox/cast to return type
+            var returnTypeRef = _module.ImportReference(method.ReturnType);
             if (method.ReturnType.IsValueType || method.ReturnType.IsGenericParameter)
             {
-                instructions.Add(Instruction.Create(OpCodes.Unbox_Any, method.ReturnType));
+                instructions.Add(Instruction.Create(OpCodes.Unbox_Any, returnTypeRef));
             }
             else if (method.ReturnType.FullName != "System.Object")
             {
-                instructions.Add(Instruction.Create(OpCodes.Castclass, method.ReturnType));
+                instructions.Add(Instruction.Create(OpCodes.Castclass, returnTypeRef));
             }
 
             instructions.Add(Instruction.Create(OpCodes.Stloc, returnVar));
