@@ -98,6 +98,35 @@ public class MethodBoundaryAspectWeaver : WeaverBase
         {
             InsertNext(Instruction.Create(OpCodes.Newobj, _module.ImportReference(aspectCtor)));
             InsertNext(Instruction.Create(OpCodes.Stloc, aspectVar));
+
+            // Set attribute properties (e.g., MaxCalls, FailureThreshold, etc.)
+            foreach (var namedArg in aspectAttribute.Properties)
+            {
+                var propertyDef = aspectTypeDef.Properties.FirstOrDefault(p => p.Name == namedArg.Name);
+                if (propertyDef != null && propertyDef.SetMethod != null)
+                {
+                    InsertNext(Instruction.Create(OpCodes.Ldloc, aspectVar));
+
+                    // Load the property value onto the stack
+                    var value = namedArg.Argument.Value;
+                    if (value is int intValue)
+                    {
+                        InsertNext(Instruction.Create(OpCodes.Ldc_I4, intValue));
+                    }
+                    else if (value is bool boolValue)
+                    {
+                        InsertNext(Instruction.Create(boolValue ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0));
+                    }
+                    else if (value is string stringValue)
+                    {
+                        InsertNext(Instruction.Create(OpCodes.Ldstr, stringValue));
+                    }
+                    // Add more type handling as needed
+
+                    var setterRef = _module.ImportReference(propertyDef.SetMethod);
+                    InsertNext(Instruction.Create(OpCodes.Callvirt, setterRef));
+                }
+            }
         }
 
         // 2. Create MethodExecutionArgs
@@ -312,6 +341,35 @@ public class MethodBoundaryAspectWeaver : WeaverBase
             var ctorRef = _module.ImportReference(ctor);
             processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Newobj, ctorRef));
             processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Stloc, aspectVar));
+
+            // Set attribute properties (e.g., MaxCalls, FailureThreshold, etc.)
+            foreach (var namedArg in aspectAttribute.Properties)
+            {
+                var propertyDef = aspectTypeDef.Properties.FirstOrDefault(p => p.Name == namedArg.Name);
+                if (propertyDef != null && propertyDef.SetMethod != null)
+                {
+                    processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Ldloc, aspectVar));
+
+                    // Load the property value onto the stack
+                    var value = namedArg.Argument.Value;
+                    if (value is int intValue)
+                    {
+                        processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Ldc_I4, intValue));
+                    }
+                    else if (value is bool boolValue)
+                    {
+                        processor.InsertBefore(insertBefore, Instruction.Create(boolValue ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0));
+                    }
+                    else if (value is string stringValue)
+                    {
+                        processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Ldstr, stringValue));
+                    }
+                    // Add more type handling as needed
+
+                    var setterRef = _module.ImportReference(propertyDef.SetMethod);
+                    processor.InsertBefore(insertBefore, Instruction.Create(OpCodes.Callvirt, setterRef));
+                }
+            }
         }
     }
 
