@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <!-- Enable/disable weaving (can be overridden in project) -->
+    <ProwlAspectWeavingEnabled Condition="'$(ProwlAspectWeavingEnabled)' == ''">true</ProwlAspectWeavingEnabled>
+
+    <!-- Path to the weaver executable -->
+    <ProwlAspectWeaverPath Condition="'$(ProwlAspectWeaverPath)' == ''">$(MSBuildThisFileDirectory)..\tools\net8.0\Aspect.Weaver.Host.exe</ProwlAspectWeaverPath>
+
+    <!-- Skip weaving for design-time builds -->
+    <ProwlAspectSkipWeaving Condition="'$(DesignTimeBuild)' == 'true' OR '$(BuildingProject)' != 'true'">true</ProwlAspectSkipWeaving>
+  </PropertyGroup>
+
+  <!-- Target that runs after compilation to weave aspects into the assembly -->
+  <Target Name="ProwlAspectWeave"
+          AfterTargets="CoreCompile"
+          Condition="'$(ProwlAspectWeavingEnabled)' == 'true' AND '$(ProwlAspectSkipWeaving)' != 'true'"
+          Inputs="@(IntermediateAssembly)"
+          Outputs="@(IntermediateAssembly);$(IntermediateOutputPath)$(TargetName).ProwlAspect.woven">
+
+    <PropertyGroup>
+      <_ProwlAspectAssemblyPath>@(IntermediateAssembly)</_ProwlAspectAssemblyPath>
+    </PropertyGroup>
+
+    <Message Text="Prowl.Aspect: Weaving aspects into $(_ProwlAspectAssemblyPath)" Importance="high" />
+
+    <!-- Execute the weaver on the intermediate assembly -->
+    <Exec Command="&quot;$(ProwlAspectWeaverPath)&quot; &quot;$(_ProwlAspectAssemblyPath)&quot;"
+          WorkingDirectory="$(ProjectDir)"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="false">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_ProwlAspectWeaverOutput" />
+    </Exec>
+
+    <Message Text="$(_ProwlAspectWeaverOutput)" Importance="high" />
+
+    <!-- Create a marker file to track that weaving has been done -->
+    <Touch Files="$(IntermediateOutputPath)$(TargetName).ProwlAspect.woven" AlwaysCreate="true" />
+
+    <Message Text="Prowl.Aspect: Weaving completed successfully" Importance="high" />
+  </Target>
+
+  <!-- Clean the weaving marker file -->
+  <Target Name="ProwlAspectClean" AfterTargets="CoreClean">
+    <Delete Files="$(IntermediateOutputPath)$(TargetName).ProwlAspect.woven" />
+  </Target>
+
+</Project>

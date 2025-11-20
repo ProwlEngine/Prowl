@@ -6,7 +6,8 @@
       "Bash(\"Aspect.Weaver.Host/bin/Debug/net10.0/Aspect.Weaver.Host.exe\" \"BooleanParamBug/BooleanTest/bin/Debug/net10.0/BooleanTest.dll\")",
       "Bash(../Aspect.Weaver.Host/bin/Debug/net10.0/Aspect.Weaver.Host.exe BooleanTest/bin/Debug/net10.0/BooleanTest.dll)",
       "Bash(BooleanTest/bin/Debug/net10.0/BooleanTest.exe)",
-      "Bash(Select-String -Pattern \"error|warning|Build succeeded|Build FAILED\" -Context 0)"
+      "Bash(Select-String -Pattern \"error|warning|Build succeeded|Build FAILED\" -Context 0)",
+      "Bash(unzip:*)"
     ],
     "deny": [],
     "ask": []
