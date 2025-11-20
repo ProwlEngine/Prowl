@@ -8,7 +8,7 @@
 
     <!-- NuGet Package Metadata -->
     <PackageId>Prowl.Aspect</PackageId>
-    <Version>1.0.0-preview.1</Version>
+    <Version>1.0.0-preview.2</Version>
     <Authors>Wulferis</Authors>
     <Company>Prowl Engine</Company>
     <Product>Prowl.Aspect</Product>

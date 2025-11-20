@@ -1,4 +1,4 @@
-# Prowl.Aspect - PostSharp Alternative for C#
+# Prowl.Aspect
 
 ![Github top languages](https://img.shields.io/github/languages/top/prowlengine/prowl.aspect)
 [![GitHub license](https://img.shields.io/github/license/prowlengine/prowl.aspect?style=flat-square)](https://github.com/prowlengine/prowl.aspect/blob/main/LICENSE)

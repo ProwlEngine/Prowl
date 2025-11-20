@@ -9,7 +9,7 @@
     <ProwlAspectWeaverPath Condition="'$(ProwlAspectWeaverPath)' == ''">$(MSBuildThisFileDirectory)..\tools\net8.0\Aspect.Weaver.Host.exe</ProwlAspectWeaverPath>
 
     <!-- Skip weaving for design-time builds -->
-    <ProwlAspectSkipWeaving Condition="'$(DesignTimeBuild)' == 'true' OR '$(BuildingProject)' != 'true'">true</ProwlAspectSkipWeaving>
+    <ProwlAspectSkipWeaving Condition="'$(DesignTimeBuild)' == 'true'">true</ProwlAspectSkipWeaving>
   </PropertyGroup>
 
   <!-- Target that runs after compilation to weave aspects into the assembly -->
