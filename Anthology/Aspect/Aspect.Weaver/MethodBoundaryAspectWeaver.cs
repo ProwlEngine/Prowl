@@ -49,7 +49,6 @@ public class MethodBoundaryAspectWeaver : WeaverBase
             return;
 
         var processor = method.Body.GetILProcessor();
-        method.Body.SimplifyMacros(); // Need this for branching instructions
         method.Body.InitLocals = true;
 
         // Create ALL local variables FIRST before emitting any IL
@@ -72,6 +71,8 @@ public class MethodBoundaryAspectWeaver : WeaverBase
         }
         method.Body.Variables.Add(exceptionVar);
         method.Body.Variables.Add(tempArgumentsVar);
+
+        method.Body.SimplifyMacros();
 
         // Save the original first instruction (this will be tryStart)
         var originalFirstInstruction = method.Body.Instructions.First();
@@ -751,9 +752,11 @@ public class MethodBoundaryAspectWeaver : WeaverBase
                 processor.InsertBefore(retInstruction, Instruction.Create(OpCodes.Stloc, returnVar));
             }
 
-            // Insert leave before ret, then remove ret
-            processor.InsertBefore(retInstruction, Instruction.Create(OpCodes.Leave, tryEnd));
-            processor.Remove(retInstruction);
+            // CRITICAL: Modify the ret instruction in-place instead of replacing it
+            // This preserves branch targets that point to this instruction
+            // Branches maintain their Instruction reference, which now has leave opcode/operand
+            retInstruction.OpCode = OpCodes.Leave;
+            retInstruction.Operand = tryEnd;
         }
 
         // === AFTER TRY BLOCK (OnSuccess) ===
