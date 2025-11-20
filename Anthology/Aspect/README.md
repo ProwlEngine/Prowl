@@ -13,22 +13,23 @@
    * [Installation](#installation)
    * [Create an Aspect](#create-an-aspect)
    * [Apply the Aspect](#apply-the-aspect)
-   * [Weave the Assembly](#weave-the-assembly)
+   * [Build Your Project](#build-your-project)
+   * [Configuration](#configuration)
 4. [Core Features](#-core-features-)
    * [Method Interception](#method-interception-onmethodboundaryaspect)
    * [Property Interception](#property-interception-locationinterceptionaspect)
    * [Flow Behavior Control](#flow-behavior-control)
 5. [Project Structure](#-project-structure)
 6. [Implementation Status](#-implementation-status)
-7. [Contributing](#-contributing-)
-8. [Part of the Prowl Ecosystem](#-part-of-the-prowl-ecosystem)
-9. [License](#-license-)
+7. [Advanced Examples](#-advanced-examples-)
+8. [Troubleshooting](#-troubleshooting-)
+9. [Contributing](#-contributing-)
+10. [Part of the Prowl Ecosystem](#-part-of-the-prowl-ecosystem)
+11. [License](#-license-)
 
 # <span align="center">📝 About The Project 📝</span>
 
 Prowl.Aspect is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** Aspect-Oriented Programming (AOP) framework for C#, inspired by PostSharp. It uses IL weaving with Mono.Cecil to inject aspect behavior into your assemblies, enabling powerful cross-cutting concerns like logging, caching, validation, and more.
-
-Unlike runtime proxies, Prowl.Aspect weaves aspects directly into your IL at build time, resulting in zero runtime overhead and better performance.
 
 ## 🎯 Current Status
 
@@ -59,9 +60,13 @@ Unlike runtime proxies, Prowl.Aspect weaves aspects directly into your IL at bui
 
 ## Installation
 
+Install via NuGet (once published):
+
 ```bash
 dotnet add package Prowl.Aspect
 ```
+
+Or download from [NuGet.org](https://www.nuget.org/packages/Prowl.Aspect)
 
 ## Create an Aspect
 
@@ -96,13 +101,48 @@ public class MyService
 }
 ```
 
-## Weave the Assembly
+## Build Your Project
 
-After building your project, run the weaver on your assembly:
+With the NuGet package installed, weaving happens **automatically** during build:
 
 ```bash
 dotnet build
+```
+
+You'll see weaving messages in the build output:
+```
+Prowl.Aspect: Weaving aspects into obj\Debug\net8.0\MyApp.dll
+  Weaving method: MyNamespace.MyClass::DoWork() with 1 aspect(s)
+Prowl.Aspect: Weaving completed successfully
+```
+
+**Note**: If not using the NuGet package, you can manually run the weaver:
+```bash
 Aspect.Weaver.Host.exe bin/Debug/net10.0/MyApp.dll
+```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Configuration
+
+### Disable Automatic Weaving
+
+To temporarily disable weaving for a project:
+
+```xml
+<PropertyGroup>
+  <ProwlAspectWeavingEnabled>false</ProwlAspectWeavingEnabled>
+</PropertyGroup>
+```
+
+### Custom Weaver Path
+
+If needed, specify a custom weaver location:
+
+```xml
+<PropertyGroup>
+  <ProwlAspectWeaverPath>C:\path\to\Aspect.Weaver.Host.exe</ProwlAspectWeaverPath>
+</PropertyGroup>
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -282,12 +322,6 @@ Prowl.Aspect/
 - Console weaver host application
 - Double-weaving protection
 
-### 🚧 In Progress
-
-- MSBuild integration for automatic weaving
-- NuGet package publishing
-- Performance benchmarks
-
 ### 📋 Planned
 
 - Async method support
@@ -296,14 +330,208 @@ Prowl.Aspect/
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+# <span align="center">🎨 Advanced Examples 🎨</span>
+
+## Caching
+
+```csharp
+[AttributeUsage(AttributeTargets.Method)]
+public class CacheAttribute : OnMethodBoundaryAspect
+{
+    private static Dictionary<string, object> _cache = new();
+
+    public override void OnEntry(MethodExecutionArgs args)
+    {
+        var key = $"{args.Method.Name}:{string.Join(",", args.Arguments)}";
+        if (_cache.TryGetValue(key, out var cachedValue))
+        {
+            args.ReturnValue = cachedValue;
+            args.FlowBehavior = FlowBehavior.Return;
+        }
+    }
+
+    public override void OnSuccess(MethodExecutionArgs args)
+    {
+        var key = $"{args.Method.Name}:{string.Join(",", args.Arguments)}";
+        _cache[key] = args.ReturnValue;
+    }
+}
+
+// Usage
+[Cache]
+public int ExpensiveCalculation(int x, int y)
+{
+    Thread.Sleep(1000);
+    return x + y;
+}
+```
+
+## Retry Logic
+
+```csharp
+[AttributeUsage(AttributeTargets.Method)]
+public class RetryAttribute : MethodInterceptionAspect
+{
+    public int MaxRetries { get; set; } = 3;
+
+    public override void OnInvoke(MethodInterceptionArgs args)
+    {
+        Exception lastException = null;
+
+        for (int attempt = 0; attempt < MaxRetries; attempt++)
+        {
+            try
+            {
+                args.Proceed();
+                return;
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+            }
+        }
+
+        throw lastException;
+    }
+}
+
+// Usage
+[Retry(MaxRetries = 5)]
+public void UnreliableOperation()
+{
+    // May fail occasionally
+}
+```
+
+## INotifyPropertyChanged
+
+```csharp
+[AttributeUsage(AttributeTargets.Property)]
+public class NotifyPropertyChangedAttribute : LocationInterceptionAspect
+{
+    public override void OnSetValue(LocationInterceptionArgs args)
+    {
+        var newValue = args.Value;
+        args.ProceedGetValue();
+        var oldValue = args.Value;
+
+        if (!Equals(oldValue, newValue))
+        {
+            args.Value = newValue;
+            args.ProceedSetValue();
+
+            if (args.Instance is INotifyPropertyChanged inpc)
+            {
+                RaisePropertyChanged(inpc, args.Property.Name);
+            }
+        }
+    }
+
+    public override void OnGetValue(LocationInterceptionArgs args)
+    {
+        args.ProceedGetValue();
+    }
+
+    private void RaisePropertyChanged(INotifyPropertyChanged instance, string propertyName)
+    {
+        var eventDelegate = instance.GetType()
+            .GetField("PropertyChanged", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?.GetValue(instance) as PropertyChangedEventHandler;
+
+        eventDelegate?.Invoke(instance, new PropertyChangedEventArgs(propertyName));
+    }
+}
+
+// Usage
+public class Person : INotifyPropertyChanged
+{
+    public event PropertyChangedEventHandler PropertyChanged;
+
+    [NotifyPropertyChanged]
+    public string Name { get; set; }
+}
+```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+# <span align="center">🔧 Troubleshooting 🔧</span>
+
+## Weaving Not Running
+
+**Symptoms**: No "Prowl.Aspect: Weaving" messages in build output
+
+**Solutions**:
+1. Check that the NuGet package is properly installed
+2. Verify `ProwlAspectWeavingEnabled` is not set to `false`
+3. Build with detailed verbosity: `dotnet build -v detailed`
+
+## Assembly Already Woven Error
+
+**Symptoms**: "Assembly has already been woven by Aspect" message
+
+**Explanation**: This is normal! The weaver detected double-weaving protection and skipped re-weaving.
+
+**Solution**: If you need a fresh weave:
+```bash
+dotnet clean
+dotnet build
+```
+
+## Performance Impact
+
+Prowl.Aspect uses **compile-time weaving** - there is **zero runtime overhead**. All aspect code is injected directly into your IL during build. The performance is identical to hand-written code.
+
 # <span align="center">🤝 Contributing 🤝</span>
 
 Contributions are welcome! Areas where you can help:
 
-1. **MSBuild Integration** - Automatic weaving during build process
-2. **Documentation** - Examples, tutorials, and use cases
-3. **Performance** - Benchmarks and optimizations
-4. **Async Support** - Add support for async/await patterns
+1. **Documentation** - More examples, tutorials, and use cases
+2. **Performance** - Benchmarks and optimizations
+3. **Async Support** - Add support for async/await patterns
+4. **More Aspects** - Implement additional real-world aspect patterns
+
+## Building from Source
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/ProwlEngine/Prowl.Aspect.git
+   cd Prowl.Aspect
+   ```
+
+2. **Build all projects**:
+   ```bash
+   dotnet build
+   ```
+
+3. **Run tests**:
+   ```bash
+   dotnet test Aspect.Tests
+   ```
+
+## Creating a Local NuGet Package
+
+1. **Build in Release mode**:
+   ```bash
+   dotnet build Aspect.Weaver -c Release
+   dotnet build Aspect.Weaver.Host -c Release
+   dotnet build Aspect -c Release
+   ```
+
+2. **Create the package**:
+   ```bash
+   dotnet pack Aspect/Aspect.csproj -c Release -o ./nupkg
+   ```
+
+3. **Test locally**:
+   ```bash
+   # Add local source
+   dotnet nuget add source ./nupkg --name ProwlLocal
+
+   # Create test project
+   dotnet new console -n TestAspect
+   cd TestAspect
+   dotnet add package Prowl.Aspect --version 1.0.0-preview.1 --source ProwlLocal
+   ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
