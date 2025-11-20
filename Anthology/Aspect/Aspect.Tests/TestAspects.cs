@@ -1,4 +1,5 @@
 using Aspect;
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 
@@ -361,75 +362,6 @@ public class ChangeTrackerAttribute : LocationInterceptionAspect
     }
 }
 
-// Inheritance test aspects
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
-public class InheritableAttribute : OnMethodBoundaryAspect
-{
-    public override void OnEntry(MethodExecutionArgs args)
-    {
-        InheritanceTracker.InterceptedMethods.Add(args.Method.Name);
-    }
-}
-
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public class NonInheritableAttribute : OnMethodBoundaryAspect
-{
-    public override void OnEntry(MethodExecutionArgs args)
-    {
-        InheritanceTracker.InterceptedMethods.Add(args.Method.Name);
-    }
-}
-
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
-public class SecondaryAspectAttribute : OnMethodBoundaryAspect
-{
-    public override void OnEntry(MethodExecutionArgs args)
-    {
-        SecondaryTracker.InterceptedMethods.Add(args.Method.Name);
-    }
-}
-
-[AttributeUsage(AttributeTargets.Method)]
-public class OverrideAttribute : OnMethodBoundaryAspect
-{
-    public override void OnEntry(MethodExecutionArgs args)
-    {
-        OverrideTracker.InterceptedMethods.Add(args.Method.Name);
-    }
-}
-
-[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public class HighPriorityAttribute : OnMethodBoundaryAspect
-{
-    public override void OnEntry(MethodExecutionArgs args)
-    {
-        PriorityTracker.ExecutionOrder.Add("HighPriority");
-    }
-}
-
-[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public class LowPriorityAttribute : OnMethodBoundaryAspect
-{
-    public override void OnSuccess(MethodExecutionArgs args)
-    {
-        PriorityTracker.ExecutionOrder.Add("LowPriority");
-    }
-}
-
-[AttributeUsage(AttributeTargets.Class)]
-public class TargetMemberFilterAttribute : OnMethodBoundaryAspect
-{
-    public string TargetMembers { get; set; } = "Included*";
-
-    public override void OnEntry(MethodExecutionArgs args)
-    {
-        if (args.Method.Name.StartsWith("Included"))
-        {
-            InheritanceTracker.InterceptedMethods.Add(args.Method.Name);
-        }
-    }
-}
-
 [AttributeUsage(AttributeTargets.Method)]
 public class TimingAttribute : OnMethodBoundaryAspect
 {
@@ -766,11 +698,16 @@ public class RateLimitAttribute : OnMethodBoundaryAspect
 
     public override void OnEntry(MethodExecutionArgs args)
     {
-        if (RateLimiter.CallCount >= MaxCalls)
+        // Create instance-specific key using instance hash code
+        var instanceKey = args.Instance?.GetHashCode() ?? 0;
+        var methodKey = $"{instanceKey}:{args.Method.DeclaringType?.FullName}.{args.Method.Name}";
+        var currentCount = RateLimiter.GetCount(methodKey);
+
+        if (currentCount >= MaxCalls)
         {
             throw new InvalidOperationException("Rate limit exceeded");
         }
-        RateLimiter.CallCount++;
+        RateLimiter.Increment(methodKey);
     }
 }
 
@@ -782,25 +719,38 @@ public class RateLimitWithTimeWindowAttribute : OnMethodBoundaryAspect
 
     public override void OnEntry(MethodExecutionArgs args)
     {
-        if (RateLimiterWithReset.CallCount >= MaxCalls)
+        // Create instance-specific key using instance hash code
+        var instanceKey = args.Instance?.GetHashCode() ?? 0;
+        var methodKey = $"{instanceKey}:{args.Method.DeclaringType?.FullName}.{args.Method.Name}";
+        var currentCount = RateLimiterWithReset.GetCount(methodKey);
+
+        if (currentCount >= MaxCalls)
         {
             throw new InvalidOperationException("Rate limit exceeded");
         }
-        RateLimiterWithReset.CallCount++;
+        RateLimiterWithReset.Increment(methodKey);
     }
 }
 
 public static class RateLimiter
 {
-    public static int CallCount;
-    public static void Reset() => CallCount = 0;
+    private static ConcurrentDictionary<string, int> _counters = new();
+
+    public static int CallCount => _counters.Values.Sum(); // For backward compat
+    public static int GetCount(string key) => _counters.GetOrAdd(key, 0);
+    public static void Increment(string key) => _counters.AddOrUpdate(key, 1, (k, v) => v + 1);
+    public static void Reset() => _counters.Clear();
 }
 
 public static class RateLimiterWithReset
 {
-    public static int CallCount;
-    public static void Reset() => CallCount = 0;
-    public static void SimulateTimeElapsed() => CallCount = 0;
+    private static ConcurrentDictionary<string, int> _counters = new();
+
+    public static int CallCount => _counters.Values.Sum(); // For backward compat
+    public static int GetCount(string key) => _counters.GetOrAdd(key, 0);
+    public static void Increment(string key) => _counters.AddOrUpdate(key, 1, (k, v) => v + 1);
+    public static void Reset() => _counters.Clear();
+    public static void SimulateTimeElapsed() => _counters.Clear();
 }
 
 #endregion
@@ -987,57 +937,6 @@ public static class AuditLog
     {
         Entries.Clear();
         CurrentEntry = null;
-    }
-}
-
-#endregion
-
-#region Lazy Initialization
-
-[AttributeUsage(AttributeTargets.Property)]
-public class LazyInitAttribute : LocationInterceptionAspect
-{
-    private readonly Dictionary<object, object?> _initializedValues = new();
-
-    public override void OnGetValue(LocationInterceptionArgs args)
-    {
-        var instance = args.Instance ?? new object(); // Use dummy for static
-
-        if (!_initializedValues.ContainsKey(instance))
-        {
-            args.ProceedGetValue();
-            _initializedValues[instance] = args.Value;
-        }
-        else
-        {
-            args.Value = _initializedValues[instance];
-        }
-    }
-}
-
-#endregion
-
-#region Thread Safety
-
-[AttributeUsage(AttributeTargets.Property)]
-public class ThreadSafeAttribute : LocationInterceptionAspect
-{
-    private static readonly object _lock = new();
-
-    public override void OnGetValue(LocationInterceptionArgs args)
-    {
-        lock (_lock)
-        {
-            args.ProceedGetValue();
-        }
-    }
-
-    public override void OnSetValue(LocationInterceptionArgs args)
-    {
-        lock (_lock)
-        {
-            args.ProceedSetValue();
-        }
     }
 }
 

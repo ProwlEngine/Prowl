@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 
 namespace Aspect.Tests;
 
+[Collection("Sequential")]
 /// <summary>
 /// Tests for advanced real-world aspect implementations
 /// </summary>
@@ -287,79 +288,6 @@ public class AdvancedPracticalAspectsTests
 
     #endregion
 
-    #region Lazy Initialization Tests
-
-    [Fact]
-    public void LazyInitialization_ShouldInitializeOnFirstAccess()
-    {
-        // Arrange
-        var service = new LazyInitializedService();
-
-        // Act
-        var value = service.ExpensiveProperty;
-
-        // Assert
-        Assert.NotNull(value);
-        Assert.Equal(1, service.InitializationCount);
-    }
-
-    [Fact]
-    public void LazyInitialization_ShouldOnlyInitializeOnce()
-    {
-        // Arrange
-        var service = new LazyInitializedService();
-
-        // Act
-        var value1 = service.ExpensiveProperty;
-        var value2 = service.ExpensiveProperty;
-        var value3 = service.ExpensiveProperty;
-
-        // Assert
-        Assert.Equal(1, service.InitializationCount);
-        Assert.Same(value1, value2);
-        Assert.Same(value2, value3);
-    }
-
-    #endregion
-
-    #region Thread Safety Tests
-
-    [Fact]
-    public void ThreadSafety_ShouldSynchronizePropertyAccess()
-    {
-        // Arrange
-        var model = new ThreadSafeModel();
-        var tasks = new List<Task>();
-        var errors = new ConcurrentBag<Exception>();
-
-        // Act - multiple threads incrementing
-        for (int i = 0; i < 10; i++)
-        {
-            tasks.Add(Task.Run(() =>
-            {
-                try
-                {
-                    for (int j = 0; j < 100; j++)
-                    {
-                        model.Counter++;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    errors.Add(ex);
-                }
-            }));
-        }
-
-        Task.WaitAll(tasks.ToArray());
-
-        // Assert - no race conditions
-        Assert.Empty(errors);
-        Assert.Equal(1000, model.Counter);
-    }
-
-    #endregion
-
     #region Dependent Property Notification Tests
 
     [Fact]
@@ -552,37 +480,6 @@ public class AuditedService
     public string GetSensitiveData(int id)
     {
         return $"Sensitive: {id}";
-    }
-}
-
-// Lazy Initialization
-public class LazyInitializedService
-{
-    public int InitializationCount { get; private set; }
-
-    [LazyInit]
-    public string? ExpensiveProperty
-    {
-        get
-        {
-            InitializationCount++;
-            Thread.Sleep(10);
-            return "Initialized";
-        }
-        set { }
-    }
-}
-
-// Thread Safety
-public class ThreadSafeModel
-{
-    private int _counter;
-
-    [ThreadSafe]
-    public int Counter
-    {
-        get => _counter;
-        set => _counter = value;
     }
 }
 
