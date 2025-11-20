@@ -23,6 +23,13 @@ public class ModuleWeaver
         using var assembly = AssemblyDefinition.ReadAssembly(assemblyPath, readerParameters);
         _module = assembly.MainModule;
 
+        // Check if already woven to prevent double-weaving
+        if (IsAlreadyWoven(assembly))
+        {
+            Console.WriteLine("Assembly has already been woven by Aspect. Skipping to prevent double-weaving.");
+            return;
+        }
+
         // Import aspect base types
         ImportAspectTypes();
 
@@ -35,6 +42,9 @@ public class ModuleWeaver
         {
             WeaveType(type, methodWeaver, propertyWeaver, methodInterceptionWeaver);
         }
+
+        // Mark assembly as woven before saving
+        MarkAsWoven(assembly);
 
         // Save the modified assembly
         try
@@ -94,5 +104,85 @@ public class ModuleWeaver
     {
         // These will be imported from the Aspect assembly at runtime
         // For now, we'll resolve them dynamically during weaving
+    }
+
+    /// <summary>
+    /// Checks if the assembly has already been woven by looking for the WeavedByAspect attribute.
+    /// </summary>
+    private bool IsAlreadyWoven(AssemblyDefinition assembly)
+    {
+        var weavedAttr = assembly.CustomAttributes
+            .FirstOrDefault(a => a.AttributeType.Name == "WeavedByAspectAttribute");
+
+        if (weavedAttr != null)
+        {
+            var version = weavedAttr.ConstructorArguments.Count > 0
+                ? weavedAttr.ConstructorArguments[0].Value as string
+                : "unknown";
+            Console.WriteLine($"Assembly was already woven by Aspect version: {version}");
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Marks the assembly as woven by adding the WeavedByAspect attribute.
+    /// </summary>
+    private void MarkAsWoven(AssemblyDefinition assembly)
+    {
+        // Find the WeavedByAspectAttribute type - first try in current module, then in referenced assemblies
+        TypeDefinition? attrType = _module.Types
+            .FirstOrDefault(t => t.FullName == "Aspect.WeavedByAspectAttribute");
+
+        if (attrType == null)
+        {
+            // Look in referenced assemblies
+            foreach (var assemblyRef in _module.AssemblyReferences)
+            {
+                if (assemblyRef.Name == "Aspect")
+                {
+                    try
+                    {
+                        var aspectAssembly = _module.AssemblyResolver.Resolve(assemblyRef);
+                        attrType = aspectAssembly.MainModule.Types
+                            .FirstOrDefault(t => t.FullName == "Aspect.WeavedByAspectAttribute");
+                        if (attrType != null)
+                            break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"WARNING: Could not resolve Aspect assembly: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        if (attrType == null)
+        {
+            Console.WriteLine("WARNING: Could not find WeavedByAspectAttribute type to mark assembly as woven.");
+            return;
+        }
+
+        // Find the constructor that takes a string parameter
+        var ctor = attrType.Methods
+            .FirstOrDefault(m => m.IsConstructor &&
+                               m.Parameters.Count == 1 &&
+                               m.Parameters[0].ParameterType.FullName == "System.String");
+
+        if (ctor == null)
+        {
+            Console.WriteLine("WARNING: Could not find WeavedByAspectAttribute constructor.");
+            return;
+        }
+
+        // Create and add the attribute
+        var attr = new CustomAttribute(_module.ImportReference(ctor));
+        attr.ConstructorArguments.Add(new CustomAttributeArgument(
+            _module.TypeSystem.String,
+            "1.0.0")); // Version number - could be read from assembly version in future
+
+        assembly.CustomAttributes.Add(attr);
+        Console.WriteLine("Marked assembly as woven by Aspect v1.0.0");
     }
 }
