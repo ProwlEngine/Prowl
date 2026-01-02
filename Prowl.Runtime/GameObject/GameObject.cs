@@ -875,10 +875,19 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     internal bool IsComponentRequired(MonoBehaviour requiredComponent, out Type dependentType)
     {
         Type componentType = requiredComponent.GetType();
+
+        // Check if there is multiple of the same type before checking if required.
+        int numType = _components.Count(x => x.GetType() == componentType);
+        if (numType > 1)
+        {
+            dependentType = null;
+            return false;
+        }
+
+        // If it is the last type on a GameObject, check if it is required by another component.
         foreach (MonoBehaviour component in _components)
         {
-            RequireComponentAttribute? requireComponentAttribute =
-                component.GetType().GetCustomAttribute<RequireComponentAttribute>();
+            RequireComponentAttribute? requireComponentAttribute = component.GetType().GetCustomAttribute<RequireComponentAttribute>();
             if (requireComponentAttribute == null)
                 continue;
 
