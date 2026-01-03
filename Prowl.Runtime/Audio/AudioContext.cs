@@ -18,7 +18,7 @@ namespace Prowl.Runtime.Audio
     public static class AudioContext
     {
         private static IntPtr audioContext;
-        private static ma_device_data_proc deviceDataProc;
+        private static unsafe delegate* unmanaged[Cdecl]<ma_device_ptr, IntPtr, IntPtr, uint, void> deviceDataProc;
         private static Dictionary<UInt64, IntPtr> audioClipHandles = new Dictionary<UInt64, IntPtr>();
         private static AudioBuffer outputBuffer = new AudioBuffer(8192);
 
@@ -108,8 +108,10 @@ namespace Prowl.Runtime.Audio
 
             ma_ex_context_config contextConfig = MiniAudioExNative.ma_ex_context_config_init(sampleRate, (byte)channels, periodSizeInFrames, ref pDeviceInfo);
 
-            deviceDataProc = OnDeviceDataProc;
-            contextConfig.deviceDataProc = deviceDataProc;
+            unsafe
+            {
+                deviceDataProc = &OnDeviceDataProc;
+            }
 
             audioContext = MiniAudioExNative.ma_ex_context_init(ref contextConfig);
 
@@ -228,6 +230,7 @@ namespace Prowl.Runtime.Audio
             return false;
         }
 
+        [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
         private static void OnDeviceDataProc(ma_device_ptr pDevice, IntPtr pOutput, IntPtr pInput, UInt32 frameCount)
         {
             IntPtr pEngine = MiniAudioExNative.ma_ex_device_get_user_data(pDevice.pointer);

@@ -66,10 +66,10 @@ namespace Prowl.Runtime.Audio.Native
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate IntPtr ma_allocation_callbacks_malloc_proc(size_t sz, IntPtr pUserData);
-    
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate IntPtr ma_allocation_callbacks_realloc_proc(IntPtr p, size_t sz, IntPtr pUserData);
-    
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void ma_allocation_callbacks_free_proc(IntPtr p, IntPtr pUserData);
 
@@ -1029,7 +1029,7 @@ namespace Prowl.Runtime.Audio.Native
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ma_device_descriptor* Get()
         {
-            return (ma_device_descriptor*)pointer;            
+            return (ma_device_descriptor*)pointer;
         }
 	}
 
@@ -2284,7 +2284,7 @@ namespace Prowl.Runtime.Audio.Native
         {
             notificationCallback = MarshalHelper.GetFunctionPointerForDelegate(callback);
         }
-        
+
         public void SetEngineProcessProc(ma_engine_process_proc callback)
         {
             onProcess = MarshalHelper.GetFunctionPointerForDelegate(callback);
@@ -3140,7 +3140,7 @@ namespace Prowl.Runtime.Audio.Native
         public IntPtr onGetLength;
         public IntPtr onSetLooping;
         public ma_uint32 flags;
-        
+
         public void SetReadProc(ma_data_source_vtable_read_proc callback)
         {
             onRead = MarshalHelper.GetFunctionPointerForDelegate(callback);
@@ -3226,7 +3226,7 @@ namespace Prowl.Runtime.Audio.Native
         /* Memory management. */
         public IntPtr _pHeap;
         public ma_bool32 _ownsHeap;
-        
+
         [StructLayout(LayoutKind.Explicit)]
         public unsafe struct ma_channel_converter_weights
         {
@@ -3808,7 +3808,7 @@ namespace Prowl.Runtime.Audio.Native
         public IntPtr _pHeap;
     }
 
-    public static class MiniAudioNative
+    public static partial class MiniAudioNative
     {
         public const int MA_MAX_CHANNELS = 254;
         public const int MA_MAX_DEVICE_NAME_LENGTH = 255;
@@ -3820,61 +3820,79 @@ namespace Prowl.Runtime.Audio.Native
 
         private const string LIB_MINIAUDIO_EX = "miniaudioex";
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern IntPtr ma_allocate_type(ma_allocation_type type);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_allocate_type")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial IntPtr ma_allocate_type(ma_allocation_type type);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern IntPtr ma_allocate(size_t size);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_allocate")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial IntPtr ma_allocate(size_t size);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_deallocate_type(IntPtr pData);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_deallocate_type")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_deallocate_type(IntPtr pData);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern size_t ma_get_size_of_type(ma_allocation_type type);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_get_size_of_type")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial size_t ma_get_size_of_type(ma_allocation_type type);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_engine_config ma_engine_config_init();
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_engine_config ma_engine_config_init();
 
         // ma_device
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_device_config ma_device_config_init(ma_device_type deviceType);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_device_config ma_device_config_init(ma_device_type deviceType);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_device_init(ma_context_ptr pContext, ref ma_device_config pConfig, ma_device_ptr pDevice);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_device_init(ma_context_ptr pContext, ref ma_device_config pConfig, ma_device_ptr pDevice);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_device_uninit(ma_device_ptr pDevice);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_device_uninit(ma_device_ptr pDevice);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_context_ptr ma_device_get_context(ma_device_ptr pDevice);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_get_context")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_context_ptr ma_device_get_context(ma_device_ptr pDevice);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_device_start(ma_device_ptr pDevice);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_start")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_device_start(ma_device_ptr pDevice);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_device_stop(ma_device_ptr pDevice);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_stop")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_device_stop(ma_device_ptr pDevice);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_device_is_started(ma_device_ptr pDevice);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_is_started")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_device_is_started(ma_device_ptr pDevice);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_device_state ma_device_get_state(ma_device_ptr pDevice);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_get_state")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_device_state ma_device_get_state(ma_device_ptr pDevice);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_device_set_master_volume(ma_device_ptr pDevice, float volume);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_set_master_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_device_set_master_volume(ma_device_ptr pDevice, float volume);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_device_get_master_volume(ma_device_ptr pDevice, out float pVolume);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_get_master_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_device_get_master_volume(ma_device_ptr pDevice, out float pVolume);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_device_set_master_volume_db(ma_device_ptr pDevice, float gainDB);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_set_master_volume_db")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_device_set_master_volume_db(ma_device_ptr pDevice, float gainDB);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_device_get_master_volume_db(ma_device_ptr pDevice, out float pGainDB);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_device_get_master_volume_db")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_device_get_master_volume_db(ma_device_ptr pDevice, out float pGainDB);
 
         // ma_context
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_context_config ma_context_config_init();
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_context_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_context_config ma_context_config_init();
 
         [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
         private static extern unsafe ma_result ma_context_init(ma_backend* backends, ma_uint32 backendCount, ma_context_config* pConfig, ma_context_ptr pContext);
@@ -3912,14 +3930,17 @@ namespace Prowl.Runtime.Audio.Native
             }
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_context_uninit(ma_context_ptr pContext);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_context_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_context_uninit(ma_context_ptr pContext);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern size_t ma_context_sizeof();
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_context_sizeof")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial size_t ma_context_sizeof();
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_log_ptr ma_context_get_log(ma_context_ptr pContext);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_context_get_log")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_log_ptr ma_context_get_log(ma_context_ptr pContext);
 
         [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
         private static extern ma_result ma_context_enumerate_devices(ma_context_ptr pContext, IntPtr callback, IntPtr pUserData);
@@ -3971,18 +3992,22 @@ namespace Prowl.Runtime.Audio.Native
             return result;
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_context_get_device_info(ma_context_ptr pContext, ma_device_type deviceType, ma_device_id_ptr pDeviceID, out ma_device_info pDeviceInfo);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_context_get_device_info")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_context_get_device_info(ma_context_ptr pContext, ma_device_type deviceType, ma_device_id_ptr pDeviceID, out ma_device_info pDeviceInfo);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_context_is_loopback_supported(ma_context_ptr pContext);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_context_is_loopback_supported")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_context_is_loopback_supported(ma_context_ptr pContext);
 
         // ma_engine
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_engine_uninit(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_engine_uninit(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_engine_init(ref ma_engine_config pConfig, ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_engine_init(ref ma_engine_config pConfig, ma_engine_ptr pEngine);
 
         public static ma_result ma_engine_init(ma_engine_ptr pEngine)
         {
@@ -4006,342 +4031,454 @@ namespace Prowl.Runtime.Audio.Native
             return ma_engine_read_pcm_frames(pEngine, pFramesOut, frameCount, null);
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_node_graph_ptr ma_engine_get_node_graph(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_node_graph")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_node_graph_ptr ma_engine_get_node_graph(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_resource_manager_ptr ma_engine_get_resource_manager(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_resource_manager")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_resource_manager_ptr ma_engine_get_resource_manager(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_device_ptr ma_engine_get_device(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_device")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_device_ptr ma_engine_get_device(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_log_ptr ma_engine_get_log(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_log")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_log_ptr ma_engine_get_log(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_node_ptr ma_engine_get_endpoint(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_endpoint")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_node_ptr ma_engine_get_endpoint(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint64 ma_engine_get_time_in_pcm_frames(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_time_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint64 ma_engine_get_time_in_pcm_frames(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint64 ma_engine_get_time_in_milliseconds(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_time_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint64 ma_engine_get_time_in_milliseconds(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_engine_set_time_in_pcm_frames(ma_engine_ptr pEngine, ma_uint64 globalTime);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_set_time_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_engine_set_time_in_pcm_frames(ma_engine_ptr pEngine, ma_uint64 globalTime);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_engine_set_time_in_milliseconds(ma_engine_ptr pEngine, ma_uint64 globalTime);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_set_time_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_engine_set_time_in_milliseconds(ma_engine_ptr pEngine, ma_uint64 globalTime);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_engine_get_channels(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_channels")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_engine_get_channels(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_engine_get_sample_rate(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_sample_rate")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_engine_get_sample_rate(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_engine_start(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_start")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_engine_start(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_engine_stop(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_stop")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_engine_stop(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_engine_set_volume(ma_engine_ptr pEngine, float volume);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_set_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_engine_set_volume(ma_engine_ptr pEngine, float volume);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_engine_get_volume(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_engine_get_volume(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_engine_set_gain_db(ma_engine_ptr pEngine, float gainDB);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_set_gain_db")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_engine_set_gain_db(ma_engine_ptr pEngine, float gainDB);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_engine_get_gain_db(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_gain_db")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_engine_get_gain_db(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_engine_get_listener_count(ma_engine_ptr pEngine);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_get_listener_count")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_engine_get_listener_count(ma_engine_ptr pEngine);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_engine_find_closest_listener(ma_engine_ptr pEngine, float absolutePosX, float absolutePosY, float absolutePosZ);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_find_closest_listener")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_engine_find_closest_listener(ma_engine_ptr pEngine, float absolutePosX, float absolutePosY, float absolutePosZ);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_engine_listener_set_position(ma_engine_ptr pEngine, ma_uint32 listenerIndex, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_set_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_engine_listener_set_position(ma_engine_ptr pEngine, ma_uint32 listenerIndex, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_engine_listener_get_position(ma_engine_ptr pEngine, ma_uint32 listenerIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_get_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_engine_listener_get_position(ma_engine_ptr pEngine, ma_uint32 listenerIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_engine_listener_set_direction(ma_engine_ptr pEngine, ma_uint32 listenerIndex, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_set_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_engine_listener_set_direction(ma_engine_ptr pEngine, ma_uint32 listenerIndex, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_engine_listener_get_direction(ma_engine_ptr pEngine, ma_uint32 listenerIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_get_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_engine_listener_get_direction(ma_engine_ptr pEngine, ma_uint32 listenerIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_engine_listener_set_velocity(ma_engine_ptr pEngine, ma_uint32 listenerIndex, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_set_velocity")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_engine_listener_set_velocity(ma_engine_ptr pEngine, ma_uint32 listenerIndex, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_engine_listener_get_velocity(ma_engine_ptr pEngine, ma_uint32 listenerIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_get_velocity")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_engine_listener_get_velocity(ma_engine_ptr pEngine, ma_uint32 listenerIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_engine_listener_set_cone(ma_engine_ptr pEngine, ma_uint32 listenerIndex, float innerAngleInRadians, float outerAngleInRadians, float outerGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_set_cone")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_engine_listener_set_cone(ma_engine_ptr pEngine, ma_uint32 listenerIndex, float innerAngleInRadians, float outerAngleInRadians, float outerGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_engine_listener_get_cone(ma_engine_ptr pEngine, ma_uint32 listenerIndex, out float pInnerAngleInRadians, out float pOuterAngleInRadians, out float pOuterGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_get_cone")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_engine_listener_get_cone(ma_engine_ptr pEngine, ma_uint32 listenerIndex, out float pInnerAngleInRadians, out float pOuterAngleInRadians, out float pOuterGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_engine_listener_set_world_up(ma_engine_ptr pEngine, ma_uint32 listenerIndex, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_set_world_up")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_engine_listener_set_world_up(ma_engine_ptr pEngine, ma_uint32 listenerIndex, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_engine_listener_get_world_up(ma_engine_ptr pEngine, ma_uint32 listenerIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_get_world_up")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_engine_listener_get_world_up(ma_engine_ptr pEngine, ma_uint32 listenerIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_engine_listener_set_enabled(ma_engine_ptr pEngine, ma_uint32 listenerIndex, ma_bool32 isEnabled);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_set_enabled")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_engine_listener_set_enabled(ma_engine_ptr pEngine, ma_uint32 listenerIndex, ma_bool32 isEnabled);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_engine_listener_is_enabled(ma_engine_ptr pEngine, ma_uint32 listenerIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_listener_is_enabled")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_engine_listener_is_enabled(ma_engine_ptr pEngine, ma_uint32 listenerIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_engine_play_sound_ex(ma_engine_ptr pEngine, string pFilePath, ma_node_ptr pNode, ma_uint32 nodeInputBusIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_play_sound_ex", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_engine_play_sound_ex(ma_engine_ptr pEngine, string pFilePath, ma_node_ptr pNode, ma_uint32 nodeInputBusIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_engine_play_sound(ma_engine_ptr pEngine, string pFilePath, ma_sound_group_ptr pGroup);   /* Fire and forget. */
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_play_sound", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_engine_play_sound(ma_engine_ptr pEngine, string pFilePath, ma_sound_group_ptr pGroup);   /* Fire and forget. */
 
         // ma_sound
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_init_from_file(ma_engine_ptr pEngine, string pFilePath, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_fence_ptr pDoneFence, ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_init_from_file_w(ma_engine_ptr pEngine, string pFilePath, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_fence_ptr pDoneFence, ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_init_from_memory(ma_engine_ptr pEngine, IntPtr pData, ma_uint64 dataSize, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_fence_ptr pDoneFence, ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_init_from_callback(ma_engine_ptr pEngine, ref ma_procedural_data_source_config pConfig, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_fence_ptr pDoneFence, ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_init_copy(ma_engine_ptr pEngine, ma_sound_ptr pExistingSound, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_init_from_data_source(ma_engine_ptr pEngine, ma_data_source_ptr pDataSource, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_init_ex(ma_engine_ptr pEngine, ref ma_sound_config pConfig, ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_uninit(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_engine_ptr ma_sound_get_engine(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_data_source_ptr ma_sound_get_data_source(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_start(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_stop(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_stop_with_fade_in_pcm_frames(ma_sound_ptr pSound, ma_uint64 fadeLengthInFrames);     /* Will overwrite any scheduled stop and fade. */
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_stop_with_fade_in_milliseconds(ma_sound_ptr pSound, ma_uint64 fadeLengthInFrames);   /* Will overwrite any scheduled stop and fade. */
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_volume(ma_sound_ptr pSound, float volume);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_volume(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_pan(ma_sound_ptr pSound, float pan);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_pan(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_pan_mode(ma_sound_ptr pSound, ma_pan_mode panMode);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_pan_mode ma_sound_get_pan_mode(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_pitch(ma_sound_ptr pSound, float pitch);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_pitch(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_spatialization_enabled(ma_sound_ptr pSound, ma_bool32 enabled);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_sound_is_spatialization_enabled(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_pinned_listener_index(ma_sound_ptr pSound, ma_uint32 listenerIndex);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_sound_get_pinned_listener_index(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_sound_get_listener_index(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_sound_get_direction_to_listener(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_position(ma_sound_ptr pSound, float x, float y, float z);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_sound_get_position(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_direction(ma_sound_ptr pSound, float x, float y, float z);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_sound_get_direction(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_velocity(ma_sound_ptr pSound, float x, float y, float z);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_sound_get_velocity(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_attenuation_model(ma_sound_ptr pSound, ma_attenuation_model attenuationModel);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_attenuation_model ma_sound_get_attenuation_model(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_positioning(ma_sound_ptr pSound, ma_positioning positioning);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_positioning ma_sound_get_positioning(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_rolloff(ma_sound_ptr pSound, float rolloff);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_rolloff(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_min_gain(ma_sound_ptr pSound, float minGain);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_min_gain(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_max_gain(ma_sound_ptr pSound, float maxGain);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_max_gain(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_min_distance(ma_sound_ptr pSound, float minDistance);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_min_distance(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_max_distance(ma_sound_ptr pSound, float maxDistance);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_max_distance(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_cone(ma_sound_ptr pSound, float innerAngleInRadians, float outerAngleInRadians, float outerGain);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_get_cone(ma_sound_ptr pSound, out float pInnerAngleInRadians, out float pOuterAngleInRadians, out float pOuterGain);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_doppler_factor(ma_sound_ptr pSound, float dopplerFactor);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_doppler_factor(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_directional_attenuation_factor(ma_sound_ptr pSound, float directionalAttenuationFactor);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_directional_attenuation_factor(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_fade_in_pcm_frames(ma_sound_ptr pSound, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInFrames);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_fade_in_milliseconds(ma_sound_ptr pSound, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInMilliseconds);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_fade_start_in_pcm_frames(ma_sound_ptr pSound, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInFrames, ma_uint64 absoluteGlobalTimeInFrames);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_fade_start_in_milliseconds(ma_sound_ptr pSound, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInMilliseconds, ma_uint64 absoluteGlobalTimeInMilliseconds);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_get_current_fade_volume(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_start_time_in_pcm_frames(ma_sound_ptr pSound, ma_uint64 absoluteGlobalTimeInFrames);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_start_time_in_milliseconds(ma_sound_ptr pSound, ma_uint64 absoluteGlobalTimeInMilliseconds);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_stop_time_in_pcm_frames(ma_sound_ptr pSound, ma_uint64 absoluteGlobalTimeInFrames);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_stop_time_in_milliseconds(ma_sound_ptr pSound, ma_uint64 absoluteGlobalTimeInMilliseconds);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_stop_time_with_fade_in_pcm_frames(ma_sound_ptr pSound, ma_uint64 stopAbsoluteGlobalTimeInFrames, ma_uint64 fadeLengthInFrames);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_stop_time_with_fade_in_milliseconds(ma_sound_ptr pSound, ma_uint64 stopAbsoluteGlobalTimeInMilliseconds, ma_uint64 fadeLengthInMilliseconds);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_sound_is_playing(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint64 ma_sound_get_time_in_pcm_frames(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint64 ma_sound_get_time_in_milliseconds(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_set_looping(ma_sound_ptr pSound, ma_bool32 isLooping);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_sound_is_looping(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_sound_at_end(ma_sound_ptr pSound);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_seek_to_pcm_frame(ma_sound_ptr pSound, ma_uint64 frameIndex); /* Just a wrapper around ma_data_source_seek_to_pcm_frame(). */
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_seek_to_second(ma_sound_ptr pSound, float seekPointInSeconds); /* Abstraction to ma_sound_seek_to_pcm_frame() */
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_get_data_format(ma_sound_ptr pSound, out ma_format pFormat, out ma_uint32 pChannels, out ma_uint32 pSampleRate, Byte pChannelMap, size_t channelMapCap);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_get_cursor_in_pcm_frames(ma_sound_ptr pSound, out ma_uint64 pCursor);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_get_length_in_pcm_frames(ma_sound_ptr pSound, out ma_uint64 pLength);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_get_cursor_in_seconds(ma_sound_ptr pSound, out float pCursor);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_get_length_in_seconds(ma_sound_ptr pSound, out float pLength);
-
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_set_end_callback(ma_sound_ptr pSound, IntPtr callback, IntPtr pUserData);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_init_from_file", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_init_from_file(ma_engine_ptr pEngine, string pFilePath, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_fence_ptr pDoneFence, ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_init_from_file_w", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_init_from_file_w(ma_engine_ptr pEngine, string pFilePath, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_fence_ptr pDoneFence, ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_init_from_memory")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_init_from_memory(ma_engine_ptr pEngine, IntPtr pData, ma_uint64 dataSize, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_fence_ptr pDoneFence, ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_init_from_callback")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_init_from_callback(ma_engine_ptr pEngine, ref ma_procedural_data_source_config pConfig, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_fence_ptr pDoneFence, ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_init_copy")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_init_copy(ma_engine_ptr pEngine, ma_sound_ptr pExistingSound, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_init_from_data_source")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_init_from_data_source(ma_engine_ptr pEngine, ma_data_source_ptr pDataSource, ma_sound_flags flags, ma_sound_group_ptr pGroup, ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_init_ex")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_init_ex(ma_engine_ptr pEngine, ref ma_sound_config pConfig, ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_uninit(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_engine")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_engine_ptr ma_sound_get_engine(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_data_source")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_data_source_ptr ma_sound_get_data_source(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_start")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_start(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_stop")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_stop(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_stop_with_fade_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_stop_with_fade_in_pcm_frames(ma_sound_ptr pSound, ma_uint64 fadeLengthInFrames);     /* Will overwrite any scheduled stop and fade. */
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_stop_with_fade_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_stop_with_fade_in_milliseconds(ma_sound_ptr pSound, ma_uint64 fadeLengthInFrames);   /* Will overwrite any scheduled stop and fade. */
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_volume(ma_sound_ptr pSound, float volume);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_volume(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_pan")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_pan(ma_sound_ptr pSound, float pan);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_pan")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_pan(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_pan_mode")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_pan_mode(ma_sound_ptr pSound, ma_pan_mode panMode);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_pan_mode")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_pan_mode ma_sound_get_pan_mode(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_pitch")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_pitch(ma_sound_ptr pSound, float pitch);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_pitch")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_pitch(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_spatialization_enabled")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_spatialization_enabled(ma_sound_ptr pSound, ma_bool32 enabled);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_is_spatialization_enabled")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_sound_is_spatialization_enabled(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_pinned_listener_index")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_pinned_listener_index(ma_sound_ptr pSound, ma_uint32 listenerIndex);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_pinned_listener_index")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_sound_get_pinned_listener_index(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_listener_index")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_sound_get_listener_index(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_direction_to_listener")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_sound_get_direction_to_listener(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_position(ma_sound_ptr pSound, float x, float y, float z);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_sound_get_position(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_direction(ma_sound_ptr pSound, float x, float y, float z);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_sound_get_direction(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_velocity")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_velocity(ma_sound_ptr pSound, float x, float y, float z);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_velocity")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_sound_get_velocity(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_attenuation_model")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_attenuation_model(ma_sound_ptr pSound, ma_attenuation_model attenuationModel);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_attenuation_model")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_attenuation_model ma_sound_get_attenuation_model(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_positioning")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_positioning(ma_sound_ptr pSound, ma_positioning positioning);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_positioning")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_positioning ma_sound_get_positioning(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_rolloff")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_rolloff(ma_sound_ptr pSound, float rolloff);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_rolloff")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_rolloff(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_min_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_min_gain(ma_sound_ptr pSound, float minGain);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_min_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_min_gain(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_max_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_max_gain(ma_sound_ptr pSound, float maxGain);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_max_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_max_gain(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_min_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_min_distance(ma_sound_ptr pSound, float minDistance);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_min_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_min_distance(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_max_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_max_distance(ma_sound_ptr pSound, float maxDistance);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_max_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_max_distance(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_cone")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_cone(ma_sound_ptr pSound, float innerAngleInRadians, float outerAngleInRadians, float outerGain);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_cone")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_get_cone(ma_sound_ptr pSound, out float pInnerAngleInRadians, out float pOuterAngleInRadians, out float pOuterGain);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_doppler_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_doppler_factor(ma_sound_ptr pSound, float dopplerFactor);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_doppler_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_doppler_factor(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_directional_attenuation_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_directional_attenuation_factor(ma_sound_ptr pSound, float directionalAttenuationFactor);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_directional_attenuation_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_directional_attenuation_factor(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_fade_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_fade_in_pcm_frames(ma_sound_ptr pSound, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInFrames);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_fade_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_fade_in_milliseconds(ma_sound_ptr pSound, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInMilliseconds);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_fade_start_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_fade_start_in_pcm_frames(ma_sound_ptr pSound, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInFrames, ma_uint64 absoluteGlobalTimeInFrames);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_fade_start_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_fade_start_in_milliseconds(ma_sound_ptr pSound, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInMilliseconds, ma_uint64 absoluteGlobalTimeInMilliseconds);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_current_fade_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_get_current_fade_volume(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_start_time_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_start_time_in_pcm_frames(ma_sound_ptr pSound, ma_uint64 absoluteGlobalTimeInFrames);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_start_time_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_start_time_in_milliseconds(ma_sound_ptr pSound, ma_uint64 absoluteGlobalTimeInMilliseconds);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_stop_time_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_stop_time_in_pcm_frames(ma_sound_ptr pSound, ma_uint64 absoluteGlobalTimeInFrames);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_stop_time_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_stop_time_in_milliseconds(ma_sound_ptr pSound, ma_uint64 absoluteGlobalTimeInMilliseconds);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_stop_time_with_fade_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_stop_time_with_fade_in_pcm_frames(ma_sound_ptr pSound, ma_uint64 stopAbsoluteGlobalTimeInFrames, ma_uint64 fadeLengthInFrames);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_stop_time_with_fade_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_stop_time_with_fade_in_milliseconds(ma_sound_ptr pSound, ma_uint64 stopAbsoluteGlobalTimeInMilliseconds, ma_uint64 fadeLengthInMilliseconds);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_is_playing")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_sound_is_playing(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_time_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint64 ma_sound_get_time_in_pcm_frames(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_time_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint64 ma_sound_get_time_in_milliseconds(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_looping")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_set_looping(ma_sound_ptr pSound, ma_bool32 isLooping);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_is_looping")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_sound_is_looping(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_at_end")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_sound_at_end(ma_sound_ptr pSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_seek_to_pcm_frame")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_seek_to_pcm_frame(ma_sound_ptr pSound, ma_uint64 frameIndex); /* Just a wrapper around ma_data_source_seek_to_pcm_frame(). */
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_seek_to_second")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_seek_to_second(ma_sound_ptr pSound, float seekPointInSeconds); /* Abstraction to ma_sound_seek_to_pcm_frame() */
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_data_format")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_get_data_format(ma_sound_ptr pSound, out ma_format pFormat, out ma_uint32 pChannels, out ma_uint32 pSampleRate, Byte pChannelMap, size_t channelMapCap);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_cursor_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_get_cursor_in_pcm_frames(ma_sound_ptr pSound, out ma_uint64 pCursor);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_length_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_get_length_in_pcm_frames(ma_sound_ptr pSound, out ma_uint64 pLength);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_cursor_in_seconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_get_cursor_in_seconds(ma_sound_ptr pSound, out float pCursor);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_get_length_in_seconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_get_length_in_seconds(ma_sound_ptr pSound, out float pLength);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_set_end_callback")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_set_end_callback(ma_sound_ptr pSound, IntPtr callback, IntPtr pUserData);
 
         public static ma_result ma_sound_set_end_callback(ma_sound_ptr pSound, ma_sound_end_proc callback, IntPtr pUserData)
         {
@@ -4349,170 +4486,225 @@ namespace Prowl.Runtime.Audio.Native
         }
 
         // ma_sound_group
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_group_init(ma_engine_ptr pEngine, ma_sound_flags flags, ma_sound_group_ptr pParentGroup, ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_group_init(ma_engine_ptr pEngine, ma_sound_flags flags, ma_sound_group_ptr pParentGroup, ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_group_init_ex(ma_engine_ptr pEngine, ref ma_sound_group_config pConfig, ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_init_ex")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_group_init_ex(ma_engine_ptr pEngine, ref ma_sound_group_config pConfig, ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_uninit(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_uninit(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_engine_ptr ma_sound_group_get_engine(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_engine")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_engine_ptr ma_sound_group_get_engine(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_group_start(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_start")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_group_start(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_sound_group_stop(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_stop")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_sound_group_stop(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_volume(ma_sound_group_ptr pGroup, float volume);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_volume(ma_sound_group_ptr pGroup, float volume);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_volume(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_volume(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_pan(ma_sound_group_ptr pGroup, float pan);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_pan")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_pan(ma_sound_group_ptr pGroup, float pan);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_pan(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_pan")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_pan(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_pan_mode(ma_sound_group_ptr pGroup, ma_pan_mode panMode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_pan_mode")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_pan_mode(ma_sound_group_ptr pGroup, ma_pan_mode panMode);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_pan_mode ma_sound_group_get_pan_mode(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_pan_mode")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_pan_mode ma_sound_group_get_pan_mode(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_pitch(ma_sound_group_ptr pGroup, float pitch);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_pitch")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_pitch(ma_sound_group_ptr pGroup, float pitch);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_pitch(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_pitch")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_pitch(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_spatialization_enabled(ma_sound_group_ptr pGroup, ma_bool32 enabled);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_spatialization_enabled")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_spatialization_enabled(ma_sound_group_ptr pGroup, ma_bool32 enabled);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_sound_group_is_spatialization_enabled(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_is_spatialization_enabled")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_sound_group_is_spatialization_enabled(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_pinned_listener_index(ma_sound_group_ptr pGroup, ma_uint32 listenerIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_pinned_listener_index")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_pinned_listener_index(ma_sound_group_ptr pGroup, ma_uint32 listenerIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_sound_group_get_pinned_listener_index(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_pinned_listener_index")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_sound_group_get_pinned_listener_index(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_sound_group_get_listener_index(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_listener_index")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_sound_group_get_listener_index(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_sound_group_get_direction_to_listener(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_direction_to_listener")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_sound_group_get_direction_to_listener(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_position(ma_sound_group_ptr pGroup, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_position(ma_sound_group_ptr pGroup, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_sound_group_get_position(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_sound_group_get_position(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_direction(ma_sound_group_ptr pGroup, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_direction(ma_sound_group_ptr pGroup, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_sound_group_get_direction(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_sound_group_get_direction(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_velocity(ma_sound_group_ptr pGroup, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_velocity")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_velocity(ma_sound_group_ptr pGroup, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_sound_group_get_velocity(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_velocity")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_sound_group_get_velocity(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_attenuation_model(ma_sound_group_ptr pGroup, ma_attenuation_model attenuationModel);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_attenuation_model")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_attenuation_model(ma_sound_group_ptr pGroup, ma_attenuation_model attenuationModel);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_attenuation_model ma_sound_group_get_attenuation_model(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_attenuation_model")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_attenuation_model ma_sound_group_get_attenuation_model(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_positioning(ma_sound_group_ptr pGroup, ma_positioning positioning);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_positioning")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_positioning(ma_sound_group_ptr pGroup, ma_positioning positioning);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_positioning ma_sound_group_get_positioning(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_positioning")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_positioning ma_sound_group_get_positioning(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_rolloff(ma_sound_group_ptr pGroup, float rolloff);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_rolloff")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_rolloff(ma_sound_group_ptr pGroup, float rolloff);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_rolloff(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_rolloff")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_rolloff(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_min_gain(ma_sound_group_ptr pGroup, float minGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_min_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_min_gain(ma_sound_group_ptr pGroup, float minGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_min_gain(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_min_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_min_gain(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_max_gain(ma_sound_group_ptr pGroup, float maxGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_max_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_max_gain(ma_sound_group_ptr pGroup, float maxGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_max_gain(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_max_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_max_gain(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_min_distance(ma_sound_group_ptr pGroup, float minDistance);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_min_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_min_distance(ma_sound_group_ptr pGroup, float minDistance);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_min_distance(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_min_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_min_distance(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_max_distance(ma_sound_group_ptr pGroup, float maxDistance);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_max_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_max_distance(ma_sound_group_ptr pGroup, float maxDistance);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_max_distance(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_max_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_max_distance(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_cone(ma_sound_group_ptr pGroup, float innerAngleInRadians, float outerAngleInRadians, float outerGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_cone")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_cone(ma_sound_group_ptr pGroup, float innerAngleInRadians, float outerAngleInRadians, float outerGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_get_cone(ma_sound_group_ptr pGroup, out float pInnerAngleInRadians, out float pOuterAngleInRadians, out float pOuterGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_cone")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_get_cone(ma_sound_group_ptr pGroup, out float pInnerAngleInRadians, out float pOuterAngleInRadians, out float pOuterGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_doppler_factor(ma_sound_group_ptr pGroup, float dopplerFactor);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_doppler_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_doppler_factor(ma_sound_group_ptr pGroup, float dopplerFactor);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_doppler_factor(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_doppler_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_doppler_factor(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_directional_attenuation_factor(ma_sound_group_ptr pGroup, float directionalAttenuationFactor);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_directional_attenuation_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_directional_attenuation_factor(ma_sound_group_ptr pGroup, float directionalAttenuationFactor);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_directional_attenuation_factor(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_directional_attenuation_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_directional_attenuation_factor(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_fade_in_pcm_frames(ma_sound_group_ptr pGroup, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_fade_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_fade_in_pcm_frames(ma_sound_group_ptr pGroup, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_fade_in_milliseconds(ma_sound_group_ptr pGroup, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInMilliseconds);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_fade_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_fade_in_milliseconds(ma_sound_group_ptr pGroup, float volumeBeg, float volumeEnd, ma_uint64 fadeLengthInMilliseconds);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_sound_group_get_current_fade_volume(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_current_fade_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_sound_group_get_current_fade_volume(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_start_time_in_pcm_frames(ma_sound_group_ptr pGroup, ma_uint64 absoluteGlobalTimeInFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_start_time_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_start_time_in_pcm_frames(ma_sound_group_ptr pGroup, ma_uint64 absoluteGlobalTimeInFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_start_time_in_milliseconds(ma_sound_group_ptr pGroup, ma_uint64 absoluteGlobalTimeInMilliseconds);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_start_time_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_start_time_in_milliseconds(ma_sound_group_ptr pGroup, ma_uint64 absoluteGlobalTimeInMilliseconds);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_stop_time_in_pcm_frames(ma_sound_group_ptr pGroup, ma_uint64 absoluteGlobalTimeInFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_stop_time_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_stop_time_in_pcm_frames(ma_sound_group_ptr pGroup, ma_uint64 absoluteGlobalTimeInFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_sound_group_set_stop_time_in_milliseconds(ma_sound_group_ptr pGroup, ma_uint64 absoluteGlobalTimeInMilliseconds);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_set_stop_time_in_milliseconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_sound_group_set_stop_time_in_milliseconds(ma_sound_group_ptr pGroup, ma_uint64 absoluteGlobalTimeInMilliseconds);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_sound_group_is_playing(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_is_playing")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_sound_group_is_playing(ma_sound_group_ptr pGroup);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint64 ma_sound_group_get_time_in_pcm_frames(ma_sound_group_ptr pGroup);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_sound_group_get_time_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint64 ma_sound_group_get_time_in_pcm_frames(ma_sound_group_ptr pGroup);
 
         // ma_procedural_data_source
         [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
@@ -4522,192 +4714,253 @@ namespace Prowl.Runtime.Audio.Native
         {
             return ma_procedural_data_source_config_init(format, channels, sampleRate, MarshalHelper.GetFunctionPointerForDelegate(pProceduralSoundProc), pUserData);
         }
-        
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_procedural_data_source_init(ref ma_procedural_data_source_config pConfig, ma_procedural_data_source_ptr pProceduralSound);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_procedural_data_source_uninit(ma_procedural_data_source_ptr pProceduralSound);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_procedural_data_source_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_procedural_data_source_init(ref ma_procedural_data_source_config pConfig, ma_procedural_data_source_ptr pProceduralSound);
+
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_procedural_data_source_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_procedural_data_source_uninit(ma_procedural_data_source_ptr pProceduralSound);
 
         // ma_spatializer_listener
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_spatializer_listener_config ma_spatializer_listener_config_init(ma_uint32 channelsOut);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_spatializer_listener_config ma_spatializer_listener_config_init(ma_uint32 channelsOut);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_spatializer_listener_get_heap_size(ref ma_spatializer_listener_config pConfig, out size_t pHeapSizeInBytes);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_get_heap_size")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_spatializer_listener_get_heap_size(ref ma_spatializer_listener_config pConfig, out size_t pHeapSizeInBytes);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_spatializer_listener_init_preallocated(ref ma_spatializer_listener_config pConfig, IntPtr pHeap, ma_spatializer_listener_ptr pListener);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_init_preallocated")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_spatializer_listener_init_preallocated(ref ma_spatializer_listener_config pConfig, IntPtr pHeap, ma_spatializer_listener_ptr pListener);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_spatializer_listener_init(ref ma_spatializer_listener_config pConfig, IntPtr pAllocationCallbacks, ma_spatializer_listener_ptr pListener);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_spatializer_listener_init(ref ma_spatializer_listener_config pConfig, IntPtr pAllocationCallbacks, ma_spatializer_listener_ptr pListener);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_listener_uninit(ma_spatializer_listener_ptr pListener, IntPtr pAllocationCallbacks);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_listener_uninit(ma_spatializer_listener_ptr pListener, IntPtr pAllocationCallbacks);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_channel_ptr ma_spatializer_listener_get_channel_map(ma_spatializer_listener_ptr pListener);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_get_channel_map")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_channel_ptr ma_spatializer_listener_get_channel_map(ma_spatializer_listener_ptr pListener);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_listener_set_cone(ma_spatializer_listener_ptr pListener, float innerAngleInRadians, float outerAngleInRadians, float outerGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_set_cone")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_listener_set_cone(ma_spatializer_listener_ptr pListener, float innerAngleInRadians, float outerAngleInRadians, float outerGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_listener_get_cone(ma_spatializer_listener_ptr pListener, out float pInnerAngleInRadians, out float pOuterAngleInRadians, out float pOuterGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_get_cone")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_listener_get_cone(ma_spatializer_listener_ptr pListener, out float pInnerAngleInRadians, out float pOuterAngleInRadians, out float pOuterGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_listener_set_position(ma_spatializer_listener_ptr pListener, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_set_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_listener_set_position(ma_spatializer_listener_ptr pListener, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_spatializer_listener_get_position(ma_spatializer_listener_ptr pListener);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_get_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_spatializer_listener_get_position(ma_spatializer_listener_ptr pListener);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_listener_set_direction(ma_spatializer_listener_ptr pListener, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_set_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_listener_set_direction(ma_spatializer_listener_ptr pListener, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_spatializer_listener_get_direction(ma_spatializer_listener_ptr pListener);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_get_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_spatializer_listener_get_direction(ma_spatializer_listener_ptr pListener);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_listener_set_velocity(ma_spatializer_listener_ptr pListener, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_set_velocity")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_listener_set_velocity(ma_spatializer_listener_ptr pListener, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_spatializer_listener_get_velocity(ma_spatializer_listener_ptr pListener);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_get_velocity")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_spatializer_listener_get_velocity(ma_spatializer_listener_ptr pListener);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_listener_set_speed_of_sound(ma_spatializer_listener_ptr pListener, float speedOfSound);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_set_speed_of_sound")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_listener_set_speed_of_sound(ma_spatializer_listener_ptr pListener, float speedOfSound);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_spatializer_listener_get_speed_of_sound(ma_spatializer_listener_ptr pListener);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_get_speed_of_sound")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_spatializer_listener_get_speed_of_sound(ma_spatializer_listener_ptr pListener);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_listener_set_world_up(ma_spatializer_listener_ptr pListener, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_set_world_up")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_listener_set_world_up(ma_spatializer_listener_ptr pListener, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_spatializer_listener_get_world_up(ma_spatializer_listener_ptr pListener);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_get_world_up")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_spatializer_listener_get_world_up(ma_spatializer_listener_ptr pListener);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_listener_set_enabled(ma_spatializer_listener_ptr pListener, ma_bool32 isEnabled);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_set_enabled")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_listener_set_enabled(ma_spatializer_listener_ptr pListener, ma_bool32 isEnabled);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_spatializer_listener_is_enabled(ma_spatializer_listener_ptr pListener);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_listener_is_enabled")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_spatializer_listener_is_enabled(ma_spatializer_listener_ptr pListener);
 
         // ma_spatializer
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_spatializer_config ma_spatializer_config_init(ma_uint32 channelsIn, ma_uint32 channelsOut);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_spatializer_config ma_spatializer_config_init(ma_uint32 channelsIn, ma_uint32 channelsOut);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_spatializer_get_heap_size(ref ma_spatializer_config pConfig, out size_t pHeapSizeInBytes);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_heap_size")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_spatializer_get_heap_size(ref ma_spatializer_config pConfig, out size_t pHeapSizeInBytes);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_spatializer_init_preallocated(ref ma_spatializer_config pConfig, IntPtr pHeap, ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_init_preallocated")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_spatializer_init_preallocated(ref ma_spatializer_config pConfig, IntPtr pHeap, ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_spatializer_init(ref ma_spatializer_config pConfig, IntPtr pAllocationCallbacks, ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_spatializer_init(ref ma_spatializer_config pConfig, IntPtr pAllocationCallbacks, ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_uninit(ma_spatializer_ptr pSpatializer, IntPtr pAllocationCallbacks);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_uninit(ma_spatializer_ptr pSpatializer, IntPtr pAllocationCallbacks);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_spatializer_process_pcm_frames(ma_spatializer_ptr pSpatializer, ma_spatializer_listener_ptr pListener, IntPtr pFramesOut, IntPtr pFramesIn, ma_uint64 frameCount);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_process_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_spatializer_process_pcm_frames(ma_spatializer_ptr pSpatializer, ma_spatializer_listener_ptr pListener, IntPtr pFramesOut, IntPtr pFramesIn, ma_uint64 frameCount);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_spatializer_set_master_volume(ma_spatializer_ptr pSpatializer, float volume);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_master_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_spatializer_set_master_volume(ma_spatializer_ptr pSpatializer, float volume);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_spatializer_get_master_volume(ma_spatializer_ptr pSpatializer, out float pVolume);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_master_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_spatializer_get_master_volume(ma_spatializer_ptr pSpatializer, out float pVolume);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_spatializer_get_input_channels(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_input_channels")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_spatializer_get_input_channels(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_spatializer_get_output_channels(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_output_channels")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_spatializer_get_output_channels(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_attenuation_model(ma_spatializer_ptr pSpatializer, ma_attenuation_model attenuationModel);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_attenuation_model")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_attenuation_model(ma_spatializer_ptr pSpatializer, ma_attenuation_model attenuationModel);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_attenuation_model ma_spatializer_get_attenuation_model(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_attenuation_model")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_attenuation_model ma_spatializer_get_attenuation_model(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_positioning(ma_spatializer_ptr pSpatializer, ma_positioning positioning);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_positioning")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_positioning(ma_spatializer_ptr pSpatializer, ma_positioning positioning);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_positioning ma_spatializer_get_positioning(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_positioning")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_positioning ma_spatializer_get_positioning(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_rolloff(ma_spatializer_ptr pSpatializer, float rolloff);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_rolloff")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_rolloff(ma_spatializer_ptr pSpatializer, float rolloff);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_spatializer_get_rolloff(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_rolloff")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_spatializer_get_rolloff(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_min_gain(ma_spatializer_ptr pSpatializer, float minGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_min_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_min_gain(ma_spatializer_ptr pSpatializer, float minGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_spatializer_get_min_gain(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_min_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_spatializer_get_min_gain(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_max_gain(ma_spatializer_ptr pSpatializer, float maxGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_max_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_max_gain(ma_spatializer_ptr pSpatializer, float maxGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_spatializer_get_max_gain(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_max_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_spatializer_get_max_gain(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_min_distance(ma_spatializer_ptr pSpatializer, float minDistance);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_min_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_min_distance(ma_spatializer_ptr pSpatializer, float minDistance);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_spatializer_get_min_distance(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_min_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_spatializer_get_min_distance(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_max_distance(ma_spatializer_ptr pSpatializer, float maxDistance);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_max_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_max_distance(ma_spatializer_ptr pSpatializer, float maxDistance);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_spatializer_get_max_distance(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_max_distance")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_spatializer_get_max_distance(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_cone(ma_spatializer_ptr pSpatializer, float innerAngleInRadians, float outerAngleInRadians, float outerGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_cone")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_cone(ma_spatializer_ptr pSpatializer, float innerAngleInRadians, float outerAngleInRadians, float outerGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_get_cone(ma_spatializer_ptr pSpatializer, out float pInnerAngleInRadians, out float pOuterAngleInRadians, out float pOuterGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_cone")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_get_cone(ma_spatializer_ptr pSpatializer, out float pInnerAngleInRadians, out float pOuterAngleInRadians, out float pOuterGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_doppler_factor(ma_spatializer_ptr pSpatializer, float dopplerFactor);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_doppler_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_doppler_factor(ma_spatializer_ptr pSpatializer, float dopplerFactor);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_spatializer_get_doppler_factor(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_doppler_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_spatializer_get_doppler_factor(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_directional_attenuation_factor(ma_spatializer_ptr pSpatializer, float directionalAttenuationFactor);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_directional_attenuation_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_directional_attenuation_factor(ma_spatializer_ptr pSpatializer, float directionalAttenuationFactor);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_spatializer_get_directional_attenuation_factor(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_directional_attenuation_factor")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_spatializer_get_directional_attenuation_factor(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_position(ma_spatializer_ptr pSpatializer, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_position(ma_spatializer_ptr pSpatializer, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_spatializer_get_position(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_spatializer_get_position(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_direction(ma_spatializer_ptr pSpatializer, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_direction(ma_spatializer_ptr pSpatializer, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_spatializer_get_direction(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_spatializer_get_direction(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_set_velocity(ma_spatializer_ptr pSpatializer, float x, float y, float z);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_set_velocity")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_set_velocity(ma_spatializer_ptr pSpatializer, float x, float y, float z);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_vec3f ma_spatializer_get_velocity(ma_spatializer_ptr pSpatializer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_velocity")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_vec3f ma_spatializer_get_velocity(ma_spatializer_ptr pSpatializer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_spatializer_get_relative_position_and_direction(ma_spatializer_ptr pSpatializer, ma_spatializer_listener_ptr pListener, out ma_vec3f pRelativePos, out ma_vec3f pRelativeDir);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_spatializer_get_relative_position_and_direction")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_spatializer_get_relative_position_and_direction(ma_spatializer_ptr pSpatializer, ma_spatializer_listener_ptr pListener, out ma_vec3f pRelativePos, out ma_vec3f pRelativeDir);
 
         // ma_decoder
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_decoder_config ma_decoder_config_init(ma_format outputFormat, ma_uint32 outputChannels, ma_uint32 outputSampleRate);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_decoder_config ma_decoder_config_init(ma_format outputFormat, ma_uint32 outputChannels, ma_uint32 outputSampleRate);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_decoder_config ma_decoder_config_init_default();
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_config_init_default")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_decoder_config ma_decoder_config_init_default();
 
         [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
         private static extern ma_result ma_decoder_init(IntPtr onRead, IntPtr onSeek, IntPtr pUserData, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
@@ -4717,8 +4970,9 @@ namespace Prowl.Runtime.Audio.Native
             return ma_decoder_init(MarshalHelper.GetFunctionPointerForDelegate(onRead), MarshalHelper.GetFunctionPointerForDelegate(onSeek), pUserData, ref pConfig, pDecoder);
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_init_memory(IntPtr pData, size_t dataSize, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_init_memory")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_init_memory(IntPtr pData, size_t dataSize, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
 
         public static ma_result ma_decoder_init_memory(IntPtr pData, size_t dataSize, ma_decoder_ptr pDecoder)
         {
@@ -4726,14 +4980,17 @@ namespace Prowl.Runtime.Audio.Native
             return ma_decoder_init_memory(pData, dataSize, ref config, pDecoder);
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_init_vfs(ma_vfs_ptr pVFS, string pFilePath, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_init_vfs", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_init_vfs(ma_vfs_ptr pVFS, string pFilePath, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_init_vfs_w(ma_vfs_ptr pVFS, string pFilePath, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_init_vfs_w", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_init_vfs_w(ma_vfs_ptr pVFS, string pFilePath, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_init_file(string pFilePath, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_init_file", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_init_file(string pFilePath, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
 
         public static ma_result ma_decoder_init_file(string pFilePath, ma_decoder_ptr pDecoder)
         {
@@ -4741,11 +4998,13 @@ namespace Prowl.Runtime.Audio.Native
             return ma_decoder_init_file(pFilePath, ref config, pDecoder);
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_init_file_w(string pFilePath, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_init_file_w", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_init_file_w(string pFilePath, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_uninit(ma_decoder_ptr pDecoder);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_uninit(ma_decoder_ptr pDecoder);
 
         [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
         private static extern unsafe ma_result ma_decoder_read_pcm_frames(ma_decoder_ptr pDecoder, IntPtr pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
@@ -4766,73 +5025,95 @@ namespace Prowl.Runtime.Audio.Native
             }
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_seek_to_pcm_frame(ma_decoder_ptr pDecoder, ma_uint64 frameIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_seek_to_pcm_frame")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_seek_to_pcm_frame(ma_decoder_ptr pDecoder, ma_uint64 frameIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_get_data_format(ma_decoder_ptr pDecoder, out ma_format pFormat, out ma_uint32 pChannels, out ma_uint32 pSampleRate, ma_channel_ptr pChannelMap, size_t channelMapCap);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_get_data_format")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_get_data_format(ma_decoder_ptr pDecoder, out ma_format pFormat, out ma_uint32 pChannels, out ma_uint32 pSampleRate, ma_channel_ptr pChannelMap, size_t channelMapCap);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_get_cursor_in_pcm_frames(ma_decoder_ptr pDecoder, out ma_uint64 pCursor);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_get_cursor_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_get_cursor_in_pcm_frames(ma_decoder_ptr pDecoder, out ma_uint64 pCursor);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_get_length_in_pcm_frames(ma_decoder_ptr pDecoder, out ma_uint64 pLength);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_get_length_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_get_length_in_pcm_frames(ma_decoder_ptr pDecoder, out ma_uint64 pLength);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decoder_get_available_frames(ma_decoder_ptr pDecoder, out ma_uint64 pAvailableFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_get_available_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decoder_get_available_frames(ma_decoder_ptr pDecoder, out ma_uint64 pAvailableFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decode_from_vfs(ma_vfs_ptr pVFS, string pFilePath, ref ma_decoder_config pConfig, ref ma_uint64 pFrameCountOut, IntPtr ppPCMFramesOut);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decode_from_vfs", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decode_from_vfs(ma_vfs_ptr pVFS, string pFilePath, ref ma_decoder_config pConfig, ref ma_uint64 pFrameCountOut, IntPtr ppPCMFramesOut);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decode_file(string pFilePath, ref ma_decoder_config pConfig, ref ma_uint64 pFrameCountOut, IntPtr ppPCMFramesOut);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decode_file", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decode_file(string pFilePath, ref ma_decoder_config pConfig, ref ma_uint64 pFrameCountOut, IntPtr ppPCMFramesOut);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_decode_memory(IntPtr pData, size_t dataSize, ref ma_decoder_config pConfig, ref ma_uint64 pFrameCountOut, IntPtr ppPCMFramesOut);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decode_memory")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_decode_memory(IntPtr pData, size_t dataSize, ref ma_decoder_config pConfig, ref ma_uint64 pFrameCountOut, IntPtr ppPCMFramesOut);
 
         // ma_resource_manager
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_resource_manager_config ma_resource_manager_config_init();
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_resource_manager_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_resource_manager_config ma_resource_manager_config_init();
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_resource_manager_init(ref ma_resource_manager_config pConfig, ma_resource_manager_ptr pResourceManager);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_resource_manager_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_resource_manager_init(ref ma_resource_manager_config pConfig, ma_resource_manager_ptr pResourceManager);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_resource_manager_uninit(ma_resource_manager_ptr pResourceManager);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_resource_manager_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_resource_manager_uninit(ma_resource_manager_ptr pResourceManager);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_log_ptr ma_resource_manager_get_log(ma_resource_manager_ptr pResourceManager);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_resource_manager_get_log")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_log_ptr ma_resource_manager_get_log(ma_resource_manager_ptr pResourceManager);
 
         // ma_gainer
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_gainer_config ma_gainer_config_init(ma_uint32 channels, ma_uint32 smoothTimeInFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_gainer_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_gainer_config ma_gainer_config_init(ma_uint32 channels, ma_uint32 smoothTimeInFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_gainer_get_heap_size(ref ma_gainer_config pConfig, out size_t pHeapSizeInBytes);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_gainer_get_heap_size")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_gainer_get_heap_size(ref ma_gainer_config pConfig, out size_t pHeapSizeInBytes);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_gainer_init_preallocated(ref ma_gainer_config pConfig, IntPtr pHeap, ma_gainer_ptr pGainer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_gainer_init_preallocated")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_gainer_init_preallocated(ref ma_gainer_config pConfig, IntPtr pHeap, ma_gainer_ptr pGainer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_gainer_init(ref ma_gainer_config pConfig, IntPtr pAllocationCallbacks, ma_gainer_ptr pGainer);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_gainer_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_gainer_init(ref ma_gainer_config pConfig, IntPtr pAllocationCallbacks, ma_gainer_ptr pGainer);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_gainer_uninit(ma_gainer_ptr pGainer, IntPtr pAllocationCallbacks);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_gainer_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_gainer_uninit(ma_gainer_ptr pGainer, IntPtr pAllocationCallbacks);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_gainer_process_pcm_frames(ma_gainer_ptr pGainer, IntPtr pFramesOut, IntPtr pFramesIn, ma_uint64 frameCount);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_gainer_process_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_gainer_process_pcm_frames(ma_gainer_ptr pGainer, IntPtr pFramesOut, IntPtr pFramesIn, ma_uint64 frameCount);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_gainer_set_gain(ma_gainer_ptr pGainer, float newGain);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_gainer_set_gain")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_gainer_set_gain(ma_gainer_ptr pGainer, float newGain);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_gainer_set_gains(ma_gainer_ptr pGainer, out float pNewGains);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_gainer_set_gains")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_gainer_set_gains(ma_gainer_ptr pGainer, out float pNewGains);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_gainer_set_master_volume(ma_gainer_ptr pGainer, float volume);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_gainer_set_master_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_gainer_set_master_volume(ma_gainer_ptr pGainer, float volume);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_gainer_get_master_volume(ma_gainer_ptr pGainer, out float pVolume);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_gainer_get_master_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_gainer_get_master_volume(ma_gainer_ptr pGainer, out float pVolume);
 
         // ma_libvorbis
         [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
@@ -4877,24 +5158,30 @@ namespace Prowl.Runtime.Audio.Native
             }
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_log_uninit(ma_log_ptr pLog);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_log_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_log_uninit(ma_log_ptr pLog);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_log_register_callback(ma_log_ptr pLog, ma_log_callback callback);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_log_register_callback")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_log_register_callback(ma_log_ptr pLog, ma_log_callback callback);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_log_unregister_callback(ma_log_ptr pLog, ma_log_callback callback);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_log_unregister_callback")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_log_unregister_callback(ma_log_ptr pLog, ma_log_callback callback);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_log_post(ma_log_ptr pLog, ma_uint32 level, string pMessage);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_log_post", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_log_post(ma_log_ptr pLog, ma_uint32 level, string pMessage);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern string ma_log_level_to_string(ma_uint32 logLevel);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_log_level_to_string", StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial string ma_log_level_to_string(ma_uint32 logLevel);
 
         // ma_node_graph
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_node_graph_config ma_node_graph_config_init(ma_uint32 channels);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_graph_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_node_graph_config ma_node_graph_config_init(ma_uint32 channels);
 
         [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
         private static extern unsafe ma_result ma_node_graph_init(ref ma_node_graph_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_node_graph_ptr pNodeGraph);
@@ -4940,30 +5227,38 @@ namespace Prowl.Runtime.Audio.Native
             }
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_node_ptr ma_node_graph_get_endpoint(ma_node_graph_ptr pNodeGraph);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_graph_get_endpoint")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_node_ptr ma_node_graph_get_endpoint(ma_node_graph_ptr pNodeGraph);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_graph_read_pcm_frames(ma_node_graph_ptr pNodeGraph, IntPtr pFramesOut, ma_uint64 frameCount, IntPtr pFramesRead);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_graph_read_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_graph_read_pcm_frames(ma_node_graph_ptr pNodeGraph, IntPtr pFramesOut, ma_uint64 frameCount, IntPtr pFramesRead);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_node_graph_get_channels(ma_node_graph_ptr pNodeGraph);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_graph_get_channels")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_node_graph_get_channels(ma_node_graph_ptr pNodeGraph);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint64 ma_node_graph_get_time(ma_node_graph_ptr pNodeGraph);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_graph_get_time")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint64 ma_node_graph_get_time(ma_node_graph_ptr pNodeGraph);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_graph_set_time(ma_node_graph_ptr pNodeGraph, ma_uint64 globalTime);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_graph_set_time")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_graph_set_time(ma_node_graph_ptr pNodeGraph, ma_uint64 globalTime);
 
         // ma_node
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_node_config ma_node_config_init();
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_node_config ma_node_config_init();
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_get_heap_size(ma_node_graph_ptr pNodeGraph, ref ma_node_config pConfig, out size_t pHeapSizeInBytes);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_heap_size")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_get_heap_size(ma_node_graph_ptr pNodeGraph, ref ma_node_config pConfig, out size_t pHeapSizeInBytes);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_init_preallocated(ma_node_graph_ptr pNodeGraph, ref ma_node_config pConfig, IntPtr pHeap, ma_node_ptr pNode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_init_preallocated")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_init_preallocated(ma_node_graph_ptr pNodeGraph, ref ma_node_config pConfig, IntPtr pHeap, ma_node_ptr pNode);
 
         [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
         private static extern unsafe ma_result ma_node_init(ma_node_graph_ptr pNodeGraph, ref ma_node_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_node_ptr pNode);
@@ -5009,71 +5304,91 @@ namespace Prowl.Runtime.Audio.Native
             }
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_node_graph_ptr ma_node_get_node_graph(ma_node_ptr pNode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_node_graph")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_node_graph_ptr ma_node_get_node_graph(ma_node_ptr pNode);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_node_get_input_bus_count(ma_node_ptr pNode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_input_bus_count")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_node_get_input_bus_count(ma_node_ptr pNode);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_node_get_output_bus_count(ma_node_ptr pNode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_output_bus_count")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_node_get_output_bus_count(ma_node_ptr pNode);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_node_get_input_channels(ma_node_ptr pNode, ma_uint32 inputBusIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_input_channels")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_node_get_input_channels(ma_node_ptr pNode, ma_uint32 inputBusIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint32 ma_node_get_output_channels(ma_node_ptr pNode, ma_uint32 outputBusIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_output_channels")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint32 ma_node_get_output_channels(ma_node_ptr pNode, ma_uint32 outputBusIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_attach_output_bus(ma_node_ptr pNode, ma_uint32 outputBusIndex, ma_node_ptr pOtherNode, ma_uint32 otherNodeInputBusIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_attach_output_bus")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_attach_output_bus(ma_node_ptr pNode, ma_uint32 outputBusIndex, ma_node_ptr pOtherNode, ma_uint32 otherNodeInputBusIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_detach_output_bus(ma_node_ptr pNode, ma_uint32 outputBusIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_detach_output_bus")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_detach_output_bus(ma_node_ptr pNode, ma_uint32 outputBusIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_detach_all_output_buses(ma_node_ptr pNode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_detach_all_output_buses")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_detach_all_output_buses(ma_node_ptr pNode);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_set_output_bus_volume(ma_node_ptr pNode, ma_uint32 outputBusIndex, float volume);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_set_output_bus_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_set_output_bus_volume(ma_node_ptr pNode, ma_uint32 outputBusIndex, float volume);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_node_get_output_bus_volume(ma_node_ptr pNode, ma_uint32 outputBusIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_output_bus_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_node_get_output_bus_volume(ma_node_ptr pNode, ma_uint32 outputBusIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_set_state(ma_node_ptr pNode, ma_node_state state);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_set_state")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_set_state(ma_node_ptr pNode, ma_node_state state);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_node_state ma_node_get_state(ma_node_ptr pNode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_state")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_node_state ma_node_get_state(ma_node_ptr pNode);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_set_state_time(ma_node_ptr pNode, ma_node_state state, ma_uint64 globalTime);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_set_state_time")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_set_state_time(ma_node_ptr pNode, ma_node_state state, ma_uint64 globalTime);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint64 ma_node_get_state_time(ma_node_ptr pNode, ma_node_state state);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_state_time")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint64 ma_node_get_state_time(ma_node_ptr pNode, ma_node_state state);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_node_state ma_node_get_state_by_time(ma_node_ptr pNode, ma_uint64 globalTime);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_state_by_time")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_node_state ma_node_get_state_by_time(ma_node_ptr pNode, ma_uint64 globalTime);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_node_state ma_node_get_state_by_time_range(ma_node_ptr pNode, ma_uint64 globalTimeBeg, ma_uint64 globalTimeEnd);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_state_by_time_range")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_node_state ma_node_get_state_by_time_range(ma_node_ptr pNode, ma_uint64 globalTimeBeg, ma_uint64 globalTimeEnd);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_uint64 ma_node_get_time(ma_node_ptr pNode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_get_time")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_uint64 ma_node_get_time(ma_node_ptr pNode);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_node_set_time(ma_node_ptr pNode, ma_uint64 localTime);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_set_time")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_node_set_time(ma_node_ptr pNode, ma_uint64 localTime);
 
         // ma_effect_node
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_effect_node_config ma_effect_node_config_init(ma_uint32 channels, ma_uint32 sampleRate, IntPtr onProcess, IntPtr pUserData);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_effect_node_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_effect_node_config ma_effect_node_config_init(ma_uint32 channels, ma_uint32 sampleRate, IntPtr onProcess, IntPtr pUserData);
 
         public static ma_effect_node_config ma_effect_node_config_init(ma_uint32 channels, ma_uint32 sampleRate, ma_effect_node_process_proc onProcess, IntPtr pUserData)
         {
             return ma_effect_node_config_init(channels, sampleRate, MarshalHelper.GetFunctionPointerForDelegate(onProcess), pUserData);
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern unsafe ma_result ma_effect_node_init(ma_node_graph_ptr pNodeGraph, ref ma_effect_node_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_effect_node_ptr pEffectNode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_effect_node_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static unsafe partial ma_result ma_effect_node_init(ma_node_graph_ptr pNodeGraph, ref ma_effect_node_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_effect_node_ptr pEffectNode);
 
         public static ma_result ma_effect_node_init(ma_node_graph_ptr pNodeGraph, ref ma_effect_node_config pConfig, ma_effect_node_ptr pEffectNode)
         {
@@ -5083,8 +5398,9 @@ namespace Prowl.Runtime.Audio.Native
             }
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern unsafe void ma_effect_node_uninit(ma_effect_node_ptr pEffectNode, ma_allocation_callbacks* pAllocationCallbacks);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_effect_node_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static unsafe partial void ma_effect_node_uninit(ma_effect_node_ptr pEffectNode, ma_allocation_callbacks* pAllocationCallbacks);
 
         public static void ma_effect_node_uninit(ma_effect_node_ptr pEffectNode)
         {
@@ -5095,83 +5411,109 @@ namespace Prowl.Runtime.Audio.Native
         }
 
         // ma_data_source
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_data_source_config ma_data_source_config_init();
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_data_source_config ma_data_source_config_init();
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_init(ref ma_data_source_config pConfig, ma_data_source_ptr pDataSource);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_init(ref ma_data_source_config pConfig, ma_data_source_ptr pDataSource);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_data_source_uninit(ma_data_source_ptr pDataSource);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_uninit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_data_source_uninit(ma_data_source_ptr pDataSource);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_read_pcm_frames(ma_data_source_ptr pDataSource, IntPtr pFramesOut, ma_uint64 frameCount, IntPtr pFramesRead);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_read_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_read_pcm_frames(ma_data_source_ptr pDataSource, IntPtr pFramesOut, ma_uint64 frameCount, IntPtr pFramesRead);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_seek_pcm_frames(ma_data_source_ptr pDataSource, ma_uint64 frameCount, out ma_uint64 pFramesSeeked);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_seek_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_seek_pcm_frames(ma_data_source_ptr pDataSource, ma_uint64 frameCount, out ma_uint64 pFramesSeeked);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_seek_to_pcm_frame(ma_data_source_ptr pDataSource, ma_uint64 frameIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_seek_to_pcm_frame")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_seek_to_pcm_frame(ma_data_source_ptr pDataSource, ma_uint64 frameIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_seek_seconds(ma_data_source_ptr pDataSource, float secondCount, out float pSecondsSeeked);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_seek_seconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_seek_seconds(ma_data_source_ptr pDataSource, float secondCount, out float pSecondsSeeked);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_seek_to_second(ma_data_source_ptr pDataSource, float seekPointInSeconds);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_seek_to_second")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_seek_to_second(ma_data_source_ptr pDataSource, float seekPointInSeconds);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_get_data_format(ma_data_source_ptr pDataSource, out ma_format pFormat, out ma_uint32 pChannels, out ma_uint32 pSampleRate, ma_channel_ptr pChannelMap, size_t channelMapCap);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_get_data_format")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_get_data_format(ma_data_source_ptr pDataSource, out ma_format pFormat, out ma_uint32 pChannels, out ma_uint32 pSampleRate, ma_channel_ptr pChannelMap, size_t channelMapCap);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_get_cursor_in_pcm_frames(ma_data_source_ptr pDataSource, out ma_uint64 pCursor);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_get_cursor_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_get_cursor_in_pcm_frames(ma_data_source_ptr pDataSource, out ma_uint64 pCursor);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_get_length_in_pcm_frames(ma_data_source_ptr pDataSource, out ma_uint64 pLength);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_get_length_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_get_length_in_pcm_frames(ma_data_source_ptr pDataSource, out ma_uint64 pLength);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_get_cursor_in_seconds(ma_data_source_ptr pDataSource, out float pCursor);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_get_cursor_in_seconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_get_cursor_in_seconds(ma_data_source_ptr pDataSource, out float pCursor);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_get_length_in_seconds(ma_data_source_ptr pDataSource, out float pLength);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_get_length_in_seconds")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_get_length_in_seconds(ma_data_source_ptr pDataSource, out float pLength);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_set_looping(ma_data_source_ptr pDataSource, ma_bool32 isLooping);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_set_looping")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_set_looping(ma_data_source_ptr pDataSource, ma_bool32 isLooping);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_data_source_is_looping(ma_data_source_ptr pDataSource);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_is_looping")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_data_source_is_looping(ma_data_source_ptr pDataSource);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_set_range_in_pcm_frames(ma_data_source_ptr pDataSource, ma_uint64 rangeBegInFrames, ma_uint64 rangeEndInFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_set_range_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_set_range_in_pcm_frames(ma_data_source_ptr pDataSource, ma_uint64 rangeBegInFrames, ma_uint64 rangeEndInFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_data_source_get_range_in_pcm_frames(ma_data_source_ptr pDataSource, out ma_uint64 pRangeBegInFrames, out ma_uint64 pRangeEndInFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_get_range_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_data_source_get_range_in_pcm_frames(ma_data_source_ptr pDataSource, out ma_uint64 pRangeBegInFrames, out ma_uint64 pRangeEndInFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_set_loop_point_in_pcm_frames(ma_data_source_ptr pDataSource, ma_uint64 loopBegInFrames, ma_uint64 loopEndInFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_set_loop_point_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_set_loop_point_in_pcm_frames(ma_data_source_ptr pDataSource, ma_uint64 loopBegInFrames, ma_uint64 loopEndInFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_data_source_get_loop_point_in_pcm_frames(ma_data_source_ptr pDataSource, out ma_uint64 pLoopBegInFrames, out ma_uint64 pLoopEndInFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_get_loop_point_in_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_data_source_get_loop_point_in_pcm_frames(ma_data_source_ptr pDataSource, out ma_uint64 pLoopBegInFrames, out ma_uint64 pLoopEndInFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_set_current(ma_data_source_ptr pDataSource, ma_data_source_ptr pCurrentDataSource);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_set_current")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_set_current(ma_data_source_ptr pDataSource, ma_data_source_ptr pCurrentDataSource);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_data_source_ptr ma_data_source_get_current(ma_data_source_ptr pDataSource);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_get_current")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_data_source_ptr ma_data_source_get_current(ma_data_source_ptr pDataSource);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_set_next(ma_data_source_ptr pDataSource, ma_data_source_ptr pNextDataSource);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_set_next")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_set_next(ma_data_source_ptr pDataSource, ma_data_source_ptr pNextDataSource);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_data_source_ptr ma_data_source_get_next(ma_data_source_ptr pDataSource);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_get_next")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_data_source_ptr ma_data_source_get_next(ma_data_source_ptr pDataSource);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_set_next_callback(ma_data_source_ptr pDataSource, ma_data_source_get_next_proc onGetNext);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_set_next_callback")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_set_next_callback(ma_data_source_ptr pDataSource, ma_data_source_get_next_proc onGetNext);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_data_source_get_next_proc ma_data_source_get_next_callback(ma_data_source_ptr pDataSource);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_get_next_callback")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_data_source_get_next_proc ma_data_source_get_next_callback(ma_data_source_ptr pDataSource);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_data_source_node_config ma_data_source_node_config_init(ma_data_source_ptr pDataSource);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_node_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_data_source_node_config ma_data_source_node_config_init(ma_data_source_ptr pDataSource);
 
         [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
         private static extern unsafe ma_result ma_data_source_node_init(ma_node_graph_ptr pNodeGraph, ref ma_data_source_node_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_data_source_node_ptr pDataSourceNode);
@@ -5217,89 +5559,116 @@ namespace Prowl.Runtime.Audio.Native
             }
         }
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_data_source_node_set_looping(ma_data_source_node_ptr pDataSourceNode, ma_bool32 isLooping);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_node_set_looping")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_data_source_node_set_looping(ma_data_source_node_ptr pDataSourceNode, ma_bool32 isLooping);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_data_source_node_is_looping(ma_data_source_node_ptr pDataSourceNode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_node_is_looping")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_data_source_node_is_looping(ma_data_source_node_ptr pDataSourceNode);
 
         // ma_fader
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_fader_config ma_fader_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_fader_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_fader_config ma_fader_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_fader_init(ref ma_fader_config pConfig, ma_fader_ptr pFader);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_fader_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_fader_init(ref ma_fader_config pConfig, ma_fader_ptr pFader);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_fader_process_pcm_frames(ma_fader_ptr pFader, IntPtr pFramesOut, IntPtr pFramesIn, ma_uint64 frameCount);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_fader_process_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_fader_process_pcm_frames(ma_fader_ptr pFader, IntPtr pFramesOut, IntPtr pFramesIn, ma_uint64 frameCount);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_fader_get_data_format(ma_fader_ptr pFader, out ma_format pFormat, out ma_uint32 pChannels, out ma_uint32 pSampleRate);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_fader_get_data_format")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_fader_get_data_format(ma_fader_ptr pFader, out ma_format pFormat, out ma_uint32 pChannels, out ma_uint32 pSampleRate);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_fader_set_fade(ma_fader_ptr pFader, float volumeBeg, float volumeEnd, ma_uint64 lengthInFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_fader_set_fade")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_fader_set_fade(ma_fader_ptr pFader, float volumeBeg, float volumeEnd, ma_uint64 lengthInFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_fader_set_fade_ex(ma_fader_ptr pFader, float volumeBeg, float volumeEnd, ma_uint64 lengthInFrames, ma_int64 startOffsetInFrames);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_fader_set_fade_ex")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_fader_set_fade_ex(ma_fader_ptr pFader, float volumeBeg, float volumeEnd, ma_uint64 lengthInFrames, ma_int64 startOffsetInFrames);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_fader_get_current_volume(ma_fader_ptr pFader);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_fader_get_current_volume")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_fader_get_current_volume(ma_fader_ptr pFader);
 
         // ma_panner
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_panner_config ma_panner_config_init(ma_format format, ma_uint32 channels);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_panner_config_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_panner_config ma_panner_config_init(ma_format format, ma_uint32 channels);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_panner_init(ref ma_panner_config pConfig, ma_panner_ptr pPanner);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_panner_init")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_panner_init(ref ma_panner_config pConfig, ma_panner_ptr pPanner);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_result ma_panner_process_pcm_frames(ma_panner_ptr pPanner, IntPtr pFramesOut, IntPtr pFramesIn, ma_uint64 frameCount);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_panner_process_pcm_frames")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_result ma_panner_process_pcm_frames(ma_panner_ptr pPanner, IntPtr pFramesOut, IntPtr pFramesIn, ma_uint64 frameCount);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_panner_set_mode(ma_panner_ptr pPanner, ma_pan_mode mode);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_panner_set_mode")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_panner_set_mode(ma_panner_ptr pPanner, ma_pan_mode mode);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_pan_mode ma_panner_get_mode(ma_panner_ptr pPanner);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_panner_get_mode")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_pan_mode ma_panner_get_mode(ma_panner_ptr pPanner);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_panner_set_pan(ma_panner_ptr pPanner, float pan);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_panner_set_pan")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_panner_set_pan(ma_panner_ptr pPanner, float pan);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern float ma_panner_get_pan(ma_panner_ptr pPanner);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_panner_get_pan")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial float ma_panner_get_pan(ma_panner_ptr pPanner);
 
         // ma_channel_map
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_channel ma_channel_map_get_channel(ma_channel_ptr pChannelMap, ma_uint32 channelCount, ma_uint32 channelIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_get_channel")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_channel ma_channel_map_get_channel(ma_channel_ptr pChannelMap, ma_uint32 channelCount, ma_uint32 channelIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_channel_map_init_blank(ma_channel_ptr pChannelMap, ma_uint32 channels);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_init_blank")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_channel_map_init_blank(ma_channel_ptr pChannelMap, ma_uint32 channels);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_channel_map_init_standard(ma_standard_channel_map standardChannelMap, ma_channel_ptr pChannelMap, size_t channelMapCap, ma_uint32 channels);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_init_standard")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_channel_map_init_standard(ma_standard_channel_map standardChannelMap, ma_channel_ptr pChannelMap, size_t channelMapCap, ma_uint32 channels);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_channel_map_copy(ma_channel_ptr pOut, ma_channel_ptr pIn, ma_uint32 channels);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_copy")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_channel_map_copy(ma_channel_ptr pOut, ma_channel_ptr pIn, ma_uint32 channels);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ma_channel_map_copy_or_default(ma_channel_ptr pOut, size_t channelMapCapOut, ma_channel_ptr pIn, ma_uint32 channels);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_copy_or_default")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial void ma_channel_map_copy_or_default(ma_channel_ptr pOut, size_t channelMapCapOut, ma_channel_ptr pIn, ma_uint32 channels);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_channel_map_is_valid(ma_channel_ptr pChannelMap, ma_uint32 channels);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_is_valid")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_channel_map_is_valid(ma_channel_ptr pChannelMap, ma_uint32 channels);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_channel_map_is_equal(ma_channel_ptr pChannelMapA, ma_channel_ptr pChannelMapB, ma_uint32 channels);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_is_equal")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_channel_map_is_equal(ma_channel_ptr pChannelMapA, ma_channel_ptr pChannelMapB, ma_uint32 channels);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_channel_map_is_blank(ma_channel_ptr pChannelMap, ma_uint32 channels);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_is_blank")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_channel_map_is_blank(ma_channel_ptr pChannelMap, ma_uint32 channels);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_channel_map_contains_channel_position(ma_uint32 channels, ma_channel_ptr pChannelMap, ma_channel channelPosition);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_contains_channel_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_channel_map_contains_channel_position(ma_uint32 channels, ma_channel_ptr pChannelMap, ma_channel channelPosition);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ma_bool32 ma_channel_map_find_channel_position(ma_uint32 channels, ma_channel_ptr pChannelMap, ma_channel channelPosition, out ma_uint32 pChannelIndex);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_find_channel_position")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial ma_bool32 ma_channel_map_find_channel_position(ma_uint32 channels, ma_channel_ptr pChannelMap, ma_channel channelPosition, out ma_uint32 pChannelIndex);
 
-        [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-        public static extern size_t ma_channel_map_to_string(ma_channel_ptr pChannelMap, ma_uint32 channels, IntPtr pBufferOut, size_t bufferCap);
+        [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_channel_map_to_string")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        public static partial size_t ma_channel_map_to_string(ma_channel_ptr pChannelMap, ma_uint32 channels, IntPtr pBufferOut, size_t bufferCap);
     }
 
     public static class MarshalHelper
