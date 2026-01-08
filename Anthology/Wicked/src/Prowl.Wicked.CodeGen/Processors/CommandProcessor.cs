@@ -7,6 +7,7 @@ using Mono.Cecil.Cil;
 /// Processes methods marked with [Command] attribute.
 /// Transforms them to send a command message when called on a client.
 /// With Echo serialization, args are deserialized as object?[] before invoker is called.
+/// Uses function hash (ushort) for efficient network transmission.
 /// </summary>
 public class CommandProcessor : RpcProcessorBase
 {
@@ -28,6 +29,11 @@ public class CommandProcessor : RpcProcessorBase
         var attr = GetAttribute(method, CommandAttributeName)!;
         var requireOwnership = GetAttributeProperty(attr, "RequireOwnership", true);
 
+        // Compute function hash at compile time
+        var behaviourTypeName = method.DeclaringType.FullName;
+        var functionHash = ComputeFunctionHash(behaviourTypeName, method.Name);
+        Console.WriteLine($"    Function hash: 0x{functionHash:X4}");
+
         // Step 1: Substitute the method - swaps bodies so UserLogic has original code
         var userLogicMethod = SubstituteMethod(method);
         method.DeclaringType.Methods.Add(userLogicMethod);
@@ -37,7 +43,7 @@ public class CommandProcessor : RpcProcessorBase
         method.DeclaringType.Methods.Add(invokerMethod);
 
         // Step 3: Rewrite the original method to send a command when on client
-        RewriteMethodToSendCommand(method, userLogicMethod, requireOwnership);
+        RewriteMethodToSendCommand(method, userLogicMethod, functionHash, requireOwnership);
 
         // Register the invoker with RpcRegistry
         AddRegistration(method, invokerMethod);
@@ -127,7 +133,7 @@ public class CommandProcessor : RpcProcessorBase
         return invoker;
     }
 
-    private void RewriteMethodToSendCommand(MethodDefinition method, MethodDefinition userLogicMethod, bool requireOwnership)
+    private void RewriteMethodToSendCommand(MethodDefinition method, MethodDefinition userLogicMethod, ushort functionHash, bool requireOwnership)
     {
         // Clear the original body
         method.Body.Instructions.Clear();
@@ -169,7 +175,7 @@ public class CommandProcessor : RpcProcessorBase
         // Send command to server (for non-host clients)
         il.Append(sendCommandLabel);
 
-        // Call SendCommand(methodName, args)
+        // Call SendCommand(functionHash, args)
         var sendCommandMethodInfo = typeof(Prowl.Wicked.Core.EntityBehaviour).GetMethod("SendCommand",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         if (sendCommandMethodInfo == null)
@@ -177,7 +183,8 @@ public class CommandProcessor : RpcProcessorBase
         var sendCommandMethod = Module.ImportReference(sendCommandMethodInfo);
 
         il.Emit(OpCodes.Ldarg_0); // this
-        il.Emit(OpCodes.Ldstr, method.Name); // method name
+        il.Emit(OpCodes.Ldc_I4, (int)functionHash); // function hash (emitted as int32, will be truncated to ushort)
+        il.Emit(OpCodes.Conv_U2); // convert to ushort
 
         // Create object[] for args
         il.Emit(OpCodes.Ldc_I4, method.Parameters.Count);

@@ -245,7 +245,7 @@ public static class NetworkServer
         var entity = World.Active.FindEntity(msg.NetId);
         if (entity == null)
         {
-            Console.WriteLine($"NetworkServer: Entity {msg.NetId} not found for command {msg.MethodName}");
+            Console.WriteLine($"NetworkServer: Entity {msg.NetId} not found for command 0x{msg.FunctionHash:X4}");
             return;
         }
 
@@ -259,7 +259,7 @@ public static class NetworkServer
 
         // Deserialize arguments using Echo
         var args = NetworkSerializer.Deserialize<object?[]>(msg.Arguments) ?? Array.Empty<object?>();
-        behaviour.InvokeCommand(msg.MethodName, args, sender);
+        behaviour.InvokeCommand(msg.FunctionHash, args, sender);
     }
 
     /// <summary>

@@ -19,9 +19,10 @@ public class RpcMessage : INetworkMessage
     public byte BehaviourIndex;
 
     /// <summary>
-    /// The name or hash of the method to invoke.
+    /// The 16-bit hash of the function name.
+    /// Computed as FunctionHash.ComputeHash(behaviourType, methodName).
     /// </summary>
-    public string MethodName = string.Empty;
+    public ushort FunctionHash;
 
     /// <summary>
     /// Serialized arguments for the method (Echo-serialized object[]).

@@ -422,7 +422,7 @@ public static class NetworkClient
             var behaviour = entity.Behaviours[msg.BehaviourIndex];
             // Deserialize arguments using Echo
             var args = NetworkSerializer.Deserialize<object?[]>(msg.Arguments) ?? Array.Empty<object?>();
-            behaviour.InvokeRpc(msg.MethodName, args);
+            behaviour.InvokeRpc(msg.FunctionHash, args);
         }
     }
 
@@ -503,13 +503,13 @@ public static class NetworkClient
     /// <summary>
     /// Sends a command to the server.
     /// </summary>
-    public static void SendCommand(uint netId, byte behaviourIndex, string methodName, byte[] arguments)
+    public static void SendCommand(uint netId, byte behaviourIndex, ushort functionHash, byte[] arguments)
     {
         var message = new CommandMessage
         {
             NetId = netId,
             BehaviourIndex = behaviourIndex,
-            MethodName = methodName,
+            FunctionHash = functionHash,
             Arguments = arguments
         };
         Send(message);

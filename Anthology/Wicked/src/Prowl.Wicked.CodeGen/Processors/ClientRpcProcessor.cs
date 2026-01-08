@@ -7,6 +7,7 @@ using Mono.Cecil.Cil;
 /// Processes methods marked with [ClientRpc] attribute.
 /// Transforms them to send an RPC message to all clients when called on the server.
 /// With Echo serialization, args are deserialized as object?[] before invoker is called.
+/// Uses function hash (ushort) for efficient network transmission.
 /// </summary>
 public class ClientRpcProcessor : RpcProcessorBase
 {
@@ -28,6 +29,11 @@ public class ClientRpcProcessor : RpcProcessorBase
         var attr = GetAttribute(method, ClientRpcAttributeName)!;
         var includeHost = GetAttributeProperty(attr, "IncludeHost", true);
 
+        // Compute function hash at compile time
+        var behaviourTypeName = method.DeclaringType.FullName;
+        var functionHash = ComputeFunctionHash(behaviourTypeName, method.Name);
+        Console.WriteLine($"    Function hash: 0x{functionHash:X4}");
+
         // Step 1: Substitute the method - swaps bodies so UserLogic has original code
         var userLogicMethod = SubstituteMethod(method);
         method.DeclaringType.Methods.Add(userLogicMethod);
@@ -37,7 +43,7 @@ public class ClientRpcProcessor : RpcProcessorBase
         method.DeclaringType.Methods.Add(invokerMethod);
 
         // Step 3: Rewrite the original method to send an RPC when on server
-        RewriteMethodToSendRpc(method, userLogicMethod, includeHost);
+        RewriteMethodToSendRpc(method, userLogicMethod, functionHash, includeHost);
 
         return true;
     }
@@ -121,7 +127,7 @@ public class ClientRpcProcessor : RpcProcessorBase
         return invoker;
     }
 
-    private void RewriteMethodToSendRpc(MethodDefinition method, MethodDefinition userLogic, bool includeHost)
+    private void RewriteMethodToSendRpc(MethodDefinition method, MethodDefinition userLogic, ushort functionHash, bool includeHost)
     {
         // Clear the original body
         method.Body.Instructions.Clear();
@@ -153,7 +159,7 @@ public class ClientRpcProcessor : RpcProcessorBase
         // Send RPC to clients
         il.Append(sendRpcLabel);
 
-        // Call SendClientRpc(methodName, includeHost, args)
+        // Call SendClientRpc(functionHash, includeHost, args)
         var sendClientRpcMethodInfo = typeof(Prowl.Wicked.Core.EntityBehaviour).GetMethod("SendClientRpc",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         if (sendClientRpcMethodInfo == null)
@@ -161,7 +167,8 @@ public class ClientRpcProcessor : RpcProcessorBase
         var sendRpcMethod = Module.ImportReference(sendClientRpcMethodInfo);
 
         il.Emit(OpCodes.Ldarg_0); // this
-        il.Emit(OpCodes.Ldstr, method.Name); // method name
+        il.Emit(OpCodes.Ldc_I4, (int)functionHash); // function hash (emitted as int32)
+        il.Emit(OpCodes.Conv_U2); // convert to ushort
         il.Emit(includeHost ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0); // includeHost
 
         // Create object[] for args

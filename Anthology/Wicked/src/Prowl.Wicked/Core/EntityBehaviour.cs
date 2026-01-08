@@ -251,26 +251,24 @@ public abstract class EntityBehaviour
     // RPC sending methods (protected - called by IL-weaved code in derived classes)
 
     /// <summary>
-    /// Sends a Command (client to server RPC).
+    /// Sends a Command (client to server RPC) using function hash.
     /// Called by IL-weaved code. Not intended for direct use.
     /// </summary>
-    protected void SendCommand(string methodName, params object?[] args)
+    protected void SendCommand(ushort functionHash, params object?[] args)
     {
         if (!IsClient)
         {
-            Console.WriteLine($"EntityBehaviour.SendCommand: Not a client, cannot send command {methodName}");
+            Console.WriteLine($"EntityBehaviour.SendCommand: Not a client, cannot send command 0x{functionHash:X4}");
             return;
         }
 
         // Serialize args using Echo
         var argsBytes = NetworkSerializer.Serialize(args);
-        Console.WriteLine($"SendCommand: Serialized {args.Length} args for {methodName} ({argsBytes.Length} bytes)");
 
         // In host mode, invoke command locally instead of sending through transport
         if (NetworkManager.IsHost)
         {
-            Console.WriteLine($"SendCommand: Host mode, invoking locally");
-            InvokeCommand(methodName, args, NetworkServer.LocalConnection!);
+            InvokeCommand(functionHash, args, NetworkServer.LocalConnection!);
             return;
         }
 
@@ -278,7 +276,7 @@ public abstract class EntityBehaviour
         {
             NetId = NetId,
             BehaviourIndex = BehaviourIndex,
-            MethodName = methodName,
+            FunctionHash = functionHash,
             Arguments = argsBytes
         };
 
@@ -286,14 +284,14 @@ public abstract class EntityBehaviour
     }
 
     /// <summary>
-    /// Sends a ClientRpc (server to all clients RPC).
+    /// Sends a ClientRpc (server to all clients RPC) using function hash.
     /// Called by IL-weaved code. Not intended for direct use.
     /// </summary>
-    protected void SendClientRpc(string methodName, bool includeHost, params object?[] args)
+    protected void SendClientRpc(ushort functionHash, bool includeHost, params object?[] args)
     {
         if (!IsServer)
         {
-            Console.WriteLine($"EntityBehaviour.SendClientRpc: Not a server, cannot send RPC {methodName}");
+            Console.WriteLine($"EntityBehaviour.SendClientRpc: Not a server, cannot send RPC 0x{functionHash:X4}");
             return;
         }
 
@@ -304,7 +302,7 @@ public abstract class EntityBehaviour
         {
             NetId = NetId,
             BehaviourIndex = BehaviourIndex,
-            MethodName = methodName,
+            FunctionHash = functionHash,
             Arguments = argsBytes
         };
 
@@ -313,25 +311,25 @@ public abstract class EntityBehaviour
         // If host mode and includeHost, also invoke locally
         if (includeHost && IsHost)
         {
-            RpcRegistry.Invoke(this, methodName, args);
+            RpcRegistry.Invoke(this, functionHash, args);
         }
     }
 
     /// <summary>
-    /// Sends a TargetRpc (server to specific client RPC).
+    /// Sends a TargetRpc (server to specific client RPC) using function hash.
     /// Called by IL-weaved code. Not intended for direct use.
     /// </summary>
-    protected void SendTargetRpc(NetworkConnection target, string methodName, params object?[] args)
+    protected void SendTargetRpc(NetworkConnection target, ushort functionHash, params object?[] args)
     {
         if (!IsServer)
         {
-            Console.WriteLine($"EntityBehaviour.SendTargetRpc: Not a server, cannot send RPC {methodName}");
+            Console.WriteLine($"EntityBehaviour.SendTargetRpc: Not a server, cannot send RPC 0x{functionHash:X4}");
             return;
         }
 
         if (target == null)
         {
-            Console.WriteLine($"EntityBehaviour.SendTargetRpc: Target connection is null for {methodName}");
+            Console.WriteLine($"EntityBehaviour.SendTargetRpc: Target connection is null for 0x{functionHash:X4}");
             return;
         }
 
@@ -342,7 +340,7 @@ public abstract class EntityBehaviour
         {
             NetId = NetId,
             BehaviourIndex = BehaviourIndex,
-            MethodName = methodName,
+            FunctionHash = functionHash,
             Arguments = argsBytes
         };
 
@@ -351,31 +349,31 @@ public abstract class EntityBehaviour
         // If target is the local connection (host mode), invoke locally
         if (target == NetworkServer.LocalConnection)
         {
-            RpcRegistry.Invoke(this, methodName, args);
+            RpcRegistry.Invoke(this, functionHash, args);
         }
     }
 
     /// <summary>
-    /// Invokes an RPC method with deserialized arguments.
+    /// Invokes an RPC method with deserialized arguments using function hash.
     /// Called by the network system when a message is received.
     /// </summary>
-    internal void InvokeRpc(string methodName, object?[] args)
+    internal void InvokeRpc(ushort functionHash, object?[] args)
     {
-        if (!RpcRegistry.Invoke(this, methodName, args))
+        if (!RpcRegistry.Invoke(this, functionHash, args))
         {
-            Console.WriteLine($"EntityBehaviour.InvokeRpc: No handler found for {GetType().Name}.{methodName}");
+            Console.WriteLine($"EntityBehaviour.InvokeRpc: No handler found for {GetType().Name}.0x{functionHash:X4}");
         }
     }
 
     /// <summary>
-    /// Invokes a Command method on the server with deserialized arguments.
+    /// Invokes a Command method on the server with deserialized arguments using function hash.
     /// Called by the network system when a command message is received.
     /// </summary>
-    internal void InvokeCommand(string methodName, object?[] args, NetworkConnection sender)
+    internal void InvokeCommand(ushort functionHash, object?[] args, NetworkConnection sender)
     {
-        if (!RpcRegistry.Invoke(this, methodName, args))
+        if (!RpcRegistry.Invoke(this, functionHash, args))
         {
-            Console.WriteLine($"EntityBehaviour.InvokeCommand: No handler found for {GetType().Name}.{methodName}");
+            Console.WriteLine($"EntityBehaviour.InvokeCommand: No handler found for {GetType().Name}.0x{functionHash:X4}");
         }
     }
 }

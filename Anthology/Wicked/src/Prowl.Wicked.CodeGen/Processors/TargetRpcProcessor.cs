@@ -8,6 +8,7 @@ using Mono.Cecil.Cil;
 /// Transforms them to send an RPC message to a specific client when called on the server.
 /// The first parameter must be NetworkConnection specifying the target.
 /// With Echo serialization, args are deserialized as object?[] before invoker is called.
+/// Uses function hash (ushort) for efficient network transmission.
 /// </summary>
 public class TargetRpcProcessor : RpcProcessorBase
 {
@@ -34,6 +35,11 @@ public class TargetRpcProcessor : RpcProcessorBase
 
         Console.WriteLine($"  Processing [TargetRpc] {method.Name}");
 
+        // Compute function hash at compile time
+        var behaviourTypeName = method.DeclaringType.FullName;
+        var functionHash = ComputeFunctionHash(behaviourTypeName, method.Name);
+        Console.WriteLine($"    Function hash: 0x{functionHash:X4}");
+
         // Step 1: Substitute the method - swaps bodies so UserLogic has original code
         var userLogicMethod = SubstituteMethod(method);
         method.DeclaringType.Methods.Add(userLogicMethod);
@@ -43,7 +49,7 @@ public class TargetRpcProcessor : RpcProcessorBase
         method.DeclaringType.Methods.Add(invokerMethod);
 
         // Step 3: Rewrite the original method to send target RPC
-        RewriteMethodToSendTargetRpc(method, userLogicMethod);
+        RewriteMethodToSendTargetRpc(method, userLogicMethod, functionHash);
 
         return true;
     }
@@ -139,7 +145,7 @@ public class TargetRpcProcessor : RpcProcessorBase
         return invoker;
     }
 
-    private void RewriteMethodToSendTargetRpc(MethodDefinition method, MethodDefinition userLogic)
+    private void RewriteMethodToSendTargetRpc(MethodDefinition method, MethodDefinition userLogic, ushort functionHash)
     {
         // Clear the original body
         method.Body.Instructions.Clear();
@@ -171,14 +177,15 @@ public class TargetRpcProcessor : RpcProcessorBase
         // Send RPC to target client
         il.Append(sendRpcLabel);
 
-        // Call SendTargetRpc(target, methodName, args)
+        // Call SendTargetRpc(target, functionHash, args)
         var sendRpcMethod = Module.ImportReference(
             typeof(Prowl.Wicked.Core.EntityBehaviour).GetMethod("SendTargetRpc",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic));
 
         il.Emit(OpCodes.Ldarg_0); // this
         il.Emit(OpCodes.Ldarg_1); // target (first parameter)
-        il.Emit(OpCodes.Ldstr, method.Name); // method name
+        il.Emit(OpCodes.Ldc_I4, (int)functionHash); // function hash (emitted as int32)
+        il.Emit(OpCodes.Conv_U2); // convert to ushort
 
         // Create object[] for remaining args (skip first param which is target)
         il.Emit(OpCodes.Ldc_I4, method.Parameters.Count - 1);
