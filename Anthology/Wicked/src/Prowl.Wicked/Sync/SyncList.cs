@@ -274,6 +274,8 @@ public class SyncList<T> : SyncObject, IList<T>, IReadOnlyList<T>
                     newItem = ReadItem(reader);
                     if (apply)
                     {
+                        if (index < 0 || index > _items.Count)
+                            throw new ArgumentOutOfRangeException(nameof(index), $"SyncList Insert index {index} out of range (count: {_items.Count})");
                         _items.Insert(index, newItem);
                         AddOperation(Operation.Insert, index, default!, newItem, false);
                     }
@@ -283,6 +285,8 @@ public class SyncList<T> : SyncObject, IList<T>, IReadOnlyList<T>
                     index = (int)reader.ReadUInt32();
                     if (apply)
                     {
+                        if (index < 0 || index >= _items.Count)
+                            throw new ArgumentOutOfRangeException(nameof(index), $"SyncList RemoveAt index {index} out of range (count: {_items.Count})");
                         oldItem = _items[index];
                         _items.RemoveAt(index);
                         AddOperation(Operation.RemoveAt, index, oldItem, default!, false);
@@ -294,6 +298,8 @@ public class SyncList<T> : SyncObject, IList<T>, IReadOnlyList<T>
                     newItem = ReadItem(reader);
                     if (apply)
                     {
+                        if (index < 0 || index >= _items.Count)
+                            throw new ArgumentOutOfRangeException(nameof(index), $"SyncList Set index {index} out of range (count: {_items.Count})");
                         oldItem = _items[index];
                         _items[index] = newItem;
                         AddOperation(Operation.Set, index, oldItem, newItem, false);
