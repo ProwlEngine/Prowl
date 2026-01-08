@@ -16,9 +16,10 @@ public class LocationInterceptionAspectWeaver : WeaverBase
 
     /// <summary>
     /// Transforms fields with LocationInterceptionAspect attributes into properties.
-    /// The original field is renamed to a backing field and made private.
+    /// The original field is renamed to a backing field.
+    /// Registers the field-to-property mapping with the FieldAccessReplacer.
     /// </summary>
-    public void TransformFieldsToProperties(TypeDefinition type)
+    public void TransformFieldsToProperties(TypeDefinition type, FieldAccessReplacer fieldAccessReplacer)
     {
         // Find all fields with LocationInterceptionAspect attributes
         var fieldsToTransform = type.Fields
@@ -34,11 +35,12 @@ public class LocationInterceptionAspectWeaver : WeaverBase
                 .Where(attr => IsLocationInterceptionAspect(attr.AttributeType))
                 .ToList();
 
-            // IMPORTANT: Rename and privatize the original field instead of creating a new one!
-            // This is what the user requested: "the original field is renamed and made private"
             var fieldType = field.FieldType;
             var fieldName = field.Name;
             var isStatic = field.IsStatic;
+
+            // Store reference to the original field BEFORE renaming (for the replacer)
+            var originalField = field;
 
             // Rename the original field to the backing field pattern
             var backingFieldName = $"<{fieldName}>k__BackingField";
@@ -109,10 +111,14 @@ public class LocationInterceptionAspectWeaver : WeaverBase
             type.Methods.Add(getter);
             type.Methods.Add(setter);
 
-            // No need to remove the field - we renamed it to the backing field!
+            // Register the field replacement mapping
+            // Note: originalField and backingField are the same object, just renamed
+            // The FieldAccessReplacer will find instructions referencing this field and replace them
+            fieldAccessReplacer.RegisterFieldReplacement(originalField, getter, setter);
 
             Console.WriteLine($"    Created property: {property.FullName}");
             Console.WriteLine($"    Created backing field: {backingField.FullName}");
+            Console.WriteLine($"    Registered field access replacement");
         }
     }
 

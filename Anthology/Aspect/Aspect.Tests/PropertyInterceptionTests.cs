@@ -234,6 +234,68 @@ public class PropertyInterceptionTests
         Assert.Equal(10, ChangeTrackingAspect.OldValue);
         Assert.Equal(20, ChangeTrackingAspect.NewValue);
     }
+
+    // Field interception tests
+
+    [Fact]
+    public void FieldInterception_OnGetValue_ShouldBeCalledWhenFieldIsRead()
+    {
+        // Arrange
+        var testClass = new TestClassWithFieldInterception();
+        testClass.TrackedField = 42; // Set initial value
+        PropertyAccessTracker.Reset();
+
+        // Act
+        var value = testClass.TrackedField;
+
+        // Assert
+        Assert.Contains("OnGetValue", PropertyAccessTracker.Events);
+    }
+
+    [Fact]
+    public void FieldInterception_OnSetValue_ShouldBeCalledWhenFieldIsWritten()
+    {
+        // Arrange
+        var testClass = new TestClassWithFieldInterception();
+        PropertyAccessTracker.Reset();
+
+        // Act
+        testClass.TrackedField = 42;
+
+        // Assert
+        Assert.Contains("OnSetValue", PropertyAccessTracker.Events);
+    }
+
+    [Fact]
+    public void FieldInterception_ShouldProvideFieldValue()
+    {
+        // Arrange
+        var testClass = new TestClassWithFieldValueCapture();
+        testClass.CapturedField = 123;
+        PropertyValueCapture.Reset();
+
+        // Act
+        var value = testClass.CapturedField;
+
+        // Assert
+        Assert.Equal(123, PropertyValueCapture.GetValue);
+    }
+
+    [Fact]
+    public void FieldInterception_ShouldTrackAccessFromMethods()
+    {
+        // Arrange
+        var testClass = new TestClassWithMultipleFields();
+        PropertyAccessTracker.Reset();
+
+        // Act - access fields through methods
+        testClass.SetBothFields(10, "hello");
+        var val = testClass.GetField1();
+
+        // Assert - should have tracked the field accesses from within methods
+        Assert.Contains("OnSetValue", PropertyAccessTracker.Events);
+        Assert.Contains("OnGetValue", PropertyAccessTracker.Events);
+    }
 }
 
 // Test infrastructure
@@ -366,4 +428,35 @@ public class TestClassWithChangeTracking
 {
     [ChangeTracker]
     public int TrackedValue { get; set; }
+}
+
+// Field interception test classes
+
+public class TestClassWithFieldInterception
+{
+    [PropertyAccessTracking]
+    public int TrackedField;
+}
+
+public class TestClassWithFieldValueCapture
+{
+    [PropertyValueCapture]
+    public int CapturedField;
+}
+
+public class TestClassWithMultipleFields
+{
+    [PropertyAccessTracking]
+    public int Field1;
+
+    [PropertyAccessTracking]
+    public string? Field2;
+
+    public void SetBothFields(int val1, string? val2)
+    {
+        Field1 = val1;
+        Field2 = val2;
+    }
+
+    public int GetField1() => Field1;
 }
