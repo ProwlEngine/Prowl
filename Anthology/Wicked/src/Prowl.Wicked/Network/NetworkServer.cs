@@ -16,7 +16,6 @@ public static class NetworkServer
 {
     private static readonly Dictionary<int, NetworkConnection> _connections = new();
     private static readonly Dictionary<ushort, Action<NetworkConnection, BinaryReader>> _handlers = new();
-    private static uint _nextNetId = 1;
 
     /// <summary>
     /// True if the server is currently active.
@@ -98,22 +97,6 @@ public static class NetworkServer
     public static event Action? OnServerStopped;
 
     /// <summary>
-    /// Gets the next available network ID for spawning entities.
-    /// </summary>
-    internal static uint GetNextNetId()
-    {
-        return _nextNetId++;
-    }
-
-    /// <summary>
-    /// Resets the network ID counter.
-    /// </summary>
-    internal static void ResetNetIdCounter()
-    {
-        _nextNetId = 1;
-    }
-
-    /// <summary>
     /// Starts the server.
     /// </summary>
     internal static void Start()
@@ -170,7 +153,7 @@ public static class NetworkServer
 
         Active = false;
         LocalConnection = null;
-        ResetNetIdCounter();
+        Entity.ResetNetIdCounter();
 
         OnServerStopped?.Invoke();
     }
