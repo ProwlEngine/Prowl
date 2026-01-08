@@ -365,8 +365,8 @@ public static class NetworkClient
             }
         }
 
-        // Determine ownership
-        bool isOwned = msg.OwnerId == Connection?.ConnectionId;
+        // Use IsOwner directly from server (server computed this correctly for us)
+        bool isOwned = msg.IsOwner;
 
         // Track local player - only ONE entity per client has this
         if (msg.IsLocalPlayer)

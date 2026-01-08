@@ -19,6 +19,12 @@ public class SpawnMessage : INetworkMessage
     public int OwnerId = -1;
 
     /// <summary>
+    /// True if the receiving client owns this entity (has authority).
+    /// Server computes this directly rather than client deriving from OwnerId.
+    /// </summary>
+    public bool IsOwner;
+
+    /// <summary>
     /// True if this entity is the local player for the receiving client.
     /// </summary>
     public bool IsLocalPlayer;

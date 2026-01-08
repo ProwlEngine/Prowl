@@ -478,10 +478,14 @@ public static class NetworkServer
             behaviourSyncData[i] = syncData;
         }
 
+        // Server computes IsOwner directly - the receiving connection owns this if it's the entity's owner
+        bool isOwner = entity.Owner == conn;
+
         var message = new SpawnMessage
         {
             NetId = entity.NetId,
             OwnerId = entity.Owner?.ConnectionId ?? -1,
+            IsOwner = isOwner,
             IsLocalPlayer = entity.Owner == conn,
             BehaviourIndices = behaviourIndices,
             BehaviourSyncData = behaviourSyncData
