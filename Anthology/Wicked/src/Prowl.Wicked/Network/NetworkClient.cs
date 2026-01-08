@@ -5,6 +5,8 @@ using Prowl.Wicked.Network.Messages;
 using Prowl.Wicked.Network.Rpc;
 using Prowl.Wicked.Network.Serialization;
 using Prowl.Wicked.Tools;
+using SnapshotInterp = Prowl.Wicked.SnapshotInterpolation.SnapshotInterpolation;
+using TimeSnapshot = Prowl.Wicked.SnapshotInterpolation.TimeSnapshot;
 using Prowl.Wicked.Transport;
 
 /// <summary>
@@ -17,6 +19,30 @@ public static class NetworkClient
     // Batch spawning support (like Mirror's ObjectSpawnStarted/Finished)
     private static bool _isSpawnFinished = true;
     private static readonly Dictionary<uint, SpawnMessage> _pendingSpawns = new();
+
+    // =========== Snapshot Interpolation ===========
+    // Settings for snapshot interpolation
+    public static Prowl.Wicked.SnapshotInterpolation.SnapshotInterpolationSettings snapshotSettings = new();
+
+    // Buffer time is dynamically adjusted. Store the current multiplier here.
+    public static double bufferTimeMultiplier;
+
+    // Original buffer time based on settings
+    public static double initialBufferTime => NetworkServer.sendInterval * snapshotSettings.bufferTimeMultiplier;
+    // Dynamically adjusted buffer time
+    public static double bufferTime => NetworkServer.sendInterval * bufferTimeMultiplier;
+
+    // <servertime, snaps>
+    public static SortedList<double, TimeSnapshot> snapshots = new SortedList<double, TimeSnapshot>();
+
+    // Catchup / slowdown adjustments applied to timescale
+    internal static double localTimescale = 1;
+
+    // EMA for drift calculation (catchup/slowdown)
+    static ExponentialMovingAverage driftEma;
+
+    // EMA for delivery time (dynamic buffer adjustment)
+    static ExponentialMovingAverage deliveryTimeEma;
 
     /// <summary>
     /// The current connection state.
@@ -75,7 +101,7 @@ public static class NetworkClient
     /// <summary>
     /// Client's local timeline - used for snapshot interpolation and NetworkTime.time.
     /// </summary>
-    public static double localTimeline { get; internal set; }
+    public static double localTimeline;
 
     /// <summary>
     /// Event raised when the client connects to the server.
@@ -104,6 +130,10 @@ public static class NetworkClient
         }
 
         ConnectState = ConnectState.Connecting;
+
+        // Initialize time interpolation
+        InitTimeInterpolation();
+
         RegisterHandlers();
 
         // Hook into transport events
@@ -255,6 +285,13 @@ public static class NetworkClient
         RegisterHandler<NetworkPongMessage>(msg =>
         {
             NetworkTime.OnClientPong(msg);
+        });
+
+        // Time snapshot for snapshot interpolation
+        RegisterHandler<TimeSnapshotMessage>(msg =>
+        {
+            // Create a TimeSnapshot with server time and local time
+            OnTimeSnapshot(new TimeSnapshot(msg.ServerTime, NetworkTime.localTime));
         });
     }
 
@@ -626,13 +663,87 @@ public static class NetworkClient
                 NetworkTime.rtt,
                 NetworkTime.rttStandardDeviation);
         }
-        // Pragmatic method would need snapshot interpolation buffer time
-        // For now, fall back to Simple if Pragmatic is chosen
+        // Pragmatic method uses snapshot interpolation buffer time
         else
         {
-            connectionQuality = ConnectionQualityHeuristics.Simple(
-                NetworkTime.rtt,
-                NetworkTime.rttStandardDeviation);
+            connectionQuality = ConnectionQualityHeuristics.Pragmatic(
+                initialBufferTime,
+                bufferTime);
+        }
+    }
+
+    // =========== Snapshot Interpolation Methods ===========
+
+    /// <summary>
+    /// Initializes time interpolation state.
+    /// Called when client starts.
+    /// </summary>
+    internal static void InitTimeInterpolation()
+    {
+        // Reset timeline, localTimescale & snapshots from last session (if any)
+        bufferTimeMultiplier = snapshotSettings.bufferTimeMultiplier;
+        localTimeline = 0;
+        localTimescale = 1;
+        snapshots.Clear();
+
+        // Initialize EMA with 'emaDuration' seconds worth of history.
+        // 1 second holds 'sendRate' worth of values.
+        // multiplied by emaDuration gives n-seconds.
+        driftEma = new ExponentialMovingAverage(NetworkServer.sendRate * snapshotSettings.driftEmaDuration);
+        deliveryTimeEma = new ExponentialMovingAverage(NetworkServer.sendRate * snapshotSettings.deliveryTimeEmaDuration);
+    }
+
+    /// <summary>
+    /// Called when we receive a time snapshot from the server.
+    /// Inserts it into the buffer and adjusts the timeline.
+    /// </summary>
+    public static void OnTimeSnapshot(TimeSnapshot snap)
+    {
+        // (optional) dynamic adjustment
+        if (snapshotSettings.dynamicAdjustment)
+        {
+            // Set bufferTime on the fly
+            bufferTimeMultiplier = SnapshotInterp.DynamicAdjustment(
+                NetworkServer.sendInterval,
+                deliveryTimeEma.StandardDeviation,
+                snapshotSettings.dynamicAdjustmentTolerance
+            );
+        }
+
+        // Insert into the buffer & initialize / adjust / catchup
+        SnapshotInterp.InsertAndAdjust(
+            snapshots,
+            snapshotSettings.bufferLimit,
+            snap,
+            ref localTimeline,
+            ref localTimescale,
+            NetworkServer.sendInterval,
+            bufferTime,
+            snapshotSettings.catchupSpeed,
+            snapshotSettings.slowdownSpeed,
+            ref driftEma,
+            snapshotSettings.catchupNegativeThreshold,
+            snapshotSettings.catchupPositiveThreshold,
+            ref deliveryTimeEma);
+    }
+
+    /// <summary>
+    /// Updates the time interpolation timeline.
+    /// Call this from early update so timeline is safe to use in update.
+    /// </summary>
+    internal static void UpdateTimeInterpolation(double deltaTime)
+    {
+        // Only while we have snapshots.
+        // Timeline starts when the first snapshot arrives.
+        if (snapshots.Count > 0)
+        {
+            // Progress local timeline.
+            SnapshotInterp.StepTime(deltaTime, ref localTimeline, localTimescale);
+
+            // Progress local interpolation.
+            // TimeSnapshot doesn't interpolate anything.
+            // This is merely to keep removing older snapshots.
+            SnapshotInterp.StepInterpolation(snapshots, localTimeline, out _, out _, out double t);
         }
     }
 }

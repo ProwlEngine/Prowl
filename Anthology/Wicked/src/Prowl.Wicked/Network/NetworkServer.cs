@@ -677,6 +677,25 @@ public static class NetworkServer
         }
     }
 
+    /// <summary>
+    /// Sends a time snapshot to all ready clients for snapshot interpolation.
+    /// Called every sendInterval.
+    /// </summary>
+    internal static void SendTimeSnapshotToAll()
+    {
+        // Create time snapshot message with current server time
+        var message = new TimeSnapshotMessage(NetworkTime.localTime);
+
+        // Send to all ready clients (except host's local connection)
+        foreach (var conn in _connections.Values)
+        {
+            if (conn == LocalConnection) continue;
+            if (!conn.IsReady) continue;
+
+            Send(conn, message);
+        }
+    }
+
     private static void OnTransportDisconnect(int connectionId)
     {
         if (_connections.TryGetValue(connectionId, out var conn))

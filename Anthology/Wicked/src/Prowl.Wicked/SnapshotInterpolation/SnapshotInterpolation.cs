@@ -10,8 +10,9 @@
 //   ninjakicka: math & debugging
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Prowl.Wicked.Tools;
 
-namespace Mirror
+namespace Prowl.Wicked.SnapshotInterpolation
 {
     public static class SortedListExtensions
     {

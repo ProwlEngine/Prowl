@@ -1,4 +1,4 @@
-namespace Mirror
+namespace Prowl.Wicked.SnapshotInterpolation
 {
     // empty snapshot that is only used to progress client's local timeline.
     public struct TimeSnapshot : Snapshot

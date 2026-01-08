@@ -23,6 +23,7 @@ public static class MessageRegistry
         Register<SpawnFinishedMessage>();
         Register<NetworkPingMessage>();
         Register<NetworkPongMessage>();
+        Register<TimeSnapshotMessage>();
     }
 
     /// <summary>

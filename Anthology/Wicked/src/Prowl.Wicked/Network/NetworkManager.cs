@@ -375,6 +375,9 @@ public static class NetworkManager
     // for tick rate limiting
     static double lastServerSendTime;
 
+    // Track deltaTime for snapshot interpolation
+    static double lastTickTime;
+
     /// <summary>
     /// Called every frame to process network messages.
     /// </summary>
@@ -382,6 +385,11 @@ public static class NetworkManager
     {
         // Update network time at the start of each frame
         NetworkTime.EarlyUpdate();
+
+        // Calculate delta time
+        double currentTime = NetworkTime.localTime;
+        double deltaTime = currentTime - lastTickTime;
+        lastTickTime = currentTime;
 
         // Process transport messages
         Transport?.Tick();
@@ -398,6 +406,9 @@ public static class NetworkManager
             // Only send sync data at the configured sendRate
             if (AccurateInterval.Elapsed(NetworkTime.localTime, NetworkServer.sendInterval, ref lastServerSendTime))
             {
+                // Send time snapshot for snapshot interpolation
+                NetworkServer.SendTimeSnapshotToAll();
+
                 // Send sync data updates
                 foreach (var entity in World.Active.Entities.Values)
                 {
@@ -410,10 +421,13 @@ public static class NetworkManager
         }
 
         // Client tick
-        if (IsClient && !IsHost) // Host doesn't need to send pings to itself
+        if (IsClient && !IsHost) // Host doesn't need these
         {
             // Update ping time (sends NetworkPingMessage)
             NetworkTime.UpdateClient();
+
+            // Update snapshot interpolation timeline
+            NetworkClient.UpdateTimeInterpolation(deltaTime);
 
             // Update connection quality
             NetworkClient.UpdateConnectionQuality();

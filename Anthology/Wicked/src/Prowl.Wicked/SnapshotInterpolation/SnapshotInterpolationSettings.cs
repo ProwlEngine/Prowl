@@ -2,7 +2,7 @@
 // can easily be exposed in Unity inspectors.
 using System;
 
-namespace Mirror
+namespace Prowl.Wicked.SnapshotInterpolation
 {
     // class so we can define defaults easily
     [Serializable]
@@ -30,9 +30,9 @@ namespace Mirror
 
         private double _catchupSpeed = 0.02f; // see snap interp demo. 1% is too slow.
         // Local timeline acceleration in % while catching up.
-        public double catchupSpeed 
-        { 
-            get => _catchupSpeed; 
+        public double catchupSpeed
+        {
+            get => _catchupSpeed;
             set => _catchupSpeed = Math.Clamp(value, 0, 1);
         }
 
