@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Path to the IL weaver executable -->
+    <WickedWeaverPath>$(MSBuildThisFileDirectory)..\..\..\src\Prowl.Wicked.CodeGen\bin\$(Configuration)\net10.0\Prowl.Wicked.CodeGen.dll</WickedWeaverPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Raylib-cs" Version="6.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Prowl.Wicked\Prowl.Wicked.csproj" />
+    <ProjectReference Include="..\..\..\src\Prowl.Wicked.Transport.Telepathy\Prowl.Wicked.Transport.Telepathy.csproj" />
+    <!-- Reference CodeGen to ensure it builds before this project (but don't include it as runtime dependency) -->
+    <ProjectReference Include="..\..\..\src\Prowl.Wicked.CodeGen\Prowl.Wicked.CodeGen.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- Import the IL weaver targets -->
+  <Import Project="..\..\..\src\Prowl.Wicked.CodeGen\Prowl.Wicked.CodeGen.targets" />
+
+</Project>

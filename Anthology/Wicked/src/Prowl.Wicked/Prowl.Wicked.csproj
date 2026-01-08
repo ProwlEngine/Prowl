@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Prowl.Wicked</RootNamespace>
+    <AssemblyName>Prowl.Wicked</AssemblyName>
+    <Description>A standalone networking framework for multiplayer games</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prowl.Wicked.Tests" />
+  </ItemGroup>
+
+
+</Project>
