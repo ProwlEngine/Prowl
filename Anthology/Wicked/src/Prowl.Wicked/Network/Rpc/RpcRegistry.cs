@@ -171,12 +171,10 @@ public static class RpcRegistry
 
             if (hash == targetHash)
             {
-                Console.WriteLine($"FindInvokerByHash: Found {method.Name} for hash 0x{targetHash:X4} (method: {originalName})");
                 return method;
             }
         }
 
-        Console.WriteLine($"FindInvokerByHash: No invoker found for hash 0x{targetHash:X4} in {behaviourType.Name}");
         return null;
     }
 

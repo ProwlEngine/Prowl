@@ -372,7 +372,6 @@ public static class NetworkClient
         if (msg.IsLocalPlayer)
         {
             LocalPlayer = entity;
-            Console.WriteLine($"NetworkClient: Set LocalPlayer to entity {msg.NetId}");
         }
 
         // IsLocalPlayer is true ONLY if this entity IS our tracked LocalPlayer
@@ -381,8 +380,6 @@ public static class NetworkClient
 
         // Spawn the entity (isServer = false, isClient = true)
         World.Active.Spawn(entity, false, true, isLocalPlayer, isOwned);
-
-        Console.WriteLine($"NetworkClient: Spawned entity {msg.NetId}, LocalPlayer={isLocalPlayer}, Owned={isOwned}");
     }
 
     private static void OnDespawnMessage(DespawnMessage msg)
@@ -391,7 +388,6 @@ public static class NetworkClient
         if (entity != null)
         {
             World.Active?.DestroyEntity(entity);
-            Console.WriteLine($"NetworkClient: Despawned entity {msg.NetId}");
         }
     }
 
@@ -438,8 +434,6 @@ public static class NetworkClient
             Console.WriteLine($"NetworkClient: OnOwnershipMessage - Entity {msg.NetId} not found");
             return;
         }
-
-        Console.WriteLine($"NetworkClient: OnOwnershipMessage - NetId={msg.NetId}, IsOwner={msg.IsOwner}, IsLocalPlayer={msg.IsLocalPlayer}");
 
         // Was local player before, but not anymore?
         // Call OnStopLocalPlayer BEFORE setting new values

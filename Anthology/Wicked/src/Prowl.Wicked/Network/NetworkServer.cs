@@ -504,14 +504,6 @@ public static class NetworkServer
             BehaviourSyncData = behaviourSyncData
         };
 
-        // Debug: Log what we're sending
-        Console.WriteLine($"[SERVER] SendSpawnMessage: NetId={message.NetId}, Behaviours={behaviourIndices.Length}, IsLocalPlayer={message.IsLocalPlayer}, OwnerId={message.OwnerId}");
-        if (behaviourSyncData.Length > 0 && behaviourSyncData[0] != null)
-        {
-            var syncData = behaviourSyncData[0];
-            Console.WriteLine($"  SyncData[0]: X={syncData[0]}, Y={syncData[1]}, Health={syncData[2]}, Color={syncData[3]}");
-        }
-
         Send(conn, message);
     }
 
@@ -823,8 +815,6 @@ public static class NetworkServer
         // LocalPlayer means: it's the main player entity assigned to this connection
         // AND the connection owns it
         bool isLocalPlayer = isOwner && conn.OwnedEntities.Contains(entity.NetId) && entity.IsLocalPlayer;
-
-        Console.WriteLine($"[SERVER] SendChangeOwnerMessage: NetId={entity.NetId}, Conn={conn.ConnectionId}, IsOwner={isOwner}, IsLocalPlayer={isLocalPlayer}");
 
         Send(conn, new OwnershipMessage
         {
