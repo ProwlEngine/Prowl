@@ -1,9 +1,12 @@
 namespace Prowl.Wicked.Network.Messages;
 
+using Prowl.Echo;
+
 /// <summary>
 /// Response to NetworkPingMessage.
 /// Used to calculate RTT and prediction error.
 /// </summary>
+[FixedEchoStructure]
 public struct NetworkPongMessage : INetworkMessage
 {
     /// <summary>
@@ -27,19 +30,5 @@ public struct NetworkPongMessage : INetworkMessage
         LocalTime = localTime;
         PredictionErrorUnadjusted = predictionErrorUnadjusted;
         PredictionErrorAdjusted = predictionErrorAdjusted;
-    }
-
-    public void Serialize(Serialization.NetworkWriter writer)
-    {
-        writer.WriteDouble(LocalTime);
-        writer.WriteDouble(PredictionErrorUnadjusted);
-        writer.WriteDouble(PredictionErrorAdjusted);
-    }
-
-    public void Deserialize(Serialization.NetworkReader reader)
-    {
-        LocalTime = reader.ReadDouble();
-        PredictionErrorUnadjusted = reader.ReadDouble();
-        PredictionErrorAdjusted = reader.ReadDouble();
     }
 }

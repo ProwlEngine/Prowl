@@ -1,5 +1,6 @@
 namespace Prowl.Wicked.Network;
 
+using Prowl.Echo;
 using Prowl.Wicked.Core;
 using Prowl.Wicked.Network.Messages;
 using Prowl.Wicked.Network.Rpc;
@@ -14,7 +15,7 @@ using Prowl.Wicked.Transport;
 /// </summary>
 public static class NetworkClient
 {
-    private static readonly Dictionary<ushort, Action<NetworkReader>> _handlers = new();
+    private static readonly Dictionary<ushort, Action<BinaryReader>> _handlers = new();
 
     // Batch spawning support (like Mirror's ObjectSpawnStarted/Finished)
     private static bool _isSpawnFinished = true;
@@ -245,13 +246,12 @@ public static class NetworkClient
     /// <summary>
     /// Registers a message handler.
     /// </summary>
-    public static void RegisterHandler<T>(Action<T> handler) where T : INetworkMessage, new()
+    public static void RegisterHandler<T>(Action<T> handler) where T : INetworkMessage
     {
         var messageId = MessageRegistry.GetMessageId<T>();
         _handlers[messageId] = (reader) =>
         {
-            var message = new T();
-            message.Deserialize(reader);
+            var message = NetworkSerializer.DeserializeMessage<T>(reader);
             handler(message);
         };
     }
@@ -259,7 +259,7 @@ public static class NetworkClient
     /// <summary>
     /// Unregisters a message handler.
     /// </summary>
-    public static void UnregisterHandler<T>() where T : INetworkMessage, new()
+    public static void UnregisterHandler<T>() where T : INetworkMessage
     {
         var messageId = MessageRegistry.GetMessageId<T>();
         _handlers.Remove(messageId);
@@ -420,7 +420,9 @@ public static class NetworkClient
         if (msg.BehaviourIndex < entity.Behaviours.Count)
         {
             var behaviour = entity.Behaviours[msg.BehaviourIndex];
-            InvokeRpc(behaviour, msg.MethodName, msg.Arguments);
+            // Deserialize arguments using Echo
+            var args = NetworkSerializer.Deserialize<object?[]>(msg.Arguments) ?? Array.Empty<object?>();
+            behaviour.InvokeRpc(msg.MethodName, args);
         }
     }
 
@@ -487,12 +489,6 @@ public static class NetworkClient
         }
     }
 
-    private static void InvokeRpc(EntityBehaviour behaviour, string methodName, byte[] arguments)
-    {
-        var reader = new NetworkReader(arguments);
-        behaviour.InvokeRpc(methodName, reader);
-    }
-
     /// <summary>
     /// Sends a message to the server.
     /// </summary>
@@ -500,12 +496,8 @@ public static class NetworkClient
     {
         if (!Active) return;
 
-        var writer = new NetworkWriter();
-        var messageId = MessageRegistry.GetMessageId<T>();
-        writer.WriteUShort(messageId);
-        message.Serialize(writer);
-
-        NetworkManager.Transport?.ClientSend(writer.ToArraySegment());
+        var data = NetworkSerializer.PackMessage(message);
+        NetworkManager.Transport?.ClientSend(new ArraySegment<byte>(data));
     }
 
     /// <summary>
@@ -589,13 +581,15 @@ public static class NetworkClient
         if (Connection != null)
             Connection.LastMessageTime = NetworkTime.localTime;
 
-        var reader = new NetworkReader(data);
+        // Use BinaryReader for message deserialization
+        using var ms = new MemoryStream(data.Array!, data.Offset, data.Count);
+        using var reader = new BinaryReader(ms);
 
         // try to read message id
         ushort messageId;
         try
         {
-            messageId = reader.ReadUShort();
+            messageId = reader.ReadUInt16();
         }
         catch (Exception ex)
         {

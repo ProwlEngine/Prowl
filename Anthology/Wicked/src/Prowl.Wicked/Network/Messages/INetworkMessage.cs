@@ -1,19 +1,10 @@
 namespace Prowl.Wicked.Network.Messages;
 
-using Prowl.Wicked.Network.Serialization;
-
 /// <summary>
-/// Interface for all network messages.
+/// Marker interface for all network messages.
+/// Messages are serialized using Prowl.Echo - just define public fields/properties.
+/// Use [FixedEchoStructure] attribute on message classes for better performance.
 /// </summary>
 public interface INetworkMessage
 {
-    /// <summary>
-    /// Serializes the message to a NetworkWriter.
-    /// </summary>
-    void Serialize(NetworkWriter writer);
-
-    /// <summary>
-    /// Deserializes the message from a NetworkReader.
-    /// </summary>
-    void Deserialize(NetworkReader reader);
 }

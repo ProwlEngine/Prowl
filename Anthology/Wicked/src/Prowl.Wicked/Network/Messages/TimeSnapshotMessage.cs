@@ -1,9 +1,12 @@
 namespace Prowl.Wicked.Network.Messages;
 
+using Prowl.Echo;
+
 /// <summary>
 /// Sent by the server to clients for time synchronization.
 /// Used by snapshot interpolation to drive the client timeline.
 /// </summary>
+[FixedEchoStructure]
 public struct TimeSnapshotMessage : INetworkMessage
 {
     /// <summary>
@@ -14,15 +17,5 @@ public struct TimeSnapshotMessage : INetworkMessage
     public TimeSnapshotMessage(double serverTime)
     {
         ServerTime = serverTime;
-    }
-
-    public void Serialize(Serialization.NetworkWriter writer)
-    {
-        writer.WriteDouble(ServerTime);
-    }
-
-    public void Deserialize(Serialization.NetworkReader reader)
-    {
-        ServerTime = reader.ReadDouble();
     }
 }

@@ -1,9 +1,12 @@
 namespace Prowl.Wicked.Network.Messages;
 
+using Prowl.Echo;
+
 /// <summary>
 /// Sent to measure RTT (round trip time).
 /// The receiver responds with a NetworkPongMessage.
 /// </summary>
+[FixedEchoStructure]
 public struct NetworkPingMessage : INetworkMessage
 {
     /// <summary>
@@ -21,17 +24,5 @@ public struct NetworkPingMessage : INetworkMessage
     {
         LocalTime = localTime;
         PredictedTimeAdjusted = predictedTimeAdjusted;
-    }
-
-    public void Serialize(Serialization.NetworkWriter writer)
-    {
-        writer.WriteDouble(LocalTime);
-        writer.WriteDouble(PredictedTimeAdjusted);
-    }
-
-    public void Deserialize(Serialization.NetworkReader reader)
-    {
-        LocalTime = reader.ReadDouble();
-        PredictedTimeAdjusted = reader.ReadDouble();
     }
 }

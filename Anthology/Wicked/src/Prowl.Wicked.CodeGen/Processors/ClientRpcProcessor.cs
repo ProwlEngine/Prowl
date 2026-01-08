@@ -6,6 +6,7 @@ using Mono.Cecil.Cil;
 /// <summary>
 /// Processes methods marked with [ClientRpc] attribute.
 /// Transforms them to send an RPC message to all clients when called on the server.
+/// With Echo serialization, args are deserialized as object?[] before invoker is called.
 /// </summary>
 public class ClientRpcProcessor : RpcProcessorBase
 {
@@ -31,7 +32,7 @@ public class ClientRpcProcessor : RpcProcessorBase
         var userLogicMethod = SubstituteMethod(method);
         method.DeclaringType.Methods.Add(userLogicMethod);
 
-        // Step 2: Create the invoker that deserializes args and calls user logic
+        // Step 2: Create the invoker that reads args from object[] and calls user logic
         var invokerMethod = CreateRpcInvoker(method, userLogicMethod);
         method.DeclaringType.Methods.Add(invokerMethod);
 
@@ -87,26 +88,21 @@ public class ClientRpcProcessor : RpcProcessorBase
         if (original.Name.StartsWith("Rpc"))
             invokerName = $"Invoke{original.Name}";
 
-        var invoker = new MethodDefinition(
-            invokerName,
-            MethodAttributes.Public | MethodAttributes.HideBySig,
-            VoidType);
-
-        // Add NetworkReader parameter
-        var readerType = Module.ImportReference(typeof(Prowl.Wicked.Network.Serialization.NetworkReader));
-        invoker.Parameters.Add(new ParameterDefinition("reader", ParameterAttributes.None, readerType));
+        // Create invoker with object?[] args parameter
+        var invoker = CreateInvokerMethod(invokerName);
 
         var il = invoker.Body.GetILProcessor();
 
-        // Read each parameter from the reader and store in locals
+        // Read each parameter from the args array and store in locals
         var locals = new List<VariableDefinition>();
-        foreach (var param in original.Parameters)
+        for (int i = 0; i < original.Parameters.Count; i++)
         {
+            var param = original.Parameters[i];
             var local = new VariableDefinition(Module.ImportReference(param.ParameterType));
             invoker.Body.Variables.Add(local);
             locals.Add(local);
 
-            EmitReadParameter(il, param);
+            EmitReadParameterFromArgs(il, param.ParameterType, i);
             il.Emit(OpCodes.Stloc, local);
         }
 

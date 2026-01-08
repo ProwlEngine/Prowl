@@ -3,12 +3,12 @@ namespace Prowl.Wicked.Network.Rpc;
 using System.Linq;
 using System.Reflection;
 using Prowl.Wicked.Core;
-using Prowl.Wicked.Network.Serialization;
 
 /// <summary>
 /// Delegate for invoking an RPC method.
+/// Args is the deserialized object[] from the message.
 /// </summary>
-public delegate void RpcInvoker(EntityBehaviour behaviour, NetworkReader reader);
+public delegate void RpcInvoker(EntityBehaviour behaviour, object?[] args);
 
 /// <summary>
 /// Registry for RPC method handlers.
@@ -56,10 +56,10 @@ public static class RpcRegistry
     }
 
     /// <summary>
-    /// Invokes an RPC on a behaviour.
+    /// Invokes an RPC on a behaviour with deserialized arguments.
     /// Returns true if the RPC was found and invoked.
     /// </summary>
-    public static bool Invoke(EntityBehaviour behaviour, string methodName, NetworkReader reader)
+    public static bool Invoke(EntityBehaviour behaviour, string methodName, object?[] args)
     {
         var behaviourType = behaviour.GetType();
 
@@ -67,7 +67,7 @@ public static class RpcRegistry
         var invoker = GetInvoker(behaviourType, methodName);
         if (invoker != null)
         {
-            invoker(behaviour, reader);
+            invoker(behaviour, args);
             return true;
         }
 
@@ -82,7 +82,7 @@ public static class RpcRegistry
         {
             try
             {
-                method.Invoke(behaviour, new object[] { reader });
+                method.Invoke(behaviour, new object[] { args });
             }
             catch (TargetInvocationException ex)
             {
@@ -101,7 +101,7 @@ public static class RpcRegistry
             RegisterMethod(behaviourType, invokerName, method);
             try
             {
-                method.Invoke(behaviour, new object[] { reader });
+                method.Invoke(behaviour, new object[] { args });
             }
             catch (TargetInvocationException ex)
             {
@@ -116,7 +116,7 @@ public static class RpcRegistry
     }
 
     /// <summary>
-    /// Finds the IL-weaved invoker method by name, handling duplicates by selecting the one with NetworkReader parameter.
+    /// Finds the IL-weaved invoker method by name, handling duplicates by selecting the one with object[] parameter.
     /// </summary>
     private static MethodInfo? FindInvokerMethod(Type behaviourType, string invokerName)
     {
@@ -137,11 +137,11 @@ public static class RpcRegistry
         if (methods.Length == 1)
             return methods[0];
 
-        // Multiple methods found - look for the one with exactly one NetworkReader parameter
+        // Multiple methods found - look for the one with exactly one object[] parameter
         foreach (var m in methods)
         {
             var parameters = m.GetParameters();
-            if (parameters.Length == 1 && parameters[0].ParameterType == typeof(NetworkReader))
+            if (parameters.Length == 1 && parameters[0].ParameterType == typeof(object?[]))
                 return m;
         }
 
@@ -164,34 +164,6 @@ public static class RpcRegistry
 
         // Fallback for non-standard names
         return $"InvokeCmd{methodName}";
-    }
-
-    private static object?[] DeserializeParameters(MethodInfo method, NetworkReader reader)
-    {
-        var paramInfos = method.GetParameters();
-        var parameters = new object?[paramInfos.Length];
-
-        for (int i = 0; i < paramInfos.Length; i++)
-        {
-            var paramType = paramInfos[i].ParameterType;
-
-            // Skip NetworkConnection parameter for TargetRpc (it's not serialized)
-            if (paramType == typeof(NetworkConnection))
-            {
-                parameters[i] = null; // Will be filled in by the caller if needed
-                continue;
-            }
-
-            parameters[i] = ReadParameter(reader, paramType);
-        }
-
-        return parameters;
-    }
-
-    private static object? ReadParameter(NetworkReader reader, Type paramType)
-    {
-        // Read the typed value (includes type tag from WriteTypedValue)
-        return reader.ReadTypedValue();
     }
 
     /// <summary>

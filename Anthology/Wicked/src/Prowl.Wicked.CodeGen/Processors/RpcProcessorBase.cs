@@ -5,6 +5,7 @@ using Mono.Cecil.Cil;
 
 /// <summary>
 /// Base class for RPC processors with common IL generation utilities.
+/// With Echo serialization, invokers receive object?[] args directly instead of NetworkReader.
 /// </summary>
 public abstract class RpcProcessorBase
 {
@@ -12,21 +13,12 @@ public abstract class RpcProcessorBase
 
     // Cached type references
     protected TypeReference? EntityBehaviourType;
-    protected TypeReference? NetworkWriterType;
-    protected TypeReference? NetworkReaderType;
     protected TypeReference? NetworkConnectionType;
     protected TypeReference? ObjectType;
     protected TypeReference? ObjectArrayType;
     protected TypeReference? VoidType;
     protected TypeReference? BoolType;
     protected TypeReference? StringType;
-
-    // Cached method references
-    protected MethodReference? WriteObject;
-    protected MethodReference? ReadObject;
-    protected MethodReference? GetIsServer;
-    protected MethodReference? GetIsClient;
-    protected MethodReference? GetIsHost;
 
     protected RpcProcessorBase(ModuleDefinition module)
     {
@@ -87,38 +79,36 @@ public abstract class RpcProcessorBase
     }
 
     /// <summary>
-    /// Creates an invoker method that calls the original method logic.
+    /// Creates an invoker method that receives object?[] args.
+    /// Signature: void InvokeXxx(object?[] args)
     /// </summary>
-    protected MethodDefinition CreateInvokerMethod(MethodDefinition original, string invokerName)
+    protected MethodDefinition CreateInvokerMethod(string invokerName)
     {
-        // Create the invoker method signature: void InvokeXxx(NetworkReader reader)
         var invoker = new MethodDefinition(
             invokerName,
-            MethodAttributes.Private | MethodAttributes.HideBySig,
+            MethodAttributes.Public | MethodAttributes.HideBySig,
             VoidType);
 
-        // Add NetworkReader parameter
-        var readerType = Module.ImportReference(typeof(Prowl.Wicked.Network.Serialization.NetworkReader));
-        invoker.Parameters.Add(new ParameterDefinition("reader", ParameterAttributes.None, readerType));
+        // Add object?[] parameter
+        invoker.Parameters.Add(new ParameterDefinition("args", ParameterAttributes.None, ObjectArrayType));
 
         return invoker;
     }
 
     /// <summary>
-    /// Emits code to read a parameter from the NetworkReader.
-    /// Uses ReadTypedValue to match WriteTypedValue used in SendCommand/SendClientRpc.
+    /// Emits code to read a parameter from the args array at the specified index.
+    /// The value is loaded and cast/unboxed to the target type.
     /// </summary>
-    protected void EmitReadParameter(ILProcessor il, ParameterDefinition param)
+    protected void EmitReadParameterFromArgs(ILProcessor il, TypeReference paramType, int argIndex)
     {
-        var readerType = typeof(Prowl.Wicked.Network.Serialization.NetworkReader);
-        var paramType = param.ParameterType;
         var resolvedParamType = Module.ImportReference(paramType);
 
-        // Use ReadTypedValue for all types - matches WriteTypedValue in SendCommand
-        var readTypedValueMethod = Module.ImportReference(readerType.GetMethod("ReadTypedValue"));
-
-        il.Emit(OpCodes.Ldarg_1); // reader
-        il.Emit(OpCodes.Callvirt, readTypedValueMethod);
+        // Load args array (arg1)
+        il.Emit(OpCodes.Ldarg_1);
+        // Load index
+        il.Emit(OpCodes.Ldc_I4, argIndex);
+        // Get element from array
+        il.Emit(OpCodes.Ldelem_Ref);
 
         // Unbox/cast to the expected type
         if (paramType.IsValueType)
@@ -128,72 +118,6 @@ public abstract class RpcProcessorBase
         else
         {
             il.Emit(OpCodes.Castclass, resolvedParamType);
-        }
-    }
-
-    /// <summary>
-    /// Emits code to write a parameter to the NetworkWriter.
-    /// </summary>
-    protected void EmitWriteParameter(ILProcessor il, ParameterDefinition param, int paramIndex, VariableDefinition writerVar)
-    {
-        var writerType = typeof(Prowl.Wicked.Network.Serialization.NetworkWriter);
-        var paramType = param.ParameterType;
-
-        il.Emit(OpCodes.Ldloc, writerVar);
-
-        // Load the parameter value
-        il.Emit(OpCodes.Ldarg, paramIndex);
-
-        // Handle primitive types with specific write methods
-        if (paramType.FullName == "System.Int32")
-        {
-            var method = Module.ImportReference(writerType.GetMethod("WriteInt"));
-            il.Emit(OpCodes.Callvirt, method);
-        }
-        else if (paramType.FullName == "System.Single")
-        {
-            var method = Module.ImportReference(writerType.GetMethod("WriteFloat"));
-            il.Emit(OpCodes.Callvirt, method);
-        }
-        else if (paramType.FullName == "System.Boolean")
-        {
-            var method = Module.ImportReference(writerType.GetMethod("WriteBool"));
-            il.Emit(OpCodes.Callvirt, method);
-        }
-        else if (paramType.FullName == "System.String")
-        {
-            var method = Module.ImportReference(writerType.GetMethod("WriteString"));
-            il.Emit(OpCodes.Callvirt, method);
-        }
-        else if (paramType.FullName == "System.Byte")
-        {
-            var method = Module.ImportReference(writerType.GetMethod("WriteByte"));
-            il.Emit(OpCodes.Callvirt, method);
-        }
-        else if (paramType.FullName == "System.UInt32")
-        {
-            var method = Module.ImportReference(writerType.GetMethod("WriteUInt"));
-            il.Emit(OpCodes.Callvirt, method);
-        }
-        else if (paramType.FullName == "System.Int64")
-        {
-            var method = Module.ImportReference(writerType.GetMethod("WriteLong"));
-            il.Emit(OpCodes.Callvirt, method);
-        }
-        else if (paramType.FullName == "System.Double")
-        {
-            var method = Module.ImportReference(writerType.GetMethod("WriteDouble"));
-            il.Emit(OpCodes.Callvirt, method);
-        }
-        else
-        {
-            // Box value types for WriteObject
-            if (paramType.IsValueType)
-            {
-                il.Emit(OpCodes.Box, Module.ImportReference(paramType));
-            }
-            var method = Module.ImportReference(writerType.GetMethod("WriteObject"));
-            il.Emit(OpCodes.Callvirt, method);
         }
     }
 }

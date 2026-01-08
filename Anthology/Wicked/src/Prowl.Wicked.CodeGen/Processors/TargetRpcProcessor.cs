@@ -7,6 +7,7 @@ using Mono.Cecil.Cil;
 /// Processes methods marked with [TargetRpc] attribute.
 /// Transforms them to send an RPC message to a specific client when called on the server.
 /// The first parameter must be NetworkConnection specifying the target.
+/// With Echo serialization, args are deserialized as object?[] before invoker is called.
 /// </summary>
 public class TargetRpcProcessor : RpcProcessorBase
 {
@@ -37,7 +38,7 @@ public class TargetRpcProcessor : RpcProcessorBase
         var userLogicMethod = SubstituteMethod(method);
         method.DeclaringType.Methods.Add(userLogicMethod);
 
-        // Step 2: Create the invoker that deserializes args and calls user logic
+        // Step 2: Create the invoker that reads args from object[] and calls user logic
         var invokerMethod = CreateRpcInvoker(method, userLogicMethod);
         method.DeclaringType.Methods.Add(invokerMethod);
 
@@ -93,18 +94,12 @@ public class TargetRpcProcessor : RpcProcessorBase
         if (original.Name.StartsWith("Target"))
             invokerName = $"Invoke{original.Name}";
 
-        var invoker = new MethodDefinition(
-            invokerName,
-            MethodAttributes.Public | MethodAttributes.HideBySig,
-            VoidType);
-
-        // Add NetworkReader parameter
-        var readerType = Module.ImportReference(typeof(Prowl.Wicked.Network.Serialization.NetworkReader));
-        invoker.Parameters.Add(new ParameterDefinition("reader", ParameterAttributes.None, readerType));
+        // Create invoker with object?[] args parameter
+        var invoker = CreateInvokerMethod(invokerName);
 
         var il = invoker.Body.GetILProcessor();
 
-        // Read each parameter from the reader and store in locals
+        // Read each parameter from the args array and store in locals
         // Skip the first parameter (NetworkConnection) as it's not serialized
         var locals = new List<VariableDefinition>();
 
@@ -116,7 +111,7 @@ public class TargetRpcProcessor : RpcProcessorBase
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stloc, connLocal);
 
-        // Read remaining parameters
+        // Read remaining parameters from args (starting at index 0 since NetworkConnection isn't serialized)
         for (int i = 1; i < original.Parameters.Count; i++)
         {
             var param = original.Parameters[i];
@@ -124,7 +119,8 @@ public class TargetRpcProcessor : RpcProcessorBase
             invoker.Body.Variables.Add(local);
             locals.Add(local);
 
-            EmitReadParameter(il, param);
+            // Args array index is i-1 since NetworkConnection isn't in the args
+            EmitReadParameterFromArgs(il, param.ParameterType, i - 1);
             il.Emit(OpCodes.Stloc, local);
         }
 

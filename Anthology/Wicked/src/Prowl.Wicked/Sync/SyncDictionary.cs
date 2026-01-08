@@ -1,11 +1,12 @@
 namespace Prowl.Wicked.Sync;
 
 using System.Collections;
-using Prowl.Wicked.Network.Serialization;
+using Prowl.Echo;
 
 /// <summary>
 /// A synchronized dictionary that automatically replicates changes from server to clients.
 /// Changes made on the server are tracked and sent to all clients efficiently using delta synchronization.
+/// Uses Prowl.Echo for serialization of contained values.
 /// </summary>
 /// <typeparam name="TKey">The type of keys in the dictionary.</typeparam>
 /// <typeparam name="TValue">The type of values in the dictionary.</typeparam>
@@ -152,6 +153,34 @@ public class SyncDictionary<TKey, TValue> : SyncObject, IDictionary<TKey, TValue
         }
     }
 
+    #region Echo Serialization Helpers
+
+    private void WriteKey(BinaryWriter writer, TKey key)
+    {
+        var echo = Serializer.Serialize(key);
+        echo.WriteToBinary(writer);
+    }
+
+    private TKey ReadKey(BinaryReader reader)
+    {
+        var echo = EchoObject.ReadFromBinary(reader);
+        return Serializer.Deserialize<TKey>(echo)!;
+    }
+
+    private void WriteValue(BinaryWriter writer, TValue value)
+    {
+        var echo = Serializer.Serialize(value);
+        echo.WriteToBinary(writer);
+    }
+
+    private TValue ReadValue(BinaryReader reader)
+    {
+        var echo = EchoObject.ReadFromBinary(reader);
+        return Serializer.Deserialize<TValue>(echo)!;
+    }
+
+    #endregion
+
     #region SyncObject Implementation
 
     public override void ClearChanges() => _changes.Clear();
@@ -163,39 +192,39 @@ public class SyncDictionary<TKey, TValue> : SyncObject, IDictionary<TKey, TValue
         _items.Clear();
     }
 
-    public override void OnSerializeAll(NetworkWriter writer)
+    public override void OnSerializeAll(BinaryWriter writer)
     {
         // Write the full dictionary
-        writer.WriteUInt((uint)_items.Count);
+        writer.Write((uint)_items.Count);
         foreach (var kvp in _items)
         {
-            writer.Write(kvp.Key);
-            writer.Write(kvp.Value);
+            WriteKey(writer, kvp.Key);
+            WriteValue(writer, kvp.Value);
         }
 
         // Write how many changes are pending (client needs to skip these)
-        writer.WriteUInt((uint)_changes.Count);
+        writer.Write((uint)_changes.Count);
     }
 
-    public override void OnSerializeDelta(NetworkWriter writer)
+    public override void OnSerializeDelta(BinaryWriter writer)
     {
         // Write all queued changes
-        writer.WriteUInt((uint)_changes.Count);
+        writer.Write((uint)_changes.Count);
 
         for (int i = 0; i < _changes.Count; i++)
         {
             var change = _changes[i];
-            writer.WriteByte((byte)change.Operation);
+            writer.Write((byte)change.Operation);
 
             switch (change.Operation)
             {
                 case Operation.Add:
                 case Operation.Set:
-                    writer.Write(change.Key);
-                    writer.Write(change.Item);
+                    WriteKey(writer, change.Key);
+                    WriteValue(writer, change.Item);
                     break;
                 case Operation.Remove:
-                    writer.Write(change.Key);
+                    WriteKey(writer, change.Key);
                     break;
                 case Operation.Clear:
                     // No data needed
@@ -204,28 +233,28 @@ public class SyncDictionary<TKey, TValue> : SyncObject, IDictionary<TKey, TValue
         }
     }
 
-    public override void OnDeserializeAll(NetworkReader reader)
+    public override void OnDeserializeAll(BinaryReader reader)
     {
         // Read the full dictionary
-        int count = (int)reader.ReadUInt();
+        int count = (int)reader.ReadUInt32();
 
         _items.Clear();
         _changes.Clear();
 
         for (int i = 0; i < count; i++)
         {
-            TKey key = reader.Read<TKey>();
-            TValue value = reader.Read<TValue>();
+            TKey key = ReadKey(reader);
+            TValue value = ReadValue(reader);
             _items.Add(key, value);
         }
 
         // How many changes to skip
-        _changesAhead = (int)reader.ReadUInt();
+        _changesAhead = (int)reader.ReadUInt32();
     }
 
-    public override void OnDeserializeDelta(NetworkReader reader)
+    public override void OnDeserializeDelta(BinaryReader reader)
     {
-        int changesCount = (int)reader.ReadUInt();
+        int changesCount = (int)reader.ReadUInt32();
 
         for (int i = 0; i < changesCount; i++)
         {
@@ -240,8 +269,8 @@ public class SyncDictionary<TKey, TValue> : SyncObject, IDictionary<TKey, TValue
             {
                 case Operation.Add:
                 case Operation.Set:
-                    key = reader.Read<TKey>();
-                    item = reader.Read<TValue>();
+                    key = ReadKey(reader);
+                    item = ReadValue(reader);
                     if (apply)
                     {
                         if (_items.TryGetValue(key, out oldItem!))
@@ -266,7 +295,7 @@ public class SyncDictionary<TKey, TValue> : SyncObject, IDictionary<TKey, TValue
                     break;
 
                 case Operation.Remove:
-                    key = reader.Read<TKey>();
+                    key = ReadKey(reader);
                     if (apply)
                     {
                         if (_items.TryGetValue(key, out oldItem!))

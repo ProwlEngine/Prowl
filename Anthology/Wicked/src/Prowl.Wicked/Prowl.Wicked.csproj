@@ -14,5 +14,9 @@
     <InternalsVisibleTo Include="Prowl.Wicked.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Prowl.Echo" Version="1.8.0" />
+  </ItemGroup>
+
 
 </Project>

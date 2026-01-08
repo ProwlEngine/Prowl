@@ -1,5 +1,6 @@
 namespace Prowl.Wicked.Network;
 
+using Prowl.Echo;
 using Prowl.Wicked.Core;
 using Prowl.Wicked.Interest;
 using Prowl.Wicked.Network.Messages;
@@ -14,7 +15,7 @@ using Prowl.Wicked.Transport;
 public static class NetworkServer
 {
     private static readonly Dictionary<int, NetworkConnection> _connections = new();
-    private static readonly Dictionary<ushort, Action<NetworkConnection, NetworkReader>> _handlers = new();
+    private static readonly Dictionary<ushort, Action<NetworkConnection, BinaryReader>> _handlers = new();
     private static uint _nextNetId = 1;
 
     /// <summary>
@@ -179,7 +180,7 @@ public static class NetworkServer
     /// </summary>
     /// <param name="handler">The handler to call when the message is received.</param>
     /// <param name="requireAuthentication">If true, connection must be authenticated before handler is called.</param>
-    public static void RegisterHandler<T>(Action<NetworkConnection, T> handler, bool requireAuthentication = true) where T : INetworkMessage, new()
+    public static void RegisterHandler<T>(Action<NetworkConnection, T> handler, bool requireAuthentication = true) where T : INetworkMessage
     {
         var messageId = MessageRegistry.GetMessageId<T>();
         _handlers[messageId] = (conn, reader) =>
@@ -192,8 +193,7 @@ public static class NetworkServer
                 return;
             }
 
-            var message = new T();
-            message.Deserialize(reader);
+            var message = NetworkSerializer.DeserializeMessage<T>(reader);
             handler(conn, message);
         };
     }
@@ -201,7 +201,7 @@ public static class NetworkServer
     /// <summary>
     /// Unregisters a message handler.
     /// </summary>
-    public static void UnregisterHandler<T>() where T : INetworkMessage, new()
+    public static void UnregisterHandler<T>() where T : INetworkMessage
     {
         var messageId = MessageRegistry.GetMessageId<T>();
         _handlers.Remove(messageId);
@@ -256,8 +256,10 @@ public static class NetworkServer
         }
 
         var behaviour = entity.Behaviours[msg.BehaviourIndex];
-        var reader = new NetworkReader(msg.Arguments);
-        behaviour.InvokeCommand(msg.MethodName, reader, sender);
+
+        // Deserialize arguments using Echo
+        var args = NetworkSerializer.Deserialize<object?[]>(msg.Arguments) ?? Array.Empty<object?>();
+        behaviour.InvokeCommand(msg.MethodName, args, sender);
     }
 
     /// <summary>
@@ -375,12 +377,8 @@ public static class NetworkServer
     {
         if (!Active) return;
 
-        var writer = new NetworkWriter();
-        var messageId = MessageRegistry.GetMessageId<T>();
-        writer.WriteUShort(messageId);
-        message.Serialize(writer);
-
-        NetworkManager.Transport?.ServerSend(conn.ConnectionId, writer.ToArraySegment());
+        var data = NetworkSerializer.PackMessage(message);
+        NetworkManager.Transport?.ServerSend(conn.ConnectionId, new ArraySegment<byte>(data));
     }
 
     /// <summary>
@@ -741,13 +739,15 @@ public static class NetworkServer
 
         conn.LastMessageTime = NetworkTime.localTime;
 
-        var reader = new NetworkReader(data);
+        // Use BinaryReader for message deserialization
+        using var ms = new MemoryStream(data.Array!, data.Offset, data.Count);
+        using var reader = new BinaryReader(ms);
 
         // try to read message id
         ushort messageId;
         try
         {
-            messageId = reader.ReadUShort();
+            messageId = reader.ReadUInt16();
         }
         catch (Exception ex)
         {

@@ -262,21 +262,15 @@ public abstract class EntityBehaviour
             return;
         }
 
-        var writer = new NetworkWriter();
-        Console.WriteLine($"SendCommand: Writing {args.Length} args for {methodName}");
-        foreach (var arg in args)
-        {
-            Console.WriteLine($"  Writing arg: {arg} (type: {arg?.GetType().Name ?? "null"})");
-            writer.WriteTypedValue(arg);
-        }
-        Console.WriteLine($"  Total bytes: {writer.Position}");
+        // Serialize args using Echo
+        var argsBytes = NetworkSerializer.Serialize(args);
+        Console.WriteLine($"SendCommand: Serialized {args.Length} args for {methodName} ({argsBytes.Length} bytes)");
 
         // In host mode, invoke command locally instead of sending through transport
         if (NetworkManager.IsHost)
         {
-            var reader = new NetworkReader(writer.ToArray());
-            Console.WriteLine($"SendCommand: Host mode, invoking locally. Reader has {reader.Length} bytes");
-            InvokeCommand(methodName, reader, NetworkServer.LocalConnection!);
+            Console.WriteLine($"SendCommand: Host mode, invoking locally");
+            InvokeCommand(methodName, args, NetworkServer.LocalConnection!);
             return;
         }
 
@@ -285,7 +279,7 @@ public abstract class EntityBehaviour
             NetId = NetId,
             BehaviourIndex = BehaviourIndex,
             MethodName = methodName,
-            Arguments = writer.ToArray()
+            Arguments = argsBytes
         };
 
         NetworkClient.Send(message);
@@ -303,18 +297,15 @@ public abstract class EntityBehaviour
             return;
         }
 
-        var writer = new NetworkWriter();
-        foreach (var arg in args)
-        {
-            writer.WriteTypedValue(arg);
-        }
+        // Serialize args using Echo
+        var argsBytes = NetworkSerializer.Serialize(args);
 
         var message = new RpcMessage
         {
             NetId = NetId,
             BehaviourIndex = BehaviourIndex,
             MethodName = methodName,
-            Arguments = writer.ToArray()
+            Arguments = argsBytes
         };
 
         NetworkServer.SendToReady(message);
@@ -322,7 +313,7 @@ public abstract class EntityBehaviour
         // If host mode and includeHost, also invoke locally
         if (includeHost && IsHost)
         {
-            InvokeRpcLocally(methodName, args);
+            RpcRegistry.Invoke(this, methodName, args);
         }
     }
 
@@ -344,18 +335,15 @@ public abstract class EntityBehaviour
             return;
         }
 
-        var writer = new NetworkWriter();
-        foreach (var arg in args)
-        {
-            writer.WriteTypedValue(arg);
-        }
+        // Serialize args using Echo
+        var argsBytes = NetworkSerializer.Serialize(args);
 
         var message = new RpcMessage
         {
             NetId = NetId,
             BehaviourIndex = BehaviourIndex,
             MethodName = methodName,
-            Arguments = writer.ToArray()
+            Arguments = argsBytes
         };
 
         NetworkServer.Send(target, message);
@@ -363,45 +351,29 @@ public abstract class EntityBehaviour
         // If target is the local connection (host mode), invoke locally
         if (target == NetworkServer.LocalConnection)
         {
-            InvokeRpcLocally(methodName, args);
+            RpcRegistry.Invoke(this, methodName, args);
         }
     }
 
     /// <summary>
-    /// Invokes an RPC method locally (for host mode).
-    /// </summary>
-    private void InvokeRpcLocally(string methodName, object?[] args)
-    {
-        // Create a reader from the serialized args
-        var writer = new NetworkWriter();
-        foreach (var arg in args)
-        {
-            writer.WriteTypedValue(arg);
-        }
-
-        var reader = new NetworkReader(writer.ToArray());
-        RpcRegistry.Invoke(this, methodName, reader);
-    }
-
-    /// <summary>
-    /// Invokes an RPC method with the given reader.
+    /// Invokes an RPC method with deserialized arguments.
     /// Called by the network system when a message is received.
     /// </summary>
-    internal void InvokeRpc(string methodName, NetworkReader reader)
+    internal void InvokeRpc(string methodName, object?[] args)
     {
-        if (!RpcRegistry.Invoke(this, methodName, reader))
+        if (!RpcRegistry.Invoke(this, methodName, args))
         {
             Console.WriteLine($"EntityBehaviour.InvokeRpc: No handler found for {GetType().Name}.{methodName}");
         }
     }
 
     /// <summary>
-    /// Invokes a Command method on the server.
+    /// Invokes a Command method on the server with deserialized arguments.
     /// Called by the network system when a command message is received.
     /// </summary>
-    internal void InvokeCommand(string methodName, NetworkReader reader, NetworkConnection sender)
+    internal void InvokeCommand(string methodName, object?[] args, NetworkConnection sender)
     {
-        if (!RpcRegistry.Invoke(this, methodName, reader))
+        if (!RpcRegistry.Invoke(this, methodName, args))
         {
             Console.WriteLine($"EntityBehaviour.InvokeCommand: No handler found for {GetType().Name}.{methodName}");
         }

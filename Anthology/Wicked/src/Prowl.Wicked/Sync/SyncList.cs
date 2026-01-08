@@ -1,11 +1,12 @@
 namespace Prowl.Wicked.Sync;
 
 using System.Collections;
-using Prowl.Wicked.Network.Serialization;
+using Prowl.Echo;
 
 /// <summary>
 /// A synchronized list that automatically replicates changes from server to clients.
 /// Changes made on the server are tracked and sent to all clients efficiently using delta synchronization.
+/// Uses Prowl.Echo for serialization of contained values.
 /// </summary>
 /// <typeparam name="T">The type of elements in the list.</typeparam>
 public class SyncList<T> : SyncObject, IList<T>, IReadOnlyList<T>
@@ -147,6 +148,22 @@ public class SyncList<T> : SyncObject, IList<T>, IReadOnlyList<T>
         }
     }
 
+    #region Echo Serialization Helpers
+
+    private void WriteItem(BinaryWriter writer, T item)
+    {
+        var echo = Serializer.Serialize(item);
+        echo.WriteToBinary(writer);
+    }
+
+    private T ReadItem(BinaryReader reader)
+    {
+        var echo = EchoObject.ReadFromBinary(reader);
+        return Serializer.Deserialize<T>(echo)!;
+    }
+
+    #endregion
+
     #region SyncObject Implementation
 
     public override void ClearChanges() => _changes.Clear();
@@ -158,70 +175,70 @@ public class SyncList<T> : SyncObject, IList<T>, IReadOnlyList<T>
         _items.Clear();
     }
 
-    public override void OnSerializeAll(NetworkWriter writer)
+    public override void OnSerializeAll(BinaryWriter writer)
     {
         // Write the full list
-        writer.WriteUInt((uint)_items.Count);
+        writer.Write((uint)_items.Count);
         for (int i = 0; i < _items.Count; i++)
         {
-            writer.Write(_items[i]);
+            WriteItem(writer, _items[i]);
         }
 
         // Write how many changes are pending (client needs to skip these)
-        writer.WriteUInt((uint)_changes.Count);
+        writer.Write((uint)_changes.Count);
     }
 
-    public override void OnSerializeDelta(NetworkWriter writer)
+    public override void OnSerializeDelta(BinaryWriter writer)
     {
         // Write all queued changes
-        writer.WriteUInt((uint)_changes.Count);
+        writer.Write((uint)_changes.Count);
 
         for (int i = 0; i < _changes.Count; i++)
         {
             var change = _changes[i];
-            writer.WriteByte((byte)change.Operation);
+            writer.Write((byte)change.Operation);
 
             switch (change.Operation)
             {
                 case Operation.Add:
-                    writer.Write(change.Item);
+                    WriteItem(writer, change.Item);
                     break;
                 case Operation.Clear:
                     // No data needed
                     break;
                 case Operation.RemoveAt:
-                    writer.WriteUInt((uint)change.Index);
+                    writer.Write((uint)change.Index);
                     break;
                 case Operation.Insert:
                 case Operation.Set:
-                    writer.WriteUInt((uint)change.Index);
-                    writer.Write(change.Item);
+                    writer.Write((uint)change.Index);
+                    WriteItem(writer, change.Item);
                     break;
             }
         }
     }
 
-    public override void OnDeserializeAll(NetworkReader reader)
+    public override void OnDeserializeAll(BinaryReader reader)
     {
         // Read the full list
-        int count = (int)reader.ReadUInt();
+        int count = (int)reader.ReadUInt32();
 
         _items.Clear();
         _changes.Clear();
 
         for (int i = 0; i < count; i++)
         {
-            T item = reader.Read<T>();
+            T item = ReadItem(reader);
             _items.Add(item);
         }
 
         // How many changes to skip
-        _changesAhead = (int)reader.ReadUInt();
+        _changesAhead = (int)reader.ReadUInt32();
     }
 
-    public override void OnDeserializeDelta(NetworkReader reader)
+    public override void OnDeserializeDelta(BinaryReader reader)
     {
-        int changesCount = (int)reader.ReadUInt();
+        int changesCount = (int)reader.ReadUInt32();
 
         for (int i = 0; i < changesCount; i++)
         {
@@ -235,7 +252,7 @@ public class SyncList<T> : SyncObject, IList<T>, IReadOnlyList<T>
             switch (operation)
             {
                 case Operation.Add:
-                    newItem = reader.Read<T>();
+                    newItem = ReadItem(reader);
                     if (apply)
                     {
                         index = _items.Count;
@@ -253,8 +270,8 @@ public class SyncList<T> : SyncObject, IList<T>, IReadOnlyList<T>
                     break;
 
                 case Operation.Insert:
-                    index = (int)reader.ReadUInt();
-                    newItem = reader.Read<T>();
+                    index = (int)reader.ReadUInt32();
+                    newItem = ReadItem(reader);
                     if (apply)
                     {
                         _items.Insert(index, newItem);
@@ -263,7 +280,7 @@ public class SyncList<T> : SyncObject, IList<T>, IReadOnlyList<T>
                     break;
 
                 case Operation.RemoveAt:
-                    index = (int)reader.ReadUInt();
+                    index = (int)reader.ReadUInt32();
                     if (apply)
                     {
                         oldItem = _items[index];
@@ -273,8 +290,8 @@ public class SyncList<T> : SyncObject, IList<T>, IReadOnlyList<T>
                     break;
 
                 case Operation.Set:
-                    index = (int)reader.ReadUInt();
-                    newItem = reader.Read<T>();
+                    index = (int)reader.ReadUInt32();
+                    newItem = ReadItem(reader);
                     if (apply)
                     {
                         oldItem = _items[index];

@@ -1,10 +1,9 @@
 namespace Prowl.Wicked.Sync;
 
-using Prowl.Wicked.Network.Serialization;
-
 /// <summary>
 /// Base class for synchronized objects (SyncList, SyncDictionary, etc.).
 /// SyncObjects automatically track changes and synchronize state between server and clients.
+/// Uses Prowl.Echo for serialization of contained values.
 /// </summary>
 public abstract class SyncObject
 {
@@ -36,22 +35,22 @@ public abstract class SyncObject
     /// <summary>
     /// Writes a complete copy of the object state (for initial sync).
     /// </summary>
-    public abstract void OnSerializeAll(NetworkWriter writer);
+    public abstract void OnSerializeAll(BinaryWriter writer);
 
     /// <summary>
     /// Writes only the changes since last sync (delta sync).
     /// </summary>
-    public abstract void OnSerializeDelta(NetworkWriter writer);
+    public abstract void OnSerializeDelta(BinaryWriter writer);
 
     /// <summary>
     /// Reads a complete copy of the object state (for initial sync).
     /// </summary>
-    public abstract void OnDeserializeAll(NetworkReader reader);
+    public abstract void OnDeserializeAll(BinaryReader reader);
 
     /// <summary>
     /// Reads and applies changes since last sync (delta sync).
     /// </summary>
-    public abstract void OnDeserializeDelta(NetworkReader reader);
+    public abstract void OnDeserializeDelta(BinaryReader reader);
 
     /// <summary>
     /// Resets the SyncObject to its initial state.
