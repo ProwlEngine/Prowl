@@ -5,6 +5,7 @@ using Prowl.Wicked.Interest;
 using Prowl.Wicked.Network.Messages;
 using Prowl.Wicked.Network.Rpc;
 using Prowl.Wicked.Network.Serialization;
+using Prowl.Wicked.Tools;
 using Prowl.Wicked.Transport;
 
 /// <summary>
@@ -20,6 +21,27 @@ public static class NetworkServer
     /// True if the server is currently active.
     /// </summary>
     public static bool Active { get; private set; }
+
+    // tick rate is defined as 'sendRate' because that's more obvious.
+    // for example, 30 Hz would mean 30 state updates per second.
+    /// <summary>
+    /// Server send rate in Hz. Determines how often state updates are sent to clients.
+    /// 30 Hz for fast paced games like Counter-Strike.
+    /// 10 Hz for slow paced games like Dota, Starcraft, etc.
+    /// </summary>
+    public static int sendRate = 30;
+
+    /// <summary>
+    /// Calculated send interval based on sendRate.
+    /// </summary>
+    public static float sendInterval => 1f / sendRate;
+
+    /// <summary>
+    /// If true, exceptions during message handling will disconnect the connection.
+    /// This is for security - prevents attackers from causing crashes with malformed data.
+    /// Recommended to keep this true in production.
+    /// </summary>
+    public static bool exceptionsDisconnect = true;
 
     /// <summary>
     /// Maximum number of concurrent connections allowed.
@@ -155,11 +177,21 @@ public static class NetworkServer
     /// <summary>
     /// Registers a message handler.
     /// </summary>
-    public static void RegisterHandler<T>(Action<NetworkConnection, T> handler) where T : INetworkMessage, new()
+    /// <param name="handler">The handler to call when the message is received.</param>
+    /// <param name="requireAuthentication">If true, connection must be authenticated before handler is called.</param>
+    public static void RegisterHandler<T>(Action<NetworkConnection, T> handler, bool requireAuthentication = true) where T : INetworkMessage, new()
     {
         var messageId = MessageRegistry.GetMessageId<T>();
         _handlers[messageId] = (conn, reader) =>
         {
+            // Check authentication if required
+            if (requireAuthentication && !conn.IsAuthenticated)
+            {
+                Console.WriteLine($"NetworkServer: Disconnecting connection {conn}. Received message {typeof(T).Name} that required authentication, but the user has not authenticated yet");
+                DisconnectClient(conn.ConnectionId);
+                return;
+            }
+
             var message = new T();
             message.Deserialize(reader);
             handler(conn, message);
@@ -188,6 +220,17 @@ public static class NetworkServer
         RegisterHandler<CommandMessage>((conn, msg) =>
         {
             HandleCommand(conn, msg);
+        });
+
+        // Ping/Pong for RTT calculation
+        RegisterHandler<NetworkPingMessage>((conn, msg) =>
+        {
+            NetworkTime.OnServerPing(conn, msg);
+        });
+
+        RegisterHandler<NetworkPongMessage>((conn, msg) =>
+        {
+            NetworkTime.OnServerPong(conn, msg);
         });
     }
 
@@ -552,7 +595,7 @@ public static class NetworkServer
         {
             Address = address,
             IsAuthenticated = true, // For now, auto-authenticate
-            LastMessageTime = GameLoop.Time
+            LastMessageTime = NetworkTime.localTime
         };
         _connections[connectionId] = conn;
 
@@ -596,7 +639,7 @@ public static class NetworkServer
     {
         if (!DisconnectInactiveConnections) return;
 
-        var currentTime = GameLoop.Time;
+        var currentTime = NetworkTime.localTime;
         foreach (var conn in _connections.Values.ToArray())
         {
             // Skip local host connection
@@ -607,6 +650,29 @@ public static class NetworkServer
             {
                 Console.WriteLine($"NetworkServer: Disconnecting inactive client {conn.ConnectionId} (timeout: {DisconnectInactiveTimeout}s)");
                 DisconnectClient(conn.ConnectionId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates ping for all connections. Sends ping messages and calculates RTT.
+    /// </summary>
+    internal static void UpdateConnectionPings()
+    {
+        foreach (var conn in _connections.Values)
+        {
+            // Skip local host connection
+            if (conn == LocalConnection) continue;
+
+            // Send ping if interval has elapsed
+            if (NetworkTime.localTime >= conn.LastPingTime + NetworkTime.PingInterval)
+            {
+                // TODO: it would be safer for the server to store the last N
+                // messages' timestamp and only send a message number.
+                // This way clients can't just modify the timestamp.
+                NetworkPingMessage pingMessage = new NetworkPingMessage(NetworkTime.localTime, 0);
+                Send(conn, pingMessage);
+                conn.LastPingTime = NetworkTime.localTime;
             }
         }
     }
@@ -654,10 +720,29 @@ public static class NetworkServer
         if (!_connections.TryGetValue(connectionId, out var conn))
             return;
 
-        conn.LastMessageTime = GameLoop.Time;
+        conn.LastMessageTime = NetworkTime.localTime;
 
         var reader = new NetworkReader(data);
-        var messageId = reader.ReadUShort();
+
+        // try to read message id
+        ushort messageId;
+        try
+        {
+            messageId = reader.ReadUShort();
+        }
+        catch (Exception ex)
+        {
+            if (exceptionsDisconnect)
+            {
+                Console.WriteLine($"NetworkServer: Disconnecting connection {conn} because reading message ID caused an Exception: {ex}");
+                DisconnectClient(connectionId);
+            }
+            else
+            {
+                Console.WriteLine($"NetworkServer: Error reading message ID from {conn}: {ex}");
+            }
+            return;
+        }
 
         if (_handlers.TryGetValue(messageId, out var handler))
         {
@@ -667,7 +752,16 @@ public static class NetworkServer
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"NetworkServer: Error handling message {messageId}: {ex}");
+                // should we disconnect on exceptions?
+                if (exceptionsDisconnect)
+                {
+                    Console.WriteLine($"NetworkServer: Disconnecting connection {conn} because handling message {messageId} caused an Exception. This can happen if the other side accidentally (or an attacker intentionally) sent invalid data. Reason: {ex}");
+                    DisconnectClient(connectionId);
+                }
+                else
+                {
+                    Console.WriteLine($"NetworkServer: Error handling message {messageId} from {conn}: {ex}");
+                }
             }
         }
         else

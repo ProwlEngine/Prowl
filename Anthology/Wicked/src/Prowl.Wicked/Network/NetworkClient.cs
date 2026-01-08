@@ -4,6 +4,7 @@ using Prowl.Wicked.Core;
 using Prowl.Wicked.Network.Messages;
 using Prowl.Wicked.Network.Rpc;
 using Prowl.Wicked.Network.Serialization;
+using Prowl.Wicked.Tools;
 using Prowl.Wicked.Transport;
 
 /// <summary>
@@ -53,6 +54,28 @@ public static class NetworkClient
     /// Set when receiving a SpawnMessage with IsLocalPlayer = true.
     /// </summary>
     public static Entity? LocalPlayer { get; private set; }
+
+    /// <summary>
+    /// If true, exceptions during message handling will disconnect from the server.
+    /// This is for security - prevents attackers from causing crashes with malformed data.
+    /// Recommended to keep this true in production.
+    /// </summary>
+    public static bool exceptionsDisconnect = true;
+
+    /// <summary>
+    /// The current connection quality based on RTT and jitter.
+    /// </summary>
+    public static ConnectionQuality connectionQuality { get; private set; } = ConnectionQuality.ESTIMATING;
+
+    /// <summary>
+    /// The method used to calculate connection quality.
+    /// </summary>
+    public static ConnectionQualityMethod connectionQualityMethod = ConnectionQualityMethod.Simple;
+
+    /// <summary>
+    /// Client's local timeline - used for snapshot interpolation and NetworkTime.time.
+    /// </summary>
+    public static double localTimeline { get; internal set; }
 
     /// <summary>
     /// Event raised when the client connects to the server.
@@ -222,6 +245,17 @@ public static class NetworkClient
         RegisterHandler<SyncDataMessage>(OnSyncDataMessage);
         RegisterHandler<RpcMessage>(OnRpcMessage);
         RegisterHandler<OwnershipMessage>(OnOwnershipMessage);
+
+        // Ping/Pong for RTT calculation
+        RegisterHandler<NetworkPingMessage>(msg =>
+        {
+            NetworkTime.OnClientPing(msg);
+        });
+
+        RegisterHandler<NetworkPongMessage>(msg =>
+        {
+            NetworkTime.OnClientPong(msg);
+        });
     }
 
     private static void OnSpawnStarted(SpawnStartedMessage _)
@@ -516,10 +550,29 @@ public static class NetworkClient
     private static void OnTransportData(ArraySegment<byte> data)
     {
         if (Connection != null)
-            Connection.LastMessageTime = GameLoop.Time;
+            Connection.LastMessageTime = NetworkTime.localTime;
 
         var reader = new NetworkReader(data);
-        var messageId = reader.ReadUShort();
+
+        // try to read message id
+        ushort messageId;
+        try
+        {
+            messageId = reader.ReadUShort();
+        }
+        catch (Exception ex)
+        {
+            if (exceptionsDisconnect)
+            {
+                Console.WriteLine($"NetworkClient: Disconnecting because reading message ID caused an Exception: {ex}");
+                Disconnect();
+            }
+            else
+            {
+                Console.WriteLine($"NetworkClient: Error reading message ID: {ex}");
+            }
+            return;
+        }
 
         if (_handlers.TryGetValue(messageId, out var handler))
         {
@@ -529,7 +582,16 @@ public static class NetworkClient
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"NetworkClient: Error handling message {messageId}: {ex}");
+                // should we disconnect on exceptions?
+                if (exceptionsDisconnect)
+                {
+                    Console.WriteLine($"NetworkClient: Disconnecting because handling message {messageId} caused an Exception. This can happen if the other side accidentally (or an attacker intentionally) sent invalid data. Reason: {ex}");
+                    Disconnect();
+                }
+                else
+                {
+                    Console.WriteLine($"NetworkClient: Error handling message {messageId}: {ex}");
+                }
             }
         }
         else
@@ -547,5 +609,30 @@ public static class NetworkClient
         ConnectState = ConnectState.Connected;
         IsReady = true;
         OnConnected?.Invoke();
+    }
+
+    /// <summary>
+    /// Updates connection quality based on RTT.
+    /// Called each frame from NetworkManager.
+    /// </summary>
+    internal static void UpdateConnectionQuality()
+    {
+        if (!IsConnected) return;
+
+        // Calculate connection quality based on chosen method
+        if (connectionQualityMethod == ConnectionQualityMethod.Simple)
+        {
+            connectionQuality = ConnectionQualityHeuristics.Simple(
+                NetworkTime.rtt,
+                NetworkTime.rttStandardDeviation);
+        }
+        // Pragmatic method would need snapshot interpolation buffer time
+        // For now, fall back to Simple if Pragmatic is chosen
+        else
+        {
+            connectionQuality = ConnectionQualityHeuristics.Simple(
+                NetworkTime.rtt,
+                NetworkTime.rttStandardDeviation);
+        }
     }
 }

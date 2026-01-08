@@ -1,6 +1,7 @@
 namespace Prowl.Wicked.Network;
 
 using Prowl.Wicked.Core;
+using Prowl.Wicked.Tools;
 using Prowl.Wicked.Transport;
 
 /// <summary>
@@ -371,26 +372,51 @@ public static class NetworkManager
         World.Active.DestroyEntity(entity);
     }
 
+    // for tick rate limiting
+    static double lastServerSendTime;
+
     /// <summary>
     /// Called every frame to process network messages.
     /// </summary>
     private static void Tick()
     {
+        // Update network time at the start of each frame
+        NetworkTime.EarlyUpdate();
+
+        // Process transport messages
         Transport?.Tick();
 
+        // Server tick
         if (IsServer && World.Active != null)
         {
             // Update entity visibility (AOI)
             NetworkServer.UpdateVisibility();
 
-            // Send sync data updates
-            foreach (var entity in World.Active.Entities.Values)
+            // Update pings for all connections
+            NetworkServer.UpdateConnectionPings();
+
+            // Only send sync data at the configured sendRate
+            if (AccurateInterval.Elapsed(NetworkTime.localTime, NetworkServer.sendInterval, ref lastServerSendTime))
             {
-                if (entity.IsDirty)
+                // Send sync data updates
+                foreach (var entity in World.Active.Entities.Values)
                 {
-                    NetworkServer.SendSyncData(entity);
+                    if (entity.IsDirty)
+                    {
+                        NetworkServer.SendSyncData(entity);
+                    }
                 }
             }
+        }
+
+        // Client tick
+        if (IsClient && !IsHost) // Host doesn't need to send pings to itself
+        {
+            // Update ping time (sends NetworkPingMessage)
+            NetworkTime.UpdateClient();
+
+            // Update connection quality
+            NetworkClient.UpdateConnectionQuality();
         }
     }
 }

@@ -1,6 +1,7 @@
 namespace Prowl.Wicked.Network;
 
 using Prowl.Wicked.Core;
+using Prowl.Wicked.Tools;
 
 /// <summary>
 /// Represents a network connection between server and client.
@@ -9,6 +10,11 @@ public class NetworkConnection
 {
     private readonly HashSet<uint> _ownedEntities = new();
     private readonly HashSet<Entity> _observing = new();
+
+    // ping for rtt (round trip time)
+    // useful for statistics, lag compensation, etc.
+    double lastPingTime = 0;
+    internal ExponentialMovingAverage _rtt = new ExponentialMovingAverage(NetworkTime.PingWindowSize);
 
     /// <summary>
     /// The unique identifier for this connection.
@@ -48,14 +54,33 @@ public class NetworkConnection
     public Core.Entity? PlayerEntity { get; internal set; }
 
     /// <summary>
-    /// Round-trip time in milliseconds.
+    /// Round trip time (in seconds) that it takes a message to go server->client->server.
     /// </summary>
-    public float RoundTripTime { get; internal set; }
+    public double rtt => _rtt.Value;
+
+    /// <summary>
+    /// Round trip time variance aka jitter, in seconds.
+    /// </summary>
+    public double rttVariance => _rtt.Variance;
+
+    /// <summary>
+    /// Round trip time standard deviation in seconds.
+    /// </summary>
+    public double rttStandardDeviation => _rtt.StandardDeviation;
 
     /// <summary>
     /// Last time a message was received from this connection.
     /// </summary>
     public double LastMessageTime { get; internal set; }
+
+    /// <summary>
+    /// Last time a ping was sent to this connection.
+    /// </summary>
+    internal double LastPingTime
+    {
+        get => lastPingTime;
+        set => lastPingTime = value;
+    }
 
     /// <summary>
     /// Creates a new network connection.
