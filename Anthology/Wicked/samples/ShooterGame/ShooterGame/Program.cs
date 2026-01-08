@@ -462,6 +462,53 @@ void DrawGameUI()
 
     // Instructions
     Raylib.DrawText("ESC to disconnect", ScreenWidth - 150, 10, 14, Color.Gray);
+
+    // ============ Network Stats (top right) ============
+    int rightX = ScreenWidth - 200;
+    int y = 10;
+
+    // Ping / RTT
+    double rttMs = NetworkTime.rtt * 1000.0;
+    double rttVarMs = NetworkTime.rttStandardDeviation * 1000.0;
+    Color pingColor = rttMs < 50 ? Color.Green : rttMs < 100 ? Color.Yellow : rttMs < 200 ? Color.Orange : Color.Red;
+    Raylib.DrawText($"Ping: {rttMs:F1} ms", rightX, y, 14, pingColor);
+    y += 18;
+    Raylib.DrawText($"Jitter: {rttVarMs:F1} ms", rightX, y, 14, Color.LightGray);
+    y += 18;
+
+    // Connection Quality
+    string qualityStr = NetworkClient.connectionQuality.ToString();
+    Color qualityColor = NetworkClient.connectionQuality switch
+    {
+        ConnectionQuality.EXCELLENT => Color.Green,
+        ConnectionQuality.GOOD => Color.SkyBlue,
+        ConnectionQuality.FAIR => Color.Yellow,
+        ConnectionQuality.POOR => Color.Red,
+        _ => Color.Gray
+    };
+    Raylib.DrawText($"Quality: {qualityStr}", rightX, y, 14, qualityColor);
+    y += 22;
+
+    // Network Time
+    Raylib.DrawText("--- Time ---", rightX, y, 12, Color.Gray);
+    y += 16;
+    Raylib.DrawText($"Local: {NetworkTime.localTime:F2}s", rightX, y, 14, Color.LightGray);
+    y += 18;
+    Raylib.DrawText($"Network: {NetworkTime.time:F2}s", rightX, y, 14, Color.White);
+    y += 18;
+    Raylib.DrawText($"Predicted: {NetworkTime.predictedTime:F2}s", rightX, y, 14, Color.SkyBlue);
+    y += 18;
+
+    // Time offset (how far behind server we are)
+    double offsetMs = NetworkTime.offset * 1000.0;
+    Raylib.DrawText($"Offset: {offsetMs:F1} ms", rightX, y, 14, Color.LightGray);
+    y += 22;
+
+    // Server tick rate (only shown on server/host)
+    if (NetworkManager.IsServer)
+    {
+        Raylib.DrawText($"Send Rate: {NetworkServer.sendRate} Hz", rightX, y, 14, Color.LightGray);
+    }
 }
 
 void SpawnLocalPlayer()

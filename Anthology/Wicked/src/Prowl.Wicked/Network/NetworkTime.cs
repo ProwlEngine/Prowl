@@ -216,6 +216,13 @@ namespace Prowl.Wicked.Network
         internal static void EarlyUpdate()
         {
             localFrameTime = stopwatch.Elapsed.TotalSeconds;
+
+            // Update client's local timeline each frame so it advances smoothly.
+            // The offset from pong messages is already averaged via EMA, so we just apply it.
+            if (NetworkClient.Active && !NetworkServer.Active)
+            {
+                NetworkClient.localTimeline = localFrameTime + _predictionErrorUnadjusted.Value;
+            }
         }
     }
 }

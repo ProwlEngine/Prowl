@@ -19,6 +19,10 @@ public static class MessageRegistry
         Register<RpcMessage>();
         Register<CommandMessage>();
         Register<OwnershipMessage>();
+        Register<SpawnStartedMessage>();
+        Register<SpawnFinishedMessage>();
+        Register<NetworkPingMessage>();
+        Register<NetworkPongMessage>();
     }
 
     /// <summary>
