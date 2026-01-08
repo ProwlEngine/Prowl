@@ -258,9 +258,13 @@ public class Entity
 
     /// <summary>
     /// Adds a behaviour to this entity.
+    /// Can only be called before the entity is spawned (before IsServer or IsClient is set).
     /// </summary>
     public T AddBehaviour<T>() where T : EntityBehaviour, new()
     {
+        if (IsServer || IsClient)
+            throw new InvalidOperationException("Cannot add EntityBehaviour after spawning!");
+
         var behaviour = new T();
         behaviour.Entity = this;
         behaviour.BehaviourIndex = (byte)_behaviours.Count;
@@ -269,79 +273,24 @@ public class Entity
         try { behaviour.OnAwake(); }
         catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnAwake: {e}"); }
 
-        // If the entity has already started, call the lifecycle methods for this new behaviour
-        // Note: We need to check each flag individually because they track per-entity state
-        if (_hasStarted)
-        {
-            try { behaviour.OnStart(); }
-            catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnStart: {e}"); }
-
-            // Only call if the entity's flag is set (StartNetwork was already called)
-            if (_serverStarted)
-            {
-                try { behaviour.OnStartServer(); }
-                catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnStartServer: {e}"); }
-            }
-            if (_clientStarted)
-            {
-                try { behaviour.OnStartClient(); }
-                catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnStartClient: {e}"); }
-            }
-            if (_localPlayerStarted)
-            {
-                try { behaviour.OnStartLocalPlayer(); }
-                catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnStartLocalPlayer: {e}"); }
-            }
-            if (_authorityStarted)
-            {
-                try { behaviour.OnStartAuthority(); }
-                catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnStartAuthority: {e}"); }
-            }
-        }
-
         return behaviour;
     }
 
     /// <summary>
     /// Adds a pre-created behaviour to this entity.
+    /// Can only be called before the entity is spawned (before IsServer or IsClient is set).
     /// </summary>
     internal void AddBehaviour(EntityBehaviour behaviour)
     {
+        if (IsServer || IsClient)
+            throw new InvalidOperationException("Cannot add EntityBehaviour after spawning!");
+
         behaviour.Entity = this;
         behaviour.BehaviourIndex = (byte)_behaviours.Count;
         _behaviours.Add(behaviour);
 
         try { behaviour.OnAwake(); }
         catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnAwake: {e}"); }
-
-        // If the entity has already started, call the lifecycle methods for this new behaviour
-        if (_hasStarted)
-        {
-            try { behaviour.OnStart(); }
-            catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnStart: {e}"); }
-
-            // Only call if the entity's flag is set (StartNetwork was already called)
-            if (_serverStarted)
-            {
-                try { behaviour.OnStartServer(); }
-                catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnStartServer: {e}"); }
-            }
-            if (_clientStarted)
-            {
-                try { behaviour.OnStartClient(); }
-                catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnStartClient: {e}"); }
-            }
-            if (_localPlayerStarted)
-            {
-                try { behaviour.OnStartLocalPlayer(); }
-                catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnStartLocalPlayer: {e}"); }
-            }
-            if (_authorityStarted)
-            {
-                try { behaviour.OnStartAuthority(); }
-                catch (Exception e) { Console.WriteLine($"[Entity {NetId}] Exception in OnStartAuthority: {e}"); }
-            }
-        }
     }
 
     /// <summary>
@@ -367,24 +316,6 @@ public class Entity
             if (behaviour is T typed)
                 yield return typed;
         }
-    }
-
-    /// <summary>
-    /// Removes the first behaviour of the specified type.
-    /// </summary>
-    public bool RemoveBehaviour<T>() where T : EntityBehaviour
-    {
-        for (int i = 0; i < _behaviours.Count; i++)
-        {
-            if (_behaviours[i] is T)
-            {
-                var behaviour = _behaviours[i];
-                behaviour.OnDestroy();
-                _behaviours.RemoveAt(i);
-                return true;
-            }
-        }
-        return false;
     }
 
     // Lifecycle methods - called by World

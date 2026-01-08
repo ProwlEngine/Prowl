@@ -274,8 +274,6 @@ public static class NetworkManager
             throw new InvalidOperationException("No active world.");
 
         var entity = World.Active.CreateEntity();
-        entity.IsServer = true;
-        entity.IsClient = IsHost;
 
         return entity;
     }
@@ -291,6 +289,9 @@ public static class NetworkManager
     {
         if (!IsServer)
             throw new InvalidOperationException("FinalizeSpawn can only be called on the server.");
+
+        entity.IsServer = true;
+        entity.IsClient = IsHost;
 
         if (owner != null)
         {
