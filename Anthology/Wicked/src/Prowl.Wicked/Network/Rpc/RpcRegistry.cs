@@ -5,10 +5,27 @@ using System.Reflection;
 using Prowl.Wicked.Core;
 
 /// <summary>
+/// Invoke type for Cmd/Rpc - like Mirror's RemoteCallType.
+/// </summary>
+public enum RemoteCallType { Command, ClientRpc }
+
+/// <summary>
 /// Delegate for invoking an RPC method.
 /// Args is the deserialized object[] from the message.
 /// </summary>
 public delegate void RpcInvoker(EntityBehaviour behaviour, object?[] args);
+
+/// <summary>
+/// Internal invoker info - like Mirror's Invoker class.
+/// </summary>
+internal class Invoker
+{
+    public Type ComponentType { get; set; } = null!;
+    public RemoteCallType CallType { get; set; }
+    public RpcInvoker Function { get; set; } = null!;
+    public bool CmdRequiresAuthority { get; set; } = true;
+    public string MethodName { get; set; } = "";
+}
 
 /// <summary>
 /// Registry for RPC method handlers.
@@ -17,23 +34,75 @@ public delegate void RpcInvoker(EntityBehaviour behaviour, object?[] args);
 /// </summary>
 public static class RpcRegistry
 {
-    private static readonly Dictionary<(Type, ushort), RpcInvoker> _invokers = new();
+    private static readonly Dictionary<(Type, ushort), Invoker> _invokers = new();
     private static readonly Dictionary<(Type, ushort), MethodInfo> _methods = new();
-    private static readonly Dictionary<(Type, ushort), string> _hashToName = new(); // For debugging
 
     /// <summary>
-    /// Registers an RPC invoker for a behaviour type and function hash.
+    /// Registers a command invoker for a behaviour type and function hash.
+    /// Like Mirror's RegisterCommand.
     /// </summary>
-    public static void Register<TBehaviour>(ushort functionHash, RpcInvoker invoker, string methodName = "") where TBehaviour : EntityBehaviour
+    public static void RegisterCommand<TBehaviour>(ushort functionHash, RpcInvoker invoker, bool requiresAuthority = true, string methodName = "") where TBehaviour : EntityBehaviour
     {
         var key = (typeof(TBehaviour), functionHash);
-        _invokers[key] = invoker;
-        if (!string.IsNullOrEmpty(methodName))
-            _hashToName[key] = methodName;
+        _invokers[key] = new Invoker
+        {
+            ComponentType = typeof(TBehaviour),
+            CallType = RemoteCallType.Command,
+            Function = invoker,
+            CmdRequiresAuthority = requiresAuthority,
+            MethodName = methodName
+        };
     }
 
     /// <summary>
-    /// Registers an RPC invoker for a behaviour type and method name (computes hash automatically).
+    /// Registers a command invoker for a behaviour type and method name (computes hash automatically).
+    /// Like Mirror's RegisterCommand.
+    /// </summary>
+    public static void RegisterCommand<TBehaviour>(string methodName, RpcInvoker invoker, bool requiresAuthority = true) where TBehaviour : EntityBehaviour
+    {
+        var hash = FunctionHash.ComputeHash(typeof(TBehaviour), methodName);
+        RegisterCommand<TBehaviour>(hash, invoker, requiresAuthority, methodName);
+    }
+
+    /// <summary>
+    /// Registers a client RPC invoker for a behaviour type and function hash.
+    /// Like Mirror's RegisterRpc.
+    /// </summary>
+    public static void RegisterRpc<TBehaviour>(ushort functionHash, RpcInvoker invoker, string methodName = "") where TBehaviour : EntityBehaviour
+    {
+        var key = (typeof(TBehaviour), functionHash);
+        _invokers[key] = new Invoker
+        {
+            ComponentType = typeof(TBehaviour),
+            CallType = RemoteCallType.ClientRpc,
+            Function = invoker,
+            CmdRequiresAuthority = false,
+            MethodName = methodName
+        };
+    }
+
+    /// <summary>
+    /// Registers a client RPC invoker for a behaviour type and method name (computes hash automatically).
+    /// Like Mirror's RegisterRpc.
+    /// </summary>
+    public static void RegisterRpc<TBehaviour>(string methodName, RpcInvoker invoker) where TBehaviour : EntityBehaviour
+    {
+        var hash = FunctionHash.ComputeHash(typeof(TBehaviour), methodName);
+        RegisterRpc<TBehaviour>(hash, invoker, methodName);
+    }
+
+    /// <summary>
+    /// Registers an RPC invoker (backward compatible method).
+    /// Defaults to Command type with requiresAuthority=true.
+    /// </summary>
+    public static void Register<TBehaviour>(ushort functionHash, RpcInvoker invoker, string methodName = "") where TBehaviour : EntityBehaviour
+    {
+        RegisterCommand<TBehaviour>(functionHash, invoker, true, methodName);
+    }
+
+    /// <summary>
+    /// Registers an RPC invoker (backward compatible method).
+    /// Defaults to Command type with requiresAuthority=true.
     /// </summary>
     public static void Register<TBehaviour>(string methodName, RpcInvoker invoker) where TBehaviour : EntityBehaviour
     {
@@ -48,14 +117,46 @@ public static class RpcRegistry
     {
         var key = (behaviourType, functionHash);
         _methods[key] = method;
-        if (!string.IsNullOrEmpty(methodName))
-            _hashToName[key] = methodName;
+
+        // Also create an invoker entry if not exists
+        if (!_invokers.ContainsKey(key))
+        {
+            _invokers[key] = new Invoker
+            {
+                ComponentType = behaviourType,
+                CallType = RemoteCallType.Command, // Default to command
+                Function = (b, args) => method.Invoke(b, new object[] { args }),
+                CmdRequiresAuthority = true, // Default to requiring authority
+                MethodName = methodName
+            };
+        }
+    }
+
+    /// <summary>
+    /// Checks if a command requires authority to execute.
+    /// Like Mirror's CommandRequiresAuthority.
+    /// </summary>
+    public static bool CommandRequiresAuthority(Type behaviourType, ushort functionHash)
+    {
+        var key = (behaviourType, functionHash);
+        return _invokers.TryGetValue(key, out var invoker) &&
+               invoker.CallType == RemoteCallType.Command &&
+               invoker.CmdRequiresAuthority;
     }
 
     /// <summary>
     /// Gets the invoker for a behaviour type and function hash.
     /// </summary>
     public static RpcInvoker? GetInvoker(Type behaviourType, ushort functionHash)
+    {
+        var key = (behaviourType, functionHash);
+        return _invokers.TryGetValue(key, out var invoker) ? invoker.Function : null;
+    }
+
+    /// <summary>
+    /// Gets the full invoker info for a behaviour type and function hash.
+    /// </summary>
+    internal static Invoker? GetInvokerInfo(Type behaviourType, ushort functionHash)
     {
         var key = (behaviourType, functionHash);
         return _invokers.TryGetValue(key, out var invoker) ? invoker : null;
@@ -76,7 +177,9 @@ public static class RpcRegistry
     public static string GetMethodName(Type behaviourType, ushort functionHash)
     {
         var key = (behaviourType, functionHash);
-        return _hashToName.TryGetValue(key, out var name) ? name : $"0x{functionHash:X4}";
+        if (_invokers.TryGetValue(key, out var invoker) && !string.IsNullOrEmpty(invoker.MethodName))
+            return invoker.MethodName;
+        return $"0x{functionHash:X4}";
     }
 
     /// <summary>
@@ -185,6 +288,5 @@ public static class RpcRegistry
     {
         _invokers.Clear();
         _methods.Clear();
-        _hashToName.Clear();
     }
 }

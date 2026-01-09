@@ -128,6 +128,7 @@ public static class NetworkManager
             World.Create();
 
         Mode = NetworkMode.Client;
+        NetworkClient.ServerAddress = address; // Store server address for the connection
         NetworkClient.Start();
         Transport.ClientConnect(address, port);
 
@@ -321,16 +322,32 @@ public static class NetworkManager
     /// <summary>
     /// Spawns a new entity with a specific owner.
     /// Must be called on the server.
+    /// Like Mirror's Spawn(identity, ownerConnection).
     /// </summary>
     public static Entity SpawnWithOwner(NetworkConnection owner)
     {
-        var entity = Spawn();
+        if (!IsServer)
+            throw new InvalidOperationException("SpawnWithOwner can only be called on the server.");
+
+        if (World.Active == null)
+            throw new InvalidOperationException("No active world.");
+
+        var entity = World.Active.CreateEntity();
+
+        // Setup ownership BEFORE spawning (so spawn message includes owner info)
         entity.Owner = owner;
         entity.IsOwned = IsHost && owner == NetworkServer.LocalConnection;
         owner.AddOwnedEntity(entity.NetId);
 
-        // Re-send spawn message with ownership info
-        // (In a real implementation, we'd include this in the initial spawn)
+        // Setup network state
+        entity.IsServer = true;
+        entity.IsClient = IsHost;
+
+        // Start the entity
+        World.Active.Spawn(entity, true, IsHost);
+
+        // Notify clients (spawn message now includes correct owner info)
+        NetworkServer.SpawnEntity(entity);
 
         return entity;
     }
@@ -338,12 +355,23 @@ public static class NetworkManager
     /// <summary>
     /// Spawns a player entity for a connection.
     /// Must be called on the server.
+    /// Note: IsLocalPlayer is set per-connection on the client side when the spawn message is received.
+    /// On the server, we just track which entity is the player via conn.PlayerEntity.
+    /// Like Mirror's AddPlayerForConnection.
     /// </summary>
     public static Entity SpawnPlayer(NetworkConnection owner)
     {
         var entity = SpawnWithOwner(owner);
-        entity.IsLocalPlayer = true;
+        // Set this connection's main player entity
+        // This is used by SendSpawnMessage to compute isLocalPlayer per-connection
         owner.PlayerEntity = entity;
+
+        // In host mode, the local connection's player IS the local player
+        if (IsHost && owner == NetworkServer.LocalConnection)
+        {
+            entity.IsLocalPlayer = true;
+        }
+
         return entity;
     }
 

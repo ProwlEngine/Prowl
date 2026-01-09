@@ -320,13 +320,9 @@ public class Entity
 
     // Lifecycle methods - called by World
 
-    internal void Awake()
-    {
-        foreach (var behaviour in _behaviours)
-        {
-            behaviour.OnAwake();
-        }
-    }
+    // NOTE: Unlike Unity, we don't have a separate Awake() call.
+    // OnAwake() is called immediately in AddBehaviour() when behaviours are added.
+    // This matches the intent of Unity's Awake() which runs before Start().
 
     internal void Start()
     {

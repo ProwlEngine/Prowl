@@ -225,6 +225,16 @@ public static class NetworkServer
             return;
         }
 
+        // Check if connection is ready
+        if (!sender.IsReady)
+        {
+            // Clients may be set NotReady due to scene change or other game logic.
+            // Ignore commands that may have been in flight before client received NotReadyMessage.
+            var methodName = RpcRegistry.GetMethodName(typeof(Core.EntityBehaviour), msg.FunctionHash);
+            Console.WriteLine($"NetworkServer: Command {methodName} received for netId={msg.NetId} when client not ready. This may be ignored if client intentionally set NotReady.");
+            return;
+        }
+
         var entity = World.Active.FindEntity(msg.NetId);
         if (entity == null)
         {
@@ -239,6 +249,17 @@ public static class NetworkServer
         }
 
         var behaviour = entity.Behaviours[msg.BehaviourIndex];
+
+        // Check authority - like Mirror's OnCommandMessage
+        // Commands can be for player objects, OR other objects with client-authority.
+        // Only allow the command if the sender owns the entity (when requiresAuthority is true).
+        bool requiresAuthority = RpcRegistry.CommandRequiresAuthority(behaviour.GetType(), msg.FunctionHash);
+        if (requiresAuthority && entity.Owner != sender)
+        {
+            var methodName = RpcRegistry.GetMethodName(behaviour.GetType(), msg.FunctionHash);
+            Console.WriteLine($"NetworkServer: Command {methodName} received for {entity.NetId} without authority. Sender={sender.ConnectionId}, Owner={entity.Owner?.ConnectionId ?? -1}");
+            return;
+        }
 
         // Deserialize arguments using Echo
         var args = NetworkSerializer.Deserialize<object?[]>(msg.Arguments) ?? Array.Empty<object?>();
@@ -481,12 +502,16 @@ public static class NetworkServer
         // Server computes IsOwner directly - the receiving connection owns this if it's the entity's owner
         bool isOwner = entity.Owner == conn;
 
+        // IsLocalPlayer means this entity IS the main player entity for this connection
+        // Like Mirror's: conn.identity == identity
+        bool isLocalPlayer = conn.PlayerEntity == entity;
+
         var message = new SpawnMessage
         {
             NetId = entity.NetId,
             OwnerId = entity.Owner?.ConnectionId ?? -1,
             IsOwner = isOwner,
-            IsLocalPlayer = entity.Owner == conn,
+            IsLocalPlayer = isLocalPlayer,
             BehaviourIndices = behaviourIndices,
             BehaviourSyncData = behaviourSyncData
         };
@@ -516,7 +541,8 @@ public static class NetworkServer
             };
 
             // Send to all observers of this entity
-            foreach (var conn in entity.Observers.Values)
+            // Create a snapshot to avoid collection modification during iteration
+            foreach (var conn in new List<NetworkConnection>(entity.Observers.Values))
             {
                 if (conn.IsReady)
                 {
@@ -799,9 +825,8 @@ public static class NetworkServer
         bool isOwner = entity.Owner == conn;
 
         // Determine if this is the local player for this connection
-        // LocalPlayer means: it's the main player entity assigned to this connection
-        // AND the connection owns it
-        bool isLocalPlayer = isOwner && conn.OwnedEntities.Contains(entity.NetId) && entity.IsLocalPlayer;
+        // Like Mirror's: conn.identity == identity
+        bool isLocalPlayer = conn.PlayerEntity == entity;
 
         Send(conn, new OwnershipMessage
         {

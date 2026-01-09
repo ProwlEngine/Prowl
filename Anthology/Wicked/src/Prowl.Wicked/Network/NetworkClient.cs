@@ -105,6 +105,12 @@ public static class NetworkClient
     public static double localTimeline;
 
     /// <summary>
+    /// The server address this client is connected to (or trying to connect to).
+    /// Set by NetworkManager when starting a client connection.
+    /// </summary>
+    public static string ServerAddress { get; internal set; } = "localhost";
+
+    /// <summary>
     /// Event raised when the client connects to the server.
     /// </summary>
     public static event Action? OnConnected;
@@ -528,7 +534,7 @@ public static class NetworkClient
         {
             Connection = new NetworkConnection(-1) // Client doesn't know its own ID
             {
-                Address = "localhost",
+                Address = ServerAddress, // Use the server address we connected to
                 IsAuthenticated = true
             };
         }
@@ -536,7 +542,7 @@ public static class NetworkClient
         // Set connected state before invoking callbacks
         ConnectState = ConnectState.Connected;
 
-        Console.WriteLine("NetworkClient: Connected to server");
+        Console.WriteLine($"NetworkClient: Connected to server at {ServerAddress}");
         OnConnected?.Invoke();
 
         // Auto-ready for now
