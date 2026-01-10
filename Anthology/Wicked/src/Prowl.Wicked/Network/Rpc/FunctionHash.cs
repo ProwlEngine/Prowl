@@ -1,28 +1,33 @@
 namespace Prowl.Wicked.Network.Rpc;
 
 /// <summary>
-/// Computes stable hash codes for RPC function names.
+/// Computes stable hash codes for RPC function names and message types.
 /// Uses a 16-bit hash (ushort) to minimize network bandwidth while maintaining low collision probability.
-/// Inspired by Mirror's approach.
+/// Like Mirror's StableHashCode extension methods.
 /// </summary>
 public static class FunctionHash
 {
     /// <summary>
-    /// Computes a stable 16-bit hash for a function name.
-    /// The hash is deterministic across different runs and platforms.
+    /// Computes a stable 16-bit hash for a string using XOR folding.
+    /// Gets the 32-bit FNV-1a hash, then folds the highest 16 bits into the lowest 16 bits.
+    /// This creates a more uniform 16-bit hash distribution.
+    /// See: http://www.isthe.com/chongo/tech/comp/fnv/ "xor-folding" section.
     /// </summary>
-    /// <param name="functionName">The full function name (typically "TypeName.MethodName")</param>
+    /// <param name="text">The string to hash</param>
     /// <returns>A 16-bit hash code</returns>
-    public static ushort GetStableHash16(string functionName)
+    public static ushort GetStableHash16(string text)
     {
-        return (ushort)(GetStableHash32(functionName) & 0xFFFF);
+        uint hash32 = GetStableHash32(text);
+        // XOR fold: take the highest 16 bits and XOR them into the lowest 16 bits
+        return (ushort)((hash32 >> 16) ^ hash32);
     }
 
     /// <summary>
     /// Computes a stable 32-bit hash for a string.
     /// Uses FNV-1a algorithm for good distribution.
+    /// Platform independent, deterministic across runs.
     /// </summary>
-    private static uint GetStableHash32(string text)
+    public static uint GetStableHash32(string text)
     {
         unchecked
         {
