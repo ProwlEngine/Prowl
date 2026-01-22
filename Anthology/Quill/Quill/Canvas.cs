@@ -209,7 +209,7 @@ namespace Prowl.Quill
 
         private readonly List<SubPath> _subPaths = new List<SubPath>();
         private SubPath? _currentSubPath = null;
-        private bool _isPathOpen = false;
+        private bool _isPathReady = false;
 
         private readonly Stack<ProwlCanvasState> _savedStates = new Stack<ProwlCanvasState>();
         private ProwlCanvasState _state;
@@ -305,7 +305,7 @@ namespace Prowl.Quill
 
             _subPaths.Clear();
             _currentSubPath = null;
-            _isPathOpen = true;
+            _isPathReady = true;
 
             _globalAlpha = 1f;
             _drawStateDirty = true;
@@ -692,7 +692,7 @@ namespace Prowl.Quill
         {
             _subPaths.Clear();
             _currentSubPath = null;
-            _isPathOpen = true;
+            _isPathReady = true;
         }
 
         /// <summary>
@@ -707,7 +707,7 @@ namespace Prowl.Quill
         /// </remarks>
         public void MoveTo(float x, float y)
         {
-            if (!_isPathOpen)
+            if (!_isPathReady)
                 BeginPath();
 
             _currentSubPath = new SubPath(new List<Float2>());
@@ -799,7 +799,7 @@ namespace Prowl.Quill
                 (endAngle - startAngle) / segments;
 
             // If no path has started yet, move to the first point of the arc
-            if (!_isPathOpen)
+            if (!_isPathReady)
             {
                 float firstX = x + Maths.Cos(startAngle) * radius;
                 float firstY = y + Maths.Sin(startAngle) * radius;
@@ -839,7 +839,7 @@ namespace Prowl.Quill
         /// </remarks>
         public void ArcTo(float x1, float y1, float x2, float y2, float radius)
         {
-            if (!_isPathOpen)
+            if (!_isPathReady)
             {
                 MoveTo(x1, y1);
                 return;
@@ -1048,7 +1048,7 @@ namespace Prowl.Quill
         /// </remarks>
         public void BezierCurveTo(float cp1x, float cp1y, float cp2x, float cp2y, float x, float y)
         {
-            if (!_isPathOpen)
+            if (!_isPathReady)
             {
                 MoveTo(x, y);
                 return;
@@ -1105,7 +1105,7 @@ namespace Prowl.Quill
         /// </remarks>
         public void QuadraticCurveTo(float cpx, float cpy, float x, float y)
         {
-            if (!_isPathOpen)
+            if (!_isPathReady)
             {
                 MoveTo(x, y);
                 return;
