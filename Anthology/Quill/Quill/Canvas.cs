@@ -1278,11 +1278,10 @@ namespace Prowl.Quill
             if (subPath.Points.Count < 2)
                 return;
 
-            var copy = subPath.Points.ToArray();
+            var copy = new List<Float2>(subPath.Points.Count);
             // Transform each point
             for (int i = 0; i < subPath.Points.Count; i++)
-                subPath.Points[i] = TransformPoint(subPath.Points[i]);
-
+                copy.Add(TransformPoint(subPath.Points[i]));
 
             List<float> dashPattern = null;
             if (_state.strokeDashPattern != null)
@@ -1298,7 +1297,7 @@ namespace Prowl.Quill
             // Convert stroke width and dash offset from units to pixels
             float pixelStrokeWidth = (_state.strokeWidth * _state.strokeScale) * _scale;
             float pixelDashOffset = (_state.strokeDashOffset * _state.strokeScale) * _scale;
-            var triangles = PolylineMesher.Create(subPath.Points, pixelStrokeWidth, _pixelWidth, _state.strokeColor, _state.strokeJoint, _state.miterLimit, false, _state.strokeStartCap, _state.strokeEndCap, dashPattern, pixelDashOffset);
+            var triangles = PolylineMesher.Create(copy, pixelStrokeWidth, _pixelWidth, _state.strokeColor, _state.strokeJoint, _state.miterLimit, false, _state.strokeStartCap, _state.strokeEndCap, dashPattern, pixelDashOffset);
 
 
             // Store the starting index to reference _vertices
@@ -1321,10 +1320,6 @@ namespace Prowl.Quill
             }
 
             AddTriangleCount(triangles.Count);
-
-            // Reset the points to their original values
-            for (int i = 0; i < subPath.Points.Count; i++)
-                subPath.Points[i] = copy[i];
         }
 
         public void FillAndStroke()
