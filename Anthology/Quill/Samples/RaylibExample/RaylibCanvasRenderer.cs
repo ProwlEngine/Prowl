@@ -27,7 +27,6 @@ uniform vec4 brushParams;    // x,y = start point, z,w = end point (or center+ra
 uniform vec2 brushParams2;   // x = Box radius, y = Box Feather
 
 uniform mat4 brushTextureMat;     // Texture transform matrix (inverse)
-uniform int useWorldTextureCoords; // 0 = use vertex UVs, 1 = use world coords with transform
 
 float calculateBrushFactor() {
     // No brush
@@ -104,26 +103,10 @@ float scissorMask(vec2 p) {
     return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
 }
 
-// Can improve text but a bit slower
-//vec4 textureNice( sampler2D sam, vec2 uv )
-//{
-//    float textureResolution = float(textureSize(sam,0).x);
-//    uv = uv*textureResolution + 0.5;
-//    vec2 iuv = floor( uv );
-//    vec2 fuv = fract( uv );
-//    uv = iuv + fuv*fuv*(3.0-2.0*fuv);
-//    uv = (uv - 0.5)/textureResolution;
-//    return texture( sam, uv );
-//}
-
 void main()
 {
-    vec2 pixelSize = fwidth(fragTexCoord);
-    vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
-    float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
-    edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
-
     float mask = scissorMask(fragPos);
+
     vec4 color = fragColor;
 
     // Apply brush if active
@@ -132,22 +115,21 @@ void main()
         color = mix(brushColor1, brushColor2, factor);
     }
 
-    // Calculate texture coordinates based on mode
-    vec2 texCoord;
-    if (useWorldTextureCoords > 0) {
-        // Use world position transformed by texture matrix
-        texCoord = (brushTextureMat * vec4(fragPos, 0.0, 1.0)).xy;
-    } else {
-        // Use vertex UV coordinates (for text, legacy images)
-        texCoord = fragTexCoord;
+    // Text mode: UV >= 2.0 means text rendering - fast path
+    if (fragTexCoord.x >= 2.0) {
+        finalColor = color * texture(texture0, fragTexCoord - vec2(2.0)) * mask;
+        return;
     }
+    
+    // Edge anti-aliasing based on distance to edges by abusing fwidth and UVs
+    vec2 pixelSize = fwidth(fragTexCoord);
+    vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
+    float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
+    edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
 
-    vec4 textureColor = texture(texture0, texCoord);
-    color *= textureColor;
-
-    color *= edgeAlpha * mask;
-
-    finalColor = color;
+    // Use world position transformed by texture matrix
+    // If Canvas texture was null, renderer should assign a default white texture, so any sample position is valid
+    finalColor = color * texture(texture0, (brushTextureMat * vec4(fragPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
 }";
 
         public const string Vertex_VS = @"
@@ -181,7 +163,6 @@ void main()
         int _brushParamsLoc;
         int _brushParams2Loc;
         int _brushTextureMatLoc;
-        int _useWorldTextureCoordsLoc;
 
         public RaylibCanvasRenderer()
         {
@@ -197,7 +178,6 @@ void main()
             _brushParamsLoc = GetShaderLocation(shader, "brushParams");
             _brushParams2Loc = GetShaderLocation(shader, "brushParams2");
             _brushTextureMatLoc = GetShaderLocation(shader, "brushTextureMat");
-            _useWorldTextureCoordsLoc = GetShaderLocation(shader, "useWorldTextureCoords");
         }
 
         public object CreateTexture(uint width, uint height)
@@ -270,7 +250,6 @@ void main()
 
             // Set texture transform parameters
             SetShaderValueMatrix(shader, _brushTextureMatLoc, drawCall.Brush.TextureMatrix);
-            SetShaderValue(shader, _useWorldTextureCoordsLoc, drawCall.Brush.UseWorldTextureCoords ? 1 : 0, ShaderUniformDataType.Int);
         }
 
         public void RenderCalls(Canvas canvas, IReadOnlyList<Prowl.Quill.DrawCall> drawCalls)

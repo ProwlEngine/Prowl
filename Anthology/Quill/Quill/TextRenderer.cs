@@ -69,6 +69,9 @@ namespace Prowl.Quill
         {
             _canvas.SetTexture(texture);
 
+            // UV offset of 2.0 signals text mode to shader (UV >= 2 means text)
+            var uvOffset = new Float2(2.0f, 2.0f);
+
             for (int i = 0; i < indices.Length; i += 3)
             {
                 var a = vertices[indices[i + 0]];
@@ -76,10 +79,11 @@ namespace Prowl.Quill
                 var c = vertices[indices[i + 2]];
 
                 // Transform vertices through the current transform matrix
+                // Add 2.0 to UVs to signal text mode to shader
                 uint index = (uint)_canvas.Vertices.Count;
-                var vertA = new Vertex(_canvas.TransformPoint(new Float2(a.Position.X, a.Position.Y)), a.TextureCoordinate, ToColor(a.Color));
-                var vertB = new Vertex(_canvas.TransformPoint(new Float2(b.Position.X, b.Position.Y)), b.TextureCoordinate, ToColor(b.Color));
-                var vertC = new Vertex(_canvas.TransformPoint(new Float2(c.Position.X, c.Position.Y)), c.TextureCoordinate, ToColor(c.Color));
+                var vertA = new Vertex(_canvas.TransformPoint(new Float2(a.Position.X, a.Position.Y)), a.TextureCoordinate + uvOffset, ToColor(a.Color));
+                var vertB = new Vertex(_canvas.TransformPoint(new Float2(b.Position.X, b.Position.Y)), b.TextureCoordinate + uvOffset, ToColor(b.Color));
+                var vertC = new Vertex(_canvas.TransformPoint(new Float2(c.Position.X, c.Position.Y)), c.TextureCoordinate + uvOffset, ToColor(c.Color));
 
                 _canvas.AddVertex(vertA);
                 _canvas.AddVertex(vertC);

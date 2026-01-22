@@ -105,11 +105,6 @@ namespace Prowl.Quill
         public float CornerRadii;
         public float Feather;
         public object? Texture;
-        /// <summary>
-        /// When true, texture is sampled using world coordinates transformed by TextureTransform.
-        /// When false, texture is sampled using vertex UVs (for text rendering).
-        /// </summary>
-        public bool UseWorldTextureCoords;
 
         internal bool EqualsOther(in Brush other)
         {
@@ -122,8 +117,7 @@ namespace Prowl.Quill
                    Feather == other.Feather &&
                    Transform == other.Transform &&
                    Texture == other.Texture &&
-                   TextureTransform == other.TextureTransform &&
-                   UseWorldTextureCoords == other.UseWorldTextureCoords;
+                   TextureTransform == other.TextureTransform;
         }
     }
 
@@ -172,7 +166,6 @@ namespace Prowl.Quill
             brush.Transform = Transform2D.Identity;
             brush.TextureTransform = Transform2D.Identity;
             brush.Texture = null;
-            brush.UseWorldTextureCoords = false;
             fillColor = Color32.FromArgb(255, 0, 0, 0); // Default fill color (black)
             fillMode = WindingMode.OddEven; // Default winding mode
         }
@@ -373,7 +366,6 @@ namespace Prowl.Quill
         public void SetBrushTexture(object? texture)
         {
             _state.brush.Texture = texture;
-            _state.brush.UseWorldTextureCoords = true;
             // Default texture transform: 1 pixel = 1 texel, starting at origin
             if (texture != null && _state.brush.TextureTransform == Transform2D.Identity)
             {
@@ -399,7 +391,6 @@ namespace Prowl.Quill
         {
             _state.brush.Texture = null;
             _state.brush.TextureTransform = Transform2D.Identity;
-            _state.brush.UseWorldTextureCoords = false;
         }
 
         /// <summary>
@@ -409,7 +400,6 @@ namespace Prowl.Quill
         internal void SetTexture(object? texture)
         {
             _state.brush.Texture = texture;
-            _state.brush.UseWorldTextureCoords = false;
         }
 
         public void SetLinearBrush(float x1, float y1, float x2, float y2, Color32 color1, Color32 color2)

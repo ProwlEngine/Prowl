@@ -34,7 +34,6 @@ uniform vec4 brushParams;    // x,y = start point, z,w = end point (or center+ra
 uniform vec2 brushParams2;   // x = Box radius, y = Box Feather
 
 uniform mat4 brushTextureMat;     // Texture transform matrix (inverse)
-uniform int useWorldTextureCoords; // 0 = use vertex UVs, 1 = use world coords with transform
 
 varying vec2 v_position; // Add this
 
@@ -118,12 +117,8 @@ void main()
     // Color comes from vertex color
     vec4 fragColor = gl_Color;
 
-    vec2 pixelSize = fwidth(fragTexCoord);
-    vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
-    float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
-    edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
-
     float mask = scissorMask(fragPos);
+
     vec4 color = fragColor;
 
     // Apply brush if active
@@ -131,23 +126,22 @@ void main()
         float factor = calculateBrushFactor(fragPos);
         color = mix(brushColor1, brushColor2, factor);
     }
-
-    // Calculate texture coordinates based on mode
-    vec2 texCoord;
-    if (useWorldTextureCoords > 0) {
-        // Use world position transformed by texture matrix
-        texCoord = (brushTextureMat * vec4(fragPos, 0.0, 1.0)).xy;
-    } else {
-        // Use vertex UV coordinates (for text, legacy images)
-        texCoord = fragTexCoord;
+    
+    // Text mode: UV >= 2.0 means text rendering - fast path
+    if (fragTexCoord.x >= 2.0) {
+        gl_FragColor = color * texture(texture0, fragTexCoord - vec2(2.0, 2.0)) * mask;
+        return;
     }
-
-    vec4 textureColor = texture2D(texture0, texCoord);
-    color *= textureColor;
-
-    color *= edgeAlpha * mask;
-
-    gl_FragColor = color;
+    
+    // Edge anti-aliasing based on distance to edges by abusing fwidth and UVs
+    vec2 pixelSize = fwidth(fragTexCoord);
+    vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
+    float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
+    edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
+    
+    // Use world position transformed by texture matrix
+    // If Canvas texture was null, renderer should assign a default white texture, so any sample position is valid
+    gl_FragColor = color * texture(texture0, (brushTextureMat * vec4(fragPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
 }";
 
         private const string VERTEX_SHADER = @"
@@ -333,7 +327,6 @@ void main()
 
                         // Set texture transform parameters
                         _shader.SetUniform("brushTextureMat", ToMat4(drawCall.Brush.TextureMatrix));
-                        _shader.SetUniform("useWorldTextureCoords", drawCall.Brush.UseWorldTextureCoords ? 1 : 0);
                     }
                     catch (Exception ex)
                     {
