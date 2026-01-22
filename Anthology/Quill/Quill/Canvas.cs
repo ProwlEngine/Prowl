@@ -182,12 +182,10 @@ namespace Prowl.Quill
         internal class SubPath
         {
             internal List<Float2> Points { get; }
-            internal bool IsClosed { get; }
 
-            public SubPath(List<Float2> points, bool isClosed)
+            public SubPath(List<Float2> points)
             {
                 Points = points;
-                IsClosed = isClosed;
             }
         }
 
@@ -712,7 +710,7 @@ namespace Prowl.Quill
             if (!_isPathOpen)
                 BeginPath();
 
-            _currentSubPath = new SubPath(new List<Float2>(), false);
+            _currentSubPath = new SubPath(new List<Float2>());
             _currentSubPath.Points.Add(new Float2(x, y));
             _subPaths.Add(_currentSubPath);
         }
@@ -1285,7 +1283,6 @@ namespace Prowl.Quill
             for (int i = 0; i < subPath.Points.Count; i++)
                 subPath.Points[i] = TransformPoint(subPath.Points[i]);
 
-            bool isClosed = subPath.IsClosed;
 
             List<float> dashPattern = null;
             if (_state.strokeDashPattern != null)
