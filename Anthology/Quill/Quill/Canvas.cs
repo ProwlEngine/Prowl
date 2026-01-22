@@ -59,7 +59,7 @@ namespace Prowl.Quill
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct Vertex
     {
-        public static int SizeInBytes => Marshal.SizeOf<Vertex>();
+        public static int SizeInBytes => 20; //Marshal.SizeOf<Vertex>();
 
         public Float2 Position => new Float2(x, y);
         public Float2 UV => new Float2(u, v);
