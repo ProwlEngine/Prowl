@@ -291,8 +291,6 @@ void main()
 
             int index = 0;
 
-
-            Console.WriteLine("Rendering Canvas with {0} draw calls and {1} vertices", canvas.DrawCalls.Count, canvas.Vertices.Count);
             foreach (var drawCall in canvas.DrawCalls)
             {
                 // Determine which shader to use
