@@ -32,6 +32,7 @@ namespace Prowl.Quill
         public Brush Brush;
         internal Transform2D scissor;
         internal Float2 scissorExtent;
+        internal int stateHash;
 
         /// <summary>
         /// Gets the texture from the brush. Returns null if no texture is set.
@@ -106,18 +107,23 @@ namespace Prowl.Quill
         public float Feather;
         public object? Texture;
 
-        internal bool EqualsOther(in Brush other)
+        internal int ComputeHash()
         {
-            return Type == other.Type &&
-                   Color1 == other.Color1 &&
-                   Color2 == other.Color2 &&
-                   Point1 == other.Point1 &&
-                   Point2 == other.Point2 &&
-                   CornerRadii == other.CornerRadii &&
-                   Feather == other.Feather &&
-                   Transform == other.Transform &&
-                   Texture == other.Texture &&
-                   TextureTransform == other.TextureTransform;
+            unchecked
+            {
+                int hash = 17;
+                hash = hash * 31 + (int)Type;
+                hash = hash * 31 + Color1.GetHashCode();
+                hash = hash * 31 + Color2.GetHashCode();
+                hash = hash * 31 + Point1.GetHashCode();
+                hash = hash * 31 + Point2.GetHashCode();
+                hash = hash * 31 + CornerRadii.GetHashCode();
+                hash = hash * 31 + Feather.GetHashCode();
+                hash = hash * 31 + Transform.GetHashCode();
+                hash = hash * 31 + (Texture?.GetHashCode() ?? 0);
+                hash = hash * 31 + TextureTransform.GetHashCode();
+                return hash;
+            }
         }
     }
 
@@ -196,6 +202,9 @@ namespace Prowl.Quill
         internal bool _isNewDrawCallRequested = false;
         internal List<DrawCall> _drawCalls = new List<DrawCall>();
         internal Stack<object> _textureStack = new Stack<object>();
+
+        private int _currentDrawStateHash;
+        private bool _drawStateDirty = true;
 
         internal List<uint> _indices = new List<uint>();
         internal List<Vertex> _vertices = new List<Vertex>();
@@ -301,14 +310,34 @@ namespace Prowl.Quill
             _isPathOpen = true;
 
             _globalAlpha = 1f;
+            _drawStateDirty = true;
         }
 
 
         #region State
 
+        private void InvalidateDrawState() => _drawStateDirty = true;
+
+        private int ComputeDrawStateHash()
+        {
+            if (!_drawStateDirty)
+                return _currentDrawStateHash;
+
+            unchecked
+            {
+                int hash = 17;
+                hash = hash * 31 + _state.scissorExtent.GetHashCode();
+                hash = hash * 31 + _state.scissor.GetHashCode();
+                hash = hash * 31 + _state.brush.ComputeHash();
+                _currentDrawStateHash = hash;
+            }
+            _drawStateDirty = false;
+            return _currentDrawStateHash;
+        }
+
         public void SaveState() => _savedStates.Push(_state);
-        public void RestoreState() => _state = _savedStates.Pop();
-        public void ResetState() => _state.Reset();
+        public void RestoreState() { _state = _savedStates.Pop(); InvalidateDrawState(); }
+        public void ResetState() { _state.Reset(); InvalidateDrawState(); }
 
         public void SetStrokeColor(Color32 color) => _state.strokeColor = color;
         public void SetStrokeJoint(JointStyle joint) => _state.strokeJoint = joint;
@@ -372,6 +401,7 @@ namespace Prowl.Quill
                 var size = _renderer.GetTextureSize(texture);
                 _state.brush.TextureTransform = Transform2D.CreateScale(1.0f / size.X, 1.0f / size.Y);
             }
+            InvalidateDrawState();
         }
 
         /// <summary>
@@ -382,6 +412,7 @@ namespace Prowl.Quill
         public void SetBrushTextureTransform(Transform2D transform)
         {
             _state.brush.TextureTransform = _state.transform * transform;
+            InvalidateDrawState();
         }
 
         /// <summary>
@@ -391,15 +422,17 @@ namespace Prowl.Quill
         {
             _state.brush.Texture = null;
             _state.brush.TextureTransform = Transform2D.Identity;
+            InvalidateDrawState();
         }
 
         /// <summary>
         /// Internal method for setting a texture that will be sampled using vertex UVs.
         /// Used by TextRenderer for font atlas textures.
         /// </summary>
-        internal void SetTexture(object? texture)
+        internal void SetFontTexture(object? texture)
         {
             _state.brush.Texture = texture;
+            InvalidateDrawState();
         }
 
         public void SetLinearBrush(float x1, float y1, float x2, float y2, Color32 color1, Color32 color2)
@@ -423,6 +456,7 @@ namespace Prowl.Quill
             _state.brush.Point2 = new Float2(x2, y2);
 
             _state.brush.Transform = _state.transform;
+            InvalidateDrawState();
         }
         public void SetRadialBrush(float centerX, float centerY, float innerRadius, float outerRadius, Color32 innerColor, Color32 outerColor)
         {
@@ -445,6 +479,7 @@ namespace Prowl.Quill
             _state.brush.Point2 = new Float2(innerRadius, outerRadius); // Store radius
 
             _state.brush.Transform = _state.transform;
+            InvalidateDrawState();
         }
         public void SetBoxBrush(float centerX, float centerY, float width, float height, float radi, float feather, Color32 innerColor, Color32 outerColor)
         {
@@ -469,10 +504,12 @@ namespace Prowl.Quill
             _state.brush.Feather = feather;
 
             _state.brush.Transform = _state.transform;
+            InvalidateDrawState();
         }
         public void ClearBrush()
         {
             _state.brush.Type = BrushType.None;
+            InvalidateDrawState();
         }
         public void SetFillColor(Color32 color) => _state.fillColor = color;
 
@@ -489,6 +526,7 @@ namespace Prowl.Quill
             _state.scissor = _state.transform * Transform2D.CreateTranslation(x + w * 0.5f, y + h * 0.5f);
             _state.scissorExtent.X = (w * 0.5f) * _scale;
             _state.scissorExtent.Y = (h * 0.5f) * _scale;
+            InvalidateDrawState();
         }
 
         /// <summary>
@@ -538,6 +576,7 @@ namespace Prowl.Quill
             _state.scissor = Transform2D.Identity;
             _state.scissorExtent.X = -1.0f;
             _state.scissorExtent.Y = -1.0f;
+            InvalidateDrawState();
         }
         #endregion
 
@@ -606,6 +645,8 @@ namespace Prowl.Quill
 
         private void AddTriangleCount(int count)
         {
+            int currentHash = ComputeDrawStateHash();
+
             if (_drawCalls.Count == 0)
             {
                 _drawCalls.Add(new DrawCall());
@@ -613,9 +654,7 @@ namespace Prowl.Quill
 
             DrawCall lastDrawCall = _drawCalls[_drawCalls.Count - 1];
 
-            bool isDrawStateSame = lastDrawCall.scissorExtent == _state.scissorExtent &&
-                lastDrawCall.scissor == _state.scissor &&
-                lastDrawCall.Brush.EqualsOther(_state.brush);
+            bool isDrawStateSame = lastDrawCall.stateHash == currentHash;
 
             if (!isDrawStateSame || _isNewDrawCallRequested)
             {
@@ -627,6 +666,7 @@ namespace Prowl.Quill
                 lastDrawCall.scissor = _state.scissor;
                 lastDrawCall.scissorExtent = _state.scissorExtent;
                 lastDrawCall.Brush = _state.brush;
+                lastDrawCall.stateHash = currentHash;
 
                 _isNewDrawCallRequested = false;
             }

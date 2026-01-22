@@ -67,7 +67,7 @@ namespace Prowl.Quill
         /// </summary>
         public void DrawQuads(object texture, ReadOnlySpan<IFontRenderer.Vertex> vertices, ReadOnlySpan<int> indices)
         {
-            _canvas.SetTexture(texture);
+            _canvas.SetFontTexture(texture);
 
             // UV offset of 2.0 signals text mode to shader (UV >= 2 means text)
             var uvOffset = new Float2(2.0f, 2.0f);
@@ -92,7 +92,7 @@ namespace Prowl.Quill
                 _canvas.AddTriangle(index, index + 1, index + 2);
             }
 
-            _canvas.SetTexture(null);
+            _canvas.SetFontTexture(null);
         }
 
         private static FontColor ToFSColor(Prowl.Vector.Color32 color)
