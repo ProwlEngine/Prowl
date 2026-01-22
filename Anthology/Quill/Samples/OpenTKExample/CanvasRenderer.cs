@@ -263,6 +263,38 @@ void main()
             color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f
         );
 
+        private void SetCustomUniforms(int program, ShaderUniforms uniforms)
+        {
+            foreach (var kvp in uniforms.Values)
+            {
+                int loc = GL.GetUniformLocation(program, kvp.Key);
+                if (loc < 0) continue;
+
+                switch (kvp.Value)
+                {
+                    case float f:
+                        GL.Uniform1(loc, f);
+                        break;
+                    case int i:
+                        GL.Uniform1(loc, i);
+                        break;
+                    case Float2 v2:
+                        GL.Uniform2(loc, (float)v2.X, (float)v2.Y);
+                        break;
+                    case Float3 v3:
+                        GL.Uniform3(loc, (float)v3.X, (float)v3.Y, (float)v3.Z);
+                        break;
+                    case Float4 v4:
+                        GL.Uniform4(loc, (float)v4.X, (float)v4.Y, (float)v4.Z, (float)v4.W);
+                        break;
+                    case Float4x4 mat:
+                        var tkMat = ToTK(mat);
+                        GL.UniformMatrix4(loc, false, ref tkMat);
+                        break;
+                }
+            }
+        }
+
         public object CreateTexture(uint width, uint height)
         {
             return TextureTK.CreateNew(width, height);
@@ -334,24 +366,51 @@ void main()
                 // Handle texture binding
                 (drawCall.Texture as TextureTK ?? _defaultTexture).Use(TextureUnit.Texture0);
 
-                // Set scissor rectangle
-                drawCall.GetScissor(out var scissor, out var extent);
-                var tkScissor = ToTK(scissor);
-                GL.UniformMatrix4(_scissorMatLoc, false, ref tkScissor);
-                GL.Uniform2(_scissorExtLoc, (float)extent.X, (float)extent.Y);
+                // Check for custom shader
+                if (drawCall.Shader is int customProgram)
+                {
+                    // Use custom shader
+                    GL.UseProgram(customProgram);
 
-                // Set brush parameters
-                var brushMat = ToTK(drawCall.Brush.BrushMatrix);
-                GL.UniformMatrix4(_brushMatLoc, false, ref brushMat);
-                GL.Uniform1(_brushTypeLoc, (int)drawCall.Brush.Type);
-                GL.Uniform4(_brushColor1Loc, ToTK(drawCall.Brush.Color1));
-                GL.Uniform4(_brushColor2Loc, ToTK(drawCall.Brush.Color2));
-                GL.Uniform4(_brushParamsLoc, (float)drawCall.Brush.Point1.X, (float)drawCall.Brush.Point1.Y, (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y);
-                GL.Uniform2(_brushParams2Loc, (float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather);
+                    // Set projection (required for all shaders to work correctly)
+                    int projLoc = GL.GetUniformLocation(customProgram, "projection");
+                    if (projLoc >= 0)
+                        GL.UniformMatrix4(projLoc, false, ref _projection);
 
-                // Set texture transform parameters
-                var textureMat = ToTK(drawCall.Brush.TextureMatrix);
-                GL.UniformMatrix4(_brushTextureMatLoc, false, ref textureMat);
+                    // Set texture sampler
+                    int texLoc = GL.GetUniformLocation(customProgram, "texture0");
+                    if (texLoc >= 0)
+                        GL.Uniform1(texLoc, 0);
+
+                    // Set user-provided uniforms
+                    if (drawCall.ShaderUniforms != null)
+                        SetCustomUniforms(customProgram, drawCall.ShaderUniforms);
+                }
+                else
+                {
+                    // Use default shader
+                    GL.UseProgram(_shaderProgram);
+                    GL.UniformMatrix4(_projectionLocation, false, ref _projection);
+
+                    // Set scissor rectangle
+                    drawCall.GetScissor(out var scissor, out var extent);
+                    var tkScissor = ToTK(scissor);
+                    GL.UniformMatrix4(_scissorMatLoc, false, ref tkScissor);
+                    GL.Uniform2(_scissorExtLoc, (float)extent.X, (float)extent.Y);
+
+                    // Set brush parameters
+                    var brushMat = ToTK(drawCall.Brush.BrushMatrix);
+                    GL.UniformMatrix4(_brushMatLoc, false, ref brushMat);
+                    GL.Uniform1(_brushTypeLoc, (int)drawCall.Brush.Type);
+                    GL.Uniform4(_brushColor1Loc, ToTK(drawCall.Brush.Color1));
+                    GL.Uniform4(_brushColor2Loc, ToTK(drawCall.Brush.Color2));
+                    GL.Uniform4(_brushParamsLoc, (float)drawCall.Brush.Point1.X, (float)drawCall.Brush.Point1.Y, (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y);
+                    GL.Uniform2(_brushParams2Loc, (float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather);
+
+                    // Set texture transform parameters
+                    var textureMat = ToTK(drawCall.Brush.TextureMatrix);
+                    GL.UniformMatrix4(_brushTextureMatLoc, false, ref textureMat);
+                }
 
                 GL.DrawElements(PrimitiveType.Triangles, drawCall.ElementCount, DrawElementsType.UnsignedInt, indexOffset * sizeof(uint));
                 indexOffset += drawCall.ElementCount;

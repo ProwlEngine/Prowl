@@ -39,6 +39,16 @@ namespace Prowl.Quill
         /// </summary>
         public object? Texture => Brush.Texture;
 
+        /// <summary>
+        /// Gets the custom shader from the brush. Returns null if no custom shader is set (uses default).
+        /// </summary>
+        public object? Shader => Brush.Shader;
+
+        /// <summary>
+        /// Gets the shader uniforms from the brush. Returns null if no custom uniforms are set.
+        /// </summary>
+        public ShaderUniforms? ShaderUniforms => Brush.Uniforms;
+
         public void GetScissor(out Float4x4 matrix, out Float2 extent)
         {
             if (scissorExtent.X < -0.5f || scissorExtent.Y < -0.5f)
@@ -53,6 +63,81 @@ namespace Prowl.Quill
                 matrix = scissor.Inverse().ToMatrix();
                 extent = new Float2(scissorExtent.X, scissorExtent.Y);
             }
+        }
+    }
+
+    /// <summary>
+    /// Holds custom uniform values for a shader. Used for batching - shapes with the same
+    /// shader and uniform values will be batched together into a single draw call.
+    /// </summary>
+    public class ShaderUniforms
+    {
+        private readonly Dictionary<string, object> _uniforms = new Dictionary<string, object>();
+        private int _cachedHash;
+        private bool _hashDirty = true;
+
+        /// <summary>
+        /// Gets the uniform values as a read-only dictionary.
+        /// </summary>
+        public IReadOnlyDictionary<string, object> Values => _uniforms;
+
+        /// <summary>
+        /// Sets a uniform value. Supported types: float, int, Float2, Float3, Float4, Float4x4.
+        /// </summary>
+        public void Set(string name, object value)
+        {
+            _uniforms[name] = value;
+            _hashDirty = true;
+        }
+
+        /// <summary>
+        /// Removes a uniform by name.
+        /// </summary>
+        public void Remove(string name)
+        {
+            if (_uniforms.Remove(name))
+                _hashDirty = true;
+        }
+
+        /// <summary>
+        /// Clears all uniforms.
+        /// </summary>
+        public void Clear()
+        {
+            _uniforms.Clear();
+            _hashDirty = true;
+        }
+
+        /// <summary>
+        /// Creates a shallow clone of this ShaderUniforms instance.
+        /// </summary>
+        internal ShaderUniforms Clone()
+        {
+            var clone = new ShaderUniforms();
+            foreach (var kvp in _uniforms)
+                clone._uniforms[kvp.Key] = kvp.Value;
+            clone._cachedHash = _cachedHash;
+            clone._hashDirty = _hashDirty;
+            return clone;
+        }
+
+        internal int ComputeHash()
+        {
+            if (!_hashDirty) return _cachedHash;
+
+            unchecked
+            {
+                int hash = 17;
+                // Sort keys for consistent hashing
+                foreach (var key in _uniforms.Keys.OrderBy(k => k))
+                {
+                    hash = hash * 31 + key.GetHashCode();
+                    hash = hash * 31 + (_uniforms[key]?.GetHashCode() ?? 0);
+                }
+                _cachedHash = hash;
+            }
+            _hashDirty = false;
+            return _cachedHash;
         }
     }
 
@@ -107,6 +192,17 @@ namespace Prowl.Quill
         public float Feather;
         public object? Texture;
 
+        /// <summary>
+        /// Custom shader object (backend-specific). When null, the default shader is used.
+        /// When set, the renderer will use this shader and only apply user-provided uniforms.
+        /// </summary>
+        public object? Shader;
+
+        /// <summary>
+        /// Custom uniforms to pass to the shader. Only used when Shader is not null.
+        /// </summary>
+        public ShaderUniforms? Uniforms;
+
         internal int ComputeHash()
         {
             unchecked
@@ -122,6 +218,11 @@ namespace Prowl.Quill
                 hash = hash * 31 + Transform.GetHashCode();
                 hash = hash * 31 + (Texture?.GetHashCode() ?? 0);
                 hash = hash * 31 + TextureTransform.GetHashCode();
+                if (Shader != null)
+                {
+                    hash = hash * 31 + Shader.GetHashCode();
+                    hash = hash * 31 + (Uniforms?.ComputeHash() ?? 0);
+                }
                 return hash;
             }
         }
@@ -172,6 +273,8 @@ namespace Prowl.Quill
             brush.Transform = Transform2D.Identity;
             brush.TextureTransform = Transform2D.Identity;
             brush.Texture = null;
+            brush.Shader = null;
+            brush.Uniforms = null;
             fillColor = Color32.FromArgb(255, 0, 0, 0); // Default fill color (black)
             fillMode = WindingMode.OddEven; // Default winding mode
         }
@@ -433,6 +536,53 @@ namespace Prowl.Quill
             InvalidateDrawState();
         }
 
+        /// <summary>
+        /// Sets a custom shader on the current brush. When a custom shader is set,
+        /// the default brush uniforms will NOT be set by the renderer - the user is responsible
+        /// for setting all required uniforms via SetShaderUniform() or SetShaderUniforms().
+        /// </summary>
+        /// <param name="shader">The backend-specific shader object, or null to use the default shader.</param>
+        public void SetCustomShader(object? shader)
+        {
+            _state.brush.Shader = shader;
+            InvalidateDrawState();
+        }
+
+        /// <summary>
+        /// Sets a custom uniform value for the current shader.
+        /// Supported types: float, int, Float2, Float3, Float4, Float4x4.
+        /// </summary>
+        /// <param name="name">The uniform name in the shader.</param>
+        /// <param name="value">The uniform value.</param>
+        public void SetShaderUniform(string name, object value)
+        {
+            _state.brush.Uniforms ??= new ShaderUniforms();
+            _state.brush.Uniforms.Set(name, value);
+            InvalidateDrawState();
+        }
+
+        /// <summary>
+        /// Sets multiple shader uniforms at once.
+        /// </summary>
+        /// <param name="uniforms">Dictionary of uniform names to values.</param>
+        public void SetShaderUniforms(Dictionary<string, object> uniforms)
+        {
+            _state.brush.Uniforms ??= new ShaderUniforms();
+            foreach (var kvp in uniforms)
+                _state.brush.Uniforms.Set(kvp.Key, kvp.Value);
+            InvalidateDrawState();
+        }
+
+        /// <summary>
+        /// Clears the custom shader and uniforms, reverting to the default shader.
+        /// </summary>
+        public void ClearCustomShader()
+        {
+            _state.brush.Shader = null;
+            _state.brush.Uniforms = null;
+            InvalidateDrawState();
+        }
+
         public void SetLinearBrush(float x1, float y1, float x2, float y2, Color32 color1, Color32 color2)
         {
             // Premultiply
@@ -664,6 +814,9 @@ namespace Prowl.Quill
                 lastDrawCall.scissor = _state.scissor;
                 lastDrawCall.scissorExtent = _state.scissorExtent;
                 lastDrawCall.Brush = _state.brush;
+                // Clone uniforms to avoid reference sharing between draw calls
+                if (lastDrawCall.Brush.Uniforms != null)
+                    lastDrawCall.Brush.Uniforms = lastDrawCall.Brush.Uniforms.Clone();
                 lastDrawCall.stateHash = currentHash;
 
                 _isNewDrawCallRequested = false;

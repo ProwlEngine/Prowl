@@ -251,6 +251,41 @@ void main()
             );
         }
 
+        private void SetCustomUniforms(Shader shader, ShaderUniforms uniforms)
+        {
+            foreach (var kvp in uniforms.Values)
+            {
+                try
+                {
+                    switch (kvp.Value)
+                    {
+                        case float f:
+                            shader.SetUniform(kvp.Key, f);
+                            break;
+                        case int i:
+                            shader.SetUniform(kvp.Key, i);
+                            break;
+                        case Float2 v2:
+                            shader.SetUniform(kvp.Key, new Vec2((float)v2.X, (float)v2.Y));
+                            break;
+                        case Float3 v3:
+                            shader.SetUniform(kvp.Key, new Vec3((float)v3.X, (float)v3.Y, (float)v3.Z));
+                            break;
+                        case Float4 v4:
+                            shader.SetUniform(kvp.Key, new Vec4((float)v4.X, (float)v4.Y, (float)v4.Z, (float)v4.W));
+                            break;
+                        case Float4x4 mat:
+                            shader.SetUniform(kvp.Key, ToMat4(mat));
+                            break;
+                    }
+                }
+                catch (Exception)
+                {
+                    // Uniform may not exist in the shader - ignore
+                }
+            }
+        }
+
         public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
         {
             if (_window == null || drawCalls.Count == 0)
@@ -299,9 +334,36 @@ void main()
                     _vertexArray.Append(sfmlVertex);
                 }
 
-                // Set shader parameters for this draw call
-                if (Shader.IsAvailable && _shader != null)
+                // Determine which shader to use
+                Shader activeShader = null;
+                bool useCustomShader = drawCall.Shader is Shader;
+
+                if (useCustomShader)
                 {
+                    activeShader = (Shader)drawCall.Shader;
+
+                    // Set projection for custom shader
+                    try
+                    {
+                        Mat4 projMat = new(
+                            2.0f / _projection.Size.X, 0, 0, -1,
+                            0, -2.0f / _projection.Size.Y, 0, 1,
+                            0, 0, 1, 0,
+                            0, 0, 0, 1
+                        );
+                        activeShader.SetUniform("projection", projMat);
+                        activeShader.SetUniform("texture0", Shader.CurrentTexture);
+                    }
+                    catch (Exception) { }
+
+                    // Set user-provided uniforms
+                    if (drawCall.ShaderUniforms != null)
+                        SetCustomUniforms(activeShader, drawCall.ShaderUniforms);
+                }
+                else if (Shader.IsAvailable && _shader != null)
+                {
+                    activeShader = _shader;
+
                     try
                     {
                         // Get scissor parameters - this is crucial for the scissor to work
@@ -339,7 +401,7 @@ void main()
                     premultipliedAlpha,
                     Transform.Identity,
                     texture,
-                    (Shader.IsAvailable && _shader != null) ? _shader : null
+                    activeShader
                 );
 
                 _window.Draw(_vertexArray, states);

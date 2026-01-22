@@ -252,28 +252,91 @@ void main()
             SetShaderValueMatrix(shader, _brushTextureMatLoc, drawCall.Brush.TextureMatrix);
         }
 
+        void SetCustomUniforms(Shader customShader, ShaderUniforms uniforms)
+        {
+            foreach (var kvp in uniforms.Values)
+            {
+                int loc = GetShaderLocation(customShader, kvp.Key);
+                if (loc < 0) continue;
+
+                switch (kvp.Value)
+                {
+                    case float f:
+                        SetShaderValue(customShader, loc, f, ShaderUniformDataType.Float);
+                        break;
+                    case int i:
+                        SetShaderValue(customShader, loc, i, ShaderUniformDataType.Int);
+                        break;
+                    case Float2 v2:
+                        SetShaderValue(customShader, loc, v2, ShaderUniformDataType.Vec2);
+                        break;
+                    case Prowl.Vector.Float3 v3:
+                        SetShaderValue(customShader, loc, v3, ShaderUniformDataType.Vec3);
+                        break;
+                    case Float4 v4:
+                        SetShaderValue(customShader, loc, v4, ShaderUniformDataType.Vec4);
+                        break;
+                    case Float4x4 mat:
+                        SetShaderValueMatrix(customShader, loc, mat);
+                        break;
+                }
+            }
+        }
+
         public void RenderCalls(Canvas canvas, IReadOnlyList<Prowl.Quill.DrawCall> drawCalls)
         {
             BeginBlendMode(BlendMode.AlphaPremultiply);
-            BeginShaderMode(shader);
 
             Rlgl.DrawRenderBatchActive();
 
             int index = 0;
 
+
+            Console.WriteLine("Rendering Canvas with {0} draw calls and {1} vertices", canvas.DrawCalls.Count, canvas.Vertices.Count);
             foreach (var drawCall in canvas.DrawCalls)
             {
+                // Determine which shader to use
+                bool useCustomShader = drawCall.Shader is Shader;
+                Shader activeShader = useCustomShader ? (Shader)drawCall.Shader : shader;
+
+                BeginShaderMode(activeShader);
 
                 // Draw the vertices for this draw call
                 Rlgl.Begin(DrawMode.Triangles);
-                SetUniforms(drawCall);
+
+                // Bind the texture if available, otherwise use default
+                uint textureToUse = 0;
+                if (drawCall.Texture != null)
+                    textureToUse = ((Texture2D)drawCall.Texture).Id;
+                Rlgl.SetTexture(textureToUse);
+
+                if (useCustomShader)
+                {
+                    // Set user-provided uniforms for custom shader
+                    if (drawCall.ShaderUniforms != null)
+                        SetCustomUniforms(activeShader, drawCall.ShaderUniforms);
+                }
+                else
+                {
+                    // Set default uniforms
+                    SetUniforms(drawCall);
+                }
 
                 for (int i = 0; i < drawCall.ElementCount; i += 3)
                 {
                     if (Rlgl.CheckRenderBatchLimit(3))
                     {
                         Rlgl.Begin(DrawMode.Triangles);
-                        SetUniforms(drawCall);
+                        Rlgl.SetTexture(textureToUse);
+                        if (useCustomShader)
+                        {
+                            if (drawCall.ShaderUniforms != null)
+                                SetCustomUniforms(activeShader, drawCall.ShaderUniforms);
+                        }
+                        else
+                        {
+                            SetUniforms(drawCall);
+                        }
                     }
 
                     var a = canvas.Vertices[(int)canvas.Indices[index]];
@@ -296,10 +359,9 @@ void main()
                 }
                 Rlgl.End();
                 Rlgl.DrawRenderBatchActive();
+                EndShaderMode();
             }
             Rlgl.SetTexture(0);
-
-            EndShaderMode();
         }
 
         static System.Numerics.Vector4 ToVec4(System.Drawing.Color color) => new System.Numerics.Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);

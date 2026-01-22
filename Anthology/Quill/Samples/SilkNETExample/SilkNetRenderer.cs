@@ -381,12 +381,39 @@ void main()
             // Bind texture
             TextureSilk texture = (drawCall.Texture as TextureSilk) ?? _defaultTexture;
             texture.Use(TextureUnit.Texture0);
-    
-            // Set scissor and brush uniforms
-            drawCall.GetScissor(out var scissorMat, out var scissorExt);
-            SetScissorUniforms(scissorMat, scissorExt);
-            SetBrushUniforms(drawCall.Brush);
-    
+
+            // Check for custom shader
+            if (drawCall.Shader is uint customProgram)
+            {
+                // Use custom shader
+                _gl.UseProgram(customProgram);
+
+                // Set projection (required for all shaders to work correctly)
+                int projLoc = _gl.GetUniformLocation(customProgram, "projection");
+                if (projLoc >= 0)
+                    SetMatrix4Uniform(projLoc, _projection);
+
+                // Set texture sampler
+                int texLoc = _gl.GetUniformLocation(customProgram, "texture0");
+                if (texLoc >= 0)
+                    _gl.Uniform1(texLoc, 0);
+
+                // Set user-provided uniforms
+                if (drawCall.ShaderUniforms != null)
+                    SetCustomUniforms(customProgram, drawCall.ShaderUniforms);
+            }
+            else
+            {
+                // Use default shader
+                _gl.UseProgram(_program);
+                SetProjectionMatrix();
+
+                // Set scissor and brush uniforms
+                drawCall.GetScissor(out var scissorMat, out var scissorExt);
+                SetScissorUniforms(scissorMat, scissorExt);
+                SetBrushUniforms(drawCall.Brush);
+            }
+
             // Draw the elements
             _gl.DrawElements(
                 PrimitiveType.Triangles,
@@ -443,6 +470,37 @@ void main()
 
             // Set texture transform parameters
             SetMatrix4Uniform(_brushTextureMatLocation, brush.TextureMatrix);
+        }
+
+        private unsafe void SetCustomUniforms(uint program, ShaderUniforms uniforms)
+        {
+            foreach (var kvp in uniforms.Values)
+            {
+                int loc = _gl.GetUniformLocation(program, kvp.Key);
+                if (loc < 0) continue;
+
+                switch (kvp.Value)
+                {
+                    case float f:
+                        _gl.Uniform1(loc, f);
+                        break;
+                    case int i:
+                        _gl.Uniform1(loc, i);
+                        break;
+                    case Float2 v2:
+                        _gl.Uniform2(loc, (float)v2.X, (float)v2.Y);
+                        break;
+                    case Float3 v3:
+                        _gl.Uniform3(loc, (float)v3.X, (float)v3.Y, (float)v3.Z);
+                        break;
+                    case Float4 v4:
+                        _gl.Uniform4(loc, (float)v4.X, (float)v4.Y, (float)v4.Z, (float)v4.W);
+                        break;
+                    case Float4x4 mat:
+                        SetMatrix4Uniform(loc, mat);
+                        break;
+                }
+            }
         }
 
         public void Cleanup()
