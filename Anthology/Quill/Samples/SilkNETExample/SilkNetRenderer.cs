@@ -29,10 +29,13 @@ uniform vec4 brushColor2;    // End color
 uniform vec4 brushParams;    // x,y = start point, z,w = end point (or center+radius for radial)
 uniform vec2 brushParams2;   // x = Box radius, y = Box Feather
 
+uniform mat4 brushTextureMat;     // Texture transform matrix (inverse)
+uniform int useWorldTextureCoords; // 0 = use vertex UVs, 1 = use world coords with transform
+
 float calculateBrushFactor() {
     // No brush
     if (brushType == 0) return 0.0;
-    
+
     vec2 transformedPoint = (brushMat * vec4(fragPos, 0.0, 1.0)).xy;
 
     // Linear brush - projects position onto the line between start and end
@@ -41,60 +44,60 @@ float calculateBrushFactor() {
         vec2 endPoint = brushParams.zw;
         vec2 line = endPoint - startPoint;
         float lineLength = length(line);
-        
+
         if (lineLength < 0.001) return 0.0;
-        
+
         vec2 posToStart = transformedPoint - startPoint;
         float projection = dot(posToStart, line) / (lineLength * lineLength);
         return clamp(projection, 0.0, 1.0);
     }
-    
+
     // Radial brush - based on distance from center
     if (brushType == 2) {
         vec2 center = brushParams.xy;
         float innerRadius = brushParams.z;
         float outerRadius = brushParams.w;
-        
+
         if (outerRadius < 0.001) return 0.0;
-        
+
         float distance = smoothstep(innerRadius, outerRadius, length(transformedPoint - center));
         return clamp(distance, 0.0, 1.0);
     }
-    
+
     // Box brush - like radial but uses max distance in x or y direction
     if (brushType == 3) {
         vec2 center = brushParams.xy;
         vec2 halfSize = brushParams.zw;
         float radius = brushParams2.x;
         float feather = brushParams2.y;
-        
+
         if (halfSize.x < 0.001 || halfSize.y < 0.001) return 0.0;
-        
+
         // Calculate distance from center (normalized by half-size)
         vec2 q = abs(transformedPoint - center) - (halfSize - vec2(radius));
-        
+
         // Distance field calculation for rounded rectangle
         float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
-        
+
         return clamp((dist + feather * 0.5) / feather, 0.0, 1.0);
     }
-    
+
     return 0.0;
 }
 
 float scissorMask(vec2 p) {
     // Early exit if scissoring is disabled (when any scissor dimension is negative)
     if(scissorExt.x < 0.0 || scissorExt.y < 0.0) return 1.0;
-    
+
     // Transform point to scissor space
     vec2 transformedPoint = (scissorMat * vec4(p, 0.0, 1.0)).xy;
-    
+
     // Calculate signed distance from scissor edges (negative inside, positive outside)
     vec2 distanceFromEdges = abs(transformedPoint) - scissorExt;
-    
+
     // Apply offset for smooth edge transition (0.5 creates half-pixel anti-aliased edges)
     vec2 smoothEdges = vec2(0.5, 0.5) - distanceFromEdges;
-    
+
     // Clamp each component and multiply to get final mask value
     // Result is 1.0 inside, 0.0 outside, with smooth transition at edges
     return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
@@ -106,7 +109,7 @@ void main()
     vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
     float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
     edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
-    
+
     float mask = scissorMask(fragPos);
     vec4 color = fragColor;
 
@@ -115,12 +118,22 @@ void main()
         float factor = calculateBrushFactor();
         color = mix(brushColor1, brushColor2, factor);
     }
-    
-    vec4 textureColor = texture(texture0, fragTexCoord);
+
+    // Calculate texture coordinates based on mode
+    vec2 texCoord;
+    if (useWorldTextureCoords > 0) {
+        // Use world position transformed by texture matrix
+        texCoord = (brushTextureMat * vec4(fragPos, 0.0, 1.0)).xy;
+    } else {
+        // Use vertex UV coordinates (for text, legacy images)
+        texCoord = fragTexCoord;
+    }
+
+    vec4 textureColor = texture(texture0, texCoord);
     color *= textureColor;
-    
+
     color *= edgeAlpha * mask;
-    
+
     finalColor = color;
 }";
 
@@ -158,6 +171,8 @@ void main()
         private int _brushColor2Location;
         private int _brushParamsLocation;
         private int _brushParams2Location;
+        private int _brushTextureMatLocation;
+        private int _useWorldTextureCoordsLocation;
 
         private Float4x4 _projection;
         private TextureSilk _defaultTexture;
@@ -227,6 +242,8 @@ void main()
             _brushColor2Location = _gl.GetUniformLocation(_program, "brushColor2");
             _brushParamsLocation = _gl.GetUniformLocation(_program, "brushParams");
             _brushParams2Location = _gl.GetUniformLocation(_program, "brushParams2");
+            _brushTextureMatLocation = _gl.GetUniformLocation(_program, "brushTextureMat");
+            _useWorldTextureCoordsLocation = _gl.GetUniformLocation(_program, "useWorldTextureCoords");
         }
         
         private void CheckProgramLinking(uint program)
@@ -401,35 +418,39 @@ void main()
         {
             // Set brush matrix using the helper
             SetMatrix4Uniform(_brushMatLocation, brush.BrushMatrix);
-    
+
             // Set other brush parameters
             _gl.Uniform1(_brushTypeLocation, (int)brush.Type);
-    
+
             _gl.Uniform4(
                 _brushColor1Location,
                 brush.Color1.R / 255f,
                 brush.Color1.G / 255f,
                 brush.Color1.B / 255f,
                 brush.Color1.A / 255f);
-        
+
             _gl.Uniform4(
                 _brushColor2Location,
                 brush.Color2.R / 255f,
                 brush.Color2.G / 255f,
                 brush.Color2.B / 255f,
                 brush.Color2.A / 255f);
-        
+
             _gl.Uniform4(
                 _brushParamsLocation,
                 (float)brush.Point1.X,
                 (float)brush.Point1.Y,
                 (float)brush.Point2.X,
                 (float)brush.Point2.Y);
-        
+
             _gl.Uniform2(
                 _brushParams2Location,
                 (float)brush.CornerRadii,
                 (float)brush.Feather);
+
+            // Set texture transform parameters
+            SetMatrix4Uniform(_brushTextureMatLocation, brush.TextureMatrix);
+            _gl.Uniform1(_useWorldTextureCoordsLocation, brush.UseWorldTextureCoords ? 1 : 0);
         }
 
         public void Cleanup()

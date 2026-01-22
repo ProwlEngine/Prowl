@@ -280,6 +280,8 @@ namespace Common
         {
             // Save the canvas state
             _canvas.SaveState();
+            _canvas.SetBrushTexture(_texture);
+            _canvas.SetBrushTextureTransform(Transform2D.CreateTranslation(0, 0) * Transform2D.CreateScale(128, 128));
 
             // Draw 2D grid for reference
             DrawGrid(16, 17, 50, Color32.FromArgb(40, 255, 255, 255));
@@ -295,7 +297,7 @@ namespace Common
             
             // 3. Shapes Demo
             DrawShapesDemo(550, 50, 200, 150);
-            
+
             // 4. Line Styles Demo
             DrawLineStylesDemo(50, 250, 200, 150);
 
@@ -323,6 +325,7 @@ namespace Common
             // 12. Text Demo
             DrawTextDemo(550, 650, 200, 150);
 
+            _canvas.ClearBrushTexture();
             // Restore the canvas state
             _canvas.RestoreState();
         }
@@ -746,30 +749,42 @@ namespace Common
             _canvas.SaveState();
             _canvas.TransformBy(Transform2D.CreateTranslation(x + 40, y + 20));
 
-            // Basic image drawing
+            // Basic image drawing using brush textures
             if (_texture != null)
             {
-                // Draw the texture at different scales and rotations
+                // Helper to create texture transform that maps a local rect to the full texture
+                Transform2D TextureTransformForRect(float lx, float ly, float w, float h)
+                {
+                    return Transform2D.CreateTranslation(lx, ly) *
+                           Transform2D.CreateScale(w, h);
+                }
 
-                // 1. Basic image drawing
-                _canvas.Image(_texture, 0, 0, 50, 50, Color.White);
+                // 1. Basic textured rectangle
+                _canvas.SetBrushTexture(_texture);
+                _canvas.SetBrushTextureTransform(TextureTransformForRect(0, 0, 50, 50));
+                _canvas.RectFilled(0, 0, 50, 50, Color.White);
+                _canvas.ClearBrushTexture();
 
-                // 2. Scaled image
+                // 2. Scaled textured rectangle
                 float scale = 0.7f + 0.3f * Maths.Sin(_time);
                 _canvas.SaveState();
                 _canvas.TransformBy(Transform2D.CreateTranslation(80, 0));
                 _canvas.TransformBy(Transform2D.CreateScale(scale, scale));
-                _canvas.Image(_texture, 0, 0, 50, 50, Color.White);
+                _canvas.SetBrushTexture(_texture);
+                _canvas.SetBrushTextureTransform(TextureTransformForRect(0, 0, 50, 50));
+                _canvas.RectFilled(0, 0, 50, 50, Color.White);
                 _canvas.RestoreState();
 
-                // 3. Rotated image
+                // 3. Rotated textured rectangle
                 _canvas.SaveState();
                 _canvas.TransformBy(Transform2D.CreateTranslation(30, 60));
                 _canvas.TransformBy(Transform2D.CreateRotation(45));
-                _canvas.Image(_texture, -10, 0, 50, 50, Color.White);
+                _canvas.SetBrushTexture(_texture);
+                _canvas.SetBrushTextureTransform(TextureTransformForRect(-10, 0, 50, 50));
+                _canvas.RectFilled(-10, 0, 50, 50, Color.White);
                 _canvas.RestoreState();
 
-                // 4. Image with transparency/tint
+                // 4. Textured rectangle with tint
                 _canvas.SaveState();
                 _canvas.TransformBy(Transform2D.CreateTranslation(80, 60));
 
@@ -777,13 +792,12 @@ namespace Common
                 float r = 0.5f + 0.5f * Maths.Sin(_time);
                 float g = 0.5f + 0.5f * Maths.Sin(_time + Maths.PI * 2 / 3);
                 float b = 0.5f + 0.5f * Maths.Sin(_time + Maths.PI * 4 / 3);
-                _canvas.Image(_texture, 0, 0, 60, 40, Color32.FromArgb(200,
+                _canvas.SetBrushTexture(_texture);
+                _canvas.SetBrushTextureTransform(TextureTransformForRect(0, 0, 60, 40));
+                _canvas.RectFilled(0, 0, 60, 40, Color32.FromArgb(200,
                     (int)(r * 255), (int)(g * 255), (int)(b * 255)));
 
                 _canvas.RestoreState();
-
-                // Reset texture to avoid affecting other drawing
-                _canvas.SetTexture(null);
             }
             else
             {

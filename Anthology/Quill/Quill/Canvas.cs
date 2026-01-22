@@ -29,10 +29,14 @@ namespace Prowl.Quill
     public struct DrawCall
     {
         public int ElementCount;
-        public object Texture;
         public Brush Brush;
         internal Transform2D scissor;
         internal Float2 scissorExtent;
+
+        /// <summary>
+        /// Gets the texture from the brush. Returns null if no texture is set.
+        /// </summary>
+        public object? Texture => Brush.Texture;
 
         public void GetScissor(out Float4x4 matrix, out Float2 extent)
         {
@@ -88,8 +92,10 @@ namespace Prowl.Quill
     public struct Brush
     {
         public Float4x4 BrushMatrix => Transform.Inverse().ToMatrix();
+        public Float4x4 TextureMatrix => TextureTransform.Inverse().ToMatrix();
 
         public Transform2D Transform;
+        public Transform2D TextureTransform;
 
         public BrushType Type;
         public Color32 Color1;
@@ -98,17 +104,26 @@ namespace Prowl.Quill
         public Float2 Point2; // or radius for radial, half-size for box
         public float CornerRadii;
         public float Feather;
+        public object? Texture;
+        /// <summary>
+        /// When true, texture is sampled using world coordinates transformed by TextureTransform.
+        /// When false, texture is sampled using vertex UVs (for text rendering).
+        /// </summary>
+        public bool UseWorldTextureCoords;
 
-        internal bool EqualsOther(in Brush gradient)
+        internal bool EqualsOther(in Brush other)
         {
-            return Type == gradient.Type &&
-                   Color1 == gradient.Color1 &&
-                   Color2 == gradient.Color2 &&
-                   Point1 == gradient.Point1 &&
-                   Point2 == gradient.Point2 &&
-                   CornerRadii == gradient.CornerRadii &&
-                   Feather == gradient.Feather &&
-                   Transform == gradient.Transform;
+            return Type == other.Type &&
+                   Color1 == other.Color1 &&
+                   Color2 == other.Color2 &&
+                   Point1 == other.Point1 &&
+                   Point2 == other.Point2 &&
+                   CornerRadii == other.CornerRadii &&
+                   Feather == other.Feather &&
+                   Transform == other.Transform &&
+                   Texture == other.Texture &&
+                   TextureTransform == other.TextureTransform &&
+                   UseWorldTextureCoords == other.UseWorldTextureCoords;
         }
     }
 
@@ -128,7 +143,6 @@ namespace Prowl.Quill
         internal float tess_tol;
         internal float roundingMinDistance;
 
-        internal object? texture;
         internal Transform2D scissor;
         internal Float2 scissorExtent;
         internal Brush brush;
@@ -151,12 +165,14 @@ namespace Prowl.Quill
             miterLimit = 4; // Default miter limit
             tess_tol = 0.5f; // Default tessellation tolerance
             roundingMinDistance = 3; //Default _state.roundingMinDistance
-            texture = null;
             scissor = Transform2D.Identity;
             scissorExtent.X = -1.0f;
             scissorExtent.Y = -1.0f;
             brush = new Brush();
             brush.Transform = Transform2D.Identity;
+            brush.TextureTransform = Transform2D.Identity;
+            brush.Texture = null;
+            brush.UseWorldTextureCoords = false;
             fillColor = Color32.FromArgb(255, 0, 0, 0); // Default fill color (black)
             fillMode = WindingMode.OddEven; // Default winding mode
         }
@@ -348,7 +364,54 @@ namespace Prowl.Quill
         public void SetMiterLimit(float limit = 4) => _state.miterLimit = limit;
         public void SetTessellationTolerance(float tolerance = 0.5f) => _state.tess_tol = tolerance;
         public void SetRoundingMinDistance(float distance = 3) => _state.roundingMinDistance = distance;
-        public void SetTexture(object texture) => _state.texture = texture;
+
+        /// <summary>
+        /// Sets a texture on the current brush. The texture will be applied to all shapes drawn with this brush.
+        /// Use SetBrushTextureTransform to control how the texture maps to world coordinates.
+        /// </summary>
+        /// <param name="texture">The texture to apply, or null to clear the brush texture.</param>
+        public void SetBrushTexture(object? texture)
+        {
+            _state.brush.Texture = texture;
+            _state.brush.UseWorldTextureCoords = true;
+            // Default texture transform: 1 pixel = 1 texel, starting at origin
+            if (texture != null && _state.brush.TextureTransform == Transform2D.Identity)
+            {
+                var size = _renderer.GetTextureSize(texture);
+                _state.brush.TextureTransform = Transform2D.CreateScale(1.0f / size.X, 1.0f / size.Y);
+            }
+        }
+
+        /// <summary>
+        /// Sets the texture transform for the current brush. This controls how world coordinates map to texture coordinates.
+        /// The transform is applied to world-space coordinates before sampling the texture.
+        /// </summary>
+        /// <param name="transform">The transformation to apply. Use scale to control texture size, rotation to rotate texture, translation to offset it.</param>
+        public void SetBrushTextureTransform(Transform2D transform)
+        {
+            _state.brush.TextureTransform = _state.transform * transform;
+        }
+
+        /// <summary>
+        /// Clears the brush texture, reverting to solid color or gradient rendering.
+        /// </summary>
+        public void ClearBrushTexture()
+        {
+            _state.brush.Texture = null;
+            _state.brush.TextureTransform = Transform2D.Identity;
+            _state.brush.UseWorldTextureCoords = false;
+        }
+
+        /// <summary>
+        /// Internal method for setting a texture that will be sampled using vertex UVs.
+        /// Used by TextRenderer for font atlas textures.
+        /// </summary>
+        internal void SetTexture(object? texture)
+        {
+            _state.brush.Texture = texture;
+            _state.brush.UseWorldTextureCoords = false;
+        }
+
         public void SetLinearBrush(float x1, float y1, float x2, float y2, Color32 color1, Color32 color2)
         {
             // Premultiply
@@ -560,8 +623,7 @@ namespace Prowl.Quill
 
             DrawCall lastDrawCall = _drawCalls[_drawCalls.Count - 1];
 
-            bool isDrawStateSame = lastDrawCall.Texture == _state.texture &&
-                lastDrawCall.scissorExtent == _state.scissorExtent &&
+            bool isDrawStateSame = lastDrawCall.scissorExtent == _state.scissorExtent &&
                 lastDrawCall.scissor == _state.scissor &&
                 lastDrawCall.Brush.EqualsOther(_state.brush);
 
@@ -572,7 +634,6 @@ namespace Prowl.Quill
                     _drawCalls.Add(new DrawCall());
 
                 lastDrawCall = _drawCalls[_drawCalls.Count - 1];
-                lastDrawCall.Texture = _state.texture;
                 lastDrawCall.scissor = _state.scissor;
                 lastDrawCall.scissorExtent = _state.scissorExtent;
                 lastDrawCall.Brush = _state.brush;
@@ -1488,16 +1549,6 @@ namespace Prowl.Quill
             _indices.Add(startVertexIndex + 3);
 
             AddTriangleCount(2);
-        }
-
-        public void Image(object texture, float x, float y, float width, float height, Color32 color)
-        {
-            if (width <= 0 || height <= 0)
-                return;
-
-            SetTexture(texture);
-            RectFilled(x, y, width, height, color);
-            SetTexture(null);
         }
 
         /// <summary>
