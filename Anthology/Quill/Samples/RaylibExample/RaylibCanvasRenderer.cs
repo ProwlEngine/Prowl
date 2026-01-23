@@ -285,6 +285,13 @@ void main()
 
         public void RenderCalls(Canvas canvas, IReadOnlyList<Prowl.Quill.DrawCall> drawCalls)
         {
+            // Set up orthographic projection for pixel coordinates (framebuffer size)
+            Rlgl.MatrixMode(MatrixMode.Projection);
+            Rlgl.LoadIdentity();
+            Rlgl.Ortho(0, GetRenderWidth(), GetRenderHeight(), 0, -1, 1);
+            Rlgl.MatrixMode(MatrixMode.ModelView);
+            Rlgl.LoadIdentity();
+
             BeginBlendMode(BlendMode.AlphaPremultiply);
 
             Rlgl.DrawRenderBatchActive();
