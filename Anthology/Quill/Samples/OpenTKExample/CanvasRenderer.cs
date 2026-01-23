@@ -32,11 +32,15 @@ uniform vec2 brushParams2;   // x = Box radius, y = Box Feather
 
 uniform mat4 brushTextureMat;     // Texture transform matrix (inverse)
 
+uniform float dpiScale;           // DPI scale factor (pixels / logical units)
+
 float calculateBrushFactor() {
     // No brush
     if (brushType == 0) return 0.0;
 
-    vec2 transformedPoint = (brushMat * vec4(fragPos, 0.0, 1.0)).xy;
+    // Convert fragPos from pixel coordinates to logical coordinates for brush calculations
+    vec2 logicalPos = fragPos / dpiScale;
+    vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
 
     // Linear brush - projects position onto the line between start and end
     if (brushType == 1) {
@@ -93,14 +97,19 @@ float scissorMask(vec2 p) {
     // Early exit if scissoring is disabled (when any scissor dimension is negative)
     if(scissorExt.x < 0.0 || scissorExt.y < 0.0) return 1.0;
 
-    // Transform point to scissor space
-    vec2 transformedPoint = (scissorMat * vec4(p, 0.0, 1.0)).xy;
+    // Convert from pixel to logical coordinates, then transform to scissor space
+    vec2 logicalP = p / dpiScale;
+    vec2 transformedPoint = (scissorMat * vec4(logicalP, 0.0, 1.0)).xy;
+
+    // Convert scissorExt from pixels to logical units to match transformedPoint
+    vec2 logicalExt = scissorExt / dpiScale;
 
     // Calculate signed distance from scissor edges (negative inside, positive outside)
-    vec2 distanceFromEdges = abs(transformedPoint) - scissorExt;
+    vec2 distanceFromEdges = abs(transformedPoint) - logicalExt;
 
-    // Apply offset for smooth edge transition (0.5 creates half-pixel anti-aliased edges)
-    vec2 smoothEdges = vec2(0.5, 0.5) - distanceFromEdges;
+    // Apply offset for smooth edge transition (0.5 pixels converted to logical units)
+    float halfPixelLogical = 0.5 / dpiScale;
+    vec2 smoothEdges = vec2(halfPixelLogical) - distanceFromEdges;
 
     // Clamp each component and multiply to get final mask value
     // Result is 1.0 inside, 0.0 outside, with smooth transition at edges
@@ -131,9 +140,10 @@ void main()
     float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
     edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
 
-    // Use world position transformed by texture matrix
+    // Use world position transformed by texture matrix (convert to logical coords first)
     // If Canvas texture was null, renderer should assign a default white texture, so any sample position is valid
-    finalColor = color * texture(texture0, (brushTextureMat * vec4(fragPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
+    vec2 logicalPos = fragPos / dpiScale;
+    finalColor = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
 }";
 
         // Shader source for the vertex shader
@@ -172,6 +182,7 @@ void main()
         static int _brushParamsLoc;
         static int _brushParams2Loc;
         static int _brushTextureMatLoc;
+        static int _dpiScaleLoc;
 
         private Matrix4 _projection;
         private TextureTK _defaultTexture;
@@ -246,6 +257,7 @@ void main()
             _brushParamsLoc = GL.GetUniformLocation(_shaderProgram, "brushParams");
             _brushParams2Loc = GL.GetUniformLocation(_shaderProgram, "brushParams2");
             _brushTextureMatLoc = GL.GetUniformLocation(_shaderProgram, "brushTextureMat");
+            _dpiScaleLoc = GL.GetUniformLocation(_shaderProgram, "dpiScale");
         }
 
         private Matrix4 ToTK(Float4x4 mat) => new Matrix4(
@@ -391,6 +403,9 @@ void main()
                     // Use default shader
                     GL.UseProgram(_shaderProgram);
                     GL.UniformMatrix4(_projectionLocation, false, ref _projection);
+
+                    // Set DPI scale for converting pixel coords to logical coords in shader
+                    GL.Uniform1(_dpiScaleLoc, canvas.Scale);
 
                     // Set scissor rectangle
                     drawCall.GetScissor(out var scissor, out var extent);
