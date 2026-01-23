@@ -1370,7 +1370,8 @@ namespace Prowl.Quill
             {
                 var copy = path.Points.ToArray();
                 for (int i = 0; i < copy.Length; i++)
-                    copy[i] = TransformPoint(copy[i]) + new Float2(0.5f, 0.5f); // And offset by half a pixel to properly align it with Stroke()
+                    // TransformPoint converts to physical pixels; 0.5 offset aligns with pixel grid for AA (DPI-independent in pixel space)
+                    copy[i] = TransformPoint(copy[i]) + new Float2(0.5f, 0.5f);
                 var points = copy.Select(v => new ContourVertex() { Position = new Vec3() { X = v.X, Y = v.Y } }).ToArray();
 
                 tess.AddContour(points, ContourOrientation.Original);
@@ -1410,7 +1411,8 @@ namespace Prowl.Quill
             for (int i = 0; i < copy.Length; i++)
             {
                 var point = copy[i];
-                point = TransformPoint(point) + new Float2(0.5f, 0.5f); // And offset by half a pixel to properly center it with Stroke()
+                // TransformPoint converts to physical pixels; 0.5 offset aligns with pixel grid for AA (DPI-independent in pixel space)
+                point = TransformPoint(point) + new Float2(0.5f, 0.5f);
                 center += point;
                 copy[i] = point;
             }
@@ -1423,11 +1425,12 @@ namespace Prowl.Quill
             AddVertex(new Vertex(center, new Float2(0.5f, 0.5f), _state.fillColor));
 
             // Generate vertices around the path
+            // Note: copy[] is in physical pixel space after TransformPoint, so use 1.0 for one physical pixel expansion
             int segments = copy.Length;
             for (int i = 0; i < segments; i++) // Edge vertices have UV at 0,0 for anti-aliasing
             {
                 Float2 dirToPoint = Float2.Normalize(copy[i] - center);
-                AddVertex(new Vertex(copy[i] + (dirToPoint * _pixelWidth), new Float2(0, 0), _state.fillColor));
+                AddVertex(new Vertex(copy[i] + dirToPoint, new Float2(0, 0), _state.fillColor));
             }
 
             // Create triangles (fan from center to edges)
