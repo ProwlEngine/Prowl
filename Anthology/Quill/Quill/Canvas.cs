@@ -12,24 +12,65 @@ using System.Runtime.InteropServices;
 
 namespace Prowl.Quill
 {
+    /// <summary>
+    /// Specifies the type of brush used for filling shapes.
+    /// </summary>
     public enum BrushType
     {
+        /// <summary>
+        /// No brush; uses solid color from vertex data.
+        /// </summary>
         None = 0,
+
+        /// <summary>
+        /// Linear gradient brush that transitions between two colors along a line.
+        /// </summary>
         Linear = 1,
+
+        /// <summary>
+        /// Radial gradient brush that transitions between two colors in a circular pattern.
+        /// </summary>
         Radial = 2,
+
+        /// <summary>
+        /// Box gradient brush that transitions between two colors with rounded corners.
+        /// </summary>
         Box = 3
     }
 
+    /// <summary>
+    /// Specifies the winding rule used to determine the interior of complex paths.
+    /// </summary>
     public enum WindingMode
     {
+        /// <summary>
+        /// A point is inside the shape if a ray from that point crosses an odd number of path segments.
+        /// Also known as the even-odd fill rule.
+        /// </summary>
         OddEven,
+
+        /// <summary>
+        /// A point is inside the shape if the winding number is non-zero.
+        /// Also known as the non-zero fill rule.
+        /// </summary>
         NonZero
     }
 
+    /// <summary>
+    /// Represents a single draw call containing rendering state and the number of elements to draw.
+    /// </summary>
     public struct DrawCall
     {
+        /// <summary>
+        /// The number of index elements (vertices * 3) in this draw call.
+        /// </summary>
         public int ElementCount;
+
+        /// <summary>
+        /// The brush state for this draw call, containing gradient and texture information.
+        /// </summary>
         public Brush Brush;
+
         internal Transform2D scissor;
         internal Float2 scissorExtent;
         internal int stateHash;
@@ -141,27 +182,59 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// Represents a vertex in the canvas rendering system with position, UV coordinates, and color.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct Vertex
     {
         public static int SizeInBytes => 20; //Marshal.SizeOf<Vertex>();
 
+        /// <summary>
+        /// Gets the position of the vertex in screen space.
+        /// </summary>
         public Float2 Position => new Float2(x, y);
+
+        /// <summary>
+        /// Gets the texture/UV coordinates of the vertex.
+        /// </summary>
         public Float2 UV => new Float2(u, v);
+
+        /// <summary>
+        /// Gets the color of the vertex.
+        /// </summary>
         public Color32 Color => Color32.FromArgb(a, r, g, b);
 
-
+        /// <summary>The X position in screen space.</summary>
         public float x;
+
+        /// <summary>The Y position in screen space.</summary>
         public float y;
 
+        /// <summary>The U texture coordinate.</summary>
         public float u;
+
+        /// <summary>The V texture coordinate.</summary>
         public float v;
 
+        /// <summary>The red color component.</summary>
         public byte r;
+
+        /// <summary>The green color component.</summary>
         public byte g;
+
+        /// <summary>The blue color component.</summary>
         public byte b;
+
+        /// <summary>The alpha (transparency) component.</summary>
         public byte a;
 
+        /// <summary>
+        /// Creates a new vertex with the specified position, UV coordinates, and color.
+        /// </summary>
+        /// <param name="position">The position in screen space.</param>
+        /// <param name="UV">The texture coordinates.</param>
+        /// <param name="color">The vertex color.</param>
         public Vertex(in Float2 position, in Float2 UV, in Color32 color)
         {
             x = (float)position.X;
@@ -175,21 +248,71 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// Represents a brush used for filling shapes with gradients, textures, or custom shaders.
+    /// </summary>
     public struct Brush
     {
+        /// <summary>
+        /// Gets the inverse transformation matrix for the brush gradient.
+        /// </summary>
         public Float4x4 BrushMatrix => Transform.Inverse().ToMatrix();
+
+        /// <summary>
+        /// Gets the inverse transformation matrix for texture mapping.
+        /// </summary>
         public Float4x4 TextureMatrix => TextureTransform.Inverse().ToMatrix();
 
+        /// <summary>
+        /// The transformation applied to the brush gradient coordinates.
+        /// </summary>
         public Transform2D Transform;
+
+        /// <summary>
+        /// The transformation applied to texture coordinates.
+        /// </summary>
         public Transform2D TextureTransform;
 
+        /// <summary>
+        /// The type of brush (None, Linear, Radial, or Box gradient).
+        /// </summary>
         public BrushType Type;
+
+        /// <summary>
+        /// The first color of the gradient (inner color for radial, start color for linear).
+        /// </summary>
         public Color32 Color1;
+
+        /// <summary>
+        /// The second color of the gradient (outer color for radial, end color for linear).
+        /// </summary>
         public Color32 Color2;
+
+        /// <summary>
+        /// The first point of the gradient (center for radial, start point for linear).
+        /// </summary>
         public Float2 Point1;
-        public Float2 Point2; // or radius for radial, half-size for box
+
+        /// <summary>
+        /// The second point of the gradient. For linear gradients this is the end point.
+        /// For radial gradients, X and Y contain inner and outer radius.
+        /// For box gradients, this contains the half-size.
+        /// </summary>
+        public Float2 Point2;
+
+        /// <summary>
+        /// The corner radius for box gradients.
+        /// </summary>
         public float CornerRadii;
+
+        /// <summary>
+        /// The feather amount for box gradients, controlling the softness of edges.
+        /// </summary>
         public float Feather;
+
+        /// <summary>
+        /// The texture to apply to shapes, or null for no texture.
+        /// </summary>
         public object? Texture;
 
         /// <summary>
@@ -280,6 +403,10 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// A hardware-accelerated 2D vector graphics canvas for drawing shapes, text, and images.
+    /// Provides an API similar to HTML5 Canvas for creating paths, stroking, filling, and rendering.
+    /// </summary>
     public partial class Canvas
     {
         internal class SubPath
@@ -292,9 +419,24 @@ namespace Prowl.Quill
             }
         }
 
+        /// <summary>
+        /// Gets the list of draw calls accumulated during rendering.
+        /// </summary>
         public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.AsReadOnly();
+
+        /// <summary>
+        /// Gets the list of triangle indices for all accumulated geometry.
+        /// </summary>
         public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
+
+        /// <summary>
+        /// Gets the list of vertices for all accumulated geometry.
+        /// </summary>
         public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
+
+        /// <summary>
+        /// Gets the current point of the active path, or Zero if no path is active.
+        /// </summary>
         public Float2 CurrentPoint => _currentSubPath != null && _currentSubPath.Points.Count > 0 ? CurrentPointInternal : Float2.Zero;
 
         internal Float2 CurrentPointInternal => _currentSubPath.Points[_currentSubPath.Points.Count - 1];
@@ -349,8 +491,17 @@ namespace Prowl.Quill
         /// </summary>
         public float PixelFraction => 1.0f / _scale;
 
+        /// <summary>
+        /// Gets the text renderer for drawing text and accessing font functionality.
+        /// </summary>
         public TextRenderer Text => _scribeRenderer;
 
+        /// <summary>
+        /// Creates a new Canvas with the specified renderer backend and font settings.
+        /// </summary>
+        /// <param name="renderer">The renderer backend implementation for drawing.</param>
+        /// <param name="fontAtlasSettings">Settings for the font atlas used for text rendering.</param>
+        /// <exception cref="ArgumentNullException">Thrown when renderer is null.</exception>
         public Canvas(ICanvasRenderer renderer, FontAtlasSettings fontAtlasSettings)
         {
             if (renderer == null)
@@ -441,6 +592,9 @@ namespace Prowl.Quill
             _pixelHalf = _pixelWidth * 0.5f;
         }
 
+        /// <summary>
+        /// Clears all accumulated geometry, draw calls, and resets the canvas state.
+        /// </summary>
         public void Clear()
         {
             _drawCalls.Clear();
@@ -483,8 +637,15 @@ namespace Prowl.Quill
             return _currentDrawStateHash;
         }
 
+        /// <summary>
+        /// Saves the current canvas state (transform, stroke, fill, scissor, brush) to a stack.
+        /// </summary>
         public void SaveState() => _savedStates.Push(_state);
 
+        /// <summary>
+        /// Restores the most recently saved canvas state from the stack.
+        /// Does nothing if no state has been saved.
+        /// </summary>
         public void RestoreState()
         {
             if (_savedStates.Count == 0)
@@ -492,18 +653,56 @@ namespace Prowl.Quill
             _state = _savedStates.Pop();
             InvalidateDrawState();
         }
+
+        /// <summary>
+        /// Resets the canvas state to default values without clearing the state stack.
+        /// </summary>
         public void ResetState() { _state.Reset(); InvalidateDrawState(); }
 
+        /// <summary>
+        /// Sets the color used for stroking paths.
+        /// </summary>
+        /// <param name="color">The stroke color.</param>
         public void SetStrokeColor(Color32 color) => _state.strokeColor = color;
+
+        /// <summary>
+        /// Sets the joint style used when stroking paths at corners.
+        /// </summary>
+        /// <param name="joint">The joint style (Bevel, Miter, or Round).</param>
         public void SetStrokeJoint(JointStyle joint) => _state.strokeJoint = joint;
+
+        /// <summary>
+        /// Sets the cap style for both start and end of open paths.
+        /// </summary>
+        /// <param name="cap">The cap style (Butt, Square, Round, or Bevel).</param>
         public void SetStrokeCap(EndCapStyle cap)
         {
             _state.strokeStartCap = cap;
             _state.strokeEndCap = cap;
         }
+
+        /// <summary>
+        /// Sets the cap style for the start of open paths.
+        /// </summary>
+        /// <param name="cap">The cap style (Butt, Square, Round, or Bevel).</param>
         public void SetStrokeStartCap(EndCapStyle cap) => _state.strokeStartCap = cap;
+
+        /// <summary>
+        /// Sets the cap style for the end of open paths.
+        /// </summary>
+        /// <param name="cap">The cap style (Butt, Square, Round, or Bevel).</param>
         public void SetStrokeEndCap(EndCapStyle cap) => _state.strokeEndCap = cap;
+
+        /// <summary>
+        /// Sets the width of stroked paths in logical units.
+        /// </summary>
+        /// <param name="width">The stroke width. Default is 2.</param>
         public void SetStrokeWidth(float width = 2f) => _state.strokeWidth = width;
+
+        /// <summary>
+        /// Sets a scale factor applied to stroke width.
+        /// </summary>
+        /// <param name="scale">The scale factor.</param>
         public void SetStrokeScale(float scale) => _state.strokeScale = scale;
 
 
@@ -538,8 +737,22 @@ namespace Prowl.Quill
             _state.strokeDashOffset = 0.0f;
         }
 
+        /// <summary>
+        /// Sets the miter limit for mitered joints. When the miter length would exceed this ratio of stroke width, the joint falls back to bevel.
+        /// </summary>
+        /// <param name="limit">The miter limit ratio. Default is 4.</param>
         public void SetMiterLimit(float limit = 4) => _state.miterLimit = limit;
+
+        /// <summary>
+        /// Sets the tessellation tolerance for curve approximation. Lower values produce smoother curves with more triangles.
+        /// </summary>
+        /// <param name="tolerance">The tessellation tolerance. Default is 0.5.</param>
         public void SetTessellationTolerance(float tolerance = 0.5f) => _state.tess_tol = tolerance;
+
+        /// <summary>
+        /// Sets the minimum distance between points when approximating curves and arcs.
+        /// </summary>
+        /// <param name="distance">The minimum distance in logical units. Default is 3.</param>
         public void SetRoundingMinDistance(float distance = 3) => _state.roundingMinDistance = distance;
 
         /// <summary>
@@ -637,6 +850,15 @@ namespace Prowl.Quill
             InvalidateDrawState();
         }
 
+        /// <summary>
+        /// Sets a linear gradient brush for filling shapes.
+        /// </summary>
+        /// <param name="x1">The X coordinate of the gradient start point.</param>
+        /// <param name="y1">The Y coordinate of the gradient start point.</param>
+        /// <param name="x2">The X coordinate of the gradient end point.</param>
+        /// <param name="y2">The Y coordinate of the gradient end point.</param>
+        /// <param name="color1">The color at the start point.</param>
+        /// <param name="color2">The color at the end point.</param>
         public void SetLinearBrush(float x1, float y1, float x2, float y2, Color32 color1, Color32 color2)
         {
             // Premultiply
@@ -660,6 +882,16 @@ namespace Prowl.Quill
             _state.brush.Transform = _state.transform;
             InvalidateDrawState();
         }
+
+        /// <summary>
+        /// Sets a radial gradient brush for filling shapes.
+        /// </summary>
+        /// <param name="centerX">The X coordinate of the gradient center.</param>
+        /// <param name="centerY">The Y coordinate of the gradient center.</param>
+        /// <param name="innerRadius">The radius at which the inner color ends.</param>
+        /// <param name="outerRadius">The radius at which the outer color begins.</param>
+        /// <param name="innerColor">The color at the center.</param>
+        /// <param name="outerColor">The color at the outer edge.</param>
         public void SetRadialBrush(float centerX, float centerY, float innerRadius, float outerRadius, Color32 innerColor, Color32 outerColor)
         {
             // Premultiply
@@ -683,6 +915,18 @@ namespace Prowl.Quill
             _state.brush.Transform = _state.transform;
             InvalidateDrawState();
         }
+
+        /// <summary>
+        /// Sets a box gradient brush for filling shapes with rounded corners and feathered edges.
+        /// </summary>
+        /// <param name="centerX">The X coordinate of the box center.</param>
+        /// <param name="centerY">The Y coordinate of the box center.</param>
+        /// <param name="width">The width of the box.</param>
+        /// <param name="height">The height of the box.</param>
+        /// <param name="radi">The corner radius of the box.</param>
+        /// <param name="feather">The feather amount for soft edges.</param>
+        /// <param name="innerColor">The color inside the box.</param>
+        /// <param name="outerColor">The color outside the box.</param>
         public void SetBoxBrush(float centerX, float centerY, float width, float height, float radi, float feather, Color32 innerColor, Color32 outerColor)
         {
             // Premultiply
@@ -708,11 +952,20 @@ namespace Prowl.Quill
             _state.brush.Transform = _state.transform;
             InvalidateDrawState();
         }
+
+        /// <summary>
+        /// Clears the current brush, reverting to solid color fills.
+        /// </summary>
         public void ClearBrush()
         {
             _state.brush.Type = BrushType.None;
             InvalidateDrawState();
         }
+
+        /// <summary>
+        /// Sets the color used for filling shapes.
+        /// </summary>
+        /// <param name="color">The fill color.</param>
         public void SetFillColor(Color32 color) => _state.fillColor = color;
 
 
@@ -782,17 +1035,38 @@ namespace Prowl.Quill
         }
         #endregion
 
-        // Globals
+        /// <summary>
+        /// Sets the global alpha (transparency) applied to all subsequent drawing operations.
+        /// </summary>
+        /// <param name="alpha">The alpha value from 0 (fully transparent) to 1 (fully opaque).</param>
         public void SetGlobalAlpha(float alpha) => _globalAlpha = alpha;
 
         #endregion
 
         #region Transformation
 
-        //public void TransformBy(Transform2D t) => _state.transform.Premultiply(ref t);
+        /// <summary>
+        /// Multiplies the current transformation matrix by the specified transform.
+        /// </summary>
+        /// <param name="t">The transformation to apply.</param>
         public void TransformBy(Transform2D t) => _state.transform = _state.transform * t;
+
+        /// <summary>
+        /// Resets the current transformation to the identity matrix.
+        /// </summary>
         public void ResetTransform() => _state.transform = Transform2D.Identity;
+
+        /// <summary>
+        /// Sets the current transformation matrix directly.
+        /// </summary>
+        /// <param name="xform">The transformation matrix to set.</param>
         public void CurrentTransform(Transform2D xform) => _state.transform = xform;
+
+        /// <summary>
+        /// Transforms a point from logical units to pixel coordinates, applying the current transformation.
+        /// </summary>
+        /// <param name="unitPoint">The point in logical units.</param>
+        /// <returns>The transformed point in pixel coordinates.</returns>
         public Float2 TransformPoint(in Float2 unitPoint)
         {
             // Apply transform in unit space, then convert to pixels
@@ -800,6 +1074,10 @@ namespace Prowl.Quill
             return transformedUnitPoint * _scale;
         }
 
+        /// <summary>
+        /// Gets the current transformation matrix.
+        /// </summary>
+        /// <returns>The current transformation matrix.</returns>
         public Transform2D GetTransform() => _state.transform;
 
         #endregion
@@ -814,6 +1092,10 @@ namespace Prowl.Quill
             _isNewDrawCallRequested = true;
         }
 
+        /// <summary>
+        /// Adds a vertex to the vertex buffer, applying global alpha and premultiplied alpha.
+        /// </summary>
+        /// <param name="vertex">The vertex to add.</param>
         public void AddVertex(Vertex vertex)
         {
             if (_globalAlpha != 1.0f)
@@ -825,7 +1107,7 @@ namespace Prowl.Quill
                 var alpha = vertex.a / 255f;
                 vertex.r = (byte)(vertex.r * alpha);
                 vertex.g = (byte)(vertex.g * alpha);
-                vertex.b = (byte)(vertex.b * alpha);          
+                vertex.b = (byte)(vertex.b * alpha);
             }
 
 
@@ -833,8 +1115,25 @@ namespace Prowl.Quill
             _vertices.Add(vertex);
         }
 
+        /// <summary>
+        /// Adds a triangle using the last three vertices added to the vertex buffer.
+        /// </summary>
         public void AddTriangle() => AddTriangle(_vertices.Count - 3, _vertices.Count - 2, _vertices.Count - 1);
+
+        /// <summary>
+        /// Adds a triangle with the specified vertex indices.
+        /// </summary>
+        /// <param name="v1">Index of the first vertex.</param>
+        /// <param name="v2">Index of the second vertex.</param>
+        /// <param name="v3">Index of the third vertex.</param>
         public void AddTriangle(int v1, int v2, int v3) => AddTriangle((uint)v1, (uint)v2, (uint)v3);
+
+        /// <summary>
+        /// Adds a triangle with the specified vertex indices.
+        /// </summary>
+        /// <param name="v1">Index of the first vertex.</param>
+        /// <param name="v2">Index of the second vertex.</param>
+        /// <param name="v3">Index of the third vertex.</param>
         public void AddTriangle(uint v1, uint v2, uint v3)
         {
             // Add the triangle indices to the list
@@ -880,6 +1179,10 @@ namespace Prowl.Quill
             _drawCalls[_drawCalls.Count - 1] = lastDrawCall;
         }
 
+        /// <summary>
+        /// Renders all accumulated draw calls using the renderer backend.
+        /// Call this at the end of each frame after all drawing operations are complete.
+        /// </summary>
         public void Render()
         {
             _renderer.RenderCalls(this, _drawCalls);
@@ -1333,6 +1636,10 @@ namespace Prowl.Quill
 
         #endregion
 
+        /// <summary>
+        /// Fills the current path using the current fill color.
+        /// Uses a simple fan-based fill algorithm suitable for convex shapes.
+        /// </summary>
         public void Fill()
         {
             if (_subPaths.Count == 0)
@@ -1343,6 +1650,10 @@ namespace Prowl.Quill
                 FillSubPath(subPath);
         }
 
+        /// <summary>
+        /// Fills complex paths with anti-aliasing using tessellation.
+        /// Combines FillComplex with an outline stroke for smooth edges.
+        /// </summary>
         public void FillComplexAA()
         {
             FillComplex();
@@ -1360,6 +1671,10 @@ namespace Prowl.Quill
             RestoreState();
         }
 
+        /// <summary>
+        /// Fills complex or self-intersecting paths using LibTess tessellation.
+        /// Supports both OddEven and NonZero winding rules.
+        /// </summary>
         public void FillComplex()
         {
             if (_subPaths.Count == 0)
@@ -1473,6 +1788,9 @@ namespace Prowl.Quill
             AddTriangleCount(segments);
         }
 
+        /// <summary>
+        /// Strokes the current path using the current stroke color, width, and style settings.
+        /// </summary>
         public void Stroke()
         {
             if (_subPaths.Count == 0)
@@ -1532,6 +1850,9 @@ namespace Prowl.Quill
             AddTriangleCount(triangles.Count);
         }
 
+        /// <summary>
+        /// Fills and then strokes the current path using the current fill and stroke settings.
+        /// </summary>
         public void FillAndStroke()
         {
             Fill();
@@ -2096,8 +2417,26 @@ namespace Prowl.Quill
 
         #region Text
 
+        /// <summary>
+        /// Adds a fallback font to use when glyphs are missing from the primary font.
+        /// </summary>
+        /// <param name="font">The fallback font to add.</param>
         public void AddFallbackFont(FontFile font) => _scribeRenderer.FontEngine.AddFallbackFont(font);
+
+        /// <summary>
+        /// Enumerates all fonts available on the system.
+        /// </summary>
+        /// <returns>An enumerable of system fonts.</returns>
         public IEnumerable<FontFile> EnumerateSystemFonts() => _scribeRenderer.FontEngine.EnumerateSystemFonts();
+
+        /// <summary>
+        /// Measures the size of text when rendered with the specified settings.
+        /// </summary>
+        /// <param name="text">The text to measure.</param>
+        /// <param name="pixelSize">The font size in logical units.</param>
+        /// <param name="font">The font to use.</param>
+        /// <param name="letterSpacing">Additional spacing between letters.</param>
+        /// <returns>The size of the text in logical units.</returns>
         public Float2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0f)
         {
             // Measure at scaled pixel size for accuracy, then convert back to logical units
@@ -2106,8 +2445,26 @@ namespace Prowl.Quill
             Float2 pixelResult = (Float2)_scribeRenderer.FontEngine.MeasureText(text, actualPixelSize, font, actualLetterSpacing);
             return pixelResult / _scale;
         }
+
+        /// <summary>
+        /// Measures the size of text using custom layout settings.
+        /// </summary>
+        /// <param name="text">The text to measure.</param>
+        /// <param name="settings">The layout settings to use.</param>
+        /// <returns>The size of the text.</returns>
         public Float2 MeasureText(string text, TextLayoutSettings settings) => (Float2)_scribeRenderer.FontEngine.MeasureText(text, settings);
 
+        /// <summary>
+        /// Draws text at the specified position.
+        /// </summary>
+        /// <param name="text">The text to draw.</param>
+        /// <param name="x">The X coordinate.</param>
+        /// <param name="y">The Y coordinate.</param>
+        /// <param name="color">The text color.</param>
+        /// <param name="pixelSize">The font size in logical units.</param>
+        /// <param name="font">The font to use.</param>
+        /// <param name="letterSpacing">Additional spacing between letters.</param>
+        /// <param name="origin">Optional origin point for alignment (0-1 range, e.g., 0.5,0.5 for center).</param>
         public void DrawText(string text, float x, float y, Color32 color, float pixelSize, FontFile font, float letterSpacing = 0f, Float2? origin = null)
         {
             Float2 position = new Float2(x, y);
@@ -2180,11 +2537,17 @@ namespace Prowl.Quill
 
         #region Markdown
 
+        /// <summary>
+        /// Represents a parsed and laid out markdown document ready for rendering.
+        /// </summary>
         public struct QuillMarkdown
         {
             internal MarkdownLayoutSettings Settings;
             internal MarkdownDisplayList List;
 
+            /// <summary>
+            /// Gets the size of the laid out markdown content.
+            /// </summary>
             public readonly Float2 Size => (Float2)List.Size;
 
             internal QuillMarkdown(MarkdownLayoutSettings settings, MarkdownDisplayList list)
@@ -2194,11 +2557,21 @@ namespace Prowl.Quill
             }
         }
 
+        /// <summary>
+        /// Sets the image provider for loading images referenced in markdown content.
+        /// </summary>
+        /// <param name="provider">The image provider to use.</param>
         public void SetMarkdownImageProvider(IMarkdownImageProvider provider)
         {
             _markdownImageProvider = provider;
         }
 
+        /// <summary>
+        /// Parses and lays out markdown text for rendering.
+        /// </summary>
+        /// <param name="markdown">The markdown text to parse.</param>
+        /// <param name="settings">The layout settings for rendering.</param>
+        /// <returns>A QuillMarkdown object ready for drawing.</returns>
         public QuillMarkdown CreateMarkdown(string markdown, MarkdownLayoutSettings settings)
         {
             var doc = Markdown.Parse(markdown);
@@ -2211,6 +2584,11 @@ namespace Prowl.Quill
             return md;
         }
 
+        /// <summary>
+        /// Draws a parsed markdown document at the specified position.
+        /// </summary>
+        /// <param name="markdown">The markdown to render.</param>
+        /// <param name="position">The position to render at in logical units.</param>
         public void DrawMarkdown(QuillMarkdown markdown, Float2 position)
         {
             // Convert units to pixels for position
@@ -2218,6 +2596,15 @@ namespace Prowl.Quill
             MarkdownLayoutEngine.Render(markdown.List, _scribeRenderer.FontEngine, _scribeRenderer, (Float2)pixelPosition, markdown.Settings);
         }
 
+        /// <summary>
+        /// Checks if a point is over a link in the markdown content and returns the link URL.
+        /// </summary>
+        /// <param name="markdown">The markdown document to check.</param>
+        /// <param name="renderOffset">The offset where the markdown was rendered.</param>
+        /// <param name="point">The point to check in logical units.</param>
+        /// <param name="useScissor">Whether to respect the current scissor region.</param>
+        /// <param name="href">When returning true, contains the URL of the link at the point.</param>
+        /// <returns>True if a link was found at the point, false otherwise.</returns>
         public bool GetMarkdownLinkAt(QuillMarkdown markdown, Float2 renderOffset, Float2 point, bool useScissor, out string href)
         {
             // Check if point is within scissor rect if enabled
@@ -2275,6 +2662,9 @@ namespace Prowl.Quill
 
         #endregion
 
+        /// <summary>
+        /// Disposes the canvas and releases the underlying renderer resources.
+        /// </summary>
         public void Dispose()
         {
             _renderer?.Dispose();
