@@ -97,12 +97,18 @@ namespace Prowl.Quill
         private const float EpsilonSqr = 1e-9f;
         private static readonly Float2 HalfPixel = new Float2(0.5f, 0.5f);
 
+        /// <summary>
+        /// Represents a triangle with position, UV coordinates, and color data for rendering stroked paths.
+        /// </summary>
         public struct Triangle
         {
             public Float2 V1, V2, V3;
             public Float2 UV1, UV2, UV3;
             public Color32 Color;
 
+            /// <summary>
+            /// Creates a new triangle with the specified vertices, UV coordinates, and color.
+            /// </summary>
             public Triangle(Float2 v1, Float2 v2, Float2 v3, Float2 uv1, Float2 uv2, Float2 uv3, Color32 color)
             {
                 V1 = v1; V2 = v2; V3 = v3;
