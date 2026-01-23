@@ -484,7 +484,14 @@ namespace Prowl.Quill
         }
 
         public void SaveState() => _savedStates.Push(_state);
-        public void RestoreState() { _state = _savedStates.Pop(); InvalidateDrawState(); }
+
+        public void RestoreState()
+        {
+            if (_savedStates.Count == 0)
+                return;
+            _state = _savedStates.Pop();
+            InvalidateDrawState();
+        }
         public void ResetState() { _state.Reset(); InvalidateDrawState(); }
 
         public void SetStrokeColor(Color32 color) => _state.strokeColor = color;
