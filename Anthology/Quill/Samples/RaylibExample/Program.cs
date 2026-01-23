@@ -50,8 +50,10 @@ namespace RaylibExample
             {
                 HandleDemoInput(ref offset, ref zoom, ref rotation, ref currentDemoIndex, demos.Count);
 
+                float dpiScale = (float)GetRenderWidth() / GetScreenWidth();
+
                 // Begin frame with logical size and DPI scale - this also clears the canvas
-                canvas.BeginFrame(GetScreenWidth(), GetScreenHeight(), GetWindowScaleDPI().X);
+                canvas.BeginFrame(GetScreenWidth(), GetScreenHeight(), dpiScale);
 
                 // Draw demo into canvas
                 demos[currentDemoIndex].RenderFrame(GetFrameTime(), offset, zoom, rotation);
