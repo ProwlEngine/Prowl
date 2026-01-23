@@ -124,6 +124,7 @@ namespace Prowl.Quill
         public static IReadOnlyList<Triangle> Create(List<Float2> points, float thickness, float pixelWidth, Color32 color, JointStyle jointStyle = JointStyle.Miter, float miterLimit = 4.0f, bool allowOverlap = false, EndCapStyle startCap = EndCapStyle.Butt, EndCapStyle endCap = EndCapStyle.Butt, List<float> dashPattern = null, float dashOffset = 0.0f)
         {
             TriangleCache.Clear();
+            ReturnDashSegments(); // Return previously used segments to pool
 
             if (points.Count < 2 || thickness <= 0 || color.A == 0)
                 return TriangleCache;
