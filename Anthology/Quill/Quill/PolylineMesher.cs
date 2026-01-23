@@ -59,9 +59,37 @@ namespace Prowl.Quill
         private static List<Triangle> _triangles;
         [ThreadStatic]
         private static List<PolySegment> _polySegments;
+        [ThreadStatic]
+        private static List<List<Float2>> _dashSegments;
+        [ThreadStatic]
+        private static List<Float2> _currentDashPoints;
+        [ThreadStatic]
+        private static List<List<Float2>> _dashSegmentPool;
 
         private static List<Triangle> TriangleCache => _triangles ??= new List<Triangle>();
         private static List<PolySegment> PolySegmentCache => _polySegments ??= new List<PolySegment>();
+        private static List<List<Float2>> DashSegmentCache => _dashSegments ??= new List<List<Float2>>();
+        private static List<Float2> CurrentDashPointsCache => _currentDashPoints ??= new List<Float2>();
+        private static List<List<Float2>> DashSegmentPool => _dashSegmentPool ??= new List<List<Float2>>();
+
+        private static List<Float2> RentDashSegment()
+        {
+            if (DashSegmentPool.Count > 0)
+            {
+                var segment = DashSegmentPool[DashSegmentPool.Count - 1];
+                DashSegmentPool.RemoveAt(DashSegmentPool.Count - 1);
+                segment.Clear();
+                return segment;
+            }
+            return new List<Float2>();
+        }
+
+        private static void ReturnDashSegments()
+        {
+            foreach (var segment in DashSegmentCache)
+                DashSegmentPool.Add(segment);
+            DashSegmentCache.Clear();
+        }
 
         private const float MiterMinAngle = 20.0f * Maths.PI / 180.0f;
         private const float RoundMinAngle = 40.0f * Maths.PI / 180.0f;
@@ -265,30 +293,43 @@ namespace Prowl.Quill
 
         private static List<List<Float2>> GenerateDashSegments(List<Float2> points, List<float> dashPattern, float dashOffset, Float2 halfPixelOffset)
         {
-            var allDashSegments = new List<List<Float2>>();
+            var allDashSegments = DashSegmentCache;
 
             if (points.Count < 2 || dashPattern == null || dashPattern.Count == 0 || dashPattern.Sum() <= Epsilon)
             {
                 if (points.Count >= 2)
                 {
-                    var singleSegment = points.Select(p => p + halfPixelOffset).ToList();
+                    var singleSegment = RentDashSegment();
+                    for (int i = 0; i < points.Count; i++)
+                        singleSegment.Add(points[i] + halfPixelOffset);
                     allDashSegments.Add(singleSegment);
                 }
                 return allDashSegments;
             }
 
             var dashState = InitializeDashState(dashPattern, dashOffset);
-            var currentDashPoints = new List<Float2>();
+            var currentDashPoints = CurrentDashPointsCache;
+            currentDashPoints.Clear();
 
             ProcessLineSegments(points, halfPixelOffset, dashPattern, dashState, currentDashPoints, allDashSegments);
 
             // Add final dash segment if we're in dash state
             if (dashState.IsInDash && currentDashPoints.Count >= 2)
             {
-                allDashSegments.Add(new List<Float2>(currentDashPoints));
+                var segment = RentDashSegment();
+                segment.AddRange(currentDashPoints);
+                allDashSegments.Add(segment);
             }
 
-            allDashSegments.RemoveAll(dash => dash.Count < 2);
+            // Remove segments with fewer than 2 points (return them to pool)
+            for (int i = allDashSegments.Count - 1; i >= 0; i--)
+            {
+                if (allDashSegments[i].Count < 2)
+                {
+                    DashSegmentPool.Add(allDashSegments[i]);
+                    allDashSegments.RemoveAt(i);
+                }
+            }
             return allDashSegments;
         }
 
@@ -437,7 +478,9 @@ namespace Prowl.Quill
                 // End of dash - save current segment
                 if (currentDashPoints.Count >= 2)
                 {
-                    allDashSegments.Add(new List<Float2>(currentDashPoints));
+                    var segment = RentDashSegment();
+                    segment.AddRange(currentDashPoints);
+                    allDashSegments.Add(segment);
                 }
                 currentDashPoints.Clear();
             }
