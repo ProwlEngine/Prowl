@@ -19,10 +19,10 @@ namespace RaylibExample
 
         static void Main(string[] args)
         {
-            // Initialize window
+            // Initialize window with high-DPI support
             int screenWidth = 1280;
             int screenHeight = 720;
-            SetConfigFlags(ConfigFlags.ResizableWindow);
+            SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.HighDpiWindow);
             InitWindow(screenWidth, screenHeight, "Raylib Quill Example");
             SetTargetFPS(60);
 
@@ -32,6 +32,7 @@ namespace RaylibExample
             Texture2D demoTexture = LoadTexture("Textures/wall.png");
 
             Canvas canvas = new Canvas(renderer, new FontAtlasSettings());
+
             RobotoFont = new FontFile("Fonts/Roboto.ttf");
             AlamakFont = new FontFile("Fonts/Alamak.ttf");
 
@@ -42,18 +43,15 @@ namespace RaylibExample
                 new BenchmarkScene(canvas, RobotoFont, screenWidth, screenHeight)
             };
 
-
             int currentDemoIndex = 0;
 
             // In your render loop
             while (!WindowShouldClose())
             {
                 HandleDemoInput(ref offset, ref zoom, ref rotation, ref currentDemoIndex, demos.Count);
-                screenWidth = GetScreenWidth();
-                screenHeight = GetScreenHeight();
 
-                // Reset Canvas
-                canvas.Clear();
+                // Begin frame with logical size and DPI scale - this also clears the canvas
+                canvas.BeginFrame(GetScreenWidth(), GetScreenHeight(), GetWindowScaleDPI().X);
 
                 // Draw demo into canvas
                 demos[currentDemoIndex].RenderFrame(GetFrameTime(), offset, zoom, rotation);

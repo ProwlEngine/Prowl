@@ -324,21 +324,29 @@ namespace Prowl.Quill
         private float _pixelHalf = 0.5f;
 
         private float _scale = 1.0f;
+        private float _width = 0.0f;
+        private float _height = 0.0f;
 
         private IMarkdownImageProvider? _markdownImageProvider = null;
 
-        public float Scale
-        {
-            get => _scale;
-            set
-            {
-                if (value <= 0)
-                    throw new ArgumentOutOfRangeException(nameof(value), "Scale must be greater than zero.");
-                _scale = value;
-                UpdatePixelCalculations();
-            }
-        }
+        /// <summary>
+        /// Gets the current device pixel ratio (DPI scale factor).
+        /// </summary>
+        public float Scale => _scale;
 
+        /// <summary>
+        /// Gets the logical width of the canvas in units.
+        /// </summary>
+        public float Width => _width;
+
+        /// <summary>
+        /// Gets the logical height of the canvas in units.
+        /// </summary>
+        public float Height => _height;
+
+        /// <summary>
+        /// Gets the size of one pixel in logical units.
+        /// </summary>
         public float PixelFraction => 1.0f / _scale;
 
         public TextRenderer Text => _scribeRenderer;
@@ -355,38 +363,77 @@ namespace Prowl.Quill
         }
 
         /// <summary>
-        /// Converts a physical/backing pixel width into the canvas' logical unit space.
+        /// Begins a new frame with the specified logical dimensions and pixel ratio.
         /// </summary>
         /// <remarks>
-        /// This method is useful when you have a window or framebuffer width measured in
-        /// device pixels (for example the size reported by the OS or graphics API) and
-        /// you need the equivalent size in the canvas' unit space so layout and clipping
-        /// remain consistent when the canvas is scaled or the system DPI changes.
+        /// Call this at the start of each frame before any drawing operations.
+        /// All drawing coordinates are in logical units. The pixel ratio determines
+        /// how logical units map to physical pixels for high-DPI rendering.
         ///
-        /// The conversion divides the provided <paramref name="baseWidth"/> by the
-        /// current <see cref="Scale"/>. Use the
-        /// returned logical width when placing or sizing content so it stays inside the
-        /// visible canvas area even under DPI scaling or when the canvas is zoomed.
+        /// Example usage:
+        /// <code>
+        /// // Each frame:
+        /// canvas.BeginFrame(GetScreenWidth(), GetScreenHeight(), GetWindowScaleDPI().X);
+        ///
+        /// // Draw using logical coordinates:
+        /// canvas.DrawRect(0, 0, canvas.Width, canvas.Height);
+        /// canvas.DrawText("Hello", 10, 10, color, 16, font); // 16 logical pixels
+        /// </code>
         /// </remarks>
-        /// <param name="baseWidth">Width in device pixels (window/backing buffer pixels).</param>
-        /// <returns>Width in canvas logical units.</returns>
-        public int GetLogicalWidth(int baseWidth) => (int)(baseWidth / _scale);
+        /// <param name="width">Logical width of the canvas in units.</param>
+        /// <param name="height">Logical height of the canvas in units.</param>
+        /// <param name="pixelRatio">Device pixel ratio (1.0 = standard DPI, 2.0 = Retina/HiDPI).</param>
+        public void BeginFrame(float width, float height, float pixelRatio = 1.0f)
+        {
+            if (pixelRatio <= 0)
+                throw new ArgumentOutOfRangeException(nameof(pixelRatio), "Pixel ratio must be greater than zero.");
+
+            _width = width;
+            _height = height;
+            _scale = pixelRatio;
+            UpdatePixelCalculations();
+            Clear();
+        }
+
+        #region Coordinate Conversion
 
         /// <summary>
-        /// Converts a physical/backing pixel height into the canvas' logical unit space.
+        /// Converts a point from physical pixel coordinates to logical units.
         /// </summary>
         /// <remarks>
-        /// This method is the vertical counterpart to <see cref="GetLogicalWidth(int)"/>.
-        /// Provide a height value measured in device pixels and it will be converted by
-        /// dividing by the current <see cref="Scale"/>.
-        ///
-        /// Use the returned logical height for layout, clipping (scissor) calculations
-        /// and positioning to ensure content remains correctly sized and contained when
-        /// DPI scaling or an application scale factor is applied.
+        /// Use this to convert mouse/touch positions from the windowing system
+        /// (which are typically in physical pixels) to logical canvas coordinates.
         /// </remarks>
-        /// <param name="baseHeight">Height in device pixels (window/backing buffer pixels).</param>
-        /// <returns>Height in canvas logical units.</returns>
-        public int GetLogicalHeight(int baseHeight) => (int)(baseHeight / _scale);
+        /// <param name="pixelPoint">Point in physical pixel coordinates.</param>
+        /// <returns>Point in logical canvas units.</returns>
+        public Float2 PixelToLogical(Float2 pixelPoint) => pixelPoint / _scale;
+
+        /// <summary>
+        /// Converts a value from physical pixels to logical units.
+        /// </summary>
+        /// <param name="pixelValue">Value in physical pixels.</param>
+        /// <returns>Value in logical units.</returns>
+        public float PixelToLogical(float pixelValue) => pixelValue / _scale;
+
+        /// <summary>
+        /// Converts a point from logical units to physical pixel coordinates.
+        /// </summary>
+        /// <remarks>
+        /// Use this when you need to map logical canvas coordinates back to
+        /// physical pixel positions (e.g., for setting cursor position).
+        /// </remarks>
+        /// <param name="logicalPoint">Point in logical canvas units.</param>
+        /// <returns>Point in physical pixel coordinates.</returns>
+        public Float2 LogicalToPixel(Float2 logicalPoint) => logicalPoint * _scale;
+
+        /// <summary>
+        /// Converts a value from logical units to physical pixels.
+        /// </summary>
+        /// <param name="logicalValue">Value in logical units.</param>
+        /// <returns>Value in physical pixels.</returns>
+        public float LogicalToPixel(float logicalValue) => logicalValue * _scale;
+
+        #endregion
 
         private void UpdatePixelCalculations()
         {
@@ -2043,8 +2090,10 @@ namespace Prowl.Quill
         public IEnumerable<FontFile> EnumerateSystemFonts() => _scribeRenderer.FontEngine.EnumerateSystemFonts();
         public Float2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0f)
         {
-            float actualPixelSize = pixelSize;// * _scale; // This is preferrable, but we also need a way to scale Scribes output quads down accordingly
-            Float2 pixelResult = (Float2)_scribeRenderer.FontEngine.MeasureText(text, (float)actualPixelSize, font, (float)letterSpacing);
+            // Measure at scaled pixel size for accuracy, then convert back to logical units
+            float actualPixelSize = pixelSize * _scale;
+            float actualLetterSpacing = letterSpacing * _scale;
+            Float2 pixelResult = (Float2)_scribeRenderer.FontEngine.MeasureText(text, actualPixelSize, font, actualLetterSpacing);
             return pixelResult / _scale;
         }
         public Float2 MeasureText(string text, TextLayoutSettings settings) => (Float2)_scribeRenderer.FontEngine.MeasureText(text, settings);
@@ -2052,40 +2101,71 @@ namespace Prowl.Quill
         public void DrawText(string text, float x, float y, Color32 color, float pixelSize, FontFile font, float letterSpacing = 0f, Float2? origin = null)
         {
             Float2 position = new Float2(x, y);
-            float actualPixelSize = pixelSize;// * _scale; // This is preferrable, but we also need a way to scale Scribes output quads down accordingly
+            // Scale font size for crisp high-DPI rendering
+            float actualPixelSize = pixelSize * _scale;
+            float actualLetterSpacing = letterSpacing * _scale;
             if (origin.HasValue)
             {
-                var textSize = _scribeRenderer.FontEngine.MeasureText(text, (float)actualPixelSize, font, (float)letterSpacing);
-                position.X -= textSize.X * origin.Value.X;
-                position.Y -= textSize.Y * origin.Value.Y;
+                // Measure at scaled size, convert offset back to logical units
+                var textSize = _scribeRenderer.FontEngine.MeasureText(text, actualPixelSize, font, actualLetterSpacing);
+                position.X -= (textSize.X / _scale) * origin.Value.X;
+                position.Y -= (textSize.Y / _scale) * origin.Value.Y;
             }
-            _scribeRenderer.FontEngine.DrawText(text, (Float2)position, new FontColor(color.R, color.G, color.B, color.A), (float)actualPixelSize, font, (float)letterSpacing);
+            // Scale position to pixel space - DrawQuads will convert back for transform application
+            Float2 pixelPosition = position * _scale;
+            _scribeRenderer.FontEngine.DrawText(text, pixelPosition, new FontColor(color.R, color.G, color.B, color.A), actualPixelSize, font, actualLetterSpacing);
         }
 
+        /// <summary>
+        /// Draws text using custom TextLayoutSettings.
+        /// </summary>
+        /// <remarks>
+        /// Note: For proper DPI scaling, the font size in TextLayoutSettings should be
+        /// pre-multiplied by the pixel ratio. Use the other DrawText overload for automatic scaling.
+        /// </remarks>
         public void DrawText(string text, float x, float y, Color32 color, TextLayoutSettings settings, Float2? origin = null)
         {
             Float2 position = new Float2(x, y);
             if (origin.HasValue)
             {
                 var textSize = _scribeRenderer.FontEngine.MeasureText(text, settings);
-                position.X -= textSize.X * origin.Value.X;
-                position.Y -= textSize.Y * origin.Value.Y;
+                // Settings use pixel units, so convert back to logical for offset
+                position.X -= (textSize.X / _scale) * origin.Value.X;
+                position.Y -= (textSize.Y / _scale) * origin.Value.Y;
             }
-            _scribeRenderer.FontEngine.DrawText(text, (Float2)position, new FontColor(color.R, color.G, color.B, color.A), settings);
+            // Scale position to pixel space - DrawQuads will convert back for transform application
+            Float2 pixelPosition = position * _scale;
+            _scribeRenderer.FontEngine.DrawText(text, pixelPosition, new FontColor(color.R, color.G, color.B, color.A), settings);
         }
 
+        /// <summary>
+        /// Creates a text layout for later rendering.
+        /// </summary>
+        /// <remarks>
+        /// Note: For proper DPI scaling, the font size in TextLayoutSettings should be
+        /// pre-multiplied by the pixel ratio.
+        /// </remarks>
         public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.CreateLayout(text, settings);
 
+        /// <summary>
+        /// Draws a pre-created text layout.
+        /// </summary>
+        /// <remarks>
+        /// Note: The layout should have been created with DPI-scaled font sizes for proper rendering.
+        /// </remarks>
         public void DrawLayout(TextLayout layout, float x, float y, Color32 color, Float2? origin = null)
         {
             Float2 position = new Float2(x, y);
             if (origin.HasValue)
             {
                 var layoutSize = layout.Size;
-                position.X -= layoutSize.X * origin.Value.X;
-                position.Y -= layoutSize.Y * origin.Value.Y;
+                // Layout size is in pixels, convert back to logical for offset
+                position.X -= (layoutSize.X / _scale) * origin.Value.X;
+                position.Y -= (layoutSize.Y / _scale) * origin.Value.Y;
             }
-            _scribeRenderer.FontEngine.DrawLayout(layout, (Float2)position, new FontColor(color.R, color.G, color.B, color.A));
+            // Scale position to pixel space - DrawQuads will convert back for transform application
+            Float2 pixelPosition = position * _scale;
+            _scribeRenderer.FontEngine.DrawLayout(layout, pixelPosition, new FontColor(color.R, color.G, color.B, color.A));
         }
 
         #region Markdown

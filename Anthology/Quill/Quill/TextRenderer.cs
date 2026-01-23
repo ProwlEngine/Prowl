@@ -72,18 +72,22 @@ namespace Prowl.Quill
             // UV offset of 2.0 signals text mode to shader (UV >= 2 means text)
             var uvOffset = new Float2(2.0f, 2.0f);
 
+            // Positions from Scribe are in pixel space (scaled). Convert back to logical units
+            // before TransformPoint, which will apply the canvas transform and then scale back.
+            float invScale = 1.0f / _canvas.Scale;
+
             for (int i = 0; i < indices.Length; i += 3)
             {
                 var a = vertices[indices[i + 0]];
                 var b = vertices[indices[i + 1]];
                 var c = vertices[indices[i + 2]];
 
-                // Transform vertices through the current transform matrix
-                // Add 2.0 to UVs to signal text mode to shader
+                // Convert from pixel space to logical units, then transform
+                // TransformPoint applies the canvas transform and scales back to pixels
                 uint index = (uint)_canvas.Vertices.Count;
-                var vertA = new Vertex(_canvas.TransformPoint(new Float2(a.Position.X, a.Position.Y)), a.TextureCoordinate + uvOffset, ToColor(a.Color));
-                var vertB = new Vertex(_canvas.TransformPoint(new Float2(b.Position.X, b.Position.Y)), b.TextureCoordinate + uvOffset, ToColor(b.Color));
-                var vertC = new Vertex(_canvas.TransformPoint(new Float2(c.Position.X, c.Position.Y)), c.TextureCoordinate + uvOffset, ToColor(c.Color));
+                var vertA = new Vertex(_canvas.TransformPoint(new Float2(a.Position.X * invScale, a.Position.Y * invScale)), a.TextureCoordinate + uvOffset, ToColor(a.Color));
+                var vertB = new Vertex(_canvas.TransformPoint(new Float2(b.Position.X * invScale, b.Position.Y * invScale)), b.TextureCoordinate + uvOffset, ToColor(b.Color));
+                var vertC = new Vertex(_canvas.TransformPoint(new Float2(c.Position.X * invScale, c.Position.Y * invScale)), c.TextureCoordinate + uvOffset, ToColor(c.Color));
 
                 _canvas.AddVertex(vertA);
                 _canvas.AddVertex(vertC);
