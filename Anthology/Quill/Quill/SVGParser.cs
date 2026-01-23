@@ -10,31 +10,82 @@ using Color = Prowl.Vector.Color;
 
 namespace Prowl.Quill
 {
+    /// <summary>
+    /// Represents an SVG element parsed from an SVG document.
+    /// </summary>
     public class SvgElement
     {
+        /// <summary>
+        /// The type of SVG element (path, circle, rect, etc.).
+        /// </summary>
         public TagType tag;
+
+        /// <summary>
+        /// The nesting depth of this element in the SVG document hierarchy.
+        /// </summary>
         public int depth;
+
+        /// <summary>
+        /// Gets the attributes defined on this element.
+        /// </summary>
         public Dictionary<string, string> Attributes { get; }
+
+        /// <summary>
+        /// Gets the child elements of this element.
+        /// </summary>
         public List<SvgElement> Children { get; }
+
+        /// <summary>
+        /// The draw commands for path elements.
+        /// </summary>
         public DrawCommand[] drawCommands;
 
+        /// <summary>
+        /// The stroke color of this element.
+        /// </summary>
         public Color32 stroke;
+
+        /// <summary>
+        /// The fill color of this element.
+        /// </summary>
         public Color32 fill;
+
+        /// <summary>
+        /// The type of stroke color (none, currentColor, or specific).
+        /// </summary>
         public ColorType strokeType;
+
+        /// <summary>
+        /// The type of fill color (none, currentColor, or specific).
+        /// </summary>
         public ColorType fillType;
+
+        /// <summary>
+        /// The stroke width of this element.
+        /// </summary>
         public float strokeWidth;
 
+        /// <summary>
+        /// Creates a new SVG element.
+        /// </summary>
         public SvgElement()
         {
             Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             Children = new List<SvgElement>();
         }
 
+        /// <summary>
+        /// Returns a string representation of this element.
+        /// </summary>
         public override string ToString()
         {
             return $"<{tag} Depth={depth} Attributes='{Attributes.Count}' Children='{Children.Count}'>";
         }
 
+        /// <summary>
+        /// Flattens the element hierarchy into a single list.
+        /// </summary>
+        /// <returns>A list containing this element and all its descendants.</returns>
         public List<SvgElement> Flatten()
         {
             var list = new List<SvgElement>();
@@ -49,6 +100,9 @@ namespace Prowl.Quill
                 AddChildren(child, list);
         }
 
+        /// <summary>
+        /// Parses the element's attributes and initializes stroke and fill properties.
+        /// </summary>
         public virtual void Parse()
         {
             var strokeText = ParseString("stroke");
@@ -106,33 +160,60 @@ namespace Prowl.Quill
             return color;
         }
 
+        /// <summary>
+        /// Specifies the type of SVG element.
+        /// </summary>
         public enum TagType
         {
+            /// <summary>Root SVG container element.</summary>
             svg,
+            /// <summary>Path element with draw commands.</summary>
             path,
+            /// <summary>Circle element.</summary>
             circle,
+            /// <summary>Rectangle element.</summary>
             rect,
+            /// <summary>Line element.</summary>
             line,
+            /// <summary>Polyline element (open path through points).</summary>
             polyline,
+            /// <summary>Polygon element (closed path through points).</summary>
             polygon,
+            /// <summary>Ellipse element.</summary>
             ellipse,
+            /// <summary>Group element for organizing other elements.</summary>
             g,
         }
 
+        /// <summary>
+        /// Specifies how a color value is determined.
+        /// </summary>
         public enum ColorType
         {
+            /// <summary>No color (transparent).</summary>
             none,
+            /// <summary>Uses the current inherited color.</summary>
             currentColor,
+            /// <summary>A specific color value is defined.</summary>
             specific
         }
     }
 
+    /// <summary>
+    /// Represents an SVG rectangle element.
+    /// </summary>
     public class SvgRectElement : SvgElement
     {
+        /// <summary>The position of the rectangle's top-left corner.</summary>
         public Float2 pos;
+
+        /// <summary>The size of the rectangle.</summary>
         public Float2 size;
+
+        /// <summary>The corner radius for rounded rectangles.</summary>
         public Float2 radius;
 
+        /// <inheritdoc/>
         public override void Parse()
         {
             base.Parse();
@@ -145,10 +226,21 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// Represents an SVG circle element.
+    /// </summary>
     public class SvgCircleElement : SvgElement
     {
-        public float cx, cy, r;
+        /// <summary>The X coordinate of the center.</summary>
+        public float cx;
 
+        /// <summary>The Y coordinate of the center.</summary>
+        public float cy;
+
+        /// <summary>The radius of the circle.</summary>
+        public float r;
+
+        /// <inheritdoc/>
         public override void Parse()
         {
             base.Parse();
@@ -158,10 +250,24 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// Represents an SVG ellipse element.
+    /// </summary>
     public class SvgEllipseElement : SvgElement
     {
-        public float cx, cy, rx, ry;
+        /// <summary>The X coordinate of the center.</summary>
+        public float cx;
 
+        /// <summary>The Y coordinate of the center.</summary>
+        public float cy;
+
+        /// <summary>The X-axis radius.</summary>
+        public float rx;
+
+        /// <summary>The Y-axis radius.</summary>
+        public float ry;
+
+        /// <inheritdoc/>
         public override void Parse()
         {
             base.Parse();
@@ -172,10 +278,24 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// Represents an SVG line element.
+    /// </summary>
     public class SvgLineElement : SvgElement
     {
-        public float x1, y1, x2, y2;
+        /// <summary>The X coordinate of the start point.</summary>
+        public float x1;
 
+        /// <summary>The Y coordinate of the start point.</summary>
+        public float y1;
+
+        /// <summary>The X coordinate of the end point.</summary>
+        public float x2;
+
+        /// <summary>The Y coordinate of the end point.</summary>
+        public float y2;
+
+        /// <inheritdoc/>
         public override void Parse()
         {
             base.Parse();
@@ -186,10 +306,15 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// Represents an SVG polyline element (an open series of connected line segments).
+    /// </summary>
     public class SvgPolylineElement : SvgElement
     {
+        /// <summary>The points defining the polyline.</summary>
         public Float2[] points = Array.Empty<Float2>();
 
+        /// <inheritdoc/>
         public override void Parse()
         {
             base.Parse();
@@ -211,10 +336,15 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// Represents an SVG polygon element (a closed series of connected line segments).
+    /// </summary>
     public class SvgPolygonElement : SvgElement
     {
+        /// <summary>The points defining the polygon.</summary>
         public Float2[] points = Array.Empty<Float2>();
 
+        /// <inheritdoc/>
         public override void Parse()
         {
             base.Parse();
@@ -223,8 +353,12 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// Represents an SVG path element with draw commands.
+    /// </summary>
     public class SvgPathElement : SvgElement
     {
+        /// <inheritdoc/>
         public override void Parse()
         {
             base.Parse();
@@ -313,12 +447,23 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// Represents a single draw command in an SVG path.
+    /// </summary>
     public struct DrawCommand
     {
+        /// <summary>The type of draw command.</summary>
         public DrawType type;
+
+        /// <summary>Whether coordinates are relative to the current position.</summary>
         public bool relative;
+
+        /// <summary>The parameters for this command.</summary>
         public float[] param;
 
+        /// <summary>
+        /// Returns a string representation of this draw command.
+        /// </summary>
         public override string ToString()
         {
             var sb = new StringBuilder();
@@ -332,22 +477,45 @@ namespace Prowl.Quill
         }
     }
 
+    /// <summary>
+    /// Specifies the type of SVG path draw command.
+    /// </summary>
     public enum DrawType
     {
+        /// <summary>Move to a new position without drawing.</summary>
         MoveTo,
+        /// <summary>Draw a line to the specified position.</summary>
         LineTo,
+        /// <summary>Draw a vertical line to the specified Y coordinate.</summary>
         VerticalLineTo,
+        /// <summary>Draw a horizontal line to the specified X coordinate.</summary>
         HorizontalLineTo,
+        /// <summary>Draw a cubic Bezier curve.</summary>
         CubicCurveTo,
+        /// <summary>Draw a smooth cubic Bezier curve (control point reflected from previous).</summary>
         SmoothCubicCurveTo,
+        /// <summary>Draw a quadratic Bezier curve.</summary>
         QuadraticCurveTo,
+        /// <summary>Draw a smooth quadratic Bezier curve (control point reflected from previous).</summary>
         SmoothQuadraticCurveTo,
+        /// <summary>Draw an elliptical arc.</summary>
         ArcTo,
+        /// <summary>Close the current path by drawing a line to the start.</summary>
         ClosePath
     }
 
+    /// <summary>
+    /// Provides methods for parsing SVG documents into SvgElement trees.
+    /// </summary>
     public static class SVGParser
     {
+        /// <summary>
+        /// Parses an SVG document from a file path.
+        /// </summary>
+        /// <param name="filePath">The path to the SVG file.</param>
+        /// <returns>The root SvgElement representing the parsed document.</returns>
+        /// <exception cref="FileNotFoundException">Thrown when the file does not exist.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the document is not a valid SVG.</exception>
         public static SvgElement ParseSVGDocument(string filePath)
         {
             if (!File.Exists(filePath))

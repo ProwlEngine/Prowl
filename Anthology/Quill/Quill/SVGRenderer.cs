@@ -4,13 +4,27 @@ using Color = Prowl.Vector.Color;
 
 namespace Prowl.Quill
 {
+    /// <summary>
+    /// Provides methods for rendering parsed SVG elements to a Canvas.
+    /// </summary>
     public static class SVGRenderer
     {
+        /// <summary>
+        /// The current color used when SVG elements specify "currentColor".
+        /// </summary>
         public static Color32 currentColor = Color.White;
 
-        //for debug
+        /// <summary>
+        /// When true, outputs debug information during rendering.
+        /// </summary>
         public static bool debug;
 
+        /// <summary>
+        /// Draws an SVG element and all its children to a canvas at the specified position.
+        /// </summary>
+        /// <param name="canvas">The canvas to draw to.</param>
+        /// <param name="position">The position offset for rendering.</param>
+        /// <param name="svgElement">The root SVG element to render.</param>
         public static void DrawToCanvas(Canvas canvas, Float2 position, SvgElement svgElement)
         {
             var elements = svgElement.Flatten();
