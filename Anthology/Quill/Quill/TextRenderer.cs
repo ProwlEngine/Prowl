@@ -4,23 +4,59 @@ using System;
 
 namespace Prowl.Quill
 {
-    public class FontAtlasSettings 
+    /// <summary>
+    /// Configuration settings for the font atlas used in text rendering.
+    /// </summary>
+    public class FontAtlasSettings
     {
+        /// <summary>
+        /// Whether to allow the atlas to expand when it runs out of space. Default is true.
+        /// </summary>
         public bool AllowExpansion = true;
+
+        /// <summary>
+        /// The factor by which to expand the atlas when more space is needed. Default is 2.
+        /// </summary>
         public float ExpansionFactor = 2f;
+
+        /// <summary>
+        /// The initial size of the font atlas in pixels. Default is 1024.
+        /// </summary>
         public int AtlasSize = 1024;
+
+        /// <summary>
+        /// The maximum size the atlas can expand to. Default is 4096.
+        /// </summary>
         public int MaxAtlasSize = 4096;
+
+        /// <summary>
+        /// Whether to cache text layouts for improved performance. Default is true.
+        /// </summary>
         public bool UseLayoutCache = true;
+
+        /// <summary>
+        /// The maximum number of layouts to cache. Default is 256.
+        /// </summary>
         public int MaxLayoutCacheSize = 256;
+
+        /// <summary>
+        /// The padding between glyphs in the atlas. Default is 1.
+        /// </summary>
         public int AtlasPadding = 1;
     }
 
+    /// <summary>
+    /// Handles text rendering by integrating with the Scribe font system.
+    /// </summary>
     public class TextRenderer : IFontRenderer
     {
         private readonly Canvas _canvas;
 
         private FontSystem _fontSystem;
 
+        /// <summary>
+        /// Gets the underlying font system for advanced text operations.
+        /// </summary>
         public FontSystem FontEngine => _fontSystem;
 
         internal TextRenderer(Canvas canvas, FontAtlasSettings settings)
