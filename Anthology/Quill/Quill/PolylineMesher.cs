@@ -5,8 +5,53 @@ using System.Linq;
 
 namespace Prowl.Quill
 {
-    public enum JointStyle { Bevel, Miter, Round }
-    public enum EndCapStyle { Butt, Square, Round, Bevel }
+    /// <summary>
+    /// Specifies the style used to join line segments at corners.
+    /// </summary>
+    public enum JointStyle
+    {
+        /// <summary>
+        /// Creates a beveled corner with a flat edge connecting the outer corners of the line segments.
+        /// </summary>
+        Bevel,
+
+        /// <summary>
+        /// Creates a sharp corner by extending the outer edges of the line segments until they meet.
+        /// Subject to miter limit to prevent extremely long points.
+        /// </summary>
+        Miter,
+
+        /// <summary>
+        /// Creates a rounded corner with a circular arc connecting the outer edges of the line segments.
+        /// </summary>
+        Round
+    }
+
+    /// <summary>
+    /// Specifies the style used for the end caps of open paths.
+    /// </summary>
+    public enum EndCapStyle
+    {
+        /// <summary>
+        /// No cap is added; the stroke ends at the endpoint.
+        /// </summary>
+        Butt,
+
+        /// <summary>
+        /// A square cap is added, extending the stroke by half the stroke width.
+        /// </summary>
+        Square,
+
+        /// <summary>
+        /// A semicircular cap is added with a radius equal to half the stroke width.
+        /// </summary>
+        Round,
+
+        /// <summary>
+        /// A beveled cap is added, creating a triangular end.
+        /// </summary>
+        Bevel
+    }
 
     internal static class PolylineMesher
     {
