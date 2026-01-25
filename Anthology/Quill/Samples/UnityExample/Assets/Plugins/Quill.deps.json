@@ -1,0 +1,60 @@
+{
+  "runtimeTarget": {
+    "name": ".NETStandard,Version=v2.1/",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETStandard,Version=v2.1": {},
+    ".NETStandard,Version=v2.1/": {
+      "Quill/0.9.0": {
+        "dependencies": {
+          "Prowl.Scribe": "0.8.1"
+        },
+        "runtime": {
+          "Quill.dll": {}
+        }
+      },
+      "Prowl.Scribe/0.8.1": {
+        "dependencies": {
+          "Prowl.Vector": "2.1.0"
+        },
+        "runtime": {
+          "lib/netstandard2.1/Scribe.dll": {
+            "assemblyVersion": "0.8.1.0",
+            "fileVersion": "0.8.1.0"
+          }
+        }
+      },
+      "Prowl.Vector/2.1.0": {
+        "runtime": {
+          "lib/netstandard2.1/Vector.dll": {
+            "assemblyVersion": "2.1.0.0",
+            "fileVersion": "2.1.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Quill/0.9.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Prowl.Scribe/0.8.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-GQ5Viz0rqWsBchkl8n0b6VwbwrWRMAo/Pa4iWgBDi/eL9556X66ototQ3fRt3geywlGAeKtt0TuY+5TJMryDig==",
+      "path": "prowl.scribe/0.8.1",
+      "hashPath": "prowl.scribe.0.8.1.nupkg.sha512"
+    },
+    "Prowl.Vector/2.1.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ACzEiQJWuaApj5TIQaOrCb2rkGnMTPEomvgltPHvbQw2J0d6B5xdxqcXc+tOVJ11VmKDOTK9hyorDDsZ80WKIQ==",
+      "path": "prowl.vector/2.1.0",
+      "hashPath": "prowl.vector.2.1.0.nupkg.sha512"
+    }
+  }
+}

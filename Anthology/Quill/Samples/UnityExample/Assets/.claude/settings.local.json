@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\acer1\\\\Documents\\\\GitHub\\\\Prowl.Quill\\\\Samples\\\\UnityExample\\\\Assets\\\\Plugins\")",
+      "Bash(powershell -Command:*)"
+    ]
+  }
+}
