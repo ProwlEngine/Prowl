@@ -102,7 +102,7 @@ public abstract class Game
             {
                 Debug.LogError("An exception occurred during the Update loop:");
                 Debug.LogError(e.ToString());
-                throw e;
+                throw;
             }
         };
 
@@ -143,7 +143,7 @@ public abstract class Game
             {
                 Debug.LogError("An exception occurred during the Update loop:");
                 Debug.LogError(e.ToString());
-                throw e;
+                throw;
             }
         };
 
