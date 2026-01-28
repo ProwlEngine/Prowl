@@ -122,18 +122,20 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         if(IsActive) throw new Exception("Scene is already active!");
 
-        s_activeScenes.Add(this);
+        // Create a copy to avoid collection modification during enumeration
+        List<GameObject> allObjectsCopy = [.. AllObjects];
 
         // Trigger OnEnable for all enabled components in the scene
-        foreach (GameObject go in AllObjects)
+        foreach (GameObject go in allObjectsCopy)
         {
             if (go.IsDisposed) continue;
 
             if (go.EnabledInHierarchy)
             {
-                foreach (MonoBehaviour component in go.GetComponents<MonoBehaviour>())
+                // Create a copy of components to avoid modification during enumeration
+                MonoBehaviour[] components = [.. go.GetComponents<MonoBehaviour>()];
+                foreach (MonoBehaviour component in components)
                 {
-                    if (component.Enabled)
                     if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
                         component.OnEnable();
@@ -144,16 +146,21 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public void Deactivate()
     {
-        if(!IsActive) throw new Exception("Scene is not active!");
+        if (!_isActive) throw new Exception("Scene is not active!");
+
+        // Create a copy to avoid collection modification during enumeration
+        List<GameObject> allObjectsCopy = [.. AllObjects];
 
         // Trigger OnDisable for all enabled components in the scene
-        foreach (GameObject go in AllObjects)
+        foreach (GameObject go in allObjectsCopy)
         {
             if (go.IsDisposed) continue;
 
             if (go.EnabledInHierarchy)
             {
-                foreach (MonoBehaviour component in go.GetComponents<MonoBehaviour>())
+                // Create a copy of components to avoid modification during enumeration
+                MonoBehaviour[] components = [.. go.GetComponents<MonoBehaviour>()];
+                foreach (MonoBehaviour component in components)
                 {
                     if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
@@ -218,16 +225,20 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             obj.Scene = this;
 
+            // Create a copy of components to avoid modification during enumeration
+            MonoBehaviour[] components = [.. obj.GetComponents<MonoBehaviour>()];
+
             // Call OnAddedToScene for all components
-            foreach (MonoBehaviour component in obj.GetComponents<MonoBehaviour>())
+            foreach (MonoBehaviour component in components)
             {
+                if (component.IsDisposed) continue;
                 component.OnAddedToScene();
             }
 
             // Call OnEnable for enabled components, but only if the scene is active
             if (IsActive && obj.EnabledInHierarchy)
             {
-                foreach (MonoBehaviour component in obj.GetComponents<MonoBehaviour>())
+                foreach (MonoBehaviour component in components)
                 {
                     if (component.Enabled)
                     if (component.IsDisposed) continue;
@@ -236,21 +247,29 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 }
             }
         }
-        foreach (GameObject child in obj.Children)
+
+        // Create a copy to avoid modification during enumeration
+        List<GameObject> children = [.. obj.Children];
+        foreach (GameObject child in children)
             AddObject(child);
     }
 
     private void RemoveObject(GameObject obj)
     {
-        foreach (GameObject child in obj.Children)
+        // Create a copy to avoid modification during enumeration
+        List<GameObject> children = [.. obj.Children];
+        foreach (GameObject child in children)
             RemoveObject(child);
 
         if (_allObj.Remove(obj))
         {
-            // Call OnDisable for currently enabled components
-            if (obj.EnabledInHierarchy)
+            // Create a copy of components to avoid modification during enumeration
+            MonoBehaviour[] components = [.. obj.GetComponents<MonoBehaviour>()];
+
+            // Call OnDisable for currently enabled components (only if scene is active)
+            if (IsActive && obj.EnabledInHierarchy)
             {
-                foreach (MonoBehaviour component in obj.GetComponents<MonoBehaviour>())
+                foreach (MonoBehaviour component in components)
                 {
                     if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
@@ -259,7 +278,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             }
 
             // Call OnRemovedFromScene for all components
-            foreach (MonoBehaviour component in obj.GetComponents<MonoBehaviour>())
+            foreach (MonoBehaviour component in components)
             {
                 if (component.IsDisposed) continue;
                 component.OnRemovedFromScene();
