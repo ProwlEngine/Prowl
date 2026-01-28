@@ -72,26 +72,22 @@ public abstract class Game
 
                 BeginUpdate();
 
-                var scenesCopy = Scene.s_activeScenes.ToArray();
+                Scene? currentScene = Scene.Current;
 
                 // Fixed update loop
                 fixedTimeAccumulator += delta;
                 int count = 0;
                 while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < 10)
                 {
-                    foreach (var scene in scenesCopy)
-                        scene.FixedUpdate();
-
+                    currentScene?.FixedUpdate();
                     fixedTimeAccumulator -= Time.FixedDeltaTime;
                 }
 
-                foreach (var scene in scenesCopy)
-                    scene.Update();
+                currentScene?.Update();
 
                 if (DrawGizmos)
                 {
-                    foreach (var scene in scenesCopy)
-                        scene.DrawGizmos();
+                    currentScene?.DrawGizmos();
                 }
 
                 EndUpdate();
@@ -110,14 +106,13 @@ public abstract class Game
         {
             try
             {
-                var scenesCopy = Scene.s_activeScenes.ToArray();
+                Scene? currentScene = Scene.Current;
 
                 Graphics.StartFrame();
 
                 BeginRender();
 
-                foreach (var scene in scenesCopy)
-                    scene.Render();
+                currentScene?.Render();
 
                 EndRender();
 
@@ -128,8 +123,7 @@ public abstract class Game
 
                 BeginGui(_paper);
 
-                foreach (var scene in scenesCopy)
-                    scene.OnGui(_paper);
+                currentScene?.OnGui(_paper);
 
                 EndGui(_paper);
 
@@ -157,6 +151,9 @@ public abstract class Game
         Window.Closing += () =>
         {
             Closing();
+
+            // Unload the current scene
+            Scene.Unload();
 
             AudioContext.Deinitialize();
             Graphics.Dispose();

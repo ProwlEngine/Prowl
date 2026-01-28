@@ -86,7 +86,7 @@ public sealed class MyGame : Game
         CreateBananaMan();
 
         Input.SetCursorVisible(false);
-        scene.Activate();
+        Scene.Load(scene);
     }
 
     private void CreateBananaMan()

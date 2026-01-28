@@ -110,7 +110,7 @@ public sealed class PhysicsDemo : Game
         // Demo 8: GrabPass Refraction Demo!
         CreateRefractionDemo(scene, new Float3(0, 5, 0));
 
-        scene.Activate();
+        Scene.Load(scene);
 
         // Print controls
         Debug.Log("=== Physics Demo Controls ===");

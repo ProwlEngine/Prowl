@@ -89,7 +89,7 @@ public sealed class PhysicsTesterDemo : Game
         // Expected: Each should claim their own colliders and fall independently
         CreateTestCase5_ParentAndChildRigidbodies();
 
-        scene.Activate();
+        Scene.Load(scene);
     }
 
     private void CreateTestCase1_StaticFloor()

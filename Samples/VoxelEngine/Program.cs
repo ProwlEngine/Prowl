@@ -70,7 +70,7 @@ public sealed class VoxelGame : Game
 
         world.GenerateWorld();
 
-        scene.Activate();
+        Scene.Load(scene);
     }
 
     public override void BeginUpdate()

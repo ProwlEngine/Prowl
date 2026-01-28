@@ -105,7 +105,7 @@ public sealed class AudioDemoGame : Game
         CreateVisualMarkers();
 
         Input.SetCursorVisible(false);
-        scene.Activate();
+        Scene.Load(scene);
     }
 
     private void LoadAudioFiles()

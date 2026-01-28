@@ -6,8 +6,8 @@
 //
 // This demo thoroughly tests component lifecycle methods (OnEnable, OnDisable, OnDispose)
 // in various scenarios including:
-// - Adding objects to inactive scenes
-// - Scene activation/deactivation
+// - Adding objects to disabled scenes
+// - Scene enabling/disabling
 // - GameObject enabled state toggling
 // - Component enabled state toggling
 // - Parent-child hierarchy enabled state changes
@@ -50,40 +50,40 @@ public sealed class LifecycleTestGame : Game
 
     private void RunAllTests()
     {
-        // Test 1: Adding objects to inactive scene
-        Debug.Log("========== TEST 1: Adding GameObject to INACTIVE Scene ==========");
+        // Test 1: Adding objects to disabled scene
+        Debug.Log("========== TEST 1: Adding GameObject to DISABLED Scene ==========");
         scene1 = new Scene();
         testObject1 = new GameObject("TestObject1");
         var comp1 = testObject1.AddComponent<LifecycleComponent>();
         comp1.ComponentName = "Component1";
 
-        Debug.Log("Adding TestObject1 to inactive scene...");
+        Debug.Log("Adding TestObject1 to disabled scene...");
         scene1.Add(testObject1);
-        Debug.Log("Expected: OnAddedToScene called, OnEnable NOT called (scene inactive)");
+        Debug.Log("Expected: OnAddedToScene called, OnEnable NOT called (scene disabled)");
 
         Debug.Log("");
         Debug.Log("");
         Debug.Log("");
 
-        // Test 2: Scene activation
-        Debug.Log("========== TEST 2: Activating Scene ==========");
-        Debug.Log("Activating scene1...");
-        scene1.Activate();
+        // Test 2: Scene enabling
+        Debug.Log("========== TEST 2: Enabling Scene ==========");
+        Debug.Log("Enabling scene1...");
+        scene1.Enable();
         Debug.Log("Expected: OnEnable called for all enabled components");
 
         Debug.Log("");
         Debug.Log("");
         Debug.Log("");
 
-        // Test 3: Adding object to active scene
-        Debug.Log("========== TEST 3: Adding GameObject to ACTIVE Scene ==========");
+        // Test 3: Adding object to enabled scene
+        Debug.Log("========== TEST 3: Adding GameObject to ENABLED Scene ==========");
         testObject2 = new GameObject("TestObject2");
         var comp2 = testObject2.AddComponent<LifecycleComponent>();
         comp2.ComponentName = "Component2";
 
-        Debug.Log("Adding TestObject2 to active scene...");
+        Debug.Log("Adding TestObject2 to enabled scene...");
         scene1.Add(testObject2);
-        Debug.Log("Expected: OnAddedToScene called, then OnEnable called (scene active)");
+        Debug.Log("Expected: OnAddedToScene called, then OnEnable called (scene enabled)");
 
         Debug.Log("");
         Debug.Log("");
@@ -121,36 +121,36 @@ public sealed class LifecycleTestGame : Game
         Debug.Log("");
         Debug.Log("");
 
-        // Test 6: Scene deactivation
-        Debug.Log("========== TEST 6: Deactivating Scene ==========");
-        Debug.Log("Deactivating scene1...");
-        scene1.Deactivate();
+        // Test 6: Scene disabling
+        Debug.Log("========== TEST 6: Disabling Scene ==========");
+        Debug.Log("Disabling scene1...");
+        scene1.Disable();
         Debug.Log("Expected: OnDisable called for all enabled components");
 
         Debug.Log("");
         Debug.Log("");
         Debug.Log("");
 
-        // Test 7: Toggling states in inactive scene
-        Debug.Log("========== TEST 7: Toggling States in INACTIVE Scene ==========");
-        Debug.Log("Disabling Component1 (scene inactive)...");
+        // Test 7: Toggling states in disabled scene
+        Debug.Log("========== TEST 7: Toggling States in DISABLED Scene ==========");
+        Debug.Log("Disabling Component1 (scene disabled)...");
         comp1.Enabled = false;
-        Debug.Log("Expected: No OnDisable (scene inactive)");
+        Debug.Log("Expected: No OnDisable (scene disabled)");
 
         Debug.Log("");
 
-        Debug.Log("Re-enabling Component1 (scene inactive)...");
+        Debug.Log("Re-enabling Component1 (scene disabled)...");
         comp1.Enabled = true;
-        Debug.Log("Expected: No OnEnable (scene inactive)");
+        Debug.Log("Expected: No OnEnable (scene disabled)");
 
         Debug.Log("");
         Debug.Log("");
         Debug.Log("");
 
-        // Test 8: Re-activating scene
-        Debug.Log("========== TEST 8: Re-activating Scene ==========");
-        Debug.Log("Re-activating scene1...");
-        scene1.Activate();
+        // Test 8: Re-enabling scene
+        Debug.Log("========== TEST 8: Re-enabling Scene ==========");
+        Debug.Log("Re-enabling scene1...");
+        scene1.Enable();
         Debug.Log("Expected: OnEnable called for all enabled components");
 
         Debug.Log("");
@@ -225,19 +225,19 @@ public sealed class LifecycleTestGame : Game
         var multiComp = multiSceneObj.AddComponent<LifecycleComponent>();
         multiComp.ComponentName = "MultiSceneComponent";
 
-        Debug.Log("Adding to inactive scene2...");
+        Debug.Log("Adding to disabled scene2...");
         scene2.Add(multiSceneObj);
-        Debug.Log("Expected: OnAddedToScene, no OnEnable (scene inactive)");
+        Debug.Log("Expected: OnAddedToScene, no OnEnable (scene disabled)");
 
         Debug.Log("");
 
-        Debug.Log("Activating scene2...");
-        scene2.Activate();
+        Debug.Log("Enabling scene2...");
+        scene2.Enable();
         Debug.Log("Expected: OnEnable");
 
         Debug.Log("");
 
-        Debug.Log("Moving object from scene2 to scene1 (both active)...");
+        Debug.Log("Moving object from scene2 to scene1 (both enabled)...");
         scene1.Add(multiSceneObj); // This should remove from scene2 and add to scene1
         Debug.Log("Expected: OnDisable (from scene2), OnRemovedFromScene, OnAddedToScene, OnEnable (to scene1)");
 
@@ -245,14 +245,14 @@ public sealed class LifecycleTestGame : Game
         Debug.Log("");
         Debug.Log("");
 
-        // Test 14: Component on disabled GameObject added to active scene
-        Debug.Log("========== TEST 14: Disabled GameObject Added to Active Scene ==========");
+        // Test 14: Component on disabled GameObject added to enabled scene
+        Debug.Log("========== TEST 14: Disabled GameObject Added to Enabled Scene ==========");
         var disabledObj = new GameObject("DisabledObject");
         disabledObj.Enabled = false;
         var disabledComp = disabledObj.AddComponent<LifecycleComponent>();
         disabledComp.ComponentName = "DisabledObjectComponent";
 
-        Debug.Log("Adding disabled GameObject to active scene...");
+        Debug.Log("Adding disabled GameObject to enabled scene...");
         scene1.Add(disabledObj);
         Debug.Log("Expected: OnAddedToScene only, no OnEnable (GameObject disabled)");
 
@@ -266,10 +266,10 @@ public sealed class LifecycleTestGame : Game
         Debug.Log("");
         Debug.Log("");
 
-        // Test 15: Deactivate scene and dispose
+        // Test 15: Disable scene and dispose
         Debug.Log("========== TEST 15: Scene Cleanup ==========");
-        Debug.Log("Deactivating scene1...");
-        scene1.Deactivate();
+        Debug.Log("Disabling scene1...");
+        scene1.Disable();
         Debug.Log("Expected: OnDisable for all enabled components");
 
         Debug.Log("");
@@ -280,8 +280,8 @@ public sealed class LifecycleTestGame : Game
 
         Debug.Log("");
 
-        Debug.Log("Deactivating and disposing scene2...");
-        scene2.Deactivate();
+        Debug.Log("Disabling and disposing scene2...");
+        scene2.Disable();
         scene2.Dispose();
         Debug.Log("Expected: OnDispose since OnDisable was already called");
 

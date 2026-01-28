@@ -73,7 +73,7 @@ public sealed class CarPhysicsGame : Game
         thirdPersonCamera.Height = 3f;
         thirdPersonCamera.Smoothness = 5f;
 
-        scene.Activate();
+        Scene.Load(scene);
 
         Debug.Log("Controls:");
         Debug.Log("  WASD - Drive car");

@@ -97,7 +97,7 @@ public sealed class MyGame : Game
 
         Input.SetCursorVisible(false);
 
-        scene.Activate();
+        Scene.Load(scene);
     }
 
     private void SetupInputActions()

@@ -79,7 +79,7 @@ public sealed class ShapeCastDemoGame : Game
         // Create player character
         CreatePlayer();
 
-        scene.Activate();
+        Scene.Load(scene);
     }
 
     private void CreateFloor()

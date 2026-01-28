@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -14,7 +14,54 @@ namespace Prowl.Runtime.Resources;
 
 public class Scene : EngineObject, ISerializationCallbackReceiver
 {
-    internal static List<Scene> s_activeScenes = [];
+    #region Scene Manager
+
+    /// <summary>
+    /// The currently active scene managed by the built-in Scene Manager.
+    /// For simple games, use Scene.Load() and Scene.Current for automatic scene management.
+    /// For advanced use cases (e.g., multiplayer servers with multiple scenes),
+    /// create and manage your own Scene instances directly.
+    /// </summary>
+    public static Scene? Current { get; private set; }
+
+    /// <summary>
+    /// Loads a scene as the current active scene, replacing any previously loaded scene.
+    /// The previous scene will be disabled and disposed.
+    /// </summary>
+    /// <param name="scene">The scene to load as the current scene.</param>
+    public static void Load(Scene scene)
+    {
+        if (scene == null)
+            throw new ArgumentNullException(nameof(scene));
+
+        // Disable and dispose the current scene if one exists
+        if (Current != null)
+        {
+            if (Current.IsActive)
+                Current.Disable();
+            Current.Dispose();
+        }
+
+        Current = scene;
+        Current.Enable();
+    }
+
+    /// <summary>
+    /// Unloads the current scene, disabling and disposing it.
+    /// After calling this, Scene.Current will be null.
+    /// </summary>
+    public static void Unload()
+    {
+        if (Current != null)
+        {
+            if (Current.IsActive)
+                Current.Disable();
+            Current.Dispose();
+            Current = null;
+        }
+    }
+
+    #endregion
 
     [SerializeField]
     private GameObject[] serializeObj = null;
@@ -31,6 +78,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     private readonly List<IRenderable> _renderables = [];
     [SerializeIgnore]
     private readonly List<IRenderableLight> _lights = [];
+
+    [SerializeIgnore]
+    private bool _isActive = false;
 
     public int RenderableCount => _renderables.Count;
     public IReadOnlyList<IRenderable> Renderables => _renderables;
@@ -109,7 +159,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary> Returns whether this Scene is completely empty. </summary>
     public bool IsEmpty => !AllObjects.Any();
 
-    public bool IsActive => s_activeScenes.Contains(this);
+    /// <summary> Returns whether this scene is currently active. </summary>
+    public bool IsActive => _isActive;
 
     /// <summary>
     /// Creates a new, empty scene which does not contain any <see cref="GameObject">GameObjects</see>.
@@ -118,9 +169,15 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
     }
 
-    public void Activate()
+    /// <summary>
+    /// Enables this scene, triggering OnEnable callbacks for its components.
+    /// For most use cases, prefer using Scene.Load() instead of calling Enable() directly.
+    /// </summary>
+    public void Enable()
     {
-        if(IsActive) throw new Exception("Scene is already active!");
+        if (_isActive) throw new Exception("Scene is already enabled!");
+
+        _isActive = true;
 
         // Create a copy to avoid collection modification during enumeration
         List<GameObject> allObjectsCopy = [.. AllObjects];
@@ -144,9 +201,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         }
     }
 
-    public void Deactivate()
+    /// <summary>
+    /// Disables this scene, triggering OnDisable callbacks for its components.
+    /// For most use cases, prefer using Scene.Unload() or Scene.Load() instead of calling Disable() directly.
+    /// </summary>
+    public void Disable()
     {
-        if (!_isActive) throw new Exception("Scene is not active!");
+        if (!_isActive) throw new Exception("Scene is not enabled!");
 
         // Create a copy to avoid collection modification during enumeration
         List<GameObject> allObjectsCopy = [.. AllObjects];
@@ -169,7 +230,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             }
         }
 
-        s_activeScenes.Remove(this);
+        _isActive = false;
     }
 
     /// <summary>
@@ -240,7 +301,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             {
                 foreach (MonoBehaviour component in components)
                 {
-                    if (component.Enabled)
                     if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
                         component.OnEnable();
@@ -360,6 +420,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         base.OnDispose();
 
+        // Clear the current scene reference if this is the current scene
+        if (Current == this)
+            Current = null;
 
         // Clear the physics world
         _physics.Clear();
