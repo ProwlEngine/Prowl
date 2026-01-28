@@ -27,8 +27,7 @@ public abstract class EngineObject : IDisposable
 
     public EngineObject(string? name = "New Object")
     {
-        _instanceID = s_nextID;
-        s_nextID = Interlocked.Increment(ref s_nextID);
+        _instanceID = Interlocked.Increment(ref s_nextID);
         Name = "New" + GetType().Name;
         CreatedInstance();
         Name = name ?? Name;
