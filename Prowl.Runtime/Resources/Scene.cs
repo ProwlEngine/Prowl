@@ -127,11 +127,15 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Trigger OnEnable for all enabled components in the scene
         foreach (GameObject go in AllObjects)
         {
+            if (go.IsDisposed) continue;
+
             if (go.EnabledInHierarchy)
             {
                 foreach (MonoBehaviour component in go.GetComponents<MonoBehaviour>())
                 {
                     if (component.Enabled)
+                    if (component.IsDisposed) continue;
+                    if (component.Enabled && component.EnabledInHierarchy)
                         component.OnEnable();
                 }
             }
@@ -145,10 +149,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Trigger OnDisable for all enabled components in the scene
         foreach (GameObject go in AllObjects)
         {
+            if (go.IsDisposed) continue;
+
             if (go.EnabledInHierarchy)
             {
                 foreach (MonoBehaviour component in go.GetComponents<MonoBehaviour>())
                 {
+                    if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
                         component.OnDisable();
                 }
@@ -223,6 +230,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 foreach (MonoBehaviour component in obj.GetComponents<MonoBehaviour>())
                 {
                     if (component.Enabled)
+                    if (component.IsDisposed) continue;
+                    if (component.Enabled && component.EnabledInHierarchy)
                         component.OnEnable();
                 }
             }
@@ -243,6 +252,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             {
                 foreach (MonoBehaviour component in obj.GetComponents<MonoBehaviour>())
                 {
+                    if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
                         component.OnDisable();
                 }
@@ -251,6 +261,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             // Call OnRemovedFromScene for all components
             foreach (MonoBehaviour component in obj.GetComponents<MonoBehaviour>())
             {
+                if (component.IsDisposed) continue;
                 component.OnRemovedFromScene();
             }
 
