@@ -874,8 +874,8 @@ public class GameObject : EngineObject, ISerializable
             if (component.EnabledInHierarchy && scene.IsValid() && scene.IsActive)
                 component.OnDisable();
 
-            if (component.HasStarted) component.Dispose(); // OnDispose is only called if the component has previously been active
-            component.Dispose();
+            if (component.HasStarted)
+                component.Dispose(); // OnDispose is only called if the component has previously been active
         }
         _components.Clear();
 
