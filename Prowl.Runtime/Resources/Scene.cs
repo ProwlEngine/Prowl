@@ -385,7 +385,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// Updates all active GameObjects and their components in this scene.
     /// Calls PreUpdate, Update, and LateUpdate.
     /// </summary>
-    internal void Update()
+    public void Update()
     {
         // Clear render tracking at the start of each update
         ClearRenderTracking();
@@ -405,7 +405,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// Executes physics update on all active GameObjects and their components.
     /// Calls Physics.Update and FixedUpdate.
     /// </summary>
-    internal void FixedUpdate()
+    public void FixedUpdate()
     {
         Physics.Update();
 
@@ -415,7 +415,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         Flush();
     }
 
-    internal void DrawGizmos()
+    /// <summary>
+    /// Draws gizmos for all active GameObjects and their components.
+    /// </summary>
+    public void DrawGizmos()
     {
         List<GameObject> activeGOs = [.. ActiveObjects];
         ForeachComponent(activeGOs, (x) =>
@@ -430,7 +433,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// Executes GUI update on all active GameObjects and their components.
     /// Calls OnGUI.
     /// </summary>
-    internal void OnGui(Paper paper)
+    public void OnGui(Paper paper)
     {
         List<GameObject> activeGOs = [.. ActiveObjects];
         ForeachComponent(activeGOs, (x) =>
@@ -446,7 +449,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     /// <param name="target">Optional render target to render into</param>
     /// <returns>True if any cameras were rendered, false otherwise</returns>
-    internal bool Render(RenderTexture? target = null)
+    public bool Render(RenderTexture? target = null)
     {
         var Cameras = ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
 
