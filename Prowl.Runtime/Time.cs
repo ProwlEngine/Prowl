@@ -48,10 +48,11 @@ public class TimeData
 
 public static class Time
 {
+    private static readonly TimeData s_defaultTime = new();
 
     public static Stack<TimeData> TimeStack { get; } = new();
 
-    public static TimeData CurrentTime => TimeStack.Peek();
+    public static TimeData CurrentTime => TimeStack.Count > 0 ? TimeStack.Peek() : s_defaultTime;
 
     public static float UnscaledDeltaTime => CurrentTime.UnscaledDeltaTime;
     public static float UnscaledTotalTime => CurrentTime.UnscaledTotalTime;
