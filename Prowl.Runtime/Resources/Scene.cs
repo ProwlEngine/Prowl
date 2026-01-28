@@ -195,7 +195,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 {
                     if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
-                        component.OnEnable();
+                        component.InternalOnEnable();
                 }
             }
         }
@@ -303,7 +303,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 {
                     if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
-                        component.OnEnable();
+                        component.InternalOnEnable();
                 }
             }
         }

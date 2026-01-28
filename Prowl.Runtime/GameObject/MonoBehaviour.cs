@@ -36,6 +36,9 @@ public abstract class MonoBehaviour : EngineObject
     [SerializeIgnore]
     private bool _hasStarted = false;
 
+    [SerializeIgnore]
+    private bool _hasBeenEnabled = false;
+
     /// <summary>
     /// Gets the identifier for this MonoBehaviour.
     /// Generally shouldnt be set manually
@@ -56,6 +59,13 @@ public abstract class MonoBehaviour : EngineObject
     /// Gets whether the Start method has been called.
     /// </summary>
     public bool HasStarted { get => _hasStarted; internal set => _hasStarted = value; }
+
+    /// <summary>
+    /// Gets whether OnEnable has ever been called on this component.
+    /// Used to determine if OnDispose should be called during cleanup.
+    /// </summary>
+    public bool HasBeenEnabled { get => _hasBeenEnabled; internal set => _hasBeenEnabled = value; }
+
     /// <summary>
     /// Gets the tag of the GameObject this MonoBehaviour is attached to.
     /// </summary>
@@ -205,7 +215,7 @@ public abstract class MonoBehaviour : EngineObject
             if (scene.IsValid() && scene.IsActive)
             {
                 if (newState)
-                    OnEnable();
+                    InternalOnEnable();
                 else
                     OnDisable();
             }
@@ -293,6 +303,16 @@ public abstract class MonoBehaviour : EngineObject
         if (HasStarted) return;
         HasStarted = true;
         Start();
+    }
+
+    /// <summary>
+    /// Internal method to handle the OnEnable lifecycle event.
+    /// Sets HasBeenEnabled flag before calling the virtual OnEnable method.
+    /// </summary>
+    internal void InternalOnEnable()
+    {
+        _hasBeenEnabled = true;
+        OnEnable();
     }
 
     /// <summary>
