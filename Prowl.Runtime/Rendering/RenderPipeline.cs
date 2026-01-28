@@ -95,7 +95,7 @@ public abstract class RenderPipeline : EngineObject
         public uint PixelHeight = camera.PixelHeight;
         public float Aspect = camera.Aspect;
         public Float4x4 View = camera.ViewMatrix;
-        public Float4x4 ViewInverse = camera.ViewMatrix;
+        public Float4x4 ViewInverse = camera.ViewMatrix.Invert();
         public Float4x4 Projection = camera.ProjectionMatrix;
         public Float4x4 PreviousViewProj = camera.PreviousViewProjectionMatrix;
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
