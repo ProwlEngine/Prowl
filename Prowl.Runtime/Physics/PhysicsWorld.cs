@@ -316,7 +316,7 @@ public class PhysicsWorld
 
             // Check layer mask
             var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
-            if (!layerMask.HasLayer(userData.Layer)) continue;
+            if (userData == null || !layerMask.HasLayer(userData.Layer)) continue;
 
             Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
 
@@ -731,7 +731,7 @@ public class PhysicsWorld
 
             // Check layer mask
             var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
-            if (!layerMask.HasLayer(userData.Layer)) continue;
+            if (userData == null || !layerMask.HasLayer(userData.Layer)) continue;
 
             Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
 
