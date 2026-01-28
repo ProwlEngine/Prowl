@@ -360,6 +360,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         base.OnDispose();
 
+
+        // Clear the physics world
+        _physics.Clear();
+
         // Dispose all GameObjects which will also remove them from the scene
         List<GameObject> allObjects = [.. AllObjects];
         foreach (GameObject g in allObjects)
