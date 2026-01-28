@@ -57,8 +57,6 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material s_gizmo;
     private static Material s_deferredCompose;
 
-    private static RenderTexture? s_shadowMap;
-
     public static DefaultRenderPipeline Default { get; } = new();
 
     #endregion
