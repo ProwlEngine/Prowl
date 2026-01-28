@@ -52,6 +52,7 @@ public abstract class EngineObject : IDisposable
     }
     public static bool operator !=(EngineObject left, EngineObject right) => !(left == right);
     public override bool Equals(object? obj) => this == (obj as EngineObject);
+    public override int GetHashCode() => _instanceID;
 
     public virtual void OnDispose() { }
 
