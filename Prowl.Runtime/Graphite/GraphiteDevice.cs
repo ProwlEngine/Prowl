@@ -13,21 +13,9 @@ public struct GraphiteDeviceOptions
     /// <summary>Enable debug/validation layers.</summary>
     public bool EnableDebugLayer;
 
-    /// <summary>Enable API validation (slower but catches errors).</summary>
-    public bool EnableValidation;
-
-    /// <summary>Prefer discrete GPU over integrated.</summary>
-    public bool PreferDiscreteGPU;
-
-    /// <summary>Maximum frames in flight for frame buffering (Vulkan).</summary>
-    public int MaxFramesInFlight;
-
     public GraphiteDeviceOptions()
     {
         EnableDebugLayer = false;
-        EnableValidation = false;
-        PreferDiscreteGPU = true;
-        MaxFramesInFlight = 2;
     }
 
     public static GraphiteDeviceOptions Default => new();
@@ -35,7 +23,6 @@ public struct GraphiteDeviceOptions
     public static GraphiteDeviceOptions Debug => new()
     {
         EnableDebugLayer = true,
-        EnableValidation = true,
     };
 }
 
@@ -122,9 +109,6 @@ public abstract class GraphiteDevice : IDisposable
 
     /// <summary>Device capabilities.</summary>
     public abstract DeviceCapabilities Capabilities { get; }
-
-    /// <summary>The current swapchain texture format.</summary>
-    public abstract TextureFormat SwapchainFormat { get; }
 
     /// <summary>Current swapchain width.</summary>
     public abstract uint SwapchainWidth { get; }
@@ -249,21 +233,6 @@ public abstract class GraphiteDevice : IDisposable
     #region Frame Management
 
     /// <summary>
-    /// Begins a new frame. Call at the start of each frame.
-    /// </summary>
-    public abstract void BeginFrame();
-
-    /// <summary>
-    /// Ends the current frame. Call after all rendering.
-    /// </summary>
-    public abstract void EndFrame();
-
-    /// <summary>
-    /// Presents the swapchain to the screen.
-    /// </summary>
-    public abstract void Present();
-
-    /// <summary>
     /// Resizes the swapchain.
     /// </summary>
     public abstract void ResizeSwapchain(uint width, uint height);
@@ -337,6 +306,7 @@ public abstract class GraphiteDevice : IDisposable
     {
         return backend switch
         {
+            GraphicsBackendType.OpenGL => new OpenGL.GLGraphiteDevice(),
             _ => throw new ArgumentException($"Unknown backend type: {backend}", nameof(backend)),
         };
     }
