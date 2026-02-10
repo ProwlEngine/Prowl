@@ -116,7 +116,24 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
             string? absolutePath = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(filePath)!, path));
             if (System.IO.File.Exists(absolutePath))
                 return System.IO.File.ReadAllText(absolutePath);
-            return null;
+
+            // Then try embedded resources (for default includes like VertexAttributes, Fragment, etc.)
+            try
+            {
+                return EmbeddedResources.ReadAllText(path);
+            }
+            catch
+            {
+                // Also try with Assets/Defaults/ prefix
+                try
+                {
+                    return EmbeddedResources.ReadAllText($"Assets/Defaults/{path}");
+                }
+                catch
+                {
+                    return null;
+                }
+            }
         }, out Shader? shader))
         {
             throw new System.Exception($"Failed to parse shader: {filePath}");
