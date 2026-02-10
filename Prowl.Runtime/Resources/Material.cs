@@ -84,6 +84,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public void SetInt(string name, int value) { _properties.SetInt(name, value); MarkDirty(); }
     public void SetMatrix(string name, Float4x4 value) { _properties.SetMatrix(name, value); MarkDirty(); }
     public void SetTexture(string name, Texture2D value) { _properties.SetTexture(name, value); MarkDirty(); }
+    public void SetTexture3D(string name, Texture3D value) { _properties.SetTexture3D(name, value); MarkDirty(); }
 
     #region Global Properties
 
@@ -95,6 +96,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public static void SetGlobalInt(string name, int value) => PropertyState.SetGlobalInt(name, value);
     public static void SetGlobalMatrix(string name, Float4x4 value) => PropertyState.SetGlobalMatrix(name, value);
     public static void SetGlobalTexture(string name, Texture2D value) => PropertyState.SetGlobalTexture(name, value);
+    public static void SetGlobalTexture3D(string name, Texture3D value) => PropertyState.SetGlobalTexture3D(name, value);
 
     #endregion
 
@@ -104,6 +106,10 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         {
             case ShaderPropertyType.Texture2D:
                 _properties.SetTexture(property.Name, property.Texture2DValue);
+                break;
+
+            case ShaderPropertyType.Texture3D:
+                _properties.SetTexture3D(property.Name, property.Texture3DValue);
                 break;
 
             case ShaderPropertyType.Float:

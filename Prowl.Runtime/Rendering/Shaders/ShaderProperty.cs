@@ -5,10 +5,11 @@ using Prowl.Echo;
 using Prowl.Vector;
 
 using Texture2D = Prowl.Runtime.Resources.Texture2D;
+using Texture3D = Prowl.Runtime.Resources.Texture3D;
 
 namespace Prowl.Runtime.Rendering.Shaders;
 
-public enum ShaderPropertyType { Float, Vector2, Vector3, Vector4, Color, Matrix, Texture2D }
+public enum ShaderPropertyType { Float, Vector2, Vector3, Vector4, Color, Matrix, Texture2D, Texture3D }
 
 public class ShaderProperty
 {
@@ -22,6 +23,7 @@ public class ShaderProperty
     public Float4x4 MatrixValue;
 
     public Texture2D Texture2DValue;
+    public Texture3D Texture3DValue;
 
     public ShaderProperty() { }
 
@@ -33,6 +35,7 @@ public class ShaderProperty
         Value = other.Value;
         MatrixValue = other.MatrixValue;
         Texture2DValue = other.Texture2DValue;
+        Texture3DValue = other.Texture3DValue;
     }
 
     public ShaderProperty(float value)
@@ -118,4 +121,16 @@ public class ShaderProperty
 
     public static implicit operator Texture2D(ShaderProperty value)
         => value.Texture2DValue;
+
+    public ShaderProperty(Texture3D value)
+    {
+        Texture3DValue = value;
+        PropertyType = ShaderPropertyType.Texture3D;
+    }
+
+    public static implicit operator ShaderProperty(Texture3D value)
+        => new(value);
+
+    public static implicit operator Texture3D(ShaderProperty value)
+        => value.Texture3DValue;
 }

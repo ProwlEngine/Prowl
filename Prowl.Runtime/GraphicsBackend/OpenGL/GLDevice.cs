@@ -457,6 +457,11 @@ public sealed unsafe class GLDevice : GraphicsDevice
     public override unsafe void TexSubImage2D(GraphicsTexture texture, int mip, int x, int y, uint width, uint height, void* data)
         => (texture as GLTexture)!.TexSubImage2D((texture as GLTexture).Target, mip, x, y, width, height, data);
 
+    public override unsafe void TexImage3D(GraphicsTexture texture, int level, uint width, uint height, uint depth, void* data)
+        => (texture as GLTexture)!.TexImage3D((texture as GLTexture).Target, level, width, height, depth, data);
+    public override unsafe void TexSubImage3D(GraphicsTexture texture, int level, int x, int y, int z, uint width, uint height, uint depth, void* data)
+        => (texture as GLTexture)!.TexSubImage3D((texture as GLTexture).Target, level, x, y, z, width, height, depth, data);
+
     #endregion
 
 

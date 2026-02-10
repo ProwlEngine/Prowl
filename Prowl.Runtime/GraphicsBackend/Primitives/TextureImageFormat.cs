@@ -6,6 +6,7 @@ namespace Prowl.Runtime.GraphicsBackend.Primitives;
 public enum TextureImageFormat
 {
     Color4b,
+    Byte,
 
     Short,
     Short2,

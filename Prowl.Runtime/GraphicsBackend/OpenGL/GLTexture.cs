@@ -32,6 +32,7 @@ public sealed unsafe class GLTexture : GraphicsTexture
         Target = type switch
         {
             TextureType.Texture2D => TextureTarget.Texture2D,
+            TextureType.Texture3D => TextureTarget.Texture3D,
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
         };
         GetTextureFormatEnums(format, out PixelInternalFormat, out PixelType, out PixelFormat);
@@ -149,10 +150,10 @@ public sealed unsafe class GLTexture : GraphicsTexture
         GLDevice.GL.TexImage2D(type, mip, PixelInternalFormat, width, height, v2, PixelFormat, PixelType, data);
     }
 
-    public void TexImage3D(TextureTarget type, int mip, uint width, uint height, uint depth, int v2, void* data)
+    public void TexImage3D(TextureTarget type, int level, uint width, uint height, uint depth, void* data)
     {
         Bind(false);
-        GLDevice.GL.TexImage3D(type, mip, PixelInternalFormat, width, height, depth, v2, PixelFormat, PixelType, data);
+        GLDevice.GL.TexImage3D(type, level, PixelInternalFormat, width, height, depth, 0, PixelFormat, PixelType, data);
     }
 
     internal void TexSubImage2D(TextureTarget type, int mip, int x, int y, uint width, uint height, void* data)
@@ -161,10 +162,10 @@ public sealed unsafe class GLTexture : GraphicsTexture
         GLDevice.GL.TexSubImage2D(type, mip, x, y, width, height, PixelFormat, PixelType, data);
     }
 
-    internal void TexSubImage3D(TextureTarget type, int mip, int x, int y, int z, uint width, uint height, uint depth, void* data)
+    internal void TexSubImage3D(TextureTarget type, int level, int x, int y, int z, uint width, uint height, uint depth, void* data)
     {
         Bind(false);
-        GLDevice.GL.TexSubImage3D(type, mip, x, y, z, width, height, depth, PixelFormat, PixelType, data);
+        GLDevice.GL.TexSubImage3D(type, level, x, y, z, width, height, depth, PixelFormat, PixelType, data);
     }
 
     /// <summary>
@@ -181,6 +182,7 @@ public sealed unsafe class GLTexture : GraphicsTexture
         pixelType = imageFormat switch
         {
             TextureImageFormat.Color4b => PixelType.UnsignedByte,
+            TextureImageFormat.Byte => PixelType.UnsignedByte,
             TextureImageFormat.Float => PixelType.Float,
             TextureImageFormat.Float2 => PixelType.Float,
             TextureImageFormat.Float3 => PixelType.Float,
@@ -211,6 +213,7 @@ public sealed unsafe class GLTexture : GraphicsTexture
         pixelInternalFormat = imageFormat switch
         {
             TextureImageFormat.Color4b => InternalFormat.Rgba8,
+            TextureImageFormat.Byte => InternalFormat.R8ui,
             TextureImageFormat.Float => InternalFormat.R32f,
             TextureImageFormat.Float2 => InternalFormat.RG32f,
             TextureImageFormat.Float3 => InternalFormat.Rgb32f,
@@ -241,6 +244,7 @@ public sealed unsafe class GLTexture : GraphicsTexture
         pixelFormat = imageFormat switch
         {
             TextureImageFormat.Color4b => PixelFormat.Rgba,
+            TextureImageFormat.Byte => PixelFormat.RedInteger,
             TextureImageFormat.Short => PixelFormat.Red,
             TextureImageFormat.Short2 => PixelFormat.RG,
             TextureImageFormat.Short3 => PixelFormat.Rgb,

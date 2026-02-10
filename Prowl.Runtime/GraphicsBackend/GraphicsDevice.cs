@@ -98,6 +98,9 @@ public abstract class GraphicsDevice
     public abstract unsafe void TexImage2D(GraphicsTexture texture, int v1, uint size1, uint size2, int v2, void* v3);
     public abstract unsafe void TexSubImage2D(GraphicsTexture texture, int v, int rectX, int rectY, uint rectWidth, uint rectHeight, void* ptr);
 
+    public abstract unsafe void TexImage3D(GraphicsTexture texture, int level, uint width, uint height, uint depth, void* data);
+    public abstract unsafe void TexSubImage3D(GraphicsTexture texture, int level, int x, int y, int z, uint width, uint height, uint depth, void* data);
+
     #endregion
 
     public void Draw(Topology primitiveType, uint count) => Draw(primitiveType, 0, count);
