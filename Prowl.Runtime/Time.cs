@@ -58,7 +58,7 @@ public static class Time
     public static float UnscaledTotalTime => CurrentTime.UnscaledTotalTime;
 
     public static float DeltaTime => CurrentTime.DeltaTime;
-    public static float FixedDeltaTime => 1.0f / 60.0f; // 60 FPS fixed timestep
+    public static float FixedDeltaTime = 1.0f / 60.0f; // 60 FPS fixed timestep
     public static float TimeSinceStartup => CurrentTime.Time;
 
     public static float SmoothUnscaledDeltaTime => CurrentTime.SmoothUnscaledDeltaTime;
