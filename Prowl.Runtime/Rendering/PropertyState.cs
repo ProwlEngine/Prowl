@@ -48,6 +48,18 @@ public partial class PropertyState
 
     public bool IsEmpty => _colors.Count == 0 && _vectors4.Count == 0 && _vectors3.Count == 0 && _vectors2.Count == 0 && _floats.Count == 0 && _ints.Count == 0 && _matrices.Count == 0 && _textures.Count == 0 && _textures3D.Count == 0;
 
+    private ulong HashDictionary<T>(Dictionary<string, T> dict, ulong hash)
+    {
+        foreach (var kvp in dict.OrderBy(x => x.Key))
+        {
+            hash ^= (ulong)kvp.Key.GetHashCode();
+            hash *= 1099511628211UL;
+            hash ^= (ulong)kvp.Value.GetHashCode();
+            hash *= 1099511628211UL;
+        }
+        return hash;
+    }
+
     /// <summary>
     /// Computes a FNV-1a 64-bit hash representing the current state of all properties.
     /// Used for material batching to group objects with identical material properties together,
@@ -59,94 +71,16 @@ public partial class PropertyState
         ulong hash = 14695981039346656037UL; // FNV-1a offset basis
 
         // Hash all property dictionaries (order is important for consistency)
-        foreach (var kvp in _floats.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL; // FNV prime
-            hash ^= (ulong)kvp.Value.GetHashCode();
-            hash *= 1099511628211UL;
-        }
-
-        foreach (var kvp in _ints.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL;
-            hash ^= (ulong)kvp.Value.GetHashCode();
-            hash *= 1099511628211UL;
-        }
-
-        foreach (var kvp in _vectors2.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL;
-            hash ^= (ulong)kvp.Value.GetHashCode();
-            hash *= 1099511628211UL;
-        }
-
-        foreach (var kvp in _vectors3.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL;
-            hash ^= (ulong)kvp.Value.GetHashCode();
-            hash *= 1099511628211UL;
-        }
-
-        foreach (var kvp in _vectors4.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL;
-            hash ^= (ulong)kvp.Value.GetHashCode();
-            hash *= 1099511628211UL;
-        }
-
-        foreach (var kvp in _colors.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL;
-            hash ^= (ulong)kvp.Value.GetHashCode();
-            hash *= 1099511628211UL;
-        }
-
-        foreach (var kvp in _matrices.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL;
-            hash ^= (ulong)kvp.Value.GetHashCode();
-            hash *= 1099511628211UL;
-        }
-
-        foreach (var kvp in _textures.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL;
-            if (kvp.Value != null)
-            {
-                hash ^= (ulong)kvp.Value.GetHashCode();
-                hash *= 1099511628211UL;
-            }
-        }
-
-        foreach (var kvp in _textures3D.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL;
-            if (kvp.Value != null)
-            {
-                hash ^= (ulong)kvp.Value.GetHashCode();
-                hash *= 1099511628211UL;
-            }
-        }
-
-        foreach (var kvp in _buffers.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL;
-            if (kvp.Value != null)
-            {
-                hash ^= (ulong)kvp.Value.GetHashCode();
-                hash *= 1099511628211UL;
-            }
-        }
+        hash = HashDictionary(_floats, hash);
+        hash = HashDictionary(_ints, hash);
+        hash = HashDictionary(_vectors2, hash);
+        hash = HashDictionary(_vectors3, hash);
+        hash = HashDictionary(_vectors4, hash);
+        hash = HashDictionary(_colors, hash);
+        hash = HashDictionary(_matrices, hash);
+        hash = HashDictionary(_textures, hash);
+        hash = HashDictionary(_textures3D, hash);
+        hash = HashDictionary(_buffers, hash);
 
         return hash;
     }
