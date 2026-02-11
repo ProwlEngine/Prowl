@@ -3,10 +3,87 @@
 
 using System;
 
+using Silk.NET.OpenGL;
+
+using static Prowl.Runtime.GraphicsBackend.VertexFormat;
+
 namespace Prowl.Runtime.GraphicsBackend;
 
-public abstract class GraphicsVertexArray : IDisposable
+public unsafe class GraphicsVertexArray : IDisposable
 {
-    public abstract bool IsDisposed { get; protected set; }
-    public abstract void Dispose();
+    public uint Handle { get; private set; }
+
+    public GraphicsVertexArray(
+        VertexFormat format,
+        GraphicsBuffer vertices,
+        GraphicsBuffer? indices,
+        VertexFormat? instanceFormat = null,
+        GraphicsBuffer? instanceBuffer = null)
+    {
+        Handle = GraphicsDevice.GL.GenVertexArray();
+
+        if (Handle == 0)
+        {
+            throw new System.Exception("Failed to create VAO - glGenVertexArray returned 0");
+        }
+
+        GraphicsDevice.GL.BindVertexArray(Handle);
+
+        // Bind vertex buffer and set up per-vertex attributes
+        GraphicsDevice.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vertices.Handle);
+        BindFormat(format);
+
+        // Bind instance buffer and set up per-instance attributes (if provided)
+        if (instanceFormat != null && instanceBuffer != null)
+        {
+            GraphicsDevice.GL.BindBuffer(BufferTargetARB.ArrayBuffer, instanceBuffer.Handle);
+            BindFormat(instanceFormat);
+        }
+
+        // Bind index buffer if present
+        if (indices != null)
+            GraphicsDevice.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, indices.Handle);
+
+        GraphicsDevice.GL.BindVertexArray(0);
+    }
+
+    void BindFormat(VertexFormat format)
+    {
+        for (int i = 0; i < format.Elements.Length; i++)
+        {
+            Element element = format.Elements[i];
+            uint index = element.Semantic;
+            GraphicsDevice.GL.EnableVertexAttribArray(index);
+            int offset = element.Offset;
+            unsafe
+            {
+                if (element.Type == VertexType.Float)
+                    GraphicsDevice.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)format.Size, (void*)offset);
+                else
+                    GraphicsDevice.GL.VertexAttribIPointer(index, element.Count, (GLEnum)element.Type, (uint)format.Size, (void*)offset);
+
+                // Set divisor for instancing (0 = per-vertex, 1+ = per-instance)
+                if (element.Divisor > 0)
+                {
+                    GraphicsDevice.GL.VertexAttribDivisor(index, (uint)element.Divisor);
+                }
+            }
+        }
+    }
+
+    public bool IsDisposed { get; protected set; }
+
+    public void Dispose()
+    {
+        if (IsDisposed)
+            return;
+
+        GraphicsDevice.GL.DeleteVertexArray(Handle);
+        IsDisposed = true;
+    }
+
+    public override string ToString()
+    {
+        return Handle.ToString();
+    }
 }

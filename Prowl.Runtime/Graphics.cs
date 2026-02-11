@@ -4,7 +4,6 @@
 using System;
 
 using Prowl.Runtime.GraphicsBackend;
-using Prowl.Runtime.GraphicsBackend.OpenGL;
 using Prowl.Runtime.GraphicsBackend.Primitives;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -317,7 +316,7 @@ public static class Graphics
 
     public static void Initialize()
     {
-        Device = new GLDevice();
+        Device = new GraphicsDevice();
         Device.Initialize(true);
     }
 
