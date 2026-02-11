@@ -2,11 +2,10 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime;
-using Prowl.Runtime.GraphicsBackend.Primitives;
-using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Resources;
 using Prowl.Runtime.Terrain;
 using Prowl.Vector;
 

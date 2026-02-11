@@ -59,8 +59,6 @@ public abstract class Game
         {
             try
             {
-                frameCounter++;
-
                 UpdatePaperInput();
 
                 AudioContext.Update();
