@@ -325,20 +325,5 @@ public abstract class MonoBehaviour : EngineObject
             GameObject.RemoveComponent(this);
     }
 
-
-    /// <summary>
-    /// Calls the method named methodName on every MonoBehaviour in this game object or any of its children.
-    /// </summary>
-    /// <param name="methodName">The name of the method to call.</param>
-    /// <param name="objs">Optional parameters to pass to the method.</param>
-    public void BroadcastMessage(string methodName, params object[] objs) => GameObject.BroadcastMessage(methodName, objs);
-
-    /// <summary>
-    /// Calls the method named methodName on every MonoBehaviour in this game object.
-    /// </summary>
-    /// <param name="methodName">The name of the method to call.</param>
-    /// <param name="objs">Optional parameters to pass to the method.</param>
-    public void SendMessage(string methodName, params object[] objs) => GameObject.SendMessage(methodName, objs);
-
     #endregion
 }

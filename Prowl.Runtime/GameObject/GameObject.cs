@@ -929,34 +929,6 @@ public class GameObject : EngineObject, ISerializable
     private bool IsParentEnabled() => Parent.IsNotValid() || Parent.EnabledInHierarchy;
 
     /// <summary>
-    /// Calls the specified method on every MonoBehaviour in this GameObject and its children.
-    /// </summary>
-    /// <param name="methodName">The name of the method to call.</param>
-    /// <param name="objs">Optional parameters to pass to the method.</param>
-    public void BroadcastMessage(string methodName, params object[] objs)
-    {
-        foreach (MonoBehaviour component in GetComponents<MonoBehaviour>())
-            component.SendMessage(methodName, objs);
-
-        foreach (GameObject child in Children)
-            child.BroadcastMessage(methodName, objs);
-    }
-
-    /// <summary>
-    /// Calls the specified method on every MonoBehaviour in this GameObject.
-    /// </summary>
-    /// <param name="methodName">The name of the method to call.</param>
-    /// <param name="objs">Optional parameters to pass to the method.</param>
-    public void SendMessage(string methodName, params object[] objs)
-    {
-        foreach (MonoBehaviour c in GetComponents<MonoBehaviour>())
-        {
-            MethodInfo method = c.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
-            method?.Invoke(c, objs);
-        }
-    }
-
-    /// <summary>
     /// Prints the GameObject hierarchy including all components and children to Debug.Log.
     /// Useful for debugging scene structure.
     /// </summary>
