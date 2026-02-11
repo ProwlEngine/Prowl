@@ -3,8 +3,6 @@
 
 using System;
 
-using Prowl.Runtime.GraphicsBackend.Primitives;
-
 using Silk.NET.OpenGL;
 
 namespace Prowl.Runtime.GraphicsBackend;

@@ -6,11 +6,8 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Runtime.GraphicsBackend;
-using Prowl.Runtime.GraphicsBackend.Primitives;
-using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 
 using Material = Prowl.Runtime.Resources.Material;
 using Mesh = Prowl.Runtime.Resources.Mesh;

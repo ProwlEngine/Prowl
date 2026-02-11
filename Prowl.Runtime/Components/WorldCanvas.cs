@@ -54,7 +54,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
     private void InitializeCanvas()
     {
         // Create the render texture
-        _renderTexture = new RenderTexture(Width, Height, false, [GraphicsBackend.Primitives.TextureImageFormat.Color4b]);
+        _renderTexture = new RenderTexture(Width, Height, false, [TextureImageFormat.Color4b]);
 
         // Create the Paper renderer and instance
         _paperRenderer = new PaperRenderer();
@@ -225,7 +225,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
         _renderTexture.Begin();
 
         // Clear the render texture
-        Graphics.Device.Clear(0f, 0f, 0f, 0f, GraphicsBackend.Primitives.ClearFlags.Color);
+        Graphics.Device.Clear(0f, 0f, 0f, 0f, ClearFlags.Color);
 
         // Begin Paper frame
         _paper.BeginFrame(Time.DeltaTime);

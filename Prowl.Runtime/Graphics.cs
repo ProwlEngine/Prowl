@@ -4,7 +4,6 @@
 using System;
 
 using Prowl.Runtime.GraphicsBackend;
-using Prowl.Runtime.GraphicsBackend.Primitives;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;

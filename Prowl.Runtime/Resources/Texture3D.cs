@@ -4,7 +4,7 @@
 using System;
 
 using Prowl.Echo;
-using Prowl.Runtime.GraphicsBackend.Primitives;
+using Prowl.Runtime.GraphicsBackend;
 
 namespace Prowl.Runtime.Resources;
 

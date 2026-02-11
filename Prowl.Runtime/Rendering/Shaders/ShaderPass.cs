@@ -6,7 +6,6 @@ using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Runtime.GraphicsBackend;
-using Prowl.Runtime.GraphicsBackend.Primitives;
 
 namespace Prowl.Runtime.Rendering.Shaders;
 

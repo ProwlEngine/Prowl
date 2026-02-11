@@ -7,7 +7,6 @@ using System.Linq;
 
 using Prowl.Quill;
 using Prowl.Runtime.GraphicsBackend;
-using Prowl.Runtime.GraphicsBackend.Primitives;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 

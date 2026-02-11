@@ -7,9 +7,7 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Runtime.GraphicsBackend;
-using Prowl.Runtime.GraphicsBackend.Primitives;
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 
 using static Prowl.Runtime.GraphicsBackend.VertexFormat;
 
