@@ -13,22 +13,21 @@ namespace Prowl.Runtime.Resources;
 
 public sealed class Material : EngineObject, ISerializationCallbackReceiver
 {
-    private static Material s_defaultMaterial;
+    private static Shader s_defaultShader;
 
-    public static Material GetDefaultMaterial()
+    /// <summary>
+    /// Returns a new instance of a default Standalone Material
+    /// </summary>
+    public static Material DefaultMaterial
     {
-        if (s_defaultMaterial.IsNotValid())
+        get
         {
-            s_defaultMaterial = CreateDefaultMaterial();
-            s_defaultMaterial.SetColor("_MainColor", Color.White);
-        }
-
-        return s_defaultMaterial;
-    }
-
-    public static Material CreateDefaultMaterial()
-    {
-        return new Material(Shader.LoadDefault(DefaultShader.Standard));
+            if (s_defaultShader == null)
+                s_defaultShader = Shader.LoadDefault(DefaultShader.Standard);
+            var mat = new Material();
+            mat.SetColor("_MainColor", Color.White);
+            return mat;
+        } 
     }
 
     [SerializeField]
