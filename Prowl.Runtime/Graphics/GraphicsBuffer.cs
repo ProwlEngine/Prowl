@@ -5,7 +5,7 @@ using System;
 
 using Silk.NET.OpenGL;
 
-namespace Prowl.Runtime.GraphicsBackend;
+namespace Prowl.Runtime;
 
 public class GraphicsBuffer : IDisposable
 {
@@ -43,7 +43,7 @@ public class GraphicsBuffer : IDisposable
         }
 
 
-        Handle = GraphicsDevice.GL.GenBuffer();
+        Handle = Graphics.GL.GenBuffer();
         Bind();
         if (sizeInBytes != 0)
             Set(sizeInBytes, data, dynamic);
@@ -53,13 +53,13 @@ public class GraphicsBuffer : IDisposable
     {
         Bind();
         BufferUsageARB usage = dynamic ? BufferUsageARB.DynamicDraw : BufferUsageARB.StaticDraw;
-        GraphicsDevice.GL.BufferData(Target, sizeInBytes, data, usage);
+        Graphics.GL.BufferData(Target, sizeInBytes, data, usage);
     }
 
     public unsafe void Update(uint offsetInBytes, uint sizeInBytes, void* data)
     {
         Bind();
-        GraphicsDevice.GL.BufferSubData(Target, (nint)offsetInBytes, sizeInBytes, data);
+        Graphics.GL.BufferSubData(Target, (nint)offsetInBytes, sizeInBytes, data);
     }
 
     public void Dispose()
@@ -71,7 +71,7 @@ public class GraphicsBuffer : IDisposable
             boundBuffers[(int)OriginalType] = 0;
 
         IsDisposed = true;
-        GraphicsDevice.GL.DeleteBuffer(Handle);
+        Graphics.GL.DeleteBuffer(Handle);
     }
 
     public override string ToString()
@@ -85,7 +85,7 @@ public class GraphicsBuffer : IDisposable
     {
         if (boundBuffers[(int)OriginalType] == Handle)
             return;
-        GraphicsDevice.GL.BindBuffer(Target, Handle);
+        Graphics.GL.BindBuffer(Target, Handle);
         boundBuffers[(int)OriginalType] = Handle;
     }
 }

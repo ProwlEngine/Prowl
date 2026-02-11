@@ -1,7 +1,6 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Runtime.GraphicsBackend;
 using Prowl.Runtime.Resources;
 
 using Material = Prowl.Runtime.Resources.Material;
@@ -35,9 +34,9 @@ public sealed class TonemapperEffect : ImageEffect
         // Copy depth from current buffer if it has one
         if (context.SceneColor.InternalDepth != null)
         {
-            Graphics.Device.BindFramebuffer(context.SceneColor.frameBuffer, FBOTarget.Read);
-            Graphics.Device.BindFramebuffer(ldrBuffer.frameBuffer, FBOTarget.Draw);
-            Graphics.Device.BlitFramebuffer(
+            Graphics.BindFramebuffer(context.SceneColor.frameBuffer, FBOTarget.Read);
+            Graphics.BindFramebuffer(ldrBuffer.frameBuffer, FBOTarget.Draw);
+            Graphics.BlitFramebuffer(
                 0, 0, context.Width, context.Height,
                 0, 0, context.Width, context.Height,
                 ClearFlags.Depth, BlitFilter.Nearest

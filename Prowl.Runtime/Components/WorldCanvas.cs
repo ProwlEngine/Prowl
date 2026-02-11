@@ -4,7 +4,6 @@
 using System;
 
 using Prowl.PaperUI;
-using Prowl.Runtime.GraphicsBackend;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -225,7 +224,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
         _renderTexture.Begin();
 
         // Clear the render texture
-        Graphics.Device.Clear(0f, 0f, 0f, 0f, ClearFlags.Color);
+        Graphics.Clear(0f, 0f, 0f, 0f, ClearFlags.Color);
 
         // Begin Paper frame
         _paper.BeginFrame(Time.DeltaTime);

@@ -153,7 +153,7 @@ public class DirectionalLight : Light
                 int atlasY = slot.Value.Y;
 
                 // Set viewport to this cascade's atlas region
-                Graphics.Device.Viewport(atlasX, atlasY, (uint)res, (uint)res);
+                Graphics.Viewport(atlasX, atlasY, (uint)res, (uint)res);
 
                 // Calculate shadow matrix for this cascade distance
                 GetShadowMatrix(cameraPosition, res, cascadeDistance, out Float4x4 view, out Float4x4 proj);

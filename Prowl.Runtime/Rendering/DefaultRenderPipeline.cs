@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Runtime.GraphicsBackend;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -193,12 +192,12 @@ public class DefaultRenderPipeline : RenderPipeline
             ]);
 
         // Bind GBuffer as the target
-        Graphics.Device.BindFramebuffer(gBuffer.frameBuffer);
+        Graphics.BindFramebuffer(gBuffer.frameBuffer);
         // 6.1 Clear GBuffer
         switch (camera.ClearFlags)
         {
             case CameraClearFlags.Skybox:
-                Graphics.Device.Clear(
+                Graphics.Clear(
                     (float)camera.ClearColor.R,
                     (float)camera.ClearColor.G,
                     (float)camera.ClearColor.B,
@@ -210,7 +209,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 break;
 
             case CameraClearFlags.SolidColor:
-                Graphics.Device.Clear(
+                Graphics.Clear(
                     (float)camera.ClearColor.R,
                     (float)camera.ClearColor.G,
                     (float)camera.ClearColor.B,
@@ -220,7 +219,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 break;
 
             case CameraClearFlags.Depth:
-                Graphics.Device.Clear(0, 0, 0, 0, ClearFlags.Depth);
+                Graphics.Clear(0, 0, 0, 0, ClearFlags.Depth);
                 break;
 
             case CameraClearFlags.Nothing:
@@ -247,8 +246,8 @@ public class DefaultRenderPipeline : RenderPipeline
         PropertyState.SetGlobalTexture("_CameraDepthTexture", gBuffer.InternalDepth);
 
         // Clear light accumulation to black
-        Graphics.Device.BindFramebuffer(lightAccumulation.frameBuffer);
-        Graphics.Device.Clear(0, 0, 0, 0, ClearFlags.Color);
+        Graphics.BindFramebuffer(lightAccumulation.frameBuffer);
+        Graphics.Clear(0, 0, 0, 0, ClearFlags.Color);
 
         // Render each light's contribution (additive blending)
         foreach (IRenderableLight light in lights)
@@ -321,12 +320,12 @@ public class DefaultRenderPipeline : RenderPipeline
         Blit(lightAccumulation, composedOutput, s_deferredCompose, 0, false, false);
 
         // Copy depth from GBuffer to composed output for transparent rendering
-        Graphics.Device.BindFramebuffer(gBuffer.frameBuffer, FBOTarget.Read);
-        Graphics.Device.BindFramebuffer(composedOutput.frameBuffer, FBOTarget.Draw);
-        Graphics.Device.BlitFramebuffer(0, 0, gBuffer.Width, gBuffer.Height, 0, 0, composedOutput.Width, composedOutput.Height, ClearFlags.Depth, BlitFilter.Nearest);
+        Graphics.BindFramebuffer(gBuffer.frameBuffer, FBOTarget.Read);
+        Graphics.BindFramebuffer(composedOutput.frameBuffer, FBOTarget.Draw);
+        Graphics.BlitFramebuffer(0, 0, gBuffer.Width, gBuffer.Height, 0, 0, composedOutput.Width, composedOutput.Height, ClearFlags.Depth, BlitFilter.Nearest);
 
         // Bind composed output for transparent rendering
-        Graphics.Device.BindFramebuffer(composedOutput.frameBuffer);
+        Graphics.BindFramebuffer(composedOutput.frameBuffer);
 
         // =======================================================
         // 9. Apply AfterLighting effects (opaque post-processing)
@@ -403,14 +402,14 @@ public class DefaultRenderPipeline : RenderPipeline
         RenderTexture.ReleaseTemporaryRT(composedOutput);
 
         // Reset bound framebuffer if any is bound
-        Graphics.Device.UnbindFramebuffer();
-        Graphics.Device.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+        Graphics.UnbindFramebuffer();
+        Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
     }
 
     private void RenderShadowAtlas(CameraSnapshot css, IReadOnlyList<IRenderableLight> lights, IReadOnlyList<IRenderable> renderables)
     {
-        Graphics.Device.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
-        Graphics.Device.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
+        Graphics.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
+        Graphics.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
 
         // Process all lights - each light handles its own shadow rendering
         foreach (IRenderableLight light in lights)

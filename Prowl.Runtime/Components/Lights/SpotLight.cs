@@ -97,7 +97,7 @@ public class SpotLight : Light
             int atlasY = slot.Value.Y;
 
             // Set viewport to atlas region
-            Graphics.Device.Viewport(atlasX, atlasY, (uint)res, (uint)res);
+            Graphics.Viewport(atlasX, atlasY, (uint)res, (uint)res);
 
             // Calculate shadow matrices
             GetShadowMatrix(out Float4x4 view, out Float4x4 proj);
@@ -178,7 +178,7 @@ public class SpotLight : Light
         _lightMaterial.SetMatrix("prowl_WorldToObject", model.Invert());
 
         // Bind destination framebuffer
-        Graphics.Device.BindFramebuffer(destination.frameBuffer);
+        Graphics.BindFramebuffer(destination.frameBuffer);
 
         // Draw cone mesh instead of fullscreen quad
         RenderPipeline.DrawMeshNow(_mesh, _lightMaterial, 0);

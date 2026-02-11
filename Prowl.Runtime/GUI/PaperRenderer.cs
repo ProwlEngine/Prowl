@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Quill;
-using Prowl.Runtime.GraphicsBackend;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -29,10 +28,10 @@ public class PaperRenderer : ICanvasRenderer
         InitializeShaders();
 
         // Create vertex buffer
-        _vertexBuffer = Graphics.Device.CreateBuffer<float>(BufferType.VertexBuffer, Array.Empty<float>(), true);
+        _vertexBuffer = Graphics.CreateBuffer<float>(BufferType.VertexBuffer, Array.Empty<float>(), true);
 
         // Create element buffer
-        _elementBuffer = Graphics.Device.CreateBuffer<uint>(BufferType.ElementsBuffer, Array.Empty<uint>(), true);
+        _elementBuffer = Graphics.CreateBuffer<uint>(BufferType.ElementsBuffer, Array.Empty<uint>(), true);
 
         // Create a VertexArray
         var vertexFormat = new VertexFormat(
@@ -42,7 +41,7 @@ public class PaperRenderer : ICanvasRenderer
                 new((VertexFormat.VertexSemantic)2, VertexFormat.VertexType.Float, 4, 0)
         ]);
 
-        _vertexArrayObject = Graphics.Device.CreateVertexArray(vertexFormat, _vertexBuffer, _elementBuffer);
+        _vertexArrayObject = Graphics.CreateVertexArray(vertexFormat, _vertexBuffer, _elementBuffer);
 
         // Set the default texture
         _defaultTexture = new Texture2D(1, 1);
@@ -128,12 +127,12 @@ public class PaperRenderer : ICanvasRenderer
             CullFace = RasterizerState.PolyFace.None,
         };
 
-        Graphics.Device.SetState(state);
-        Graphics.Device.BindProgram(_shaderProgram);
-        Graphics.Device.SetUniformMatrix(_shaderProgram, "projection", false, (Float4x4)_projection);
+        Graphics.SetState(state);
+        Graphics.BindProgram(_shaderProgram);
+        Graphics.SetUniformMatrix(_shaderProgram, "projection", false, (Float4x4)_projection);
 
         // Bind vertex array
-        Graphics.Device.BindVertexArray(_vertexArrayObject);
+        Graphics.BindVertexArray(_vertexArrayObject);
 
         // Update buffer data
         if (canvas.Vertices.Count > 0)
@@ -151,12 +150,12 @@ public class PaperRenderer : ICanvasRenderer
                 packedVertexData[i * 8 + 6] = vertex.b / 255f;
                 packedVertexData[i * 8 + 7] = vertex.a / 255f;
             }
-            Graphics.Device.SetBuffer(_vertexBuffer, packedVertexData, true);
+            Graphics.SetBuffer(_vertexBuffer, packedVertexData, true);
         }
 
         if (canvas.Indices.Count > 0)
         {
-            Graphics.Device.SetBuffer(_elementBuffer, canvas.Indices.ToArray(), true);
+            Graphics.SetBuffer(_elementBuffer, canvas.Indices.ToArray(), true);
         }
 
         // Process draw calls
@@ -165,29 +164,29 @@ public class PaperRenderer : ICanvasRenderer
         {
             // Handle texture binding
             Texture2D texture = (drawCall.Texture as Texture2D) ?? _defaultTexture;
-            Graphics.Device.SetUniformTexture(_shaderProgram, "texture0", 0, texture.Handle);
+            Graphics.SetUniformTexture(_shaderProgram, "texture0", 0, texture.Handle);
 
             // Set scissor rectangle
             drawCall.GetScissor(out Float4x4 scissor, out Float2 extent);
-            Graphics.Device.SetUniformMatrix(_shaderProgram, "scissorMat", false, scissor);
-            Graphics.Device.SetUniformV2(_shaderProgram, "scissorExt", extent);
+            Graphics.SetUniformMatrix(_shaderProgram, "scissorMat", false, scissor);
+            Graphics.SetUniformV2(_shaderProgram, "scissorExt", extent);
 
             // Set brush parameters
-            Graphics.Device.SetUniformMatrix(_shaderProgram, "brushMat", false, drawCall.Brush.BrushMatrix);
-            Graphics.Device.SetUniformI(_shaderProgram, "brushType", (int)drawCall.Brush.Type);
-            Graphics.Device.SetUniformV4(_shaderProgram, "brushColor1", ToVector4(drawCall.Brush.Color1));
-            Graphics.Device.SetUniformV4(_shaderProgram, "brushColor2", ToVector4(drawCall.Brush.Color2));
-            Graphics.Device.SetUniformV4(_shaderProgram, "brushParams", new Float4(
+            Graphics.SetUniformMatrix(_shaderProgram, "brushMat", false, drawCall.Brush.BrushMatrix);
+            Graphics.SetUniformI(_shaderProgram, "brushType", (int)drawCall.Brush.Type);
+            Graphics.SetUniformV4(_shaderProgram, "brushColor1", ToVector4(drawCall.Brush.Color1));
+            Graphics.SetUniformV4(_shaderProgram, "brushColor2", ToVector4(drawCall.Brush.Color2));
+            Graphics.SetUniformV4(_shaderProgram, "brushParams", new Float4(
                 drawCall.Brush.Point1.X,
                 drawCall.Brush.Point1.Y,
                 drawCall.Brush.Point2.X,
                 drawCall.Brush.Point2.Y));
-            Graphics.Device.SetUniformV2(_shaderProgram, "brushParams2", new Float2(
+            Graphics.SetUniformV2(_shaderProgram, "brushParams2", new Float2(
                 drawCall.Brush.CornerRadii,
                 drawCall.Brush.Feather));
 
             // Draw the elements
-            Graphics.Device.DrawIndexed(
+            Graphics.DrawIndexed(
                 Topology.Triangles,
                 (uint)drawCall.ElementCount,
                 indexOffset,
@@ -198,7 +197,7 @@ public class PaperRenderer : ICanvasRenderer
         }
 
         // Unbind vertex array
-        Graphics.Device.BindVertexArray(null);
+        Graphics.BindVertexArray(null);
     }
 
     public void Dispose()

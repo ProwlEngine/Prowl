@@ -8,7 +8,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 
-using Prowl.Runtime.GraphicsBackend;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 

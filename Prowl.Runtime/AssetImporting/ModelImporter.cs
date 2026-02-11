@@ -225,7 +225,7 @@ public class ModelImporter
 
             // Texture
             AssimpString texPath = default;
-            if (_assimp.GetMaterialTexture(m, TextureType.Diffuse, 0, &texPath, null, null, null, null, null, null) == Return.Success)
+            if (_assimp.GetMaterialTexture(m, Silk.NET.Assimp.TextureType.Diffuse, 0, &texPath, null, null, null, null, null, null) == Return.Success)
             {
                 string texPathStr = texPath.AsString;
                 name ??= "Mat_" + Path.GetFileNameWithoutExtension(texPathStr);
@@ -239,7 +239,7 @@ public class ModelImporter
 
             // Normal Texture
             texPath = default;
-            if (_assimp.GetMaterialTexture(m, TextureType.Normals, 0, &texPath, null, null, null, null, null, null) == Return.Success)
+            if (_assimp.GetMaterialTexture(m, Silk.NET.Assimp.TextureType.Normals, 0, &texPath, null, null, null, null, null, null) == Return.Success)
             {
                 string texPathStr = texPath.AsString;
                 name ??= "Mat_" + Path.GetFileNameWithoutExtension(texPathStr);
@@ -253,7 +253,7 @@ public class ModelImporter
 
             //AO, Roughness, Metallic Texture Attempt 1
             texPath = default;
-            if (_assimp.GetMaterialTexture(m, TextureType.Unknown, 0, &texPath, null, null, null, null, null, null) == Return.Success)
+            if (_assimp.GetMaterialTexture(m, Silk.NET.Assimp.TextureType.Unknown, 0, &texPath, null, null, null, null, null, null) == Return.Success)
             {
                 string texPathStr = texPath.AsString;
                 name ??= "Mat_" + Path.GetFileNameWithoutExtension(texPathStr);
@@ -267,7 +267,7 @@ public class ModelImporter
 
             //AO, Roughness, Metallic Texture Attempt 2
             texPath = default;
-            if (_assimp.GetMaterialTexture(m, TextureType.Specular, 0, &texPath, null, null, null, null, null, null) == Return.Success)
+            if (_assimp.GetMaterialTexture(m, Silk.NET.Assimp.TextureType.Specular, 0, &texPath, null, null, null, null, null, null) == Return.Success)
             {
                 string texPathStr = texPath.AsString;
                 name ??= "Mat_" + Path.GetFileNameWithoutExtension(texPathStr);
@@ -279,7 +279,7 @@ public class ModelImporter
 
             // Emissive Texture
             texPath = default;
-            if (_assimp.GetMaterialTexture(m, TextureType.Emissive, 0, &texPath, null, null, null, null, null, null) == Return.Success)
+            if (_assimp.GetMaterialTexture(m, Silk.NET.Assimp.TextureType.Emissive, 0, &texPath, null, null, null, null, null, null) == Return.Success)
             {
                 string texPathStr = texPath.AsString;
                 name ??= "Mat_" + Path.GetFileNameWithoutExtension(texPathStr);

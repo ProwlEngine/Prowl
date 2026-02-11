@@ -99,7 +99,7 @@ public static class Window
     {
         InternalInput = InternalWindow.CreateInput();
         WindowInputHandler = new DefaultInputHandler(InternalInput);
-        Graphics.Initialize();
+        Graphics.Initialize(false);
 
         // Push Default Handler
         Input.PushHandler(WindowInputHandler);

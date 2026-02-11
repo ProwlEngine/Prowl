@@ -4,7 +4,6 @@
 using System;
 
 using Prowl.Echo;
-using Prowl.Runtime.GraphicsBackend;
 
 namespace Prowl.Runtime.Resources;
 
@@ -55,7 +54,7 @@ public sealed class Texture3D : Texture, ISerializable
         if (generateMipmaps)
             GenerateMipmaps();
 
-        Graphics.Device.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
+        Graphics.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
         MinFilter = IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter;
         MagFilter = DefaultMagFilter;
     }
@@ -74,7 +73,7 @@ public sealed class Texture3D : Texture, ISerializable
     {
         ValidateBoxOperation(boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
 
-        Graphics.Device.TexSubImage3D(Handle, 0, boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth, ptr);
+        Graphics.TexSubImage3D(Handle, 0, boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth, ptr);
     }
 
     /// <summary>
@@ -95,7 +94,7 @@ public sealed class Texture3D : Texture, ISerializable
             throw new ArgumentException("Not enough voxel data", nameof(data));
 
         fixed (void* ptr = data.Span)
-            Graphics.Device.TexSubImage3D(Handle, 0, boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth, ptr);
+            Graphics.TexSubImage3D(Handle, 0, boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth, ptr);
     }
 
     /// <summary>
@@ -114,7 +113,7 @@ public sealed class Texture3D : Texture, ISerializable
     /// <param name="ptr">The pointer to which the voxel data will be written.</param>
     public unsafe void GetDataPtr(void* ptr)
     {
-        Graphics.Device.GetTexImage(Handle, 0, ptr);
+        Graphics.GetTexImage(Handle, 0, ptr);
     }
 
     /// <summary>
@@ -128,7 +127,7 @@ public sealed class Texture3D : Texture, ISerializable
             throw new ArgumentException("Insufficient space to store the requested voxel data", nameof(data));
 
         fixed (void* ptr = data.Span)
-            Graphics.Device.GetTexImage(Handle, 0, ptr);
+            Graphics.GetTexImage(Handle, 0, ptr);
     }
 
     public int GetSize()
@@ -186,9 +185,9 @@ public sealed class Texture3D : Texture, ISerializable
     /// <param name="rWrapMode">The wrap mode for the R (or texture-Z) coordinate.</param>
     public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode, TextureWrap rWrapMode)
     {
-        Graphics.Device.SetWrapS(Handle, sWrapMode);
-        Graphics.Device.SetWrapT(Handle, tWrapMode);
-        Graphics.Device.SetWrapR(Handle, rWrapMode);
+        Graphics.SetWrapS(Handle, sWrapMode);
+        Graphics.SetWrapT(Handle, tWrapMode);
+        Graphics.SetWrapR(Handle, rWrapMode);
     }
 
     /// <summary>
@@ -206,7 +205,7 @@ public sealed class Texture3D : Texture, ISerializable
         Height = height;
         Depth = depth;
 
-        Graphics.Device.TexImage3D(Handle, 0, Width, Height, Depth, (void*)0);
+        Graphics.TexImage3D(Handle, 0, Width, Height, Depth, (void*)0);
     }
 
     private void ValidateTextureSize(uint width, uint height, uint depth)

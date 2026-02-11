@@ -95,7 +95,7 @@ public class PointLight : Light
             int viewportY = atlasY + (gridY * res);
 
             // Set viewport for this face
-            Graphics.Device.Viewport(viewportX, viewportY, (uint)res, (uint)res);
+            Graphics.Viewport(viewportX, viewportY, (uint)res, (uint)res);
 
             // Create view matrix for this face
             (Float3 forward, Float3 up) = faceOrientations[faceIndex];
@@ -171,7 +171,7 @@ public class PointLight : Light
         _lightMaterial.SetMatrix("prowl_WorldToObject", model.Invert());
 
         // Bind destination framebuffer
-        Graphics.Device.BindFramebuffer(destination.frameBuffer);
+        Graphics.BindFramebuffer(destination.frameBuffer);
 
         // Draw sphere mesh
         RenderPipeline.DrawMeshNow(_mesh, _lightMaterial, 0);

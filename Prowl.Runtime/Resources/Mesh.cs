@@ -6,10 +6,9 @@ using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
-using Prowl.Runtime.GraphicsBackend;
 using Prowl.Vector;
 
-using static Prowl.Runtime.GraphicsBackend.VertexFormat;
+using static Prowl.Runtime.VertexFormat;
 
 namespace Prowl.Runtime.Resources;
 
@@ -286,13 +285,13 @@ public class Mesh : EngineObject, ISerializable
         if (canReuseVertexBuffer)
         {
             // Reuse existing buffer - just update the data
-            Graphics.Device.SetBuffer(vertexBuffer, vertexBlob, true);
+            Graphics.SetBuffer(vertexBuffer, vertexBlob, true);
         }
         else
         {
             // Need to recreate buffer - size or layout changed
             vertexBuffer?.Dispose();
-            vertexBuffer = Graphics.Device.CreateBuffer(BufferType.VertexBuffer, vertexBlob, true);
+            vertexBuffer = Graphics.CreateBuffer(BufferType.VertexBuffer, vertexBlob, true);
             lastVertexCount = vertices.Length;
             lastVertexLayout = layout;
         }
@@ -310,12 +309,12 @@ public class Mesh : EngineObject, ISerializable
 
             if (canReuseIndexBuffer)
             {
-                Graphics.Device.SetBuffer(indexBuffer, data, true);
+                Graphics.SetBuffer(indexBuffer, data, true);
             }
             else
             {
                 indexBuffer?.Dispose();
-                indexBuffer = Graphics.Device.CreateBuffer(BufferType.ElementsBuffer, data, true);
+                indexBuffer = Graphics.CreateBuffer(BufferType.ElementsBuffer, data, true);
                 lastIndexCount = indices.Length;
             }
         }
@@ -323,12 +322,12 @@ public class Mesh : EngineObject, ISerializable
         {
             if (canReuseIndexBuffer)
             {
-                Graphics.Device.SetBuffer(indexBuffer, indices, true);
+                Graphics.SetBuffer(indexBuffer, indices, true);
             }
             else
             {
                 indexBuffer?.Dispose();
-                indexBuffer = Graphics.Device.CreateBuffer(BufferType.ElementsBuffer, indices, true);
+                indexBuffer = Graphics.CreateBuffer(BufferType.ElementsBuffer, indices, true);
                 lastIndexCount = indices.Length;
             }
         }
@@ -337,11 +336,11 @@ public class Mesh : EngineObject, ISerializable
         if (!canReuseVertexBuffer || !canReuseIndexBuffer || vertexArrayObject == null)
         {
             vertexArrayObject?.Dispose();
-            vertexArrayObject = Graphics.Device.CreateVertexArray(layout, vertexBuffer, indexBuffer);
+            vertexArrayObject = Graphics.CreateVertexArray(layout, vertexBuffer, indexBuffer);
             Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
         }
 
-        Graphics.Device.BindVertexArray(null);
+        Graphics.BindVertexArray(null);
     }
 
     /// <summary>
@@ -380,7 +379,7 @@ public class Mesh : EngineObject, ISerializable
             // Create new buffer with capacity
             var bufferData = new Rendering.InstanceData[instanceBufferCapacity];
             Array.Copy(instanceData, 0, bufferData, 0, instanceCount);
-            instanceBuffer = Graphics.Device.CreateBuffer(BufferType.VertexBuffer, bufferData, dynamic: true);
+            instanceBuffer = Graphics.CreateBuffer(BufferType.VertexBuffer, bufferData, dynamic: true);
 
             // Dispose old VAO since we need to recreate it with new buffer
             instancedVAO?.Dispose();
@@ -389,14 +388,14 @@ public class Mesh : EngineObject, ISerializable
         else
         {
             // Reuse buffer, just update data
-            Graphics.Device.SetBuffer(instanceBuffer, instanceData, dynamic: true);
+            Graphics.SetBuffer(instanceBuffer, instanceData, dynamic: true);
         }
 
         // Create VAO if needed (first time or after buffer resize)
         if (instancedVAO == null)
         {
             var meshFormat = GetVertexLayout(this);
-            instancedVAO = Graphics.Device.CreateVertexArray(
+            instancedVAO = Graphics.CreateVertexArray(
                 meshFormat,
                 vertexBuffer,
                 indexBuffer,

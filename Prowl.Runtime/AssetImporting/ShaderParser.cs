@@ -8,7 +8,6 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
-using Prowl.Runtime.GraphicsBackend;
 using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Utils;
 using Prowl.Vector;

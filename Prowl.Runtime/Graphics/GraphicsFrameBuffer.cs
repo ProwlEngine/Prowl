@@ -4,7 +4,7 @@ using System;
 
 using Silk.NET.OpenGL;
 
-namespace Prowl.Runtime.GraphicsBackend;
+namespace Prowl.Runtime;
 
 public unsafe class GraphicsFrameBuffer
 {
@@ -41,7 +41,7 @@ public unsafe class GraphicsFrameBuffer
             throw new Exception("[FrameBuffer] Invalid number of textures! [0-" + Graphics.MaxFramebufferColorAttachments + "]");
 
         // Generate FBO
-        Handle = GraphicsDevice.GL.GenFramebuffer();
+        Handle = Graphics.GL.GenFramebuffer();
         if (Handle <= 0)
             throw new Exception($"[FrameBuffer] Failed to generate new FrameBuffer.");
 
@@ -49,7 +49,7 @@ public unsafe class GraphicsFrameBuffer
         Width = width;
         Height = height;
 
-        GraphicsDevice.GL.BindFramebuffer(FramebufferTarget.Framebuffer, Handle);
+        Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, Handle);
 
         unsafe
         {
@@ -62,21 +62,21 @@ public unsafe class GraphicsFrameBuffer
                     {
                         //InternalTextures[i].SetTextureFilters(TextureMinFilter.Linear, TextureMagFilter.Linear);
                         //InternalTextures[i].SetWrapModes(TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge);
-                        GraphicsDevice.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, attachments[i].Texture!.Target, attachments[i].Texture!.Handle, 0);
+                        Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, attachments[i].Texture!.Target, attachments[i].Texture!.Handle, 0);
                     }
                     else
                     {
-                        GraphicsDevice.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, attachments[i].Texture!.Handle, 0);
+                        Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, attachments[i].Texture!.Handle, 0);
                     }
                 }
-                GraphicsDevice.GL.DrawBuffers((uint)numTextures, buffers);
+                Graphics.GL.DrawBuffers((uint)numTextures, buffers);
             }
 
-            if (GraphicsDevice.GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
+            if (Graphics.GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
                 throw new Exception("RenderTexture: [ID {fboId}] RenderTexture object creation failed.");
 
             // Unbind FBO
-            GraphicsDevice.GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         }
     }
 
@@ -87,7 +87,7 @@ public unsafe class GraphicsFrameBuffer
         if (IsDisposed)
             return;
 
-        GraphicsDevice.GL.DeleteFramebuffer(Handle);
+        Graphics.GL.DeleteFramebuffer(Handle);
         IsDisposed = true;
     }
     public override string ToString()

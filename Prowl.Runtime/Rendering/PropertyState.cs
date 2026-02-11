@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Echo;
-using Prowl.Runtime.GraphicsBackend;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -247,7 +246,7 @@ public partial class PropertyState
         {
             if (!cache.floats.TryGetValue(item.Key, out float cachedValue) || cachedValue != item.Value)
             {
-                Graphics.Device.SetUniformF(shader, item.Key, item.Value);
+                Graphics.SetUniformF(shader, item.Key, item.Value);
                 cache.floats[item.Key] = item.Value;
             }
         }
@@ -256,7 +255,7 @@ public partial class PropertyState
         {
             if (!cache.ints.TryGetValue(item.Key, out int cachedValue) || cachedValue != item.Value)
             {
-                Graphics.Device.SetUniformI(shader, item.Key, item.Value);
+                Graphics.SetUniformI(shader, item.Key, item.Value);
                 cache.ints[item.Key] = item.Value;
             }
         }
@@ -265,7 +264,7 @@ public partial class PropertyState
         {
             if (!cache.vectors2.TryGetValue(item.Key, out Float2 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformV2(shader, item.Key, item.Value);
+                Graphics.SetUniformV2(shader, item.Key, item.Value);
                 cache.vectors2[item.Key] = item.Value;
             }
         }
@@ -274,7 +273,7 @@ public partial class PropertyState
         {
             if (!cache.vectors3.TryGetValue(item.Key, out Float3 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformV3(shader, item.Key, item.Value);
+                Graphics.SetUniformV3(shader, item.Key, item.Value);
                 cache.vectors3[item.Key] = item.Value;
             }
         }
@@ -283,7 +282,7 @@ public partial class PropertyState
         {
             if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformV4(shader, item.Key, item.Value);
+                Graphics.SetUniformV4(shader, item.Key, item.Value);
                 cache.vectors4[item.Key] = item.Value;
             }
         }
@@ -293,7 +292,7 @@ public partial class PropertyState
             Float4 colorVec = new((float)item.Value.R, (float)item.Value.G, (float)item.Value.B, (float)item.Value.A);
             if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(colorVec))
             {
-                Graphics.Device.SetUniformV4(shader, item.Key, colorVec);
+                Graphics.SetUniformV4(shader, item.Key, colorVec);
                 cache.vectors4[item.Key] = colorVec;
             }
         }
@@ -302,21 +301,21 @@ public partial class PropertyState
         {
             if (!cache.matrices.TryGetValue(item.Key, out Float4x4 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformMatrix(shader, item.Key, false, item.Value);
+                Graphics.SetUniformMatrix(shader, item.Key, false, item.Value);
                 cache.matrices[item.Key] = item.Value;
             }
         }
 
         // Matrix arrays - always set (comparison would be expensive)
         foreach (KeyValuePair<string, Float4x4[]> item in materialProperties._matrixArr)
-            Graphics.Device.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
+            Graphics.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
 
         // Bind uniform buffers - check if buffer changed
         foreach (KeyValuePair<string, GraphicsBuffer> item in materialProperties._buffers)
         {
             if (!cache.buffers.TryGetValue(item.Key, out GraphicsBuffer? cachedBuffer) || cachedBuffer != item.Value)
             {
-                Graphics.Device.BindUniformBuffer(shader, item.Key, item.Value);
+                Graphics.BindUniformBuffer(shader, item.Key, item.Value);
                 cache.buffers[item.Key] = item.Value;
             }
         }
@@ -327,7 +326,7 @@ public partial class PropertyState
             if (tex.IsValid())
             {
                 // Always set textures - slot assignment must be consistent
-                Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
+                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
         }
@@ -338,7 +337,7 @@ public partial class PropertyState
             if (tex.IsValid())
             {
                 // Always set textures - slot assignment must be consistent
-                Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
+                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
         }
@@ -364,7 +363,7 @@ public partial class PropertyState
         {
             if (!cache.floats.TryGetValue(item.Key, out float cachedValue) || cachedValue != item.Value)
             {
-                Graphics.Device.SetUniformF(shader, item.Key, item.Value);
+                Graphics.SetUniformF(shader, item.Key, item.Value);
                 cache.floats[item.Key] = item.Value;
             }
         }
@@ -373,7 +372,7 @@ public partial class PropertyState
         {
             if (!cache.ints.TryGetValue(item.Key, out int cachedValue) || cachedValue != item.Value)
             {
-                Graphics.Device.SetUniformI(shader, item.Key, item.Value);
+                Graphics.SetUniformI(shader, item.Key, item.Value);
                 cache.ints[item.Key] = item.Value;
             }
         }
@@ -382,7 +381,7 @@ public partial class PropertyState
         {
             if (!cache.vectors2.TryGetValue(item.Key, out Float2 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformV2(shader, item.Key, item.Value);
+                Graphics.SetUniformV2(shader, item.Key, item.Value);
                 cache.vectors2[item.Key] = item.Value;
             }
         }
@@ -391,7 +390,7 @@ public partial class PropertyState
         {
             if (!cache.vectors3.TryGetValue(item.Key, out Float3 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformV3(shader, item.Key, item.Value);
+                Graphics.SetUniformV3(shader, item.Key, item.Value);
                 cache.vectors3[item.Key] = item.Value;
             }
         }
@@ -400,7 +399,7 @@ public partial class PropertyState
         {
             if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformV4(shader, item.Key, item.Value);
+                Graphics.SetUniformV4(shader, item.Key, item.Value);
                 cache.vectors4[item.Key] = item.Value;
             }
         }
@@ -410,7 +409,7 @@ public partial class PropertyState
             Float4 colorVec = new((float)item.Value.R, (float)item.Value.G, (float)item.Value.B, (float)item.Value.A);
             if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(colorVec))
             {
-                Graphics.Device.SetUniformV4(shader, item.Key, colorVec);
+                Graphics.SetUniformV4(shader, item.Key, colorVec);
                 cache.vectors4[item.Key] = colorVec;
             }
         }
@@ -419,21 +418,21 @@ public partial class PropertyState
         {
             if (!cache.matrices.TryGetValue(item.Key, out Float4x4 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformMatrix(shader, item.Key, false, item.Value);
+                Graphics.SetUniformMatrix(shader, item.Key, false, item.Value);
                 cache.matrices[item.Key] = item.Value;
             }
         }
 
         // Matrix arrays - always set (comparison would be expensive)
         foreach (KeyValuePair<string, Float4x4[]> item in instanceProperties._matrixArr)
-            Graphics.Device.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
+            Graphics.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
 
         // Bind uniform buffers - check if buffer changed
         foreach (KeyValuePair<string, GraphicsBuffer> item in instanceProperties._buffers)
         {
             if (!cache.buffers.TryGetValue(item.Key, out GraphicsBuffer? cachedBuffer) || cachedBuffer != item.Value)
             {
-                Graphics.Device.BindUniformBuffer(shader, item.Key, item.Value);
+                Graphics.BindUniformBuffer(shader, item.Key, item.Value);
                 cache.buffers[item.Key] = item.Value;
             }
         }
@@ -444,7 +443,7 @@ public partial class PropertyState
             if (tex.IsValid())
             {
                 // Always set textures - slot assignment must be consistent
-                Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
+                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
         }
@@ -455,7 +454,7 @@ public partial class PropertyState
             if (tex.IsValid())
             {
                 // Always set textures - slot assignment must be consistent
-                Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
+                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
         }
@@ -470,7 +469,7 @@ public partial class PropertyState
         GraphicsBuffer globalBuffer = GlobalUniforms.GetBuffer();
         if (globalBuffer != null)
         {
-            Graphics.Device.BindUniformBuffer(shader, "GlobalUniforms", globalBuffer, 0);
+            Graphics.BindUniformBuffer(shader, "GlobalUniforms", globalBuffer, 0);
         }
 
         // Apply global properties first (so instance properties can override them)
@@ -481,7 +480,7 @@ public partial class PropertyState
         {
             if (!cache.floats.TryGetValue(item.Key, out float cachedValue) || cachedValue != item.Value)
             {
-                Graphics.Device.SetUniformF(shader, item.Key, item.Value);
+                Graphics.SetUniformF(shader, item.Key, item.Value);
                 cache.floats[item.Key] = item.Value;
             }
         }
@@ -490,7 +489,7 @@ public partial class PropertyState
         {
             if (!cache.ints.TryGetValue(item.Key, out int cachedValue) || cachedValue != item.Value)
             {
-                Graphics.Device.SetUniformI(shader, item.Key, item.Value);
+                Graphics.SetUniformI(shader, item.Key, item.Value);
                 cache.ints[item.Key] = item.Value;
             }
         }
@@ -499,7 +498,7 @@ public partial class PropertyState
         {
             if (!cache.vectors2.TryGetValue(item.Key, out Float2 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformV2(shader, item.Key, item.Value);
+                Graphics.SetUniformV2(shader, item.Key, item.Value);
                 cache.vectors2[item.Key] = item.Value;
             }
         }
@@ -508,7 +507,7 @@ public partial class PropertyState
         {
             if (!cache.vectors3.TryGetValue(item.Key, out Float3 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformV3(shader, item.Key, item.Value);
+                Graphics.SetUniformV3(shader, item.Key, item.Value);
                 cache.vectors3[item.Key] = item.Value;
             }
         }
@@ -517,7 +516,7 @@ public partial class PropertyState
         {
             if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformV4(shader, item.Key, item.Value);
+                Graphics.SetUniformV4(shader, item.Key, item.Value);
                 cache.vectors4[item.Key] = item.Value;
             }
         }
@@ -527,7 +526,7 @@ public partial class PropertyState
             Float4 colorVec = new((float)item.Value.R, (float)item.Value.G, (float)item.Value.B, (float)item.Value.A);
             if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformV4(shader, item.Key, colorVec);
+                Graphics.SetUniformV4(shader, item.Key, colorVec);
                 cache.vectors4[item.Key] = colorVec;
             }
         }
@@ -536,21 +535,21 @@ public partial class PropertyState
         {
             if (!cache.matrices.TryGetValue(item.Key, out Float4x4 cachedValue) || !cachedValue.Equals(item.Value))
             {
-                Graphics.Device.SetUniformMatrix(shader, item.Key, false, item.Value);
+                Graphics.SetUniformMatrix(shader, item.Key, false, item.Value);
                 cache.matrices[item.Key] = item.Value;
             }
         }
 
         // Matrix arrays - always set (comparison would be expensive)
         foreach (KeyValuePair<string, Float4x4[]> item in mpb._matrixArr)
-            Graphics.Device.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
+            Graphics.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
 
         // Bind uniform buffers - check if buffer changed
         foreach (KeyValuePair<string, GraphicsBuffer> item in mpb._buffers)
         {
             if (!cache.buffers.TryGetValue(item.Key, out GraphicsBuffer? cachedBuffer) || cachedBuffer != item.Value)
             {
-                Graphics.Device.BindUniformBuffer(shader, item.Key, item.Value);
+                Graphics.BindUniformBuffer(shader, item.Key, item.Value);
                 cache.buffers[item.Key] = item.Value;
             }
         }
@@ -562,7 +561,7 @@ public partial class PropertyState
             if (tex.IsValid())
             {
                 // Always set textures - slot assignment must be consistent
-                Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
+                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
             else
@@ -584,7 +583,7 @@ public partial class PropertyState
             if (tex.IsValid())
             {
                 // Always set textures - slot assignment must be consistent
-                Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
+                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
             else
@@ -606,7 +605,7 @@ public partial class PropertyState
         {
             if (!cache.floats.TryGetValue(item.Key, out float cachedValue) || cachedValue != item.Value)
             {
-                Graphics.Device.SetUniformF(shader, item.Key, item.Value);
+                Graphics.SetUniformF(shader, item.Key, item.Value);
                 cache.floats[item.Key] = item.Value;
             }
         }
@@ -615,7 +614,7 @@ public partial class PropertyState
         {
             if (!cache.ints.TryGetValue(item.Key, out int cachedValue) || cachedValue != item.Value)
             {
-                Graphics.Device.SetUniformI(shader, item.Key, item.Value);
+                Graphics.SetUniformI(shader, item.Key, item.Value);
                 cache.ints[item.Key] = item.Value;
             }
         }
@@ -625,7 +624,7 @@ public partial class PropertyState
             Float2 value = (Float2)item.Value;
             if (!cache.vectors2.TryGetValue(item.Key, out Float2 cachedValue) || !cachedValue.Equals(value))
             {
-                Graphics.Device.SetUniformV2(shader, item.Key, value);
+                Graphics.SetUniformV2(shader, item.Key, value);
                 cache.vectors2[item.Key] = value;
             }
         }
@@ -635,7 +634,7 @@ public partial class PropertyState
             Float3 value = (Float3)item.Value;
             if (!cache.vectors3.TryGetValue(item.Key, out Float3 cachedValue) || !cachedValue.Equals(value))
             {
-                Graphics.Device.SetUniformV3(shader, item.Key, value);
+                Graphics.SetUniformV3(shader, item.Key, value);
                 cache.vectors3[item.Key] = value;
             }
         }
@@ -645,7 +644,7 @@ public partial class PropertyState
             Float4 value = (Float4)item.Value;
             if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(value))
             {
-                Graphics.Device.SetUniformV4(shader, item.Key, value);
+                Graphics.SetUniformV4(shader, item.Key, value);
                 cache.vectors4[item.Key] = value;
             }
         }
@@ -655,7 +654,7 @@ public partial class PropertyState
             Float4 colorVec = new((float)item.Value.R, (float)item.Value.G, (float)item.Value.B, (float)item.Value.A);
             if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(colorVec))
             {
-                Graphics.Device.SetUniformV4(shader, item.Key, colorVec);
+                Graphics.SetUniformV4(shader, item.Key, colorVec);
                 cache.vectors4[item.Key] = colorVec;
             }
         }
@@ -665,21 +664,21 @@ public partial class PropertyState
             Float4x4 value = (Float4x4)item.Value;
             if (!cache.matrices.TryGetValue(item.Key, out Float4x4 cachedValue) || !cachedValue.Equals(value))
             {
-                Graphics.Device.SetUniformMatrix(shader, item.Key, false, value);
+                Graphics.SetUniformMatrix(shader, item.Key, false, value);
                 cache.matrices[item.Key] = value;
             }
         }
 
         // Matrix arrays - always set (comparison would be expensive)
         foreach (KeyValuePair<string, System.Numerics.Matrix4x4[]> item in s_globalMatrixArr)
-            Graphics.Device.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].M11);
+            Graphics.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].M11);
 
         // Bind global uniform buffers - check if buffer changed
         foreach (KeyValuePair<string, GraphicsBuffer> item in s_globalBuffers)
         {
             if (!cache.buffers.TryGetValue(item.Key, out GraphicsBuffer? cachedBuffer) || cachedBuffer != item.Value)
             {
-                Graphics.Device.BindUniformBuffer(shader, item.Key, item.Value);
+                Graphics.BindUniformBuffer(shader, item.Key, item.Value);
                 cache.buffers[item.Key] = item.Value;
             }
         }
@@ -691,7 +690,7 @@ public partial class PropertyState
             if (tex.IsValid())
             {
                 // Always set textures - slot assignment must be consistent
-                Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
+                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
             else
@@ -713,7 +712,7 @@ public partial class PropertyState
             if (tex.IsValid())
             {
                 // Always set textures - slot assignment must be consistent
-                Graphics.Device.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
+                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
             else

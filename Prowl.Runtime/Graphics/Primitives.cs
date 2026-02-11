@@ -2,7 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 using System;
 
-namespace Prowl.Runtime.GraphicsBackend;
+namespace Prowl.Runtime;
 
 public enum TextureWrap { Repeat, ClampToBorder, ClampToEdge, MirroredRepeat }
 public enum TextureType { Texture2D, Texture3D, }

@@ -4,39 +4,207 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using Silk.NET.Core.Native;
 using Silk.NET.OpenGL;
 
-namespace Prowl.Runtime.GraphicsBackend;
+namespace Prowl.Runtime;
 
-
-public sealed unsafe class GraphicsDevice
+public static unsafe class Graphics
 {
+    public static int MaxTextureSize { get; internal set; }
+    public static int MaxCubeMapTextureSize { get; internal set; }
+    public static int MaxArrayTextureLayers { get; internal set; }
+    public static int MaxFramebufferColorAttachments { get; internal set; }
+
+    #region Renderable Draw API
+
+    // ============================================================================
+    // QUEUED RENDERING API - Unity-style Graphics.DrawMesh/DrawMeshInstanced
+    // ============================================================================
+
+    /// <summary>
+    /// Queues a single mesh to be rendered by pushing it to the scene's render queue.
+    /// The mesh will be rendered during the next frame with the specified material and transform.
+    /// </summary>
+    /// <param name="scene">Scene to push the renderable to</param>
+    /// <param name="mesh">Mesh to render</param>
+    /// <param name="transform">World transform matrix</param>
+    /// <param name="material">Material to render with</param>
+    /// <param name="layer">Layer index for culling and sorting (default: 0)</param>
+    /// <param name="properties">Optional per-object property overrides</param>
+    public static void DrawMesh(Scene scene, Mesh mesh, Float4x4 transform, Material material, int layer = 0, PropertyState? properties = null)
+    {
+        if (scene == null || mesh == null || material == null) return;
+
+        var renderable = new MeshRenderable(mesh, material, transform, layer, properties);
+        scene.PushRenderable(renderable);
+    }
+
+    /// <summary>
+    /// Queues multiple instances of a mesh to be rendered with GPU instancing.
+    /// Automatically handles batching for large instance counts (>1023 instances).
+    /// </summary>
+    /// <param name="scene">Scene to push the renderable to</param>
+    /// <param name="mesh">Mesh to render</param>
+    /// <param name="transforms">Array of world transforms (one per instance)</param>
+    /// <param name="material">Material to render with</param>
+    /// <param name="worldOrigin">World-space origin for depth sorting (e.g., particle system transform position, terrain chunk center)</param>
+    /// <param name="layer">Layer index for culling and sorting (default: 0)</param>
+    /// <param name="properties">Optional shared properties for all instances</param>
+    /// <param name="bounds">Optional custom bounds for culling. If null, computed from mesh bounds.</param>
+    /// <param name="maxBatchSize">Maximum instances per batch (default: 1023)</param>
+    public static void DrawMeshInstanced(Scene scene, Mesh mesh, Float4x4[] transforms, Material material, Float3 worldOrigin, int layer = 0, PropertyState? properties = null, AABB? bounds = null, int maxBatchSize = 1023)
+    {
+        if (scene == null || mesh == null || material == null || transforms == null || transforms.Length == 0) return;
+
+        // Automatic batching for >1023 instances by default
+        int remainingInstances = transforms.Length;
+        int offset = 0;
+
+        while (remainingInstances > 0)
+        {
+            int batchSize = Maths.Min(remainingInstances, maxBatchSize);
+
+            // Create instance data for this batch
+            var instanceData = new Rendering.InstanceData[batchSize];
+            for (int i = 0; i < batchSize; i++)
+            {
+                instanceData[i] = new Rendering.InstanceData(transforms[offset + i]);
+            }
+
+            // Push batch to scene
+            var renderable = new InstancedMeshRenderable(mesh, material, instanceData, worldOrigin, layer, properties, bounds);
+            scene.PushRenderable(renderable);
+
+            remainingInstances -= batchSize;
+            offset += batchSize;
+        }
+    }
+
+    /// <summary>
+    /// Queues multiple instances with per-instance colors.
+    /// Automatically handles batching for large instance counts (>1023 instances).
+    /// </summary>
+    /// <param name="worldOrigin">World-space origin for depth sorting (e.g., particle system transform position, terrain chunk center)</param>
+    public static void DrawMeshInstanced(Scene scene, Mesh mesh, Float4x4[] transforms, Material material, Float4[] colors, Float3 worldOrigin, int layer = 0, PropertyState? properties = null, AABB? bounds = null, int maxBatchSize = 1023)
+    {
+        if (scene == null || mesh == null || material == null || transforms == null || transforms.Length == 0) return;
+
+        // Automatic batching for >1023 instances by default
+        int remainingInstances = transforms.Length;
+        int offset = 0;
+
+        while (remainingInstances > 0)
+        {
+            int batchSize = Maths.Min(remainingInstances, maxBatchSize);
+
+            // Create instance data for this batch with colors
+            var instanceData = new Rendering.InstanceData[batchSize];
+            for (int i = 0; i < batchSize; i++)
+            {
+                int idx = offset + i;
+                Float4 color = idx < colors.Length ? colors[idx] : new Float4(1, 1, 1, 1);
+                instanceData[i] = new Rendering.InstanceData(transforms[idx], color);
+            }
+
+            // Push batch to scene
+            var renderable = new InstancedMeshRenderable(mesh, material, instanceData, worldOrigin, layer, properties, bounds);
+            scene.PushRenderable(renderable);
+
+            remainingInstances -= batchSize;
+            offset += batchSize;
+        }
+    }
+
+    /// <summary>
+    /// Queues multiple instances with optional per-instance colors and custom data.
+    /// This is the most flexible overload for custom per-instance data (UV offsets, lifetimes, etc.)
+    /// Automatically handles batching for large instance counts.
+    /// </summary>
+    /// <param name="scene">Scene to push the renderable to</param>
+    /// <param name="mesh">Mesh to render</param>
+    /// <param name="transforms">Array of world transforms (one per instance)</param>
+    /// <param name="material">Material to render with</param>
+    /// <param name="worldOrigin">World-space origin for depth sorting (e.g., particle system transform position, terrain chunk center)</param>
+    /// <param name="colors">Optional per-instance colors (RGBA). If null, defaults to white.</param>
+    /// <param name="customData">Optional per-instance custom data (4 floats). Useful for UV offsets, lifetimes, etc.</param>
+    /// <param name="layer">Layer index for culling and sorting (default: 0)</param>
+    /// <param name="properties">Optional shared properties for all instances</param>
+    /// <param name="bounds">Optional custom bounds for culling. If null, computed from mesh bounds.</param>
+    /// <param name="maxBatchSize">Maximum instances per batch (default: 1023)</param>
+    public static void DrawMeshInstanced(
+        Scene scene,
+        Mesh mesh,
+        Float4x4[] transforms,
+        Material material,
+        Float3 worldOrigin,
+        Float4[]? colors = null,
+        Float4[]? customData = null,
+        int layer = 0,
+        PropertyState? properties = null,
+        AABB? bounds = null,
+        int maxBatchSize = 1023)
+    {
+        if (scene == null || mesh == null || material == null || transforms == null || transforms.Length == 0) return;
+
+        // Automatic batching for >maxBatchSize instances
+        int remainingInstances = transforms.Length;
+        int offset = 0;
+
+        while (remainingInstances > 0)
+        {
+            int batchSize = Maths.Min(remainingInstances, maxBatchSize);
+
+            // Build InstanceData from separate arrays
+            var instanceData = new Rendering.InstanceData[batchSize];
+            for (int i = 0; i < batchSize; i++)
+            {
+                int idx = offset + i;
+                Float4 color = colors != null && idx < colors.Length ? colors[idx] : new Float4(1, 1, 1, 1);
+                Float4 custom = customData != null && idx < customData.Length ? customData[idx] : Float4.Zero;
+                instanceData[i] = new Rendering.InstanceData(transforms[idx], color, custom);
+            }
+
+            // Push batch to scene
+            var renderable = new InstancedMeshRenderable(mesh, material, instanceData, worldOrigin, layer, properties, bounds);
+            scene.PushRenderable(renderable);
+
+            remainingInstances -= batchSize;
+            offset += batchSize;
+        }
+    }
+
+    #endregion
+
+    #region Graphics Backend
+
     public static GL GL;
 
-    public GraphicsProgram CurrentProgram => GraphicsProgram.currentProgram;
+    public static GraphicsProgram CurrentProgram => GraphicsProgram.currentProgram;
 
     // Current OpenGL State
-    private bool depthTest = true;
-    private bool depthWrite = true;
-    private RasterizerState.DepthMode depthMode = RasterizerState.DepthMode.Lequal;
+    private static bool depthTest = true;
+    private static bool depthWrite = true;
+    private static RasterizerState.DepthMode depthMode = RasterizerState.DepthMode.Lequal;
 
-    private bool doBlend = true;
-    private RasterizerState.Blending blendSrc = RasterizerState.Blending.SrcAlpha;
-    private RasterizerState.Blending blendDst = RasterizerState.Blending.OneMinusSrcAlpha;
-    private RasterizerState.BlendMode blendEquation = RasterizerState.BlendMode.Add;
+    private static bool doBlend = true;
+    private static RasterizerState.Blending blendSrc = RasterizerState.Blending.SrcAlpha;
+    private static RasterizerState.Blending blendDst = RasterizerState.Blending.OneMinusSrcAlpha;
+    private static RasterizerState.BlendMode blendEquation = RasterizerState.BlendMode.Add;
 
-    private RasterizerState.PolyFace cullFace = RasterizerState.PolyFace.Back;
+    private static RasterizerState.PolyFace cullFace = RasterizerState.PolyFace.Back;
 
-    private RasterizerState.WindingOrder winding = RasterizerState.WindingOrder.CW;
+    private static RasterizerState.WindingOrder winding = RasterizerState.WindingOrder.CW;
 
-    private GraphicsFrameBuffer? currentFramebuffer = null;
-    private GraphicsFrameBuffer? currentReadFramebuffer = null;
-    private GraphicsFrameBuffer? currentDrawFramebuffer = null;
+    private static GraphicsFrameBuffer? currentFramebuffer = null;
+    private static GraphicsFrameBuffer? currentReadFramebuffer = null;
+    private static GraphicsFrameBuffer? currentDrawFramebuffer = null;
 
-    public void Initialize(bool debug)
+    public static void Initialize(bool debug)
     {
         GL = GL.GetApi(Window.InternalWindow);
 
@@ -74,9 +242,9 @@ public sealed unsafe class GraphicsDevice
         //    Debug.Log($"OpenGL Message: {msg}");
     }
 
-    public void Viewport(int x, int y, uint width, uint height) => GL.Viewport(x, y, width, height);
+    public static void Viewport(int x, int y, uint width, uint height) => GL.Viewport(x, y, width, height);
 
-    public void Clear(float r, float g, float b, float a, ClearFlags v)
+    public static void Clear(float r, float g, float b, float a, ClearFlags v)
     {
         GL.ClearColor(r, g, b, a);
 
@@ -90,7 +258,7 @@ public sealed unsafe class GraphicsDevice
         GL.Clear(clearBufferMask);
     }
 
-    public void SetState(RasterizerState state, bool force = false)
+    public static void SetState(RasterizerState state, bool force = false)
     {
         if (depthTest != state.DepthTest || force)
         {
@@ -154,7 +322,7 @@ public sealed unsafe class GraphicsDevice
         }
     }
 
-    public RasterizerState GetState()
+    public static RasterizerState GetState()
     {
         return new RasterizerState
         {
@@ -181,31 +349,31 @@ public sealed unsafe class GraphicsDevice
 
     public static Dictionary<ulong, uint> cachedBlockLocations = [];
 
-    public GraphicsBuffer CreateBuffer<T>(BufferType bufferType, T[] data, bool dynamic = false)
+    public static GraphicsBuffer CreateBuffer<T>(BufferType bufferType, T[] data, bool dynamic = false)
     {
         fixed (void* dat = data)
             return new GraphicsBuffer(bufferType, (uint)(data.Length * sizeof(T)), dat, dynamic);
     }
 
-    public void SetBuffer<T>(GraphicsBuffer buffer, T[] data, bool dynamic = false)
+    public static void SetBuffer<T>(GraphicsBuffer buffer, T[] data, bool dynamic = false)
     {
         fixed (void* dat = data)
             (buffer as GraphicsBuffer)!.Set((uint)(data.Length * sizeof(T)), dat, dynamic);
     }
 
-    public void UpdateBuffer<T>(GraphicsBuffer buffer, uint offsetInBytes, T[] data)
+    public static void UpdateBuffer<T>(GraphicsBuffer buffer, uint offsetInBytes, T[] data)
     {
         fixed (void* dat = data)
             (buffer as GraphicsBuffer)!.Update(offsetInBytes, (uint)(data.Length * sizeof(T)), dat);
     }
 
-    public void BindBuffer(GraphicsBuffer buffer)
+    public static void BindBuffer(GraphicsBuffer buffer)
     {
         if (buffer is GraphicsBuffer GraphicsBuffer)
             GL.BindBuffer(GraphicsBuffer.Target, GraphicsBuffer.Handle);
     }
 
-    public uint GetBlockIndex(GraphicsProgram program, string blockName)
+    public static uint GetBlockIndex(GraphicsProgram program, string blockName)
     {
         ulong key = CombineKey(program.ID, blockName);
         if (cachedBlockLocations.TryGetValue(key, out uint loc))
@@ -217,7 +385,7 @@ public sealed unsafe class GraphicsDevice
         return newLoc;
     }
 
-    public void BindUniformBuffer(GraphicsProgram program, string blockName, GraphicsBuffer buffer, uint bindingPoint = 0)
+    public static void BindUniformBuffer(GraphicsProgram program, string blockName, GraphicsBuffer buffer, uint bindingPoint = 0)
     {
         uint blockIndex = GetBlockIndex(program, blockName);
         // 0xFFFFFFFF (GL_INVALID_INDEX) means the block was not found in the shader
@@ -236,7 +404,7 @@ public sealed unsafe class GraphicsDevice
 
     #region Vertex Arrays
 
-    public GraphicsVertexArray CreateVertexArray(
+    public static GraphicsVertexArray CreateVertexArray(
         VertexFormat format,
         GraphicsBuffer vertices,
         GraphicsBuffer? indices,
@@ -246,7 +414,7 @@ public sealed unsafe class GraphicsDevice
         return new GraphicsVertexArray(format, vertices, indices, instanceFormat, instanceBuffer);
     }
 
-    public void BindVertexArray(GraphicsVertexArray? vertexArrayObject)
+    public static void BindVertexArray(GraphicsVertexArray? vertexArrayObject)
     {
         uint handle = 0;
 
@@ -262,8 +430,8 @@ public sealed unsafe class GraphicsDevice
 
     #region Frame Buffers
 
-    public GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments, uint width, uint height) => new GraphicsFrameBuffer(attachments, width, height);
-    public void UnbindFramebuffer()
+    public static GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments, uint width, uint height) => new GraphicsFrameBuffer(attachments, width, height);
+    public static void UnbindFramebuffer()
     {
         GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         currentFramebuffer = null;
@@ -271,7 +439,7 @@ public sealed unsafe class GraphicsDevice
         currentDrawFramebuffer = null;
     }
 
-    public void BindFramebuffer(GraphicsFrameBuffer frameBuffer, FBOTarget readFramebuffer = FBOTarget.Framebuffer)
+    public static void BindFramebuffer(GraphicsFrameBuffer frameBuffer, FBOTarget readFramebuffer = FBOTarget.Framebuffer)
     {
         FramebufferTarget target = readFramebuffer switch
         {
@@ -299,10 +467,10 @@ public sealed unsafe class GraphicsDevice
                 break;
         }
 
-        Graphics.Device.Viewport(0, 0, frameBuffer.Width, frameBuffer.Height);
+        Viewport(0, 0, frameBuffer.Width, frameBuffer.Height);
     }
 
-    public GraphicsFrameBuffer? GetCurrentFramebuffer(FBOTarget target = FBOTarget.Framebuffer)
+    public static GraphicsFrameBuffer? GetCurrentFramebuffer(FBOTarget target = FBOTarget.Framebuffer)
     {
         return target switch
         {
@@ -313,7 +481,7 @@ public sealed unsafe class GraphicsDevice
         };
     }
 
-    public void BlitFramebuffer(int srcX, int srcY, int srcWidth, int srcHeight, int destX, int destY, int destWidth, int destHeight, ClearFlags mask, BlitFilter filter)
+    public static void BlitFramebuffer(int srcX, int srcY, int srcWidth, int srcHeight, int destX, int destY, int destWidth, int destHeight, ClearFlags mask, BlitFilter filter)
     {
         ClearBufferMask clearBufferMask = 0;
         if (mask.HasFlag(ClearFlags.Color))
@@ -333,7 +501,7 @@ public sealed unsafe class GraphicsDevice
         GL.BlitFramebuffer(srcX, srcY, srcWidth, srcHeight, destX, destY, destWidth, destHeight, clearBufferMask, nearest);
     }
 
-    public T ReadPixel<T>(int attachment, int x, int y, TextureImageFormat format) where T : unmanaged
+    public static T ReadPixel<T>(int attachment, int x, int y, TextureImageFormat format) where T : unmanaged
     {
         GL.ReadBuffer((ReadBufferMode)((int)ReadBufferMode.ColorAttachment0 + attachment));
         GraphicsTexture.GetTextureFormatEnums(format, out InternalFormat internalFormat, out PixelType pixelType, out PixelFormat pixelFormat);
@@ -347,10 +515,10 @@ public sealed unsafe class GraphicsDevice
     public static Dictionary<ulong, int> cachedUniformLocations = [];
     public static Dictionary<ulong, int> cachedAttribLocations = [];
 
-    public GraphicsProgram CompileProgram(string fragment, string vertex, string geometry) => new GraphicsProgram(fragment, vertex, geometry);
-    public void BindProgram(GraphicsProgram program) => ((((program as GraphicsProgram))))!.Use();
+    public static GraphicsProgram CompileProgram(string fragment, string vertex, string geometry) => new GraphicsProgram(fragment, vertex, geometry);
+    public static void BindProgram(GraphicsProgram program) => ((((program as GraphicsProgram))))!.Use();
 
-    public int GetUniformLocation(GraphicsProgram program, string name)
+    public static int GetUniformLocation(GraphicsProgram program, string name)
     {
         ulong key = CombineKey(program.ID, name);
         if (cachedUniformLocations.TryGetValue(key, out int loc))
@@ -362,7 +530,7 @@ public sealed unsafe class GraphicsDevice
         return newLoc;
     }
 
-    public int GetAttribLocation(GraphicsProgram program, string name)
+    public static int GetAttribLocation(GraphicsProgram program, string name)
     {
         ulong key = CombineKey(program.ID, name);
         if (cachedAttribLocations.TryGetValue(key, out int loc))
@@ -374,7 +542,7 @@ public sealed unsafe class GraphicsDevice
         return newLoc;
     }
 
-    public void SetUniformF(GraphicsProgram program, string name, float value)
+    public static void SetUniformF(GraphicsProgram program, string name, float value)
     {
         int loc = GetUniformLocation(program, name);
         if (loc == -1) return;
@@ -383,7 +551,7 @@ public sealed unsafe class GraphicsDevice
         GL.Uniform1(loc, value);
     }
 
-    public void SetUniformI(GraphicsProgram program, string name, int value)
+    public static void SetUniformI(GraphicsProgram program, string name, int value)
     {
         int loc = GetUniformLocation(program, name);
         if (loc == -1) return;
@@ -392,7 +560,7 @@ public sealed unsafe class GraphicsDevice
         GL.Uniform1(loc, value);
     }
 
-    public void SetUniformV2(GraphicsProgram program, string name, Float2 value)
+    public static void SetUniformV2(GraphicsProgram program, string name, Float2 value)
     {
         int loc = GetUniformLocation(program, name);
         if (loc == -1) return;
@@ -401,7 +569,7 @@ public sealed unsafe class GraphicsDevice
         GL.Uniform2(loc, value); // Casts to System.Numerics.Vector2
     }
 
-    public void SetUniformV3(GraphicsProgram program, string name, Float3 value)
+    public static void SetUniformV3(GraphicsProgram program, string name, Float3 value)
     {
         int loc = GetUniformLocation(program, name);
         if (loc == -1) return;
@@ -410,7 +578,7 @@ public sealed unsafe class GraphicsDevice
         GL.Uniform3(loc, value); // Casts to System.Numerics.Vector3
     }
 
-    public void SetUniformV4(GraphicsProgram program, string name, Float4 value)
+    public static void SetUniformV4(GraphicsProgram program, string name, Float4 value)
     {
         int loc = GetUniformLocation(program, name);
         if (loc == -1) return;
@@ -419,14 +587,14 @@ public sealed unsafe class GraphicsDevice
         GL.Uniform4(loc, value); // Casts to System.Numerics.Vector4
     }
 
-    public void SetUniformMatrix(GraphicsProgram program, string name, bool transpose, Float4x4 matrix)
+    public static void SetUniformMatrix(GraphicsProgram program, string name, bool transpose, Float4x4 matrix)
     {
         Float4x4 fMat = matrix;
         SetUniformMatrix(program, name, 1, transpose, in fMat.c0.X);
     }
-    public void SetUniformMatrix(GraphicsProgram program, string name, bool transpose, in float matrix) => SetUniformMatrix(program, name, 1, transpose, in matrix);
+    public static void SetUniformMatrix(GraphicsProgram program, string name, bool transpose, in float matrix) => SetUniformMatrix(program, name, 1, transpose, in matrix);
 
-    public void SetUniformMatrix(GraphicsProgram program, string name, uint count, bool transpose, in float matrix)
+    public static void SetUniformMatrix(GraphicsProgram program, string name, uint count, bool transpose, in float matrix)
     {
         int loc = GetUniformLocation(program, name);
         if (loc == -1) return;
@@ -435,7 +603,7 @@ public sealed unsafe class GraphicsDevice
         GL.UniformMatrix4(loc, count, transpose, in matrix);
     }
 
-    public void SetUniformTexture(GraphicsProgram program, string name, int slot, GraphicsTexture texture)
+    public static void SetUniformTexture(GraphicsProgram program, string name, int slot, GraphicsTexture texture)
     {
         int loc = GetUniformLocation(program, name);
         if (loc == -1) return;
@@ -450,43 +618,43 @@ public sealed unsafe class GraphicsDevice
 
     #region Textures
 
-    public GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format) => new GraphicsTexture(type, format);
-    public void SetWrapS(GraphicsTexture texture, TextureWrap wrap) => (texture as GraphicsTexture)!.SetWrapS(wrap);
+    public static GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format) => new GraphicsTexture(type, format);
+    public static void SetWrapS(GraphicsTexture texture, TextureWrap wrap) => (texture as GraphicsTexture)!.SetWrapS(wrap);
 
-    public void SetWrapT(GraphicsTexture texture, TextureWrap wrap) => (texture as GraphicsTexture)!.SetWrapT(wrap);
-    public void SetWrapR(GraphicsTexture texture, TextureWrap wrap) => (texture as GraphicsTexture)!.SetWrapR(wrap);
-    public void SetTextureFilters(GraphicsTexture texture, TextureMin min, TextureMag mag) => (texture as GraphicsTexture)!.SetTextureFilters(min, mag);
-    public void GenerateMipmap(GraphicsTexture texture) => (texture as GraphicsTexture)!.GenerateMipmap();
+    public static void SetWrapT(GraphicsTexture texture, TextureWrap wrap) => (texture as GraphicsTexture)!.SetWrapT(wrap);
+    public static void SetWrapR(GraphicsTexture texture, TextureWrap wrap) => (texture as GraphicsTexture)!.SetWrapR(wrap);
+    public static void SetTextureFilters(GraphicsTexture texture, TextureMin min, TextureMag mag) => (texture as GraphicsTexture)!.SetTextureFilters(min, mag);
+    public static void GenerateMipmap(GraphicsTexture texture) => (texture as GraphicsTexture)!.GenerateMipmap();
 
-    public unsafe void GetTexImage(GraphicsTexture texture, int mip, void* data) => (texture as GraphicsTexture)!.GetTexImage(mip, data);
+    public static unsafe void GetTexImage(GraphicsTexture texture, int mip, void* data) => (texture as GraphicsTexture)!.GetTexImage(mip, data);
 
-    public unsafe void TexImage2D(GraphicsTexture texture, int mip, uint width, uint height, int v2, void* data)
+    public static unsafe void TexImage2D(GraphicsTexture texture, int mip, uint width, uint height, int v2, void* data)
         => (texture as GraphicsTexture)!.TexImage2D((texture as GraphicsTexture).Target, mip, width, height, v2, data);
-    public unsafe void TexSubImage2D(GraphicsTexture texture, int mip, int x, int y, uint width, uint height, void* data)
+    public static unsafe void TexSubImage2D(GraphicsTexture texture, int mip, int x, int y, uint width, uint height, void* data)
         => (texture as GraphicsTexture)!.TexSubImage2D((texture as GraphicsTexture).Target, mip, x, y, width, height, data);
 
-    public unsafe void TexImage3D(GraphicsTexture texture, int level, uint width, uint height, uint depth, void* data)
+    public static unsafe void TexImage3D(GraphicsTexture texture, int level, uint width, uint height, uint depth, void* data)
         => (texture as GraphicsTexture)!.TexImage3D((texture as GraphicsTexture).Target, level, width, height, depth, data);
-    public unsafe void TexSubImage3D(GraphicsTexture texture, int level, int x, int y, int z, uint width, uint height, uint depth, void* data)
+    public static unsafe void TexSubImage3D(GraphicsTexture texture, int level, int x, int y, int z, uint width, uint height, uint depth, void* data)
         => (texture as GraphicsTexture)!.TexSubImage3D((texture as GraphicsTexture).Target, level, x, y, z, width, height, depth, data);
 
     #endregion
 
-    public void Draw(Topology primitiveType, uint count) => Draw(primitiveType, 0, count);
+    public static void Draw(Topology primitiveType, uint count) => Draw(primitiveType, 0, count);
 
 
-    public void Draw(Topology primitiveType, int v, uint count)
+    public static void Draw(Topology primitiveType, int v, uint count)
     {
         PrimitiveType mode = TopologyToGL(primitiveType);
         GL.DrawArrays(mode, v, count);
     }
-    public unsafe void DrawIndexed(Topology primitiveType, uint indexCount, bool index32bit, void* value)
+    public static unsafe void DrawIndexed(Topology primitiveType, uint indexCount, bool index32bit, void* value)
     {
         PrimitiveType mode = TopologyToGL(primitiveType);
         GL.DrawElements(mode, indexCount, index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort, value);
     }
 
-    public unsafe void DrawIndexed(Topology primitiveType, uint indexCount, int startIndex, int baseVertex, bool index32bit)
+    public static unsafe void DrawIndexed(Topology primitiveType, uint indexCount, int startIndex, int baseVertex, bool index32bit)
     {
         PrimitiveType mode = TopologyToGL(primitiveType);
 
@@ -495,7 +663,7 @@ public sealed unsafe class GraphicsDevice
         GL.DrawElementsBaseVertex(mode, indexCount, format, (void*)(startIndex * formatSize), baseVertex);
     }
 
-    public unsafe void DrawIndexedInstanced(Topology primitiveType, uint indexCount, uint instanceCount, bool index32bit)
+    public static unsafe void DrawIndexedInstanced(Topology primitiveType, uint indexCount, uint instanceCount, bool index32bit)
     {
         // Verify a VAO is bound
         GL.GetInteger(GetPName.VertexArrayBinding, out int currentVAO);
@@ -510,7 +678,7 @@ public sealed unsafe class GraphicsDevice
         GL.DrawElementsInstanced(mode, indexCount, format, null, instanceCount);
     }
 
-    public void Dispose()
+    public static void Dispose()
     {
         GL.Dispose();
     }
@@ -533,7 +701,7 @@ public sealed unsafe class GraphicsDevice
         };
     }
 
-    private DepthFunction DepthModeToGL(RasterizerState.DepthMode depthMode)
+    private static DepthFunction DepthModeToGL(RasterizerState.DepthMode depthMode)
     {
         return depthMode switch
         {
@@ -549,7 +717,7 @@ public sealed unsafe class GraphicsDevice
         };
     }
 
-    private BlendingFactor BlendingToGL(RasterizerState.Blending blending)
+    private static BlendingFactor BlendingToGL(RasterizerState.Blending blending)
     {
         return blending switch
         {
@@ -572,7 +740,7 @@ public sealed unsafe class GraphicsDevice
         };
     }
 
-    private BlendEquationModeEXT BlendModeToGL(RasterizerState.BlendMode blendMode)
+    private static BlendEquationModeEXT BlendModeToGL(RasterizerState.BlendMode blendMode)
     {
         return blendMode switch
         {
@@ -585,7 +753,7 @@ public sealed unsafe class GraphicsDevice
         };
     }
 
-    private TriangleFace CullFaceToGL(RasterizerState.PolyFace cullFace)
+    private static TriangleFace CullFaceToGL(RasterizerState.PolyFace cullFace)
     {
         return cullFace switch
         {
@@ -596,7 +764,7 @@ public sealed unsafe class GraphicsDevice
         };
     }
 
-    private FrontFaceDirection WindingToGL(RasterizerState.WindingOrder winding)
+    private static FrontFaceDirection WindingToGL(RasterizerState.WindingOrder winding)
     {
         return winding switch
         {
@@ -608,4 +776,5 @@ public sealed unsafe class GraphicsDevice
 
     #endregion
 
+    #endregion
 }

@@ -7,7 +7,6 @@ using System.IO;
 using ImageMagick;
 
 using Prowl.Echo;
-using Prowl.Runtime.GraphicsBackend;
 
 namespace Prowl.Runtime.Resources;
 
@@ -48,7 +47,7 @@ public sealed class Texture2D : Texture, ISerializable
         if (generateMipmaps)
             GenerateMipmaps();
 
-        Graphics.Device.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
+        Graphics.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
         MinFilter = IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter;
         MagFilter = DefaultMagFilter;
     }
@@ -65,7 +64,7 @@ public sealed class Texture2D : Texture, ISerializable
     {
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
 
-        Graphics.Device.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
+        Graphics.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
     }
 
     /// <summary>
@@ -84,7 +83,7 @@ public sealed class Texture2D : Texture, ISerializable
             throw new ArgumentException("Not enough pixel data", nameof(data));
 
         fixed (void* ptr = data.Span)
-            Graphics.Device.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
+            Graphics.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
     }
 
     /// <summary>
@@ -103,7 +102,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="ptr">The pointer to which the pixel data will be written.</param>
     public unsafe void GetDataPtr(void* ptr)
     {
-        Graphics.Device.GetTexImage(Handle, 0, ptr);
+        Graphics.GetTexImage(Handle, 0, ptr);
     }
 
     /// <summary>
@@ -117,7 +116,7 @@ public sealed class Texture2D : Texture, ISerializable
             throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
 
         fixed (void* ptr = data.Span)
-            Graphics.Device.GetTexImage(Handle, 0, ptr);
+            Graphics.GetTexImage(Handle, 0, ptr);
     }
 
     public int GetSize()
@@ -172,8 +171,8 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
     public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode)
     {
-        Graphics.Device.SetWrapS(Handle, sWrapMode);
-        Graphics.Device.SetWrapT(Handle, tWrapMode);
+        Graphics.SetWrapS(Handle, sWrapMode);
+        Graphics.SetWrapT(Handle, tWrapMode);
     }
 
     /// <summary>
@@ -189,7 +188,7 @@ public sealed class Texture2D : Texture, ISerializable
         Width = width;
         Height = height;
 
-        Graphics.Device.TexImage2D(Handle, 0, Width, Height, 0, (void*)0);
+        Graphics.TexImage2D(Handle, 0, Width, Height, 0, (void*)0);
     }
 
     private void ValidateTextureSize(uint width, uint height)
@@ -283,7 +282,7 @@ public sealed class Texture2D : Texture, ISerializable
 
             unsafe
             {
-                Graphics.Device.TexSubImage2D(texture.Handle, 0, 0, 0, image.Width, image.Height, (void*)pixels);
+                Graphics.TexSubImage2D(texture.Handle, 0, 0, 0, image.Width, image.Height, (void*)pixels);
             }
 
             if (generateMipmaps)

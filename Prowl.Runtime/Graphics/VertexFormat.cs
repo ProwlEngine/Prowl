@@ -3,7 +3,7 @@
 
 using System;
 
-namespace Prowl.Runtime.GraphicsBackend;
+namespace Prowl.Runtime;
 
 public class VertexFormat
 {
