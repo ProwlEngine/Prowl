@@ -49,7 +49,6 @@ namespace Prowl.Runtime
             var pos = Transform.Position;
 
             MiniAudioExNative.ma_ex_audio_listener_set_world_up(handle, (float)up.X, (float)up.Y, (float)up.Z);
-            MiniAudioExNative.ma_ex_audio_listener_set_world_up(handle, (float)up.X, (float)up.Y, (float)up.Z);
             MiniAudioExNative.ma_ex_audio_listener_set_direction(handle, (float)forward.X, (float)forward.Y, (float)forward.Z);
 
 
