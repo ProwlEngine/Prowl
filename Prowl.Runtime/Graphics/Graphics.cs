@@ -358,13 +358,13 @@ public static unsafe class Graphics
     public static void SetBuffer<T>(GraphicsBuffer buffer, T[] data, bool dynamic = false)
     {
         fixed (void* dat = data)
-            (buffer as GraphicsBuffer)!.Set((uint)(data.Length * sizeof(T)), dat, dynamic);
+            buffer!.Set((uint)(data.Length * sizeof(T)), dat, dynamic);
     }
 
     public static void UpdateBuffer<T>(GraphicsBuffer buffer, uint offsetInBytes, T[] data)
     {
         fixed (void* dat = data)
-            (buffer as GraphicsBuffer)!.Update(offsetInBytes, (uint)(data.Length * sizeof(T)), dat);
+            buffer!.Update(offsetInBytes, (uint)(data.Length * sizeof(T)), dat);
     }
 
     public static void BindBuffer(GraphicsBuffer buffer)
@@ -380,7 +380,7 @@ public static unsafe class Graphics
             return loc;
 
         BindProgram(program);
-        uint newLoc = GL.GetUniformBlockIndex(((((program as GraphicsProgram)))).Handle, blockName);
+        uint newLoc = GL.GetUniformBlockIndex(program.Handle, blockName);
         cachedBlockLocations[key] = newLoc;
         return newLoc;
     }
@@ -394,10 +394,10 @@ public static unsafe class Graphics
         BindProgram(program);
 
         // Connect the shader's uniform block index to the specified binding point
-        GL.UniformBlockBinding(((((program as GraphicsProgram)))).Handle, blockIndex, bindingPoint);
+        GL.UniformBlockBinding(program.Handle, blockIndex, bindingPoint);
 
         // Now bind the buffer to that binding point
-        GL.BindBufferBase(BufferTargetARB.UniformBuffer, bindingPoint, (buffer as GraphicsBuffer)!.Handle);
+        GL.BindBufferBase(BufferTargetARB.UniformBuffer, bindingPoint, buffer!.Handle);
     }
 
     #endregion
@@ -448,8 +448,8 @@ public static unsafe class Graphics
             FBOTarget.Framebuffer => FramebufferTarget.Framebuffer,
             _ => throw new ArgumentOutOfRangeException(nameof(readFramebuffer), readFramebuffer, null),
         };
-        GL.BindFramebuffer(target, (frameBuffer as GraphicsFrameBuffer)!.Handle);
-        //GL.DrawBuffers((uint)(frameBuffer as GraphicsFrameBuffer).NumOfAttachments, GraphicsFrameBuffer.buffers);
+        GL.BindFramebuffer(target, frameBuffer!.Handle);
+        //GL.DrawBuffers((uint)frameBuffer.NumOfAttachments, GraphicsFrameBuffer.buffers);
 
         // Track current framebuffer
         switch (readFramebuffer)
@@ -516,7 +516,7 @@ public static unsafe class Graphics
     public static Dictionary<ulong, int> cachedAttribLocations = [];
 
     public static GraphicsProgram CompileProgram(string fragment, string vertex, string geometry) => new GraphicsProgram(fragment, vertex, geometry);
-    public static void BindProgram(GraphicsProgram program) => ((((program as GraphicsProgram))))!.Use();
+    public static void BindProgram(GraphicsProgram program) => program!.Use();
 
     public static int GetUniformLocation(GraphicsProgram program, string name)
     {
@@ -525,7 +525,7 @@ public static unsafe class Graphics
             return loc;
 
         BindProgram(program);
-        int newLoc = GL.GetUniformLocation(((((program as GraphicsProgram)))).Handle, name);
+        int newLoc = GL.GetUniformLocation(program.Handle, name);
         cachedUniformLocations[key] = newLoc;
         return newLoc;
     }
@@ -537,7 +537,7 @@ public static unsafe class Graphics
             return loc;
 
         BindProgram(program);
-        int newLoc = GL.GetAttribLocation(((((program as GraphicsProgram)))).Handle, name);
+        int newLoc = GL.GetAttribLocation(program.Handle, name);
         cachedAttribLocations[key] = newLoc;
         return newLoc;
     }
@@ -610,7 +610,7 @@ public static unsafe class Graphics
 
         BindProgram(program);
         GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + slot));
-        (texture as GraphicsTexture).Bind();
+        texture.Bind();
         GL.Uniform1(loc, slot);
     }
 
@@ -619,24 +619,24 @@ public static unsafe class Graphics
     #region Textures
 
     public static GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format) => new GraphicsTexture(type, format);
-    public static void SetWrapS(GraphicsTexture texture, TextureWrap wrap) => (texture as GraphicsTexture)!.SetWrapS(wrap);
+    public static void SetWrapS(GraphicsTexture texture, TextureWrap wrap) => texture!.SetWrapS(wrap);
 
-    public static void SetWrapT(GraphicsTexture texture, TextureWrap wrap) => (texture as GraphicsTexture)!.SetWrapT(wrap);
-    public static void SetWrapR(GraphicsTexture texture, TextureWrap wrap) => (texture as GraphicsTexture)!.SetWrapR(wrap);
-    public static void SetTextureFilters(GraphicsTexture texture, TextureMin min, TextureMag mag) => (texture as GraphicsTexture)!.SetTextureFilters(min, mag);
-    public static void GenerateMipmap(GraphicsTexture texture) => (texture as GraphicsTexture)!.GenerateMipmap();
+    public static void SetWrapT(GraphicsTexture texture, TextureWrap wrap) => texture!.SetWrapT(wrap);
+    public static void SetWrapR(GraphicsTexture texture, TextureWrap wrap) => texture!.SetWrapR(wrap);
+    public static void SetTextureFilters(GraphicsTexture texture, TextureMin min, TextureMag mag) => texture!.SetTextureFilters(min, mag);
+    public static void GenerateMipmap(GraphicsTexture texture) => texture!.GenerateMipmap();
 
-    public static unsafe void GetTexImage(GraphicsTexture texture, int mip, void* data) => (texture as GraphicsTexture)!.GetTexImage(mip, data);
+    public static unsafe void GetTexImage(GraphicsTexture texture, int mip, void* data) => texture!.GetTexImage(mip, data);
 
     public static unsafe void TexImage2D(GraphicsTexture texture, int mip, uint width, uint height, int v2, void* data)
-        => (texture as GraphicsTexture)!.TexImage2D((texture as GraphicsTexture).Target, mip, width, height, v2, data);
+        => texture!.TexImage2D(texture.Target, mip, width, height, v2, data);
     public static unsafe void TexSubImage2D(GraphicsTexture texture, int mip, int x, int y, uint width, uint height, void* data)
-        => (texture as GraphicsTexture)!.TexSubImage2D((texture as GraphicsTexture).Target, mip, x, y, width, height, data);
+        => texture!.TexSubImage2D(texture.Target, mip, x, y, width, height, data);
 
     public static unsafe void TexImage3D(GraphicsTexture texture, int level, uint width, uint height, uint depth, void* data)
-        => (texture as GraphicsTexture)!.TexImage3D((texture as GraphicsTexture).Target, level, width, height, depth, data);
+        => texture!.TexImage3D(texture.Target, level, width, height, depth, data);
     public static unsafe void TexSubImage3D(GraphicsTexture texture, int level, int x, int y, int z, uint width, uint height, uint depth, void* data)
-        => (texture as GraphicsTexture)!.TexSubImage3D((texture as GraphicsTexture).Target, level, x, y, z, width, height, depth, data);
+        => texture!.TexSubImage3D(texture.Target, level, x, y, z, width, height, depth, data);
 
     #endregion
 
