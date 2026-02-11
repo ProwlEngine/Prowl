@@ -33,6 +33,7 @@ public abstract class Game
 
     private PaperRenderer _paperRenderer;
     private Paper _paper;
+    private int frameCounter;
 
     public Paper PaperInstance => _paper;
 
@@ -58,6 +59,8 @@ public abstract class Game
         {
             try
             {
+                frameCounter++;
+
                 UpdatePaperInput();
 
                 AudioContext.Update();
@@ -90,7 +93,11 @@ public abstract class Game
 
                 EndUpdate();
 
-                Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {1.0 / Time.DeltaTime}";
+                if (frameCounter++ % 60 == 0)
+                { 
+                    Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {1.0 / Time.DeltaTime}";
+                }
+
             }
             catch (Exception e)
             {
