@@ -29,12 +29,12 @@ public class SerializationContext
     public SerializationContext(TypeMode typeMode = TypeMode.Auto)
     {
         TypeMode = typeMode;
-        objectToId.Clear();
+        //objectToId.Clear(); // Not sure why we cleared these?
         objectToId.Add(new NullKey(), 0);
-        idToObject.Clear();
+        //idToObject.Clear();
         idToObject.Add(0, new NullKey());
         nextId = 1;
-        dependencies.Clear();
+        //dependencies.Clear();
     }
 
     public void AddDependency(Guid guid)
