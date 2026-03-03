@@ -358,15 +358,7 @@ public sealed partial class EchoObject
         if (list.TagType != EchoType.List)
             throw new InvalidOperationException($"Target at path '{path}' is not a list");
 
-        var clonedValue = value.Clone();
-        list.List.Insert(index, clonedValue);
-        clonedValue.Parent = list;
-
-        // Update indices for all items from insertion point
-        for (int i = index; i < list.List.Count; i++)
-        {
-            list.List[i].ListIndex = i;
-        }
+        list.ListInsert(index, value.Clone());
     }
 
     private static void ApplyRemoveListItem(EchoObject target, string path, int index)
@@ -377,16 +369,7 @@ public sealed partial class EchoObject
         if (list.TagType != EchoType.List)
             throw new InvalidOperationException($"Target at path '{path}' is not a list");
 
-        var item = list.List[index];
-        list.List.RemoveAt(index);
-        item.Parent = null;
-        item.ListIndex = null;
-
-        // Update indices for all items after removal point
-        for (int i = index; i < list.List.Count; i++)
-        {
-            list.List[i].ListIndex = i;
-        }
+        list.ListRemoveAt(index);
     }
 
     private static string GetParentPath(string path)
