@@ -31,7 +31,25 @@ public sealed partial class EchoObject
         List.Add(tag);
         tag.Parent = this;
         tag.ListIndex = List.Count - 1;
+    }
 
+    public void ListInsert(int index, EchoObject tag)
+    {
+        if (TagType != EchoType.List)
+            throw new System.InvalidOperationException("Cannot insert tag into non-list tag");
+
+        if (tag.Parent != null)
+            throw new System.InvalidOperationException("Tag already has a parent, did you mean to clone it?");
+
+        if (index < 0 || index > List.Count)
+            throw new System.ArgumentOutOfRangeException(nameof(index));
+
+        List.Insert(index, tag);
+        tag.Parent = this;
+
+        // Update indices for all items from insertion point
+        for (int i = index; i < List.Count; i++)
+            List[i].ListIndex = i;
     }
 
     public void ListRemove(EchoObject tag)
@@ -41,20 +59,39 @@ public sealed partial class EchoObject
 
         int removedIndex = List.IndexOf(tag);
         if (removedIndex != -1)
+            ListRemoveAt(removedIndex);
+    }
+
+    public void ListRemoveAt(int index)
+    {
+        if (TagType != EchoType.List)
+            throw new System.InvalidOperationException("Cannot remove tag from non-list tag");
+
+        if (index < 0 || index >= List.Count)
+            throw new System.ArgumentOutOfRangeException(nameof(index));
+
+        var tag = List[index];
+        List.RemoveAt(index);
+
+        tag.Parent = null;
+        tag.ListIndex = null;
+
+        // Update indices for all items after removal point
+        for (int i = index; i < List.Count; i++)
+            List[i].ListIndex = i;
+    }
+
+    public void ListClear()
+    {
+        if (TagType != EchoType.List)
+            throw new System.InvalidOperationException("Cannot clear non-list tag");
+
+        foreach (var tag in List)
         {
-            List.RemoveAt(removedIndex);
-
-
             tag.Parent = null;
             tag.ListIndex = null;
-
-            // Update indices and track moves
-            for (int i = removedIndex; i < List.Count; i++)
-            {
-                var movedItem = List[i];
-                var oldIndex = movedItem.ListIndex;
-                movedItem.ListIndex = i;
-
         }
+
+        List.Clear();
     }
 }
