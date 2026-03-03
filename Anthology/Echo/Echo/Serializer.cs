@@ -147,7 +147,7 @@ public static class Serializer
 
     public static object? Deserialize(EchoObject? value, Type targetType, SerializationContext context)
     {
-        if (value?.TagType == EchoType.Null || value == null) return null;
+        if (value?.TagType == EchoType.Null || value is null) return null;
 
         if (value.GetType() == targetType) return value;
 

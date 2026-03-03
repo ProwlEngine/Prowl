@@ -132,7 +132,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         }
 
         // Register the object for reference resolution
-        if (!objectType.IsValueType && id != null)
+        if (!objectType.IsValueType && id is not null)
             context.idToObject[id.IntValue] = result;
 
         // Deserialize the object's data

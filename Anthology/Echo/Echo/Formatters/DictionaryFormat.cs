@@ -63,7 +63,7 @@ internal sealed class DictionaryFormat : ISerializationFormat
         {
             // Non-string key behavior
             var entries = value.Get("entries");
-            if (entries == null || entries.TagType != EchoType.List)
+            if (entries is null || entries.TagType != EchoType.List)
                 throw new InvalidOperationException("Invalid dictionary format");
 
             foreach (var entry in entries.List)
