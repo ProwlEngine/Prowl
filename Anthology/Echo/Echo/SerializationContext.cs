@@ -49,11 +49,13 @@ public class SerializationContext
         dependencyCounter++;
     }
 
+    private static readonly HashSet<Guid> EmptyDependencies = new();
+
     public HashSet<Guid> EndDependencies()
     {
         dependencyCounter--;
         if (dependencyCounter == 0)
             return dependencies;
-        return new();
+        return EmptyDependencies;
     }
 }
