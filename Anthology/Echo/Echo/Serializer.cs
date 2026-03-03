@@ -301,11 +301,26 @@ public static class Serializer
 
     #region Format Management
 
-    private static ISerializationFormat GetFormatForType(Type type)
+    internal static ISerializationFormat GetFormatForType(Type type)
     {
-        return _formatCache.GetOrAdd(type, t =>
-            _formats.FirstOrDefault(f => f.CanHandle(t))
-            ?? throw new NotSupportedException($"No format handler found for type {t}"));
+        if (_formatCache.TryGetValue(type, out var cached))
+            return cached;
+
+        ISerializationFormat? format = null;
+        foreach (var f in _formats)
+        {
+            if (f.CanHandle(type))
+            {
+                format = f;
+                break;
+            }
+        }
+
+        if (format == null)
+            throw new NotSupportedException($"No format handler found for type {type}");
+
+        _formatCache.TryAdd(type, format);
+        return format;
     }
 
     #endregion
