@@ -1,35 +1,34 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <NeutralLanguage>en-AU</NeutralLanguage>
-    <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Package metadata -->
+    <PackageId>Prowl.Echo</PackageId>
     <Title>Prowl.Echo</Title>
+    <Version>1.9.0</Version>
     <Authors>Wulferis</Authors>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>A high-performance .NET serializer with source generation. Supports complex object graphs, circular references, polymorphism, collections, and 470+ tests. Serializes to an in-memory graph that can be inspected, modified, and converted to binary or text.</Description>
+    <PackageTags>serialization;serializer;source-generator;high-performance;gamedev;game-engine;prowl;dotnet;csharp;binary-serialization;text-serialization;object-graph</PackageTags>
+
+    <!-- Build -->
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <NeutralLanguage>en-AU</NeutralLanguage>
+
+    <!-- Links -->
     <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Echo</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Echo</PackageProjectUrl>
-    <PackageTags>serialization;serializer;gamedev;game-engine;prowl;dotnet;csharp;binary-serialization;text-serialization;object-graph;state-serialization</PackageTags>
-    <Description>A lightweight, flexible .net serializer, with support for complex object graphs, circular references, polymorphism, and much more.
-It has over 260 tests to ensure its reliable, It also serializes objects into an In-Memory graph. 
-These Graphs can be used independantly from the serializer, and can be queried.</Description>
-    <Version>1.8.0</Version>
-    <PackageReleaseNotes>Fixed bug in Abstract classes and Private [SerializeField] fields.</PackageReleaseNotes>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\LICENSE">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
-    <None Include="..\README.md">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
+    <None Include="..\LICENSE" Pack="True" PackagePath="\" />
+    <None Include="..\README.md" Pack="True" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
