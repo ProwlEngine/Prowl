@@ -89,7 +89,17 @@ public static class Serializer
     {
         if (value == null) return new EchoObject(EchoType.Null, null);
 
+        // Fast path: primitives, string, enum — skip entire pipeline
+        if (targetType != null)
         {
+            if (targetType.IsEnum)
+                return new EchoObject(EchoType.Int, Convert.ToInt32(value));
+
+            if (targetType.IsValueType || targetType == typeof(string) || targetType == typeof(byte[]))
+            {
+                var result = SerializeFast(targetType, value);
+                if (result != null) return result;
+            }
         }
 
         var actualType = value.GetType();
@@ -103,6 +113,29 @@ public static class Serializer
 
         // STEP 3: Wrap with type envelope if needed (centralized)
         return WrapWithTypeEnvelope(serializedData, needsTypeInfo ? actualType : null, context);
+    }
+
+    private static EchoObject? SerializeFast(Type type, object value)
+    {
+        return Type.GetTypeCode(type) switch
+        {
+            TypeCode.Int32   => new EchoObject((int)value),
+            TypeCode.Single  => new EchoObject((float)value),
+            TypeCode.Double  => new EchoObject((double)value),
+            TypeCode.Boolean => new EchoObject((bool)value),
+            TypeCode.String  => new EchoObject((string)value),
+            TypeCode.Int64   => new EchoObject((long)value),
+            TypeCode.Byte    => new EchoObject((byte)value),
+            TypeCode.Char    => new EchoObject((byte)(char)value),
+            TypeCode.UInt32  => new EchoObject((uint)value),
+            TypeCode.Int16   => new EchoObject((short)value),
+            TypeCode.UInt64  => new EchoObject((ulong)value),
+            TypeCode.UInt16  => new EchoObject((ushort)value),
+            TypeCode.SByte   => new EchoObject((sbyte)value),
+            TypeCode.Decimal => new EchoObject((decimal)value),
+            TypeCode.Object when type == typeof(byte[]) => new EchoObject((byte[])value),
+            _ => null // DateTime, Guid, TimeSpan etc. — use normal path
+        };
     }
 
     public static T? Deserialize<T>(EchoObject? value) => (T?)Deserialize(value, typeof(T));
