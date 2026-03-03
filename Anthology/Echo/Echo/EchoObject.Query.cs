@@ -25,11 +25,22 @@ public sealed partial class EchoObject
         if (string.IsNullOrWhiteSpace(path)) return this;
 
         EchoObject current = this;
-        var segments = path.Split('/');
+        var remaining = path.AsSpan();
 
-        foreach (var segment in segments)
+        while (remaining.Length > 0)
         {
-            if (current == null) return null;
+            ReadOnlySpan<char> segment;
+            int slashIndex = remaining.IndexOf('/');
+            if (slashIndex == -1)
+            {
+                segment = remaining;
+                remaining = ReadOnlySpan<char>.Empty;
+            }
+            else
+            {
+                segment = remaining.Slice(0, slashIndex);
+                remaining = remaining.Slice(slashIndex + 1);
+            }
 
             // Try parse as list index
             if (current.TagType == EchoType.List && int.TryParse(segment, out int index))
@@ -41,7 +52,7 @@ public sealed partial class EchoObject
             // Handle as compound property
             else if (current.TagType == EchoType.Compound)
             {
-                if (!current.TryGet(segment, out var next))
+                if (!current.Tags.TryGetValue(segment.ToString(), out var next))
                     return null;
                 current = next!;
             }
