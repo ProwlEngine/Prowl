@@ -12,7 +12,8 @@ internal sealed class PrimitiveFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        var typeCode = Type.GetTypeCode(value.GetType());
+        //var typeCode = Type.GetTypeCode(value.GetType());
+        var typeCode = Type.GetTypeCode(targetType ?? value.GetType());
         return typeCode switch 
         {
             // Ordered by rough frequency of use, to reduce conditional checks
