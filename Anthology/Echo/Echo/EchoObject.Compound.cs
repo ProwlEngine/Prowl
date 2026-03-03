@@ -22,7 +22,7 @@ public sealed partial class EchoObject
             if (TagType != EchoType.Compound)
                 throw new InvalidOperationException("Cannot set tag on non-compound tag");
 
-            if (string.IsNullOrWhiteSpace(tagName))
+            if (string.IsNullOrEmpty(tagName))
                 throw new ArgumentNullException(nameof(tagName));
 
             ArgumentNullException.ThrowIfNull(value, nameof(value));
@@ -73,7 +73,7 @@ public sealed partial class EchoObject
     {
         if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
-        if (string.IsNullOrWhiteSpace(tagName))
+        if (string.IsNullOrEmpty(tagName))
             throw new ArgumentNullException(nameof(tagName));
 
         return Tags.TryGetValue(tagName, out var result) ? result : null;
@@ -91,7 +91,7 @@ public sealed partial class EchoObject
     {
         if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
-        if (string.IsNullOrWhiteSpace(tagName))
+        if (string.IsNullOrEmpty(tagName))
             throw new ArgumentNullException(nameof(tagName));
 
         return Tags.TryGetValue(tagName, out result);
@@ -108,7 +108,7 @@ public sealed partial class EchoObject
     {
         if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
-        if (string.IsNullOrWhiteSpace(tagName))
+        if (string.IsNullOrEmpty(tagName))
             throw new ArgumentNullException(nameof(tagName));
         return Tags.ContainsKey(tagName);
     }
@@ -125,7 +125,7 @@ public sealed partial class EchoObject
     {
         if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
-        if (string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrEmpty(name))
             throw new ArgumentNullException(nameof(name));
 
         if (newTag is null)
@@ -159,7 +159,7 @@ public sealed partial class EchoObject
     {
         if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
-        if (string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrEmpty(name))
             throw new ArgumentNullException(nameof(name));
 
         if (Tags.Remove(name, out var tag))
@@ -184,9 +184,9 @@ public sealed partial class EchoObject
     {
         if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot rename tag in non-compound tag");
-        if (string.IsNullOrWhiteSpace(oldName))
+        if (string.IsNullOrEmpty(oldName))
             throw new ArgumentNullException(nameof(oldName));
-        if (string.IsNullOrWhiteSpace(newName))
+        if (string.IsNullOrEmpty(newName))
             throw new ArgumentNullException(nameof(newName));
         if (oldName == newName) return;
         if (!Tags.ContainsKey(oldName))
