@@ -6,7 +6,7 @@ using Prowl.Echo;
 namespace Benchmarks;
 
 // Test data models
-//[GenerateSerializer]
+[GenerateSerializer]
 public partial class Person
 {
     public string? Name;
@@ -16,7 +16,7 @@ public partial class Person
     public List<string>? Hobbies;
 }
 
-//[GenerateSerializer]
+[GenerateSerializer]
 public partial class Address
 {
     public string? Street;
@@ -25,7 +25,7 @@ public partial class Address
     public string? ZipCode;
 }
 
-//[GenerateSerializer]
+[GenerateSerializer]
 public partial class ComplexData
 {
     public List<Person>? People;
