@@ -65,14 +65,14 @@ public class Program
         // Run benchmarks for each serializer
         var results = new Dictionary<string, List<BenchmarkResult>>();
 
-        PrintSectionHeader("Prowl.Echo");
-        results["Echo"] = RunEchoBenchmark(testData);
-
         PrintSectionHeader("System.Text.Json");
         results["System.Text.Json"] = RunSystemTextJsonBenchmark(testData);
 
         PrintSectionHeader("Newtonsoft.Json");
         results["Newtonsoft.Json"] = RunNewtonsoftJsonBenchmark(testData);
+
+        PrintSectionHeader("Prowl.Echo");
+        results["Echo"] = RunEchoBenchmark(testData);
 
         // Print comparison summary
         PrintComparisonSummary(results);
@@ -88,7 +88,7 @@ public class Program
             Coordinates = Enumerable.Range(0, 100).Select(i => random.NextDouble() * 100).ToArray(),
             Scores = Enumerable.Range(0, 50)
                 .ToDictionary(i => $"Player{i}", i => random.Next(0, 1000)),
-            People = Enumerable.Range(0, 20).Select(i => new Person
+            People = Enumerable.Range(0, 100).Select(i => new Person
             {
                 Name = $"Person {i}",
                 Age = random.Next(18, 80),
