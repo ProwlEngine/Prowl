@@ -1,7 +1,6 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 
 namespace Prowl.Echo.Formatters;
@@ -42,34 +41,35 @@ public sealed class AnyObjectFormat : ISerializationFormat
         }
         else
         {
-            foreach (System.Reflection.FieldInfo field in value.GetSerializableFields())
+            foreach (var cachedField in value.GetSerializableFields())
             {
                 try
                 {
-                    // Check SerializeIf condition
-                    if (Attribute.GetCustomAttribute(field, typeof(SerializeIfAttribute)) is SerializeIfAttribute serializeIf)
+                    // Check SerializeIf condition (using cached attribute data)
+                    if (cachedField.SerializeIfCondition != null)
                     {
-                        if (!EvaluateSerializeCondition(value, actualType, serializeIf.ConditionMemberName))
+                        if (!EvaluateSerializeCondition(value, actualType, cachedField.SerializeIfCondition))
                             continue;
                     }
 
-                    object? propValue = field.GetValue(value);
+                    object? propValue = cachedField.Field.GetValue(value);
                     if (propValue == null)
                     {
-                        if (Attribute.GetCustomAttribute(field, typeof(IgnoreOnNullAttribute)) != null)
+                        // Use cached IgnoreOnNull flag
+                        if (cachedField.HasIgnoreOnNull)
                             continue;
-                        compound.Add(field.Name, new(EchoType.Null, null));
+                        compound.Add(cachedField.Field.Name, new(EchoType.Null, null));
                     }
                     else
                     {
                         // Serialize with field type as target to enable polymorphism detection
-                        EchoObject tag = Serializer.Serialize(field.FieldType, propValue, context);
-                        compound.Add(field.Name, tag);
+                        EchoObject tag = Serializer.Serialize(cachedField.Field.FieldType, propValue, context);
+                        compound.Add(cachedField.Field.Name, tag);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Serializer.Logger.Error($"Failed to serialize field {field.Name}", ex);
+                    Serializer.Logger.Error($"Failed to serialize field {cachedField.Field.Name}", ex);
                     // We don't want to stop the serialization process because of a single field, so we just skip it and continue
                 }
             }
@@ -142,24 +142,24 @@ public sealed class AnyObjectFormat : ISerializationFormat
         }
         else
         {
-            foreach (System.Reflection.FieldInfo field in result.GetSerializableFields())
+            foreach (var cachedField in result.GetSerializableFields())
             {
-                if (!TryGetFieldValue(value, field, out EchoObject? fieldValue))
+                if (!TryGetFieldValue(value, cachedField, out EchoObject? fieldValue))
                     continue;
 
                 try
                 {
                     // Let the centralized deserializer handle type resolution for fields
-                    object? deserializedValue = Serializer.Deserialize(fieldValue, field.FieldType, context);
+                    object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.Field.FieldType, context);
 
-                    if (field.IsInitOnly)
-                        Serializer.Logger.Warning($"Setting readonly field '{field.Name}' in type '{objectType.FullName}'.");
+                    if (cachedField.Field.IsInitOnly)
+                        Serializer.Logger.Warning($"Setting readonly field '{cachedField.Field.Name}' in type '{objectType.FullName}'.");
 
-                    field.SetValue(result, deserializedValue);
+                    cachedField.Field.SetValue(result, deserializedValue);
                 }
                 catch (Exception ex)
                 {
-                    Serializer.Logger.Error($"Failed to deserialize field {field.Name}", ex);
+                    Serializer.Logger.Error($"Failed to deserialize field {cachedField.Field.Name}", ex);
                     // We don't want to stop the deserialization process because of a single field, so we just skip it and continue
                 }
             }
@@ -204,34 +204,39 @@ public sealed class AnyObjectFormat : ISerializationFormat
         }
     }
 
-    private static bool TryGetFieldValue(EchoObject compound, System.Reflection.FieldInfo field, out EchoObject? value)
+    private static bool TryGetFieldValue(EchoObject compound, CachedFieldInfo cachedField, out EchoObject? value)
     {
-        if (compound.TryGet(field.Name, out value))
+        var fieldName = cachedField.Field.Name;
+
+        if (compound.TryGet(fieldName, out value))
             return true;
 
         // Case-insensitive fallback
         foreach (var key in compound.GetNames())
         {
-            if (string.Equals(key, field.Name, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(key, fieldName, StringComparison.OrdinalIgnoreCase))
             {
                 value = compound[key];
                 return true;
             }
         }
 
-        // Check former names with case-insensitivity
-        foreach (FormerlySerializedAsAttribute formerName in Attribute.GetCustomAttributes(field, typeof(FormerlySerializedAsAttribute)).Cast<FormerlySerializedAsAttribute>())
+        // Check former names (using cached attribute data)
+        if (cachedField.FormerNames != null)
         {
-            if (compound.TryGet(formerName.oldName, out value))
-                return true;
-
-            // Case-insensitive check for former names
-            foreach (var key in compound.GetNames())
+            foreach (var formerName in cachedField.FormerNames)
             {
-                if (string.Equals(key, formerName.oldName, StringComparison.OrdinalIgnoreCase))
-                {
-                    value = compound[key];
+                if (compound.TryGet(formerName, out value))
                     return true;
+
+                // Case-insensitive check for former names
+                foreach (var key in compound.GetNames())
+                {
+                    if (string.Equals(key, formerName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        value = compound[key];
+                        return true;
+                    }
                 }
             }
         }

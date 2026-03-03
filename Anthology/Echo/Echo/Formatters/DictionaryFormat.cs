@@ -2,21 +2,33 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections;
+using System.Collections.Concurrent;
 
 namespace Prowl.Echo.Formatters;
 
 internal sealed class DictionaryFormat : ISerializationFormat
 {
+    private static readonly ConcurrentDictionary<Type, (Type keyType, Type valueType)> _typeArgCache = new();
+
     public bool CanHandle(Type type) =>
         type.IsAssignableTo(typeof(IDictionary)) &&
         type.IsGenericType;
+
+    private static (Type keyType, Type valueType) GetTypeArgs(Type dictType)
+    {
+        if (_typeArgCache.TryGetValue(dictType, out var cached))
+            return cached;
+        var args = dictType.GetGenericArguments();
+        var result = (args[0], args[1]);
+        _typeArgCache.TryAdd(dictType, result);
+        return result;
+    }
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         var dict = (IDictionary)value;
         var type = value.GetType();
-        var keyType = type.GetGenericArguments()[0];
-        var valueType = type.GetGenericArguments()[1];
+        var (keyType, valueType) = GetTypeArgs(type);
 
         if (keyType == typeof(string))
         {
@@ -47,8 +59,7 @@ internal sealed class DictionaryFormat : ISerializationFormat
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        Type keyType = targetType.GetGenericArguments()[0];
-        Type valueType = targetType.GetGenericArguments()[1];
+        var (keyType, valueType) = GetTypeArgs(targetType);
 
         IDictionary dict = Activator.CreateInstance(targetType) as IDictionary
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");

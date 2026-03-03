@@ -23,21 +23,21 @@ public sealed class FixedStructureFormat : ISerializationFormat
 
         // Get all serializable fields in declaration order
         var fields = value.GetSerializableFields()
-            .OrderBy(f => f.MetadataToken) // Use metadata token to preserve declaration order
+            .OrderBy(f => f.Field.MetadataToken) // Use metadata token to preserve declaration order
             .ToArray();
 
         // Serialize each field value in order
-        foreach (var field in fields)
+        foreach (var cachedField in fields)
         {
             try
             {
-                object? fieldValue = field.GetValue(value);
-                EchoObject serializedValue = Serializer.Serialize(field.FieldType, fieldValue, context);
+                object? fieldValue = cachedField.Field.GetValue(value);
+                EchoObject serializedValue = Serializer.Serialize(cachedField.Field.FieldType, fieldValue, context);
                 list.ListAdd(serializedValue);
             }
             catch (Exception ex)
             {
-                Serializer.Logger.Error($"Failed to serialize field {field.Name} in fixed structure", ex);
+                Serializer.Logger.Error($"Failed to serialize field {cachedField.Field.Name} in fixed structure", ex);
                 // Add null as placeholder to maintain field order
                 list.ListAdd(new EchoObject(EchoType.Null, null));
             }
@@ -59,7 +59,7 @@ public sealed class FixedStructureFormat : ISerializationFormat
 
         // Get fields in same order as serialization
         var fields = result.GetSerializableFields()
-            .OrderBy(f => f.MetadataToken)
+            .OrderBy(f => f.Field.MetadataToken)
             .ToArray();
 
         // Verify field count matches
@@ -73,17 +73,17 @@ public sealed class FixedStructureFormat : ISerializationFormat
         // Deserialize each field value in order
         for (int i = 0; i < fields.Length; i++)
         {
-            var field = fields[i];
+            var cachedField = fields[i];
             var fieldValue = listValue[i];
 
             try
             {
-                object? deserializedValue = Serializer.Deserialize(fieldValue, field.FieldType, context);
-                field.SetValue(result, deserializedValue);
+                object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.Field.FieldType, context);
+                cachedField.Field.SetValue(result, deserializedValue);
             }
             catch (Exception ex)
             {
-                Serializer.Logger.Error($"Failed to deserialize field {field.Name} in fixed structure", ex);
+                Serializer.Logger.Error($"Failed to deserialize field {cachedField.Field.Name} in fixed structure", ex);
                 // Skip setting this field and continue with others
             }
         }
