@@ -1,9 +1,32 @@
 # Prowl.Echo Serializer
 
-A lightweight, flexible serialization system (Built for the Prowl Game Engine). The serializer supports complex object graphs, circular references, and custom serialization behaviors.
+A high-performance, flexible serialization system built for the Prowl Game Engine. Echo creates an intermediate representation (an "Echo") of your objects, allowing fast inspection and modification before converting to and from Binary or Text.
 
-Echo does what the name suggests, and create an "Echo" an intermediate representation of the target object.
-This allows for fast inspection and modification before converting to and from Binary or Text.
+## Performance
+
+Echo with source generation **outperforms System.Text.Json and Newtonsoft.Json** across all operations.
+
+Benchmark run with `[GenerateSerializer]` and `[FixedEchoStructure]` on a complex object graph (20 nested objects, 100-element arrays, 50-entry dictionaries, collections):
+
+```
+  Serialize:
+    MessagePack          Avg:   0.0297 ms  (1.64x faster)
+    Echo                 Avg:   0.0487 ms
+    System.Text.Json     Avg:   0.0708 ms  (2.39x slower)
+    Newtonsoft.Json      Avg:   0.1040 ms  (3.51x slower)
+
+  Deserialize:
+    Echo                 Avg:   0.0200 ms
+    MessagePack          Avg:   0.0470 ms  (2.35x slower)
+    System.Text.Json     Avg:   0.1113 ms  (5.56x slower)
+    Newtonsoft.Json      Avg:   0.1570 ms  (7.84x slower)
+
+  Round-trip:
+    Echo                 Avg:   0.0644 ms
+    MessagePack          Avg:   0.0714 ms  (1.11x slower)
+    System.Text.Json     Avg:   0.1776 ms  (2.76x slower)
+    Newtonsoft.Json      Avg:   0.2533 ms  (3.93x slower)
+```
 
 ## Features
 
@@ -18,21 +41,24 @@ This allows for fast inspection and modification before converting to and from B
   - Circular references
   - Anonymous types
   - Multi-dimensional and jagged arrays
-  - Support for custom serializable objects
-  - 230+ tests to ensure the library remains stable and reliable!
-  - Less than 1k lines of executable code!
+  - 470+ tests to ensure stability and reliability
+
+- **Source Generation**
+  - `[GenerateSerializer]` attribute generates optimized `ISerializable` implementations at compile time
+  - Inlines serialization for primitives, strings, enums, DateTime, Guid, TimeSpan, and common collections
+  - Works alongside `[FixedEchoStructure]` for maximum performance, great for networking!
+  - Zero reflection overhead for generated types
 
 - **Flexible Serialization Control**
   - Custom serialization through `ISerializable` interface
-  - Attribute-based control (`[FormerlySerializedAs]`, `[IgnoreOnNull]`)
+  - Attribute-based control (`[FormerlySerializedAs]`, `[IgnoreOnNull]`, `[SerializeIf]`, `[SerializeField]`)
+  - `[FixedEchoStructure]` for compact positional serialization of stable types
   - Support for legacy data through attribute mapping
 
 - **Misc**
-  - Battle Tested in the Prowl Game Engine
+  - Battle tested in the Prowl Game Engine
   - Supports both String & Binary formats
   - Mimics Unity's Serializer
-  - GUID-based Resource Dependency Tracking built right in, No overhead when unused. (Byproduct of Prowl, Will be removed as its pointless to have here)
-
 
 ## Usage
 
@@ -47,43 +73,60 @@ var serialized = Serializer.Serialize(myObject);
 var deserialized = Serializer.Deserialize<MyClass>(serialized);
 ```
 
-### Serializating to Text
+### Source-Generated Serialization (Recommended)
+
+```csharp
+[GenerateSerializer]
+public partial class Player
+{
+    public string Name = "Player";
+    public int Health = 100;
+    public float Speed = 5.0f;
+    public List<string> Inventory = new();
+}
+
+// Works exactly like basic serialization — but much faster
+var player = new Player { Name = "Hero", Health = 200 };
+var serialized = Serializer.Serialize(player);
+var deserialized = Serializer.Deserialize<Player>(serialized);
+```
+
+The source generator automatically creates optimized `Serialize`/`Deserialize` methods that inline primitive construction and bypass the reflection pipeline entirely.
+
+### Serializing to Text
 
 ```csharp
 var serialized = Serializer.Serialize(myObject);
 
-// Save to Text
+// Save to text
 string text = serialized.WriteToString();
 
-// Read to From
+// Read back
 var fromText = EchoObject.ReadFromString(text);
-
 var deserialized = Serializer.Deserialize<MyClass>(fromText);
 ```
 
-### Custom Serialization - Fastest mode Echo has to offer
+### Custom Serialization
 
 ```csharp
 public class CustomObject : ISerializable
 {
     public int Value = 42;
     public string Text = "Custom";
-	public MyClass Obj = new();
+    public MyClass Obj = new();
 
-    public EchoObject Serialize(SerializationContext ctx)
+    public void Serialize(ref EchoObject compound, SerializationContext ctx)
     {
-        var compound = EchoObject.NewCompound();
-        compound.Add("value", new(Value));
-        compound.Add("text", new(Text));
-        compound.Add("obj", Serializer.Serialize(Obj, ctx));
-        return compound;
+        compound.Add("value", new EchoObject(Value));
+        compound.Add("text", new EchoObject(Text));
+        compound.Add("obj", Serializer.Serialize(typeof(MyClass), Obj, ctx));
     }
 
     public void Deserialize(EchoObject tag, SerializationContext ctx)
     {
         Value = tag.Get("value").IntValue;
         Text = tag.Get("text").StringValue;
-		Obj = Serializer.Deserialize(tag.Get("obj"), ctx);
+        Obj = Serializer.Deserialize<MyClass>(tag.Get("obj"), ctx);
     }
 }
 ```
@@ -96,9 +139,9 @@ var list = new List<string> { "one", "two", "three" };
 var serializedList = Serializer.Serialize(list);
 
 // Dictionaries
-var dict = new Dictionary<MyClass, int> {
-    { new("one"), 1 },
-    { new("two"), 2 }
+var dict = new Dictionary<string, int> {
+    { "one", 1 },
+    { "two", 2 }
 };
 var serializedDict = Serializer.Serialize(dict);
 
@@ -126,12 +169,18 @@ public class MyClass
 
     [IgnoreOnNull]
     public string? OptionalField = null;
+
+    [SerializeIf("ShouldSerializeDebug")]
+    public string DebugInfo = "";
+
+    public bool ShouldSerializeDebug => false;
 }
 
-// Fixed Structure attribute tells the serializer this struct is reliable in shape/structure and will never change
-// This allows it to skip serializing type names, and only serialize the field values in the order they appear
+// FixedEchoStructure tells the serializer this type has a stable shape
+// and will never change. This allows compact positional serialization.
+[GenerateSerializer]
 [FixedEchoStructure]
-public struct MyVector3
+public partial struct MyVector3
 {
     public float X;
     public float Y;
@@ -139,33 +188,20 @@ public struct MyVector3
 }
 ```
 
+## Performance Tips
+
+For maximum serialization speed:
+1. Use `[GenerateSerializer]` on your types (requires `partial` class/struct), Or manually implement ISerializable
+2. Add `[FixedEchoStructure]` to small, stable value types (like vectors, colors), Or for network packets/messages
+3. Use binary format instead of text for I/O-bound workloads
+
+For minimum serialized size:
+1. Use `[FixedEchoStructure]` wherever possible (skips field names)
+2. Use binary format with size encoding mode
+
 ## Limitations
-  - Properties are not serialized (only fields)
 
-## Performance
-
-Echo prioritizes simplicity over raw performance.
-If your looking for an ultra-fast serializer you may want to consider alternatives.
-However, If you're using Echo and need better performance:
-  1. Implement `ISerializable` for your critical types - this can significantly outperform the default reflection-based approach
-  2. Minimize deep object graphs when possible
-  3. Consider using binary format instead of text, as the text format is significantly slower
-
-If size is a concern:
-  1. Try to use the FixedEchoStructure attribute wherever possible.
-  2. Use binary and set its encoding to Size mode.
-This should help
-
-Heres is a quick Benchmark I did with BenchmarkDotNet, These were done on a simple Vector3 class.
-
-|      Method |           Serializer |        Mean |     Error |    StdDev | DataSize |
-|------------ |--------------------- |------------:|----------:|----------:|---------:|
-|   **Serialize** |      **Newtonsoft.Json** | **1,318.56 ns** |  **8.097 ns** |  **7.574 ns** |     **35 B** |
-| Deserialize |      Newtonsoft.Json | 2,278.44 ns |  9.244 ns |  8.195 ns |        - |
-|   **Serialize** |           **Echo** | **1,489.87 ns** | **17.410 ns** | **15.434 ns** |     **17 B** |
-| Deserialize |           Echo | 1,948.34 ns | 65.129 ns | 72.390 ns |        - |
-|   **Serialize** |           **Manual** | **68.53 ns** | **0.313 ns** | **0.277 ns** |     **12 B** |
-| Deserialize |           Manual | 60.46 ns | 0.429 ns | 0.359 ns |        - |
+- Properties are not serialized (only fields) this is by design.
 
 ## License
 

@@ -1,11 +1,13 @@
 ﻿using System.Diagnostics;
 using System.Text.Json;
+using MessagePack;
 using Newtonsoft.Json;
 using Prowl.Echo;
 
 namespace Benchmarks;
 
 // Test data models
+[FixedEchoStructure]
 [GenerateSerializer]
 public partial class Person
 {
@@ -16,6 +18,7 @@ public partial class Person
     public List<string>? Hobbies;
 }
 
+[FixedEchoStructure]
 [GenerateSerializer]
 public partial class Address
 {
@@ -25,6 +28,7 @@ public partial class Address
     public string? ZipCode;
 }
 
+[FixedEchoStructure]
 [GenerateSerializer]
 public partial class ComplexData
 {
@@ -33,6 +37,36 @@ public partial class ComplexData
     public DateTime Timestamp;
     public Guid Id;
     public double[] Coordinates = Array.Empty<double>();
+}
+
+// MessagePack models (requires attributes)
+[MessagePackObject]
+public class MsgPackPerson
+{
+    [Key(0)] public string? Name;
+    [Key(1)] public int Age;
+    [Key(2)] public string? Email;
+    [Key(3)] public MsgPackAddress? Address;
+    [Key(4)] public List<string>? Hobbies;
+}
+
+[MessagePackObject]
+public class MsgPackAddress
+{
+    [Key(0)] public string? Street;
+    [Key(1)] public string? City;
+    [Key(2)] public string? State;
+    [Key(3)] public string? ZipCode;
+}
+
+[MessagePackObject]
+public class MsgPackComplexData
+{
+    [Key(0)] public List<MsgPackPerson>? People;
+    [Key(1)] public Dictionary<string, int>? Scores;
+    [Key(2)] public DateTime Timestamp;
+    [Key(3)] public Guid Id;
+    [Key(4)] public double[] Coordinates = Array.Empty<double>();
 }
 
 public class BenchmarkResult
@@ -70,6 +104,9 @@ public class Program
 
         PrintSectionHeader("Newtonsoft.Json");
         results["Newtonsoft.Json"] = RunNewtonsoftJsonBenchmark(testData);
+
+        PrintSectionHeader("MessagePack");
+        results["MessagePack"] = RunMessagePackBenchmark(testData);
 
         PrintSectionHeader("Prowl.Echo");
         results["Echo"] = RunEchoBenchmark(testData);
@@ -227,6 +264,71 @@ public class Program
         {
             var json = JsonConvert.SerializeObject(testData, settings);
             var deserialized = JsonConvert.DeserializeObject<ComplexData>(json, settings);
+        }));
+
+        PrintResults(results);
+        return results;
+    }
+
+    private static MsgPackComplexData ConvertToMsgPack(ComplexData data)
+    {
+        return new MsgPackComplexData
+        {
+            Id = data.Id,
+            Timestamp = data.Timestamp,
+            Coordinates = data.Coordinates,
+            Scores = data.Scores,
+            People = data.People?.Select(p => new MsgPackPerson
+            {
+                Name = p.Name,
+                Age = p.Age,
+                Email = p.Email,
+                Hobbies = p.Hobbies,
+                Address = p.Address != null ? new MsgPackAddress
+                {
+                    Street = p.Address.Street,
+                    City = p.Address.City,
+                    State = p.Address.State,
+                    ZipCode = p.Address.ZipCode
+                } : null
+            }).ToList()
+        };
+    }
+
+    private static List<BenchmarkResult> RunMessagePackBenchmark(ComplexData testData)
+    {
+        var results = new List<BenchmarkResult>();
+        var msgPackData = ConvertToMsgPack(testData);
+
+        // Warmup
+        Console.WriteLine("  Warming up...");
+        for (int i = 0; i < WarmupIterations; i++)
+        {
+            var bytes = MessagePackSerializer.Serialize(msgPackData);
+            var deserialized = MessagePackSerializer.Deserialize<MsgPackComplexData>(bytes);
+        }
+
+        // Serialization benchmark
+        Console.WriteLine("  Benchmarking serialization...");
+        results.Add(BenchmarkOperation("Serialize", BenchmarkIterations, () =>
+        {
+            var bytes = MessagePackSerializer.Serialize(msgPackData);
+        }));
+
+        // Deserialization benchmark
+        Console.WriteLine("  Benchmarking deserialization...");
+        var serializedBytes = MessagePackSerializer.Serialize(msgPackData);
+        results.Add(BenchmarkOperation("Deserialize", BenchmarkIterations, () =>
+        {
+            var deserialized = MessagePackSerializer.Deserialize<MsgPackComplexData>(serializedBytes);
+        }));
+
+        // Round-trip benchmark
+        Console.WriteLine("  Benchmarking round-trip...");
+        results.Add(BenchmarkOperation("Round-trip", BenchmarkIterations, () =>
+        {
+            var bytes = MessagePackSerializer.Serialize(msgPackData);
+            var deserialized = MessagePackSerializer.Deserialize<MsgPackComplexData>(bytes);
         }));
 
         PrintResults(results);
