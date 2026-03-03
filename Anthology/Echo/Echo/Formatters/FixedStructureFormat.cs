@@ -18,15 +18,21 @@ public sealed class FixedStructureFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        // Create a list to store field values in order
+        // If the type has a source-generated ISerializable, use it
+        if (value is ISerializable serializable)
+        {
+            var result = EchoObject.NewCompound();
+            serializable.Serialize(ref result, context);
+            return result;
+        }
+
+        // Reflection fallback
         var list = EchoObject.NewList();
 
-        // Get all serializable fields in declaration order
         var fields = value.GetSerializableFields()
-            .OrderBy(f => f.Field.MetadataToken) // Use metadata token to preserve declaration order
+            .OrderBy(f => f.Field.MetadataToken)
             .ToArray();
 
-        // Serialize each field value in order
         foreach (var cachedField in fields)
         {
             try
@@ -38,7 +44,6 @@ public sealed class FixedStructureFormat : ISerializationFormat
             catch (Exception ex)
             {
                 Serializer.Logger.Error($"Failed to serialize field {cachedField.Field.Name} in fixed structure", ex);
-                // Add null as placeholder to maintain field order
                 list.ListAdd(new EchoObject(EchoType.Null, null));
             }
         }
@@ -51,18 +56,24 @@ public sealed class FixedStructureFormat : ISerializationFormat
         if (value.TagType != EchoType.List)
             throw new InvalidOperationException("Expected list for fixed structure deserialization");
 
-        var listValue = (List<EchoObject>)value.Value!;
-
         // Create instance of target type
         object result = Activator.CreateInstance(targetType, true)
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
 
-        // Get fields in same order as serialization
+        // If the type has a source-generated ISerializable, use it
+        if (result is ISerializable serializable)
+        {
+            serializable.Deserialize(value, context);
+            return result;
+        }
+
+        // Reflection fallback
+        var listValue = (List<EchoObject>)value.Value!;
+
         var fields = result.GetSerializableFields()
             .OrderBy(f => f.Field.MetadataToken)
             .ToArray();
 
-        // Verify field count matches
         if (fields.Length != listValue.Count)
         {
             throw new InvalidOperationException(
@@ -70,7 +81,6 @@ public sealed class FixedStructureFormat : ISerializationFormat
                 $"Expected {fields.Length} fields but got {listValue.Count} values.");
         }
 
-        // Deserialize each field value in order
         for (int i = 0; i < fields.Length; i++)
         {
             var cachedField = fields[i];
@@ -84,7 +94,6 @@ public sealed class FixedStructureFormat : ISerializationFormat
             catch (Exception ex)
             {
                 Serializer.Logger.Error($"Failed to deserialize field {cachedField.Field.Name} in fixed structure", ex);
-                // Skip setting this field and continue with others
             }
         }
 
