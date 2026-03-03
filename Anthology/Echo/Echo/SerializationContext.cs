@@ -22,9 +22,6 @@ public class SerializationContext
     public Dictionary<object, int> objectToId = new(ReferenceEqualityComparer.Instance);
     public Dictionary<int, object> idToObject = new();
     public int nextId = 1;
-    public HashSet<Guid> dependencies = new();
-
-    private int dependencyCounter = 0;
 
     public SerializationContext(TypeMode typeMode = TypeMode.Auto)
     {
@@ -34,28 +31,5 @@ public class SerializationContext
         //idToObject.Clear();
         idToObject.Add(0, new NullKey());
         nextId = 1;
-        //dependencies.Clear();
-    }
-
-    public void AddDependency(Guid guid)
-    {
-        if (dependencyCounter > 0)
-            dependencies.Add(guid);
-        else throw new InvalidOperationException("Cannot add a dependency outside of a BeginDependencies/EndDependencies block.");
-    }
-
-    public void BeginDependencies()
-    {
-        dependencyCounter++;
-    }
-
-    private static readonly HashSet<Guid> EmptyDependencies = new();
-
-    public HashSet<Guid> EndDependencies()
-    {
-        dependencyCounter--;
-        if (dependencyCounter == 0)
-            return dependencies;
-        return EmptyDependencies;
     }
 }

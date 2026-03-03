@@ -29,8 +29,6 @@ public sealed class AnyObjectFormat : ISerializationFormat
             context.idToObject[id.Value] = value;
         }
 
-        context.BeginDependencies();
-
         if (value is ISerializationCallbackReceiver callback)
             callback.OnBeforeSerialize();
 
@@ -81,8 +79,6 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
         // NOTE: Type information is now handled by the centralized Serializer class
         // We don't add $type here - the Serializer will wrap this with type info if needed
-
-        context.EndDependencies();
 
         return compound;
     }

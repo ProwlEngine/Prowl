@@ -18,8 +18,6 @@ internal sealed class AnonymousTypeFormat : ISerializationFormat
         var compound = EchoObject.NewCompound();
         Type actualType = value.GetType();
 
-        context.BeginDependencies();
-
         // Serialize all public properties of the anonymous type
         foreach (PropertyInfo property in actualType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
@@ -45,8 +43,6 @@ internal sealed class AnonymousTypeFormat : ISerializationFormat
             }
         }
         
-        context.EndDependencies();
-
         return compound;
     }
 

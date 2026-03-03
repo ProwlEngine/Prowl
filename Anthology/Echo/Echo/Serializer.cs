@@ -17,35 +17,6 @@ public class TypeEnvelope
 
 public static class Serializer
 {
-    /// <summary>
-    /// Since the serializer supports serializing EchoObjects
-    /// Its possible the EchoObject may have more dependencies inside it
-    /// Prowl handles these dependencies with something like:
-    /// public static void GetAllAssetRefsInEcho(EchoObject echo, ref HashSet<Guid> refs)
-    /// {
-    ///     if (echo.TagType == EchoType.List)
-    ///     {
-    ///         foreach (var tag in (List<EchoObject>)echo.Value!)
-    ///             GetAllAssetRefs(tag, ref refs);
-    ///     }
-    ///     else if (echo.TagType == EchoType.Compound)
-    ///     {
-    ///         var dict = (Dictionary<string, EchoObject>)echo.Value!;
-    ///         if (TryGet("$type", out var typeName)) // See if we are an asset ref
-    ///         {
-    ///             if (typeName!.StringValue.Contains("Prowl.Runtime.AssetRef") && echo.TryGet("AssetID", out var assetId))
-    ///             {
-    ///                 if (Guid.TryParse(assetId!.StringValue, out var id) && id != Guid.Empty)
-    ///                     refs.Add(id);
-    ///             }
-    ///         }
-    ///         foreach (var (_, tag) in dict)
-    ///             GetAllAssetRefs(tag, ref refs);
-    ///     }
-    /// }
-    /// </summary>
-    public static Action<EchoObject, HashSet<Guid>>? GetAllDependencyRefsInEcho { get; set; }
-
     public static IEchoLogger Logger { get; set; } = new NullEchoLogger();
 
     private static readonly ConcurrentDictionary<Type, ISerializationFormat> _formatCache = new();
@@ -118,14 +89,7 @@ public static class Serializer
     {
         if (value == null) return new EchoObject(EchoType.Null, null);
 
-        if (value is EchoObject echoObject)
         {
-            EchoObject clone = echoObject.Clone();
-            HashSet<Guid> deps = new();
-            GetAllDependencyRefsInEcho?.Invoke(clone, deps);
-            foreach (Guid dep in deps)
-                context.AddDependency(dep);
-            return clone;
         }
 
         var actualType = value.GetType();
