@@ -1,8 +1,6 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.ComponentModel.DataAnnotations;
-
 namespace Prowl.Echo;
 
 public sealed partial class EchoObject
@@ -32,22 +30,15 @@ public sealed partial class EchoObject
             if (value.Parent != null)
                 throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(value));
 
-            var oldValue = Tags.TryGetValue(tagName, out var existingTag) ? existingTag : null;
-
-            if (oldValue != null)
+            if (Tags.TryGetValue(tagName, out var oldValue))
             {
                 oldValue.Parent = null;
                 oldValue.CompoundKey = null;
-                OnPropertyChanged(new EchoChangeEventArgs(
-                    this, oldValue, oldValue.Value, null, ChangeType.TagRemoved));
             }
 
             Tags[tagName] = value;
             value.Parent = this;
             value.CompoundKey = tagName;
-
-            OnPropertyChanged(new EchoChangeEventArgs(
-                this, value, null, value.Value, ChangeType.TagAdded));
         }
     }
 
@@ -149,13 +140,6 @@ public sealed partial class EchoObject
         {
             newTag.Parent = this;
             newTag.CompoundKey = name;
-
-            OnPropertyChanged(new EchoChangeEventArgs(
-                this,           // Source is this compound
-                newTag,         // Property is the new tag
-                null,           // Old value null since it's an add
-                newTag.Value,   // New value is the tag's value
-                ChangeType.TagAdded));
         }
         else
         {
@@ -179,14 +163,6 @@ public sealed partial class EchoObject
 
         if (Tags.Remove(name, out var tag))
         {
-            // Fire change event before clearing parent/key
-            OnPropertyChanged(new EchoChangeEventArgs(
-                this,       // Source is this compound
-                tag,        // Property is the removed tag
-                tag.Value,  // Old value is the tag's current value
-                null,       // New value null since it's a remove
-                ChangeType.TagRemoved));
-
             tag.Parent = null;
             tag.CompoundKey = null;
             return true;
@@ -221,13 +197,6 @@ public sealed partial class EchoObject
         Tags.Remove(oldName);
         Tags.Add(newName, tag);
         tag.CompoundKey = newName;
-
-        OnPropertyChanged(new EchoChangeEventArgs(
-            this,     // Source is this compound
-            tag,      // Property is the renamed tag
-            oldName,  // Old value is the old name
-            newName,  // New value is the new name
-            ChangeType.TagRenamed));
     }
 
     /// <summary>

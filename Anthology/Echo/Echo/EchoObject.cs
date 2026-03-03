@@ -26,48 +26,8 @@ public enum EchoType
     Compound,
 }
 
-public class EchoChangeEventArgs : EventArgs
-{
-    public EchoObject Source { get; }      // The root object where the event originated
-    public string Path { get; }            // Full path to changed property
-    public string RelativePath { get; }    // Path relative to the listening object
-    public EchoObject Property { get; }    // The actual changed property
-    public object? OldValue { get; }
-    public object? NewValue { get; }
-    public ChangeType Type { get; }        // Type of change that occurred
-
-    public EchoChangeEventArgs(
-        EchoObject source,
-        EchoObject property,
-        object? oldValue,
-        object? newValue,
-        ChangeType type)
-    {
-        Source = source;
-        Property = property;
-        Path = property.GetPath();
-        RelativePath = object.ReferenceEquals(source, property) ? "" : EchoObject.GetRelativePath(source, property);
-        OldValue = oldValue;
-        NewValue = newValue;
-        Type = type;
-    }
-}
-
-public enum ChangeType
-{
-    ValueChanged,     // Value of a property changed
-    ListTagAdded,     // Item added to a list
-    ListTagRemoved,   // Item removed from a list
-    ListTagMoved,     // Item moved within a list
-    TagAdded,         // Property added to compound
-    TagRemoved,       // Property removed from compound
-    TagRenamed        // Property renamed in compound
-}
-
 public sealed partial class EchoObject : IEquatable<EchoObject>
 {
-    public event EventHandler<EchoChangeEventArgs>? PropertyChanged;
-
     private object? _value;
     public object? Value { get { return _value; } set { SetValue(value); } }
 
@@ -95,6 +55,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     public EchoObject(EchoType type, object? value)
     {
         TagType = type;
+        if (type == EchoType.List)
         {
             _value = value ?? new List<EchoObject>();
             var list = (List<EchoObject>)_value;
@@ -238,36 +199,6 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     public static EchoObject ReadFromString(string input)
     {
         return StringTagConverter.Read(input);
-    }
-
-    private void OnPropertyChanged(EchoChangeEventArgs e)
-    {
-        if (PropertyChanged != null)
-        {
-            // Create a new event with the path relative to this object
-            var localEvent = new EchoChangeEventArgs(
-                this,  // Source is this object
-                e.Property,
-                e.OldValue,
-                e.NewValue,
-                e.Type);
-
-            // Fire local event
-            PropertyChanged.Invoke(this, localEvent);
-        }
-        
-        // If we have a parent, propagate upwards
-        if (Parent != null)
-        {
-            var parentEvent = new EchoChangeEventArgs(
-                Parent,  // Source is the parent
-                e.Property,
-                e.OldValue,
-                e.NewValue,
-                e.Type);
-
-            Parent.OnPropertyChanged(parentEvent);
-        }
     }
 
     #region Equality
@@ -416,7 +347,6 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                 if (TagType == EchoType.String)
                 {
                     _value = string.Empty;
-                    OnPropertyChanged(new EchoChangeEventArgs(this, this, oldValue, _value, ChangeType.ValueChanged));
                     return;
                 }
                 throw new ArgumentNullException(nameof(value), $"Cannot set null value for type {TagType}");
@@ -438,7 +368,6 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                     tag.Parent = this;
                     tag.CompoundKey = key;
                 }
-                OnPropertyChanged(new EchoChangeEventArgs(this, this, oldValue, _value, ChangeType.ValueChanged));
                 return;
             }
 
@@ -458,7 +387,6 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                     list[i].Parent = this;
                     list[i].ListIndex = i;
                 }
-                OnPropertyChanged(new EchoChangeEventArgs(this, this, oldValue, _value, ChangeType.ValueChanged));
                 return;
             }
 
@@ -481,7 +409,6 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                         EchoType.Decimal => Convert.ToDecimal(value),
                         _ => throw new InvalidOperationException($"Unexpected numeric type: {TagType}")
                     };
-                    OnPropertyChanged(new EchoChangeEventArgs(this, this, oldValue, _value, ChangeType.ValueChanged));
                     return;
                 }
                 catch (Exception ex)
@@ -499,8 +426,6 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                     $"Cannot convert type {value.GetType().Name} to byte array"),
                 _ => throw new InvalidOperationException($"Unsupported tag type: {TagType}")
             };
-
-            OnPropertyChanged(new EchoChangeEventArgs(this, this, oldValue, _value, ChangeType.ValueChanged));
         }
         catch (Exception ex)
         {
