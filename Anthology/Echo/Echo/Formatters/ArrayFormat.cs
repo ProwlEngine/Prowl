@@ -21,7 +21,7 @@ internal sealed class ArrayFormat : ISerializationFormat
         if (array.Rank == 1)
         {
             // Single dimensional array
-            List<EchoObject> tags = new();
+            List<EchoObject> tags = new(array.Length);
             foreach (var item in array)
                 tags.Add(Serializer.Serialize(elementType, item, context));
             arrCompound["array"] = new EchoObject(tags);
