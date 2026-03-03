@@ -27,7 +27,7 @@ public sealed partial class EchoObject
 
             ArgumentNullException.ThrowIfNull(value, nameof(value));
 
-            if (value.Parent != null)
+            if (value.Parent is not null)
                 throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(value));
 
             if (Tags.TryGetValue(tagName, out var oldValue))
@@ -128,12 +128,13 @@ public sealed partial class EchoObject
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentNullException(nameof(name));
 
-        if (newTag == null)
+        if (newTag is null)
             throw new ArgumentException(null, nameof(newTag));
         else if (object.ReferenceEquals(newTag, this))
             throw new ArgumentException("Cannot add tag to self", nameof(newTag));
 
-        if (newTag.Parent != null)
+        //if (newTag.Parent != null)
+        if (newTag.Parent is not null)
             throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(newTag));
 
         if (Tags.TryAdd(name, newTag))

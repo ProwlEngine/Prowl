@@ -25,7 +25,7 @@ public sealed partial class EchoObject
         if (TagType != EchoType.List)
             throw new System.InvalidOperationException("Cannot add tag to non-list tag");
 
-        if (tag.Parent != null)
+        if (tag.Parent is not null)
             throw new System.InvalidOperationException("Tag is already in a list, did you mean to clone it?");
 
         List.Add(tag);
@@ -38,7 +38,7 @@ public sealed partial class EchoObject
         if (TagType != EchoType.List)
             throw new System.InvalidOperationException("Cannot insert tag into non-list tag");
 
-        if (tag.Parent != null)
+        if (tag.Parent is not null)
             throw new System.InvalidOperationException("Tag already has a parent, did you mean to clone it?");
 
         if (index < 0 || index > List.Count)
