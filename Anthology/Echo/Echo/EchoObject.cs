@@ -95,21 +95,18 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     public EchoObject(EchoType type, object? value)
     {
         TagType = type;
-        if (type == EchoType.List && value == null)
         {
-            _value = new List<EchoObject>();
-            // Set parent for all children
-            for (int i = 0; i < ((List<EchoObject>)_value).Count; i++)
+            _value = value ?? new List<EchoObject>();
+            var list = (List<EchoObject>)_value;
+            for (int i = 0; i < list.Count; i++)
             {
-                ((List<EchoObject>)_value)[i].Parent = this;
-                ((List<EchoObject>)_value)[i].ListIndex = i;
+                list[i].Parent = this;
+                list[i].ListIndex = i;
             }
         }
-        else if (type == EchoType.Compound && value == null)
+        else if (type == EchoType.Compound)
         {
-            _value = new Dictionary<string, EchoObject>();
-
-            // Set parent for all children
+            _value = value ?? new Dictionary<string, EchoObject>();
             foreach (var (key, tag) in (Dictionary<string, EchoObject>)_value)
             {
                 tag.Parent = this;
