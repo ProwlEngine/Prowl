@@ -10,7 +10,19 @@ public sealed partial class EchoObject
     public EchoObject this[int tagIdx]
     {
         get { return Get(tagIdx); }
-        set { List[tagIdx] = value; }
+        set
+        {
+            if (TagType != EchoType.List)
+                throw new System.InvalidOperationException("Cannot set tag on non-list tag");
+
+            var old = List[tagIdx];
+            old.Parent = null;
+            old.ListIndex = null;
+
+            List[tagIdx] = value;
+            value.Parent = this;
+            value.ListIndex = tagIdx;
+        }
     }
 
     public EchoObject Get(int tagIdx)
