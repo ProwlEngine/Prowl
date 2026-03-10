@@ -177,7 +177,8 @@ namespace Common
             DrawSimpleText(fpsText, x + 10, y + 35, Color32.FromArgb(255, 100, 255, 100));
             DrawSimpleText(frameTimeText, x + 10, y + 55, Color.White);
 
-            Console.Title = $"FPS: {fps:F1} | Frame Time: {_averageFrameTime:F2} ms | Shapes: {RECT_COUNT + CIRCLE_COUNT}";
+            try { Console.Title = $"FPS: {fps:F1} | Frame Time: {_averageFrameTime:F2} ms | Shapes: {RECT_COUNT + CIRCLE_COUNT}"; }
+            catch (PlatformNotSupportedException) { }
         }
 
         private void DrawSimpleText(string text, float x, float y, Color32 color)
