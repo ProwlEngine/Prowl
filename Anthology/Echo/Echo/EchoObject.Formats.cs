@@ -19,6 +19,19 @@ public sealed partial class EchoObject
 
     #endregion
 
+    #region BSON
+
+    /// <summary>
+    /// Write this EchoObject to a BSON byte array.
+    /// </summary>
+    public byte[] WriteToBson() => BsonFileFormat.Instance.WriteToBytes(this);
+
+    /// <summary>
+    /// Read an EchoObject from a BSON byte array.
+    /// </summary>
+    public static EchoObject ReadFromBson(byte[] bson) => BsonFileFormat.Instance.ReadFromBytes(bson);
+
+    #endregion
 
     #region YAML
 
