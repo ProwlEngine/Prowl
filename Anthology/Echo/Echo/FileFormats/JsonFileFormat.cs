@@ -203,20 +203,8 @@ public sealed class JsonFileFormat : IFileFormat
                 default:
                     if (c < ' ')
                     {
-                        // Emit surrogate pairs as \uHHHH\uHHHH when in the control-char/escape branch
-                        if (char.IsHighSurrogate(c) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
-                        {
-                            writer.Write("\\u");
-                            writer.Write(((int)c).ToString("X4"));
-                            i++;
-                            writer.Write("\\u");
-                            writer.Write(((int)value[i]).ToString("X4"));
-                        }
-                        else
-                        {
-                            writer.Write("\\u");
-                            writer.Write(((int)c).ToString("X4"));
-                        }
+                        writer.Write("\\u");
+                        writer.Write(((int)c).ToString("X4"));
                     }
                     else if (char.IsHighSurrogate(c) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
                     {
