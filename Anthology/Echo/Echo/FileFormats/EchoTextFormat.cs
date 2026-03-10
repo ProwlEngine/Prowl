@@ -193,44 +193,37 @@ public sealed class EchoTextFormat : IFileFormat
 
         writer.WriteLine("{");
 
-        // Write "$id" and "$type" keys first, if they exist
-        if (dict.ContainsKey("$id"))
-        {
-            WriteCompoundElement("$id", writer, dict, indentLevel, indent);
-            writer.Write(",");
-            writer.WriteLine();
-        }
+        bool wroteAny = false;
 
-        if (dict.ContainsKey("$type"))
+        // Write "$id", "$type", "$dependencies" keys first, if they exist
+        string[] specialKeys = ["$id", "$type", "$dependencies"];
+        foreach (var key in specialKeys)
         {
-            WriteCompoundElement("$type", writer, dict, indentLevel, indent);
-            writer.Write(",");
-            writer.WriteLine();
-        }
+            if (!dict.ContainsKey(key))
+                continue;
 
-        if (dict.ContainsKey("$dependencies"))
-        {
-            WriteCompoundElement("$dependencies", writer, dict, indentLevel, indent);
-            writer.Write(",");
-            writer.WriteLine();
+            if (wroteAny)
+            {
+                writer.Write(",");
+                writer.WriteLine();
+            }
+            WriteCompoundElement(key, writer, dict, indentLevel, indent);
+            wroteAny = true;
         }
 
         // Write the remaining key-value pairs
-        var skipNextComma = true;
         foreach (var kvp in dict)
         {
             if (kvp.Key == "$id" || kvp.Key == "$type" || kvp.Key == "$dependencies")
                 continue;
 
-            if (!skipNextComma)
+            if (wroteAny)
             {
-                skipNextComma = false;
                 writer.Write(",");
                 writer.WriteLine();
             }
-            skipNextComma = false;
-
             WriteCompoundElement(kvp.Key, writer, dict, indentLevel, indent);
+            wroteAny = true;
         }
 
         writer.WriteLine();
