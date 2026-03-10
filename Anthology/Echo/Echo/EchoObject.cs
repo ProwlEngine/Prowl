@@ -219,13 +219,12 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                 // First check if the dictionaries have the same number of keys
                 if (thisTags.Count != otherTags.Count) return false;
 
-                // Then check if they have exactly the same keys
-                if (!thisTags.Keys.SequenceEqual(otherTags.Keys)) return false;
-
-                // Finally check if all values are equal
-                foreach (var key in thisTags.Keys)
+                // Check all keys exist in both and values are equal
+                // (no SequenceEqual — dictionary enumeration order is not guaranteed)
+                foreach (var kvp in thisTags)
                 {
-                    if (!thisTags[key].Equals(otherTags[key])) return false;
+                    if (!otherTags.TryGetValue(kvp.Key, out var otherVal) || !kvp.Value.Equals(otherVal))
+                        return false;
                 }
                 return true;
 
