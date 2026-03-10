@@ -1,13 +1,32 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Globalization;
+using System.Text;
 
 namespace Prowl.Echo;
 
-internal static class StringTagConverter
+/// <summary>
+/// IFileFormat wrapper around the Echo text format.
+/// Preserves all EchoObject types exactly during roundtrip.
+/// </summary>
+public sealed class EchoTextFormat : IFileFormat
 {
-    // Writing:
+    public static readonly EchoTextFormat Instance = new();
+
+    public void WriteTo(EchoObject tag, Stream stream)
+    {
+        using var writer = new StreamWriter(stream, new UTF8Encoding(false), 1024, leaveOpen: true);
+        writer.Write(Write(tag));
+    }
+
+    public EchoObject ReadFrom(Stream stream)
+    {
+        using var reader = new StreamReader(stream, Encoding.UTF8, true, 1024, leaveOpen: true);
+        return Read(reader.ReadToEnd());
+    }
+
+    // Public static methods (used by EchoObject.cs and other callers)
 
     public static void WriteToFile(EchoObject tag, FileInfo file)
     {
@@ -43,6 +62,8 @@ internal static class StringTagConverter
             throw;
         }
     }
+
+    // Writing:
 
     private static void WriteTag(EchoObject prop, TextWriter writer, int indentLevel)
     {
@@ -228,19 +249,6 @@ internal static class StringTagConverter
 
     // Reading:
 
-    public enum TextTokenType
-    {
-        None,
-        BeginCompound,
-        EndCompound,
-        BeginList,
-        BeginArray,
-        EndList,
-        Separator,
-        NameValueSeparator,
-        Value
-    }
-
     private static EchoObject ReadTag(StringTagTokenizer parser)
     {
         return parser.TokenType switch
@@ -395,7 +403,22 @@ internal static class StringTagConverter
         };
     }
 
-    public class StringTagTokenizer
+    // Nested types
+
+    internal enum TextTokenType
+    {
+        None,
+        BeginCompound,
+        EndCompound,
+        BeginList,
+        BeginArray,
+        EndList,
+        Separator,
+        NameValueSeparator,
+        Value
+    }
+
+    internal class StringTagTokenizer
     {
         private readonly Tokenizer<TextTokenType> _tokenizer;
 
@@ -449,6 +472,4 @@ internal static class StringTagConverter
         public int TokenPosition => _tokenizer.TokenPosition;
         public int InputPosition => _tokenizer.InputPosition;
     }
-
-
 }

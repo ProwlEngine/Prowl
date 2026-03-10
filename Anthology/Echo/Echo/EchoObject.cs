@@ -128,7 +128,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     {
         using var stream = file.OpenWrite();
         using var writer = new BinaryWriter(stream);
-        BinaryTagConverter.WriteTo(this, writer, options);
+        EchoBinaryFormat.WriteTo(this, writer, options);
     }
 
     /// <summary>
@@ -138,7 +138,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     /// <param name="options">Optional serialization options</param>
     public void WriteToBinary(BinaryWriter writer, BinarySerializationOptions? options = null)
     {
-        BinaryTagConverter.WriteTo(this, writer, options);
+        EchoBinaryFormat.WriteTo(this, writer, options);
     }
 
     /// <summary>
@@ -149,7 +149,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     /// <returns>The tag read from the file</returns>
     public static EchoObject ReadFromBinary(FileInfo file, BinarySerializationOptions? options = null)
     {
-        return BinaryTagConverter.ReadFromFile(file, options);
+        return EchoBinaryFormat.ReadFromFile(file, options);
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     /// <returns>The tag read from the file</returns>
     public static EchoObject ReadFromBinary(BinaryReader reader, BinarySerializationOptions? options = null)
     {
-        return BinaryTagConverter.ReadFrom(reader, options);
+        return EchoBinaryFormat.ReadFrom(reader, options);
     }
 
 
@@ -170,7 +170,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     /// <param name="file">The file to write to</param>
     public void WriteToString(FileInfo file)
     {
-        StringTagConverter.WriteToFile(this, file);
+        EchoTextFormat.WriteToFile(this, file);
     }
 
     /// <summary>
@@ -178,7 +178,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     /// </summary>
     public string WriteToString()
     {
-        return StringTagConverter.Write(this);
+        return EchoTextFormat.Write(this);
     }
 
     /// <summary>
@@ -188,7 +188,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     /// <returns>The tag read from the file</returns>
     public static EchoObject ReadFromString(FileInfo file)
     {
-        return StringTagConverter.ReadFromFile(file);
+        return EchoTextFormat.ReadFromFile(file);
     }
 
     /// <summary>
@@ -198,7 +198,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     /// <returns>The tag read from the string</returns>
     public static EchoObject ReadFromString(string input)
     {
-        return StringTagConverter.Read(input);
+        return EchoTextFormat.Read(input);
     }
 
     #region Equality

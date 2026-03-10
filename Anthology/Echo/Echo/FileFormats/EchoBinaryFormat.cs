@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Text;
@@ -39,8 +39,33 @@ public class BinarySerializationOptions
     public static BinarySerializationOptions Default => new();
 }
 
-internal static class BinaryTagConverter
+/// <summary>
+/// IFileFormat wrapper around the Echo binary format.
+/// Preserves all EchoObject types exactly during roundtrip.
+/// </summary>
+public sealed class EchoBinaryFormat : IFileFormat
 {
+    public static readonly EchoBinaryFormat Instance = new();
+
+    /// <summary>
+    /// Options controlling binary encoding mode (Performance vs Size).
+    /// </summary>
+    public BinarySerializationOptions Options { get; set; } = BinarySerializationOptions.Default;
+
+    public void WriteTo(EchoObject tag, Stream stream)
+    {
+        using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
+        WriteTo(tag, writer, Options);
+    }
+
+    public EchoObject ReadFrom(Stream stream)
+    {
+        using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
+        return ReadFrom(reader, Options);
+    }
+
+    #region Shared ThreadLocal Collections
+
     private static readonly ThreadLocal<Dictionary<string, int>> SharedEncodeDictionary = new(() => new Dictionary<string, int>(4096));
     private static readonly ThreadLocal<Dictionary<int, string>> SharedDecodeDictionary = new(() => new Dictionary<int, string>(4096));
     private static readonly ThreadLocal<StringBuilder> SharedStringBuilder = new(() => new StringBuilder(4096));
@@ -54,6 +79,7 @@ internal static class BinaryTagConverter
         SharedCodeList.Value!.Clear();
     }
 
+    #endregion
 
     #region LZW Compression Helpers
     private const int MaxDictionarySize = 4096;
@@ -255,7 +281,7 @@ internal static class BinaryTagConverter
         else if (type == EchoType.Compound) WriteCompound_Performance(tag, writer, options);
         else throw new Exception($"Unknown tag type: {type}");
     }
-    
+
     private static void WriteTag_Size(EchoObject tag, BinaryWriter writer, BinarySerializationOptions options)
     {
         var type = tag.TagType;
@@ -293,7 +319,7 @@ internal static class BinaryTagConverter
         else if (type == EchoType.Compound) WriteCompound_Size(tag, writer, options);
         else throw new Exception($"Unknown tag type: {type}");
     }
-    
+
     #endregion
 
     #region Reading
@@ -382,7 +408,7 @@ internal static class BinaryTagConverter
         else if (type == EchoType.Compound) return ReadCompound_Performance(reader, options);
         else throw new Exception($"Unknown tag type: {type}");
     }
-    
+
     private static EchoObject ReadTag_Size(BinaryReader reader, BinarySerializationOptions options)
     {
         var type = (EchoType)reader.ReadByte();
@@ -420,6 +446,6 @@ internal static class BinaryTagConverter
         else if (type == EchoType.Compound) return ReadCompound_Size(reader, options);
         else throw new Exception($"Unknown tag type: {type}");
     }
-    
+
     #endregion
 }
