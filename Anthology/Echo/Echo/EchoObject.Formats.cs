@@ -19,6 +19,21 @@ public sealed partial class EchoObject
 
     #endregion
 
+
+    #region YAML
+
+    /// <summary>
+    /// Write this EchoObject to a YAML string.
+    /// </summary>
+    public string WriteToYaml() => YamlFileFormat.Instance.WriteToString(this);
+
+    /// <summary>
+    /// Read an EchoObject from a YAML string. Supports generic YAML.
+    /// </summary>
+    public static EchoObject ReadFromYaml(string yaml) => YamlFileFormat.Instance.ReadFromString(yaml);
+
+    #endregion
+
     #region XML
 
     /// <summary>
