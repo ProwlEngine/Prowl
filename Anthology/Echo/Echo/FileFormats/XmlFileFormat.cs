@@ -386,7 +386,7 @@ public sealed class XmlFileFormat : IFileFormat
         return sb.ToString();
     }
 
-    private static char ReadEntityRef(string xml, ref int index)
+    private static string ReadEntityRef(string xml, ref int index)
     {
         index++; // skip '&'
         int start = index;
@@ -397,18 +397,21 @@ public sealed class XmlFileFormat : IFileFormat
         var entity = xml.Substring(start, index - start);
         index++; // skip ';'
 
-        return entity switch
+        if (entity == "amp") return "&";
+        if (entity == "lt") return "<";
+        if (entity == "gt") return ">";
+        if (entity == "quot") return "\"";
+        if (entity == "apos") return "'";
+
+        if (entity.StartsWith('#'))
         {
-            "amp" => '&',
-            "lt" => '<',
-            "gt" => '>',
-            "quot" => '"',
-            "apos" => '\'',
-            _ when entity.StartsWith('#') => entity.Length > 1 && (entity[1] == 'x' || entity[1] == 'X')
-                ? (char)int.Parse(entity.Substring(2), System.Globalization.NumberStyles.HexNumber)
-                : (char)int.Parse(entity.Substring(1)),
-            _ => '?'
-        };
+            int codePoint = entity.Length > 1 && (entity[1] == 'x' || entity[1] == 'X')
+                ? int.Parse(entity.Substring(2), System.Globalization.NumberStyles.HexNumber)
+                : int.Parse(entity.Substring(1));
+            return char.ConvertFromUtf32(codePoint);
+        }
+
+        return "?";
     }
 
     private static EchoObject ConvertFromAttributes(Dictionary<string, string> attrs, string textContent, string elemName)
