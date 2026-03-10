@@ -18,4 +18,18 @@ public sealed partial class EchoObject
     public static EchoObject ReadFromJson(string json) => JsonFileFormat.Instance.ReadFromString(json);
 
     #endregion
+
+    #region XML
+
+    /// <summary>
+    /// Write this EchoObject to an XML string.
+    /// </summary>
+    public string WriteToXml() => XmlFileFormat.Instance.WriteToString(this);
+
+    /// <summary>
+    /// Read an EchoObject from an XML string. Supports generic XML.
+    /// </summary>
+    public static EchoObject ReadFromXml(string xml) => XmlFileFormat.Instance.ReadFromString(xml);
+
+    #endregion
 }
