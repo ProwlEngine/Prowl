@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Prowl.Wicked\Prowl.Wicked.csproj" />
+    <ProjectReference Include="..\Prowl.Wicked.Weaver\Prowl.Wicked.Weaver.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="Weave" AfterTargets="Build">
+    <Exec Command="dotnet run --no-build --project &quot;$(MSBuildThisFileDirectory)..\Prowl.Wicked.Weaver\Prowl.Wicked.Weaver.csproj&quot; -- &quot;$(TargetPath)&quot;" />
+  </Target>
+
+</Project>
