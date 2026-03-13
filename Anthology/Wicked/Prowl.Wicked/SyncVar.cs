@@ -197,6 +197,7 @@ public class SyncVarInterpolated : SyncVar<float>
 {
     private float _target;
     private float _display;
+    private bool _hasReceivedValue;
 
     /// <summary>Interpolation speed in units per second. Higher = snappier.</summary>
     public float InterpSpeed { get; set; }
@@ -219,6 +220,12 @@ public class SyncVarInterpolated : SyncVar<float>
     {
         base.OnDeserialize(oldValue, newValue);
         _target = newValue;
+        // Snap display on first receive (spawn data) so entities don't lerp from origin
+        if (!_hasReceivedValue)
+        {
+            _display = newValue;
+            _hasReceivedValue = true;
+        }
     }
 
     public override float Value
@@ -252,6 +259,7 @@ public class SyncVarInterpolatedVector2 : SyncVar<Vector2>
 {
     private Vector2 _target;
     private Vector2 _display;
+    private bool _hasReceivedValue;
 
     /// <summary>Interpolation speed. Higher = snappier.</summary>
     public float InterpSpeed { get; set; }
@@ -276,6 +284,12 @@ public class SyncVarInterpolatedVector2 : SyncVar<Vector2>
     {
         base.OnDeserialize(oldValue, newValue);
         _target = newValue;
+        // Snap display on first receive (spawn data) so entities don't lerp from origin
+        if (!_hasReceivedValue)
+        {
+            _display = newValue;
+            _hasReceivedValue = true;
+        }
     }
 
     public override Vector2 Value
