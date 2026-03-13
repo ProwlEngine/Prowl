@@ -869,32 +869,47 @@ public class SyncVarTests : IDisposable
     {
         var sv = new SyncVarInterpolated(0f, interpSpeed: 10f);
 
-        // Simulate receiving a new value from network
+        // First deserialize snaps display (spawn data)
         var writer = new NetworkWriter();
         new SyncVar<float>(100f).Serialize(writer);
         var reader = new NetworkReader(writer.ToArraySegment());
         sv.Deserialize(reader);
 
         Assert.Equal(100f, sv.Value);
-        // Display hasn't been updated yet (still at initial)
-        Assert.Equal(0f, sv.Display);
+        Assert.Equal(100f, sv.Display); // snapped on first receive
 
-        // Simulate client updates
+        // Second deserialize interpolates (subsequent updates)
+        writer = new NetworkWriter();
+        new SyncVar<float>(200f).Serialize(writer);
+        reader = new NetworkReader(writer.ToArraySegment());
+        sv.Deserialize(reader);
+
+        Assert.Equal(200f, sv.Value);
+        Assert.Equal(100f, sv.Display); // not yet interpolated
+
         sv.ClientUpdate(0.1f); // 10 * 0.1 = 1.0 → clamped to 1.0 → instant jump
-        Assert.Equal(100f, sv.Display); // interpSpeed*dt = 1.0 → full lerp
+        Assert.Equal(200f, sv.Display);
 
         // Test partial interpolation with smaller dt
         var sv2 = new SyncVarInterpolated(0f, interpSpeed: 5f);
+        // First deserialize snaps
         writer = new NetworkWriter();
-        new SyncVar<float>(100f).Serialize(writer);
+        new SyncVar<float>(50f).Serialize(writer);
+        reader = new NetworkReader(writer.ToArraySegment());
+        sv2.Deserialize(reader);
+        Assert.Equal(50f, sv2.Display);
+
+        // Second deserialize sets target without snapping
+        writer = new NetworkWriter();
+        new SyncVar<float>(150f).Serialize(writer);
         reader = new NetworkReader(writer.ToArraySegment());
         sv2.Deserialize(reader);
 
         sv2.ClientUpdate(0.016f); // ~60fps, interpSpeed*dt = 0.08
-        float expected = 0f + (100f - 0f) * MathF.Min(1f, 5f * 0.016f);
+        float expected = 50f + (150f - 50f) * MathF.Min(1f, 5f * 0.016f);
         Assert.Equal(expected, sv2.Display, precision: 3);
-        Assert.True(sv2.Display > 0f);
-        Assert.True(sv2.Display < 100f);
+        Assert.True(sv2.Display > 50f);
+        Assert.True(sv2.Display < 150f);
     }
 
     [Fact]
@@ -953,16 +968,25 @@ public class SyncVarTests : IDisposable
     {
         var sv = new SyncVarInterpolatedVector2(Vector2.Zero, interpSpeed: 5f);
 
+        // First deserialize snaps display (spawn data)
         var writer = new NetworkWriter();
         new SyncVar<Vector2>(new Vector2(100, 200)).Serialize(writer);
         sv.Deserialize(new NetworkReader(writer.ToArraySegment()));
 
         Assert.Equal(new Vector2(100, 200), sv.Value);
-        Assert.Equal(Vector2.Zero, sv.Display); // not yet updated
+        Assert.Equal(new Vector2(100, 200), sv.Display); // snapped on first receive
+
+        // Second deserialize interpolates (subsequent updates)
+        writer = new NetworkWriter();
+        new SyncVar<Vector2>(new Vector2(200, 400)).Serialize(writer);
+        sv.Deserialize(new NetworkReader(writer.ToArraySegment()));
+
+        Assert.Equal(new Vector2(200, 400), sv.Value);
+        Assert.Equal(new Vector2(100, 200), sv.Display); // not yet interpolated
 
         sv.ClientUpdate(0.016f);
         float t = MathF.Min(1f, 5f * 0.016f);
-        var expected = new Vector2(100f * t, 200f * t);
+        var expected = new Vector2(100f + 100f * t, 200f + 200f * t);
         Assert.Equal(expected.X, sv.Display.X, precision: 3);
         Assert.Equal(expected.Y, sv.Display.Y, precision: 3);
     }

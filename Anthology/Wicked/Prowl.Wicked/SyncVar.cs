@@ -163,6 +163,28 @@ public class SyncVar<T> : ISyncVar
     /// <summary>Implicit conversion to T for convenient read access.</summary>
     public static implicit operator T(SyncVar<T> syncVar) => syncVar._value;
 
+    /// <summary>
+    /// Compares two SyncVars by their underlying values.
+    /// Without this, C# uses reference equality for SyncVar == SyncVar comparisons.
+    /// </summary>
+    public static bool operator ==(SyncVar<T>? left, SyncVar<T>? right)
+    {
+        if (left is null) return right is null;
+        if (right is null) return false;
+        return EqualityComparer<T>.Default.Equals(left._value, right._value);
+    }
+
+    public static bool operator !=(SyncVar<T>? left, SyncVar<T>? right) => !(left == right);
+
+    public override bool Equals(object? obj) => obj switch
+    {
+        SyncVar<T> other => EqualityComparer<T>.Default.Equals(_value, other._value),
+        T val => EqualityComparer<T>.Default.Equals(_value, val),
+        _ => false
+    };
+
+    public override int GetHashCode() => _value?.GetHashCode() ?? 0;
+
     public override string ToString() => _value?.ToString() ?? "null";
 }
 
