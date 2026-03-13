@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\SampleBase\SampleBase.csproj" />
+    <ProjectReference Include="..\..\AssetProcessor\AssetProcessor.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Common\RawList.cs" Link="RawList.cs" />
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)/Shaders/**">
+      <LogicalName>%(FileName)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <Asset Include="$(SamplesAssetsDir)\textures\texturearray_rocks_bc3_unorm.ktx" />
+    <Asset Include="$(SamplesAssetsDir)\textures\lavaplanet_bc3_unorm.ktx" />
+    <Asset Include="$(SamplesAssetsDir)\textures\texturearray_rocks_etc2_unorm.ktx" />
+    <Asset Include="$(SamplesAssetsDir)\textures\lavaplanet_etc2_unorm.ktx" />
+    <Asset Include="$(SamplesAssetsDir)\models\rock01.dae" />
+    <Asset Include="$(SamplesAssetsDir)\models\sphere.obj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);VALIDATE_USAGE</DefineConstants>
+    <DefineConstants Condition="'$(ExcludeD3D11)' == 'true'">$(DefineConstants);EXCLUDE_D3D11_BACKEND</DefineConstants>
+    <DefineConstants Condition="'$(ExcludeVulkan)' == 'true'">$(DefineConstants);EXCLUDE_VULKAN_BACKEND</DefineConstants>
+    <DefineConstants Condition="'$(ExcludeOpenGL)' == 'true'">$(DefineConstants);EXCLUDE_OPENGL_BACKEND</DefineConstants>
+    <!-- Metal always excluded — replaced by MoltenVK via Vulkan -->
+    <DefineConstants>$(DefineConstants);EXCLUDE_METAL_BACKEND</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Silk.NET Vulkan -->
+    <PackageReference Include="Silk.NET.Vulkan" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
+
+    <!-- Silk.NET Direct3D 11 -->
+    <PackageReference Include="Silk.NET.Direct3D11" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
+    <PackageReference Include="Silk.NET.DXGI" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
+    <PackageReference Include="Silk.NET.Direct3D.Compilers" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
+
+    <!-- Silk.NET OpenGL -->
+    <PackageReference Include="Silk.NET.OpenGL" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
+    <PackageReference Include="Silk.NET.OpenGLES" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
+
+    <!-- Silk.NET Core (for SilkMarshal, ComPtr, etc.) -->
+    <PackageReference Include="Silk.NET.Core" Version="$(SilkNetVersion)" />
+  </ItemGroup>
+
+  <!-- Exclude backends by compile removal -->
+  <ItemGroup>
+    <Compile Remove="D3D11/**/*" Condition="'$(ExcludeD3D11)' == 'true'" />
+    <Compile Remove="Vk/**/*" Condition="'$(ExcludeVulkan)' == 'true'" />
+    <Compile Remove="OpenGL/**/*" Condition="'$(ExcludeOpenGL)' == 'true'" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <Description>A low-level, hardware-accelerated graphics and compute library for .NET, with backends for Vulkan, Direct3D 11, and OpenGL. Veldrid can be used to create high-performance 2D and 3D games, simulations, tools, and other graphical applications.</Description>
+    <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game</PackageTags>
+  </PropertyGroup>
+
+</Project>

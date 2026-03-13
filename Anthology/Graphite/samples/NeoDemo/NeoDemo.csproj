@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Veldrid.NeoDemo</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <AssetsDir>$(MSBuildThisFileDirectory)Assets</AssetsDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="$(AssetsDir)\Textures\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Assets\Textures\%(RecursiveDir)\%(FileName)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="$(AssetsDir)\Models\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Assets\Models\%(RecursiveDir)\%(FileName)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="$(AssetsDir)\Shaders\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Assets\Shaders\%(RecursiveDir)\%(FileName)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Veldrid.SPIRV" Version="$(VeldridSpirvVersion)" />
+    <ProjectReference Include="..\..\src\Veldrid.RenderDoc\Veldrid.RenderDoc.csproj" />
+    <ProjectReference Include="..\..\src\Veldrid\Veldrid.csproj" />
+    <ProjectReference Include="..\..\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj" />
+    <ProjectReference Include="..\..\src\Veldrid.ImageSharp\Veldrid.ImageSharp.csproj" />
+    <ProjectReference Include="..\..\src\Veldrid.Utilities\Veldrid.Utilities.csproj" />
+    <ProjectReference Include="..\..\src\Veldrid.ImGui\Veldrid.ImGui.csproj" />
+  </ItemGroup>
+
+</Project>

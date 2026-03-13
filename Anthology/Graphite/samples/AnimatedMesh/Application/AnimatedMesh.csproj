@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <Compile Include="..\..\Common\Model.cs" Link="Model.cs" />
+    <Compile Include="..\..\Common\RawList.cs" Link="RawList.cs" />
+    <EmbeddedResource Include="$(SamplesAssetsDir)\models\goblin.dae">
+      <LogicalName>goblin.dae</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(SamplesAssetsDir)\textures\goblin_bc3_unorm.ktx">
+      <LogicalName>goblin_bc3_unorm.ktx</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\SampleBase\SampleBase.csproj" />
+    <PackageReference Include="Veldrid.Spirv" Version="$(VeldridSpirvVersion)" />
+    <PackageReference Include="AssimpNet" Version="$(AssimpNetVersion)" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\SampleBase\SampleBase.csproj" />
+    <ProjectReference Include="..\..\AssetPrimitives\AssetPrimitives.csproj" />
+    <ProjectReference Include="..\..\AssetProcessor\AssetProcessor.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

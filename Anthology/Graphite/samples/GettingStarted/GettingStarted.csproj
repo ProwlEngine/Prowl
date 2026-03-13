@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Veldrid\Veldrid.csproj" />
+    <ProjectReference Include="..\..\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj" />
+    <PackageReference Include="Veldrid.SPIRV" Version="$(VeldridSpirvVersion)" />
+  </ItemGroup>
+
+</Project>
