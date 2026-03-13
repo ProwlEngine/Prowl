@@ -45,6 +45,13 @@ public interface ISyncVar
 
     /// <summary>Called each client tick for interpolation or other per-frame updates.</summary>
     void ClientUpdate(float dt);
+
+    /// <summary>
+    /// Resets interpolation state so the next received value snaps instead of lerping.
+    /// Call on the server before setting a new position (e.g., on respawn).
+    /// No-op for non-interpolated SyncVars.
+    /// </summary>
+    void ResetInterpolation();
 }
 
 /// <summary>
@@ -160,6 +167,9 @@ public class SyncVar<T> : ISyncVar
     /// </summary>
     public virtual void ClientUpdate(float dt) { }
 
+    /// <summary>No-op for non-interpolated SyncVars.</summary>
+    public virtual void ResetInterpolation() { }
+
     /// <summary>Implicit conversion to T for convenient read access.</summary>
     public static implicit operator T(SyncVar<T> syncVar) => syncVar._value;
 
@@ -198,6 +208,8 @@ public class SyncVarInterpolated : SyncVar<float>
     private float _target;
     private float _display;
     private bool _hasReceivedValue;
+    private bool _snapNext;
+    private bool _snapOnDeserialize;
 
     /// <summary>Interpolation speed in units per second. Higher = snappier.</summary>
     public float InterpSpeed { get; set; }
@@ -216,15 +228,37 @@ public class SyncVarInterpolated : SyncVar<float>
         _display = initialValue;
     }
 
+    /// <summary>
+    /// Marks this SyncVar so the next serialized value tells clients to snap
+    /// instead of interpolating. Call before setting a new value (e.g., on respawn).
+    /// </summary>
+    public override void ResetInterpolation()
+    {
+        _snapNext = true;
+    }
+
+    public override void Serialize(NetworkWriter writer)
+    {
+        writer.WriteBool(_snapNext);
+        _snapNext = false;
+        base.Serialize(writer);
+    }
+
+    public override void Deserialize(NetworkReader reader)
+    {
+        _snapOnDeserialize = reader.ReadBool();
+        base.Deserialize(reader);
+    }
+
     protected override void OnDeserialize(float oldValue, float newValue)
     {
         base.OnDeserialize(oldValue, newValue);
         _target = newValue;
-        // Snap display on first receive (spawn data) so entities don't lerp from origin
-        if (!_hasReceivedValue)
+        if (_snapOnDeserialize || !_hasReceivedValue)
         {
             _display = newValue;
             _hasReceivedValue = true;
+            _snapOnDeserialize = false;
         }
     }
 
@@ -260,6 +294,8 @@ public class SyncVarInterpolatedVector2 : SyncVar<Vector2>
     private Vector2 _target;
     private Vector2 _display;
     private bool _hasReceivedValue;
+    private bool _snapNext;
+    private bool _snapOnDeserialize;
 
     /// <summary>Interpolation speed. Higher = snappier.</summary>
     public float InterpSpeed { get; set; }
@@ -280,15 +316,37 @@ public class SyncVarInterpolatedVector2 : SyncVar<Vector2>
     public SyncVarInterpolatedVector2(SyncTarget target)
         : this(Vector2.Zero, 15f, target) { }
 
+    /// <summary>
+    /// Marks this SyncVar so the next serialized value tells clients to snap
+    /// instead of interpolating. Call before setting a new value (e.g., on respawn).
+    /// </summary>
+    public override void ResetInterpolation()
+    {
+        _snapNext = true;
+    }
+
+    public override void Serialize(NetworkWriter writer)
+    {
+        writer.WriteBool(_snapNext);
+        _snapNext = false;
+        base.Serialize(writer);
+    }
+
+    public override void Deserialize(NetworkReader reader)
+    {
+        _snapOnDeserialize = reader.ReadBool();
+        base.Deserialize(reader);
+    }
+
     protected override void OnDeserialize(Vector2 oldValue, Vector2 newValue)
     {
         base.OnDeserialize(oldValue, newValue);
         _target = newValue;
-        // Snap display on first receive (spawn data) so entities don't lerp from origin
-        if (!_hasReceivedValue)
+        if (_snapOnDeserialize || !_hasReceivedValue)
         {
             _display = newValue;
             _hasReceivedValue = true;
+            _snapOnDeserialize = false;
         }
     }
 

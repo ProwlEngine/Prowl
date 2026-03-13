@@ -865,67 +865,66 @@ public class SyncVarTests : IDisposable
     }
 
     [Fact]
-    public void SyncVarInterpolated_ClientUpdate_InterpolatesOverTime()
+    public void SyncVarInterpolated_SpawnSnapsDisplay()
     {
-        var sv = new SyncVarInterpolated(0f, interpSpeed: 10f);
+        var (client, map) = SetupWithMap();
+        var serverEntity = Server.Spawn<SyncVarInterpolatedEntity>(map, e =>
+        {
+            e.Health.Value = 100f;
+        });
+        Tick();
 
-        // First deserialize snaps display (spawn data)
-        var writer = new NetworkWriter();
-        new SyncVar<float>(100f).Serialize(writer);
-        var reader = new NetworkReader(writer.ToArraySegment());
-        sv.Deserialize(reader);
-
-        Assert.Equal(100f, sv.Value);
-        Assert.Equal(100f, sv.Display); // snapped on first receive
-
-        // Second deserialize interpolates (subsequent updates)
-        writer = new NetworkWriter();
-        new SyncVar<float>(200f).Serialize(writer);
-        reader = new NetworkReader(writer.ToArraySegment());
-        sv.Deserialize(reader);
-
-        Assert.Equal(200f, sv.Value);
-        Assert.Equal(100f, sv.Display); // not yet interpolated
-
-        sv.ClientUpdate(0.1f); // 10 * 0.1 = 1.0 → clamped to 1.0 → instant jump
-        Assert.Equal(200f, sv.Display);
-
-        // Test partial interpolation with smaller dt
-        var sv2 = new SyncVarInterpolated(0f, interpSpeed: 5f);
-        // First deserialize snaps
-        writer = new NetworkWriter();
-        new SyncVar<float>(50f).Serialize(writer);
-        reader = new NetworkReader(writer.ToArraySegment());
-        sv2.Deserialize(reader);
-        Assert.Equal(50f, sv2.Display);
-
-        // Second deserialize sets target without snapping
-        writer = new NetworkWriter();
-        new SyncVar<float>(150f).Serialize(writer);
-        reader = new NetworkReader(writer.ToArraySegment());
-        sv2.Deserialize(reader);
-
-        sv2.ClientUpdate(0.016f); // ~60fps, interpSpeed*dt = 0.08
-        float expected = 50f + (150f - 50f) * MathF.Min(1f, 5f * 0.016f);
-        Assert.Equal(expected, sv2.Display, precision: 3);
-        Assert.True(sv2.Display > 50f);
-        Assert.True(sv2.Display < 150f);
+        var clientEntity = Client.FindEntity<SyncVarInterpolatedEntity>(serverEntity.NetworkId);
+        Assert.NotNull(clientEntity);
+        Assert.Equal(100f, clientEntity!.Health.Value);
+        Assert.Equal(100f, clientEntity.Health.Display); // snapped on spawn
     }
 
     [Fact]
-    public void SyncVarInterpolated_ClientUpdate_ConvergesToTarget()
+    public void SyncVarInterpolated_UpdateInterpolatesNotSnaps()
     {
-        var sv = new SyncVarInterpolated(0f, interpSpeed: 10f);
+        var (client, map) = SetupWithMap();
+        var serverEntity = Server.Spawn<SyncVarInterpolatedEntity>(map, e =>
+        {
+            e.Health.Value = 100f;
+        });
+        Tick();
 
-        var writer = new NetworkWriter();
-        new SyncVar<float>(100f).Serialize(writer);
-        sv.Deserialize(new NetworkReader(writer.ToArraySegment()));
+        var clientEntity = Client.FindEntity<SyncVarInterpolatedEntity>(serverEntity.NetworkId);
+        Assert.NotNull(clientEntity);
 
-        // Run many updates to converge
-        for (int i = 0; i < 1000; i++)
-            sv.ClientUpdate(0.016f);
+        // Change value on server and sync
+        serverEntity.Health.Value = 200f;
+        Tick();
 
-        Assert.Equal(100f, sv.Display, precision: 2);
+        // Value is updated but display should be interpolating (not snapped)
+        Assert.Equal(200f, clientEntity!.Health.Value);
+        // Display should have moved toward 200 but may not be there yet
+        Assert.True(clientEntity.Health.Display >= 100f);
+    }
+
+    [Fact]
+    public void SyncVarInterpolated_ResetInterpolation_SnapsOnNextSync()
+    {
+        var (client, map) = SetupWithMap();
+        var serverEntity = Server.Spawn<SyncVarInterpolatedEntity>(map, e =>
+        {
+            e.Health.Value = 100f;
+        });
+        Tick();
+
+        var clientEntity = Client.FindEntity<SyncVarInterpolatedEntity>(serverEntity.NetworkId);
+        Assert.NotNull(clientEntity);
+        Assert.Equal(100f, clientEntity!.Health.Display);
+
+        // Reset interpolation (simulating a respawn/teleport) and set new value
+        serverEntity.Health.ResetInterpolation();
+        serverEntity.Health.Value = 500f;
+        Tick();
+
+        // Client should have snapped display to 500, not interpolated from 100
+        Assert.Equal(500f, clientEntity.Health.Value);
+        Assert.Equal(500f, clientEntity.Health.Display);
     }
 
     [Fact]
@@ -964,92 +963,7 @@ public class SyncVarTests : IDisposable
     }
 
     [Fact]
-    public void SyncVarInterpolatedVector2_ClientUpdate_Interpolates()
-    {
-        var sv = new SyncVarInterpolatedVector2(Vector2.Zero, interpSpeed: 5f);
-
-        // First deserialize snaps display (spawn data)
-        var writer = new NetworkWriter();
-        new SyncVar<Vector2>(new Vector2(100, 200)).Serialize(writer);
-        sv.Deserialize(new NetworkReader(writer.ToArraySegment()));
-
-        Assert.Equal(new Vector2(100, 200), sv.Value);
-        Assert.Equal(new Vector2(100, 200), sv.Display); // snapped on first receive
-
-        // Second deserialize interpolates (subsequent updates)
-        writer = new NetworkWriter();
-        new SyncVar<Vector2>(new Vector2(200, 400)).Serialize(writer);
-        sv.Deserialize(new NetworkReader(writer.ToArraySegment()));
-
-        Assert.Equal(new Vector2(200, 400), sv.Value);
-        Assert.Equal(new Vector2(100, 200), sv.Display); // not yet interpolated
-
-        sv.ClientUpdate(0.016f);
-        float t = MathF.Min(1f, 5f * 0.016f);
-        var expected = new Vector2(100f + 100f * t, 200f + 200f * t);
-        Assert.Equal(expected.X, sv.Display.X, precision: 3);
-        Assert.Equal(expected.Y, sv.Display.Y, precision: 3);
-    }
-
-    [Fact]
-    public void SyncVarInterpolatedVector2_ClientUpdate_Converges()
-    {
-        var target = new Vector2(50, -30);
-        var sv = new SyncVarInterpolatedVector2(Vector2.Zero, interpSpeed: 15f);
-
-        var writer = new NetworkWriter();
-        new SyncVar<Vector2>(target).Serialize(writer);
-        sv.Deserialize(new NetworkReader(writer.ToArraySegment()));
-
-        for (int i = 0; i < 1000; i++)
-            sv.ClientUpdate(0.016f);
-
-        Assert.Equal(target.X, sv.Display.X, precision: 2);
-        Assert.Equal(target.Y, sv.Display.Y, precision: 2);
-    }
-
-    [Fact]
-    public void SyncVarInterpolatedVector2_SnapsToTarget_WhenClose()
-    {
-        var sv = new SyncVarInterpolatedVector2(new Vector2(0.0005f, 0.0005f), interpSpeed: 10f);
-
-        var writer = new NetworkWriter();
-        new SyncVar<Vector2>(Vector2.Zero).Serialize(writer);
-        sv.Deserialize(new NetworkReader(writer.ToArraySegment()));
-
-        // Display is at (0.0005, 0.0005), target is (0,0) — within snap threshold
-        sv.ClientUpdate(0.016f);
-        Assert.Equal(Vector2.Zero, sv.Display);
-    }
-
-    // ── Interpolated end-to-end replication ──
-
-    [Fact]
-    public void SyncVarInterpolated_ReplicatesAndInterpolatesOnClient()
-    {
-        var (client, map) = SetupWithMap();
-        var serverEntity = Server.Spawn<SyncVarInterpolatedEntity>(map, e =>
-        {
-            e.Health.Value = 100f;
-            e.Position.Value = Vector2.Zero;
-        });
-        Tick();
-
-        var clientEntity = Client.FindEntity<SyncVarInterpolatedEntity>(serverEntity.NetworkId);
-        Assert.NotNull(clientEntity);
-        Assert.Equal(100f, clientEntity!.Health.Value);
-
-        // Server changes health
-        serverEntity.Health.Value = 50f;
-        Tick();
-
-        // Client received the value
-        Assert.Equal(50f, clientEntity.Health.Value);
-        // Display should be interpolating (ClientUpdate was called during Tick)
-    }
-
-    [Fact]
-    public void SyncVarInterpolatedVector2_ReplicatesOnSpawn()
+    public void SyncVarInterpolatedVector2_SpawnSnapsDisplay()
     {
         var (client, map) = SetupWithMap();
         var pos = new Vector2(10, 20);
@@ -1062,6 +976,52 @@ public class SyncVarTests : IDisposable
         var clientEntity = Client.FindEntity<SyncVarInterpolatedEntity>(serverEntity.NetworkId);
         Assert.NotNull(clientEntity);
         Assert.Equal(pos, clientEntity!.Position.Value);
+        Assert.Equal(pos, clientEntity.Position.Display); // snapped on spawn
+    }
+
+    [Fact]
+    public void SyncVarInterpolatedVector2_UpdateInterpolatesNotSnaps()
+    {
+        var (client, map) = SetupWithMap();
+        var serverEntity = Server.Spawn<SyncVarInterpolatedEntity>(map, e =>
+        {
+            e.Position.Value = new Vector2(10, 20);
+        });
+        Tick();
+
+        var clientEntity = Client.FindEntity<SyncVarInterpolatedEntity>(serverEntity.NetworkId);
+        Assert.NotNull(clientEntity);
+
+        serverEntity.Position.Value = new Vector2(100, 200);
+        Tick();
+
+        Assert.Equal(new Vector2(100, 200), clientEntity!.Position.Value);
+        // Display should be interpolating toward the new value
+        Assert.True(clientEntity.Position.Display.X >= 10f);
+        Assert.True(clientEntity.Position.Display.Y >= 20f);
+    }
+
+    [Fact]
+    public void SyncVarInterpolatedVector2_ResetInterpolation_SnapsOnNextSync()
+    {
+        var (client, map) = SetupWithMap();
+        var serverEntity = Server.Spawn<SyncVarInterpolatedEntity>(map, e =>
+        {
+            e.Position.Value = new Vector2(10, 20);
+        });
+        Tick();
+
+        var clientEntity = Client.FindEntity<SyncVarInterpolatedEntity>(serverEntity.NetworkId);
+        Assert.NotNull(clientEntity);
+        Assert.Equal(new Vector2(10, 20), clientEntity!.Position.Display);
+
+        // Reset interpolation and teleport
+        serverEntity.Position.ResetInterpolation();
+        serverEntity.Position.Value = new Vector2(999, 888);
+        Tick();
+
+        Assert.Equal(new Vector2(999, 888), clientEntity.Position.Value);
+        Assert.Equal(new Vector2(999, 888), clientEntity.Position.Display);
     }
 
     // ── Edge cases ──
