@@ -1,9 +1,9 @@
-﻿using Vulkan;
-using static Vulkan.VulkanNative;
+using Silk.NET.Vulkan;
 using static Veldrid.Vk.VulkanUtil;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using VkFramebufferHandle = Silk.NET.Vulkan.Framebuffer;
 
 namespace Veldrid.Vk
 {
@@ -11,14 +11,14 @@ namespace Veldrid.Vk
     {
         private readonly VkGraphicsDevice _gd;
         private readonly VkSwapchain _swapchain;
-        private readonly VkSurfaceKHR _surface;
+        private readonly SurfaceKHR _surface;
         private readonly PixelFormat? _depthFormat;
         private uint _currentImageIndex;
 
         private VkFramebuffer[] _scFramebuffers;
-        private VkImage[] _scImages = {};
-        private VkFormat _scImageFormat;
-        private VkExtent2D _scExtent;
+        private Image[] _scImages = {};
+        private Format _scImageFormat;
+        private Extent2D _scExtent;
         private FramebufferAttachment[][] _scColorTextures;
 
         private FramebufferAttachment? _depthAttachment;
@@ -28,18 +28,18 @@ namespace Veldrid.Vk
         private string _name;
         private OutputDescription _outputDescription;
 
-        public override Vulkan.VkFramebuffer CurrentFramebuffer => _scFramebuffers[(int)_currentImageIndex].CurrentFramebuffer;
+        public override VkFramebufferHandle CurrentFramebuffer => _scFramebuffers[(int)_currentImageIndex].CurrentFramebuffer;
 
-        public override VkRenderPass RenderPassNoClear_Init => _scFramebuffers[0].RenderPassNoClear_Init;
-        public override VkRenderPass RenderPassNoClear_Load => _scFramebuffers[0].RenderPassNoClear_Load;
-        public override VkRenderPass RenderPassClear => _scFramebuffers[0].RenderPassClear;
+        public override RenderPass RenderPassNoClear_Init => _scFramebuffers[0].RenderPassNoClear_Init;
+        public override RenderPass RenderPassNoClear_Load => _scFramebuffers[0].RenderPassNoClear_Load;
+        public override RenderPass RenderPassClear => _scFramebuffers[0].RenderPassClear;
 
         public override IReadOnlyList<FramebufferAttachment> ColorTargets => _scColorTextures[(int)_currentImageIndex];
 
         public override FramebufferAttachment? DepthTarget => _depthAttachment;
 
-        public override uint RenderableWidth => _scExtent.width;
-        public override uint RenderableHeight => _scExtent.height;
+        public override uint RenderableWidth => _scExtent.Width;
+        public override uint RenderableHeight => _scExtent.Height;
 
         public override uint Width => _desiredWidth;
         public override uint Height => _desiredHeight;
@@ -57,7 +57,7 @@ namespace Veldrid.Vk
         public VkSwapchainFramebuffer(
             VkGraphicsDevice gd,
             VkSwapchain swapchain,
-            VkSurfaceKHR surface,
+            SurfaceKHR surface,
             uint width,
             uint height,
             PixelFormat? depthFormat)
@@ -77,27 +77,27 @@ namespace Veldrid.Vk
         }
 
         internal void SetNewSwapchain(
-            VkSwapchainKHR deviceSwapchain,
+            SwapchainKHR deviceSwapchain,
             uint width,
             uint height,
-            VkSurfaceFormatKHR surfaceFormat,
-            VkExtent2D swapchainExtent)
+            SurfaceFormatKHR surfaceFormat,
+            Extent2D swapchainExtent)
         {
             _desiredWidth = width;
             _desiredHeight = height;
 
             // Get the images
             uint scImageCount = 0;
-            VkResult result = vkGetSwapchainImagesKHR(_gd.Device, deviceSwapchain, ref scImageCount, null);
+            Result result = _gd.KhrSwapchain.GetSwapchainImages(_gd.Device, deviceSwapchain, ref scImageCount, null);
             CheckResult(result);
             if (_scImages.Length < scImageCount)
             {
-                _scImages = new VkImage[(int)scImageCount];
+                _scImages = new Image[(int)scImageCount];
             }
-            result = vkGetSwapchainImagesKHR(_gd.Device, deviceSwapchain, ref scImageCount, out _scImages[0]);
+            result = _gd.KhrSwapchain.GetSwapchainImages(_gd.Device, deviceSwapchain, ref scImageCount, out _scImages[0]);
             CheckResult(result);
 
-            _scImageFormat = surfaceFormat.format;
+            _scImageFormat = surfaceFormat.Format;
             _scExtent = swapchainExtent;
 
             CreateDepthTexture();
@@ -125,8 +125,8 @@ namespace Veldrid.Vk
             {
                 _depthAttachment?.Target.Dispose();
                 VkTexture depthTexture = (VkTexture)_gd.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
-                    Math.Max(1, _scExtent.width),
-                    Math.Max(1, _scExtent.height),
+                    Math.Max(1, _scExtent.Width),
+                    Math.Max(1, _scExtent.Height),
                     1,
                     1,
                     _depthFormat.Value,
@@ -153,8 +153,8 @@ namespace Veldrid.Vk
             {
                 VkTexture colorTex = new VkTexture(
                     _gd,
-                    Math.Max(1, _scExtent.width),
-                    Math.Max(1, _scExtent.height),
+                    Math.Max(1, _scExtent.Width),
+                    Math.Max(1, _scExtent.Height),
                     1,
                     1,
                     _scImageFormat,
@@ -168,23 +168,23 @@ namespace Veldrid.Vk
             }
         }
 
-        public override void TransitionToIntermediateLayout(VkCommandBuffer cb)
+        public override void TransitionToIntermediateLayout(CommandBuffer cb)
         {
             for (int i = 0; i < ColorTargets.Count; i++)
             {
                 FramebufferAttachment ca = ColorTargets[i];
                 VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(ca.Target);
-                vkTex.SetImageLayout(0, ca.ArrayLayer, VkImageLayout.ColorAttachmentOptimal);
+                vkTex.SetImageLayout(0, ca.ArrayLayer, ImageLayout.ColorAttachmentOptimal);
             }
         }
 
-        public override void TransitionToFinalLayout(VkCommandBuffer cb)
+        public override void TransitionToFinalLayout(CommandBuffer cb)
         {
             for (int i = 0; i < ColorTargets.Count; i++)
             {
                 FramebufferAttachment ca = ColorTargets[i];
                 VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(ca.Target);
-                vkTex.TransitionImageLayout(cb, 0, 1, ca.ArrayLayer, 1, VkImageLayout.PresentSrcKHR);
+                vkTex.TransitionImageLayout(cb, 0, 1, ca.ArrayLayer, 1, ImageLayout.PresentSrcKhr);
             }
         }
 

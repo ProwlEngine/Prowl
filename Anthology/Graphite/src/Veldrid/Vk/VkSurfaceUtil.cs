@@ -1,17 +1,13 @@
-﻿using Vulkan;
-using Vulkan.Xlib;
-using Vulkan.Wayland;
-using static Vulkan.VulkanNative;
+using Silk.NET.Vulkan;
+using Silk.NET.Vulkan.Extensions.KHR;
 using static Veldrid.Vk.VulkanUtil;
-using Veldrid.Android;
 using System;
-using Veldrid.MetalBindings;
 
 namespace Veldrid.Vk
 {
     internal static unsafe class VkSurfaceUtil
     {
-        internal static VkSurfaceKHR CreateSurface(VkGraphicsDevice gd, VkInstance instance, SwapchainSource swapchainSource)
+        internal static SurfaceKHR CreateSurface(VkGraphicsDevice gd, Instance instance, SwapchainSource swapchainSource)
         {
             // TODO a null GD is passed from VkSurfaceSource.CreateSurface for compatibility
             //      when VkSurfaceInfo is removed we do not have to handle gd == null anymore
@@ -27,25 +23,25 @@ namespace Veldrid.Vk
                     {
                         throw new VeldridException($"The required instance extension was not available: {CommonStrings.VK_KHR_XLIB_SURFACE_EXTENSION_NAME}");
                     }
-                    return CreateXlib(instance, xlibSource);
+                    return CreateXlib(gd, instance, xlibSource);
                 case WaylandSwapchainSource waylandSource:
                     if (doCheck && !gd.HasSurfaceExtension(CommonStrings.VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME))
                     {
                         throw new VeldridException($"The required instance extension was not available: {CommonStrings.VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME}");
                     }
-                    return CreateWayland(instance, waylandSource);
+                    return CreateWayland(gd, instance, waylandSource);
                 case Win32SwapchainSource win32Source:
                     if (doCheck && !gd.HasSurfaceExtension(CommonStrings.VK_KHR_WIN32_SURFACE_EXTENSION_NAME))
                     {
                         throw new VeldridException($"The required instance extension was not available: {CommonStrings.VK_KHR_WIN32_SURFACE_EXTENSION_NAME}");
                     }
-                    return CreateWin32(instance, win32Source);
+                    return CreateWin32(gd, instance, win32Source);
                 case AndroidSurfaceSwapchainSource androidSource:
                     if (doCheck && !gd.HasSurfaceExtension(CommonStrings.VK_KHR_ANDROID_SURFACE_EXTENSION_NAME))
                     {
                         throw new VeldridException($"The required instance extension was not available: {CommonStrings.VK_KHR_ANDROID_SURFACE_EXTENSION_NAME}");
                     }
-                    return CreateAndroidSurface(instance, androidSource);
+                    return CreateAndroidSurface(gd, instance, androidSource);
                 case NSWindowSwapchainSource nsWindowSource:
                     if (doCheck)
                     {
@@ -99,113 +95,88 @@ namespace Veldrid.Vk
             }
         }
 
-        private static VkSurfaceKHR CreateWin32(VkInstance instance, Win32SwapchainSource win32Source)
+        private static SurfaceKHR CreateWin32(VkGraphicsDevice gd, Instance instance, Win32SwapchainSource win32Source)
         {
-            VkWin32SurfaceCreateInfoKHR surfaceCI = VkWin32SurfaceCreateInfoKHR.New();
-            surfaceCI.hwnd = win32Source.Hwnd;
-            surfaceCI.hinstance = win32Source.Hinstance;
-            VkResult result = vkCreateWin32SurfaceKHR(instance, ref surfaceCI, null, out VkSurfaceKHR surface);
+            Win32SurfaceCreateInfoKHR surfaceCI = new Win32SurfaceCreateInfoKHR
+            {
+                SType = StructureType.Win32SurfaceCreateInfoKhr
+            };
+            surfaceCI.Hwnd = win32Source.Hwnd;
+            surfaceCI.Hinstance = win32Source.Hinstance;
+
+            if (!gd.Vk.TryGetInstanceExtension(instance, out KhrWin32Surface khrWin32Surface))
+            {
+                throw new VeldridException("VK_KHR_win32_surface extension not available.");
+            }
+
+            SurfaceKHR surface;
+            Result result = khrWin32Surface.CreateWin32Surface(instance, in surfaceCI, null, out surface);
             CheckResult(result);
             return surface;
         }
 
-        private static VkSurfaceKHR CreateXlib(VkInstance instance, XlibSwapchainSource xlibSource)
+        private static SurfaceKHR CreateXlib(VkGraphicsDevice gd, Instance instance, XlibSwapchainSource xlibSource)
         {
-            VkXlibSurfaceCreateInfoKHR xsci = VkXlibSurfaceCreateInfoKHR.New();
-            xsci.dpy = (Display*)xlibSource.Display;
-            xsci.window = new Window { Value = xlibSource.Window };
-            VkResult result = vkCreateXlibSurfaceKHR(instance, ref xsci, null, out VkSurfaceKHR surface);
+            XlibSurfaceCreateInfoKHR xsci = new XlibSurfaceCreateInfoKHR
+            {
+                SType = StructureType.XlibSurfaceCreateInfoKhr
+            };
+            xsci.Dpy = (nint*)xlibSource.Display;
+            xsci.Window = (nint)xlibSource.Window;
+
+            if (!gd.Vk.TryGetInstanceExtension(instance, out KhrXlibSurface khrXlibSurface))
+            {
+                throw new VeldridException("VK_KHR_xlib_surface extension not available.");
+            }
+
+            SurfaceKHR surface;
+            Result result = khrXlibSurface.CreateXlibSurface(instance, in xsci, null, out surface);
             CheckResult(result);
             return surface;
         }
 
-        private static VkSurfaceKHR CreateWayland(VkInstance instance, WaylandSwapchainSource waylandSource)
+        private static SurfaceKHR CreateWayland(VkGraphicsDevice gd, Instance instance, WaylandSwapchainSource waylandSource)
         {
-            VkWaylandSurfaceCreateInfoKHR wsci = VkWaylandSurfaceCreateInfoKHR.New();
-            wsci.display = (wl_display*)waylandSource.Display;
-            wsci.surface = (wl_surface*)waylandSource.Surface;
-            VkResult result = vkCreateWaylandSurfaceKHR(instance, ref wsci, null, out VkSurfaceKHR surface);
+            WaylandSurfaceCreateInfoKHR wsci = new WaylandSurfaceCreateInfoKHR
+            {
+                SType = StructureType.WaylandSurfaceCreateInfoKhr
+            };
+            wsci.Display = (nint*)waylandSource.Display;
+            wsci.Surface = (nint*)waylandSource.Surface;
+
+            if (!gd.Vk.TryGetInstanceExtension(instance, out KhrWaylandSurface khrWaylandSurface))
+            {
+                throw new VeldridException("VK_KHR_wayland_surface extension not available.");
+            }
+
+            SurfaceKHR surface;
+            Result result = khrWaylandSurface.CreateWaylandSurface(instance, in wsci, null, out surface);
             CheckResult(result);
             return surface;
         }
 
-        private static VkSurfaceKHR CreateAndroidSurface(VkInstance instance, AndroidSurfaceSwapchainSource androidSource)
+        private static SurfaceKHR CreateAndroidSurface(VkGraphicsDevice gd, Instance instance, AndroidSurfaceSwapchainSource androidSource)
         {
-            IntPtr aNativeWindow = AndroidRuntime.ANativeWindow_fromSurface(androidSource.JniEnv, androidSource.Surface);
-
-            VkAndroidSurfaceCreateInfoKHR androidSurfaceCI = VkAndroidSurfaceCreateInfoKHR.New();
-            androidSurfaceCI.window = (Vulkan.Android.ANativeWindow*)aNativeWindow;
-            VkResult result = vkCreateAndroidSurfaceKHR(instance, ref androidSurfaceCI, null, out VkSurfaceKHR surface);
-            CheckResult(result);
-            return surface;
+            // TODO: Android surface creation requires platform-specific ANativeWindow bindings.
+            // Will be re-enabled when Silk.NET.Windowing handles platform surfaces (Phase 2).
+            throw new PlatformNotSupportedException("Android Vulkan surface creation is not yet supported in the Silk.NET port.");
         }
 
-        private static unsafe VkSurfaceKHR CreateNSWindowSurface(VkGraphicsDevice gd, VkInstance instance, NSWindowSwapchainSource nsWindowSource, bool hasExtMetalSurface)
+        private static unsafe SurfaceKHR CreateNSWindowSurface(VkGraphicsDevice gd, Instance instance, NSWindowSwapchainSource nsWindowSource, bool hasExtMetalSurface)
         {
-            NSWindow nswindow = new NSWindow(nsWindowSource.NSWindow);
-            return CreateNSViewSurface(gd, instance, new NSViewSwapchainSource(nswindow.contentView), hasExtMetalSurface);
+            // TODO: macOS surface creation requires MetalBindings (NSWindow/CAMetalLayer).
+            // Will be re-enabled when Silk.NET.Windowing handles platform surfaces (Phase 2).
+            throw new PlatformNotSupportedException("macOS Vulkan surface creation is not yet supported in the Silk.NET port.");
         }
 
-        private static unsafe VkSurfaceKHR CreateNSViewSurface(VkGraphicsDevice gd, VkInstance instance, NSViewSwapchainSource nsViewSource, bool hasExtMetalSurface)
+        private static unsafe SurfaceKHR CreateNSViewSurface(VkGraphicsDevice gd, Instance instance, NSViewSwapchainSource nsViewSource, bool hasExtMetalSurface)
         {
-            NSView contentView = new NSView(nsViewSource.NSView);
-
-            if (!CAMetalLayer.TryCast(contentView.layer, out var metalLayer))
-            {
-                metalLayer = CAMetalLayer.New();
-                contentView.wantsLayer = true;
-                contentView.layer = metalLayer.NativePtr;
-            }
-
-            if (hasExtMetalSurface)
-            {
-                VkMetalSurfaceCreateInfoEXT surfaceCI = new VkMetalSurfaceCreateInfoEXT();
-                surfaceCI.sType = VkMetalSurfaceCreateInfoEXT.VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
-                surfaceCI.pLayer = metalLayer.NativePtr.ToPointer();
-                VkSurfaceKHR surface;
-                VkResult result = gd.CreateMetalSurfaceEXT(instance, &surfaceCI, null, &surface);
-                CheckResult(result);
-                return surface;
-            }
-            else
-            {
-                VkMacOSSurfaceCreateInfoMVK surfaceCI = VkMacOSSurfaceCreateInfoMVK.New();
-                surfaceCI.pView = contentView.NativePtr.ToPointer();
-                VkResult result = vkCreateMacOSSurfaceMVK(instance, ref surfaceCI, null, out VkSurfaceKHR surface);
-                CheckResult(result);
-                return surface;
-            }
+            throw new PlatformNotSupportedException("macOS Vulkan surface creation is not yet supported in the Silk.NET port.");
         }
 
-        private static VkSurfaceKHR CreateUIViewSurface(VkGraphicsDevice gd, VkInstance instance, UIViewSwapchainSource uiViewSource, bool hasExtMetalSurface)
+        private static SurfaceKHR CreateUIViewSurface(VkGraphicsDevice gd, Instance instance, UIViewSwapchainSource uiViewSource, bool hasExtMetalSurface)
         {
-            UIView uiView = new UIView(uiViewSource.UIView);
-
-            if (!CAMetalLayer.TryCast(uiView.layer, out var metalLayer))
-            {
-                metalLayer = CAMetalLayer.New();
-                metalLayer.frame = uiView.frame;
-                metalLayer.opaque = true;
-                uiView.layer.addSublayer(metalLayer.NativePtr);
-            }
-
-            if (hasExtMetalSurface)
-            {
-                VkMetalSurfaceCreateInfoEXT surfaceCI = new VkMetalSurfaceCreateInfoEXT();
-                surfaceCI.sType = VkMetalSurfaceCreateInfoEXT.VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
-                surfaceCI.pLayer = metalLayer.NativePtr.ToPointer();
-                VkSurfaceKHR surface;
-                VkResult result = gd.CreateMetalSurfaceEXT(instance, &surfaceCI, null, &surface);
-                CheckResult(result);
-                return surface;
-            }
-            else
-            {
-                VkIOSSurfaceCreateInfoMVK surfaceCI = VkIOSSurfaceCreateInfoMVK.New();
-                surfaceCI.pView = uiView.NativePtr.ToPointer();
-                VkResult result = vkCreateIOSSurfaceMVK(instance, ref surfaceCI, null, out VkSurfaceKHR surface);
-                return surface;
-            }
+            throw new PlatformNotSupportedException("iOS Vulkan surface creation is not yet supported in the Silk.NET port.");
         }
     }
 }

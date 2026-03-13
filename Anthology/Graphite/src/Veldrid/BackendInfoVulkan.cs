@@ -1,8 +1,9 @@
-﻿#if !EXCLUDE_VULKAN_BACKEND
+#if !EXCLUDE_VULKAN_BACKEND
 using System;
 using System.Collections.ObjectModel;
 using Veldrid.Vk;
-using Vulkan;
+using Silk.NET.Vulkan;
+using VkImageLayout = Silk.NET.Vulkan.ImageLayout;
 
 namespace Veldrid
 {
@@ -116,13 +117,13 @@ namespace Veldrid
 
         private unsafe ReadOnlyCollection<ExtensionProperties> EnumerateDeviceExtensions()
         {
-            VkExtensionProperties[] vkProps = _gd.GetDeviceExtensionProperties();
+            Silk.NET.Vulkan.ExtensionProperties[] vkProps = _gd.GetDeviceExtensionProperties();
             ExtensionProperties[] veldridProps = new ExtensionProperties[vkProps.Length];
 
             for (int i = 0; i < vkProps.Length; i++)
             {
-                VkExtensionProperties prop = vkProps[i];
-                veldridProps[i] = new ExtensionProperties(Util.GetString(prop.extensionName), prop.specVersion);
+                Silk.NET.Vulkan.ExtensionProperties prop = vkProps[i];
+                veldridProps[i] = new ExtensionProperties(Util.GetString(prop.ExtensionName), prop.SpecVersion);
             }
 
             return new ReadOnlyCollection<ExtensionProperties>(veldridProps);

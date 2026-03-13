@@ -1,5 +1,6 @@
-﻿using System.Collections.Generic;
-using Vulkan;
+using System.Collections.Generic;
+using Silk.NET.Vulkan;
+using VkFramebufferHandle = Silk.NET.Vulkan.Framebuffer;
 
 namespace Veldrid.Vk
 {
@@ -30,12 +31,12 @@ namespace Veldrid.Vk
 
         protected abstract void DisposeCore();
 
-        public abstract Vulkan.VkFramebuffer CurrentFramebuffer { get; }
-        public abstract VkRenderPass RenderPassNoClear_Init { get; }
-        public abstract VkRenderPass RenderPassNoClear_Load { get; }
-        public abstract VkRenderPass RenderPassClear { get; }
+        public abstract VkFramebufferHandle CurrentFramebuffer { get; }
+        public abstract RenderPass RenderPassNoClear_Init { get; }
+        public abstract RenderPass RenderPassNoClear_Load { get; }
+        public abstract RenderPass RenderPassClear { get; }
         public abstract uint AttachmentCount { get; }
-        public abstract void TransitionToIntermediateLayout(VkCommandBuffer cb);
-        public abstract void TransitionToFinalLayout(VkCommandBuffer cb);
+        public abstract void TransitionToIntermediateLayout(CommandBuffer cb);
+        public abstract void TransitionToFinalLayout(CommandBuffer cb);
     }
 }

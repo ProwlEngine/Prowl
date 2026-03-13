@@ -1,11 +1,11 @@
-﻿using Vulkan;
+using Silk.NET.Vulkan;
 
 namespace Veldrid.Vk
 {
     internal class VkResourceFactory : ResourceFactory
     {
         private readonly VkGraphicsDevice _gd;
-        private readonly VkDevice _device;
+        private readonly Device _device;
 
         public VkResourceFactory(VkGraphicsDevice vkGraphicsDevice)
             : base (vkGraphicsDevice.Features)
@@ -71,7 +71,7 @@ namespace Veldrid.Vk
                 VkFormats.VdToVkPixelFormat(description.Format, (description.Usage & TextureUsage.DepthStencil) != 0),
                 description.Usage,
                 description.SampleCount,
-                nativeTexture);
+                new Image(nativeTexture));
         }
 
         protected override TextureView CreateTextureViewCore(ref TextureViewDescription description)
