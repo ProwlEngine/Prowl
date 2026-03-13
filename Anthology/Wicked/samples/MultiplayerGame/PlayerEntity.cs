@@ -8,12 +8,12 @@ namespace MultiplayerGame;
 /// </summary>
 public class PlayerEntity : NetworkEntity
 {
-    public float X;
-    public float Y;
-    public byte ColorR;
-    public byte ColorG;
-    public byte ColorB;
-    public string Name = "";
+    public SyncVarInterpolated X = new(0f, interpSpeed: 15f) { SyncInterval = 0.05f };
+    public SyncVarInterpolated Y = new(0f, interpSpeed: 15f) { SyncInterval = 0.05f };
+    public SyncVar<byte> ColorR = new((byte)255);
+    public SyncVar<byte> ColorG = new((byte)255);
+    public SyncVar<byte> ColorB = new((byte)255);
+    public SyncVar<string> Name = new("");
 
     // Server-side target position from client input
     private float _targetX;
@@ -21,54 +21,34 @@ public class PlayerEntity : NetworkEntity
 
     private static readonly Random _rng = new();
 
-    public override void PackSpawnData(NetworkWriter writer)
-    {
-        writer.WriteFloat(X);
-        writer.WriteFloat(Y);
-        writer.WriteByte(ColorR);
-        writer.WriteByte(ColorG);
-        writer.WriteByte(ColorB);
-        writer.WriteString(Name);
-    }
-
-    public override void UnpackSpawnData(NetworkReader reader)
-    {
-        X = reader.ReadFloat();
-        Y = reader.ReadFloat();
-        ColorR = reader.ReadByte();
-        ColorG = reader.ReadByte();
-        ColorB = reader.ReadByte();
-        Name = reader.ReadString() ?? "";
-    }
-
     public override void OnSpawn()
     {
-        _targetX = X;
-        _targetY = Y;
+        _targetX = X.Value;
+        _targetY = Y.Value;
     }
 
     public override void OnStartServer()
     {
-        Console.WriteLine($"[Server] Player spawned: {Name} at ({X:F0},{Y:F0})");
+        Console.WriteLine($"[Server] Player spawned: {Name} at ({X.Value:F0},{Y.Value:F0})");
     }
 
     public override void OnStartClient()
     {
-        Console.WriteLine($"[Client] Player appeared: {Name} at ({X:F0},{Y:F0})");
+        Console.WriteLine($"[Client] Player appeared: {Name} at ({X.Value:F0},{Y.Value:F0})");
     }
 
     public override void ServerTick()
     {
         // Lerp toward target position
         float speed = 300f * Server.DeltaTime;
-        float dx = _targetX - X;
-        float dy = _targetY - Y;
+        float dx = _targetX - X.Value;
+        float dy = _targetY - Y.Value;
         float dist = MathF.Sqrt(dx * dx + dy * dy);
         if (dist > 1f)
         {
             float move = MathF.Min(speed, dist);
-            X += dx / dist * move;
-            Y += dy / dist * move;
+            X.Value += dx / dist * move;
+            Y.Value += dy / dist * move;
         }
     }
 
@@ -81,16 +61,6 @@ public class PlayerEntity : NetworkEntity
         // Clamp to world bounds
         _targetX = Math.Clamp(targetX, 0, 780);
         _targetY = Math.Clamp(targetY, 0, 580);
-    }
-
-    /// <summary>
-    /// Server broadcasts position updates to all observers.
-    /// </summary>
-    [EntityRpc(Target = RpcTarget.Observers)]
-    public void RpcUpdatePosition(float x, float y)
-    {
-        X = x;
-        Y = y;
     }
 
     /// <summary>
@@ -111,8 +81,8 @@ public class PlayerEntity : NetworkEntity
 
     public void AssignRandomColor()
     {
-        ColorR = (byte)_rng.Next(100, 256);
-        ColorG = (byte)_rng.Next(100, 256);
-        ColorB = (byte)_rng.Next(100, 256);
+        ColorR.Value = (byte)_rng.Next(100, 256);
+        ColorG.Value = (byte)_rng.Next(100, 256);
+        ColorB.Value = (byte)_rng.Next(100, 256);
     }
 }

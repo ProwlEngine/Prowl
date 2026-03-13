@@ -34,9 +34,9 @@ public static class GameCommands
         // Spawn a player entity for this client
         var player = Server.Spawn<PlayerEntity>(gameMap, sender, p =>
         {
-            p.Name = string.IsNullOrWhiteSpace(playerName) ? $"Player_{sender.ClientId}" : playerName;
-            p.X = 100 + (sender.ClientId * 80) % 600;
-            p.Y = 100 + (sender.ClientId * 60) % 400;
+            p.Name.Value = string.IsNullOrWhiteSpace(playerName) ? $"Player_{sender.ClientId}" : playerName;
+            p.X.Value = 100 + (sender.ClientId * 80) % 600;
+            p.Y.Value = 100 + (sender.ClientId * 60) % 400;
             p.AssignRandomColor();
         });
 

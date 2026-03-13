@@ -48,7 +48,6 @@ public static class Program
         while (true)
         {
             Server.Tick();
-            BroadcastPositions();
             Thread.Sleep((int)(TickRate * 1000));
         }
     }
@@ -63,13 +62,6 @@ public static class Program
         Console.WriteLine($"[Server] Client disconnected: {client.ClientId}");
         if (client.PlayerEntity != null)
             Server.Despawn(client.PlayerEntity);
-    }
-
-    private static void BroadcastPositions()
-    {
-        if (_serverMap == null) return;
-        foreach (var entity in _serverMap.GetEntities<PlayerEntity>())
-            entity.RpcUpdatePosition(entity.X, entity.Y);
     }
 
     // ── Client ──
@@ -186,31 +178,32 @@ public static class Program
             {
                 var color = new Color(player.ColorR, player.ColorG, player.ColorB, (byte)255);
 
-                // Draw player square
-                Raylib.DrawRectangle((int)player.X, (int)player.Y, 20, 20, color);
+                // Draw player square (use Display for smooth interpolation)
+                Raylib.DrawRectangle((int)player.X.Display, (int)player.Y.Display, 20, 20, color);
 
                 // Highlight local player
                 if (player.IsOwner)
-                    Raylib.DrawRectangleLines((int)player.X - 2, (int)player.Y - 2, 24, 24, Color.White);
+                    Raylib.DrawRectangleLines((int)player.X.Display - 2, (int)player.Y.Display - 2, 24, 24, Color.White);
 
                 // Draw name
-                int nameWidth = Raylib.MeasureText(player.Name, 12);
-                Raylib.DrawText(player.Name,
-                    (int)player.X + 10 - nameWidth / 2,
-                    (int)player.Y - 16, 12, Color.White);
+                string name = player.Name.Value;
+                int nameWidth = Raylib.MeasureText(name, 12);
+                Raylib.DrawText(name,
+                    (int)player.X.Display + 10 - nameWidth / 2,
+                    (int)player.Y.Display - 16, 12, Color.White);
 
                 // Draw chat bubble
                 if (player.ChatMessageTimer > 0 && player.LastChatMessage != null)
                 {
                     int msgWidth = Raylib.MeasureText(player.LastChatMessage, 14);
                     Raylib.DrawRectangle(
-                        (int)player.X + 10 - msgWidth / 2 - 4,
-                        (int)player.Y - 40,
+                        (int)player.X.Display + 10 - msgWidth / 2 - 4,
+                        (int)player.Y.Display - 40,
                         msgWidth + 8, 20,
                         new Color((byte)0, (byte)0, (byte)0, (byte)180));
                     Raylib.DrawText(player.LastChatMessage,
-                        (int)player.X + 10 - msgWidth / 2,
-                        (int)player.Y - 38, 14, Color.Yellow);
+                        (int)player.X.Display + 10 - msgWidth / 2,
+                        (int)player.Y.Display - 38, 14, Color.Yellow);
                 }
             }
         }
