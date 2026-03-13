@@ -1,0 +1,20 @@
+<Project>
+
+  <!--
+    Prowl.Wicked post-build IL weaver (transitive).
+    Imported automatically for projects that transitively reference Prowl.Wicked.
+    e.g. Game.Core → Game.Common → Prowl.Wicked: both Game.Common AND Game.Core get weaved.
+  -->
+
+  <PropertyGroup>
+    <_ProwlWickedWeaverDir>$(MSBuildThisFileDirectory)..\tools\net8.0\any\</_ProwlWickedWeaverDir>
+    <_ProwlWickedWeaverExe>$(_ProwlWickedWeaverDir)Prowl.Wicked.Weaver.dll</_ProwlWickedWeaverExe>
+    <ProwlWickedWeave Condition="'$(ProwlWickedWeave)' == ''">true</ProwlWickedWeave>
+  </PropertyGroup>
+
+  <Target Name="ProwlWickedWeave" AfterTargets="Build" Condition="'$(ProwlWickedWeave)' == 'true'">
+    <Message Importance="high" Text="Prowl.Wicked: Weaving $(TargetFileName)..." />
+    <Exec Command="dotnet &quot;$(_ProwlWickedWeaverExe)&quot; &quot;$(TargetPath)&quot;" />
+  </Target>
+
+</Project>
