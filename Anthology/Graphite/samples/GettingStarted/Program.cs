@@ -1,7 +1,5 @@
-﻿using System.IO;
 using System.Numerics;
 using Veldrid;
-using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using Veldrid.SPIRV;
 using System.Text;
@@ -52,7 +50,7 @@ void main()
                 WindowHeight = 540,
                 WindowTitle = "Veldrid Tutorial"
             };
-            Sdl2Window window = VeldridStartup.CreateWindow(ref windowCI);
+            VeldridWindow window = VeldridStartup.CreateWindow(ref windowCI);
 
             GraphicsDeviceOptions options = new GraphicsDeviceOptions
             {

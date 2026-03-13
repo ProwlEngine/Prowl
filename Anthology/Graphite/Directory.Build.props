@@ -13,11 +13,19 @@
     <ImGuiNetVersion>1.90.1.1</ImGuiNetVersion>
     <ImageSharpVersion>1.0.4</ImageSharpVersion>
     <VeldridSpirvVersion>1.0.14</VeldridSpirvVersion>
+    <AssimpNetVersion>5.0.0-beta1</AssimpNetVersion>
   </PropertyGroup>
 
   <!-- Sample assets directory -->
   <PropertyGroup>
     <SamplesAssetsDir>$(MSBuildThisFileDirectory)samples\assets</SamplesAssetsDir>
+  </PropertyGroup>
+
+  <!-- Exclude unported backends until their phases are complete -->
+  <!-- Remove these when D3D11 (Phase 3) and OpenGL (Phase 4) are ported -->
+  <PropertyGroup>
+    <ExcludeD3D11>true</ExcludeD3D11>
+    <ExcludeOpenGL>true</ExcludeOpenGL>
   </PropertyGroup>
 
   <!-- Suppress documentation warnings in Debug -->

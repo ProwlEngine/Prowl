@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using Veldrid;
-using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using Veldrid.Utilities;
 
@@ -9,7 +8,7 @@ namespace SampleBase
 {
     public class VeldridStartupWindow : ApplicationWindow
     {
-        private readonly Sdl2Window _window;
+        private readonly VeldridWindow _window;
         private GraphicsDevice _gd;
         private DisposeCollectorResourceFactory _factory;
         private bool _windowResized = true;
@@ -55,7 +54,7 @@ namespace SampleBase
 #if DEBUG
             options.Debug = true;
 #endif
-            _gd = VeldridStartup.CreateGraphicsDevice(_window, options, GraphicsBackend.Direct3D11);
+            _gd = VeldridStartup.CreateGraphicsDevice(_window, options, GraphicsBackend.Vulkan);
             _factory = new DisposeCollectorResourceFactory(_gd.ResourceFactory);
             GraphicsDeviceCreated?.Invoke(_gd, _factory, _gd.MainSwapchain);
 

@@ -10,7 +10,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Veldrid\Veldrid.csproj" />
-    <!-- TODO Phase 2: Add Silk.NET.Windowing and Silk.NET.Input -->
+    <PackageReference Include="Silk.NET.Windowing" Version="$(SilkNetVersion)" />
+    <PackageReference Include="Silk.NET.Input" Version="$(SilkNetVersion)" />
   </ItemGroup>
 
   <PropertyGroup>
