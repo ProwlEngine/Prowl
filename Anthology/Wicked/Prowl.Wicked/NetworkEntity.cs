@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Prowl.Wicked;
 
 /// <summary>
@@ -6,6 +8,35 @@ namespace Prowl.Wicked;
 /// </summary>
 public abstract class NetworkEntity : NetworkObject
 {
+    /// <summary>
+    /// All SyncVar fields on this entity, discovered via reflection at spawn time.
+    /// Indices are stable and match between server and client (sorted by field name).
+    /// </summary>
+    internal ISyncVar[]? _syncVars;
+
+    /// <summary>
+    /// Discovers all SyncVar fields on this entity via reflection.
+    /// Called once at spawn time. Fields are sorted by name for stable indexing.
+    /// </summary>
+    internal void DiscoverSyncVars()
+    {
+        var fields = GetType()
+            .GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            .Where(f => typeof(ISyncVar).IsAssignableFrom(f.FieldType))
+            .OrderBy(f => f.Name, StringComparer.Ordinal)
+            .ToArray();
+
+        if (fields.Length == 0)
+        {
+            _syncVars = null;
+            return;
+        }
+
+        _syncVars = new ISyncVar[fields.Length];
+        for (int i = 0; i < fields.Length; i++)
+            _syncVars[i] = (ISyncVar)fields[i].GetValue(this)!;
+    }
+
     /// <summary>
     /// Unique identifier assigned by the server at spawn time.
     /// Consistent across server and all clients.

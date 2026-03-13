@@ -284,6 +284,9 @@ public static class Client
             case MessageType.AuthResult:
                 HandleAuthResult(reader);
                 break;
+            case MessageType.SyncVarUpdate:
+                HandleSyncVarUpdate(reader);
+                break;
         }
     }
 
@@ -332,6 +335,8 @@ public static class Client
         entity.Map = map;
         map.AddEntity(entity);
         entity.UnpackSpawnData(reader);
+        entity.DiscoverSyncVars();
+        ReadSyncVarsInitial(reader, entity);
         entity.IsSpawned = true;
         TrackEntity(entity);
         entity.OnSpawn();
@@ -379,6 +384,31 @@ public static class Client
         entity.OnOwnerChanged(oldOwner, entity.Owner);
         if (entity.IsOwner)
             entity.OnStartOwner();
+    }
+
+    private static void ReadSyncVarsInitial(NetworkReader reader, NetworkEntity entity)
+    {
+        byte count = reader.ReadByte();
+        if (count == 0 || entity._syncVars == null) return;
+        int toRead = Math.Min(count, entity._syncVars.Length);
+        for (int i = 0; i < toRead; i++)
+            entity._syncVars[i].Deserialize(reader);
+    }
+
+    private static void HandleSyncVarUpdate(NetworkReader reader)
+    {
+        uint networkId = reader.ReadUInt();
+        byte dirtyCount = reader.ReadByte();
+
+        if (!_entities.TryGetValue(networkId, out var entity) || entity._syncVars == null)
+            return;
+
+        for (int i = 0; i < dirtyCount; i++)
+        {
+            byte index = reader.ReadByte();
+            if (index < entity._syncVars.Length)
+                entity._syncVars[index].Deserialize(reader);
+        }
     }
 
     private static void HandleMapCreate(NetworkReader reader)
@@ -694,6 +724,14 @@ public static class Client
             if (timedOut != null)
                 foreach (var id in timedOut)
                     _pendingPromises.Remove(id);
+        }
+
+        // Update interpolated SyncVars
+        foreach (var entity in _entities.Values)
+        {
+            if (entity._syncVars == null) continue;
+            foreach (var sv in entity._syncVars)
+                sv.ClientUpdate(DeltaTime);
         }
 
         // Tick all client-side entities (snapshot — ClientTick may trigger despawns)

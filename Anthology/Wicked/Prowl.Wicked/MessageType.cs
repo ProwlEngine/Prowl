@@ -34,4 +34,7 @@ internal static class MessageType
     // Authentication
     internal const byte Authenticate = 0x32;
     internal const byte AuthResult   = 0x33;
+
+    // SyncVar
+    internal const byte SyncVarUpdate = 0x40;
 }

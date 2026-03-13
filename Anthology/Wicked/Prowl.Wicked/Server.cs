@@ -494,6 +494,7 @@ public static class Server
         entity.NetworkId = _nextNetworkId++;
         entity.OwnerClientId = owner?.ClientId ?? 0;
         entity.IsSpawned = true;
+        entity.DiscoverSyncVars();
         _entities[entity.NetworkId] = entity;
         map.AddEntity(entity);
         entity.OnSpawn();
@@ -696,6 +697,95 @@ public static class Server
         foreach (var entity in _entities.Values.ToArray())
             entity.ServerTick();
 
+        // Send dirty SyncVar updates
+        SendDirtySyncVars();
+    }
+
+    private static void SendDirtySyncVars()
+    {
+        float dt = DeltaTime;
+
+        foreach (var entity in _entities.Values)
+        {
+            if (entity._syncVars == null || entity.Map == null) continue;
+
+            // Accumulate time and check if any SyncVar is ready to send
+            bool anyReady = false;
+            for (int i = 0; i < entity._syncVars.Length; i++)
+            {
+                var sv = entity._syncVars[i];
+                if (!sv.IsDirty) continue;
+                sv.TimeSinceLastSync += dt;
+                if (sv.TimeSinceLastSync >= sv.SyncInterval)
+                    anyReady = true;
+            }
+            if (!anyReady) continue;
+
+            // Determine which targets have ready vars
+            bool hasObserverReady = false;
+            bool hasOwnerReady = false;
+            for (int i = 0; i < entity._syncVars.Length; i++)
+            {
+                var sv = entity._syncVars[i];
+                if (!sv.IsDirty || sv.TimeSinceLastSync < sv.SyncInterval) continue;
+                if (sv.Target == SyncTarget.Owner)
+                    hasOwnerReady = true;
+                else
+                    hasObserverReady = true;
+            }
+
+            var writer = new NetworkWriter();
+
+            // Send observer-targeted ready vars to all observers
+            if (hasObserverReady && entity.Map.Observers.Count > 0)
+            {
+                WriteSyncVarUpdateMessage(writer, entity, SyncTarget.Observers);
+                foreach (var observer in entity.Map.Observers)
+                    SendToClient(observer, writer);
+            }
+
+            // Send owner-targeted ready vars to owner only
+            if (hasOwnerReady && entity.Owner != null)
+            {
+                WriteSyncVarUpdateMessage(writer, entity, SyncTarget.Owner);
+                SendToClient(entity.Owner, writer);
+            }
+
+            // Clear dirty flags only for vars that were sent
+            for (int i = 0; i < entity._syncVars.Length; i++)
+            {
+                var sv = entity._syncVars[i];
+                if (sv.IsDirty && sv.TimeSinceLastSync >= sv.SyncInterval)
+                    sv.ClearDirty();
+            }
+        }
+    }
+
+    private static void WriteSyncVarUpdateMessage(NetworkWriter writer, NetworkEntity entity, SyncTarget targetFilter)
+    {
+        writer.Reset();
+        writer.WriteByte(MessageType.SyncVarUpdate);
+        writer.WriteUInt(entity.NetworkId);
+
+        // Count + index/value pairs for ready dirty vars matching the target filter
+        int count = 0;
+        for (int i = 0; i < entity._syncVars!.Length; i++)
+        {
+            var sv = entity._syncVars[i];
+            if (sv.IsDirty && sv.TimeSinceLastSync >= sv.SyncInterval && sv.Target == targetFilter)
+                count++;
+        }
+
+        writer.WriteByte((byte)count);
+        for (int i = 0; i < entity._syncVars.Length; i++)
+        {
+            var sv = entity._syncVars[i];
+            if (sv.IsDirty && sv.TimeSinceLastSync >= sv.SyncInterval && sv.Target == targetFilter)
+            {
+                writer.WriteByte((byte)i);
+                sv.Serialize(writer);
+            }
+        }
     }
 
     // ── Replication helpers ──
@@ -714,6 +804,19 @@ public static class Server
         writer.WriteUInt(entity.OwnerClientId);
         writer.WriteGuid(entity.Map!.MapId);
         entity.PackSpawnData(writer);
+        WriteSyncVarsInitial(writer, entity);
+    }
+
+    private static void WriteSyncVarsInitial(NetworkWriter writer, NetworkEntity entity)
+    {
+        if (entity._syncVars == null)
+        {
+            writer.WriteByte(0);
+            return;
+        }
+        writer.WriteByte((byte)entity._syncVars.Length);
+        foreach (var sv in entity._syncVars)
+            sv.Serialize(writer);
     }
 
     private static void WriteEntityDespawnMessage(NetworkWriter writer, NetworkEntity entity)
