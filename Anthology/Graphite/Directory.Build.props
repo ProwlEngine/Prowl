@@ -11,7 +11,7 @@
   <PropertyGroup>
     <SilkNetVersion>2.23.0</SilkNetVersion>
     <ImGuiNetVersion>1.90.1.1</ImGuiNetVersion>
-    <ImageSharpVersion>1.0.4</ImageSharpVersion>
+    <ImageSharpVersion>3.1.12</ImageSharpVersion>
     <VeldridSpirvVersion>1.0.14</VeldridSpirvVersion>
     <AssimpNetVersion>5.0.0-beta1</AssimpNetVersion>
   </PropertyGroup>
@@ -27,6 +27,7 @@
     <ExcludeD3D11>true</ExcludeD3D11>
     <ExcludeOpenGL>true</ExcludeOpenGL>
   </PropertyGroup>
+
 
   <!-- Suppress documentation warnings in Debug -->
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">

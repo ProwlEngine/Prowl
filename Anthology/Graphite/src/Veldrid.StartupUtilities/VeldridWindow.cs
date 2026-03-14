@@ -100,7 +100,9 @@ namespace Veldrid.StartupUtilities
             {
                 Title = wci.WindowTitle ?? "Veldrid",
                 Position = new Vector2D<int>(wci.X, wci.Y),
-                Size = new Vector2D<int>(wci.WindowWidth, wci.WindowHeight),
+                Size = new Vector2D<int>(
+                    wci.WindowWidth > 0 ? wci.WindowWidth : 960,
+                    wci.WindowHeight > 0 ? wci.WindowHeight : 540),
                 API = api,
                 WindowBorder = WindowBorder.Resizable,
                 IsVisible = wci.WindowInitialState != WindowState.Hidden,

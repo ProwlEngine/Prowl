@@ -1,0 +1,21 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <_AssetProcessorPath>$(MSBuildThisFileDirectory)AssetProcessor\bin\$(Configuration)\net10.0\AssetProcessor.dll</_AssetProcessorPath>
+  </PropertyGroup>
+  <Target Name="ProcessAssets" AfterTargets="AssignTargetPaths" Condition="'@(Asset)' != ''">
+    <PropertyGroup>
+      <_ProcessDir>$(BaseIntermediateOutputPath)ProcessedAssets</_ProcessDir>
+      <_Command>dotnet "$(_AssetProcessorPath)"</_Command>
+      <_Command>$(_Command) "$(_ProcessDir)"</_Command>
+      <_Command>$(_Command) @(Asset->'&quot;%(Identity)&quot;', ' ')</_Command>
+    </PropertyGroup>
+    <Message Importance="high" Text="Executing: $(_Command)" />
+    <Exec Command="$(_Command)" />
+    <ItemGroup>
+      <_ProcessedAsset Include="$(_ProcessDir)\*.binary" />
+      <EmbeddedResource Include="@(_ProcessedAsset)">
+        <LogicalName>%(FileName)%(Extension)</LogicalName>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
+</Project>

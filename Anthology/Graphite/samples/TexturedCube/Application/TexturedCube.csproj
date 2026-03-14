@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Asset Include="$(SamplesAssetsDir)\sponza\spnza_bricks_a_diff.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\SampleBase\SampleBase.csproj" />
     <ProjectReference Include="..\..\AssetPrimitives\AssetPrimitives.csproj" />
     <ProjectReference Include="..\..\AssetProcessor\AssetProcessor.csproj">

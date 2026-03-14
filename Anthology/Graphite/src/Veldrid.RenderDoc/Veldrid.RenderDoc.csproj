@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <RootNamespace>Veldrid</RootNamespace>
+    <!-- NativeLibraryLoader pulls old Newtonsoft.Json; transitive vulnerability, not exploitable here -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

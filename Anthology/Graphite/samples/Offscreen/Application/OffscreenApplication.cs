@@ -5,7 +5,6 @@ using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using Veldrid;
-using Veldrid.Sdl2;
 using Veldrid.SPIRV;
 using Veldrid.Utilities;
 

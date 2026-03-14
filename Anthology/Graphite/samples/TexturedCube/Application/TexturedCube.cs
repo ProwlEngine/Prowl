@@ -46,6 +46,7 @@ namespace TexturedCube
             GraphicsDevice.UpdateBuffer(_indexBuffer, 0, _indices);
 
             _surfaceTexture = _stoneTexData.CreateDeviceTexture(GraphicsDevice, ResourceFactory, TextureUsage.Sampled);
+            GraphicsDevice.WaitForIdle();
             _surfaceTextureView = factory.CreateTextureView(_surfaceTexture);
 
             ShaderSetDescription shaderSet = new ShaderSetDescription(
