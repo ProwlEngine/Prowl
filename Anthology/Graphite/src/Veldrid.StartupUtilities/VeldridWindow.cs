@@ -1,70 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using Silk.NET.Windowing.Glfw;
 using SilkKey = Silk.NET.Input.Key;
 using SilkMouseButton = Silk.NET.Input.MouseButton;
+using SilkWindowState = Silk.NET.Windowing.WindowState;
 
 namespace Veldrid.StartupUtilities
 {
-    // TODO: Sdl2Window 1:1 parity checklist. Everything below existed on the upstream Sdl2Window
-    // and must be implemented before the port is complete.
-    //
-    // --- Properties (missing) ---
-    // int X { get; set; }                    — window position X, backed by IWindow.Position.X
-    // int Y { get; set; }                    — window position Y, backed by IWindow.Position.Y
-    // int Width { set; }                     — setter missing (getter exists), use IWindow.Size
-    // int Height { set; }                    — setter missing (getter exists), use IWindow.Size
-    // IntPtr Handle                          — native window handle (HWND/X11 Window/etc.), extract from IWindow.Native
-    // WindowState WindowState { get; set; }  — get/set window state (normal/fullscreen/maximized/minimized)
-    //                                          Silk.NET: IWindow.WindowState, but need to map between Veldrid and Silk enums
-    // bool Visible { get; set; }             — show/hide window, IWindow.IsVisible
-    // bool Focused { get; }                  — whether window has input focus
-    // bool Resizable { get; set; }           — IWindow.WindowBorder = Resizable vs Fixed
-    // bool BorderVisible { get; set; }       — IWindow.WindowBorder = Hidden vs Resizable
-    // bool CursorVisible { get; set; }       — Silk.NET: IMouse.Cursor.CursorMode = Normal/Hidden/Disabled
-    // float Opacity { get; set; }            — window opacity (0-1), may not be supported by Silk.NET/GLFW
-    // Vector2 ScaleFactor { get; }           — upstream always returns Vector2.One, can stub
-    // Rectangle Bounds { get; }              — computed from position + size
-    // Vector2 MouseDelta { get; }            — per-frame mouse delta, track via IMouse.MouseMove callback
-    // bool LimitPollRate { get; set; }       — upstream feature for threaded windows, may not be needed
-    // float PollIntervalInMs { get; set; }   — upstream feature for threaded windows, may not be needed
-    // IntPtr SdlWindowHandle                 — remove (SDL2-specific), replace with Handle or SilkWindow
-    //
-    // --- Events (missing) ---
-    // event Action Closed                    — fires after window is destroyed (vs Closing which fires before)
-    // event Action FocusLost                 — IWindow.FocusChanged (check value)
-    // event Action FocusGained               — IWindow.FocusChanged (check value)
-    // event Action Shown                     — IWindow.StateChanged or visibility change
-    // event Action Hidden                    — IWindow.StateChanged or visibility change
-    // event Action MouseEntered              — Silk.NET: no direct equivalent, may need cursor tracking
-    // event Action MouseLeft                 — Silk.NET: no direct equivalent, may need cursor tracking
-    // event Action Exposed                   — window needs redraw (rare, may stub)
-    // event Action<Point> Moved              — IWindow.Move event
-    // event Action<MouseWheelEventArgs> MouseWheel — need MouseWheelEventArgs type (contains MouseState + WheelDelta)
-    // event Action<MouseMoveEventArgs> MouseMove   — need MouseMoveEventArgs type (contains MouseState + position)
-    // event Action<DragDropEvent> DragDrop         — file drag-drop, need DragDropEvent type + Silk.NET equivalent
-    //
-    // --- Methods (missing) ---
-    // void SetMousePosition(Vector2 position)       — IMouse.Position setter
-    // void SetMousePosition(int x, int y)           — same, int overload
-    // void SetCloseRequestedHandler(Func<bool> h)   — handler returns true to cancel close
-    // Point ClientToScreen(Point p)                 — coordinate transform, may need platform-specific impl
-    // Point ScreenToClient(Point p)                 — coordinate transform, may need platform-specific impl
-    //
-    // --- Supporting types (missing) ---
-    // MouseState struct       — holds mouse position + all button states, used by MouseWheel/MouseMove events
-    // MouseWheelEventArgs     — { MouseState State, float WheelDelta }
-    // MouseMoveEventArgs      — { MouseState State, Vector2 MousePosition }
-    // DragDropEvent           — { DragDropType Type, string File } for file drag-drop
-    //
-    // --- Behavioral differences ---
-    // - KeyEvent.Repeat is always false (Silk.NET KeyDown callback doesn't expose GLFW repeat flag)
-    // - BorderlessFullScreen throws NotSupportedException (needs monitor query + borderless window workaround)
-    // - PumpEvents returns same mutable object (upstream triple-buffers for threaded mode)
-    // - No threaded window processing mode (upstream supports threadedProcessing=true with ManualResetEvent)
-
     /// <summary>
     /// A window backed by Silk.NET.Windowing, providing a Veldrid-compatible API surface.
     /// Replaces the former Sdl2Window.
@@ -72,23 +18,343 @@ namespace Veldrid.StartupUtilities
     public class VeldridWindow : IDisposable
     {
         private readonly IWindow _window;
-        private IInputContext _input;
+        private readonly IInputContext _input;
         private readonly SimpleInputSnapshot _snapshot = new();
 
-        public bool Exists => !_window.IsClosing;
-        public int Width => _window.Size.X;
-        public int Height => _window.Size.Y;
-        public string Title { get => _window.Title; set => _window.Title = value; }
+        private bool _resizable = true;
+        private bool _borderVisible = true;
+        private bool _focused = true;
+        private bool _previousIsVisible = true;
+        private Vector2 _previousMousePosition;
+        private Vector2 _mouseDelta;
+        private bool _firstPumpEvents = true;
+        private bool _disposed;
+        private Func<bool> _closeRequestedHandler;
 
+        private bool _borderlessFullScreen;
+        private bool _savedBorderVisible;
+        private bool _savedResizable;
+        private readonly HashSet<Key> _pressedKeys = new();
+        private readonly bool[] _cachedMouseButtons = new bool[(int)MouseButton.LastButton + 1];
+        private readonly Silk.NET.GLFW.Glfw _glfw;
+        private readonly unsafe Silk.NET.GLFW.WindowHandle* _glfwHandle;
+
+        /// <summary>
+        /// Whether the window is still open. Becomes false once the window begins closing or has been disposed.
+        /// </summary>
+        public bool Exists => !_disposed && !_window.IsClosing;
+
+        /// <summary>
+        /// The window's X position in screen coordinates.
+        /// </summary>
+        public int X
+        {
+            get => _window.Position.X;
+            set => _window.Position = new Vector2D<int>(value, _window.Position.Y);
+        }
+
+        /// <summary>
+        /// The window's Y position in screen coordinates.
+        /// </summary>
+        public int Y
+        {
+            get => _window.Position.Y;
+            set => _window.Position = new Vector2D<int>(_window.Position.X, value);
+        }
+
+        /// <summary>
+        /// The window's client area width in pixels.
+        /// </summary>
+        public int Width
+        {
+            get => _window.Size.X;
+            set => _window.Size = new Vector2D<int>(value, _window.Size.Y);
+        }
+
+        /// <summary>
+        /// The window's client area height in pixels.
+        /// </summary>
+        public int Height
+        {
+            get => _window.Size.Y;
+            set => _window.Size = new Vector2D<int>(_window.Size.X, value);
+        }
+
+        /// <summary>
+        /// The window title.
+        /// </summary>
+        public string Title
+        {
+            get => _window.Title;
+            set => _window.Title = value;
+        }
+
+        /// <summary>
+        /// The platform-specific native window handle (HWND on Windows, X11 Window on Linux, etc.).
+        /// </summary>
+        public IntPtr Handle
+        {
+            get
+            {
+                var native = _window.Native;
+                if (native == null)
+                    return IntPtr.Zero;
+                if (native.Win32.HasValue)
+                    return native.Win32.Value.Hwnd;
+                if (native.X11.HasValue)
+                    return (IntPtr)native.X11.Value.Window;
+                if (native.Wayland.HasValue)
+                    return native.Wayland.Value.Surface;
+                if (native.Cocoa.HasValue)
+                    return native.Cocoa.Value;
+                return IntPtr.Zero;
+            }
+        }
+
+        /// <summary>
+        /// The current window state (normal, fullscreen, maximized, minimized, etc.).
+        /// </summary>
+        public WindowState WindowState
+        {
+            get
+            {
+                if (!_window.IsVisible)
+                    return WindowState.Hidden;
+                if (_borderlessFullScreen)
+                    return WindowState.BorderlessFullScreen;
+                return MapWindowStateReverse(_window.WindowState);
+            }
+            set
+            {
+                if (value == WindowState.Hidden)
+                {
+                    _window.IsVisible = false;
+                    _previousIsVisible = false;
+                    return;
+                }
+
+                _window.IsVisible = true;
+                _previousIsVisible = true;
+
+                if (value == WindowState.BorderlessFullScreen)
+                {
+                    if (!_borderlessFullScreen)
+                    {
+                        _savedBorderVisible = _borderVisible;
+                        _savedResizable = _resizable;
+                    }
+                    _borderlessFullScreen = true;
+                    _borderVisible = false;
+                    _window.WindowBorder = WindowBorder.Hidden;
+                    _window.WindowState = SilkWindowState.Maximized;
+                }
+                else
+                {
+                    if (_borderlessFullScreen)
+                    {
+                        _borderVisible = _savedBorderVisible;
+                        _resizable = _savedResizable;
+                        _borderlessFullScreen = false;
+                    }
+                    _window.WindowState = MapWindowStateToSilk(value);
+                    UpdateWindowBorder();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Whether the window is visible.
+        /// </summary>
+        public bool Visible
+        {
+            get => _window.IsVisible;
+            set
+            {
+                _window.IsVisible = value;
+                _previousIsVisible = value;
+            }
+        }
+
+        /// <summary>
+        /// Whether the window currently has input focus.
+        /// </summary>
+        public bool Focused => _focused;
+
+        /// <summary>
+        /// Whether the window can be resized by the user.
+        /// </summary>
+        public bool Resizable
+        {
+            get => _resizable;
+            set
+            {
+                _resizable = value;
+                if (!_borderlessFullScreen)
+                    UpdateWindowBorder();
+            }
+        }
+
+        /// <summary>
+        /// Whether the window border (title bar and frame) is visible.
+        /// </summary>
+        public bool BorderVisible
+        {
+            get => _borderVisible;
+            set
+            {
+                _borderVisible = value;
+                if (!_borderlessFullScreen)
+                    UpdateWindowBorder();
+            }
+        }
+
+        /// <summary>
+        /// Whether the mouse cursor is visible over the window.
+        /// Returns true if no mouse device is available.
+        /// </summary>
+        public bool CursorVisible
+        {
+            get
+            {
+                if (_input?.Mice.Count > 0)
+                    return _input.Mice[0].Cursor.CursorMode == CursorMode.Normal;
+                return true;
+            }
+            set
+            {
+                if (_input?.Mice.Count > 0)
+                    _input.Mice[0].Cursor.CursorMode = value ? CursorMode.Normal : CursorMode.Hidden;
+            }
+        }
+
+        /// <summary>
+        /// The window opacity (0.0 to 1.0).
+        /// Returns float.NaN if the platform does not support opacity.
+        /// </summary>
+        public unsafe float Opacity
+        {
+            get
+            {
+                if (_glfw != null && _glfwHandle != null)
+                    return _glfw.GetWindowOpacity(_glfwHandle);
+                return float.NaN;
+            }
+            set
+            {
+                if (_glfw != null && _glfwHandle != null)
+                    _glfw.SetWindowOpacity(_glfwHandle, value);
+            }
+        }
+
+        /// <summary>
+        /// The DPI scale factor. Currently always returns (1, 1).
+        /// </summary>
+        public Vector2 ScaleFactor => Vector2.One;
+
+        /// <summary>
+        /// The window bounds (position and size) as a Rectangle.
+        /// </summary>
+        public Rectangle Bounds => new Rectangle(X, Y, Width, Height);
+
+        /// <summary>
+        /// The mouse movement delta since the last call to PumpEvents.
+        /// </summary>
+        public Vector2 MouseDelta => _mouseDelta;
+
+        /// <summary>
+        /// Whether to throttle event polling. Stored but has no effect (threaded mode not supported).
+        /// </summary>
+        public bool LimitPollRate { get; set; }
+
+        /// <summary>
+        /// Poll rate interval in milliseconds. Stored but has no effect (threaded mode not supported).
+        /// </summary>
+        public float PollIntervalInMs { get; set; }
+
+        /// <summary>
+        /// Fires when the window is resized.
+        /// </summary>
         public event Action Resized;
+
+        /// <summary>
+        /// Fires before the window closes.
+        /// </summary>
         public event Action Closing;
+
+        /// <summary>
+        /// Fires when the window is being disposed, before resources are released.
+        /// </summary>
+        public event Action Closed;
+
+        /// <summary>
+        /// Fires when the window loses input focus.
+        /// </summary>
+        public event Action FocusLost;
+
+        /// <summary>
+        /// Fires when the window gains input focus.
+        /// </summary>
+        public event Action FocusGained;
+
+        /// <summary>
+        /// Fires when the window becomes visible.
+        /// </summary>
+        public event Action Shown;
+
+        /// <summary>
+        /// Fires when the window becomes hidden.
+        /// </summary>
+        public event Action Hidden;
+
+        /// <summary>
+        /// Fires when the window is moved, providing the new position.
+        /// </summary>
+        public event Action<Point> Moved;
+
+        /// <summary>
+        /// Fires when the mouse wheel is scrolled.
+        /// </summary>
+        public event Action<MouseWheelEventArgs> MouseWheel;
+
+        /// <summary>
+        /// Fires when the mouse is moved.
+        /// </summary>
+        public event Action<MouseMoveEventArgs> MouseMove;
+
+        /// <summary>
+        /// Fires when a key is pressed.
+        /// </summary>
         public event Action<KeyEvent> KeyDown;
+
+        /// <summary>
+        /// Fires when a key is released.
+        /// </summary>
         public event Action<KeyEvent> KeyUp;
+
+        /// <summary>
+        /// Fires when a mouse button is pressed.
+        /// </summary>
         public event Action<MouseEvent> MouseDown;
+
+        /// <summary>
+        /// Fires when a mouse button is released.
+        /// </summary>
         public event Action<MouseEvent> MouseUp;
 
+        /// <summary>
+        /// Fires when a file is dropped onto the window.
+        /// </summary>
+        public event Action<DragDropEvent> DragDrop;
+
+        /// <summary>
+        /// The underlying Silk.NET window. For internal use only.
+        /// </summary>
         internal IWindow SilkWindow => _window;
 
+        /// <summary>
+        /// Creates a new window with the given creation parameters. The window uses no graphics API
+        /// (suitable for Vulkan or D3D11 where the device manages its own context).
+        /// </summary>
         public VeldridWindow(WindowCreateInfo wci)
             : this(wci, GraphicsAPI.None)
         {
@@ -106,18 +372,35 @@ namespace Veldrid.StartupUtilities
                 API = api,
                 WindowBorder = WindowBorder.Resizable,
                 IsVisible = wci.WindowInitialState != WindowState.Hidden,
-                WindowState = MapWindowState(wci.WindowInitialState),
+                WindowState = MapWindowStateToSilk(wci.WindowInitialState),
                 ShouldSwapAutomatically = false,
                 VSync = false,
             };
 
             _window = Window.Create(options);
+
             _window.Resize += OnWindowResize;
             _window.Closing += OnWindowClosing;
+            _window.Move += OnWindowMoved;
+            _window.FocusChanged += OnFocusChanged;
+            _window.StateChanged += OnStateChanged;
+            _window.FileDrop += OnFileDrop;
+
             _window.Initialize();
+            _previousIsVisible = _window.IsVisible;
+
+            // Cache GLFW handles for direct access to features Silk.NET doesn't surface
+            _glfw = GlfwWindowing.GetExistingApi(_window);
+            unsafe { _glfwHandle = (Silk.NET.GLFW.WindowHandle*)_window.Handle; }
 
             _input = _window.CreateInput();
             SetupInputCallbacks();
+
+            if (_input?.Mice.Count > 0)
+            {
+                var mouse = _input.Mice[0];
+                _previousMousePosition = new Vector2(mouse.Position.X, mouse.Position.Y);
+            }
         }
 
         private void SetupInputCallbacks()
@@ -133,63 +416,199 @@ namespace Veldrid.StartupUtilities
                 mouse.MouseDown += OnMouseDown;
                 mouse.MouseUp += OnMouseUp;
                 mouse.Scroll += OnScroll;
+                mouse.MouseMove += OnMouseMoveCallback;
             }
         }
 
         /// <summary>
-        /// Processes all pending window and input events, returning an InputSnapshot of events accumulated this frame.
+        /// Processes all pending window and input events, returning an InputSnapshot
+        /// of events accumulated this frame.
         /// </summary>
         public InputSnapshot PumpEvents()
         {
             _snapshot.Clear();
+            if (_disposed)
+                return _snapshot;
             _window.DoEvents();
 
-            // Snapshot current mouse state after events
             if (_input?.Mice.Count > 0)
             {
                 var mouse = _input.Mice[0];
-                _snapshot.MousePosition = new Vector2(mouse.Position.X, mouse.Position.Y);
+                var currentPos = new Vector2(mouse.Position.X, mouse.Position.Y);
+                _snapshot.MousePosition = currentPos;
 
-                _snapshot.SetMouseButton(MouseButton.Left, mouse.IsButtonPressed(SilkMouseButton.Left));
-                _snapshot.SetMouseButton(MouseButton.Right, mouse.IsButtonPressed(SilkMouseButton.Right));
-                _snapshot.SetMouseButton(MouseButton.Middle, mouse.IsButtonPressed(SilkMouseButton.Middle));
-                for (int i = 3; i <= (int)SilkMouseButton.Button12; i++)
+                // Suppress the first-frame delta to avoid a large spurious jump
+                if (_firstPumpEvents)
                 {
-                    _snapshot.SetMouseButton(MapMouseButton((SilkMouseButton)i), mouse.IsButtonPressed((SilkMouseButton)i));
+                    _previousMousePosition = currentPos;
+                    _firstPumpEvents = false;
+                    _mouseDelta = Vector2.Zero;
                 }
+                else
+                {
+                    _mouseDelta = currentPos - _previousMousePosition;
+                    _previousMousePosition = currentPos;
+                }
+
+                for (int i = 0; i <= (int)MouseButton.LastButton; i++)
+                    _snapshot.SetMouseButton((MouseButton)i, _cachedMouseButtons[i]);
             }
 
             return _snapshot;
         }
 
+        /// <summary>
+        /// Requests the window to close.
+        /// </summary>
         public void Close() => _window.Close();
 
-        // --- Event handlers ---
+        /// <summary>
+        /// Warps the mouse cursor to the given position in client coordinates.
+        /// </summary>
+        public void SetMousePosition(Vector2 position)
+        {
+            if (_input?.Mice.Count > 0)
+            {
+                _input.Mice[0].Position = position;
+                _previousMousePosition = position;
+            }
+        }
+
+        /// <summary>
+        /// Warps the mouse cursor to the given position in client coordinates.
+        /// </summary>
+        public void SetMousePosition(int x, int y)
+            => SetMousePosition(new Vector2(x, y));
+
+        /// <summary>
+        /// Sets a handler that is called when the user requests the window to close.
+        /// If the handler returns true, the close is cancelled and the Closing event is suppressed.
+        /// </summary>
+        public void SetCloseRequestedHandler(Func<bool> handler)
+            => _closeRequestedHandler = handler;
+
+        /// <summary>
+        /// Converts a point from client (window) coordinates to screen coordinates.
+        /// </summary>
+        public Point ClientToScreen(Point p)
+        {
+            var result = _window.PointToScreen(new Vector2D<int>(p.X, p.Y));
+            return new Point(result.X, result.Y);
+        }
+
+        /// <summary>
+        /// Converts a point from screen coordinates to client (window) coordinates.
+        /// </summary>
+        public Point ScreenToClient(Point p)
+        {
+            var result = _window.PointToClient(new Vector2D<int>(p.X, p.Y));
+            return new Point(result.X, result.Y);
+        }
+
+        private void UpdateWindowBorder()
+        {
+            if (!_borderVisible)
+                _window.WindowBorder = WindowBorder.Hidden;
+            else if (_resizable)
+                _window.WindowBorder = WindowBorder.Resizable;
+            else
+                _window.WindowBorder = WindowBorder.Fixed;
+        }
+
+        private MouseState CreateMouseState(IMouse mouse)
+        {
+            var b = _cachedMouseButtons;
+            return new MouseState(
+                (int)mouse.Position.X, (int)mouse.Position.Y,
+                b[0], b[1], b[2], b[3], b[4], b[5], b[6],
+                b[7], b[8], b[9], b[10], b[11], b[12]);
+        }
 
         private void OnWindowResize(Vector2D<int> size)
         {
+            if (_disposed) return;
             Resized?.Invoke();
         }
 
         private void OnWindowClosing()
         {
+            if (_disposed) return;
+            if (_closeRequestedHandler != null && _closeRequestedHandler())
+            {
+                // Cancel the close by resetting the GLFW should-close flag
+                _window.IsClosing = false;
+                return;
+            }
+
             Closing?.Invoke();
+        }
+
+        private void OnWindowMoved(Vector2D<int> position)
+        {
+            if (_disposed) return;
+            Moved?.Invoke(new Point(position.X, position.Y));
+        }
+
+        private void OnFocusChanged(bool focused)
+        {
+            if (_disposed) return;
+            _focused = focused;
+            if (focused)
+            {
+                FocusGained?.Invoke();
+            }
+            else
+            {
+                // Keys may be released while unfocused without generating key-up events.
+                // Clear tracked state to avoid false repeat detection when focus returns.
+                _pressedKeys.Clear();
+                FocusLost?.Invoke();
+            }
+        }
+
+        private void OnStateChanged(SilkWindowState state)
+        {
+            if (_disposed) return;
+            bool currentlyVisible = _window.IsVisible;
+            if (currentlyVisible && !_previousIsVisible)
+                Shown?.Invoke();
+            else if (!currentlyVisible && _previousIsVisible)
+                Hidden?.Invoke();
+            _previousIsVisible = currentlyVisible;
+        }
+
+        private void OnFileDrop(string[] files)
+        {
+            if (_disposed) return;
+            if (DragDrop != null)
+            {
+                foreach (var file in files)
+                    DragDrop.Invoke(new DragDropEvent(file));
+            }
         }
 
         private void OnKeyDown(IKeyboard keyboard, SilkKey key, int scancode)
         {
+            if (_disposed) return;
             var vKey = MapKey(key);
-            if (vKey == Key.Unknown && key != SilkKey.Unknown) return;
+            if (vKey == Key.Unknown && key != SilkKey.Unknown)
+                return;
             var mods = GetModifiers(keyboard);
-            var ev = new KeyEvent(vKey, down: true, mods);
+            // Silk.NET drops GLFW's repeat flag, so we detect repeats ourselves:
+            // if the key is already in the pressed set, this is a repeat event.
+            bool repeat = !_pressedKeys.Add(vKey);
+            var ev = new KeyEvent(vKey, down: true, mods, repeat);
             _snapshot.AddKeyEvent(ev);
             KeyDown?.Invoke(ev);
         }
 
         private void OnKeyUp(IKeyboard keyboard, SilkKey key, int scancode)
         {
+            if (_disposed) return;
             var vKey = MapKey(key);
-            if (vKey == Key.Unknown && key != SilkKey.Unknown) return;
+            if (vKey == Key.Unknown && key != SilkKey.Unknown)
+                return;
+            _pressedKeys.Remove(vKey);
             var mods = GetModifiers(keyboard);
             var ev = new KeyEvent(vKey, down: false, mods);
             _snapshot.AddKeyEvent(ev);
@@ -198,12 +617,15 @@ namespace Veldrid.StartupUtilities
 
         private void OnKeyChar(IKeyboard keyboard, char c)
         {
+            if (_disposed) return;
             _snapshot.AddKeyChar(c);
         }
 
         private void OnMouseDown(IMouse mouse, SilkMouseButton button)
         {
+            if (_disposed) return;
             var vButton = MapMouseButton(button);
+            _cachedMouseButtons[(int)vButton] = true;
             var ev = new MouseEvent(vButton, down: true);
             _snapshot.AddMouseEvent(ev);
             MouseDown?.Invoke(ev);
@@ -211,7 +633,9 @@ namespace Veldrid.StartupUtilities
 
         private void OnMouseUp(IMouse mouse, SilkMouseButton button)
         {
+            if (_disposed) return;
             var vButton = MapMouseButton(button);
+            _cachedMouseButtons[(int)vButton] = false;
             var ev = new MouseEvent(vButton, down: false);
             _snapshot.AddMouseEvent(ev);
             MouseUp?.Invoke(ev);
@@ -219,10 +643,24 @@ namespace Veldrid.StartupUtilities
 
         private void OnScroll(IMouse mouse, ScrollWheel wheel)
         {
+            if (_disposed) return;
             _snapshot.WheelDelta += wheel.Y;
+            if (MouseWheel != null)
+            {
+                var state = CreateMouseState(mouse);
+                MouseWheel.Invoke(new MouseWheelEventArgs(state, wheel.Y));
+            }
         }
 
-        // --- Mapping helpers ---
+        private void OnMouseMoveCallback(IMouse mouse, Vector2 position)
+        {
+            if (_disposed) return;
+            if (MouseMove != null)
+            {
+                var state = CreateMouseState(mouse);
+                MouseMove.Invoke(new MouseMoveEventArgs(state, position));
+            }
+        }
 
         private static ModifierKeys GetModifiers(IKeyboard keyboard)
         {
@@ -238,16 +676,24 @@ namespace Veldrid.StartupUtilities
             return mods;
         }
 
-        private static Silk.NET.Windowing.WindowState MapWindowState(WindowState state) => state switch
+        private static SilkWindowState MapWindowStateToSilk(WindowState state) => state switch
         {
-            WindowState.Normal => Silk.NET.Windowing.WindowState.Normal,
-            WindowState.FullScreen => Silk.NET.Windowing.WindowState.Fullscreen,
-            WindowState.Maximized => Silk.NET.Windowing.WindowState.Maximized,
-            WindowState.Minimized => Silk.NET.Windowing.WindowState.Minimized,
-            WindowState.BorderlessFullScreen => throw new NotSupportedException(
-                "BorderlessFullScreen is not yet implemented. Needs monitor query + borderless window workaround."),
-            WindowState.Hidden => Silk.NET.Windowing.WindowState.Normal, // Hidden handled via IsVisible
-            _ => Silk.NET.Windowing.WindowState.Normal,
+            WindowState.Normal => SilkWindowState.Normal,
+            WindowState.FullScreen => SilkWindowState.Fullscreen,
+            WindowState.Maximized => SilkWindowState.Maximized,
+            WindowState.Minimized => SilkWindowState.Minimized,
+            WindowState.BorderlessFullScreen => SilkWindowState.Maximized,
+            WindowState.Hidden => SilkWindowState.Normal,
+            _ => SilkWindowState.Normal,
+        };
+
+        private static WindowState MapWindowStateReverse(SilkWindowState state) => state switch
+        {
+            SilkWindowState.Normal => WindowState.Normal,
+            SilkWindowState.Fullscreen => WindowState.FullScreen,
+            SilkWindowState.Maximized => WindowState.Maximized,
+            SilkWindowState.Minimized => WindowState.Minimized,
+            _ => WindowState.Normal,
         };
 
         private static MouseButton MapMouseButton(SilkMouseButton button) => button switch
@@ -389,8 +835,16 @@ namespace Veldrid.StartupUtilities
             _ => Key.Unknown,
         };
 
+        /// <summary>
+        /// Disposes the window and its resources. Fires the Closed event.
+        /// </summary>
         public void Dispose()
         {
+            if (_disposed)
+                return;
+            _disposed = true;
+
+            Closed?.Invoke();
             _input?.Dispose();
             _window?.Dispose();
         }
