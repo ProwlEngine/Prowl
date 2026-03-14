@@ -1,4 +1,4 @@
-﻿using ImGuiNET;
+using ImGuiNET;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -8,13 +8,12 @@ using Veldrid.ImageSharp;
 using Veldrid.NeoDemo.Objects;
 using Veldrid.StartupUtilities;
 using Veldrid.Utilities;
-using Veldrid.Sdl2;
 
 namespace Veldrid.NeoDemo
 {
     public class NeoDemo
     {
-        private Sdl2Window _window;
+        private VeldridWindow _window;
         private GraphicsDevice _gd;
         private Scene _scene;
         private readonly ImGuiRenderable _igRenderable;
@@ -40,11 +39,9 @@ namespace Veldrid.NeoDemo
         private ColorWriteMask? _newMask;
 
         private readonly Dictionary<string, ImageSharpTexture> _textures = new Dictionary<string, ImageSharpTexture>();
-        private Sdl2ControllerTracker _controllerTracker;
         private bool _colorSrgb = true;
         private FullScreenQuad _fsq;
         public static RenderDoc _renderDoc;
-        private bool _controllerDebugMenu;
         private bool _showImguiDemo;
 
         public NeoDemo()
@@ -74,10 +71,7 @@ namespace Veldrid.NeoDemo
                 out _gd);
             _window.Resized += () => _windowResized = true;
 
-            Sdl2Native.SDL_Init(SDLInitFlags.GameController);
-            Sdl2ControllerTracker.CreateDefault(out _controllerTracker);
-
-            _scene = new Scene(_gd, _window, _controllerTracker);
+            _scene = new Scene(_gd, _window);
 
             _sc.SetCurrentScene(_scene);
 
@@ -226,9 +220,7 @@ namespace Veldrid.NeoDemo
 
                 previousFrameTicks = currentFrameTicks;
 
-                InputSnapshot snapshot = null;
-                Sdl2Events.ProcessEvents();
-                snapshot = _window.PumpEvents();
+                InputSnapshot snapshot = _window.PumpEvents();
                 InputTracker.UpdateFrameInput(snapshot, _window);
                 Update((float)deltaSeconds);
                 if (!_window.Exists)
@@ -271,10 +263,6 @@ namespace Veldrid.NeoDemo
                         {
                             ChangeBackend(GraphicsBackend.Direct3D11);
                         }
-                        if (ImGui.MenuItem("Metal", string.Empty, _gd.BackendType == GraphicsBackend.Metal, GraphicsDevice.IsBackendSupported(GraphicsBackend.Metal)))
-                        {
-                            ChangeBackend(GraphicsBackend.Metal);
-                        }
                         ImGui.EndMenu();
                     }
                     if (ImGui.BeginMenu("MSAA"))
@@ -315,7 +303,7 @@ namespace Veldrid.NeoDemo
                     {
                         ToggleFullscreenState();
                     }
-                    if (ImGui.MenuItem("Always Recreate Sdl2Window", string.Empty, _recreateWindow, true))
+                    if (ImGui.MenuItem("Always Recreate Window", string.Empty, _recreateWindow, true))
                     {
                         _recreateWindow = !_recreateWindow;
                     }
@@ -380,21 +368,6 @@ namespace Veldrid.NeoDemo
                     if (ImGui.MenuItem("Refresh Device Objects (100 times)"))
                     {
                         RefreshDeviceObjects(100);
-                    }
-                    if (_controllerTracker != null)
-                    {
-                        if (ImGui.MenuItem("Controller State"))
-                        {
-                            _controllerDebugMenu = true;
-                        }
-                    }
-                    else
-                    {
-                        if (ImGui.MenuItem("Connect to Controller"))
-                        {
-                            Sdl2ControllerTracker.CreateDefault(out _controllerTracker);
-                            _scene.Camera.Controller = _controllerTracker;
-                        }
                     }
                     if (ImGui.MenuItem("Show ImGui Demo", string.Empty, _showImguiDemo, true))
                     {
@@ -473,33 +446,6 @@ namespace Veldrid.NeoDemo
                         }
                     }
                     ImGui.EndMenu();
-                }
-
-                if (_controllerDebugMenu)
-                {
-                    if (ImGui.Begin("Controller State", ref _controllerDebugMenu, ImGuiWindowFlags.NoCollapse))
-                    {
-
-                        if (_controllerTracker != null)
-                        {
-                            ImGui.Columns(2);
-                            ImGui.Text($"Name: {_controllerTracker.ControllerName}");
-                            foreach (SDL_GameControllerAxis axis in (SDL_GameControllerAxis[])Enum.GetValues(typeof(SDL_GameControllerAxis)))
-                            {
-                                ImGui.Text($"{axis}: {_controllerTracker.GetAxis(axis)}");
-                            }
-                            ImGui.NextColumn();
-                            foreach (SDL_GameControllerButton button in (SDL_GameControllerButton[])Enum.GetValues(typeof(SDL_GameControllerButton)))
-                            {
-                                ImGui.Text($"{button}: {_controllerTracker.IsPressed(button)}");
-                            }
-                        }
-                        else
-                        {
-                            ImGui.Text("No controller detected.");
-                        }
-                    }
-                    ImGui.End();
                 }
 
                 ImGui.Text(_fta.CurrentAverageFramesPerSecond.ToString("000.0 fps / ") + _fta.CurrentAverageFrameTimeMilliseconds.ToString("#00.00 ms"));

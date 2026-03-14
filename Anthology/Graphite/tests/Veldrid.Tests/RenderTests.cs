@@ -4,7 +4,6 @@ using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Vortice.Mathematics;
 using Xunit;
 
 namespace Veldrid.Tests

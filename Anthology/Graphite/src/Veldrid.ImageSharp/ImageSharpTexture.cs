@@ -1,6 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using System;
+using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -76,41 +77,50 @@ namespace Veldrid.ImageSharp
 
             CommandList cl = gd.ResourceFactory.CreateCommandList();
             cl.Begin();
-            for (uint level = 0; level < MipLevels; level++)
+
+            byte[] rentedBuffer = null;
+            try
             {
-                Image<Rgba32> image = Images[level];
-                if (!image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemory))
+                for (uint level = 0; level < MipLevels; level++)
                 {
-                    throw new VeldridException("Unable to get image pixel memory.");
-                }
-                fixed (void* pin = &MemoryMarshal.GetReference(pixelMemory.Span))
-                {
+                    Image<Rgba32> image = Images[level];
+                    uint rowWidth = (uint)(image.Width * PixelSizeInBytes);
+                    uint dataSize = rowWidth * (uint)image.Height;
+
                     MappedResource map = gd.Map(staging, MapMode.Write, level);
-                    uint rowWidth = (uint)(image.Width * 4);
-                    if (rowWidth == map.RowPitch)
+
+                    if (image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemory))
                     {
-                        Unsafe.CopyBlock(map.Data.ToPointer(), pin, (uint)(image.Width * image.Height * 4));
+                        fixed (void* pin = &MemoryMarshal.GetReference(pixelMemory.Span))
+                        {
+                            CopyToMapped(pin, dataSize, rowWidth, map, (uint)image.Height);
+                        }
                     }
                     else
                     {
-                        for (uint y = 0; y < image.Height; y++)
+                        rentedBuffer ??= ArrayPool<byte>.Shared.Rent((int)dataSize);
+                        image.CopyPixelDataTo(rentedBuffer.AsSpan(0, (int)dataSize));
+                        fixed (void* pin = rentedBuffer)
                         {
-                            byte* dstStart = (byte*)map.Data.ToPointer() + y * map.RowPitch;
-                            byte* srcStart = (byte*)pin + y * rowWidth;
-                            Unsafe.CopyBlock(dstStart, srcStart, rowWidth);
+                            CopyToMapped(pin, dataSize, rowWidth, map, (uint)image.Height);
                         }
                     }
+
                     gd.Unmap(staging, level);
 
                     cl.CopyTexture(
                         staging, 0, 0, 0, level, 0,
                         ret, 0, 0, 0, level, 0,
                         (uint)image.Width, (uint)image.Height, 1, 1);
-
                 }
             }
-            cl.End();
+            finally
+            {
+                if (rentedBuffer != null)
+                    ArrayPool<byte>.Shared.Return(rentedBuffer);
+            }
 
+            cl.End();
             gd.SubmitCommands(cl);
             staging.Dispose();
             cl.Dispose();
@@ -118,32 +128,60 @@ namespace Veldrid.ImageSharp
             return ret;
         }
 
+        private static unsafe void CopyToMapped(void* src, uint dataSize, uint rowWidth, MappedResource map, uint height)
+        {
+            if (rowWidth == map.RowPitch)
+            {
+                Unsafe.CopyBlock(map.Data.ToPointer(), src, dataSize);
+            }
+            else
+            {
+                for (uint y = 0; y < height; y++)
+                {
+                    byte* dstStart = (byte*)map.Data.ToPointer() + y * map.RowPitch;
+                    byte* srcStart = (byte*)src + y * rowWidth;
+                    Unsafe.CopyBlock(dstStart, srcStart, rowWidth);
+                }
+            }
+        }
+
         private unsafe Texture CreateTextureViaUpdate(GraphicsDevice gd, ResourceFactory factory)
         {
             Texture tex = factory.CreateTexture(TextureDescription.Texture2D(
                 Width, Height, MipLevels, 1, Format, TextureUsage.Sampled));
-            for (int level = 0; level < MipLevels; level++)
+
+            byte[] rentedBuffer = null;
+            try
             {
-                Image<Rgba32> image = Images[level];
-                if (!image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemory))
+                for (int level = 0; level < MipLevels; level++)
                 {
-                    throw new VeldridException("Unable to get image pixel memory.");
+                    Image<Rgba32> image = Images[level];
+                    uint dataSize = (uint)(image.Width * image.Height * PixelSizeInBytes);
+
+                    if (image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemory))
+                    {
+                        fixed (void* pin = &MemoryMarshal.GetReference(pixelMemory.Span))
+                        {
+                            gd.UpdateTexture(tex, (IntPtr)pin, dataSize,
+                                0, 0, 0, (uint)image.Width, (uint)image.Height, 1, (uint)level, 0);
+                        }
+                    }
+                    else
+                    {
+                        rentedBuffer ??= ArrayPool<byte>.Shared.Rent((int)dataSize);
+                        image.CopyPixelDataTo(rentedBuffer.AsSpan(0, (int)dataSize));
+                        fixed (void* pin = rentedBuffer)
+                        {
+                            gd.UpdateTexture(tex, (IntPtr)pin, dataSize,
+                                0, 0, 0, (uint)image.Width, (uint)image.Height, 1, (uint)level, 0);
+                        }
+                    }
                 }
-                fixed (void* pin = &MemoryMarshal.GetReference(pixelMemory.Span))
-                {
-                    gd.UpdateTexture(
-                        tex,
-                        (IntPtr)pin,
-                        (uint)(PixelSizeInBytes * image.Width * image.Height),
-                        0,
-                        0,
-                        0,
-                        (uint)image.Width,
-                        (uint)image.Height,
-                        1,
-                        (uint)level,
-                        0);
-                }
+            }
+            finally
+            {
+                if (rentedBuffer != null)
+                    ArrayPool<byte>.Shared.Return(rentedBuffer);
             }
 
             return tex;

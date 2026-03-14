@@ -1,4 +1,4 @@
-﻿using ImGuiNET;
+using ImGuiNET;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -7,7 +7,7 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Veldrid.NeoDemo.Objects;
-using Veldrid.Sdl2;
+using Veldrid.StartupUtilities;
 using Veldrid.Utilities;
 
 namespace Veldrid.NeoDemo
@@ -42,9 +42,9 @@ namespace Veldrid.NeoDemo
         float _midCascadeLimit = 300;
         float _farCascadeLimit;
 
-        public Scene(GraphicsDevice gd, Sdl2Window window, Sdl2ControllerTracker controller)
+        public Scene(GraphicsDevice gd, VeldridWindow window)
         {
-            _camera = new Camera(gd, window, controller);
+            _camera = new Camera(gd, window);
             _farCascadeLimit = _camera.FarDistance;
             _updateables.Add(_camera);
         }

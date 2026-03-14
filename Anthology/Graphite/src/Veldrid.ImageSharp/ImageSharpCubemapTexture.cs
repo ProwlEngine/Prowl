@@ -1,6 +1,7 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using System;
+using System.Buffers;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -168,26 +169,46 @@ namespace Veldrid.ImageSharp
                         Format,
                         TextureUsage.Sampled | TextureUsage.Cubemap));
 
-            for (int level = 0; level < MipLevels; level++)
+            byte[] rentedBuffer = null;
+            try
             {
-                Image<Rgba32> image = CubemapTextures[0][level];
-                uint width = (uint)image.Width;
-                uint height = (uint)image.Height;
-                uint faceSize = width * height * PixelSizeInBytes;
-
                 uint[] faceArrayLayers = { PositiveXArrayLayer, NegativeXArrayLayer, PositiveYArrayLayer, NegativeYArrayLayer, PositiveZArrayLayer, NegativeZArrayLayer };
-                for (int face = 0; face < 6; face++)
+                for (int level = 0; level < MipLevels; level++)
                 {
-                    if (!CubemapTextures[faceArrayLayers[face]][level].DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemory))
+                    Image<Rgba32> image = CubemapTextures[0][level];
+                    uint width = (uint)image.Width;
+                    uint height = (uint)image.Height;
+                    uint faceSize = width * height * PixelSizeInBytes;
+
+                    for (int face = 0; face < 6; face++)
                     {
-                        throw new VeldridException($"Unable to get cubemap face {face} pixel memory.");
-                    }
-                    fixed (void* pin = &MemoryMarshal.GetReference(pixelMemory.Span))
-                    {
-                        gd.UpdateTexture(cubemapTexture, (IntPtr)pin, faceSize, 0, 0, 0, width, height, 1, (uint)level, faceArrayLayers[face]);
+                        Image<Rgba32> faceImage = CubemapTextures[faceArrayLayers[face]][level];
+
+                        if (faceImage.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemory))
+                        {
+                            fixed (void* pin = &MemoryMarshal.GetReference(pixelMemory.Span))
+                            {
+                                gd.UpdateTexture(cubemapTexture, (IntPtr)pin, faceSize, 0, 0, 0, width, height, 1, (uint)level, faceArrayLayers[face]);
+                            }
+                        }
+                        else
+                        {
+                            rentedBuffer ??= ArrayPool<byte>.Shared.Rent((int)faceSize);
+                            faceImage.CopyPixelDataTo(rentedBuffer.AsSpan(0, (int)faceSize));
+                            fixed (void* pin = rentedBuffer)
+                            {
+                                gd.UpdateTexture(cubemapTexture, (IntPtr)pin, faceSize, 0, 0, 0, width, height, 1, (uint)level, faceArrayLayers[face]);
+                            }
+                        }
                     }
                 }
             }
+            finally
+            {
+                if (rentedBuffer != null)
+                    ArrayPool<byte>.Shared.Return(rentedBuffer);
+            }
+
             return cubemapTexture;
         }
     }

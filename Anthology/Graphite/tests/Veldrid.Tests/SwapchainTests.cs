@@ -1,5 +1,4 @@
-﻿using Veldrid.Sdl2;
-using Veldrid.StartupUtilities;
+﻿using Veldrid.StartupUtilities;
 using Xunit;
 
 namespace Veldrid.Tests
@@ -15,7 +14,14 @@ namespace Veldrid.Tests
         [InlineData(null, true)]
         public void Ctor_SetsProperties(PixelFormat? depthFormat, bool syncToVerticalBlank)
         {
-            Sdl2Window window = new Sdl2Window("SwapchainTestWindow", 0, 0, 100, 100, SDL_WindowFlags.Hidden, false);
+            WindowCreateInfo wci = new WindowCreateInfo
+            {
+                WindowWidth = 100,
+                WindowHeight = 100,
+                WindowInitialState = WindowState.Hidden,
+                WindowTitle = "SwapchainTestWindow",
+            };
+            VeldridWindow window = VeldridStartup.CreateWindow(ref wci);
             SwapchainSource source = VeldridStartup.GetSwapchainSource(window);
             SwapchainDescription swapchainDesc = new SwapchainDescription(source, 100, 100, depthFormat, syncToVerticalBlank);
             Swapchain swapchain = RF.CreateSwapchain(ref swapchainDesc);

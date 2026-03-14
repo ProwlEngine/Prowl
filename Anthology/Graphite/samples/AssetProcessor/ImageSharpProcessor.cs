@@ -5,7 +5,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Veldrid;
 using AssetPrimitives;
 
@@ -23,11 +22,7 @@ namespace AssetProcessor
             foreach (Image<Rgba32> mipmap in mipmaps)
             {
                 int mipSize = mipmap.Width * mipmap.Height * Unsafe.SizeOf<Rgba32>();
-                if (!mipmap.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemory))
-                {
-                    throw new VeldridException("Unable to get image pixel memory.");
-                }
-                MemoryMarshal.AsBytes(pixelMemory.Span).CopyTo(allTexData.AsSpan(offset, mipSize));
+                mipmap.CopyPixelDataTo(allTexData.AsSpan(offset, mipSize));
                 offset += mipSize;
             }
 

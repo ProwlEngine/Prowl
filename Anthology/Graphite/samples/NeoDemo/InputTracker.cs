@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text;
-using Veldrid.Sdl2;
+using Veldrid.StartupUtilities;
 
 namespace Veldrid.NeoDemo
 {
@@ -38,7 +38,7 @@ namespace Veldrid.NeoDemo
             return _newMouseButtonsThisFrame.Contains(button);
         }
 
-        public static void UpdateFrameInput(InputSnapshot snapshot, Sdl2Window window)
+        public static void UpdateFrameInput(InputSnapshot snapshot, VeldridWindow window)
         {
             FrameSnapshot = snapshot;
             _newKeysThisFrame.Clear();
