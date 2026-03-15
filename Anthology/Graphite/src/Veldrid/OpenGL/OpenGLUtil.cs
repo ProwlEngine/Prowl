@@ -1,20 +1,22 @@
 using System;
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text;
-using Veldrid.OpenGLBinding;
-using static Veldrid.OpenGLBinding.OpenGLNative;
+using Silk.NET.OpenGL;
 
 namespace Veldrid.OpenGL
 {
     internal static class OpenGLUtil
     {
+        internal static GL GL;
+        internal static bool HasGlObjectLabel;
+
         private static int? MaxLabelLength;
 
         [Conditional("DEBUG")]
         [DebuggerNonUserCode]
         internal static void CheckLastError()
         {
-            uint error = glGetError();
+            uint error = (uint)GL.GetError();
             if (error != 0)
             {
                 if (Debugger.IsAttached)
@@ -26,15 +28,14 @@ namespace Veldrid.OpenGL
             }
         }
 
-        internal static unsafe void SetObjectLabel(ObjectLabelIdentifier identifier, uint target, string name)
+        internal static unsafe void SetObjectLabel(ObjectIdentifier identifier, uint target, string name)
         {
             if (HasGlObjectLabel)
             {
                 int byteCount = Encoding.UTF8.GetByteCount(name);
                 if (MaxLabelLength == null)
                 {
-                    int maxLabelLength = -1;
-                    glGetIntegerv(GetPName.MaxLabelLength, &maxLabelLength);
+                    GL.GetInteger(GetPName.MaxLabelLength, out int maxLabelLength);
                     CheckLastError();
                     MaxLabelLength = maxLabelLength;
                 }
@@ -52,7 +53,7 @@ namespace Veldrid.OpenGL
                 {
                     int written = Encoding.UTF8.GetBytes(namePtr, name.Length, utf8bytePtr, byteCount);
                     utf8bytePtr[written] = 0;
-                    glObjectLabel(identifier, target, (uint)byteCount, utf8bytePtr);
+                    GL.ObjectLabel(identifier, target, (uint)byteCount, utf8bytePtr);
                     CheckLastError();
                 }
             }

@@ -1,6 +1,6 @@
-﻿using static Veldrid.OpenGLBinding.OpenGLNative;
+using Silk.NET.OpenGL;
 using static Veldrid.OpenGL.OpenGLUtil;
-using Veldrid.OpenGLBinding;
+using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 using System;
 
 namespace Veldrid.OpenGL
@@ -10,6 +10,8 @@ namespace Veldrid.OpenGL
     /// </summary>
     internal unsafe class OpenGLTextureSamplerManager
     {
+        private readonly OpenGLGraphicsDevice _gd;
+        private GL _gl => _gd.GL;
         private readonly bool _dsaAvailable;
         private readonly int _maxTextureUnits;
         private readonly uint _lastTextureUnit;
@@ -17,11 +19,12 @@ namespace Veldrid.OpenGL
         private readonly BoundSamplerStateInfo[] _textureUnitSamplers;
         private uint _currentActiveUnit = 0;
 
-        public OpenGLTextureSamplerManager(OpenGLExtensions extensions)
+        public OpenGLTextureSamplerManager(OpenGLGraphicsDevice gd, OpenGLExtensions extensions)
         {
+            _gd = gd;
             _dsaAvailable = extensions.ARB_DirectStateAccess;
             int maxTextureUnits;
-            glGetIntegerv(GetPName.MaxCombinedTextureImageUnits, &maxTextureUnits);
+            _gl.GetInteger(GetPName.MaxCombinedTextureImageUnits, out maxTextureUnits);
             CheckLastError();
             _maxTextureUnits = Math.Max(maxTextureUnits, 8); // OpenGL spec indicates that implementations must support at least 8.
             _textureUnitTextures = new OpenGLTextureView[_maxTextureUnits];
@@ -38,13 +41,13 @@ namespace Veldrid.OpenGL
             {
                 if (_dsaAvailable)
                 {
-                    glBindTextureUnit(textureUnit, textureID);
+                    _gl.BindTextureUnit(textureUnit, textureID);
                     CheckLastError();
                 }
                 else
                 {
                     SetActiveTextureUnit(textureUnit);
-                    glBindTexture(textureView.TextureTarget, textureID);
+                    _gl.BindTexture(textureView.TextureTarget, textureID);
                     CheckLastError();
                 }
 
@@ -57,7 +60,7 @@ namespace Veldrid.OpenGL
         {
             _textureUnitTextures[_lastTextureUnit] = null;
             SetActiveTextureUnit(_lastTextureUnit);
-            glBindTexture(target, texture);
+            _gl.BindTexture(target, texture);
             CheckLastError();
         }
 
@@ -73,7 +76,7 @@ namespace Veldrid.OpenGL
                 }
 
                 uint samplerID = mipmapped ? sampler.MipmapSampler : sampler.NoMipmapSampler;
-                glBindSampler(textureUnit, samplerID);
+                _gl.BindSampler(textureUnit, samplerID);
                 CheckLastError();
 
                 _textureUnitSamplers[textureUnit] = new BoundSamplerStateInfo(sampler, mipmapped);
@@ -88,7 +91,7 @@ namespace Veldrid.OpenGL
         {
             if (_currentActiveUnit != textureUnit)
             {
-                glActiveTexture(TextureUnit.Texture0 + (int)textureUnit);
+                _gl.ActiveTexture(TextureUnit.Texture0 + (int)textureUnit);
                 CheckLastError();
                 _currentActiveUnit = textureUnit;
             }
@@ -100,7 +103,7 @@ namespace Veldrid.OpenGL
             {
                 OpenGLSampler sampler = _textureUnitSamplers[textureUnit].Sampler;
                 uint samplerID = mipmapped ? sampler.MipmapSampler : sampler.NoMipmapSampler;
-                glBindSampler(textureUnit, samplerID);
+                _gl.BindSampler(textureUnit, samplerID);
                 CheckLastError();
 
                 _textureUnitSamplers[textureUnit].Mipmapped = mipmapped;

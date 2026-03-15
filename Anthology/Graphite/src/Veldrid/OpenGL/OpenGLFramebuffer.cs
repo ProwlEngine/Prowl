@@ -1,12 +1,13 @@
-﻿using static Veldrid.OpenGLBinding.OpenGLNative;
 using static Veldrid.OpenGL.OpenGLUtil;
-using Veldrid.OpenGLBinding;
+using Silk.NET.OpenGL;
+using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
 
 namespace Veldrid.OpenGL
 {
     internal unsafe class OpenGLFramebuffer : Framebuffer, OpenGLDeferredResource
     {
         private readonly OpenGLGraphicsDevice _gd;
+        private GL _gl => _gd.GL;
         private uint _framebuffer;
 
         private string _name;
@@ -39,17 +40,17 @@ namespace Veldrid.OpenGL
                 _nameChanged = false;
                 if (_gd.Extensions.KHR_Debug)
                 {
-                    SetObjectLabel(ObjectLabelIdentifier.Framebuffer, _framebuffer, _name);
+                    SetObjectLabel(ObjectIdentifier.Framebuffer, _framebuffer, _name);
                 }
             }
         }
 
         public void CreateGLResources()
         {
-            glGenFramebuffers(1, out _framebuffer);
+            _framebuffer = _gl.GenFramebuffer();
             CheckLastError();
 
-            glBindFramebuffer(FramebufferTarget.Framebuffer, _framebuffer);
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _framebuffer);
             CheckLastError();
 
             uint colorCount = (uint)ColorTargets.Count;
@@ -69,7 +70,7 @@ namespace Veldrid.OpenGL
 
                     if (glTex.ArrayLayers == 1)
                     {
-                        glFramebufferTexture2D(
+                        _gl.FramebufferTexture2D(
                             FramebufferTarget.Framebuffer,
                             GLFramebufferAttachment.ColorAttachment0 + i,
                             textureTarget,
@@ -79,7 +80,7 @@ namespace Veldrid.OpenGL
                     }
                     else
                     {
-                        glFramebufferTextureLayer(
+                        _gl.FramebufferTextureLayer(
                             FramebufferTarget.Framebuffer,
                             GLFramebufferAttachment.ColorAttachment0 + i,
                             (uint)glTex.Texture,
@@ -89,12 +90,12 @@ namespace Veldrid.OpenGL
                     }
                 }
 
-                DrawBuffersEnum* bufs = stackalloc DrawBuffersEnum[(int)colorCount];
+                DrawBufferMode* bufs = stackalloc DrawBufferMode[(int)colorCount];
                 for (int i = 0; i < colorCount; i++)
                 {
-                    bufs[i] = DrawBuffersEnum.ColorAttachment0 + i;
+                    bufs[i] = DrawBufferMode.ColorAttachment0 + i;
                 }
-                glDrawBuffers(colorCount, bufs);
+                _gl.DrawBuffers(colorCount, bufs);
                 CheckLastError();
             }
 
@@ -121,7 +122,7 @@ namespace Veldrid.OpenGL
 
                 if (glDepthTex.ArrayLayers == 1)
                 {
-                    glFramebufferTexture2D(
+                    _gl.FramebufferTexture2D(
                         FramebufferTarget.Framebuffer,
                         framebufferAttachment,
                         depthTarget,
@@ -131,7 +132,7 @@ namespace Veldrid.OpenGL
                 }
                 else
                 {
-                    glFramebufferTextureLayer(
+                    _gl.FramebufferTextureLayer(
                         FramebufferTarget.Framebuffer,
                         framebufferAttachment,
                         glDepthTex.Texture,
@@ -142,9 +143,9 @@ namespace Veldrid.OpenGL
 
             }
 
-            FramebufferErrorCode errorCode = glCheckFramebufferStatus(FramebufferTarget.Framebuffer);
+            FramebufferStatus errorCode = (FramebufferStatus)_gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer);
             CheckLastError();
-            if (errorCode != FramebufferErrorCode.FramebufferComplete)
+            if (errorCode != FramebufferStatus.FramebufferComplete)
             {
                 throw new VeldridException("Framebuffer was not successfully created: " + errorCode);
             }
@@ -166,8 +167,7 @@ namespace Veldrid.OpenGL
             if (!_disposed)
             {
                 _disposed = true;
-                uint framebuffer = _framebuffer;
-                glDeleteFramebuffers(1, ref framebuffer);
+                _gl.DeleteFramebuffer(_framebuffer);
                 CheckLastError();
             }
         }

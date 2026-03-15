@@ -352,11 +352,12 @@ namespace Veldrid.StartupUtilities
         internal IWindow SilkWindow => _window;
 
         /// <summary>
-        /// Creates a new window with the given creation parameters. The window uses no graphics API
-        /// (suitable for Vulkan or D3D11 where the device manages its own context).
+        /// Creates a new window. Always created with OpenGL context support so that any
+        /// backend (Vulkan, D3D11, OpenGL) can be used without recreating the window,
+        /// matching upstream SDL2 behavior which always set SDL_WindowFlags.OpenGL.
         /// </summary>
         public VeldridWindow(WindowCreateInfo wci)
-            : this(wci, GraphicsAPI.None)
+            : this(wci, new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 3)))
         {
         }
 

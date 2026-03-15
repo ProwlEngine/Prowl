@@ -1,6 +1,4 @@
-﻿using static Veldrid.OpenGLBinding.OpenGLNative;
-using Veldrid.OpenGL;
-using Veldrid.OpenGLBinding;
+using Silk.NET.OpenGL;
 using System;
 
 namespace Veldrid.OpenGL

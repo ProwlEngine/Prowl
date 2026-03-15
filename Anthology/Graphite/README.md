@@ -8,17 +8,17 @@ Veldrid is a cross-platform, graphics API-agnostic rendering and compute library
 
 ## Status
 
-**Work in progress.** Vulkan, D3D11, and windowing backends are ported and validated. OpenGL backend is next.
+**Work in progress.** Vulkan, D3D11, OpenGL, and windowing backends are ported and validated.
 
 | Backend | Status |
 |---------|--------|
 | Vulkan | Ported and validated |
 | Direct3D 11 | Ported and validated |
-| OpenGL | Not yet ported |
+| OpenGL | Ported and validated |
 | Metal | Removed (use Vulkan via MoltenVK on macOS) |
 | Windowing | Ported (Silk.NET.Windowing replaces SDL2) |
 
-All [samples](samples/) have been validated on both Vulkan and D3D11.
+All [samples](samples/) have been validated on Vulkan, D3D11, and OpenGL.
 
 ## What's Different From Upstream Veldrid
 
@@ -26,7 +26,7 @@ All [samples](samples/) have been validated on both Vulkan and D3D11.
 |------|----------|-------------|
 | Vulkan bindings | `Vk` 1.0.25 | `Silk.NET.Vulkan` 2.23.0 |
 | D3D11 bindings | `Vortice.Direct3D11` 2.4.2 | `Silk.NET.Direct3D11` 2.23.0 |
-| OpenGL bindings | Custom (`Veldrid.OpenGLBindings`) | `Silk.NET.OpenGL` 2.23.0 (planned) |
+| OpenGL bindings | Custom (`Veldrid.OpenGLBindings`) | `Silk.NET.OpenGL` 2.23.0 |
 | Metal backend | Native via `Veldrid.MetalBindings` | Removed (use Vulkan via MoltenVK) |
 | Windowing | SDL2 via `Veldrid.SDL2` | `Silk.NET.Windowing` 2.23.0 |
 | ImageSharp | 1.x | 3.x (1.x is broken on .NET 10) |

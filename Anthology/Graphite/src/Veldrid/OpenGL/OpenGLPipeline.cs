@@ -1,6 +1,6 @@
-﻿using static Veldrid.OpenGLBinding.OpenGLNative;
+using Silk.NET.OpenGL;
 using static Veldrid.OpenGL.OpenGLUtil;
-using Veldrid.OpenGLBinding;
+using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 using System.Text;
 using System.Diagnostics;
 using System.Collections.Generic;
@@ -12,6 +12,7 @@ namespace Veldrid.OpenGL
     {
         private const uint GL_INVALID_INDEX = 0xFFFFFFFF;
         private readonly OpenGLGraphicsDevice _gd;
+        private GL _gl => _gd.GL;
 
 #if !VALIDATE_USAGE
         public ResourceLayout[] ResourceLayouts { get; }
@@ -107,13 +108,13 @@ namespace Veldrid.OpenGL
 
         private void CreateGraphicsGLResources()
         {
-            _program = glCreateProgram();
+            _program = _gl.CreateProgram();
             CheckLastError();
             foreach (Shader stage in GraphicsShaders)
             {
                 OpenGLShader glShader = Util.AssertSubtype<Shader, OpenGLShader>(stage);
                 glShader.EnsureResourcesCreated();
-                glAttachShader(_program, glShader.Shader);
+                _gl.AttachShader(_program, glShader.Shader);
                 CheckLastError();
             }
 
@@ -127,7 +128,7 @@ namespace Veldrid.OpenGL
                 }
             }
 
-            glLinkProgram(_program);
+            _gl.LinkProgram(_program);
             CheckLastError();
 
 #if DEBUG && GL_VALIDATE_VERTEX_INPUT_ELEMENTS
@@ -148,15 +149,12 @@ namespace Veldrid.OpenGL
 #endif
 
             int linkStatus;
-            glGetProgramiv(_program, GetProgramParameterName.LinkStatus, &linkStatus);
+            _gl.GetProgram(_program, ProgramPropertyARB.LinkStatus, out linkStatus);
             CheckLastError();
             if (linkStatus != 1)
             {
-                byte* infoLog = stackalloc byte[4096];
-                uint bytesWritten;
-                glGetProgramInfoLog(_program, 4096, &bytesWritten, infoLog);
+                string log = _gl.GetProgramInfoLog(_program);
                 CheckLastError();
-                string log = Encoding.UTF8.GetString(infoLog, (int)bytesWritten);
                 throw new VeldridException($"Error linking GL program: {log}");
             }
 
@@ -165,31 +163,13 @@ namespace Veldrid.OpenGL
 
         int GetAttribLocation(string elementName)
         {
-            int byteCount = Encoding.UTF8.GetByteCount(elementName) + 1;
-            byte* elementNamePtr = stackalloc byte[byteCount];
-            fixed (char* charPtr = elementName)
-            {
-                int bytesWritten = Encoding.UTF8.GetBytes(charPtr, elementName.Length, elementNamePtr, byteCount);
-                Debug.Assert(bytesWritten == byteCount - 1);
-            }
-            elementNamePtr[byteCount - 1] = 0; // Add null terminator.
-
-            int location = glGetAttribLocation(_program, elementNamePtr);
+            int location = _gl.GetAttribLocation(_program, elementName);
             return location;
         }
 
         void BindAttribLocation(uint slot, string elementName)
         {
-            int byteCount = Encoding.UTF8.GetByteCount(elementName) + 1;
-            byte* elementNamePtr = stackalloc byte[byteCount];
-            fixed (char* charPtr = elementName)
-            {
-                int bytesWritten = Encoding.UTF8.GetBytes(charPtr, elementName.Length, elementNamePtr, byteCount);
-                Debug.Assert(bytesWritten == byteCount - 1);
-            }
-            elementNamePtr[byteCount - 1] = 0; // Add null terminator.
-
-            glBindAttribLocation(_program, slot, elementNamePtr);
+            _gl.BindAttribLocation(_program, slot, elementName);
             CheckLastError();
         }
 
@@ -222,7 +202,7 @@ namespace Veldrid.OpenGL
                         if (blockIndex != GL_INVALID_INDEX)
                         {
                             int blockSize;
-                            glGetActiveUniformBlockiv(_program, blockIndex, ActiveUniformBlockParameter.UniformBlockDataSize, &blockSize);
+                            _gl.GetActiveUniformBlock(_program, blockIndex, UniformBlockPName.UniformBlockDataSize, out blockSize);
                             CheckLastError();
                             uniformBindings[i] = new OpenGLUniformBinding(_program, blockIndex, (uint)blockSize);
                         }
@@ -276,16 +256,7 @@ namespace Veldrid.OpenGL
 
         uint GetUniformBlockIndex(string resourceName)
         {
-            int byteCount = Encoding.UTF8.GetByteCount(resourceName) + 1;
-            byte* resourceNamePtr = stackalloc byte[byteCount];
-            fixed (char* charPtr = resourceName)
-            {
-                int bytesWritten = Encoding.UTF8.GetBytes(charPtr, resourceName.Length, resourceNamePtr, byteCount);
-                Debug.Assert(bytesWritten == byteCount - 1);
-            }
-            resourceNamePtr[byteCount - 1] = 0; // Add null terminator.
-
-            uint blockIndex = glGetUniformBlockIndex(_program, resourceNamePtr);
+            uint blockIndex = _gl.GetUniformBlockIndex(_program, resourceName);
             CheckLastError();
 #if DEBUG && GL_VALIDATE_SHADER_RESOURCE_NAMES
             if (blockIndex == GL_INVALID_INDEX)
@@ -297,9 +268,9 @@ namespace Veldrid.OpenGL
                 while (true)
                 {
                     uint actualLength;
-                    glGetActiveUniformBlockName(_program, uniformBufferIndex, bufferNameByteCount, &actualLength, bufferNamePtr);
+                    _gl.GetActiveUniformBlockName(_program, uniformBufferIndex, bufferNameByteCount, &actualLength, bufferNamePtr);
 
-                    if (glGetError() != 0)
+                    if (_gl.GetError() != 0)
                     {
                         break;
                     }
@@ -317,16 +288,7 @@ namespace Veldrid.OpenGL
 
         int GetUniformLocation(string resourceName)
         {
-            int byteCount = Encoding.UTF8.GetByteCount(resourceName) + 1;
-            byte* resourceNamePtr = stackalloc byte[byteCount];
-            fixed (char* charPtr = resourceName)
-            {
-                int bytesWritten = Encoding.UTF8.GetBytes(charPtr, resourceName.Length, resourceNamePtr, byteCount);
-                Debug.Assert(bytesWritten == byteCount - 1);
-            }
-            resourceNamePtr[byteCount - 1] = 0; // Add null terminator.
-
-            int location = glGetUniformLocation(_program, resourceNamePtr);
+            int location = _gl.GetUniformLocation(_program, resourceName);
             CheckLastError();
 
 #if DEBUG && GL_VALIDATE_SHADER_RESOURCE_NAMES
@@ -340,17 +302,7 @@ namespace Veldrid.OpenGL
 
         uint GetProgramResourceIndex(string resourceName, ProgramInterface resourceType)
         {
-            int byteCount = Encoding.UTF8.GetByteCount(resourceName) + 1;
-
-            byte* resourceNamePtr = stackalloc byte[byteCount];
-            fixed (char* charPtr = resourceName)
-            {
-                int bytesWritten = Encoding.UTF8.GetBytes(charPtr, resourceName.Length, resourceNamePtr, byteCount);
-                Debug.Assert(bytesWritten == byteCount - 1);
-            }
-            resourceNamePtr[byteCount - 1] = 0; // Add null terminator.
-
-            uint binding = glGetProgramResourceIndex(_program, resourceType, resourceNamePtr);
+            uint binding = _gl.GetProgramResourceIndex(_program, resourceType, resourceName);
             CheckLastError();
 #if DEBUG && GL_VALIDATE_SHADER_RESOURCE_NAMES
             if (binding == GL_INVALID_INDEX)
@@ -365,26 +317,25 @@ namespace Veldrid.OpenGL
         void ReportInvalidUniformName(string uniformName)
         {
             uint uniformIndex = 0;
-            uint resourceNameByteCount = 64;
-            byte* resourceNamePtr = stackalloc byte[(int)resourceNameByteCount];
-
             var names = new List<string>();
             while (true)
             {
-                uint actualLength;
-                int size;
-                uint type;
-                glGetActiveUniform(_program, uniformIndex, resourceNameByteCount,
-                    &actualLength, &size, &type, resourceNamePtr);
+                try
+                {
+                    _gl.GetActiveUniform(_program, uniformIndex, 64, out int actualLength, out int size, out UniformType type, out string name);
 
-                if (glGetError() != 0)
+                    if (_gl.GetError() != 0)
+                    {
+                        break;
+                    }
+
+                    names.Add(name);
+                    uniformIndex++;
+                }
+                catch
                 {
                     break;
                 }
-
-                string name = Encoding.UTF8.GetString(resourceNamePtr, (int)actualLength);
-                names.Add(name);
-                uniformIndex++;
             }
 
             throw new VeldridException($"Unable to bind uniform \"{uniformName}\" by name. Valid names for this pipeline are: {string.Join(", ", names)}");
@@ -400,22 +351,19 @@ namespace Veldrid.OpenGL
 
             int maxLength = 0;
             int resourceCount = 0;
-            glGetProgramInterfaceiv(_program, resourceType, ProgramInterfaceParameterName.MaxNameLength, &maxLength);
-            glGetProgramInterfaceiv(_program, resourceType, ProgramInterfaceParameterName.ActiveResources, &resourceCount);
-            byte* resourceNamePtr = stackalloc byte[maxLength];
+            _gl.GetProgramInterface(_program, resourceType, ProgramInterfacePName.MaxNameLength, out maxLength);
+            _gl.GetProgramInterface(_program, resourceType, ProgramInterfacePName.ActiveResources, out resourceCount);
 
             var names = new List<string>();
             for (uint resourceIndex = 0; resourceIndex < resourceCount; resourceIndex++)
             {
-                uint actualLength;
-                glGetProgramResourceName(_program, resourceType, resourceIndex, (uint)maxLength, &actualLength, resourceNamePtr);
+                string name = _gl.GetProgramResourceName(_program, resourceType, resourceIndex);
 
-                if (glGetError() != 0)
+                if (_gl.GetError() != 0)
                 {
                     break;
                 }
 
-                string name = Encoding.UTF8.GetString(resourceNamePtr, (int)actualLength);
                 names.Add(name);
             }
 
@@ -425,26 +373,23 @@ namespace Veldrid.OpenGL
 
         private void CreateComputeGLResources()
         {
-            _program = glCreateProgram();
+            _program = _gl.CreateProgram();
             CheckLastError();
             OpenGLShader glShader = Util.AssertSubtype<Shader, OpenGLShader>(ComputeShader);
             glShader.EnsureResourcesCreated();
-            glAttachShader(_program, glShader.Shader);
+            _gl.AttachShader(_program, glShader.Shader);
             CheckLastError();
 
-            glLinkProgram(_program);
+            _gl.LinkProgram(_program);
             CheckLastError();
 
             int linkStatus;
-            glGetProgramiv(_program, GetProgramParameterName.LinkStatus, &linkStatus);
+            _gl.GetProgram(_program, ProgramPropertyARB.LinkStatus, out linkStatus);
             CheckLastError();
             if (linkStatus != 1)
             {
-                byte* infoLog = stackalloc byte[4096];
-                uint bytesWritten;
-                glGetProgramInfoLog(_program, 4096, &bytesWritten, infoLog);
+                string log = _gl.GetProgramInfoLog(_program);
                 CheckLastError();
-                string log = Encoding.UTF8.GetString(infoLog, (int)bytesWritten);
                 throw new VeldridException($"Error linking GL program: {log}");
             }
 
@@ -494,7 +439,7 @@ namespace Veldrid.OpenGL
             if (!_disposed)
             {
                 _disposed = true;
-                glDeleteProgram(_program);
+                _gl.DeleteProgram(_program);
                 CheckLastError();
             }
         }

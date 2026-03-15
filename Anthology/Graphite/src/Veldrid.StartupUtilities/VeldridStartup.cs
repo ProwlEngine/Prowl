@@ -194,12 +194,6 @@ namespace Veldrid.StartupUtilities
         {
             var silkWindow = window.SilkWindow;
             var glContext = silkWindow.GLContext;
-            if (glContext == null)
-            {
-                throw new VeldridException(
-                    "OpenGL context not available. The window must be created with OpenGL support. " +
-                    "Use CreateWindowAndGraphicsDevice() or create the window with the appropriate GraphicsAPI.");
-            }
 
             glContext.MakeCurrent();
 
@@ -218,7 +212,7 @@ namespace Veldrid.StartupUtilities
                 () => glContext.Clear(),
                 ctx => { },
                 () => glContext.SwapBuffers(),
-                sync => glContext.SwapInterval = sync ? 1 : 0);
+                sync => glContext.SwapInterval(sync ? 1 : 0));
 
             return GraphicsDevice.CreateOpenGL(
                 options,

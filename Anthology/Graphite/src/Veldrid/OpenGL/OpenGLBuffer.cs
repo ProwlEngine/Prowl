@@ -1,7 +1,6 @@
-﻿using System;
-using static Veldrid.OpenGLBinding.OpenGLNative;
+using System;
 using static Veldrid.OpenGL.OpenGLUtil;
-using Veldrid.OpenGLBinding;
+using Silk.NET.OpenGL;
 using System.Diagnostics;
 
 namespace Veldrid.OpenGL
@@ -9,6 +8,7 @@ namespace Veldrid.OpenGL
     internal unsafe class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResource
     {
         private readonly OpenGLGraphicsDevice _gd;
+        private GL _gl => _gd.GL;
         private uint _buffer;
         private bool _dynamic;
         private bool _disposeRequested;
@@ -46,7 +46,7 @@ namespace Veldrid.OpenGL
                 _nameChanged = false;
                 if (_gd.Extensions.KHR_Debug)
                 {
-                    SetObjectLabel(ObjectLabelIdentifier.Buffer, _buffer, _name);
+                    SetObjectLabel(ObjectIdentifier.Buffer, _buffer, _name);
                 }
             }
         }
@@ -58,30 +58,30 @@ namespace Veldrid.OpenGL
             if (_gd.Extensions.ARB_DirectStateAccess)
             {
                 uint buffer;
-                glCreateBuffers(1, &buffer);
+                _gl.CreateBuffers(1, &buffer);
                 CheckLastError();
                 _buffer = buffer;
 
-                glNamedBufferData(
+                _gl.NamedBufferData(
                     _buffer,
                     SizeInBytes,
                     null,
-                    _dynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+                    _dynamic ? BufferUsageARB.DynamicDraw : BufferUsageARB.StaticDraw);
                 CheckLastError();
             }
             else
             {
-                glGenBuffers(1, out _buffer);
+                _buffer = _gl.GenBuffer();
                 CheckLastError();
 
-                glBindBuffer(BufferTarget.CopyReadBuffer, _buffer);
+                _gl.BindBuffer(BufferTargetARB.CopyReadBuffer, _buffer);
                 CheckLastError();
 
-                glBufferData(
-                    BufferTarget.CopyReadBuffer,
+                _gl.BufferData(
+                    BufferTargetARB.CopyReadBuffer,
                     (UIntPtr)SizeInBytes,
                     null,
-                    _dynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+                    _dynamic ? BufferUsageARB.DynamicDraw : BufferUsageARB.StaticDraw);
                 CheckLastError();
             }
 
@@ -99,8 +99,7 @@ namespace Veldrid.OpenGL
 
         public void DestroyGLResources()
         {
-            uint buffer = _buffer;
-            glDeleteBuffers(1, ref buffer);
+            _gl.DeleteBuffer(_buffer);
             CheckLastError();
         }
     }
