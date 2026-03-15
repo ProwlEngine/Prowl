@@ -1,20 +1,20 @@
-﻿using System;
-using Vortice.Direct3D11;
+using System;
 using System.Collections.Generic;
-using Vortice.DXGI;
-using Vortice.Direct3D;
+using Silk.NET.Core.Native;
+using Silk.NET.Direct3D11;
+using Silk.NET.DXGI;
 
 namespace Veldrid.D3D11
 {
-    internal class D3D11Buffer : DeviceBuffer
+    internal unsafe class D3D11Buffer : DeviceBuffer
     {
-        private readonly ID3D11Device _device;
-        private readonly ID3D11Buffer _buffer;
+        private readonly ID3D11Device* _device;
+        private ComPtr<ID3D11Buffer> _buffer;
         private readonly object _accessViewLock = new object();
-        private readonly Dictionary<OffsetSizePair, ID3D11ShaderResourceView> _srvs
-            = new Dictionary<OffsetSizePair, ID3D11ShaderResourceView>();
-        private readonly Dictionary<OffsetSizePair, ID3D11UnorderedAccessView> _uavs
-            = new Dictionary<OffsetSizePair, ID3D11UnorderedAccessView>();
+        private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> _srvs
+            = new Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>>();
+        private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> _uavs
+            = new Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>>();
         private readonly uint _structureByteStride;
         private readonly bool _rawBuffer;
         private string _name;
@@ -23,11 +23,11 @@ namespace Veldrid.D3D11
 
         public override BufferUsage Usage { get; }
 
-        public override bool IsDisposed => _buffer.NativePointer == IntPtr.Zero;
+        public override bool IsDisposed => _buffer.Handle == null;
 
-        public ID3D11Buffer Buffer => _buffer;
+        public ID3D11Buffer* Buffer => _buffer;
 
-        public D3D11Buffer(ID3D11Device device, uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool rawBuffer)
+        public D3D11Buffer(ID3D11Device* device, uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool rawBuffer)
         {
             _device = device;
             SizeInBytes = sizeInBytes;
@@ -35,40 +35,47 @@ namespace Veldrid.D3D11
             _structureByteStride = structureByteStride;
             _rawBuffer = rawBuffer;
 
-            Vortice.Direct3D11.BufferDescription bd = new Vortice.Direct3D11.BufferDescription(
-                (int)sizeInBytes,
-                D3D11Formats.VdToD3D11BindFlags(usage),
-                ResourceUsage.Default);
+            BufferDesc bd = new BufferDesc
+            {
+                ByteWidth = sizeInBytes,
+                BindFlags = (uint)D3D11Formats.VdToD3D11BindFlags(usage),
+                Usage = Silk.NET.Direct3D11.Usage.Default,
+            };
+
             if ((usage & BufferUsage.StructuredBufferReadOnly) == BufferUsage.StructuredBufferReadOnly
                 || (usage & BufferUsage.StructuredBufferReadWrite) == BufferUsage.StructuredBufferReadWrite)
             {
                 if (rawBuffer)
                 {
-                    bd.MiscFlags = ResourceOptionFlags.BufferAllowRawViews;
+                    bd.MiscFlags = (uint)ResourceMiscFlag.BufferAllowRawViews;
                 }
                 else
                 {
-                    bd.MiscFlags = ResourceOptionFlags.BufferStructured;
-                    bd.StructureByteStride = (int)structureByteStride;
+                    bd.MiscFlags = (uint)ResourceMiscFlag.BufferStructured;
+                    bd.StructureByteStride = structureByteStride;
                 }
             }
+
             if ((usage & BufferUsage.IndirectBuffer) == BufferUsage.IndirectBuffer)
             {
-                bd.MiscFlags = ResourceOptionFlags.DrawIndirectArguments;
+                bd.MiscFlags = (uint)ResourceMiscFlag.DrawindirectArgs;
             }
 
             if ((usage & BufferUsage.Dynamic) == BufferUsage.Dynamic)
             {
-                bd.Usage = ResourceUsage.Dynamic;
-                bd.CPUAccessFlags = CpuAccessFlags.Write;
+                bd.Usage = Silk.NET.Direct3D11.Usage.Dynamic;
+                bd.CPUAccessFlags = (uint)CpuAccessFlag.Write;
             }
             else if ((usage & BufferUsage.Staging) == BufferUsage.Staging)
             {
-                bd.Usage = ResourceUsage.Staging;
-                bd.CPUAccessFlags = CpuAccessFlags.Read | CpuAccessFlags.Write;
+                bd.Usage = Silk.NET.Direct3D11.Usage.Staging;
+                bd.CPUAccessFlags = (uint)(CpuAccessFlag.Read | CpuAccessFlag.Write);
             }
 
-            _buffer = device.CreateBuffer(bd);
+            ID3D11Buffer* pBuffer;
+            SilkMarshal.ThrowHResult(device->CreateBuffer(in bd, null, &pBuffer));
+            _buffer = default;
+            _buffer.Handle = pBuffer;
         }
 
         public override string Name
@@ -77,37 +84,33 @@ namespace Veldrid.D3D11
             set
             {
                 _name = value;
-                Buffer.DebugName = value;
-                foreach (KeyValuePair<OffsetSizePair, ID3D11ShaderResourceView> kvp in _srvs)
-                {
-                    kvp.Value.DebugName = value + "_SRV";
-                }
-                foreach (KeyValuePair<OffsetSizePair, ID3D11UnorderedAccessView> kvp in _uavs)
-                {
-                    kvp.Value.DebugName = value + "_UAV";
-                }
+                D3D11Util.SetDebugName((ID3D11DeviceChild*)_buffer.Handle, value);
+                foreach (var kvp in _srvs)
+                    D3D11Util.SetDebugName((ID3D11DeviceChild*)kvp.Value.Handle, value + "_SRV");
+                foreach (var kvp in _uavs)
+                    D3D11Util.SetDebugName((ID3D11DeviceChild*)kvp.Value.Handle, value + "_UAV");
             }
         }
 
         public override void Dispose()
         {
-            foreach (KeyValuePair<OffsetSizePair, ID3D11ShaderResourceView> kvp in _srvs)
+            foreach (KeyValuePair<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> kvp in _srvs)
             {
                 kvp.Value.Dispose();
             }
-            foreach (KeyValuePair<OffsetSizePair, ID3D11UnorderedAccessView> kvp in _uavs)
+            foreach (KeyValuePair<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> kvp in _uavs)
             {
                 kvp.Value.Dispose();
             }
             _buffer.Dispose();
         }
 
-        internal ID3D11ShaderResourceView GetShaderResourceView(uint offset, uint size)
+        internal ID3D11ShaderResourceView* GetShaderResourceView(uint offset, uint size)
         {
             lock (_accessViewLock)
             {
                 OffsetSizePair pair = new OffsetSizePair(offset, size);
-                if (!_srvs.TryGetValue(pair, out ID3D11ShaderResourceView srv))
+                if (!_srvs.TryGetValue(pair, out ComPtr<ID3D11ShaderResourceView> srv))
                 {
                     srv = CreateShaderResourceView(offset, size);
                     _srvs.Add(pair, srv);
@@ -117,12 +120,12 @@ namespace Veldrid.D3D11
             }
         }
 
-        internal ID3D11UnorderedAccessView GetUnorderedAccessView(uint offset, uint size)
+        internal ID3D11UnorderedAccessView* GetUnorderedAccessView(uint offset, uint size)
         {
             lock (_accessViewLock)
             {
                 OffsetSizePair pair = new OffsetSizePair(offset, size);
-                if (!_uavs.TryGetValue(pair, out ID3D11UnorderedAccessView uav))
+                if (!_uavs.TryGetValue(pair, out ComPtr<ID3D11UnorderedAccessView> uav))
                 {
                     uav = CreateUnorderedAccessView(offset, size);
                     _uavs.Add(pair, uav);
@@ -132,52 +135,58 @@ namespace Veldrid.D3D11
             }
         }
 
-        private ID3D11ShaderResourceView CreateShaderResourceView(uint offset, uint size)
+        private ComPtr<ID3D11ShaderResourceView> CreateShaderResourceView(uint offset, uint size)
         {
+            ShaderResourceViewDesc srvDesc = new ShaderResourceViewDesc();
+
             if (_rawBuffer)
             {
-                ShaderResourceViewDescription srvDesc = new ShaderResourceViewDescription(_buffer,
-                    Format.R32_Typeless,
-                    (int)offset / 4,
-                    (int)size / 4,
-                    BufferExtendedShaderResourceViewFlags.Raw);
-
-                return _device.CreateShaderResourceView(_buffer, srvDesc);
+                srvDesc.Format = Format.FormatR32Typeless;
+                srvDesc.ViewDimension = D3DSrvDimension.D3DSrvDimensionBufferex;
+                srvDesc.BufferEx.FirstElement = offset / 4;
+                srvDesc.BufferEx.NumElements = size / 4;
+                srvDesc.BufferEx.Flags = (uint)BufferexSrvFlag.Raw;
             }
             else
             {
-                ShaderResourceViewDescription srvDesc = new ShaderResourceViewDescription
-                {
-                    ViewDimension = ShaderResourceViewDimension.Buffer
-                };
-                srvDesc.Buffer.NumElements = (int)(size / _structureByteStride);
-                srvDesc.Buffer.ElementOffset = (int)(offset / _structureByteStride);
-                return _device.CreateShaderResourceView(_buffer, srvDesc);
+                srvDesc.ViewDimension = D3DSrvDimension.D3DSrvDimensionBuffer;
+                srvDesc.Buffer.FirstElement = offset / _structureByteStride;
+                srvDesc.Buffer.NumElements = size / _structureByteStride;
             }
+
+            ID3D11ShaderResourceView* pSrv;
+            SilkMarshal.ThrowHResult(_device->CreateShaderResourceView((ID3D11Resource*)_buffer.Handle, in srvDesc, &pSrv));
+            ComPtr<ID3D11ShaderResourceView> result = default;
+            result.Handle = pSrv;
+            return result;
         }
 
-        private ID3D11UnorderedAccessView CreateUnorderedAccessView(uint offset, uint size)
+        private ComPtr<ID3D11UnorderedAccessView> CreateUnorderedAccessView(uint offset, uint size)
         {
+            UnorderedAccessViewDesc uavDesc = new UnorderedAccessViewDesc
+            {
+                ViewDimension = UavDimension.Buffer,
+            };
+
             if (_rawBuffer)
             {
-                UnorderedAccessViewDescription uavDesc = new UnorderedAccessViewDescription(_buffer,
-                    Format.R32_Typeless,
-                    (int)offset / 4,
-                    (int)size / 4,
-                    BufferUnorderedAccessViewFlags.Raw);
-
-                return _device.CreateUnorderedAccessView(_buffer, uavDesc);
+                uavDesc.Format = Format.FormatR32Typeless;
+                uavDesc.Buffer.FirstElement = offset / 4;
+                uavDesc.Buffer.NumElements = size / 4;
+                uavDesc.Buffer.Flags = (uint)BufferUavFlag.Raw;
             }
             else
             {
-                UnorderedAccessViewDescription uavDesc = new UnorderedAccessViewDescription(_buffer,
-                    Format.Unknown,
-                    (int)(offset / _structureByteStride),
-                    (int)(size / _structureByteStride)
-                    );
-
-                return _device.CreateUnorderedAccessView(_buffer, uavDesc);
+                uavDesc.Format = Format.FormatUnknown;
+                uavDesc.Buffer.FirstElement = offset / _structureByteStride;
+                uavDesc.Buffer.NumElements = size / _structureByteStride;
             }
+
+            ID3D11UnorderedAccessView* pUav;
+            SilkMarshal.ThrowHResult(_device->CreateUnorderedAccessView((ID3D11Resource*)_buffer.Handle, in uavDesc, &pUav));
+            ComPtr<ID3D11UnorderedAccessView> result = default;
+            result.Handle = pUav;
+            return result;
         }
 
         private struct OffsetSizePair : IEquatable<OffsetSizePair>

@@ -1,28 +1,28 @@
-﻿using Vortice.Direct3D11;
-using System.Diagnostics;
 using System;
-using Vortice.Mathematics;
+using System.Diagnostics;
+using Silk.NET.Core.Native;
+using Silk.NET.Direct3D11;
 
 namespace Veldrid.D3D11
 {
-    internal class D3D11Pipeline : Pipeline
+    internal unsafe class D3D11Pipeline : Pipeline
     {
         private string _name;
         private bool _disposed;
 
-        public ID3D11BlendState BlendState { get; }
-        public Color4 BlendFactor { get; }
-        public ID3D11DepthStencilState DepthStencilState { get; }
+        public ID3D11BlendState* BlendState { get; }
+        public float[] BlendFactor { get; }
+        public ID3D11DepthStencilState* DepthStencilState { get; }
         public uint StencilReference { get; }
-        public ID3D11RasterizerState RasterizerState { get; }
-        public Vortice.Direct3D.PrimitiveTopology PrimitiveTopology { get; }
-        public ID3D11InputLayout InputLayout { get; }
-        public ID3D11VertexShader VertexShader { get; }
-        public ID3D11GeometryShader GeometryShader { get; } // May be null.
-        public ID3D11HullShader HullShader { get; } // May be null.
-        public ID3D11DomainShader DomainShader { get; } // May be null.
-        public ID3D11PixelShader PixelShader { get; }
-        public ID3D11ComputeShader ComputeShader { get; }
+        public ID3D11RasterizerState* RasterizerState { get; }
+        public D3DPrimitiveTopology PrimitiveTopology { get; }
+        public ID3D11InputLayout* InputLayout { get; }
+        public ID3D11VertexShader* VertexShader { get; }
+        public ID3D11GeometryShader* GeometryShader { get; } // May be null.
+        public ID3D11HullShader* HullShader { get; } // May be null.
+        public ID3D11DomainShader* DomainShader { get; } // May be null.
+        public ID3D11PixelShader* PixelShader { get; }
+        public ID3D11ComputeShader* ComputeShader { get; }
         public new D3D11ResourceLayout[] ResourceLayouts { get; }
         public int[] VertexStrides { get; }
 
@@ -38,28 +38,28 @@ namespace Veldrid.D3D11
                 if (stages[i].Stage == ShaderStages.Vertex)
                 {
                     D3D11Shader d3d11VertexShader = ((D3D11Shader)stages[i]);
-                    VertexShader = (ID3D11VertexShader)d3d11VertexShader.DeviceShader;
+                    VertexShader = (ID3D11VertexShader*)d3d11VertexShader.DeviceShader.Handle;
                     vsBytecode = d3d11VertexShader.Bytecode;
                 }
                 if (stages[i].Stage == ShaderStages.Geometry)
                 {
-                    GeometryShader = (ID3D11GeometryShader)((D3D11Shader)stages[i]).DeviceShader;
+                    GeometryShader = (ID3D11GeometryShader*)((D3D11Shader)stages[i]).DeviceShader.Handle;
                 }
                 if (stages[i].Stage == ShaderStages.TessellationControl)
                 {
-                    HullShader = (ID3D11HullShader)((D3D11Shader)stages[i]).DeviceShader;
+                    HullShader = (ID3D11HullShader*)((D3D11Shader)stages[i]).DeviceShader.Handle;
                 }
                 if (stages[i].Stage == ShaderStages.TessellationEvaluation)
                 {
-                    DomainShader = (ID3D11DomainShader)((D3D11Shader)stages[i]).DeviceShader;
+                    DomainShader = (ID3D11DomainShader*)((D3D11Shader)stages[i]).DeviceShader.Handle;
                 }
                 if (stages[i].Stage == ShaderStages.Fragment)
                 {
-                    PixelShader = (ID3D11PixelShader)((D3D11Shader)stages[i]).DeviceShader;
+                    PixelShader = (ID3D11PixelShader*)((D3D11Shader)stages[i]).DeviceShader.Handle;
                 }
                 if (stages[i].Stage == ShaderStages.Compute)
                 {
-                    ComputeShader = (ID3D11ComputeShader)((D3D11Shader)stages[i]).DeviceShader;
+                    ComputeShader = (ID3D11ComputeShader*)((D3D11Shader)stages[i]).DeviceShader.Handle;
                 }
             }
 
@@ -70,13 +70,14 @@ namespace Veldrid.D3D11
                 description.Outputs.SampleCount != TextureSampleCount.Count1,
                 description.ShaderSet.VertexLayouts,
                 vsBytecode,
-                out ID3D11BlendState blendState,
-                out ID3D11DepthStencilState depthStencilState,
-                out ID3D11RasterizerState rasterizerState,
-                out ID3D11InputLayout inputLayout);
+                out ID3D11BlendState* blendState,
+                out ID3D11DepthStencilState* depthStencilState,
+                out ID3D11RasterizerState* rasterizerState,
+                out ID3D11InputLayout* inputLayout);
 
             BlendState = blendState;
-            BlendFactor = new Color4(description.BlendState.BlendFactor.ToVector4());
+            var bf = description.BlendState.BlendFactor;
+            BlendFactor = new float[] { bf.R, bf.G, bf.B, bf.A };
             DepthStencilState = depthStencilState;
             StencilReference = description.DepthStencilState.StencilReference;
             RasterizerState = rasterizerState;
@@ -110,7 +111,7 @@ namespace Veldrid.D3D11
             : base(ref description)
         {
             IsComputePipeline = true;
-            ComputeShader = (ID3D11ComputeShader)((D3D11Shader)description.ComputeShader).DeviceShader;
+            ComputeShader = (ID3D11ComputeShader*)((D3D11Shader)description.ComputeShader).DeviceShader.Handle;
             ResourceLayout[] genericLayouts = description.ResourceLayouts;
             ResourceLayouts = new D3D11ResourceLayout[genericLayouts.Length];
             for (int i = 0; i < ResourceLayouts.Length; i++)

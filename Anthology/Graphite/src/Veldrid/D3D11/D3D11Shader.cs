@@ -1,19 +1,20 @@
-﻿using System;
+using System;
 using System.Text;
-using Vortice.D3DCompiler;
-using Vortice.Direct3D;
-using Vortice.Direct3D11;
+using Silk.NET.Core.Native;
+using Silk.NET.Direct3D.Compilers;
+using Silk.NET.Direct3D11;
 
 namespace Veldrid.D3D11
 {
-    internal class D3D11Shader : Shader
+    internal unsafe class D3D11Shader : Shader
     {
         private string _name;
 
-        public ID3D11DeviceChild DeviceShader { get; }
+        private ComPtr<ID3D11DeviceChild> _deviceShader;
+        public ComPtr<ID3D11DeviceChild> DeviceShader => _deviceShader;
         public byte[] Bytecode { get; internal set; }
 
-        public D3D11Shader(ID3D11Device device, ShaderDescription description)
+        public D3D11Shader(ID3D11Device* device, ShaderDescription description)
             : base(description.Stage, description.EntryPoint)
         {
             if (description.ShaderBytes.Length > 4
@@ -29,32 +30,65 @@ namespace Veldrid.D3D11
                 Bytecode = CompileCode(description);
             }
 
-            switch (description.Stage)
+            fixed (byte* pBytecode = Bytecode)
             {
-                case ShaderStages.Vertex:
-                    DeviceShader = device.CreateVertexShader(Bytecode);
-                    break;
-                case ShaderStages.Geometry:
-                    DeviceShader = device.CreateGeometryShader(Bytecode);
-                    break;
-                case ShaderStages.TessellationControl:
-                    DeviceShader = device.CreateHullShader(Bytecode);
-                    break;
-                case ShaderStages.TessellationEvaluation:
-                    DeviceShader = device.CreateDomainShader(Bytecode);
-                    break;
-                case ShaderStages.Fragment:
-                    DeviceShader = device.CreatePixelShader(Bytecode);
-                    break;
-                case ShaderStages.Compute:
-                    DeviceShader = device.CreateComputeShader(Bytecode);
-                    break;
-                default:
-                    throw Illegal.Value<ShaderStages>();
+                switch (description.Stage)
+                {
+                    case ShaderStages.Vertex:
+                    {
+                        ID3D11VertexShader* pShader;
+                        SilkMarshal.ThrowHResult(device->CreateVertexShader(pBytecode, (nuint)Bytecode.Length, null, &pShader));
+                        _deviceShader = default;
+                        _deviceShader.Handle = (ID3D11DeviceChild*)pShader;
+                        break;
+                    }
+                    case ShaderStages.Geometry:
+                    {
+                        ID3D11GeometryShader* pShader;
+                        SilkMarshal.ThrowHResult(device->CreateGeometryShader(pBytecode, (nuint)Bytecode.Length, null, &pShader));
+                        _deviceShader = default;
+                        _deviceShader.Handle = (ID3D11DeviceChild*)pShader;
+                        break;
+                    }
+                    case ShaderStages.TessellationControl:
+                    {
+                        ID3D11HullShader* pShader;
+                        SilkMarshal.ThrowHResult(device->CreateHullShader(pBytecode, (nuint)Bytecode.Length, null, &pShader));
+                        _deviceShader = default;
+                        _deviceShader.Handle = (ID3D11DeviceChild*)pShader;
+                        break;
+                    }
+                    case ShaderStages.TessellationEvaluation:
+                    {
+                        ID3D11DomainShader* pShader;
+                        SilkMarshal.ThrowHResult(device->CreateDomainShader(pBytecode, (nuint)Bytecode.Length, null, &pShader));
+                        _deviceShader = default;
+                        _deviceShader.Handle = (ID3D11DeviceChild*)pShader;
+                        break;
+                    }
+                    case ShaderStages.Fragment:
+                    {
+                        ID3D11PixelShader* pShader;
+                        SilkMarshal.ThrowHResult(device->CreatePixelShader(pBytecode, (nuint)Bytecode.Length, null, &pShader));
+                        _deviceShader = default;
+                        _deviceShader.Handle = (ID3D11DeviceChild*)pShader;
+                        break;
+                    }
+                    case ShaderStages.Compute:
+                    {
+                        ID3D11ComputeShader* pShader;
+                        SilkMarshal.ThrowHResult(device->CreateComputeShader(pBytecode, (nuint)Bytecode.Length, null, &pShader));
+                        _deviceShader = default;
+                        _deviceShader.Handle = (ID3D11DeviceChild*)pShader;
+                        break;
+                    }
+                    default:
+                        throw Illegal.Value<ShaderStages>();
+                }
             }
         }
 
-        private byte[] CompileCode(ShaderDescription description)
+        private static byte[] CompileCode(ShaderDescription description)
         {
             string profile;
             switch (description.Stage)
@@ -81,17 +115,54 @@ namespace Veldrid.D3D11
                     throw Illegal.Value<ShaderStages>();
             }
 
-            ShaderFlags flags = description.Debug ? ShaderFlags.Debug : ShaderFlags.OptimizationLevel3;
-            Compiler.Compile(description.ShaderBytes, null, null,
-                             description.EntryPoint, null,
-                             profile, flags, out Blob result, out Blob error);
+            // D3DCOMPILE_DEBUG = 0x1, D3DCOMPILE_OPTIMIZATION_LEVEL3 = 0x8000
+            uint flags = description.Debug ? 0x1u : 0x8000u;
 
-            if (result == null)
+            D3DCompiler compiler = D3DCompiler.GetApi();
+            ID3D10Blob* pResult = null;
+            ID3D10Blob* pError = null;
+
+            fixed (byte* pSource = description.ShaderBytes)
             {
-                throw new VeldridException($"Failed to compile HLSL code: {Encoding.ASCII.GetString(error.AsBytes())}");
-            }
+                nint pEntryPoint = SilkMarshal.StringToPtr(description.EntryPoint);
+                nint pProfile = SilkMarshal.StringToPtr(profile);
 
-            return result.AsBytes();
+                int hr = compiler.Compile(
+                    pSource, (nuint)description.ShaderBytes.Length,
+                    (byte*)null,
+                    null,
+                    null,
+                    (byte*)pEntryPoint,
+                    (byte*)pProfile,
+                    flags, 0,
+                    &pResult, &pError);
+
+                SilkMarshal.Free(pEntryPoint);
+                SilkMarshal.Free(pProfile);
+
+                if (pResult == null)
+                {
+                    string errorMsg = string.Empty;
+                    if (pError != null)
+                    {
+                        byte* errorPtr = (byte*)pError->GetBufferPointer();
+                        nuint errorSize = pError->GetBufferSize();
+                        errorMsg = Encoding.ASCII.GetString(errorPtr, (int)errorSize);
+                        pError->Release();
+                    }
+                    throw new VeldridException($"Failed to compile HLSL code: {errorMsg}");
+                }
+
+                byte* resultPtr = (byte*)pResult->GetBufferPointer();
+                nuint resultSize = pResult->GetBufferSize();
+                byte[] bytecode = new byte[resultSize];
+                new Span<byte>(resultPtr, (int)resultSize).CopyTo(bytecode);
+
+                if (pError != null) pError->Release();
+                pResult->Release();
+
+                return bytecode;
+            }
         }
 
         public override string Name
@@ -100,15 +171,15 @@ namespace Veldrid.D3D11
             set
             {
                 _name = value;
-                DeviceShader.DebugName = value;
+                D3D11Util.SetDebugName(_deviceShader.Handle, value);
             }
         }
 
-        public override bool IsDisposed => DeviceShader.NativePointer == IntPtr.Zero;
+        public override bool IsDisposed => _deviceShader.Handle == null;
 
         public override void Dispose()
         {
-            DeviceShader.Dispose();
+            _deviceShader.Dispose();
         }
     }
 }

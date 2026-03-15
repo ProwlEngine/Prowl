@@ -58,7 +58,8 @@ void main()
                 PreferDepthRangeZeroToOne = true
             };
 
-            _graphicsDevice = VeldridStartup.CreateGraphicsDevice(window, options, GraphicsBackend.Vulkan);
+            _graphicsDevice = VeldridStartup.CreateGraphicsDevice(window, options);
+            window.Title = $"{window.Title} ({_graphicsDevice.BackendType})";
 
             CreateResources();
 

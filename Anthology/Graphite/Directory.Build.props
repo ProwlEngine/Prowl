@@ -24,7 +24,7 @@
   <!-- Exclude unported backends until their phases are complete -->
   <!-- Remove these when D3D11 (Phase 3) and OpenGL (Phase 4) are ported -->
   <PropertyGroup>
-    <ExcludeD3D11>true</ExcludeD3D11>
+    <ExcludeD3D11>false</ExcludeD3D11>
     <ExcludeOpenGL>true</ExcludeOpenGL>
   </PropertyGroup>
 

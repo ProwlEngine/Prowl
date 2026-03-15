@@ -9,7 +9,7 @@ namespace Veldrid
     /// useful for interoperating with native components which interface directly with Direct3D 11.
     /// Can only be used on <see cref="GraphicsBackend.Direct3D11"/>.
     /// </summary>
-    public class BackendInfoD3D11
+    public unsafe class BackendInfoD3D11
     {
         private readonly D3D11GraphicsDevice _gd;
 
@@ -21,12 +21,12 @@ namespace Veldrid
         /// <summary>
         /// Gets a pointer to the ID3D11Device controlled by the GraphicsDevice.
         /// </summary>
-        public IntPtr Device => _gd.Device.NativePointer;
+        public IntPtr Device => (nint)_gd.Device;
 
         /// <summary>
         /// Gets a pointer to the IAdapter used to create the GraphicsDevice.
         /// </summary>
-        public IntPtr Adapter => _gd.Adapter.NativePointer;
+        public IntPtr Adapter => (nint)_gd.Adapter;
 
         /// <summary>
         /// Gets the PCI ID of the hardware device.
@@ -40,7 +40,7 @@ namespace Veldrid
         /// <returns>A pointer to the Veldrid Texture's underlying ID3D11Texture1D, ID3D11Texture2D, or ID3D11Texture3D. The type
         /// of this object depends on the parameter's TextureType.</returns>
         public IntPtr GetTexturePointer(Texture texture)
-            => Util.AssertSubtype<Texture, D3D11Texture>(texture).DeviceTexture.NativePointer;
+            => (nint)Util.AssertSubtype<Texture, D3D11Texture>(texture).DeviceTexture;
     }
 }
 #endif

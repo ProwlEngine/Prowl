@@ -1,12 +1,13 @@
-﻿using Vortice.Direct3D11;
+using Silk.NET.Direct3D11;
+using Silk.NET.Core.Native;
 using System;
 
 namespace Veldrid.D3D11
 {
-    internal class D3D11ResourceFactory : ResourceFactory, IDisposable
+    internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
     {
         private readonly D3D11GraphicsDevice _gd;
-        private readonly ID3D11Device _device;
+        private readonly ID3D11Device* _device;
         private readonly D3D11ResourceCache _cache;
 
         public override GraphicsBackend BackendType => GraphicsBackend.Direct3D11;
@@ -67,7 +68,7 @@ namespace Veldrid.D3D11
 
         protected override Texture CreateTextureCore(ulong nativeTexture, ref TextureDescription description)
         {
-            ID3D11Texture2D existingTexture = new ID3D11Texture2D((IntPtr)nativeTexture);
+            ID3D11Texture2D* existingTexture = (ID3D11Texture2D*)(void*)nativeTexture;
             return new D3D11Texture(existingTexture, description.Type, description.Format);
         }
 
