@@ -1,7 +1,9 @@
 using Silk.NET.Vulkan;
+using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using static Veldrid.Vk.VulkanUtil;
 using System;
+using System.Runtime.InteropServices;
 
 namespace Veldrid.Vk
 {
@@ -84,8 +86,8 @@ namespace Veldrid.Vk
                         }
                         else
                         {
-                            throw new VeldridException($"Neither macOS surface extension was available: " +
-                                $"{CommonStrings.VK_MVK_MACOS_SURFACE_EXTENSION_NAME}, {CommonStrings.VK_MVK_IOS_SURFACE_EXTENSION_NAME}");
+                            throw new VeldridException($"Neither iOS surface extension was available: " +
+                                $"{CommonStrings.VK_EXT_METAL_SURFACE_EXTENSION_NAME}, {CommonStrings.VK_MVK_IOS_SURFACE_EXTENSION_NAME}");
                         }
                     }
 
@@ -164,19 +166,103 @@ namespace Veldrid.Vk
 
         private static unsafe SurfaceKHR CreateNSWindowSurface(VkGraphicsDevice gd, Instance instance, NSWindowSwapchainSource nsWindowSource, bool hasExtMetalSurface)
         {
-            // TODO: macOS surface creation requires MetalBindings (NSWindow/CAMetalLayer).
-            // Will be re-enabled when Silk.NET.Windowing handles platform surfaces (Phase 2).
-            throw new PlatformNotSupportedException("macOS Vulkan surface creation is not yet supported in the Silk.NET port.");
+            IntPtr contentView = ObjC.MsgSend(nsWindowSource.NSWindow, ObjC.Sel("contentView"));
+            return CreateNSViewSurface(gd, instance, new NSViewSwapchainSource(contentView), hasExtMetalSurface);
         }
 
         private static unsafe SurfaceKHR CreateNSViewSurface(VkGraphicsDevice gd, Instance instance, NSViewSwapchainSource nsViewSource, bool hasExtMetalSurface)
         {
-            throw new PlatformNotSupportedException("macOS Vulkan surface creation is not yet supported in the Silk.NET port.");
+            IntPtr metalLayer = GetOrCreateMetalLayer(nsViewSource.NSView);
+
+            if (hasExtMetalSurface)
+            {
+                MetalSurfaceCreateInfoEXT surfaceCI = new MetalSurfaceCreateInfoEXT
+                {
+                    SType = StructureType.MetalSurfaceCreateInfoExt,
+                    PLayer = (nint*)metalLayer
+                };
+
+                if (!gd.Vk.TryGetInstanceExtension(instance, out ExtMetalSurface extMetalSurface))
+                {
+                    throw new VeldridException("VK_EXT_metal_surface extension not available.");
+                }
+
+                SurfaceKHR surface;
+                Result result = extMetalSurface.CreateMetalSurface(instance, in surfaceCI, null, out surface);
+                CheckResult(result);
+                return surface;
+            }
+            else
+            {
+                // Legacy path: VK_MVK_macos_surface
+                MacOSSurfaceCreateInfoMVK surfaceCI = new MacOSSurfaceCreateInfoMVK
+                {
+                    SType = StructureType.MacosSurfaceCreateInfoMvk,
+                    PView = nsViewSource.NSView.ToPointer()
+                };
+
+                var createMacOSSurface = gd.GetInstanceProcAddr<vkCreateMacOSSurfaceMVK_t>("vkCreateMacOSSurfaceMVK");
+                if (createMacOSSurface == null)
+                {
+                    throw new VeldridException("vkCreateMacOSSurfaceMVK function not found.");
+                }
+
+                SurfaceKHR surface;
+                Result result = createMacOSSurface(instance, &surfaceCI, null, &surface);
+                CheckResult(result);
+                return surface;
+            }
+        }
+
+        private static IntPtr GetOrCreateMetalLayer(IntPtr nsView)
+        {
+            // Ensure the view is layer-backed
+            ObjC.MsgSendBool(nsView, ObjC.Sel("setWantsLayer:"), 1);
+
+            IntPtr layer = ObjC.MsgSend(nsView, ObjC.Sel("layer"));
+            IntPtr caMetalLayerClass = ObjC.GetClass("CAMetalLayer");
+
+            if (layer != IntPtr.Zero && ObjC.MsgSendBool_Ret(layer, ObjC.Sel("isKindOfClass:"), caMetalLayerClass))
+            {
+                return layer;
+            }
+
+            // Create a new CAMetalLayer and set it on the view
+            IntPtr metalLayer = ObjC.MsgSend(caMetalLayerClass, ObjC.Sel("alloc"));
+            metalLayer = ObjC.MsgSend(metalLayer, ObjC.Sel("init"));
+            ObjC.MsgSendPtr(nsView, ObjC.Sel("setLayer:"), metalLayer);
+            return metalLayer;
         }
 
         private static SurfaceKHR CreateUIViewSurface(VkGraphicsDevice gd, Instance instance, UIViewSwapchainSource uiViewSource, bool hasExtMetalSurface)
         {
             throw new PlatformNotSupportedException("iOS Vulkan surface creation is not yet supported in the Silk.NET port.");
+        }
+
+        // Minimal ObjC runtime P/Invoke for macOS surface creation.
+        // Replaces the former Veldrid.MetalBindings library (only the calls needed here).
+        private static class ObjC
+        {
+            private const string Lib = "/usr/lib/libobjc.A.dylib";
+
+            [DllImport(Lib, EntryPoint = "sel_registerName")]
+            public static extern IntPtr Sel(string name);
+
+            [DllImport(Lib, EntryPoint = "objc_getClass")]
+            public static extern IntPtr GetClass(string name);
+
+            [DllImport(Lib, EntryPoint = "objc_msgSend")]
+            public static extern IntPtr MsgSend(IntPtr receiver, IntPtr selector);
+
+            [DllImport(Lib, EntryPoint = "objc_msgSend")]
+            public static extern void MsgSendPtr(IntPtr receiver, IntPtr selector, IntPtr arg);
+
+            [DllImport(Lib, EntryPoint = "objc_msgSend")]
+            public static extern void MsgSendBool(IntPtr receiver, IntPtr selector, byte arg);
+
+            [DllImport(Lib, EntryPoint = "objc_msgSend")]
+            [return: MarshalAs(UnmanagedType.U1)]
+            public static extern bool MsgSendBool_Ret(IntPtr receiver, IntPtr selector, IntPtr arg);
         }
     }
 }

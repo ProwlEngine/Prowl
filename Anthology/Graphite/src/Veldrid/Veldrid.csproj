@@ -6,8 +6,6 @@
     <DefineConstants Condition="'$(ExcludeD3D11)' == 'true'">$(DefineConstants);EXCLUDE_D3D11_BACKEND</DefineConstants>
     <DefineConstants Condition="'$(ExcludeVulkan)' == 'true'">$(DefineConstants);EXCLUDE_VULKAN_BACKEND</DefineConstants>
     <DefineConstants Condition="'$(ExcludeOpenGL)' == 'true'">$(DefineConstants);EXCLUDE_OPENGL_BACKEND</DefineConstants>
-    <!-- Metal always excluded — replaced by MoltenVK via Vulkan -->
-    <DefineConstants>$(DefineConstants);EXCLUDE_METAL_BACKEND</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

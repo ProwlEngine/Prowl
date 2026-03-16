@@ -228,8 +228,4 @@ namespace Veldrid.Tests
     [Trait("Backend", "D3D11")]
     public class D3D11ResourceSetTests : ResourceSetTests<D3D11DeviceCreator> { }
 #endif
-#if TEST_METAL
-    [Trait("Backend", "Metal")]
-    public class MetalResourceSetTests : ResourceSetTests<MetalDeviceCreator> { }
-#endif
 }

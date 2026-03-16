@@ -542,8 +542,4 @@ void main()
     [Trait("Backend", "D3D11")]
     public class D3D11ComputeTests : ComputeTests<D3D11DeviceCreatorWithMainSwapchain> { }
 #endif
-#if TEST_METAL
-    [Trait("Backend", "Metal")]
-    public class MetalComputeTests : RenderTests<MetalDeviceCreator> { }
-#endif
 }

@@ -71,8 +71,4 @@ namespace Veldrid.Tests
     [Trait("Backend", "D3D11")]
     public class D3D11VertexLayoutTests : VertexLayoutTests<D3D11DeviceCreator> { }
 #endif
-#if TEST_METAL
-    [Trait("Backend", "Metal")]
-    public class MetalVertexLayoutTests : RenderTests<MetalDeviceCreator> { }
-#endif
 }

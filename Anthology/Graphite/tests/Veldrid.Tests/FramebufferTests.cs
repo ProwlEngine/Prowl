@@ -172,10 +172,4 @@ namespace Veldrid.Tests
     [Trait("Backend", "D3D11")]
     public class D3D11SwapchainFramebufferTests : SwapchainFramebufferTests<D3D11DeviceCreatorWithMainSwapchain> { }
 #endif
-#if TEST_METAL
-    [Trait("Backend", "Metal")]
-    public class MetalFramebufferTests : FramebufferTests<MetalDeviceCreator> { }
-    [Trait("Backend", "Metal")]
-    public class MetalSwapchainFramebufferTests : SwapchainFramebufferTests<MetalDeviceCreatorWithMainSwapchain> { }
-#endif
 }

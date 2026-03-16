@@ -1546,10 +1546,6 @@ namespace Veldrid.Tests
     [Trait("Backend", "D3D11")]
     public class D3D11TextureTests : TextureTestBase<D3D11DeviceCreator> { }
 #endif
-#if TEST_METAL
-    [Trait("Backend", "Metal")]
-    public class MetalTextureTests : TextureTestBase<MetalDeviceCreator> { }
-#endif
 #if TEST_OPENGL
     [Trait("Backend", "OpenGL")]
     public class OpenGLTextureTests : TextureTestBase<OpenGLDeviceCreator> { }

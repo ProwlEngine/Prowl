@@ -56,7 +56,7 @@ namespace Veldrid
         /// Creates a new SwapchainSource for the given NSWindow.
         /// </summary>
         /// <param name="nsWindow">A pointer to an NSWindow.</param>
-        /// <returns>A new SwapchainSource which can be used to create a Metal <see cref="Swapchain"/> for the given NSWindow.
+        /// <returns>A new SwapchainSource which can be used to create a Vulkan <see cref="Swapchain"/> for the given NSWindow.
         /// </returns>
         public static SwapchainSource CreateNSWindow(IntPtr nsWindow) => new NSWindowSwapchainSource(nsWindow);
 
@@ -64,7 +64,7 @@ namespace Veldrid
         /// Creates a new SwapchainSource for the given UIView.
         /// </summary>
         /// <param name="uiView">The UIView's native handle.</param>
-        /// <returns>A new SwapchainSource which can be used to create a Metal <see cref="Swapchain"/> or an OpenGLES
+        /// <returns>A new SwapchainSource which can be used to create a Vulkan <see cref="Swapchain"/> or an OpenGLES
         /// <see cref="GraphicsDevice"/> for the given UIView.
         /// </returns>
         public static SwapchainSource CreateUIView(IntPtr uiView) => new UIViewSwapchainSource(uiView);
@@ -83,7 +83,7 @@ namespace Veldrid
         /// Creates a new SwapchainSource for the given NSView.
         /// </summary>
         /// <param name="nsView">A pointer to an NSView.</param>
-        /// <returns>A new SwapchainSource which can be used to create a Metal <see cref="Swapchain"/> for the given NSView.
+        /// <returns>A new SwapchainSource which can be used to create a Vulkan <see cref="Swapchain"/> for the given NSView.
         /// </returns>
         public static SwapchainSource CreateNSView(IntPtr nsView)
             => new NSViewSwapchainSource(nsView);

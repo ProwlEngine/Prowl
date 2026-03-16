@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
 using Veldrid;
 
 namespace SampleBase
@@ -90,17 +89,13 @@ namespace SampleBase
 
         private static string GetExtension(GraphicsBackend backendType)
         {
-			bool isMacOS = RuntimeInformation.OSDescription.Contains("Darwin");
-
             return (backendType == GraphicsBackend.Direct3D11)
                 ? "hlsl.bytes"
                 : (backendType == GraphicsBackend.Vulkan)
                     ? "450.glsl.spv"
-                    : (backendType == GraphicsBackend.Metal)
-					    ? isMacOS ? "metallib" : "ios.metallib"
-                        : (backendType == GraphicsBackend.OpenGL)
-                            ? "330.glsl"
-                            : "300.glsles";
+                    : (backendType == GraphicsBackend.OpenGL)
+                        ? "330.glsl"
+                        : "300.glsles";
         }
 
         public T LoadEmbeddedAsset<T>(string name)

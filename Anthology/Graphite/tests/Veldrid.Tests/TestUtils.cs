@@ -74,31 +74,6 @@ namespace Veldrid.Tests
             VeldridStartup.CreateWindowAndGraphicsDevice(wci, options, GraphicsBackend.OpenGLES, out window, out gd);
         }
 
-#if TEST_METAL
-        public static GraphicsDevice CreateMetalDevice()
-        {
-            if (!GraphicsDevice.IsBackendSupported(GraphicsBackend.Metal))
-            {
-                Console.WriteLine("Metal is not supported on this system.");
-                return null;
-            }
-            return GraphicsDevice.CreateMetal(new GraphicsDeviceOptions(true, null, false, ResourceBindingModel.Improved));
-        }
-
-        public static void CreateMetalDeviceWithSwapchain(out VeldridWindow window, out GraphicsDevice gd)
-        {
-            WindowCreateInfo wci = new WindowCreateInfo
-            {
-                WindowWidth = 200,
-                WindowHeight = 200,
-                WindowInitialState = WindowState.Hidden,
-            };
-
-            GraphicsDeviceOptions options = new GraphicsDeviceOptions(true, PixelFormat.R16_UNorm, false, ResourceBindingModel.Improved);
-
-            VeldridStartup.CreateWindowAndGraphicsDevice(wci, options, GraphicsBackend.Metal, out window, out gd);
-        }
-#endif
     }
 
     public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : GraphicsDeviceCreator
@@ -241,22 +216,4 @@ namespace Veldrid.Tests
         }
     }
 
-#if TEST_METAL
-    public class MetalDeviceCreator : GraphicsDeviceCreator
-    {
-        public void CreateGraphicsDevice(out VeldridWindow window, out GraphicsDevice gd)
-        {
-            window = null;
-            gd = TestUtils.CreateMetalDevice();
-        }
-    }
-
-    public class MetalDeviceCreatorWithMainSwapchain : GraphicsDeviceCreator
-    {
-        public void CreateGraphicsDevice(out VeldridWindow window, out GraphicsDevice gd)
-        {
-            TestUtils.CreateMetalDeviceWithSwapchain(out window, out gd);
-        }
-    }
-#endif
 }

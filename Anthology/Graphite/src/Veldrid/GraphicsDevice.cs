@@ -933,30 +933,6 @@ namespace Veldrid
         }
 #endif
 
-#if !EXCLUDE_METAL_BACKEND
-        /// <summary>
-        /// Tries to get a <see cref="BackendInfoMetal"/> for this instance.
-        /// This method will only succeed if this is a Metal GraphicsDevice.
-        /// </summary>
-        /// <param name="info">If successful, this will contain the <see cref="BackendInfoOpenGL"/> for this instance.</param>
-        /// <returns>True if this is an Metal GraphicsDevice and the operation was successful. False otherwise.</returns>
-        public virtual bool GetMetalInfo(out BackendInfoMetal info) { info = null; return false; }
-
-        /// <summary>
-        /// Gets a <see cref="BackendInfoMetal"/> for this instance. This method will only succeed if this is an OpenGL
-        /// GraphicsDevice. Otherwise, this method will throw an exception.
-        /// </summary>
-        /// <returns>The <see cref="BackendInfoMetal"/> for this instance.</returns>
-        public BackendInfoMetal GetMetalInfo()
-        {
-            if (!GetMetalInfo(out BackendInfoMetal info))
-            {
-                throw new VeldridException($"{nameof(GetMetalInfo)} can only be used on a Metal GraphicsDevice.");
-            }
-
-            return info;
-        }
-#endif
 
         /// <summary>
         /// Checks whether the given <see cref="GraphicsBackend"/> is supported on this system.
@@ -982,12 +958,6 @@ namespace Veldrid
                 case GraphicsBackend.OpenGL:
 #if !EXCLUDE_OPENGL_BACKEND
                     return true;
-#else
-                    return false;
-#endif
-                case GraphicsBackend.Metal:
-#if !EXCLUDE_METAL_BACKEND
-                    return MTL.MTLGraphicsDevice.IsSupported();
 #else
                     return false;
 #endif
@@ -1201,46 +1171,5 @@ namespace Veldrid
         }
 #endif
 
-#if !EXCLUDE_METAL_BACKEND
-        /// <summary>
-        /// Creates a new <see cref="GraphicsDevice"/> using Metal.
-        /// </summary>
-        /// <param name="options">Describes several common properties of the GraphicsDevice.</param>
-        /// <returns>A new <see cref="GraphicsDevice"/> using the Metal API.</returns>
-        public static GraphicsDevice CreateMetal(GraphicsDeviceOptions options)
-        {
-            return new MTL.MTLGraphicsDevice(options, null);
-        }
-
-        /// <summary>
-        /// Creates a new <see cref="GraphicsDevice"/> using Metal, with a main Swapchain.
-        /// </summary>
-        /// <param name="options">Describes several common properties of the GraphicsDevice.</param>
-        /// <param name="swapchainDescription">A description of the main Swapchain to create.</param>
-        /// <returns>A new <see cref="GraphicsDevice"/> using the Metal API.</returns>
-        public static GraphicsDevice CreateMetal(GraphicsDeviceOptions options, SwapchainDescription swapchainDescription)
-        {
-            return new MTL.MTLGraphicsDevice(options, swapchainDescription);
-        }
-
-        /// <summary>
-        /// Creates a new <see cref="GraphicsDevice"/> using Metal, with a main Swapchain.
-        /// </summary>
-        /// <param name="options">Describes several common properties of the GraphicsDevice.</param>
-        /// <param name="nsWindow">A pointer to an NSWindow object, which will be used to create the Metal device's swapchain.
-        /// </param>
-        /// <returns>A new <see cref="GraphicsDevice"/> using the Metal API.</returns>
-        public static GraphicsDevice CreateMetal(GraphicsDeviceOptions options, IntPtr nsWindow)
-        {
-            SwapchainDescription swapchainDesc = new SwapchainDescription(
-                new NSWindowSwapchainSource(nsWindow),
-                0, 0,
-                options.SwapchainDepthFormat,
-                options.SyncToVerticalBlank,
-                options.SwapchainSrgbFormat);
-
-            return new MTL.MTLGraphicsDevice(options, swapchainDesc);
-        }
-#endif
     }
 }

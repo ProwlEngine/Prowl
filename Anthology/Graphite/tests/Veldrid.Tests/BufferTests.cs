@@ -177,11 +177,6 @@ namespace Veldrid.Tests
             {
                 return; // TODO
             }
-            if (GD.BackendType == GraphicsBackend.Metal)
-            {
-                return; // TODO
-            }
-
             DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
             MappedResourceView<int> view = GD.Map<int>(buffer, MapMode.ReadWrite);
             int[] data = Enumerable.Range(0, 256).Select(i => 2 * i).ToArray();
@@ -210,11 +205,6 @@ namespace Veldrid.Tests
             {
                 return; // TODO
             }
-            if (GD.BackendType == GraphicsBackend.Metal)
-            {
-                return; // TODO
-            }
-
             DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
             MappedResource map = GD.Map(buffer, MapMode.Read);
             Assert.Throws<VeldridException>(() => GD.Map(buffer, MapMode.Write));
@@ -580,9 +570,5 @@ namespace Veldrid.Tests
 #if TEST_D3D11
     [Trait("Backend", "D3D11")]
     public class D3D11BufferTests : BufferTestBase<D3D11DeviceCreator> { }
-#endif
-#if TEST_METAL
-    [Trait("Backend", "Metal")]
-    public class MetalBufferTests : BufferTestBase<MetalDeviceCreator> { }
 #endif
 }

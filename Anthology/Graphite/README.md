@@ -15,10 +15,10 @@ Veldrid is a cross-platform, graphics API-agnostic rendering and compute library
 | Vulkan | Ported and validated |
 | Direct3D 11 | Ported and validated |
 | OpenGL | Ported and validated |
-| Metal | Removed (use Vulkan via MoltenVK on macOS) |
+| Metal | Removed (`GraphicsBackend.Metal` deleted, use Vulkan via MoltenVK on macOS) |
 | Windowing | Ported (Silk.NET.Windowing replaces SDL2) |
 
-All [samples](samples/) have been validated on Vulkan, D3D11, and OpenGL.
+All [samples](samples/) have been validated on Vulkan, D3D11, and OpenGL on Windows. macOS support (Vulkan via MoltenVK + OpenGL 4.1) is implemented but untested.
 
 ## What's Different From Upstream Veldrid
 

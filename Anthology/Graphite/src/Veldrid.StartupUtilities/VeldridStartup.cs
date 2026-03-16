@@ -82,8 +82,6 @@ namespace Veldrid.StartupUtilities
 #else
                     throw new VeldridException("OpenGL support has not been included in this configuration of Veldrid");
 #endif
-                case GraphicsBackend.Metal:
-                    throw new VeldridException("Metal backend has been removed. Use Vulkan with MoltenVK on macOS.");
                 case GraphicsBackend.OpenGLES:
 #if !EXCLUDE_OPENGL_BACKEND
                     return CreateDefaultOpenGLGraphicsDevice(options, window, preferredBackend);
@@ -197,7 +195,7 @@ namespace Veldrid.StartupUtilities
 
             glContext.MakeCurrent();
 
-            // TODO Phase 4: This bridge has known limitations for multi-context GL scenarios.
+            // TODO: This bridge has known limitations for multi-context GL scenarios.
             // - MakeCurrent ignores the ctx parameter (Veldrid's GL backend creates secondary contexts)
             // - GetCurrentContext always returns the same handle instead of querying the thread's current context
             // - ClearCurrentContext semantics may not match (glContext.Clear() vs unbinding from thread)
@@ -221,7 +219,7 @@ namespace Veldrid.StartupUtilities
                 (uint)window.Height);
         }
 
-        // TODO Phase 4: Add GL version probing (upstream tried 4.6→3.0 for GL, 3.2→3.0 for GLES).
+        // TODO: Add GL version probing (upstream tried 4.6→3.0 for GL, 3.2→3.0 for GLES).
         // GLFW may handle some version negotiation, but Mesa on Linux can fail if exact version
         // isn't supported. Also need to forward depth/stencil/sRGB hints from GraphicsDeviceOptions
         // to WindowOptions.PreferredDepthBufferBits etc.
@@ -235,7 +233,11 @@ namespace Veldrid.StartupUtilities
             ContextFlags flags = options.Debug
                 ? ContextFlags.Debug | ContextFlags.ForwardCompatible
                 : ContextFlags.ForwardCompatible;
-            return new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, flags, new APIVersion(4, 6));
+            // macOS caps OpenGL at 4.1; GLFW won't negotiate down from a higher request.
+            var version = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                ? new APIVersion(4, 1)
+                : new APIVersion(4, 6);
+            return new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, flags, version);
         }
 #endif
 

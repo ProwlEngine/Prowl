@@ -66,8 +66,4 @@ namespace Veldrid.Tests
     [Trait("Backend", "D3D11")]
     public class D3D11PipelineTests : PipelineTests<D3D11DeviceCreator> { }
 #endif
-#if TEST_METAL
-    [Trait("Backend", "Metal")]
-    public class MetalPipelineTests : PipelineTests<MetalDeviceCreator> { }
-#endif
 }

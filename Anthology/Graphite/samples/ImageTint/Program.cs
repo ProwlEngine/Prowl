@@ -191,11 +191,9 @@ namespace ImageTint
                 ? "hlsl.bytes"
                 : (backendType == GraphicsBackend.Vulkan)
                     ? "450.glsl.spv"
-                    : (backendType == GraphicsBackend.Metal)
-                        ? "ios.metallib"
-                        : (backendType == GraphicsBackend.OpenGL)
-                            ? "330.glsl"
-                            : "300.glsles";
+                    : (backendType == GraphicsBackend.OpenGL)
+                        ? "330.glsl"
+                        : "300.glsles";
         }
     }
 

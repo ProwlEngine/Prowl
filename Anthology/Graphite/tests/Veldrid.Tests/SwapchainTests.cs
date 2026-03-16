@@ -81,12 +81,6 @@ namespace Veldrid.Tests
     [Trait("Backend", "D3D11")]
     public class D3D11MainSwapchainTests : MainSwapchainTests<D3D11DeviceCreatorWithMainSwapchain> { }
 #endif
-#if TEST_METAL
-    [Trait("Backend", "Metal")]
-    public class MetalSwapchainTests : SwapchainTests<MetalDeviceCreator> { }
-    [Trait("Backend", "Metal")]
-    public class MetalMainSwapchainTests : SwapchainTests<MetalDeviceCreatorWithMainSwapchain> { }
-#endif
 #if TEST_OPENGL
     [Trait("Backend", "OpenGL")]
     public class OpenGLMainSwapchainTests : MainSwapchainTests<OpenGLDeviceCreator> { }

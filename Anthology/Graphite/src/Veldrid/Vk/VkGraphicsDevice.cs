@@ -66,7 +66,6 @@ namespace Veldrid.Vk
         private vkGetBufferMemoryRequirements2_t _getBufferMemoryRequirements2;
         private vkGetImageMemoryRequirements2_t _getImageMemoryRequirements2;
         private vkGetPhysicalDeviceProperties2_t _getPhysicalDeviceProperties2;
-        private vkCreateMetalSurfaceEXT_t _createMetalSurfaceEXT;
 
         // Staging Resources
         private const uint MinStagingBufferSize = 64;
@@ -124,7 +123,6 @@ namespace Veldrid.Vk
         public vkCmdDebugMarkerInsertEXT_t MarkerInsert => _markerInsert;
         public vkGetBufferMemoryRequirements2_t GetBufferMemoryRequirements2 => _getBufferMemoryRequirements2;
         public vkGetImageMemoryRequirements2_t GetImageMemoryRequirements2 => _getImageMemoryRequirements2;
-        public vkCreateMetalSurfaceEXT_t CreateMetalSurfaceEXT => _createMetalSurfaceEXT;
         public KhrSurface KhrSurface => _khrSurface;
         public KhrSwapchain KhrSwapchain => _khrSwapchain;
 
@@ -604,11 +602,6 @@ namespace Veldrid.Vk
             Result result = _vk.CreateInstance(in instanceCI, null, out _instance);
             CheckResult(result);
 
-            if (HasSurfaceExtension(CommonStrings.VK_EXT_METAL_SURFACE_EXTENSION_NAME))
-            {
-                _createMetalSurfaceEXT = GetInstanceProcAddr<vkCreateMetalSurfaceEXT_t>("vkCreateMetalSurfaceEXT");
-            }
-
             if (debug && debugReportExtensionAvailable)
             {
                 EnableDebugCallback();
@@ -900,7 +893,7 @@ namespace Veldrid.Vk
             return (IntPtr)_vk.GetInstanceProcAddr(_instance, utf8Ptr);
         }
 
-        private T GetInstanceProcAddr<T>(string name)
+        internal T GetInstanceProcAddr<T>(string name)
         {
             IntPtr funcPtr = GetInstanceProcAddr(name);
             if (funcPtr != IntPtr.Zero)
@@ -1635,23 +1628,12 @@ namespace Veldrid.Vk
 
     internal unsafe delegate void vkGetPhysicalDeviceProperties2_t(PhysicalDevice physicalDevice, void* properties);
 
-    // VK_EXT_metal_surface
-
-    internal unsafe delegate Result vkCreateMetalSurfaceEXT_t(
+    // VK_MVK_macos_surface (legacy, no Silk.NET extension class available)
+    internal unsafe delegate Result vkCreateMacOSSurfaceMVK_t(
         Instance instance,
-        VkMetalSurfaceCreateInfoEXT* pCreateInfo,
+        MacOSSurfaceCreateInfoMVK* pCreateInfo,
         AllocationCallbacks* pAllocator,
         SurfaceKHR* pSurface);
-
-    internal unsafe struct VkMetalSurfaceCreateInfoEXT
-    {
-        public const StructureType VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT = (StructureType)1000217000;
-
-        public StructureType sType;
-        public void* pNext;
-        public uint flags;
-        public void* pLayer;
-    }
 
     internal unsafe struct VkPhysicalDeviceDriverProperties
     {
