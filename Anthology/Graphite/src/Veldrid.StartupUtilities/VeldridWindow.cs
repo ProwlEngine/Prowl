@@ -29,6 +29,8 @@ namespace Veldrid.StartupUtilities
         private Vector2 _mouseDelta;
         private bool _firstPumpEvents = true;
         private bool _disposed;
+        private bool _cursorRelativeMode;
+        private bool _cursorVisible = true;
         private Func<bool> _closeRequestedHandler;
 
         private bool _borderlessFullScreen;
@@ -209,19 +211,37 @@ namespace Veldrid.StartupUtilities
         }
 
         /// <summary>
-        /// Whether the mouse cursor is visible over the window.
-        /// Returns true if no mouse device is available.
+        /// Whether relative mouse mode is active. When enabled, the cursor is hidden and
+        /// confined to the window, and only movement deltas are reported.
+        /// While active, <see cref="CursorVisible"/> writes update the cached state but are
+        /// not applied until relative mode is disabled.
+        /// Equivalent to SDL's SDL_SetRelativeMouseMode.
+        /// </summary>
+        public bool CursorRelativeMode
+        {
+            get => _cursorRelativeMode;
+            set
+            {
+                _cursorRelativeMode = value;
+                if (_input?.Mice.Count > 0)
+                    _input.Mice[0].Cursor.CursorMode = value
+                        ? CursorMode.Disabled
+                        : (_cursorVisible ? CursorMode.Normal : CursorMode.Hidden);
+            }
+        }
+
+        /// <summary>
+        /// Whether the mouse cursor is visible over the window. Defaults to true.
+        /// While <see cref="CursorRelativeMode"/> is active, reads return the cached state
+        /// and writes update the cached state without applying it.
         /// </summary>
         public bool CursorVisible
         {
-            get
-            {
-                if (_input?.Mice.Count > 0)
-                    return _input.Mice[0].Cursor.CursorMode == CursorMode.Normal;
-                return true;
-            }
+            get => _cursorVisible;
             set
             {
+                _cursorVisible = value;
+                if (_cursorRelativeMode) return;
                 if (_input?.Mice.Count > 0)
                     _input.Mice[0].Cursor.CursorMode = value ? CursorMode.Normal : CursorMode.Hidden;
             }
@@ -352,13 +372,26 @@ namespace Veldrid.StartupUtilities
         internal IWindow SilkWindow => _window;
 
         /// <summary>
-        /// Creates a new window. Always created with OpenGL context support so that any
-        /// backend (Vulkan, D3D11, OpenGL) can be used without recreating the window,
-        /// matching upstream SDL2 behavior which always set SDL_WindowFlags.OpenGL.
+        /// Creates a new window. Probes for the highest available OpenGL version so that
+        /// the window can be used with any backend. If no GL version is available (e.g.
+        /// headless GPU, software renderer), falls back to no GL context - D3D11/Vulkan
+        /// still work, but OpenGL requires <see cref="VeldridStartup.CreateWindowAndGraphicsDevice"/>.
         /// </summary>
         public VeldridWindow(WindowCreateInfo wci)
-            : this(wci, new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 3)))
+            : this(wci, GetDefaultGraphicsAPI())
         {
+        }
+
+        private static GraphicsAPI GetDefaultGraphicsAPI()
+        {
+#if !EXCLUDE_OPENGL_BACKEND
+            // GLFW ties GL context to window creation (unlike SDL2 which decoupled them).
+            // Probe for the best GL version so OpenGL works when creating window/device separately.
+            // If GL is completely unavailable, fall back to no context so D3D11/Vulkan still work.
+            if (OpenGLVersionProbe.TryGetMaxVersion(gles: false, out var version))
+                return new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(version.Major, version.Minor));
+#endif
+            return GraphicsAPI.None;
         }
 
         internal VeldridWindow(WindowCreateInfo wci, GraphicsAPI api)

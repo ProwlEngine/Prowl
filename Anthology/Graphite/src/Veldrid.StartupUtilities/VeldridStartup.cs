@@ -219,25 +219,23 @@ namespace Veldrid.StartupUtilities
                 (uint)window.Height);
         }
 
-        // TODO: Add GL version probing (upstream tried 4.6→3.0 for GL, 3.2→3.0 for GLES).
-        // GLFW may handle some version negotiation, but Mesa on Linux can fail if exact version
-        // isn't supported. Also need to forward depth/stencil/sRGB hints from GraphicsDeviceOptions
+        // TODO: Forward depth/stencil/sRGB hints from GraphicsDeviceOptions
         // to WindowOptions.PreferredDepthBufferBits etc.
         private static GraphicsAPI GetOpenGLGraphicsAPI(GraphicsDeviceOptions options, GraphicsBackend backend)
         {
-            if (backend == GraphicsBackend.OpenGLES)
-            {
-                return new GraphicsAPI(ContextAPI.OpenGLES, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 0));
-            }
+            bool gles = backend == GraphicsBackend.OpenGLES;
+            if (!OpenGLVersionProbe.TryGetMaxVersion(gles, out var version))
+                throw new VeldridException(
+                    $"Unable to create an {(gles ? "OpenGL ES" : "OpenGL")} context. " +
+                    "No supported version could be initialized on this system.");
+
+            if (gles)
+                return new GraphicsAPI(ContextAPI.OpenGLES, ContextProfile.Core, ContextFlags.Default, new APIVersion(version.Major, version.Minor));
 
             ContextFlags flags = options.Debug
                 ? ContextFlags.Debug | ContextFlags.ForwardCompatible
                 : ContextFlags.ForwardCompatible;
-            // macOS caps OpenGL at 4.1; GLFW won't negotiate down from a higher request.
-            var version = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                ? new APIVersion(4, 1)
-                : new APIVersion(4, 6);
-            return new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, flags, version);
+            return new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, flags, new APIVersion(version.Major, version.Minor));
         }
 #endif
 
