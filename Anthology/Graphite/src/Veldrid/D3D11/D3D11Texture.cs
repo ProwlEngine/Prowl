@@ -11,6 +11,7 @@ namespace Veldrid.D3D11
         private readonly ID3D11Device* _device;
         private ComPtr<ID3D11Resource> _deviceTexture;
         private string _name;
+        private bool _disposed;
 
         public override uint Width { get; }
         public override uint Height { get; }
@@ -21,7 +22,7 @@ namespace Veldrid.D3D11
         public override TextureUsage Usage { get; }
         public override TextureType Type { get; }
         public override TextureSampleCount SampleCount { get; }
-        public override bool IsDisposed => _deviceTexture.Handle == null;
+        public override bool IsDisposed => _disposed;
 
         public ID3D11Resource* DeviceTexture => _deviceTexture;
         public Format DxgiFormat { get; }
@@ -211,6 +212,7 @@ namespace Veldrid.D3D11
         private protected override void DisposeCore()
         {
             _deviceTexture.Dispose();
+            _disposed = true;
         }
     }
 }

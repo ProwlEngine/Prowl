@@ -18,12 +18,13 @@ namespace Veldrid.D3D11
         private readonly uint _structureByteStride;
         private readonly bool _rawBuffer;
         private string _name;
+        private bool _disposed;
 
         public override uint SizeInBytes { get; }
 
         public override BufferUsage Usage { get; }
 
-        public override bool IsDisposed => _buffer.Handle == null;
+        public override bool IsDisposed => _disposed;
 
         public ID3D11Buffer* Buffer => _buffer;
 
@@ -103,6 +104,7 @@ namespace Veldrid.D3D11
                 kvp.Value.Dispose();
             }
             _buffer.Dispose();
+            _disposed = true;
         }
 
         internal ID3D11ShaderResourceView* GetShaderResourceView(uint offset, uint size)

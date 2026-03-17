@@ -7,6 +7,7 @@ namespace Veldrid.D3D11
     {
         private ComPtr<ID3D11SamplerState> _deviceSampler;
         private string _name;
+        private bool _disposed;
 
         public ref ComPtr<ID3D11SamplerState> DeviceSampler => ref _deviceSampler;
 
@@ -72,11 +73,12 @@ namespace Veldrid.D3D11
             }
         }
 
-        public override bool IsDisposed => _deviceSampler.Handle == null;
+        public override bool IsDisposed => _disposed;
 
         public override void Dispose()
         {
             _deviceSampler.Dispose();
+            _disposed = true;
         }
     }
 }

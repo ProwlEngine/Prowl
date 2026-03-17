@@ -11,6 +11,7 @@ namespace Veldrid.D3D11
         private string _name;
 
         private ComPtr<ID3D11DeviceChild> _deviceShader;
+        private bool _disposed;
         public ComPtr<ID3D11DeviceChild> DeviceShader => _deviceShader;
         public byte[] Bytecode { get; internal set; }
 
@@ -175,11 +176,12 @@ namespace Veldrid.D3D11
             }
         }
 
-        public override bool IsDisposed => _deviceShader.Handle == null;
+        public override bool IsDisposed => _disposed;
 
         public override void Dispose()
         {
             _deviceShader.Dispose();
+            _disposed = true;
         }
     }
 }
