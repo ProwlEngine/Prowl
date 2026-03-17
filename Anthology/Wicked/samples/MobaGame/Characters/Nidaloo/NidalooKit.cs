@@ -86,8 +86,7 @@ public class NidalooKit : CharacterKit
     {
         if (champ.FormId == 0)
         {
-            return slot switch
-            {
+            return slot switch {
                 0 => new AbilityInfo { Name = "Pointy Stick Toss", ManaCost = 70, Cooldown = 6, Range = 30, Radius = 0, CastMode = CastMode.AreaTarget },
                 1 => new AbilityInfo { Name = "Shrub Smack", ManaCost = 40, Cooldown = 13, Range = 20, Radius = 1.5f, CastMode = CastMode.AreaTarget },
                 2 => new AbilityInfo { Name = "Primal Purr", ManaCost = 60, Cooldown = 12, Range = 30, Radius = 0, CastMode = CastMode.AllyTarget },
@@ -97,8 +96,7 @@ public class NidalooKit : CharacterKit
         }
         else
         {
-            return slot switch
-            {
+            return slot switch {
                 0 => new AbilityInfo { Name = "Smackdown", ManaCost = 0, Cooldown = 5, Range = 0, Radius = 0, CastMode = CastMode.Instant },
                 1 => new AbilityInfo { Name = "Bouncy Leap", ManaCost = 0, Cooldown = 5, Range = 10, Radius = 3, CastMode = CastMode.InstantDirection },
                 2 => new AbilityInfo { Name = "Claw Swat", ManaCost = 0, Cooldown = 5, Range = 6, Radius = 4, CastMode = CastMode.InstantDirection },
@@ -273,8 +271,7 @@ public class NidalooKit : CharacterKit
 
         float baseDmg = 70f + champ.Level * 15f;
 
-        var jav = Server.Spawn<JavelinEntity>(room.Map, j =>
-        {
+        var jav = Server.Spawn<JavelinEntity>(room.Map, j => {
             j.X.Value = champ.X;
             j.Y.Value = champ.Y;
             j.DirX.Value = dirX;
@@ -318,8 +315,7 @@ public class NidalooKit : CharacterKit
         }
 
         float dmg = 40f + champ.Level * 10f;
-        var trap = Server.Spawn<TrapEntity>(room.Map, t =>
-        {
+        var trap = Server.Spawn<TrapEntity>(room.Map, t => {
             t.X.Value = tx;
             t.Y.Value = ty;
             t.TeamId.Value = champ.TeamId;
@@ -499,8 +495,7 @@ public class NidalooKit : CharacterKit
         state.HuntedTargets[targetId] = HuntedDuration;
     }
 
-    private static float GetHpRatio(NetworkEntity entity) => entity switch
-    {
+    private static float GetHpRatio(NetworkEntity entity) => entity switch {
         ChampionEntity c => c.MaxHP > 0 ? c.HP / c.MaxHP : 1,
         MinionEntity m => m.MaxHP > 0 ? m.HP / m.MaxHP : 1,
         TurretEntity t => t.MaxHP > 0 ? t.HP / t.MaxHP : 1,
