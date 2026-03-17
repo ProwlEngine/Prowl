@@ -76,7 +76,9 @@ namespace Veldrid.D3D11
 
         public D3D11GraphicsDevice(D3D11DeviceOptions options, SwapchainDescription? swapchainDesc)
         {
+#pragma warning disable CS0618 // No INativeWindow available in headless device creation
             _d3d11Api = Silk.NET.Direct3D11.D3D11.GetApi();
+#pragma warning restore CS0618
 
             var flags = (CreateDeviceFlag)options.DeviceCreationFlags;
 #if DEBUG
@@ -766,7 +768,9 @@ namespace Veldrid.D3D11
                 // Report live DXGI objects (DXGIGetDebugInterface1 not available on pre-Windows 8)
                 try
                 {
+#pragma warning disable CS0618 // No INativeWindow available in debug reporting
                     using var dxgi = DXGI.GetApi();
+#pragma warning restore CS0618
                     IDXGIDebug1* pDxgiDebug;
                     var dxgiDebugGuid = IDXGIDebug1.Guid;
                     if (dxgi.GetDebugInterface1(0, &dxgiDebugGuid, (void**)&pDxgiDebug) >= 0 && pDxgiDebug != null)

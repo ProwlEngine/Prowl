@@ -641,7 +641,7 @@ namespace Veldrid.OpenGL
                 }
 
                 FramebufferStatus errorCode = (FramebufferStatus)_gl.CheckFramebufferStatus(framebufferTarget);
-                if (errorCode != FramebufferStatus.FramebufferComplete)
+                if (errorCode != FramebufferStatus.Complete)
                 {
                     throw new VeldridException("Failed to create texture copy FBO: " + errorCode);
                 }

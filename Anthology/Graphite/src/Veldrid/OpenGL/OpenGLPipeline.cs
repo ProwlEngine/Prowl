@@ -202,7 +202,7 @@ namespace Veldrid.OpenGL
                         if (blockIndex != GL_INVALID_INDEX)
                         {
                             int blockSize;
-                            _gl.GetActiveUniformBlock(_program, blockIndex, UniformBlockPName.UniformBlockDataSize, out blockSize);
+                            _gl.GetActiveUniformBlock(_program, blockIndex, UniformBlockPName.DataSize, out blockSize);
                             CheckLastError();
                             uniformBindings[i] = new OpenGLUniformBinding(_program, blockIndex, (uint)blockSize);
                         }

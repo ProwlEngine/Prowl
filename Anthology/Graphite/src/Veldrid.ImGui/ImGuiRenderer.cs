@@ -302,7 +302,7 @@ namespace Veldrid
             using (Stream s = _assembly.GetManifestResourceStream(resourceName))
             {
                 byte[] ret = new byte[s.Length];
-                s.Read(ret, 0, (int)s.Length);
+                s.ReadExactly(ret);
                 return ret;
             }
         }

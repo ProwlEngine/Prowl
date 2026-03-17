@@ -575,11 +575,11 @@ namespace Veldrid.OpenGL
             switch (mode)
             {
                 case MapMode.Read:
-                    return MapBufferAccessMask.MapReadBit;
+                    return MapBufferAccessMask.ReadBit;
                 case MapMode.Write:
-                    return MapBufferAccessMask.MapWriteBit | MapBufferAccessMask.MapInvalidateBufferBit;
+                    return MapBufferAccessMask.WriteBit | MapBufferAccessMask.InvalidateBufferBit;
                 case MapMode.ReadWrite:
-                    return MapBufferAccessMask.MapReadBit | MapBufferAccessMask.MapWriteBit;
+                    return MapBufferAccessMask.ReadBit | MapBufferAccessMask.WriteBit;
                 default:
                     throw Illegal.Value<MapMode>();
             }
