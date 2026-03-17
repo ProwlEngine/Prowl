@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using Veldrid.Utilities;
 
@@ -8,7 +9,7 @@ namespace Veldrid.NeoDemo.Objects
 {
     public class ShadowmapDrawer : Renderable
     {
-        private readonly Func<VeldridWindow> _windowGetter;
+        private readonly Func<Sdl2Window> _windowGetter;
         private readonly DisposeCollector _disposeCollector = new DisposeCollector();
 
         private DeviceBuffer _vb;
@@ -34,7 +35,7 @@ namespace Veldrid.NeoDemo.Objects
             _si = new SizeInfo { Size = _size, Position = _position };
         }
 
-        public ShadowmapDrawer(Func<VeldridWindow> windowGetter, Func<TextureView> bindingGetter)
+        public ShadowmapDrawer(Func<Sdl2Window> windowGetter, Func<TextureView> bindingGetter)
         {
             _windowGetter = windowGetter;
             OnWindowResized();

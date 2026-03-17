@@ -8,8 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Veldrid\Veldrid.csproj" />
-    <PackageReference Include="Silk.NET.Windowing" Version="$(SilkNetVersion)" />
-    <PackageReference Include="Silk.NET.Input" Version="$(SilkNetVersion)" />
+    <ProjectReference Include="..\Veldrid.SDL2\Veldrid.SDL2.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

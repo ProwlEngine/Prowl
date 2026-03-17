@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using Veldrid;
+using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using Veldrid.SPIRV;
 using System.Text;
@@ -68,7 +69,7 @@ void main()
                     "opengles" or "gles" => GraphicsBackend.OpenGLES,
                     _ => throw new InvalidOperationException($"Unknown VELDRID_BACKEND: '{backendEnv}'")
                 };
-            VeldridStartup.CreateWindowAndGraphicsDevice(windowCI, options, backend, out VeldridWindow window, out _graphicsDevice);
+            VeldridStartup.CreateWindowAndGraphicsDevice(windowCI, options, backend, out Sdl2Window window, out _graphicsDevice);
             window.Title = $"{window.Title} ({_graphicsDevice.BackendType})";
 
             CreateResources();

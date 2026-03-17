@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veldrid.StartupUtilities
+namespace Veldrid.Sdl2
 {
     /// <summary>
     /// Represents the instantaneous state of the mouse (position and button states).

@@ -1,4 +1,5 @@
-﻿using Veldrid.StartupUtilities;
+﻿using Veldrid.Sdl2;
+using Veldrid.StartupUtilities;
 using Xunit;
 
 namespace Veldrid.Tests
@@ -21,7 +22,7 @@ namespace Veldrid.Tests
                 WindowInitialState = WindowState.Hidden,
                 WindowTitle = "SwapchainTestWindow",
             };
-            VeldridWindow window = VeldridStartup.CreateWindow(ref wci);
+            Sdl2Window window = VeldridStartup.CreateWindow(ref wci);
             SwapchainSource source = VeldridStartup.GetSwapchainSource(window);
             SwapchainDescription swapchainDesc = new SwapchainDescription(source, 100, 100, depthFormat, syncToVerticalBlank);
             Swapchain swapchain = RF.CreateSwapchain(ref swapchainDesc);

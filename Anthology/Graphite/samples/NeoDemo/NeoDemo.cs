@@ -6,6 +6,7 @@ using System.IO;
 using System.Numerics;
 using Veldrid.ImageSharp;
 using Veldrid.NeoDemo.Objects;
+using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using Veldrid.Utilities;
 
@@ -13,7 +14,7 @@ namespace Veldrid.NeoDemo
 {
     public class NeoDemo
     {
-        private VeldridWindow _window;
+        private Sdl2Window _window;
         private GraphicsDevice _gd;
         private Scene _scene;
         private readonly ImGuiRenderable _igRenderable;

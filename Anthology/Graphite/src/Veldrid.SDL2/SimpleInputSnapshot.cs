@@ -43,5 +43,23 @@ namespace Veldrid.StartupUtilities
             _keyCharPresses.Clear();
             WheelDelta = 0;
         }
+
+        internal void CopyTo(SimpleInputSnapshot other)
+        {
+            System.Diagnostics.Debug.Assert(this != other);
+
+            other._mouseEvents.Clear();
+            foreach (var me in _mouseEvents) { other._mouseEvents.Add(me); }
+
+            other._keyEvents.Clear();
+            foreach (var ke in _keyEvents) { other._keyEvents.Add(ke); }
+
+            other._keyCharPresses.Clear();
+            foreach (var kcp in _keyCharPresses) { other._keyCharPresses.Add(kcp); }
+
+            other.MousePosition = MousePosition;
+            other.WheelDelta = WheelDelta;
+            _mouseDown.CopyTo(other._mouseDown, 0);
+        }
     }
 }

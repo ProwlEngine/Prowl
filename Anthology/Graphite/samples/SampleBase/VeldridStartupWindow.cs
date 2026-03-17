@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using Veldrid;
+using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using Veldrid.Utilities;
 
@@ -8,7 +9,7 @@ namespace SampleBase
 {
     public class VeldridStartupWindow : ApplicationWindow
     {
-        private VeldridWindow _window;
+        private Sdl2Window _window;
         private GraphicsDevice _gd;
         private DisposeCollectorResourceFactory _factory;
         private bool _windowResized = true;

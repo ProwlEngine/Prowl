@@ -2,6 +2,7 @@ using ImGuiNET;
 using System;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 
 namespace Veldrid.NeoDemo
@@ -28,12 +29,12 @@ namespace Veldrid.NeoDemo
         private bool _useReverseDepth;
         private float _windowWidth;
         private float _windowHeight;
-        private VeldridWindow _window;
+        private Sdl2Window _window;
 
         public event Action<Matrix4x4> ProjectionChanged;
         public event Action<Matrix4x4> ViewChanged;
 
-        public Camera(GraphicsDevice gd, VeldridWindow window)
+        public Camera(GraphicsDevice gd, Sdl2Window window)
         {
             _gd = gd;
             _useReverseDepth = gd.IsDepthRangeZeroToOne;
@@ -44,7 +45,7 @@ namespace Veldrid.NeoDemo
             UpdateViewMatrix();
         }
 
-        public void UpdateBackend(GraphicsDevice gd, VeldridWindow window)
+        public void UpdateBackend(GraphicsDevice gd, Sdl2Window window)
         {
             _gd = gd;
             _useReverseDepth = gd.IsDepthRangeZeroToOne;

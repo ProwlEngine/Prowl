@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Numerics;
 using Veldrid;
+using Veldrid.Sdl2;
 using Veldrid.ImageSharp;
 using Veldrid.SPIRV;
 using Veldrid.StartupUtilities;
@@ -43,7 +44,7 @@ namespace ImageTint
                 },
                 new GraphicsDeviceOptions() { ResourceBindingModel = ResourceBindingModel.Improved, PreferStandardClipSpaceYDirection = true },
                 BackendHelper.GetPreferredBackend(),
-                out VeldridWindow window,
+                out Sdl2Window window,
                 out GraphicsDevice gd);
 
             DisposeCollectorResourceFactory factory = new DisposeCollectorResourceFactory(gd.ResourceFactory);

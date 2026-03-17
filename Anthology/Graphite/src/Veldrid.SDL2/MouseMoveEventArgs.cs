@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veldrid.StartupUtilities
+namespace Veldrid.Sdl2
 {
     /// <summary>
     /// Event arguments for mouse move events.
