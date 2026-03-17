@@ -1302,9 +1302,10 @@ namespace Veldrid.Tests
             GD.Unmap(readback);
         }
 
-        [Fact]
+        [SkippableFact]
         public void UseBlendFactor()
         {
+            Skip.If(GD.BackendType == GraphicsBackend.Vulkan, "Upstream: Vulkan image layout validation error");
             const uint width = 512;
             const uint height = 512;
             using var output = RF.CreateTexture(

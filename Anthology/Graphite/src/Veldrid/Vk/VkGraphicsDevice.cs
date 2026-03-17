@@ -260,6 +260,7 @@ namespace Veldrid.Vk
             {
                 Result result = _vk.QueueSubmit(_graphicsQueue, 1, &si, vkFence);
                 CheckResult(result);
+                FlushValidationErrors();
                 if (useExtraFence)
                 {
                     result = _vk.QueueSubmit(_graphicsQueue, 0, (SubmitInfo*)null, submissionFence);
@@ -639,6 +640,23 @@ namespace Veldrid.Vk
             }
         }
 
+        // Stored validation error from the debug callback (cannot throw from unmanaged callback)
+        private static volatile string _lastValidationError;
+
+        /// <summary>
+        /// Checks if a Vulkan validation error was reported and throws if so.
+        /// Called after operations that may trigger validation errors.
+        /// </summary>
+        internal static void FlushValidationErrors()
+        {
+            string error = _lastValidationError;
+            if (error != null)
+            {
+                _lastValidationError = null;
+                throw new VeldridException("A Vulkan validation error was encountered: " + error);
+            }
+        }
+
         [System.Runtime.InteropServices.UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
         private static Bool32 DebugCallback(
             DebugReportFlagsEXT flags,
@@ -653,18 +671,12 @@ namespace Veldrid.Vk
             string message = Util.GetString(pMessage);
             DebugReportFlagsEXT debugReportFlags = flags;
 
-#if DEBUG
-            if (Debugger.IsAttached)
-            {
-                Debugger.Break();
-            }
-#endif
-
             string fullMessage = $"[{debugReportFlags}] ({objectType}) {message}";
 
             if (debugReportFlags == DebugReportFlagsEXT.ErrorBitExt)
             {
-                throw new VeldridException("A Vulkan validation error was encountered: " + fullMessage);
+                _lastValidationError = fullMessage;
+                return true;
             }
 
             Console.WriteLine(fullMessage);
@@ -1102,6 +1114,7 @@ namespace Veldrid.Vk
             }
 
             CheckSubmittedFences();
+            FlushValidationErrors();
         }
 
         public override TextureSampleCount GetSampleCountLimit(PixelFormat format, bool depthFormat)
