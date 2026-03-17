@@ -266,7 +266,7 @@ namespace Veldrid.Vk
             _gd.Vk.CmdDrawIndexed(_cb, indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
         }
 
-        protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
+        private protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
         {
             PreDrawCommand();
             VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
@@ -274,7 +274,7 @@ namespace Veldrid.Vk
             _gd.Vk.CmdDrawIndirect(_cb, vkBuffer.DeviceBuffer, offset, drawCount, stride);
         }
 
-        protected override void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
+        private protected override void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
         {
             PreDrawCommand();
             VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
@@ -405,7 +405,7 @@ namespace Veldrid.Vk
                 _currentComputePipeline.PipelineLayout);
         }
 
-        protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
+        private protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
         {
             PreDispatchCommand();
 
@@ -477,7 +477,7 @@ namespace Veldrid.Vk
             _submittedCommandBuffers.Add(_cb);
         }
 
-        protected override void SetFramebufferCore(Framebuffer fb)
+        private protected override void SetFramebufferCore(Framebuffer fb)
         {
             if (_activeRenderPass.Handle != default)
             {
@@ -681,7 +681,7 @@ namespace Veldrid.Vk
             Util.ClearArray(boundSets);
         }
 
-        protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
+        private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
         {
             if (!_currentGraphicsResourceSets[slot].Equals(rs, dynamicOffsetsCount, ref dynamicOffsets))
             {
@@ -692,7 +692,7 @@ namespace Veldrid.Vk
             }
         }
 
-        protected override void SetComputeResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
+        private protected override void SetComputeResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
         {
             if (!_currentComputeResourceSets[slot].Equals(rs, dynamicOffsetsCount, ref dynamicOffsets))
             {
@@ -748,7 +748,7 @@ namespace Veldrid.Vk
             CopyBuffer(stagingBuffer, 0, buffer, bufferOffsetInBytes, sizeInBytes);
         }
 
-        protected override void CopyBufferCore(
+        private protected override void CopyBufferCore(
             DeviceBuffer source,
             uint sourceOffset,
             DeviceBuffer destination,
@@ -792,7 +792,7 @@ namespace Veldrid.Vk
                 0, null);
         }
 
-        protected override void CopyTextureCore(
+        private protected override void CopyTextureCore(
             Texture source,
             uint srcX, uint srcY, uint srcZ,
             uint srcMipLevel,

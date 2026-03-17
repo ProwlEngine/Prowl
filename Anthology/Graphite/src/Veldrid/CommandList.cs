@@ -276,14 +276,14 @@ namespace Veldrid
             SetGraphicsResourceSetCore(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
         }
 
-        // TODO: private protected
+
         /// <summary>
         /// </summary>
         /// <param name="slot"></param>
         /// <param name="rs"></param>
         /// <param name="dynamicOffsets"></param>
         /// <param name="dynamicOffsetsCount"></param>
-        protected abstract void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets);
+        private protected abstract void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets);
 
         /// <summary>
         /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the compute
@@ -358,14 +358,14 @@ namespace Veldrid
             SetComputeResourceSetCore(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
         }
 
-        // TODO: private protected
+
         /// <summary>
         /// </summary>
         /// <param name="slot"></param>
         /// <param name="set"></param>
         /// <param name="dynamicOffsetsCount"></param>
         /// <param name="dynamicOffsets"></param>
-        protected abstract void SetComputeResourceSetCore(uint slot, ResourceSet set, uint dynamicOffsetsCount, ref uint dynamicOffsets);
+        private protected abstract void SetComputeResourceSetCore(uint slot, ResourceSet set, uint dynamicOffsetsCount, ref uint dynamicOffsets);
 
         /// <summary>
         /// Sets the active <see cref="Framebuffer"/> which will be rendered to.
@@ -388,7 +388,7 @@ namespace Veldrid
         /// Performs API-specific handling of the <see cref="Framebuffer"/> resource.
         /// </summary>
         /// <param name="fb"></param>
-        protected abstract void SetFramebufferCore(Framebuffer fb);
+        private protected abstract void SetFramebufferCore(Framebuffer fb);
 
         /// <summary>
         /// Clears the color target at the given index of the active <see cref="Framebuffer"/>.
@@ -600,14 +600,14 @@ namespace Veldrid
             DrawIndirectCore(indirectBuffer, offset, drawCount, stride);
         }
 
-        // TODO: private protected
+
         /// <summary>
         /// </summary>
         /// <param name="indirectBuffer"></param>
         /// <param name="offset"></param>
         /// <param name="drawCount"></param>
         /// <param name="stride"></param>
-        protected abstract void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
+        private protected abstract void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
 
         /// <summary>
         /// Issues indirect, indexed draw commands based on the information contained in the given indirect <see cref="DeviceBuffer"/>.
@@ -632,14 +632,14 @@ namespace Veldrid
             DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);
         }
 
-        // TODO: private protected
+
         /// <summary>
         /// </summary>
         /// <param name="indirectBuffer"></param>
         /// <param name="offset"></param>
         /// <param name="drawCount"></param>
         /// <param name="stride"></param>
-        protected abstract void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
+        private protected abstract void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
 
         [Conditional("VALIDATE_USAGE")]
         private static void ValidateIndirectOffset(uint offset)
@@ -703,12 +703,12 @@ namespace Veldrid
             DispatchIndirectCore(indirectBuffer, offset);
         }
 
-        // TODO: private protected
+
         /// <summary>
         /// </summary>
         /// <param name="indirectBuffer"></param>
         /// <param name="offset"></param>
-        protected abstract void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset);
+        private protected abstract void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset);
 
         /// <summary>
         /// Resolves a multisampled source <see cref="Texture"/> into a non-multisampled destination <see cref="Texture"/>.
@@ -925,7 +925,7 @@ namespace Veldrid
         /// <param name="destination"></param>
         /// <param name="destinationOffset"></param>
         /// <param name="sizeInBytes"></param>
-        protected abstract void CopyBufferCore(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes);
+        private protected abstract void CopyBufferCore(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes);
 
         /// <summary>
         /// Copies all subresources from one <see cref="Texture"/> to another.
@@ -1108,7 +1108,7 @@ namespace Veldrid
         /// <param name="height"></param>
         /// <param name="depth"></param>
         /// <param name="layerCount"></param>
-        protected abstract void CopyTextureCore(
+        private protected abstract void CopyTextureCore(
             Texture source,
             uint srcX, uint srcY, uint srcZ,
             uint srcMipLevel,

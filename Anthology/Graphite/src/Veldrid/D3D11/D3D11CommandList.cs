@@ -387,7 +387,7 @@ namespace Veldrid.D3D11
             return a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3];
         }
 
-        protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
+        private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
         {
             if (_graphicsResourceSets[slot].Equals(rs, dynamicOffsetsCount, ref dynamicOffsets))
             {
@@ -399,7 +399,7 @@ namespace Veldrid.D3D11
             ActivateResourceSet(slot, _graphicsResourceSets[slot], true);
         }
 
-        protected override void SetComputeResourceSetCore(uint slot, ResourceSet set, uint dynamicOffsetsCount, ref uint dynamicOffsets)
+        private protected override void SetComputeResourceSetCore(uint slot, ResourceSet set, uint dynamicOffsetsCount, ref uint dynamicOffsets)
         {
             if (_computeResourceSets[slot].Equals(set, dynamicOffsetsCount, ref dynamicOffsets))
             {
@@ -644,7 +644,7 @@ namespace Veldrid.D3D11
             }
         }
 
-        protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
+        private protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
         {
             PreDrawCommand();
 
@@ -657,7 +657,7 @@ namespace Veldrid.D3D11
             }
         }
 
-        protected override void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
+        private protected override void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
         {
             PreDrawCommand();
 
@@ -694,7 +694,7 @@ namespace Veldrid.D3D11
             Ctx->Dispatch(groupCountX, groupCountY, groupCountZ);
         }
 
-        protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
+        private protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
         {
             PreDispatchCommand();
             D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(indirectBuffer);
@@ -1259,7 +1259,7 @@ namespace Veldrid.D3D11
             }
         }
 
-        protected override void SetFramebufferCore(Framebuffer fb)
+        private protected override void SetFramebufferCore(Framebuffer fb)
         {
             D3D11Framebuffer d3dFB = Util.AssertSubtype<Framebuffer, D3D11Framebuffer>(fb);
             if (d3dFB.Swapchain != null)
@@ -1407,7 +1407,7 @@ namespace Veldrid.D3D11
             return Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(staging);
         }
 
-        protected override void CopyBufferCore(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
+        private protected override void CopyBufferCore(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
         {
             D3D11Buffer srcD3D11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(source);
             D3D11Buffer dstD3D11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(destination);
@@ -1427,7 +1427,7 @@ namespace Veldrid.D3D11
                 (ID3D11Resource*)srcD3D11Buffer.Buffer, 0, &region);
         }
 
-        protected override void CopyTextureCore(
+        private protected override void CopyTextureCore(
             Texture source,
             uint srcX, uint srcY, uint srcZ,
             uint srcMipLevel,

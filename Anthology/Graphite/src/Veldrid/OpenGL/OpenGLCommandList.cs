@@ -77,12 +77,12 @@ namespace Veldrid.OpenGL
             _currentCommands.DrawIndexed(indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
         }
 
-        protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
+        private protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
         {
             _currentCommands.DrawIndirect(indirectBuffer, offset, drawCount, stride);
         }
 
-        protected override void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
+        private protected override void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
         {
             _currentCommands.DrawIndexedIndirect(indirectBuffer, offset, drawCount, stride);
         }
@@ -92,7 +92,7 @@ namespace Veldrid.OpenGL
             _currentCommands.Dispatch(groupCountX, groupCountY, groupCountZ);
         }
 
-        protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
+        private protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
         {
             _currentCommands.DispatchIndirect(indirectBuffer, offset);
         }
@@ -107,7 +107,7 @@ namespace Veldrid.OpenGL
             _currentCommands.End();
         }
 
-        protected override void SetFramebufferCore(Framebuffer fb)
+        private protected override void SetFramebufferCore(Framebuffer fb)
         {
             _currentCommands.SetFramebuffer(fb);
         }
@@ -122,12 +122,12 @@ namespace Veldrid.OpenGL
             _currentCommands.SetPipeline(pipeline);
         }
 
-        protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
+        private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
         {
             _currentCommands.SetGraphicsResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets);
         }
 
-        protected override void SetComputeResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
+        private protected override void SetComputeResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
         {
             _currentCommands.SetComputeResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets);
         }
@@ -157,7 +157,7 @@ namespace Veldrid.OpenGL
             _currentCommands.UpdateBuffer(buffer, bufferOffsetInBytes, source, sizeInBytes);
         }
 
-        protected override void CopyBufferCore(
+        private protected override void CopyBufferCore(
             DeviceBuffer source,
             uint sourceOffset,
             DeviceBuffer destination,
@@ -167,7 +167,7 @@ namespace Veldrid.OpenGL
             _currentCommands.CopyBuffer(source, sourceOffset, destination, destinationOffset, sizeInBytes);
         }
 
-        protected override void CopyTextureCore(
+        private protected override void CopyTextureCore(
             Texture source,
             uint srcX, uint srcY, uint srcZ,
             uint srcMipLevel,
