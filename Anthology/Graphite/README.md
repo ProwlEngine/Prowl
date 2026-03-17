@@ -8,29 +8,33 @@ Veldrid is a cross-platform, graphics API-agnostic rendering and compute library
 
 ## Status
 
-**Work in progress.** Vulkan, D3D11, OpenGL, and windowing backends are ported and validated.
+All backends ported, validated, and passing upstream test suite (1533 pass, 0 fail).
 
 | Backend | Status |
 |---------|--------|
-| Vulkan | Ported and validated |
-| Direct3D 11 | Ported and validated |
-| OpenGL | Ported and validated |
-| Metal | Removed (`GraphicsBackend.Metal` deleted, use Vulkan via MoltenVK on macOS) |
-| Windowing | Ported (Silk.NET.Windowing replaces SDL2) |
+| Vulkan | Ported and validated (485/499 tests pass, 14 skipped upstream bugs) |
+| Direct3D 11 | Ported and validated (485/499 tests pass, 14 skipped upstream bugs) |
+| OpenGL | Ported and validated (481/493 tests pass, 12 skipped upstream bugs) |
+| SPIRV | Ported to pure C# (82/82 tests pass) |
+| Metal | Removed (use Vulkan via MoltenVK on macOS) |
+| Windowing | SDL2 via `Silk.NET.SDL` (matching upstream's SDL2 approach) |
 
-All [samples](samples/) have been validated on Vulkan, D3D11, and OpenGL on Windows. macOS support (Vulkan via MoltenVK + OpenGL 4.1) is implemented but untested.
+All [samples](samples/) validated on Vulkan, D3D11, and OpenGL on Windows. macOS support (Vulkan via MoltenVK + OpenGL 4.1) is implemented but untested.
 
-## What's Different From Upstream Veldrid
+## What Changed
 
-| Area | Upstream | veldrid-silk |
-|------|----------|-------------|
+| Area | Upstream Veldrid | veldrid-silk |
+|------|-----------------|-------------|
 | Vulkan bindings | `Vk` 1.0.25 | `Silk.NET.Vulkan` 2.23.0 |
 | D3D11 bindings | `Vortice.Direct3D11` 2.4.2 | `Silk.NET.Direct3D11` 2.23.0 |
 | OpenGL bindings | Custom (`Veldrid.OpenGLBindings`) | `Silk.NET.OpenGL` 2.23.0 |
-| Metal backend | Native via `Veldrid.MetalBindings` | Removed (use Vulkan via MoltenVK) |
-| Windowing | SDL2 via `Veldrid.SDL2` | `Silk.NET.Windowing` 2.23.0 |
-| ImageSharp | 1.x | 3.x (1.x is broken on .NET 10) |
+| Metal backend | Custom (`Veldrid.MetalBindings`, 101 files) | Removed (use Vulkan via MoltenVK) |
+| Windowing | Custom SDL2 P/Invoke (`Veldrid.SDL2`) | `Silk.NET.SDL` 2.23.0 |
+| Shader cross-compilation | `Veldrid.SPIRV` NuGet + native `libveldrid-spirv` | Pure C# via `Silk.NET.SPIRV.Cross` + `Silk.NET.Shaderc` |
+| ImageSharp | 1.x | 3.x (1.x broken on .NET 10) |
 | Target framework | `netstandard2.0` | `net10.0` |
+
+Six different binding libraries replaced by a single ecosystem. Zero hand-written P/Invoke. Zero custom native binaries.
 
 ## Building
 
@@ -53,7 +57,25 @@ dotnet run --project samples/TexturedCube/Desktop/TexturedCube.Desktop.csproj
 dotnet run --project samples/NeoDemo/NeoDemo.csproj
 ```
 
+Set `VELDRID_BACKEND` to select a backend: `d3d11`, `vulkan`, `opengl`.
+
+```bash
+VELDRID_BACKEND=vulkan dotnet run --project samples/GettingStarted/GettingStarted.csproj
+```
+
 On Windows, samples default to D3D11. On other platforms, they default to Vulkan. See the [samples directory](samples/) for the full list.
+
+## Running Tests
+
+```bash
+# SPIRV cross-compilation tests (no GPU required)
+dotnet test tests/Veldrid.SPIRV.Tests/Veldrid.SPIRV.Tests.csproj
+
+# GPU tests (requires graphics hardware)
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:DefineConstants="TEST_D3D11"
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:DefineConstants="TEST_VULKAN"
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:DefineConstants="TEST_OPENGL"
+```
 
 ## Related Projects
 
