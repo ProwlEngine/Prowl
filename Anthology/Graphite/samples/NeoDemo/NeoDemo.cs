@@ -59,13 +59,21 @@ namespace Veldrid.NeoDemo
 #if DEBUG
             gdOptions.Debug = true;
 #endif
+            string backendEnv = Environment.GetEnvironmentVariable("VELDRID_BACKEND");
+            GraphicsBackend backend = string.IsNullOrEmpty(backendEnv)
+                ? VeldridStartup.GetPlatformDefaultBackend()
+                : backendEnv.ToLowerInvariant() switch
+                {
+                    "d3d11" or "direct3d11" => GraphicsBackend.Direct3D11,
+                    "vulkan" or "vk" => GraphicsBackend.Vulkan,
+                    "opengl" or "gl" => GraphicsBackend.OpenGL,
+                    "opengles" or "gles" => GraphicsBackend.OpenGLES,
+                    _ => throw new InvalidOperationException($"Unknown VELDRID_BACKEND: '{backendEnv}'")
+                };
             VeldridStartup.CreateWindowAndGraphicsDevice(
                 windowCI,
                 gdOptions,
-                 //VeldridStartup.GetPlatformDefaultBackend(),
-                 //GraphicsBackend.Vulkan,
-                //GraphicsBackend.OpenGL,
-                //GraphicsBackend.OpenGLES,
+                backend,
                 out _window,
                 out _gd);
             _window.Resized += () => _windowResized = true;

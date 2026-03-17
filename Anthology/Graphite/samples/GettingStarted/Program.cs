@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using Veldrid;
 using Veldrid.StartupUtilities;
@@ -50,15 +51,24 @@ void main()
                 WindowHeight = 540,
                 WindowTitle = "Veldrid Tutorial"
             };
-            VeldridWindow window = VeldridStartup.CreateWindow(ref windowCI);
-
             GraphicsDeviceOptions options = new GraphicsDeviceOptions
             {
                 PreferStandardClipSpaceYDirection = true,
                 PreferDepthRangeZeroToOne = true
             };
 
-            _graphicsDevice = VeldridStartup.CreateGraphicsDevice(window, options);
+            string backendEnv = Environment.GetEnvironmentVariable("VELDRID_BACKEND");
+            GraphicsBackend backend = string.IsNullOrEmpty(backendEnv)
+                ? VeldridStartup.GetPlatformDefaultBackend()
+                : backendEnv.ToLowerInvariant() switch
+                {
+                    "d3d11" or "direct3d11" => GraphicsBackend.Direct3D11,
+                    "vulkan" or "vk" => GraphicsBackend.Vulkan,
+                    "opengl" or "gl" => GraphicsBackend.OpenGL,
+                    "opengles" or "gles" => GraphicsBackend.OpenGLES,
+                    _ => throw new InvalidOperationException($"Unknown VELDRID_BACKEND: '{backendEnv}'")
+                };
+            VeldridStartup.CreateWindowAndGraphicsDevice(windowCI, options, backend, out VeldridWindow window, out _graphicsDevice);
             window.Title = $"{window.Title} ({_graphicsDevice.BackendType})";
 
             CreateResources();

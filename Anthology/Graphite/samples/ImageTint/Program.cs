@@ -42,6 +42,7 @@ namespace ImageTint
                     WindowInitialState = WindowState.Hidden,
                 },
                 new GraphicsDeviceOptions() { ResourceBindingModel = ResourceBindingModel.Improved, PreferStandardClipSpaceYDirection = true },
+                BackendHelper.GetPreferredBackend(),
                 out VeldridWindow window,
                 out GraphicsDevice gd);
 

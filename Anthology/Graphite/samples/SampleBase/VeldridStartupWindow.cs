@@ -8,10 +8,11 @@ namespace SampleBase
 {
     public class VeldridStartupWindow : ApplicationWindow
     {
-        private readonly VeldridWindow _window;
+        private VeldridWindow _window;
         private GraphicsDevice _gd;
         private DisposeCollectorResourceFactory _factory;
         private bool _windowResized = true;
+        private readonly WindowCreateInfo _wci;
 
         public event Action<float> Rendering;
         public event Action<GraphicsDevice, ResourceFactory, Swapchain> GraphicsDeviceCreated;
@@ -19,14 +20,14 @@ namespace SampleBase
         public event Action Resized;
         public event Action<KeyEvent> KeyPressed;
 
-        public uint Width => (uint)_window.Width;
-        public uint Height => (uint)_window.Height;
+        public uint Width => (uint)(_window?.Width ?? _wci.WindowWidth);
+        public uint Height => (uint)(_window?.Height ?? _wci.WindowHeight);
 
         public SamplePlatformType PlatformType => SamplePlatformType.Desktop;
 
         public VeldridStartupWindow(string title)
         {
-            WindowCreateInfo wci = new WindowCreateInfo
+            _wci = new WindowCreateInfo
             {
                 X = 100,
                 Y = 100,
@@ -34,12 +35,6 @@ namespace SampleBase
                 WindowHeight = 720,
                 WindowTitle = title,
             };
-            _window = VeldridStartup.CreateWindow(ref wci);
-            _window.Resized += () =>
-            {
-                _windowResized = true;
-            };
-            _window.KeyDown += OnKeyDown;
         }
 
         public void Run()
@@ -54,7 +49,10 @@ namespace SampleBase
 #if DEBUG
             options.Debug = true;
 #endif
-            _gd = VeldridStartup.CreateGraphicsDevice(_window, options);
+            GraphicsBackend backend = BackendHelper.GetPreferredBackend();
+            VeldridStartup.CreateWindowAndGraphicsDevice(_wci, options, backend, out _window, out _gd);
+            _window.Resized += () => { _windowResized = true; };
+            _window.KeyDown += OnKeyDown;
             _window.Title = $"{_window.Title} ({_gd.BackendType})";
             _factory = new DisposeCollectorResourceFactory(_gd.ResourceFactory);
             GraphicsDeviceCreated?.Invoke(_gd, _factory, _gd.MainSwapchain);
