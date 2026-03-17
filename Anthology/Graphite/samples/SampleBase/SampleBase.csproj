@@ -4,7 +4,7 @@
     <ProjectReference Include="..\..\src\Veldrid\Veldrid.csproj" />
     <ProjectReference Include="..\..\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj" />
     <ProjectReference Include="..\..\src\Veldrid.Utilities\Veldrid.Utilities.csproj" />
-    <PackageReference Include="Veldrid.SPIRV" Version="$(VeldridSpirvVersion)" />
+    <ProjectReference Include="..\..\src\Veldrid.SPIRV\Veldrid.SPIRV.csproj" />
     <ProjectReference Include="..\AssetPrimitives\AssetPrimitives.csproj" />
   </ItemGroup>
 

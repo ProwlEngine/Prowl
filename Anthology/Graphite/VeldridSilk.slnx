@@ -26,8 +26,10 @@
     <Project Path="src/Veldrid.StartupUtilities/Veldrid.StartupUtilities.csproj" />
     <Project Path="src/Veldrid.Utilities/Veldrid.Utilities.csproj" />
     <Project Path="src/Veldrid/Veldrid.csproj" />
+    <Project Path="src/Veldrid.SPIRV/Veldrid.SPIRV.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Veldrid.Tests/Veldrid.Tests.csproj" />
+    <Project Path="tests/Veldrid.SPIRV.Tests/Veldrid.SPIRV.Tests.csproj" />
   </Folder>
 </Solution>
