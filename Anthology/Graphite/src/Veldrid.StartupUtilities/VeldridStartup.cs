@@ -40,7 +40,7 @@ namespace Veldrid.StartupUtilities
             }
 #endif
 
-            window = new VeldridWindow(windowCI, api);
+            window = new VeldridWindow(windowCI, api, deviceOptions);
             gd = CreateGraphicsDevice(window, deviceOptions, preferredBackend);
         }
 
@@ -48,7 +48,7 @@ namespace Veldrid.StartupUtilities
 
         public static VeldridWindow CreateWindow(ref WindowCreateInfo windowCI)
         {
-            return new VeldridWindow(windowCI);
+            return new VeldridWindow(windowCI, default);
         }
 
         public static GraphicsDevice CreateGraphicsDevice(VeldridWindow window)
@@ -195,13 +195,6 @@ namespace Veldrid.StartupUtilities
 
             glContext.MakeCurrent();
 
-            // TODO: This bridge has known limitations for multi-context GL scenarios.
-            // - MakeCurrent ignores the ctx parameter (Veldrid's GL backend creates secondary contexts)
-            // - GetCurrentContext always returns the same handle instead of querying the thread's current context
-            // - ClearCurrentContext semantics may not match (glContext.Clear() vs unbinding from thread)
-            // - deleteContext is a no-op (context lifetime managed by Silk.NET window)
-            // These need revisiting when the OpenGL backend is actually ported. The Silk.NET IGLContext
-            // abstraction doesn't map 1:1 to the raw handle/delegate model OpenGLPlatformInfo expects.
             OpenGL.OpenGLPlatformInfo platformInfo = new OpenGL.OpenGLPlatformInfo(
                 glContext.Handle,
                 name => glContext.GetProcAddress(name),
@@ -219,8 +212,6 @@ namespace Veldrid.StartupUtilities
                 (uint)window.Height);
         }
 
-        // TODO: Forward depth/stencil/sRGB hints from GraphicsDeviceOptions
-        // to WindowOptions.PreferredDepthBufferBits etc.
         private static GraphicsAPI GetOpenGLGraphicsAPI(GraphicsDeviceOptions options, GraphicsBackend backend)
         {
             bool gles = backend == GraphicsBackend.OpenGLES;

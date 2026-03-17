@@ -372,30 +372,37 @@ namespace Veldrid.StartupUtilities
         internal IWindow SilkWindow => _window;
 
         /// <summary>
-        /// Creates a new window. Probes for the highest available OpenGL version so that
-        /// the window can be used with any backend. If no GL version is available (e.g.
-        /// headless GPU, software renderer), falls back to no GL context - D3D11/Vulkan
-        /// still work, but OpenGL requires <see cref="VeldridStartup.CreateWindowAndGraphicsDevice"/>.
+        /// Creates a new window. Probes for the highest available OpenGL version and
+        /// forwards framebuffer hints (depth, stencil, sRGB) from <paramref name="options"/>
+        /// so the window can be used with any backend including OpenGL.
         /// </summary>
-        public VeldridWindow(WindowCreateInfo wci)
-            : this(wci, GetDefaultGraphicsAPI())
+        /// <param name="wci">Window creation parameters (position, size, title, state).</param>
+        /// <param name="options">Graphics device options. Depth/stencil/sRGB/debug settings
+        /// are applied to the GL context at window creation time (GLFW requires this upfront,
+        /// unlike SDL2 which could set them later).</param>
+        public VeldridWindow(WindowCreateInfo wci, GraphicsDeviceOptions options)
+            : this(wci, GetGraphicsAPI(options), options)
         {
         }
 
-        private static GraphicsAPI GetDefaultGraphicsAPI()
+        private static GraphicsAPI GetGraphicsAPI(GraphicsDeviceOptions options)
         {
 #if !EXCLUDE_OPENGL_BACKEND
-            // GLFW ties GL context to window creation (unlike SDL2 which decoupled them).
-            // Probe for the best GL version so OpenGL works when creating window/device separately.
-            // If GL is completely unavailable, fall back to no context so D3D11/Vulkan still work.
             if (OpenGLVersionProbe.TryGetMaxVersion(gles: false, out var version))
-                return new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(version.Major, version.Minor));
+            {
+                ContextFlags flags = options.Debug
+                    ? ContextFlags.Debug | ContextFlags.ForwardCompatible
+                    : ContextFlags.ForwardCompatible;
+                return new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, flags, new APIVersion(version.Major, version.Minor));
+            }
 #endif
             return GraphicsAPI.None;
         }
 
-        internal VeldridWindow(WindowCreateInfo wci, GraphicsAPI api)
+        internal VeldridWindow(WindowCreateInfo wci, GraphicsAPI api, GraphicsDeviceOptions deviceOptions = default)
         {
+            GetDepthStencilBits(deviceOptions, out int? depthBits, out int? stencilBits);
+
             var options = new WindowOptions
             {
                 Title = wci.WindowTitle ?? "Veldrid",
@@ -409,7 +416,13 @@ namespace Veldrid.StartupUtilities
                 WindowState = MapWindowStateToSilk(wci.WindowInitialState),
                 ShouldSwapAutomatically = false,
                 VSync = false,
+                PreferredDepthBufferBits = depthBits,
+                PreferredStencilBufferBits = stencilBits,
             };
+
+            GlfwWindowing.Use();
+            var glfw = Silk.NET.GLFW.GlfwProvider.GLFW.Value;
+            glfw.WindowHint(Silk.NET.GLFW.WindowHintBool.SrgbCapable, deviceOptions.SwapchainSrgbFormat);
 
             _window = Window.Create(options);
 
@@ -868,6 +881,25 @@ namespace Veldrid.StartupUtilities
             SilkKey.Menu => Key.Menu,
             _ => Key.Unknown,
         };
+
+        private static void GetDepthStencilBits(GraphicsDeviceOptions options, out int? depthBits, out int? stencilBits)
+        {
+            if (!options.SwapchainDepthFormat.HasValue)
+            {
+                depthBits = null;
+                stencilBits = null;
+                return;
+            }
+
+            (depthBits, stencilBits) = options.SwapchainDepthFormat.Value switch
+            {
+                PixelFormat.R16_UNorm => ((int?)16, (int?)0),
+                PixelFormat.D24_UNorm_S8_UInt => (24, 8),
+                PixelFormat.R32_Float => (32, 0),
+                PixelFormat.D32_Float_S8_UInt => (32, 8),
+                _ => throw new VeldridException("Invalid depth format: " + options.SwapchainDepthFormat.Value),
+            };
+        }
 
         /// <summary>
         /// Disposes the window and its resources. Fires the Closed event.
