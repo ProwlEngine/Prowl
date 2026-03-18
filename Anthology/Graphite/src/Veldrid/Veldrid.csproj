@@ -24,6 +24,9 @@
 
     <!-- Silk.NET Core (for SilkMarshal, ComPtr, etc.) -->
     <PackageReference Include="Silk.NET.Core" Version="$(SilkNetVersion)" />
+
+    <!-- MoltenVK for macOS (provides Vulkan on Apple platforms via Metal translation) -->
+    <PackageReference Include="Silk.NET.MoltenVK.Native" Version="$(SilkNetVersion)" Condition="$([MSBuild]::IsOSPlatform('OSX')) AND '$(ExcludeVulkan)' != 'true'" />
   </ItemGroup>
 
   <!-- Exclude backends by compile removal -->
