@@ -576,6 +576,15 @@ namespace Veldrid.Sdl2
         {
             Vector2 mousePos = new Vector2(mouseMotionEvent.X, mouseMotionEvent.Y);
             Vector2 delta = new Vector2(mouseMotionEvent.Xrel, mouseMotionEvent.Yrel);
+
+            // Skip spurious zero-delta motion events (SDL 2.24+ on Windows sends these
+            // continuously via raw input even when the mouse is stationary)
+            if (mouseMotionEvent.Xrel == 0 && mouseMotionEvent.Yrel == 0
+                && mouseMotionEvent.X == _currentMouseX && mouseMotionEvent.Y == _currentMouseY)
+            {
+                return;
+            }
+
             _currentMouseX = (int)mousePos.X;
             _currentMouseY = (int)mousePos.Y;
             _privateSnapshot.MousePosition = mousePos;
