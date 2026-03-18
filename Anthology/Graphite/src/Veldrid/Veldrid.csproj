@@ -18,6 +18,9 @@
     <PackageReference Include="Silk.NET.DXGI" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
     <PackageReference Include="Silk.NET.Direct3D.Compilers" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
 
+    <!-- DXVK for non-Windows D3D11 (translates D3D11 to Vulkan) -->
+    <PackageReference Include="Silk.NET.DXVK.Native" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
+
     <!-- Silk.NET OpenGL -->
     <PackageReference Include="Silk.NET.OpenGL" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
     <PackageReference Include="Silk.NET.OpenGLES" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
@@ -26,7 +29,7 @@
     <PackageReference Include="Silk.NET.Core" Version="$(SilkNetVersion)" />
 
     <!-- MoltenVK for macOS (provides Vulkan on Apple platforms via Metal translation) -->
-    <PackageReference Include="Silk.NET.MoltenVK.Native" Version="$(SilkNetVersion)" Condition="$([MSBuild]::IsOSPlatform('OSX')) AND '$(ExcludeVulkan)' != 'true'" />
+    <PackageReference Include="Silk.NET.MoltenVK.Native" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
   </ItemGroup>
 
   <!-- Exclude backends by compile removal -->
