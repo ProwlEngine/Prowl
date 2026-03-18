@@ -11,6 +11,7 @@ namespace Veldrid.SPIRV
     public static unsafe class SpirvCompilation
     {
         private static readonly Shaderc s_shaderc = Shaderc.GetApi();
+        private static readonly unsafe Silk.NET.Shaderc.Compiler* s_compiler = s_shaderc.CompilerInitialize();
 
         /// <summary>
         /// Cross-compiles the given vertex-fragment pair into some target language.
@@ -84,15 +85,11 @@ namespace Veldrid.SPIRV
             GlslCompileOptions options)
         {
             var shaderc = s_shaderc;
-            Silk.NET.Shaderc.Compiler* compiler = null;
+            var compiler = s_compiler;
             CompileOptions* compileOptions = null;
             Silk.NET.Shaderc.CompilationResult* result = null;
             try
             {
-                compiler = shaderc.CompilerInitialize();
-                if (compiler == null)
-                    throw new SpirvCompilationException("Failed to initialize shaderc compiler.");
-
                 compileOptions = shaderc.CompileOptionsInitialize();
                 if (compileOptions == null)
                     throw new SpirvCompilationException("Failed to initialize compile options.");
@@ -173,7 +170,6 @@ namespace Veldrid.SPIRV
             {
                 if (result != null) shaderc.ResultRelease(result);
                 if (compileOptions != null) shaderc.CompileOptionsRelease(compileOptions);
-                if (compiler != null) shaderc.CompilerRelease(compiler);
             }
         }
 
