@@ -51,6 +51,7 @@ dlldata.c
 *.ilk
 *.meta
 *.obj
+!samples/**/Assets/**/*.obj
 *.pch
 *.pdb
 *.pgc
