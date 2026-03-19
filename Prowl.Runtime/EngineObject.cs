@@ -19,6 +19,12 @@ public abstract class EngineObject : IDisposable
     // Asset path if we have one
     public string AssetPath = string.Empty;
 
+    /// <summary>
+    /// A unique asset identifier. When set, serialization will store only a reference
+    /// and deserialization will resolve the object from the <see cref="AssetDatabase"/>.
+    /// </summary>
+    public Guid AssetID = Guid.Empty;
+
     public string Name;
 
     public bool IsDisposed { get; private set; }
@@ -62,12 +68,16 @@ public abstract class EngineObject : IDisposable
     {
         compound.Add("Name", new(Name));
         compound.Add("AssetPath", new(AssetPath));
+        if (AssetID != Guid.Empty)
+            compound.Add("AssetID", new(AssetID.ToString()));
     }
 
     protected void DeserializeHeader(EchoObject value)
     {
         Name = value.Get("Name")?.StringValue ?? string.Empty;
         AssetPath = value.Get("AssetPath")?.StringValue ?? string.Empty;
+        if (Guid.TryParse(value.Get("AssetID")?.StringValue, out Guid assetId))
+            AssetID = assetId;
     }
 }
 
