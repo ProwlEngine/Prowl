@@ -104,6 +104,17 @@ public static class Serializer
 
         var actualType = value.GetType();
 
+        // Check for serialization override (e.g. external asset references)
+        if (context.OnSerialize != null)
+        {
+            var overrideResult = context.OnSerialize(value, context);
+            if (overrideResult != null)
+            {
+                bool needsType = ShouldPreserveType(targetType, actualType, context);
+                return WrapWithTypeEnvelope(overrideResult, needsType ? actualType : null, context);
+            }
+        }
+
         // STEP 1: Determine if we need type preservation (centralized logic)
         bool needsTypeInfo = ShouldPreserveType(targetType, actualType, context);
 
@@ -153,6 +164,13 @@ public static class Serializer
 
         // STEP 2: Determine actual type to deserialize to
         var actualType = envelope.ActualType ?? targetType;
+
+        // Check for deserialization override (e.g. external asset references)
+        if (context.OnDeserialize != null)
+        {
+            var (handled, result) = context.OnDeserialize(envelope.Data, actualType, context);
+            if (handled) return result;
+        }
 
         // STEP 3: Get formatter and deserialize data (no type logic in formatter)
         var format = GetFormatForType(actualType);
