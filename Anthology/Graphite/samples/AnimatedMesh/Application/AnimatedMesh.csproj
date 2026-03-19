@@ -15,7 +15,6 @@
     <ProjectReference Include="..\..\SampleBase\SampleBase.csproj" />
     <ProjectReference Include="..\..\..\src\Veldrid.SPIRV\Veldrid.SPIRV.csproj" />
     <PackageReference Include="AssimpNet" Version="$(AssimpNetVersion)" />
-    <PackageReference Include="Ultz.Native.Assimp" Version="6.0.2" />
   </ItemGroup>
 
 </Project>
