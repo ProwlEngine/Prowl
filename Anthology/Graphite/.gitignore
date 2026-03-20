@@ -256,9 +256,13 @@ Session.vim
 *.opendb
 
 #VS Code stuff
-
 .vscode
 launchSettings.json
 
 # Generated shaders
 Shaders.Generated
+
+# Rider
+.idea/
+*.sln.iml
+
