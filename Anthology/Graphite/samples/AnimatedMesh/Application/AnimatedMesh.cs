@@ -185,12 +185,13 @@ namespace AnimatedMesh
 
         private void UpdateAnimation(float deltaSeconds)
         {
-            double totalSeconds = _animation.DurationInTicks * _animation.TicksPerSecond;
-            double newSeconds = _previousAnimSeconds + (deltaSeconds * _animationTimeScale);
-            newSeconds = newSeconds % totalSeconds;
-            _previousAnimSeconds = newSeconds;
+            double tps = _animation.TicksPerSecond != 0 ? _animation.TicksPerSecond : 25;
+            double durationTicks = _animation.DurationInTicks;
+            double newTicks = _previousAnimSeconds + (deltaSeconds * _animationTimeScale * tps);
+            newTicks = newTicks % durationTicks;
+            _previousAnimSeconds = newTicks;
 
-            double ticks = newSeconds * _animation.TicksPerSecond;
+            double ticks = newTicks;
 
             UpdateChannel(ticks, _scene.RootNode, aiMatrix4x4.Identity);
 

@@ -14,7 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\SampleBase\SampleBase.csproj" />
     <ProjectReference Include="..\..\..\src\Veldrid.SPIRV\Veldrid.SPIRV.csproj" />
-    <PackageReference Include="AssimpNet" Version="$(AssimpNetVersion)" />
+    <PackageReference Include="StirlingLabs.Assimp.Net" Version="23.4.1" />
   </ItemGroup>
 
 </Project>
