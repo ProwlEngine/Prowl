@@ -551,7 +551,16 @@ namespace Veldrid.OpenGL
 
         private protected override void WaitForIdleCore()
         {
-            _executionThread.WaitForIdle();
+            try
+            {
+                _executionThread.WaitForIdle();
+            }
+            catch (VeldridException)
+            {
+                // The GL context may already be destroyed by SDL_DestroyWindow.
+                // Silk.NET throws SymbolLoadingException for unresolved GL functions
+                // on a dead context. Safe to ignore - the OS reclaims all GL objects.
+            }
         }
 
         public override TextureSampleCount GetSampleCountLimit(PixelFormat format, bool depthFormat)
@@ -785,7 +794,19 @@ namespace Veldrid.OpenGL
         {
             while (_resourcesToDispose.TryDequeue(out OpenGLDeferredResource resource))
             {
-                resource.DestroyGLResources();
+                try
+                {
+                    resource.DestroyGLResources();
+                }
+                catch (Exception)
+                {
+                    // After SDL_DestroyWindow, the GL context is gone and Silk.NET's
+                    // lazy symbol loader will throw SymbolLoadingException for any GL
+                    // function not yet resolved. Upstream Veldrid doesn't hit this
+                    // because its function pointers are eagerly loaded and silently
+                    // no-op on a dead context. Skip the resource - the OS reclaims
+                    // all GL objects when the process exits.
+                }
             }
         }
 
@@ -819,7 +840,16 @@ namespace Veldrid.OpenGL
 
         protected override void PlatformDispose()
         {
-            FlushAndFinish();
+            try
+            {
+                FlushAndFinish();
+            }
+            catch (VeldridException)
+            {
+                // The GL context may already be destroyed by SDL_DestroyWindow.
+                // Silk.NET throws SymbolLoadingException for unresolved GL functions
+                // on a dead context. Safe to ignore during shutdown.
+            }
             _executionThread.Terminate();
         }
 
@@ -990,14 +1020,22 @@ namespace Veldrid.OpenGL
                         break;
                         case WorkItemType.WaitForIdle:
                         {
-                            _gd.FlushDisposables();
-                            bool isFullFlush = workItem.UInt0 != 0;
-                            if (isFullFlush)
+                            // Set() must be in finally so the main thread never deadlocks
+                            // if FlushDisposables or glFinish throws on a destroyed context.
+                            try
                             {
-                                _gd.GL.Flush();
-                                _gd.GL.Finish();
+                                _gd.FlushDisposables();
+                                bool isFullFlush = workItem.UInt0 != 0;
+                                if (isFullFlush)
+                                {
+                                    _gd.GL.Flush();
+                                    _gd.GL.Finish();
+                                }
                             }
-                            ((ManualResetEventSlim)workItem.Object0).Set();
+                            finally
+                            {
+                                ((ManualResetEventSlim)workItem.Object0).Set();
+                            }
                         }
                         break;
                         case WorkItemType.InitializeResource:
