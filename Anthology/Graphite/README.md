@@ -8,18 +8,22 @@ Veldrid is a cross-platform, graphics API-agnostic rendering and compute library
 
 ## Status
 
-All backends ported, validated, and passing upstream test suite (1533 pass, 0 fail).
+All backends ported, validated, and passing upstream test suite.
 
 | Backend | Status |
 |---------|--------|
-| Vulkan | Ported and validated (485/499 tests pass, 14 skipped upstream bugs) |
-| Direct3D 11 | Ported and validated (485/499 tests pass, 14 skipped upstream bugs) |
-| OpenGL | Ported and validated (481/493 tests pass, 12 skipped upstream bugs) |
+| Vulkan | Ported and validated (484/499 tests pass, 15 skipped upstream bugs) |
+| Direct3D 11 | Ported and validated (484/499 tests pass, 15 skipped upstream bugs) |
+| OpenGL | Ported and validated (484/499 tests pass, 15 skipped upstream bugs) |
 | SPIRV | Ported to pure C# (82/82 tests pass) |
 | Metal | Removed (use Vulkan via MoltenVK on macOS) |
 | Windowing | SDL2 via `Silk.NET.SDL` (matching upstream's SDL2 approach) |
 
-All [samples](samples/) validated on Vulkan, D3D11, and OpenGL on Windows. macOS support (Vulkan via MoltenVK + OpenGL 4.1) is implemented but untested.
+| Platform | Status |
+|----------|--------|
+| Windows | All backends working. All samples validated. Full test suite passing. |
+| macOS | Vulkan via MoltenVK + OpenGL 4.1. Basic samples work. Known issues with window resize/close and compute shaders (GL 4.1 limitation). |
+| Linux | Untested. Vulkan and OpenGL expected to work. DXVK (D3D11 via Vulkan) implemented but untested. |
 
 ## What Changed
 

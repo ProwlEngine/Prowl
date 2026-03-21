@@ -23,7 +23,7 @@
 
     <!-- Silk.NET OpenGL -->
     <PackageReference Include="Silk.NET.OpenGL" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
-    <PackageReference Include="Silk.NET.OpenGLES" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
+    <PackageReference Include="Silk.NET.OpenGL.Extensions.EXT" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
 
     <!-- Silk.NET Core (for SilkMarshal, ComPtr, etc.) -->
     <PackageReference Include="Silk.NET.Core" Version="$(SilkNetVersion)" />

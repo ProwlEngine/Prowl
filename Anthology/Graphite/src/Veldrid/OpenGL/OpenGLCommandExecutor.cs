@@ -748,8 +748,16 @@ namespace Veldrid.OpenGL
                 _gl.PushDebugGroup(DebugSource.DebugSourceApplication, 0, (uint)byteCount, utf8Ptr);
                 CheckLastError();
             }
-            // EXT_DebugMarker (glPushGroupMarker) is a GLES extension not available in Silk.NET.OpenGL.
-            // The KHR_Debug path above covers desktop GL.
+            else if (_extensions.EXT_DebugMarker)
+            {
+                int byteCount = Encoding.UTF8.GetByteCount(name);
+                byte* utf8Ptr = stackalloc byte[byteCount];
+                fixed (char* namePtr = name)
+                {
+                    Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+                }
+                _gd._extDebugMarker.PushGroupMarker((uint)byteCount, utf8Ptr);
+            }
         }
 
         public void PopDebugGroup()
@@ -759,7 +767,10 @@ namespace Veldrid.OpenGL
                 _gl.PopDebugGroup();
                 CheckLastError();
             }
-            // EXT_DebugMarker (glPopGroupMarker) is a GLES extension not available in Silk.NET.OpenGL.
+            else if (_extensions.EXT_DebugMarker)
+            {
+                _gd._extDebugMarker.PopGroupMarker();
+            }
         }
 
         public void InsertDebugMarker(string name)
@@ -782,7 +793,16 @@ namespace Veldrid.OpenGL
                     utf8Ptr);
                 CheckLastError();
             }
-            // EXT_DebugMarker (glInsertEventMarker) is a GLES extension not available in Silk.NET.OpenGL.
+            else if (_extensions.EXT_DebugMarker)
+            {
+                int byteCount = Encoding.UTF8.GetByteCount(name);
+                byte* utf8Ptr = stackalloc byte[byteCount];
+                fixed (char* namePtr = name)
+                {
+                    Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+                }
+                _gd._extDebugMarker.InsertEventMarker((uint)byteCount, utf8Ptr);
+            }
         }
 
         private void ActivateComputePipeline()

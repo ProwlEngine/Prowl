@@ -1,6 +1,7 @@
 ﻿using static Veldrid.OpenGL.OpenGLUtil;
 using System;
 using Silk.NET.OpenGL;
+using Silk.NET.OpenGL.Extensions.EXT;
 using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
 using System.Collections.Concurrent;
@@ -40,26 +41,26 @@ namespace Veldrid.OpenGL
         private OpenGLExtensions _extensions;
         private bool _isDepthRangeZeroToOne;
 
-        // GLES has glClearDepthf/glDepthRangef instead of glClearDepth/glDepthRange.
-        // Silk.NET.OpenGL only exposes the desktop GL variants, so for GLES we resolve
-        // the function pointers manually - matching upstream's glClearDepth_Compat pattern.
-        private delegate* unmanaged[Cdecl]<float, void> _glClearDepthf;
-        private delegate* unmanaged[Cdecl]<float, float, void> _glDepthRangef;
+        // EXT_debug_marker (GLES extension for GPU profiling tools like Xcode GPU debugger).
+        internal ExtDebugMarker _extDebugMarker;
 
+        // Silk.NET maps GL.ClearDepth(float) to glClearDepthf (GL 4.1+ / GLES) and
+        // GL.ClearDepth(double) to glClearDepth (desktop GL). Same for DepthRange.
+        // Desktop GL below 4.1 doesn't have glClearDepthf, so we must use the double variant there.
         internal void ClearDepthCompat(float depth)
         {
             if (_backendType == GraphicsBackend.OpenGLES)
-                _glClearDepthf(depth);
+                GL.ClearDepth(depth);         // float overload -> glClearDepthf
             else
-                GL.ClearDepth(depth);
+                GL.ClearDepth((double)depth); // double overload -> glClearDepth
         }
 
         internal void DepthRangeCompat(float near, float far)
         {
             if (_backendType == GraphicsBackend.OpenGLES)
-                _glDepthRangef(near, far);
+                GL.DepthRange(near, far);         // float overload -> glDepthRangef
             else
-                GL.DepthRange(near, far);
+                GL.DepthRange((double)near, (double)far); // double overload -> glDepthRange
         }
         private BackendInfoOpenGL _openglInfo;
 
@@ -166,11 +167,8 @@ namespace Veldrid.OpenGL
             _deviceName = GL.GetStringS(StringName.Renderer);
             _backendType = _version.StartsWith("OpenGL ES") ? GraphicsBackend.OpenGLES : GraphicsBackend.OpenGL;
 
-            if (_backendType == GraphicsBackend.OpenGLES)
-            {
-                _glClearDepthf = (delegate* unmanaged[Cdecl]<float, void>)platformInfo.GetProcAddress("glClearDepthf");
-                _glDepthRangef = (delegate* unmanaged[Cdecl]<float, float, void>)platformInfo.GetProcAddress("glDepthRangef");
-            }
+            // ClearDepthf/DepthRangef are available via GL.ClearDepth(float)/GL.DepthRange(float, float)
+            // (core in GL 4.1+ from ARB_ES2_compatibility, and always available in GLES).
 
             int majorVersion, minorVersion;
             GL.GetInteger(GetPName.MajorVersion, out majorVersion);
@@ -204,6 +202,11 @@ namespace Veldrid.OpenGL
 
             _extensions = new OpenGLExtensions(extensions, _backendType, majorVersion, minorVersion);
             OpenGLUtil.HasGlObjectLabel = _extensions.KHR_Debug;
+
+            if (_extensions.EXT_DebugMarker)
+            {
+                GL.TryGetExtension(out _extDebugMarker);
+            }
 
             bool drawIndirect = _extensions.DrawIndirect || _extensions.MultiDrawIndirect;
             _features = new GraphicsDeviceFeatures(
