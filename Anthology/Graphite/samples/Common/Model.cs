@@ -1,4 +1,4 @@
-using Assimp;
+using Silk.NET.Assimp;
 using System;
 using System.IO;
 using System.Numerics;
@@ -6,11 +6,13 @@ using Veldrid;
 
 namespace Common
 {
-    public class Model
+    public unsafe class Model
     {
-        private const PostProcessSteps DefaultPostProcessSteps =
-            PostProcessSteps.FlipWindingOrder | PostProcessSteps.Triangulate | PostProcessSteps.PreTransformVertices
-            | PostProcessSteps.CalculateTangentSpace | PostProcessSteps.GenerateSmoothNormals;
+        private const uint DefaultPostProcessSteps =
+            (uint)(PostProcessSteps.FlipWindingOrder | PostProcessSteps.Triangulate | PostProcessSteps.PreTransformVertices
+            | PostProcessSteps.CalculateTangentSpace | PostProcessSteps.GenerateSmoothNormals);
+
+        private static readonly Assimp _assimp = Assimp.GetApi();
 
         public DeviceBuffer VertexBuffer { get; private set; }
         public DeviceBuffer IndexBuffer { get; private set; }
@@ -24,9 +26,9 @@ namespace Common
             string filename,
             VertexElementSemantic[] elementSemantics,
             ModelCreateInfo? createInfo,
-            PostProcessSteps flags = DefaultPostProcessSteps)
+            uint flags = DefaultPostProcessSteps)
         {
-            using (FileStream fs = File.OpenRead(filename))
+            using (FileStream fs = System.IO.File.OpenRead(filename))
             {
                 string extension = Path.GetExtension(filename);
                 Init(gd, factory, fs, extension, elementSemantics, createInfo, flags);
@@ -40,7 +42,7 @@ namespace Common
             string extension,
             VertexElementSemantic[] elementSemantics,
             ModelCreateInfo? createInfo,
-            PostProcessSteps flags = DefaultPostProcessSteps)
+            uint flags = DefaultPostProcessSteps)
         {
             Init(gd, factory, stream, extension, elementSemantics, createInfo, flags);
         }
@@ -52,14 +54,28 @@ namespace Common
             string extension,
             VertexElementSemantic[] elementSemantics,
             ModelCreateInfo? createInfo,
-            PostProcessSteps flags = DefaultPostProcessSteps)
+            uint flags = DefaultPostProcessSteps)
         {
-            // Load file
-            AssimpContext assimpContext = new AssimpContext();
-            Scene pScene = assimpContext.ImportFileFromStream(stream, DefaultPostProcessSteps, extension);
+            byte[] modelBytes;
+            using (MemoryStream ms = new MemoryStream())
+            {
+                stream.CopyTo(ms);
+                modelBytes = ms.ToArray();
+            }
+
+            Scene* pScene;
+            fixed (byte* pBuffer = modelBytes)
+            {
+                pScene = _assimp.ImportFileFromMemory(pBuffer, (uint)modelBytes.Length, flags, (byte*)null);
+            }
+
+            if (pScene == null)
+            {
+                throw new InvalidOperationException("Failed to load model: " + _assimp.GetErrorStringS());
+            }
 
             parts.Clear();
-            parts.Count = (uint)pScene.Meshes.Count;
+            parts.Count = pScene->MNumMeshes;
 
             Vector3 scale = new Vector3(1.0f);
             Vector2 uvscale = new Vector2(1.0f);
@@ -77,28 +93,39 @@ namespace Common
             VertexCount = 0;
             IndexCount = 0;
 
-            // Load meshes
-            for (int i = 0; i < pScene.Meshes.Count; i++)
+            for (uint i = 0; i < pScene->MNumMeshes; i++)
             {
-                var paiMesh = pScene.Meshes[i];
+                var paiMesh = pScene->MMeshes[i];
 
                 parts[i] = new ModelPart();
                 parts[i].vertexBase = VertexCount;
                 parts[i].indexBase = IndexCount;
 
-                VertexCount += (uint)paiMesh.VertexCount;
+                VertexCount += paiMesh->MNumVertices;
 
-                var pColor = pScene.Materials[paiMesh.MaterialIndex].ColorDiffuse;
+                var pMaterial = pScene->MMaterials[paiMesh->MMaterialIndex];
+                Vector4 diffuseColor = Vector4.One;
+                _assimp.GetMaterialColor(pMaterial, Assimp.MaterialColorDiffuseBase, 0, 0, ref diffuseColor);
 
-                Vector3D Zero3D = new Vector3D(0.0f, 0.0f, 0.0f);
+                Vector3 Zero3D = new Vector3(0.0f, 0.0f, 0.0f);
 
-                for (int j = 0; j < paiMesh.VertexCount; j++)
+                // Find the first non-null UV channel (Assimp 6.x preserves COLLADA set= index)
+                Vector3* texCoordPtr = null;
+                for (int ch = 0; ch < 8; ch++)
                 {
-                    Vector3D pPos = paiMesh.Vertices[j];
-                    Vector3D pNormal = paiMesh.Normals[j];
-                    Vector3D pTexCoord = paiMesh.HasTextureCoords(0) ? paiMesh.TextureCoordinateChannels[0][j] : Zero3D;
-                    Vector3D pTangent = paiMesh.HasTangentBasis ? paiMesh.Tangents[j] : Zero3D;
-                    Vector3D pBiTangent = paiMesh.HasTangentBasis ? paiMesh.BiTangents[j] : Zero3D;
+                    Vector3* tc = paiMesh->MTextureCoords[ch];
+                    if (tc != null) { texCoordPtr = tc; break; }
+                }
+                bool hasTexCoords = texCoordPtr != null;
+                bool hasTangents = paiMesh->MTangents != null;
+
+                for (uint j = 0; j < paiMesh->MNumVertices; j++)
+                {
+                    Vector3 pPos = paiMesh->MVertices[j];
+                    Vector3 pNormal = paiMesh->MNormals[j];
+                    Vector3 pTexCoord = hasTexCoords ? texCoordPtr[j] : Zero3D;
+                    Vector3 pTangent = hasTangents ? paiMesh->MTangents[j] : Zero3D;
+                    Vector3 pBiTangent = hasTangents ? paiMesh->MBitangents[j] : Zero3D;
 
                     foreach (VertexElementSemantic component in elementSemantics)
                     {
@@ -119,9 +146,9 @@ namespace Common
                                 vertices.Add(pTexCoord.Y * uvscale.Y);
                                 break;
                             case VertexElementSemantic.Color:
-                                vertices.Add(pColor.R);
-                                vertices.Add(pColor.G);
-                                vertices.Add(pColor.B);
+                                vertices.Add(diffuseColor.X);
+                                vertices.Add(diffuseColor.Y);
+                                vertices.Add(diffuseColor.Z);
                                 break;
                             default: throw new System.NotImplementedException();
                         };
@@ -138,22 +165,23 @@ namespace Common
 
                 dim.Size = dim.Max - dim.Min;
 
-                parts[i].vertexCount = (uint)paiMesh.VertexCount;
+                parts[i].vertexCount = paiMesh->MNumVertices;
 
                 uint indexBase = indices.Count;
-                for (uint j = 0; j < paiMesh.FaceCount; j++)
+                for (uint j = 0; j < paiMesh->MNumFaces; j++)
                 {
-                    Face Face = paiMesh.Faces[(int)j];
-                    if (Face.IndexCount != 3)
+                    Face face = paiMesh->MFaces[j];
+                    if (face.MNumIndices != 3)
                         continue;
-                    indices.Add(indexBase + (uint)Face.Indices[0]);
-                    indices.Add(indexBase + (uint)Face.Indices[1]);
-                    indices.Add(indexBase + (uint)Face.Indices[2]);
+                    indices.Add(indexBase + face.MIndices[0]);
+                    indices.Add(indexBase + face.MIndices[1]);
+                    indices.Add(indexBase + face.MIndices[2]);
                     parts[i].indexCount += 3;
                     IndexCount += 3;
                 }
             }
 
+            _assimp.ReleaseImport(pScene);
 
             uint vBufferSize = (vertices.Count) * sizeof(float);
             uint iBufferSize = (indices.Count) * sizeof(uint);

@@ -1,5 +1,5 @@
-﻿using AssetPrimitives;
-using Assimp;
+using AssetPrimitives;
+using Silk.NET.Assimp;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,30 +8,51 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using Veldrid;
-using aiMatrix4x4 = Assimp.Matrix4x4;
+
+using Mesh = Silk.NET.Assimp.Mesh;
+using Texture = Veldrid.Texture;
 
 namespace AssetProcessor
 {
     public class AssimpProcessor : BinaryAssetProcessor<ProcessedModel>
     {
+        private static readonly Assimp _assimp = Assimp.GetApi();
+
         public unsafe override ProcessedModel ProcessT(Stream stream, string extension)
         {
-            AssimpContext ac = new AssimpContext();
-            Scene scene = ac.ImportFileFromStream(
-                stream, 
-                PostProcessSteps.FlipWindingOrder | PostProcessSteps.GenerateNormals | PostProcessSteps.FlipUVs,
-                extension);
-            aiMatrix4x4 rootNodeInverseTransform = scene.RootNode.Transform;
-            rootNodeInverseTransform.Inverse();
+            byte[] modelBytes;
+            using (MemoryStream ms = new MemoryStream())
+            {
+                stream.CopyTo(ms);
+                modelBytes = ms.ToArray();
+            }
+
+            Scene* scene;
+            fixed (byte* pBuffer = modelBytes)
+            {
+                scene = _assimp.ImportFileFromMemory(
+                    pBuffer,
+                    (uint)modelBytes.Length,
+                    (uint)(PostProcessSteps.FlipWindingOrder | PostProcessSteps.GenerateNormals | PostProcessSteps.FlipUVs),
+                    extension);
+            }
+
+            if (scene == null)
+            {
+                throw new InvalidOperationException("Failed to load model: " + _assimp.GetErrorStringS());
+            }
+
+            Matrix4x4 rootNodeInverseTransform;
+            Matrix4x4.Invert(scene->MRootNode->MTransformation.ToSystemMatrix(), out rootNodeInverseTransform);
 
             List<ProcessedMeshPart> parts = new List<ProcessedMeshPart>();
             List<ProcessedAnimation> animations = new List<ProcessedAnimation>();
 
             HashSet<string> encounteredNames = new HashSet<string>();
-            for (int meshIndex = 0; meshIndex < scene.MeshCount; meshIndex++)
+            for (uint meshIndex = 0; meshIndex < scene->MNumMeshes; meshIndex++)
             {
-                Mesh mesh = scene.Meshes[meshIndex];
-                string meshName = mesh.Name;
+                Mesh* mesh = scene->MMeshes[meshIndex];
+                string meshName = mesh->MName.AsString;
                 if (string.IsNullOrEmpty(meshName))
                 {
                     meshName = $"mesh_{meshIndex}";
@@ -39,10 +60,10 @@ namespace AssetProcessor
                 int counter = 1;
                 while (!encounteredNames.Add(meshName))
                 {
-                    meshName = mesh.Name + "_" + counter.ToString();
+                    meshName = mesh->MName.AsString + "_" + counter.ToString();
                     counter += 1;
                 }
-                int vertexCount = mesh.VertexCount;
+                uint vertexCount = mesh->MNumVertices;
 
                 int positionOffset = 0;
                 int normalOffset = 12;
@@ -57,12 +78,23 @@ namespace AssetProcessor
 
                 int vertexSize = 24;
 
-                bool hasTexCoords = mesh.HasTextureCoords(0);
+                // Find the first non-null UV channel
+                Vector3* texCoordPtr = null;
+                for (int ch = 0; ch < 8; ch++)
+                {
+                    Vector3* tc = mesh->MTextureCoords[ch];
+                    if (tc != null)
+                    {
+                        texCoordPtr = tc;
+                        break;
+                    }
+                }
+                bool hasTexCoords = texCoordPtr != null;
                 elementDescs.Add(new VertexElementDescription("TexCoords", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2));
                 texCoordsOffset = vertexSize;
                 vertexSize += 8;
 
-                bool hasBones = mesh.HasBones;
+                bool hasBones = mesh->MNumBones > 0;
                 if (hasBones)
                 {
                     elementDescs.Add(new VertexElementDescription("BoneWeights", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float4));
@@ -77,80 +109,83 @@ namespace AssetProcessor
 
                 byte[] vertexData = new byte[vertexCount * vertexSize];
                 VertexDataBuilder builder = new VertexDataBuilder(vertexData, vertexSize);
-                Vector3 min = vertexCount > 0 ? mesh.Vertices[0].ToSystemVector3() : Vector3.Zero;
-                Vector3 max = vertexCount > 0 ? mesh.Vertices[0].ToSystemVector3() : Vector3.Zero;
+                Vector3 min = vertexCount > 0 ? mesh->MVertices[0] : Vector3.Zero;
+                Vector3 max = vertexCount > 0 ? mesh->MVertices[0] : Vector3.Zero;
 
-                for (int i = 0; i < vertexCount; i++)
+                for (uint i = 0; i < vertexCount; i++)
                 {
-                    Vector3 position = mesh.Vertices[i].ToSystemVector3();
+                    Vector3 position = mesh->MVertices[i];
                     min = Vector3.Min(min, position);
                     max = Vector3.Max(max, position);
 
                     builder.WriteVertexElement(
-                        i,
+                        (int)i,
                         positionOffset,
                         position);
 
-                    Vector3 normal = mesh.Normals[i].ToSystemVector3();
-                    builder.WriteVertexElement(i, normalOffset, normal);
+                    Vector3 normal = mesh->MNormals[i];
+                    builder.WriteVertexElement((int)i, normalOffset, normal);
 
-                    if (mesh.HasTextureCoords(0))
+                    if (hasTexCoords)
                     {
                         builder.WriteVertexElement(
-                            i,
+                            (int)i,
                             texCoordsOffset,
-                            new Vector2(mesh.TextureCoordinateChannels[0][i].X, mesh.TextureCoordinateChannels[0][i].Y));
+                            new Vector2(texCoordPtr[i].X, texCoordPtr[i].Y));
                     }
                     else
                     {
                         builder.WriteVertexElement(
-                            i,
+                            (int)i,
                             texCoordsOffset,
                             new Vector2());
                     }
                 }
 
                 List<int> indices = new List<int>();
-                foreach (Face face in mesh.Faces)
+                for (uint f = 0; f < mesh->MNumFaces; f++)
                 {
-                    if (face.IndexCount == 3)
+                    Face face = mesh->MFaces[f];
+                    if (face.MNumIndices == 3)
                     {
-                        indices.Add(face.Indices[0]);
-                        indices.Add(face.Indices[1]);
-                        indices.Add(face.Indices[2]);
+                        indices.Add((int)face.MIndices[0]);
+                        indices.Add((int)face.MIndices[1]);
+                        indices.Add((int)face.MIndices[2]);
                     }
                 }
 
                 Dictionary<string, uint> boneIDsByName = new Dictionary<string, uint>();
-                System.Numerics.Matrix4x4[] boneOffsets = new System.Numerics.Matrix4x4[mesh.BoneCount];
+                Matrix4x4[] boneOffsets = new Matrix4x4[mesh->MNumBones];
 
                 if (hasBones)
                 {
                     Dictionary<int, int> assignedBoneWeights = new Dictionary<int, int>();
-                    for (uint boneID = 0; boneID < mesh.BoneCount; boneID++)
+                    for (uint boneID = 0; boneID < mesh->MNumBones; boneID++)
                     {
-                        Bone bone = mesh.Bones[(int)boneID];
-                        string boneName = bone.Name;
+                        Bone* bone = mesh->MBones[boneID];
+                        string boneName = bone->MName.AsString;
                         int suffix = 1;
                         while (boneIDsByName.ContainsKey(boneName))
                         {
-                            boneName = bone.Name + "_" + suffix.ToString();
+                            boneName = bone->MName.AsString + "_" + suffix.ToString();
                             suffix += 1;
                         }
 
                         boneIDsByName.Add(boneName, boneID);
-                        foreach (VertexWeight weight in bone.VertexWeights)
+                        for (uint w = 0; w < bone->MNumWeights; w++)
                         {
-                            int relativeBoneIndex = GetAndIncrementRelativeBoneIndex(assignedBoneWeights, weight.VertexID);
-                            builder.WriteVertexElement(weight.VertexID, boneIndicesOffset + (relativeBoneIndex * sizeof(uint)), boneID);
-                            builder.WriteVertexElement(weight.VertexID, boneWeightOffset + (relativeBoneIndex * sizeof(float)), weight.Weight);
+                            VertexWeight weight = bone->MWeights[w];
+                            int relativeBoneIndex = GetAndIncrementRelativeBoneIndex(assignedBoneWeights, (int)weight.MVertexId);
+                            builder.WriteVertexElement((int)weight.MVertexId, boneIndicesOffset + (relativeBoneIndex * sizeof(uint)), boneID);
+                            builder.WriteVertexElement((int)weight.MVertexId, boneWeightOffset + (relativeBoneIndex * sizeof(float)), weight.MWeight);
                         }
 
-                        System.Numerics.Matrix4x4 offsetMat = bone.OffsetMatrix.ToSystemMatrixTransposed();
-                        System.Numerics.Matrix4x4.Decompose(offsetMat, out var scale, out var rot, out var trans);
-                        offsetMat = System.Numerics.Matrix4x4.CreateScale(scale)
-                            * System.Numerics.Matrix4x4.CreateFromQuaternion(rot)
-                            * System.Numerics.Matrix4x4.CreateTranslation(trans);
+                        // Transpose at I/O boundary, then decompose/recompose in System.Numerics convention
+                        Matrix4x4 offsetMat = bone->MOffsetMatrix.ToSystemMatrix();
+                        Matrix4x4.Decompose(offsetMat, out var scale, out var rot, out var trans);
+                        offsetMat = Matrix4x4.CreateScale(scale)
+                            * Matrix4x4.CreateFromQuaternion(rot)
+                            * Matrix4x4.CreateTranslation(trans);
 
                         boneOffsets[boneID] = offsetMat;
                     }
@@ -165,7 +200,7 @@ namespace AssetProcessor
                 {
                     fixed (int* int32Ptr = int32Indices)
                     {
-                        Buffer.MemoryCopy(int32Ptr, indexDataPtr, indexData.Length, indexData.Length);
+                        System.Buffer.MemoryCopy(int32Ptr, indexDataPtr, indexData.Length, indexData.Length);
                     }
                 }
 
@@ -181,23 +216,23 @@ namespace AssetProcessor
             }
 
             // Nodes
-            Node rootNode = scene.RootNode;
+            Node* rootNode = scene->MRootNode;
             List<ProcessedNode> processedNodes = new List<ProcessedNode>();
             ConvertNode(rootNode, -1, processedNodes);
 
-            ProcessedNodeSet nodes = new ProcessedNodeSet(processedNodes.ToArray(), 0, rootNodeInverseTransform.ToSystemMatrixTransposed());
+            ProcessedNodeSet nodes = new ProcessedNodeSet(processedNodes.ToArray(), 0, rootNodeInverseTransform);
 
-            for (int animIndex = 0; animIndex < scene.AnimationCount; animIndex++)
+            for (uint animIndex = 0; animIndex < scene->MNumAnimations; animIndex++)
             {
-                Animation animation = scene.Animations[animIndex];
+                Animation* animation = scene->MAnimations[animIndex];
                 Dictionary<string, ProcessedAnimationChannel> channels = new Dictionary<string, ProcessedAnimationChannel>();
-                for (int channelIndex = 0; channelIndex < animation.NodeAnimationChannelCount; channelIndex++)
+                for (uint channelIndex = 0; channelIndex < animation->MNumChannels; channelIndex++)
                 {
-                    NodeAnimationChannel nac = animation.NodeAnimationChannels[channelIndex];
-                    channels[nac.NodeName] = ConvertChannel(nac);
+                    NodeAnim* nac = animation->MChannels[channelIndex];
+                    channels[nac->MNodeName.AsString] = ConvertChannel(nac);
                 }
 
-                string baseAnimName = animation.Name;
+                string baseAnimName = animation->MName.AsString;
                 if (string.IsNullOrEmpty(baseAnimName))
                 {
                     baseAnimName = "anim_" + animIndex;
@@ -205,14 +240,15 @@ namespace AssetProcessor
 
                 string animationName = baseAnimName;
 
-
-                int counter = 1;
+                int nameCounter = 1;
                 while (!encounteredNames.Add(animationName))
                 {
-                    animationName = baseAnimName + "_" + counter.ToString();
-                    counter += 1;
+                    animationName = baseAnimName + "_" + nameCounter.ToString();
+                    nameCounter += 1;
                 }
             }
+
+            _assimp.ReleaseImport(scene);
 
             return new ProcessedModel()
             {
@@ -230,44 +266,45 @@ namespace AssetProcessor
             return currentCount;
         }
 
-        private ProcessedAnimationChannel ConvertChannel(NodeAnimationChannel nac)
+        private unsafe ProcessedAnimationChannel ConvertChannel(NodeAnim* nac)
         {
-            string nodeName = nac.NodeName;
-            AssetPrimitives.VectorKey[] positions = new AssetPrimitives.VectorKey[nac.PositionKeyCount];
-            for (int i = 0; i < nac.PositionKeyCount; i++)
+            string nodeName = nac->MNodeName.AsString;
+            AssetPrimitives.VectorKey[] positions = new AssetPrimitives.VectorKey[nac->MNumPositionKeys];
+            for (uint i = 0; i < nac->MNumPositionKeys; i++)
             {
-                Assimp.VectorKey assimpKey = nac.PositionKeys[i];
-                positions[i] = new AssetPrimitives.VectorKey(assimpKey.Time, assimpKey.Value.ToSystemVector3());
+                Silk.NET.Assimp.VectorKey assimpKey = nac->MPositionKeys[i];
+                positions[i] = new AssetPrimitives.VectorKey(assimpKey.MTime, assimpKey.MValue);
             }
 
-            AssetPrimitives.VectorKey[] scales = new AssetPrimitives.VectorKey[nac.ScalingKeyCount];
-            for (int i = 0; i < nac.ScalingKeyCount; i++)
+            AssetPrimitives.VectorKey[] scales = new AssetPrimitives.VectorKey[nac->MNumScalingKeys];
+            for (uint i = 0; i < nac->MNumScalingKeys; i++)
             {
-                Assimp.VectorKey assimpKey = nac.ScalingKeys[i];
-                scales[i] = new AssetPrimitives.VectorKey(assimpKey.Time, assimpKey.Value.ToSystemVector3());
+                Silk.NET.Assimp.VectorKey assimpKey = nac->MScalingKeys[i];
+                scales[i] = new AssetPrimitives.VectorKey(assimpKey.MTime, assimpKey.MValue);
             }
 
-            AssetPrimitives.QuaternionKey[] rotations = new AssetPrimitives.QuaternionKey[nac.RotationKeyCount];
-            for (int i = 0; i < nac.RotationKeyCount; i++)
+            AssetPrimitives.QuaternionKey[] rotations = new AssetPrimitives.QuaternionKey[nac->MNumRotationKeys];
+            for (uint i = 0; i < nac->MNumRotationKeys; i++)
             {
-                Assimp.QuaternionKey assimpKey = nac.RotationKeys[i];
-                rotations[i] = new AssetPrimitives.QuaternionKey(assimpKey.Time, assimpKey.Value.ToSystemQuaternion());
+                Silk.NET.Assimp.QuatKey assimpKey = nac->MRotationKeys[i];
+                rotations[i] = new AssetPrimitives.QuaternionKey(assimpKey.MTime, assimpKey.MValue.ToSystemQuaternion());
             }
 
             return new ProcessedAnimationChannel(nodeName, positions, scales, rotations);
         }
 
-        private int ConvertNode(Node node, int parentIndex, List<ProcessedNode> processedNodes)
+        private unsafe int ConvertNode(Node* node, int parentIndex, List<ProcessedNode> processedNodes)
         {
             int currentIndex = processedNodes.Count;
-            int[] childIndices = new int[node.ChildCount];
-            var nodeTransform = node.Transform.ToSystemMatrixTransposed();
-            ProcessedNode pn = new ProcessedNode(node.Name, nodeTransform, parentIndex, childIndices);
+            int[] childIndices = new int[node->MNumChildren];
+            // Transpose at I/O boundary: Assimp -> System.Numerics
+            var nodeTransform = node->MTransformation.ToSystemMatrix();
+            ProcessedNode pn = new ProcessedNode(node->MName.AsString, nodeTransform, parentIndex, childIndices);
             processedNodes.Add(pn);
 
-            for (int i = 0; i < childIndices.Length; i++)
+            for (uint i = 0; i < node->MNumChildren; i++)
             {
-                int childIndex = ConvertNode(node.Children[i], currentIndex, processedNodes);
+                int childIndex = ConvertNode(node->MChildren[i], currentIndex, processedNodes);
                 childIndices[i] = childIndex;
             }
 
@@ -306,21 +343,19 @@ namespace AssetProcessor
         }
     }
 
-    public static class AssimpExtensions
+    internal static class AssimpExtensions
     {
-        public static unsafe System.Numerics.Matrix4x4 ToSystemMatrixTransposed(this aiMatrix4x4 mat)
+        /// <summary>
+        /// Transposes a matrix from Assimp's column-vector convention to System.Numerics' row-vector convention.
+        /// </summary>
+        public static Matrix4x4 ToSystemMatrix(this Matrix4x4 assimpMatrix)
         {
-            return System.Numerics.Matrix4x4.Transpose(Unsafe.Read<System.Numerics.Matrix4x4>(&mat));
+            return Matrix4x4.Transpose(assimpMatrix);
         }
 
-        public static System.Numerics.Quaternion ToSystemQuaternion(this Assimp.Quaternion quat)
+        public static Quaternion ToSystemQuaternion(this AssimpQuaternion q)
         {
-            return new System.Numerics.Quaternion(quat.X, quat.Y, quat.Z, quat.W);
-        }
-
-        public static Vector3 ToSystemVector3(this Assimp.Vector3D v3)
-        {
-            return new Vector3(v3.X, v3.Y, v3.Z);
+            return new Quaternion(q.X, q.Y, q.Z, q.W);
         }
     }
 }

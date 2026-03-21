@@ -1,14 +1,10 @@
-﻿using SampleBase;
+using SampleBase;
 using System;
 using System.IO;
 using Veldrid;
 using System.Numerics;
-using Assimp;
+using Silk.NET.Assimp;
 
-using aiMatrix4x4 = Assimp.Matrix4x4;
-using Matrix4x4 = System.Numerics.Matrix4x4;
-using Quaternion = System.Numerics.Quaternion;
-using aiQuaternion = Assimp.Quaternion;
 using Camera = SampleBase.Camera;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -17,7 +13,7 @@ using Veldrid.SPIRV;
 
 namespace AnimatedMesh
 {
-    public class AnimatedMesh : SampleApplication
+    public unsafe class AnimatedMesh : SampleApplication
     {
         private DeviceBuffer _projectionBuffer;
         private DeviceBuffer _viewBuffer;
@@ -31,22 +27,19 @@ namespace AnimatedMesh
         private CommandList _cl;
         private Pipeline _pipeline;
 
-        private Animation _animation;
+        private static readonly Assimp _assimp = Assimp.GetApi();
+
+        private Animation* _animation;
         private Dictionary<string, uint> _boneIDsByName = new Dictionary<string, uint>();
         private double _previousAnimSeconds = 0;
-        private Scene _scene;
-        private Mesh _firstMesh;
+        private Scene* _scene;
+        private Silk.NET.Assimp.Mesh* _firstMesh;
         private BoneAnimInfo _boneAnimInfo = BoneAnimInfo.New();
-        private aiMatrix4x4 _rootNodeInverseTransform;
-        private aiMatrix4x4[] _boneTransformations;
+        private Matrix4x4 _rootNodeInverseTransform;
+        private Matrix4x4[] _boneTransformations;
         private float _animationTimeScale = 1f;
 
         public AnimatedMesh(ApplicationWindow window) : base(window) { }
-
-        private static string GetAssetPath(string relativeAssetPath)
-        {
-            return Path.Combine(AppContext.BaseDirectory, "assets", relativeAssetPath);
-        }
 
         protected override void CreateResources(ResourceFactory factory)
         {
@@ -67,7 +60,7 @@ namespace AnimatedMesh
                 new ResourceLayoutElementDescription("SurfaceTex", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
                 new ResourceLayoutElementDescription("SurfaceSampler", ResourceKind.Sampler, ShaderStages.Fragment)));
 
-            Texture texture;
+            Veldrid.Texture texture;
             using (Stream ktxStream = OpenEmbeddedAssetStream("goblin_bc3_unorm.ktx"))
             {
                 texture = KtxFile.LoadTexture(
@@ -101,45 +94,74 @@ namespace AnimatedMesh
                 GraphicsDevice.SwapchainFramebuffer.OutputDescription);
             _pipeline = factory.CreateGraphicsPipeline(ref gpd);
 
-            AssimpContext ac = new AssimpContext();
+            byte[] modelBytes;
             using (Stream modelStream = OpenEmbeddedAssetStream("goblin.dae"))
+            using (MemoryStream ms = new MemoryStream())
             {
-                _scene = ac.ImportFileFromStream(modelStream, "dae");
+                modelStream.CopyTo(ms);
+                modelBytes = ms.ToArray();
             }
-            _rootNodeInverseTransform = _scene.RootNode.Transform;
-            _rootNodeInverseTransform.Inverse();
 
-            _firstMesh = _scene.Meshes[0];
-            AnimatedVertex[] vertices = new AnimatedVertex[_firstMesh.VertexCount];
+            fixed (byte* pBuffer = modelBytes)
+            {
+                _scene = _assimp.ImportFileFromMemory(pBuffer, (uint)modelBytes.Length, 0, ".dae");
+            }
+
+            if (_scene == null || _scene->MRootNode == null)
+            {
+                throw new InvalidOperationException("Failed to load model: " + _assimp.GetErrorStringS());
+            }
+
+            // Transpose from Assimp convention to System.Numerics at the I/O boundary
+            Matrix4x4.Invert(_scene->MRootNode->MTransformation.ToSystemMatrix(), out _rootNodeInverseTransform);
+
+            _firstMesh = _scene->MMeshes[0];
+            AnimatedVertex[] vertices = new AnimatedVertex[_firstMesh->MNumVertices];
+            // Find the first non-null UV channel (Assimp 6.x may place COLLADA UVs in channel 1+)
+            Vector3* texCoords = null;
+            for (int ch = 0; ch < 8; ch++)
+            {
+                Vector3* tc = _firstMesh->MTextureCoords[ch];
+                if (tc != null)
+                {
+                    texCoords = tc;
+                    break;
+                }
+            }
             for (int i = 0; i < vertices.Length; i++)
             {
-                vertices[i].Position = new Vector3(_firstMesh.Vertices[i].X, _firstMesh.Vertices[i].Y, _firstMesh.Vertices[i].Z);
-                vertices[i].UV = new Vector2(_firstMesh.TextureCoordinateChannels[0][i].X, _firstMesh.TextureCoordinateChannels[0][i].Y);
+                vertices[i].Position = _firstMesh->MVertices[i];
+                if (texCoords != null)
+                {
+                    vertices[i].UV = new Vector2(texCoords[i].X, texCoords[i].Y);
+                }
             }
 
-            _animation = _scene.Animations[0];
+            _animation = _scene->MAnimations[0];
 
             List<int> indices = new List<int>();
-            foreach (Face face in _firstMesh.Faces)
+            for (uint f = 0; f < _firstMesh->MNumFaces; f++)
             {
-                if (face.IndexCount == 3)
+                Face face = _firstMesh->MFaces[f];
+                if (face.MNumIndices == 3)
                 {
-                    indices.Add(face.Indices[0]);
-                    indices.Add(face.Indices[1]);
-                    indices.Add(face.Indices[2]);
+                    indices.Add((int)face.MIndices[0]);
+                    indices.Add((int)face.MIndices[1]);
+                    indices.Add((int)face.MIndices[2]);
                 }
             }
 
-            for (uint boneID = 0; boneID < _firstMesh.BoneCount; boneID++)
+            for (uint boneID = 0; boneID < _firstMesh->MNumBones; boneID++)
             {
-                Bone bone = _firstMesh.Bones[(int)boneID];
-                _boneIDsByName.Add(bone.Name, boneID);
-                foreach (VertexWeight weight in bone.VertexWeights)
+                Bone* bone = _firstMesh->MBones[boneID];
+                _boneIDsByName.Add(bone->MName.AsString, boneID);
+                for (uint w = 0; w < bone->MNumWeights; w++)
                 {
-                    vertices[weight.VertexID].AddBone(boneID, weight.Weight);
+                    VertexWeight weight = bone->MWeights[w];
+                    vertices[weight.MVertexId].AddBone(boneID, weight.MWeight);
                 }
             }
-            Array.Resize(ref _boneTransformations, _firstMesh.BoneCount);
+            _boneTransformations = new Matrix4x4[_firstMesh->MNumBones];
 
             _bonesBuffer = ResourceFactory.CreateBuffer(new BufferDescription(
                 64 * 64, BufferUsage.UniformBuffer | BufferUsage.Dynamic));
@@ -185,158 +207,164 @@ namespace AnimatedMesh
 
         private void UpdateAnimation(float deltaSeconds)
         {
-            double tps = _animation.TicksPerSecond != 0 ? _animation.TicksPerSecond : 25;
-            double durationTicks = _animation.DurationInTicks;
+            double tps = _animation->MTicksPerSecond != 0 ? _animation->MTicksPerSecond : 25;
+            double durationTicks = _animation->MDuration;
             double newTicks = _previousAnimSeconds + (deltaSeconds * _animationTimeScale * tps);
             newTicks = newTicks % durationTicks;
             _previousAnimSeconds = newTicks;
 
             double ticks = newTicks;
 
-            UpdateChannel(ticks, _scene.RootNode, aiMatrix4x4.Identity);
+            UpdateChannel(ticks, _scene->MRootNode, Matrix4x4.Identity);
 
+            // Already in System.Numerics convention - no transpose needed
             for (int i = 0; i < _boneTransformations.Length; i++)
             {
-                _boneAnimInfo.BonesTransformations[i] = _boneTransformations[i].ToSystemMatrixTransposed();
+                _boneAnimInfo.BonesTransformations[i] = _boneTransformations[i];
             }
 
             GraphicsDevice.UpdateBuffer(_bonesBuffer, 0, _boneAnimInfo.GetBlittable());
         }
 
-        private void UpdateChannel(double time, Node node, aiMatrix4x4 parentTransform)
+        private void UpdateChannel(double time, Node* node, Matrix4x4 parentTransform)
         {
-            aiMatrix4x4 nodeTransformation = node.Transform;
+            // Transpose at the I/O boundary: Assimp -> System.Numerics
+            Matrix4x4 nodeTransformation = node->MTransformation.ToSystemMatrix();
 
-            if (GetChannel(node, out NodeAnimationChannel channel))
+            if (GetChannel(node, out NodeAnim* channel))
             {
-                aiMatrix4x4 scale = InterpolateScale(time, channel);
-                aiMatrix4x4 rotation = InterpolateRotation(time, channel);
-                aiMatrix4x4 translation = InterpolateTranslation(time, channel);
+                Matrix4x4 scale = InterpolateScale(time, channel);
+                Matrix4x4 rotation = InterpolateRotation(time, channel);
+                Matrix4x4 translation = InterpolateTranslation(time, channel);
 
+                // Same order as original AssimpNet code.
+                // AssimpNet's reversed operator* and the transpose cancel each other out.
                 nodeTransformation = scale * rotation * translation;
             }
 
-            if (_boneIDsByName.TryGetValue(node.Name, out uint boneID))
+            if (_boneIDsByName.TryGetValue(node->MName.AsString, out uint boneID))
             {
-                aiMatrix4x4 m = _firstMesh.Bones[(int)boneID].OffsetMatrix
+                Matrix4x4 offsetMatrix = _firstMesh->MBones[(int)boneID]->MOffsetMatrix.ToSystemMatrix();
+                Matrix4x4 m = offsetMatrix
                     * nodeTransformation
                     * parentTransform
                     * _rootNodeInverseTransform;
                 _boneTransformations[boneID] = m;
             }
 
-            foreach (Node childNode in node.Children)
+            for (uint i = 0; i < node->MNumChildren; i++)
             {
-                UpdateChannel(time, childNode, nodeTransformation * parentTransform);
+                UpdateChannel(time, node->MChildren[i], nodeTransformation * parentTransform);
             }
         }
 
-        private aiMatrix4x4 InterpolateTranslation(double time, NodeAnimationChannel channel)
+        private Matrix4x4 InterpolateTranslation(double time, NodeAnim* channel)
         {
-            Vector3D position;
+            Vector3 position;
 
-            if (channel.PositionKeyCount == 1)
+            if (channel->MNumPositionKeys == 1)
             {
-                position = channel.PositionKeys[0].Value;
+                position = channel->MPositionKeys[0].MValue;
             }
             else
             {
                 uint frameIndex = 0;
-                for (uint i = 0; i < channel.PositionKeyCount - 1; i++)
+                for (uint i = 0; i < channel->MNumPositionKeys - 1; i++)
                 {
-                    if (time < (float)channel.PositionKeys[(int)(i + 1)].Time)
+                    if (time < (float)channel->MPositionKeys[i + 1].MTime)
                     {
                         frameIndex = i;
                         break;
                     }
                 }
 
-                VectorKey currentFrame = channel.PositionKeys[(int)frameIndex];
-                VectorKey nextFrame = channel.PositionKeys[(int)((frameIndex + 1) % channel.PositionKeyCount)];
+                VectorKey currentFrame = channel->MPositionKeys[frameIndex];
+                VectorKey nextFrame = channel->MPositionKeys[(frameIndex + 1) % channel->MNumPositionKeys];
 
-                double delta = (time - (float)currentFrame.Time) / (float)(nextFrame.Time - currentFrame.Time);
+                double delta = (time - (float)currentFrame.MTime) / (float)(nextFrame.MTime - currentFrame.MTime);
 
-                Vector3D start = currentFrame.Value;
-                Vector3D end = nextFrame.Value;
-                position = (start + (float)delta * (end - start));
+                Vector3 start = currentFrame.MValue;
+                Vector3 end = nextFrame.MValue;
+                position = start + (float)delta * (end - start);
             }
 
-            return aiMatrix4x4.FromTranslation(position);
+            return Matrix4x4.CreateTranslation(position);
         }
 
-        private aiMatrix4x4 InterpolateRotation(double time, NodeAnimationChannel channel)
+        private Matrix4x4 InterpolateRotation(double time, NodeAnim* channel)
         {
-            aiQuaternion rotation;
+            Quaternion rotation;
 
-            if (channel.RotationKeyCount == 1)
+            if (channel->MNumRotationKeys == 1)
             {
-                rotation = channel.RotationKeys[0].Value;
+                rotation = channel->MRotationKeys[0].MValue.ToSystemQuaternion();
             }
             else
             {
                 uint frameIndex = 0;
-                for (uint i = 0; i < channel.RotationKeyCount - 1; i++)
+                for (uint i = 0; i < channel->MNumRotationKeys - 1; i++)
                 {
-                    if (time < (float)channel.RotationKeys[(int)(i + 1)].Time)
+                    if (time < (float)channel->MRotationKeys[i + 1].MTime)
                     {
                         frameIndex = i;
                         break;
                     }
                 }
 
-                QuaternionKey currentFrame = channel.RotationKeys[(int)frameIndex];
-                QuaternionKey nextFrame = channel.RotationKeys[(int)((frameIndex + 1) % channel.RotationKeyCount)];
+                QuatKey currentFrame = channel->MRotationKeys[frameIndex];
+                QuatKey nextFrame = channel->MRotationKeys[(frameIndex + 1) % channel->MNumRotationKeys];
 
-                double delta = (time - (float)currentFrame.Time) / (float)(nextFrame.Time - currentFrame.Time);
+                double delta = (time - (float)currentFrame.MTime) / (float)(nextFrame.MTime - currentFrame.MTime);
 
-                aiQuaternion start = currentFrame.Value;
-                aiQuaternion end = nextFrame.Value;
-                rotation = aiQuaternion.Slerp(start, end, (float)delta);
-                rotation.Normalize();
+                Quaternion start = currentFrame.MValue.ToSystemQuaternion();
+                Quaternion end = nextFrame.MValue.ToSystemQuaternion();
+                rotation = Quaternion.Slerp(start, end, (float)delta);
+                rotation = Quaternion.Normalize(rotation);
             }
 
-            return rotation.GetMatrix();
+            return Matrix4x4.CreateFromQuaternion(rotation);
         }
 
-        private aiMatrix4x4 InterpolateScale(double time, NodeAnimationChannel channel)
+        private Matrix4x4 InterpolateScale(double time, NodeAnim* channel)
         {
-            Vector3D scale;
+            Vector3 scale;
 
-            if (channel.ScalingKeyCount == 1)
+            if (channel->MNumScalingKeys == 1)
             {
-                scale = channel.ScalingKeys[0].Value;
+                scale = channel->MScalingKeys[0].MValue;
             }
             else
             {
                 uint frameIndex = 0;
-                for (uint i = 0; i < channel.ScalingKeyCount - 1; i++)
+                for (uint i = 0; i < channel->MNumScalingKeys - 1; i++)
                 {
-                    if (time < (float)channel.ScalingKeys[(int)(i + 1)].Time)
+                    if (time < (float)channel->MScalingKeys[i + 1].MTime)
                     {
                         frameIndex = i;
                         break;
                     }
                 }
 
-                VectorKey currentFrame = channel.ScalingKeys[(int)frameIndex];
-                VectorKey nextFrame = channel.ScalingKeys[(int)((frameIndex + 1) % channel.ScalingKeyCount)];
+                VectorKey currentFrame = channel->MScalingKeys[frameIndex];
+                VectorKey nextFrame = channel->MScalingKeys[(frameIndex + 1) % channel->MNumScalingKeys];
 
-                double delta = (time - (float)currentFrame.Time) / (float)(nextFrame.Time - currentFrame.Time);
+                double delta = (time - (float)currentFrame.MTime) / (float)(nextFrame.MTime - currentFrame.MTime);
 
-                Vector3D start = currentFrame.Value;
-                Vector3D end = nextFrame.Value;
-
-                scale = (start + (float)delta * (end - start));
+                Vector3 start = currentFrame.MValue;
+                Vector3 end = nextFrame.MValue;
+                scale = start + (float)delta * (end - start);
             }
 
-            return aiMatrix4x4.FromScaling(scale);
+            return Matrix4x4.CreateScale(scale);
         }
 
-        private bool GetChannel(Node node, out NodeAnimationChannel channel)
+        private bool GetChannel(Node* node, out NodeAnim* channel)
         {
-            foreach (NodeAnimationChannel c in _animation.NodeAnimationChannels)
+            string nodeName = node->MName.AsString;
+            for (uint i = 0; i < _animation->MNumChannels; i++)
             {
-                if (c.NodeName == node.Name)
+                NodeAnim* c = _animation->MChannels[i];
+                if (c->MNodeName.AsString == nodeName)
                 {
                     channel = c;
                     return true;
