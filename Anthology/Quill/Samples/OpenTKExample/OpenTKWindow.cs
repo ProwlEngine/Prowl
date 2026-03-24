@@ -52,6 +52,7 @@ namespace OpenTKExample
             _renderer = new CanvasRenderer();
             _renderer.Initialize(ClientSize.X, ClientSize.Y, _whiteTexture);
             _canvas = new Canvas(_renderer, new FontAtlasSettings());
+            _canvas.TextMode = TextRenderMode.Slug;
 
             RobotoFont = new FontFile("Fonts/Roboto.ttf");
             AlamakFont = new FontFile("Fonts/Alamak.ttf");

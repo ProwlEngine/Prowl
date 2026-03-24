@@ -13,8 +13,9 @@ let whiteTexture = null;
 let uViewportLoc, uTextureLoc, uScissorMatLoc, uScissorExtLoc, uDpiScaleLoc;
 let uBrushMatLoc, uBrushTypeLoc, uBrushColor1Loc, uBrushColor2Loc;
 let uBrushParamsLoc, uBrushParams2Loc, uBrushTextureMatLoc;
+let uSlugCurveTexLoc, uSlugBandTexLoc, uSlugCurveTexSizeLoc, uSlugBandTexSizeLoc;
 
-const VERTEX_SIZE = 20;
+const VERTEX_SIZE = 44; // 20 core + 24 slug
 
 // Pre-allocated buffer for matrix uniforms (avoids per-draw-call Float32Array allocations)
 const _mat32 = new Float32Array(16);
@@ -25,10 +26,14 @@ precision highp float;
 layout(location = 0) in vec2 aPos;
 layout(location = 1) in vec2 aUV;
 layout(location = 2) in vec4 aColor;
+layout(location = 3) in vec4 aSlugBand;
+layout(location = 4) in vec2 aSlugGlyph;
 uniform vec2 uViewport;
 out vec2 vUV;
 out vec4 vColor;
 out vec2 vPos;
+out vec4 vSlugBand;
+flat out vec2 vSlugGlyph;
 void main() {
     vec2 pos = (aPos / uViewport) * 2.0 - 1.0;
     pos.y = -pos.y;
@@ -36,6 +41,8 @@ void main() {
     vUV = aUV;
     vColor = aColor;
     vPos = aPos;
+    vSlugBand = aSlugBand;
+    vSlugGlyph = aSlugGlyph;
 }
 `;
 
@@ -44,6 +51,8 @@ precision highp float;
 in vec2 vUV;
 in vec4 vColor;
 in vec2 vPos;
+in vec4 vSlugBand;
+flat in vec2 vSlugGlyph;
 uniform sampler2D uTexture;
 uniform mat4 uScissorMat;
 uniform vec2 uScissorExt;
@@ -55,62 +64,108 @@ uniform vec4 uBrushColor2;
 uniform vec4 uBrushParams;
 uniform vec2 uBrushParams2;
 uniform mat4 uBrushTextureMat;
+uniform sampler2D uSlugCurveTex;
+uniform sampler2D uSlugBandTex;
+uniform vec2 uSlugCurveTexSize;
+uniform vec2 uSlugBandTexSize;
 out vec4 fragColor;
 
-float calculateBrushFactor() {
-    if (uBrushType == 0) return 0.0;
-    vec2 logicalPos = vPos / uDpiScale;
-    vec2 tp = (uBrushMat * vec4(logicalPos, 0.0, 1.0)).xy;
-    if (uBrushType == 1) {
-        vec2 s = uBrushParams.xy, e = uBrushParams.zw;
-        vec2 line = e - s;
-        float len = length(line);
-        if (len < 0.001) return 0.0;
-        return clamp(dot(tp - s, line) / (len * len), 0.0, 1.0);
+// ============== Slug functions ==============
+vec2 SlugFetchBand(float idx) {
+    float tx = mod(idx, uSlugBandTexSize.x);
+    float ty = floor(idx / uSlugBandTexSize.x);
+    return texture(uSlugBandTex, (vec2(tx, ty) + 0.5) / uSlugBandTexSize).rg;
+}
+vec4 SlugFetchCurve(vec2 loc) {
+    return texture(uSlugCurveTex, (loc + 0.5) / uSlugCurveTexSize);
+}
+vec2 SlugRootElig(float y1, float y2, float y3) {
+    float s0 = y1 > 0.0 ? 1.0 : 0.0, s1 = y2 > 0.0 ? 1.0 : 0.0, s2 = y3 > 0.0 ? 1.0 : 0.0;
+    float n0 = 1.0-s0, n1 = 1.0-s1, n2 = 1.0-s2;
+    return vec2(clamp(s0*n1*n2+n0*s1*n2+s0*s1*n2+s0*n1*s2, 0.0, 1.0),
+                clamp(n0*s1*n2+n0*n1*s2+s0*n1*s2+n0*s1*s2, 0.0, 1.0));
+}
+vec2 SlugSolveH(vec4 p12, vec2 p3) {
+    vec2 a = p12.xy - p12.zw*2.0 + p3, b = p12.xy - p12.zw;
+    float ra = 1.0/a.y, rb = 0.5/b.y;
+    float d = sqrt(max(b.y*b.y - a.y*p12.y, 0.0));
+    float t1 = (b.y-d)*ra, t2 = (b.y+d)*ra;
+    if (abs(a.y) < 0.0001) { t1 = p12.y*rb; t2 = t1; }
+    return vec2((a.x*t1-b.x*2.0)*t1+p12.x, (a.x*t2-b.x*2.0)*t2+p12.x);
+}
+vec2 SlugSolveV(vec4 p12, vec2 p3) {
+    vec2 a = p12.xy - p12.zw*2.0 + p3, b = p12.xy - p12.zw;
+    float ra = 1.0/a.x, rb = 0.5/b.x;
+    float d = sqrt(max(b.x*b.x - a.x*p12.x, 0.0));
+    float t1 = (b.x-d)*ra, t2 = (b.x+d)*ra;
+    if (abs(a.x) < 0.0001) { t1 = p12.x*rb; t2 = t1; }
+    return vec2((a.y*t1-b.y*2.0)*t1+p12.y, (a.y*t2-b.y*2.0)*t2+p12.y);
+}
+float SlugRender(vec2 rc, vec4 bt, vec2 gi) {
+    float bx = mod(gi.x, uSlugBandTexSize.x), by = floor(gi.x / uSlugBandTexSize.x);
+    float bc = gi.y, bm = bc - 1.0;
+    vec2 epp = fwidth(rc), ppe = 1.0/max(epp, vec2(0.0001));
+    vec2 bp = rc*bt.xy + bt.zw;
+    float biY = clamp(floor(bp.y), 0.0, bm), biX = clamp(floor(bp.x), 0.0, bm);
+    float base = by*uSlugBandTexSize.x + bx;
+    float xc=0.0, xw=0.0;
+    vec2 hh = SlugFetchBand(base+biY);
+    for (float ci=0.0; ci<hh.r; ci+=1.0) {
+        vec2 cl = SlugFetchBand(hh.g+ci);
+        vec4 p12 = SlugFetchCurve(cl)-vec4(rc,rc);
+        vec2 p3 = SlugFetchCurve(vec2(cl.x+1.0,cl.y)).xy-rc;
+        if (max(max(p12.x,p12.z),p3.x)*ppe.x < -0.5) break;
+        vec2 e = SlugRootElig(p12.y,p12.w,p3.y);
+        if (e.x+e.y>0.0) { vec2 r=SlugSolveH(p12,p3)*ppe.x;
+            if(e.x>0.5){xc+=clamp(r.x+0.5,0.0,1.0);xw=max(xw,clamp(1.0-abs(r.x)*2.0,0.0,1.0));}
+            if(e.y>0.5){xc-=clamp(r.y+0.5,0.0,1.0);xw=max(xw,clamp(1.0-abs(r.y)*2.0,0.0,1.0));}
+        }
     }
-    if (uBrushType == 2) {
-        vec2 c = uBrushParams.xy;
-        float inner = uBrushParams.z, outer = uBrushParams.w;
-        if (outer < 0.001) return 0.0;
-        return clamp(smoothstep(inner, outer, length(tp - c)), 0.0, 1.0);
+    float yc=0.0, yw=0.0;
+    vec2 vh = SlugFetchBand(base+bc+biX);
+    for (float vi=0.0; vi<vh.r; vi+=1.0) {
+        vec2 cl = SlugFetchBand(vh.g+vi);
+        vec4 p12 = SlugFetchCurve(cl)-vec4(rc,rc);
+        vec2 p3 = SlugFetchCurve(vec2(cl.x+1.0,cl.y)).xy-rc;
+        if (max(max(p12.y,p12.w),p3.y)*ppe.y < -0.5) break;
+        vec2 e = SlugRootElig(p12.x,p12.z,p3.x);
+        if (e.x+e.y>0.0) { vec2 r=SlugSolveV(p12,p3)*ppe.y;
+            if(e.x>0.5){yc-=clamp(r.x+0.5,0.0,1.0);yw=max(yw,clamp(1.0-abs(r.x)*2.0,0.0,1.0));}
+            if(e.y>0.5){yc+=clamp(r.y+0.5,0.0,1.0);yw=max(yw,clamp(1.0-abs(r.y)*2.0,0.0,1.0));}
+        }
     }
-    if (uBrushType == 3) {
-        vec2 c = uBrushParams.xy, hs = uBrushParams.zw;
-        float r = uBrushParams2.x, f = uBrushParams2.y;
-        if (hs.x < 0.001 || hs.y < 0.001) return 0.0;
-        vec2 q = abs(tp - c) - (hs - vec2(r));
-        float d = min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
-        return clamp((d + f * 0.5) / f, 0.0, 1.0);
-    }
-    return 0.0;
+    return clamp(max(abs(xc*xw+yc*yw)/max(xw+yw,0.0001), min(abs(xc),abs(yc))), 0.0, 1.0);
 }
 
+// ============== Canvas functions ==============
+float calculateBrushFactor() {
+    if (uBrushType == 0) return 0.0;
+    vec2 lp = vPos / uDpiScale, tp = (uBrushMat * vec4(lp, 0.0, 1.0)).xy;
+    if (uBrushType == 1) { vec2 s=uBrushParams.xy,e=uBrushParams.zw,l=e-s; float len=length(l); if(len<0.001)return 0.0; return clamp(dot(tp-s,l)/(len*len),0.0,1.0); }
+    if (uBrushType == 2) { vec2 c=uBrushParams.xy; if(uBrushParams.w<0.001)return 0.0; return clamp(smoothstep(uBrushParams.z,uBrushParams.w,length(tp-c)),0.0,1.0); }
+    if (uBrushType == 3) { vec2 c=uBrushParams.xy,hs=uBrushParams.zw; float r=uBrushParams2.x,f=uBrushParams2.y; if(hs.x<0.001||hs.y<0.001)return 0.0; vec2 q=abs(tp-c)-(hs-vec2(r)); float d=min(max(q.x,q.y),0.0)+length(max(q,0.0))-r; return clamp((d+f*0.5)/f,0.0,1.0); }
+    return 0.0;
+}
 float scissorMask(vec2 p) {
-    if (uScissorExt.x < 0.0 || uScissorExt.y < 0.0) return 1.0;
-    vec2 lp = p / uDpiScale;
-    vec2 tp = (uScissorMat * vec4(lp, 0.0, 1.0)).xy;
-    vec2 le = uScissorExt / uDpiScale;
-    vec2 d = abs(tp) - le;
-    float hp = 0.5 / uDpiScale;
-    vec2 se = vec2(hp) - d;
-    return clamp(se.x, 0.0, 1.0) * clamp(se.y, 0.0, 1.0);
+    if (uScissorExt.x<0.0||uScissorExt.y<0.0) return 1.0;
+    vec2 lp=p/uDpiScale, tp=(uScissorMat*vec4(lp,0.0,1.0)).xy, le=uScissorExt/uDpiScale;
+    vec2 d=abs(tp)-le; float hp=0.5/uDpiScale; vec2 se=vec2(hp)-d;
+    return clamp(se.x,0.0,1.0)*clamp(se.y,0.0,1.0);
 }
 
 void main() {
-    float mask = scissorMask(vPos);
-    vec4 color = vColor;
-    if (uBrushType > 0) {
-        color = mix(uBrushColor1, uBrushColor2, calculateBrushFactor());
-    }
-    if (vUV.x >= 2.0) {
-        fragColor = color * texture(uTexture, vUV - vec2(2.0, 0.0)) * mask;
+    // Slug mode
+    if (vSlugGlyph.y > 0.0) {
+        float cov = SlugRender(vUV, vSlugBand, vSlugGlyph);
+        fragColor = vec4(vColor.rgb * cov, cov * vColor.a);
         return;
     }
-    vec2 ps = fwidth(vUV);
-    vec2 ed = min(vUV, 1.0 - vUV);
-    float eaX = ps.x > 0.0 ? smoothstep(0.0, ps.x, ed.x) : 1.0;
-    float eaY = ps.y > 0.0 ? smoothstep(0.0, ps.y, ed.y) : 1.0;
-    float ea = clamp(eaX * eaY, 0.0, 1.0);
+    float mask = scissorMask(vPos);
+    vec4 color = vColor;
+    if (uBrushType > 0) color = mix(uBrushColor1, uBrushColor2, calculateBrushFactor());
+    if (vUV.x >= 2.0) { fragColor = color * texture(uTexture, vUV - vec2(2.0, 0.0)) * mask; return; }
+    vec2 ps = fwidth(vUV), ed = min(vUV, 1.0-vUV);
+    float ea = clamp((ps.x>0.0?smoothstep(0.0,ps.x,ed.x):1.0)*(ps.y>0.0?smoothstep(0.0,ps.y,ed.y):1.0), 0.0, 1.0);
     vec2 lp = vPos / uDpiScale;
     fragColor = color * texture(uTexture, (uBrushTextureMat * vec4(lp, 0.0, 1.0)).xy) * ea * mask;
 }
@@ -168,6 +223,10 @@ const webgl = {
         uBrushParamsLoc = gl.getUniformLocation(program, 'uBrushParams');
         uBrushParams2Loc = gl.getUniformLocation(program, 'uBrushParams2');
         uBrushTextureMatLoc = gl.getUniformLocation(program, 'uBrushTextureMat');
+        uSlugCurveTexLoc = gl.getUniformLocation(program, 'uSlugCurveTex');
+        uSlugBandTexLoc = gl.getUniformLocation(program, 'uSlugBandTex');
+        uSlugCurveTexSizeLoc = gl.getUniformLocation(program, 'uSlugCurveTexSize');
+        uSlugBandTexSizeLoc = gl.getUniformLocation(program, 'uSlugBandTexSize');
 
         vao = gl.createVertexArray();
         gl.bindVertexArray(vao);
@@ -176,12 +235,17 @@ const webgl = {
         ebo = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
 
+        // 44-byte vertex: pos(8) + uv(8) + color(4) + slugBand(16) + slugGlyph(8)
         gl.enableVertexAttribArray(0);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, VERTEX_SIZE, 0);
         gl.enableVertexAttribArray(1);
         gl.vertexAttribPointer(1, 2, gl.FLOAT, false, VERTEX_SIZE, 8);
         gl.enableVertexAttribArray(2);
         gl.vertexAttribPointer(2, 4, gl.UNSIGNED_BYTE, true, VERTEX_SIZE, 16);
+        gl.enableVertexAttribArray(3);
+        gl.vertexAttribPointer(3, 4, gl.FLOAT, false, VERTEX_SIZE, 20);
+        gl.enableVertexAttribArray(4);
+        gl.vertexAttribPointer(4, 2, gl.FLOAT, false, VERTEX_SIZE, 36);
         gl.bindVertexArray(null);
 
         whiteTexture = gl.createTexture();
@@ -214,6 +278,29 @@ const webgl = {
         if (!info) return;
         gl.bindTexture(gl.TEXTURE_2D, info.glTex);
         gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(data));
+    },
+
+    createFloatTexture(texId, width, height, components, data) {
+        const tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        const floatData = new Float32Array(data);
+        let uploadData;
+        if (components === 2) {
+            uploadData = new Float32Array(width * height * 4);
+            for (let i = 0; i < width * height; i++) {
+                uploadData[i*4] = floatData[i*2];
+                uploadData[i*4+1] = floatData[i*2+1];
+            }
+        } else {
+            uploadData = floatData;
+        }
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, width, height, 0, gl.RGBA, gl.FLOAT, uploadData);
+        textures.set(texId, { glTex: tex, width, height });
     },
 
     render(vertexBytes, indexDataI32, drawCallInfoI32, scissorDataF64, brushDataF64, canvasScale) {
@@ -251,12 +338,20 @@ const webgl = {
         gl.uniform1i(uTextureLoc, 0);
 
         let indexOffset = 0;
+        // drawCallInfo: [texId, elemCount, slugCurveTexId, slugBandTexId, slugCurveW, slugCurveH, slugBandW, slugBandH] per draw call = 8 ints each
+        const dcStride = 8;
         const dcCount = drawCallInfoI32.length;
 
-        for (let i = 0; i < dcCount; i += 2) {
+        for (let i = 0; i < dcCount; i += dcStride) {
             const texId = drawCallInfoI32[i];
             const elemCount = drawCallInfoI32[i + 1];
-            const dcIndex = i >> 1;
+            const slugCurveTexId = drawCallInfoI32[i + 2];
+            const slugBandTexId = drawCallInfoI32[i + 3];
+            const slugCurveW = drawCallInfoI32[i + 4];
+            const slugCurveH = drawCallInfoI32[i + 5];
+            const slugBandW = drawCallInfoI32[i + 6];
+            const slugBandH = drawCallInfoI32[i + 7];
+            const dcIndex = (i / dcStride) | 0;
 
             // Texture
             if (texId > 0 && textures.has(texId)) {
@@ -283,6 +378,19 @@ const webgl = {
             gl.uniform2f(uBrushParams2Loc, brushDataF64[bb+29], brushDataF64[bb+30]);
             for (let j = 0; j < 16; j++) _mat32[j] = brushDataF64[bb + 31 + j];
             gl.uniformMatrix4fv(uBrushTextureMatLoc, false, _mat32);
+
+            // Bind slug textures if present
+            if (slugCurveTexId > 0 && textures.has(slugCurveTexId) && textures.has(slugBandTexId)) {
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, textures.get(slugCurveTexId).glTex);
+                gl.uniform1i(uSlugCurveTexLoc, 1);
+                gl.activeTexture(gl.TEXTURE2);
+                gl.bindTexture(gl.TEXTURE_2D, textures.get(slugBandTexId).glTex);
+                gl.uniform1i(uSlugBandTexLoc, 2);
+                gl.uniform2f(uSlugCurveTexSizeLoc, slugCurveW, slugCurveH);
+                gl.uniform2f(uSlugBandTexSizeLoc, slugBandW, slugBandH);
+                gl.activeTexture(gl.TEXTURE0);
+            }
 
             gl.drawElements(gl.TRIANGLES, elemCount, gl.UNSIGNED_INT, indexOffset * 4);
             indexOffset += elemCount;

@@ -40,5 +40,11 @@ namespace Prowl.Quill
         /// <param name="canvas">The canvas containing vertices and indices.</param>
         /// <param name="drawCalls">The list of draw calls to render.</param>
         public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls);
+
+        /// <summary>
+        /// Creates a float texture for Slug rendering. Returns an opaque texture handle.
+        /// Backends that don't support Slug can return null (default).
+        /// </summary>
+        object? CreateFloatTexture(int width, int height, int components, float[] data) => null;
     }
 }

@@ -14,6 +14,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)CanvasDemo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IDemo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SVGDemo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CanvasShaderSource.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)VectorFont.cs" />
   </ItemGroup>
   <ItemGroup>

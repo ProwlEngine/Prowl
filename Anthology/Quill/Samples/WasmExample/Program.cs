@@ -41,6 +41,7 @@ public partial class App
         _renderer = new WebGLCanvasRenderer();
         var (cw, ch) = _renderer.GetCanvasSize();
         _canvas = new Canvas(_renderer, new FontAtlasSettings());
+        _canvas.TextMode = TextRenderMode.Slug;
 
         // Load fonts from embedded resources
         var robotoFont = LoadFontResource(asm, "Fonts.Roboto.ttf");
