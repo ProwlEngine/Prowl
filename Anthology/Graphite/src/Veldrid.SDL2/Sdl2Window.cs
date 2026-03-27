@@ -49,6 +49,20 @@ namespace Veldrid.Sdl2
         // Cursor state
         private bool _cursorRelativeMode;
 
+        // Virtual mouse mode: activated when SetMousePosition is called repeatedly
+        // to the same coordinates (the classic mouselook warp-cursor-back pattern).
+        // In this mode we use SDL relative mode + virtual position tracking instead
+        // of calling WarpMouseInWindow. This works around an SDL2 bug on Windows
+        // where SetCursorPos sets SDL_last_warp_time = GetTickCount(), and then the
+        // message pump discards all WM_MOUSEMOVE with msg.time <= SDL_last_warp_time.
+        // Since GetTickCount() has ~15ms resolution and frames can be <7ms, most real
+        // mouse events share the same tick as the warp and are silently dropped.
+        private bool _virtualMouseActive;
+        private float _virtualMouseX;
+        private float _virtualMouseY;
+        private int _lastWarpX = int.MinValue;
+        private int _lastWarpY = int.MinValue;
+
         private const int SDL_QUERY = -1;
         private const int SDL_DISABLE = 0;
         private const int SDL_ENABLE = 1;
@@ -215,6 +229,16 @@ namespace Veldrid.Sdl2
             }
             set
             {
+                if (value && _virtualMouseActive)
+                {
+                    // App is showing the cursor while virtual mode is active
+                    // (e.g., mouselook ended without a warp to a new position).
+                    _sdl.SetRelativeMouseMode(SdlBool.False);
+                    _sdl.WarpMouseInWindow(_window, _currentMouseX, _currentMouseY);
+                    _virtualMouseActive = false;
+                    _lastWarpX = int.MinValue;
+                    _lastWarpY = int.MinValue;
+                }
                 int toggle = value ? SDL_ENABLE : SDL_DISABLE;
                 _sdl.ShowCursor(toggle);
             }
@@ -295,12 +319,44 @@ namespace Veldrid.Sdl2
         public void SetMousePosition(Vector2 position) => SetMousePosition((int)position.X, (int)position.Y);
         public void SetMousePosition(int x, int y)
         {
-            if (_exists)
+            if (!_exists)
+                return;
+
+            if (_virtualMouseActive)
             {
-                _sdl.WarpMouseInWindow(_window, x, y);
-                _currentMouseX = x;
-                _currentMouseY = y;
+                if (x == _lastWarpX && y == _lastWarpY)
+                {
+                    // Still in mouselook - just reset virtual position.
+                    _virtualMouseX = x;
+                    _virtualMouseY = y;
+                }
+                else
+                {
+                    // Warp target changed - leave virtual mode and do a real warp.
+                    _sdl.SetRelativeMouseMode(SdlBool.False);
+                    _virtualMouseActive = false;
+                    _sdl.WarpMouseInWindow(_window, x, y);
+                }
             }
+            else if (x == _lastWarpX && y == _lastWarpY)
+            {
+                // Second consecutive warp to the same position - mouselook detected.
+                _virtualMouseActive = true;
+                _virtualMouseX = x;
+                _virtualMouseY = y;
+                _sdl.SetRelativeMouseMode(SdlBool.True);
+            }
+            else
+            {
+                // One-off warp (or first warp to a new position). Warp normally.
+                _sdl.WarpMouseInWindow(_window, x, y);
+            }
+
+            _lastWarpX = x;
+            _lastWarpY = y;
+            _currentMouseX = x;
+            _currentMouseY = y;
+            _privateSnapshot.MousePosition = new Vector2(x, y);
         }
 
         public Vector2 MouseDelta => _currentMouseDelta;
@@ -574,20 +630,30 @@ namespace Veldrid.Sdl2
 
         private void HandleMouseMotionEvent(MouseMotionEvent mouseMotionEvent)
         {
-            Vector2 mousePos = new Vector2(mouseMotionEvent.X, mouseMotionEvent.Y);
+            Vector2 mousePos;
             Vector2 delta = new Vector2(mouseMotionEvent.Xrel, mouseMotionEvent.Yrel);
 
-            // Skip spurious zero-delta motion events (SDL 2.24+ on Windows sends these
-            // continuously via raw input even when the mouse is stationary)
-            if (mouseMotionEvent.Xrel == 0 && mouseMotionEvent.Yrel == 0
-                && mouseMotionEvent.X == _currentMouseX && mouseMotionEvent.Y == _currentMouseY)
+            if (_virtualMouseActive)
             {
-                return;
+                // In virtual mouse mode, SDL is in relative mode so X/Y are unreliable.
+                // Accumulate deltas onto the virtual position instead.
+                _virtualMouseX += mouseMotionEvent.Xrel;
+                _virtualMouseY += mouseMotionEvent.Yrel;
+                mousePos = new Vector2(_virtualMouseX, _virtualMouseY);
+            }
+            else
+            {
+                mousePos = new Vector2(mouseMotionEvent.X, mouseMotionEvent.Y);
             }
 
             _currentMouseX = (int)mousePos.X;
             _currentMouseY = (int)mousePos.Y;
             _privateSnapshot.MousePosition = mousePos;
+
+            if (mouseMotionEvent.Xrel == 0 && mouseMotionEvent.Yrel == 0)
+            {
+                return;
+            }
 
             if (!_firstMouseEvent)
             {
