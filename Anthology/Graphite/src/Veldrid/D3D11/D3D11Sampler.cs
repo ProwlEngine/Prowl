@@ -77,8 +77,11 @@ namespace Veldrid.D3D11
 
         public override void Dispose()
         {
-            _deviceSampler.Dispose();
-            _disposed = true;
+            if (!_disposed)
+            {
+                _deviceSampler.Dispose();
+                _disposed = true;
+            }
         }
     }
 }

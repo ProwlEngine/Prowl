@@ -95,16 +95,19 @@ namespace Veldrid.D3D11
 
         public override void Dispose()
         {
-            foreach (KeyValuePair<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> kvp in _srvs)
+            if (!_disposed)
             {
-                kvp.Value.Dispose();
+                foreach (KeyValuePair<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> kvp in _srvs)
+                {
+                    kvp.Value.Dispose();
+                }
+                foreach (KeyValuePair<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> kvp in _uavs)
+                {
+                    kvp.Value.Dispose();
+                }
+                _buffer.Dispose();
+                _disposed = true;
             }
-            foreach (KeyValuePair<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> kvp in _uavs)
-            {
-                kvp.Value.Dispose();
-            }
-            _buffer.Dispose();
-            _disposed = true;
         }
 
         internal ID3D11ShaderResourceView* GetShaderResourceView(uint offset, uint size)

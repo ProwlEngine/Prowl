@@ -211,8 +211,11 @@ namespace Veldrid.D3D11
 
         private protected override void DisposeCore()
         {
-            _deviceTexture.Dispose();
-            _disposed = true;
+            if (!_disposed)
+            {
+                _deviceTexture.Dispose();
+                _disposed = true;
+            }
         }
     }
 }

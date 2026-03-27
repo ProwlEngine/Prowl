@@ -180,8 +180,11 @@ namespace Veldrid.D3D11
 
         public override void Dispose()
         {
-            _deviceShader.Dispose();
-            _disposed = true;
+            if (!_disposed)
+            {
+                _deviceShader.Dispose();
+                _disposed = true;
+            }
         }
     }
 }
