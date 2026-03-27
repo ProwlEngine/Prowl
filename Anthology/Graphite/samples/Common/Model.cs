@@ -12,7 +12,7 @@ namespace Common
             (uint)(PostProcessSteps.FlipWindingOrder | PostProcessSteps.Triangulate | PostProcessSteps.PreTransformVertices
             | PostProcessSteps.CalculateTangentSpace | PostProcessSteps.GenerateSmoothNormals);
 
-        private static readonly Assimp _assimp = Assimp.GetApi();
+        private static readonly Assimp _assimp = SampleBase.AssimpHelper.GetApi();
 
         public DeviceBuffer VertexBuffer { get; private set; }
         public DeviceBuffer IndexBuffer { get; private set; }

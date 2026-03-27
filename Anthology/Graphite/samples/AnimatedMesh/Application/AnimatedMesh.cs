@@ -27,7 +27,7 @@ namespace AnimatedMesh
         private CommandList _cl;
         private Pipeline _pipeline;
 
-        private static readonly Assimp _assimp = Assimp.GetApi();
+        private static readonly Assimp _assimp = SampleBase.AssimpHelper.GetApi();
 
         private Animation* _animation;
         private Dictionary<string, uint> _boneIDsByName = new Dictionary<string, uint>();

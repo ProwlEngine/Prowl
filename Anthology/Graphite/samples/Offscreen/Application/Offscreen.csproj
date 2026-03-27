@@ -3,6 +3,7 @@
   <ItemGroup>
     <Compile Include="..\..\Common\Model.cs" Link="Model.cs" />
     <Compile Include="..\..\Common\RawList.cs" Link="RawList.cs" />
+    <Compile Include="..\..\Common\AssimpHelper.cs" Link="AssimpHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>

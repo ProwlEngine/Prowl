@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <Compile Include="..\SampleBase\KtxFile.cs" Link="KtxFile.cs" />
+    <Compile Include="..\Common\AssimpHelper.cs" Link="AssimpHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>

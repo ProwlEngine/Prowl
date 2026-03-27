@@ -16,7 +16,7 @@ namespace AssetProcessor
 {
     public class AssimpProcessor : BinaryAssetProcessor<ProcessedModel>
     {
-        private static readonly Assimp _assimp = Assimp.GetApi();
+        private static readonly Assimp _assimp = SampleBase.AssimpHelper.GetApi();
 
         public unsafe override ProcessedModel ProcessT(Stream stream, string extension)
         {
