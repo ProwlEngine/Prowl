@@ -12,12 +12,15 @@ All backends ported, validated, and passing upstream test suite.
 
 | Backend | Status |
 |---------|--------|
-| Vulkan | Ported and validated (484/499 tests pass, 15 skipped upstream bugs) |
-| Direct3D 11 | Ported and validated (484/499 tests pass, 15 skipped upstream bugs) |
-| OpenGL | Ported and validated (484/499 tests pass, 15 skipped upstream bugs) |
+| Vulkan | Ported and validated |
+| Direct3D 11 | Ported and validated |
+| OpenGL | Ported and validated |
+| OpenGLES | Ported and validated |
 | SPIRV | Ported to pure C# (82/82 tests pass) |
 | Metal | Removed (use Vulkan via MoltenVK on macOS) |
 | Windowing | SDL2 via `Silk.NET.SDL` (matching upstream's SDL2 approach) |
+
+GPU test suite: 1634 passed, 0 failed, 163 skipped (platform limitations, not bugs). Identical results to upstream.
 
 | Platform | Status |
 |----------|--------|
@@ -75,11 +78,11 @@ On Windows, samples default to D3D11. On other platforms, they default to Vulkan
 # SPIRV cross-compilation tests (no GPU required)
 dotnet test tests/Veldrid.SPIRV.Tests/Veldrid.SPIRV.Tests.csproj
 
-# GPU tests (requires graphics hardware)
-dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:DefineConstants="TEST_D3D11"
-dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:DefineConstants="TEST_VULKAN"
-dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:DefineConstants="TEST_OPENGL"
+# GPU tests - all backends for the current platform (requires graphics hardware)
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj
 ```
+
+See [tests/README.md](tests/README.md) for filtering by backend, running individual tests, and details on skipped tests.
 
 ## Related Projects
 

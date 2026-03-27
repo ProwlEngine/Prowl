@@ -10,29 +10,51 @@ dotnet test tests/Veldrid.SPIRV.Tests/Veldrid.SPIRV.Tests.csproj
 
 ## GPU Tests (requires graphics hardware)
 
-Tests buffers, textures, framebuffers, compute, rendering, pipelines, resource sets, and swapchains against real GPU backends. Each backend is enabled via a define constant:
+Tests buffers, textures, framebuffers, compute, rendering, pipelines, resource sets, and swapchains against real GPU backends. Backend selection is automatic based on the platform:
+
+| Backend | Windows | Linux | macOS |
+|---------|---------|-------|-------|
+| D3D11 | Yes | - | - |
+| Vulkan | Yes | Yes | - |
+| OpenGL | Yes | Yes | Yes |
+| OpenGLES | Yes | Yes | - |
+
+Run all backends for the current platform:
 
 ```bash
-# Single backend
-dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:DefineConstants="TEST_D3D11"
-dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:DefineConstants="TEST_VULKAN"
-dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:DefineConstants="TEST_OPENGL"
-
-# Multiple backends (runs each test once per backend)
-dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:DefineConstants='"TEST_D3D11;TEST_VULKAN;TEST_OPENGL"'
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj
 ```
 
-Without any `TEST_*` define, only non-GPU unit tests run.
+Run a specific backend only:
+
+```bash
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj --filter "Backend=D3D11"
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj --filter "Backend=Vulkan"
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj --filter "Backend=OpenGL"
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj --filter "Backend=OpenGLES"
+```
+
+Run multiple backends:
+
+```bash
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj --filter "Backend=D3D11|Backend=Vulkan"
+```
+
+Run a specific test across all backends:
+
+```bash
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj --filter "Map_WrongFlags_Throws"
+```
 
 ### Skipped tests
 
-Some tests are skipped. These are pre-existing upstream bugs, not regressions:
+Some tests are skipped at runtime via `[SkippableFact]` + `Skip.If`/`Skip.IfNot`:
 
-- **Validation tests** - expect `VeldridException` for invalid input, but the validation code was removed from upstream in Nov 2018 (commit `33a0545`). The tests were never updated. Marked with `[Fact(Skip = "Upstream: missing input validation")]`.
+- **UseBlendFactor on Vulkan** - triggers a Vulkan image layout validation error. Same error crashes upstream's process. Our fix to the debug callback turns it into a catchable exception instead.
 
-- **UseBlendFactor on Vulkan** - triggers a Vulkan image layout validation error. Same error crashes upstream's process. Our fix to the debug callback turns it into a catchable exception instead. Marked with `[SkippableFact]` and `Skip.If(Vulkan)`.
+- **D3D11 cubemap storage tests** - D3D11 doesn't support storage cubemaps.
 
-- **D3D11 cubemap storage tests** - D3D11 doesn't support storage cubemaps. Runtime skip via `[SkippableFact]`.
+- **OpenGLES compute and buffer-range tests** - GLES on Windows desktop doesn't support compute shaders or buffer range binding. These are platform limitations, not bugs.
 
 ### Vulkan debug callback note
 

@@ -245,7 +245,7 @@ void main()
         public void ComputeCubemapGeneration()
         {
             Skip.IfNot(GD.Features.ComputeShader);
-            Skip.If(GD.BackendType == GraphicsBackend.Direct3D11, "D3D11 doesn't support Storage Cubemaps");
+            Skip.If(GD.GetD3D11Info(out _), "D3D11 doesn't support Storage Cubemaps");
 
             const int TexSize = 32;
             const uint MipLevels = 1;
@@ -310,7 +310,7 @@ void main()
         public void ComputeCubemapBindSingleTextureMipLevelOutput()
         {
             Skip.IfNot(GD.Features.ComputeShader);
-            Skip.If(GD.BackendType == GraphicsBackend.Direct3D11, "D3D11 doesn't support Storage Cubemaps");
+            Skip.If(GD.GetD3D11Info(out _), "D3D11 doesn't support Storage Cubemaps");
 
             const int TexSize = 128;
             const uint MipLevels = 7;

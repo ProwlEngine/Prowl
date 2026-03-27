@@ -40,7 +40,7 @@ namespace Veldrid.Tests
             GD.Unmap(staging);
         }
 
-        [Fact(Skip = "Upstream: missing input validation")]
+        [Fact]
         public void NoDepthTarget_ClearDepth_Fails()
         {
             Texture colorTarget = RF.CreateTexture(
@@ -53,7 +53,7 @@ namespace Veldrid.Tests
             Assert.Throws<VeldridException>(() => cl.ClearDepthStencil(1f));
         }
 
-        [Fact(Skip = "Upstream: missing input validation")]
+        [Fact]
         public void NoColorTarget_ClearColor_Fails()
         {
             Texture depthTarget = RF.CreateTexture(
@@ -66,7 +66,7 @@ namespace Veldrid.Tests
             Assert.Throws<VeldridException>(() => cl.ClearColorTarget(0, RgbaFloat.Red));
         }
 
-        [Fact(Skip = "Upstream: missing input validation")]
+        [Fact]
         public void ClearColorTarget_OutOfRange_Fails()
         {
             TextureDescription desc = TextureDescription.Texture2D(
