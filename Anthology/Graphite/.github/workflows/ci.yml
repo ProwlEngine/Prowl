@@ -24,7 +24,7 @@ jobs:
 
       - name: Install native dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libassimp-dev
+        run: sudo apt-get update && sudo apt-get install -y libassimp-dev libshaderc-dev libspirv-cross-c-shared-dev
 
       - name: Build
         run: dotnet build VeldridSilk.slnx -c Release
