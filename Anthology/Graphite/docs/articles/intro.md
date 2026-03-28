@@ -1,0 +1,54 @@
+---
+uid: intro
+---
+
+# Introduction
+
+NeoVeldrid is a low-level graphics library for .NET. It can be used to create high-performance 2D and 3D games, simulations, tools, and other graphical applications. Unlike most other .NET graphics libraries, NeoVeldrid is designed to be portable, meaning it is not tied to any particular operating system or native graphics API. With Vulkan, Direct3D 11, OpenGL, and OpenGL ES backends, applications built with NeoVeldrid can run on all desktop platforms without modification.
+
+NeoVeldrid is a maintained fork of [Veldrid](https://github.com/mellinoe/veldrid), with all native bindings replaced by [Silk.NET](https://github.com/dotnet/Silk.NET). The public API is fully preserved - if you know Veldrid, you know NeoVeldrid.
+
+## Features
+
+* Modern GPU functionality:
+  * Programmable vertex, geometry, tessellation, and fragment shaders
+  * Programmable compute shaders
+  * Full control over the graphics pipeline: blend state, depth-stencil state, rasterizer state, shaders and shader specialization, resource access, and more
+  * Modern buffer features, including vertex, index, uniform, structured, and indirect buffers, read-write shader access, and more
+  * Modern [texture](xref:textures) features, including 3D textures, array textures, multisampling, texture views, multi-output [Framebuffers](xref:framebuffers), read-write shader access, a variety of standard, compressed and packed [pixel formats](xref:Veldrid.PixelFormat), and more
+  * Multiple [Swapchains](xref:swapchains), with support for runtime creation and destruction
+* Targets modern graphics APIs, including Vulkan and Direct3D 11.
+* Cross-platform: Windows, macOS (via MoltenVK), Linux.
+* Portable Shaders: First-class support for SPIR-V bytecode allows you to write your shaders once for all platforms.
+* High-performance: Built on a thin, low-cost abstraction that is close to current-gen graphics APIs.
+* Multi-threaded: Most NeoVeldrid objects can be used from multiple threads simultaneously. See [Multi-threading](xref:multi-threading) for specifics.
+* Allocation-free: The core rendering loop can be used without allocating any garbage-collected memory.
+* Headless: Can be used without any application window, to perform GPU-accelerated operations in the background.
+* .NET-friendly: Designed with .NET in mind, integrates cleanly with regular .NET code.
+* Zero native binaries to manage: All native dependencies are handled via Silk.NET NuGet packages.
+
+## What Changed from Veldrid
+
+NeoVeldrid replaces all of Veldrid's native binding libraries with Silk.NET equivalents. The public API is identical. See the [Migration Guide](xref:migration) for details on switching from Veldrid.
+
+| Area | Veldrid | NeoVeldrid |
+|------|---------|------------|
+| Vulkan | Vk 1.0.25 | Silk.NET.Vulkan |
+| D3D11 | Vortice.Direct3D11 | Silk.NET.Direct3D11 |
+| OpenGL | Custom bindings | Silk.NET.OpenGL |
+| Metal | Custom bindings (101 files) | Removed (use Vulkan via MoltenVK) |
+| Windowing | Custom SDL2 P/Invoke | Silk.NET.SDL |
+| SPIRV | Native C++ shim | Pure C# via Silk.NET |
+| Target | netstandard2.0 | net10.0 |
+
+## Getting Started
+
+See [Getting Started](xref:getting-started-intro) for a basic startup guide.
+
+## API Concepts
+
+See [API Concepts](xref:api-concepts) for an overview of the common object types.
+
+## Samples
+
+See the [samples directory](https://github.com/jhm-ciberman/veldrid-silk/tree/main/samples) for demo applications, including NeoDemo (a full scene with shadows, reflections, and ImGui).

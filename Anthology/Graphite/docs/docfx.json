@@ -1,0 +1,63 @@
+{
+    "metadata": [
+        {
+            "src": [
+                {
+                    "files": [
+                        "src/Veldrid/Veldrid.csproj",
+                        "src/Veldrid.StartupUtilities/Veldrid.StartupUtilities.csproj",
+                        "src/Veldrid.ImageSharp/Veldrid.ImageSharp.csproj",
+                        "src/Veldrid.Utilities/Veldrid.Utilities.csproj",
+                        "src/Veldrid.SPIRV/Veldrid.SPIRV.csproj",
+                        "src/Veldrid.SDL2/Veldrid.SDL2.csproj",
+                        "src/Veldrid.ImGui/Veldrid.ImGui.csproj"
+                    ],
+                    "src": ".."
+                }
+            ],
+            "dest": "api",
+            "properties": {
+                "TargetFramework": "net10.0"
+            },
+            "includePrivateMembers": false,
+            "disableGitFeatures": false,
+            "disableDefaultFilter": false,
+            "noRestore": false
+        }
+    ],
+    "build": {
+        "content": [
+            {
+                "files": [
+                    "api/**.yml",
+                    "api/index.md"
+                ]
+            },
+            {
+                "files": [
+                    "articles/**.md",
+                    "articles/**/toc.yml",
+                    "toc.yml",
+                    "*.md"
+                ]
+            }
+        ],
+        "resource": [
+            {
+                "files": [
+                    "images/**"
+                ]
+            }
+        ],
+        "dest": "_site",
+        "template": [
+            "default",
+            "modern"
+        ],
+        "globalMetadata": {
+            "_appTitle": "NeoVeldrid",
+            "_appFooter": "NeoVeldrid - A modern, cross-platform .NET graphics library",
+            "_enableSearch": true
+        }
+    }
+}
