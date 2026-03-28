@@ -1,3 +1,4 @@
+using System.IO;
 using System.Runtime.InteropServices;
 using Silk.NET.Assimp;
 
@@ -16,14 +17,32 @@ namespace SampleBase
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                return new Assimp(Assimp.CreateDefaultContext(
-                    new[] { "libassimp.so.6", "libassimp.so.5", "libassimp" }));
+                try
+                {
+                    return new Assimp(Assimp.CreateDefaultContext(
+                        new[] { "libassimp.so.6", "libassimp.so.5", "libassimp" }));
+                }
+                catch (FileNotFoundException)
+                {
+                    // Custom names bypass Silk.NET's SearchPathContainer. Fall back to
+                    // the default loader which knows about NuGet runtimes/ directories.
+                    // This loads libassimp.so.5 (wrong ABI for animation keyframes) but
+                    // works for basic model loading.
+                    return Assimp.GetApi();
+                }
             }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                return new Assimp(Assimp.CreateDefaultContext(
-                    new[] { "libassimp.6.dylib", "libassimp.5.dylib", "libassimp" }));
+                try
+                {
+                    return new Assimp(Assimp.CreateDefaultContext(
+                        new[] { "libassimp.6.dylib", "libassimp.5.dylib", "libassimp" }));
+                }
+                catch (FileNotFoundException)
+                {
+                    return Assimp.GetApi();
+                }
             }
 
             return Assimp.GetApi();
