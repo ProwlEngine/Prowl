@@ -22,6 +22,10 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Install native dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libassimp-dev
+
       - name: Build
         run: dotnet build VeldridSilk.slnx -c Release
 
