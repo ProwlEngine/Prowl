@@ -24,16 +24,18 @@ jobs:
 
       - name: Install native dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libassimp-dev
+        run: |
+          sudo apt-get update && sudo apt-get install -y libassimp-dev
+          # Silk.NET's library loader can't find NuGet-packaged native libraries
+          # on Linux CI. Restore packages and symlink them to /usr/local/lib/.
+          dotnet restore VeldridSilk.slnx
+          for lib in $(find ~/.nuget/packages -path "*/runtimes/linux-x64/native/*.so*" -type f); do
+            sudo ln -sf "$lib" "/usr/local/lib/$(basename $lib)"
+          done
+          sudo ldconfig
 
       - name: Build
         run: dotnet build VeldridSilk.slnx -c Release
-
-      - name: Set native library path (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          NATIVE_PATHS=$(find ~/.nuget/packages -path "*/runtimes/linux-x64/native" -type d 2>/dev/null | tr '\n' ':')
-          echo "LD_LIBRARY_PATH=${NATIVE_PATHS}${LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
       - name: Run SPIRV tests
         run: dotnet test tests/Veldrid.SPIRV.Tests/Veldrid.SPIRV.Tests.csproj -c Release
