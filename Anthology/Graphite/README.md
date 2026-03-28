@@ -24,9 +24,9 @@ GPU test suite: 1634 passed, 0 failed, 163 skipped (platform limitations, not bu
 
 | Platform | Status |
 |----------|--------|
-| Windows | All backends working. All samples validated. Full test suite passing. |
-| macOS | Vulkan via MoltenVK + OpenGL 4.1. Basic samples work. Known issues with window resize/close and compute shaders (GL 4.1 limitation). |
-| Linux | Untested. Vulkan and OpenGL expected to work. DXVK (D3D11 via Vulkan) implemented but untested. |
+| Windows | All backends working. All samples validated. Full test suite passing (1634 GPU + 82 SPIRV). |
+| macOS | Vulkan via MoltenVK: all samples working. OpenGL 4.1: intermittent freeze (pre-existing upstream bug). |
+| Linux | Vulkan: all samples working, full test suite passing. OpenGL: all samples working. Tested on WSL2. |
 
 ## What Changed
 
