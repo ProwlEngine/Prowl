@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build VeldridSilk.slnx -c Release
+
+      - name: Run SPIRV tests
+        run: dotnet test tests/Veldrid.SPIRV.Tests/Veldrid.SPIRV.Tests.csproj -c Release --no-build
+
+      - name: Run non-GPU tests
+        run: dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -c Release -p:ExcludeGPU=true

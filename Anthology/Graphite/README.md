@@ -75,14 +75,11 @@ On Windows, samples default to D3D11. On other platforms, they default to Vulkan
 ## Running Tests
 
 ```bash
-# SPIRV cross-compilation tests (no GPU required)
-dotnet test tests/Veldrid.SPIRV.Tests/Veldrid.SPIRV.Tests.csproj
-
-# GPU tests - all backends for the current platform (requires graphics hardware)
-dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj
+# Run all tests (SPIRV + GPU)
+dotnet test
 ```
 
-See [tests/README.md](tests/README.md) for filtering by backend, running individual tests, and details on skipped tests.
+See [tests/README.md](tests/README.md) for filtering by backend, running individual tests, non GPU tests, and details on skipped tests.
 
 ## Related Projects
 

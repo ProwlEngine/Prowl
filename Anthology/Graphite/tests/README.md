@@ -46,6 +46,12 @@ Run a specific test across all backends:
 dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj --filter "Map_WrongFlags_Throws"
 ```
 
+Run only non-GPU tests (for CI or machines without graphics hardware):
+
+```bash
+dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -p:ExcludeGPU=true
+```
+
 ### Skipped tests
 
 Some tests are skipped at runtime via `[SkippableFact]` + `Skip.If`/`Skip.IfNot`:
