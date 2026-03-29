@@ -57,7 +57,11 @@
         "globalMetadata": {
             "_appTitle": "NeoVeldrid",
             "_appFooter": "NeoVeldrid - A modern, cross-platform .NET graphics library",
-            "_enableSearch": true
+            "_enableSearch": true,
+            "_gitContribute": {
+                "repo": "https://github.com/jhm-ciberman/neo-veldrid",
+                "branch": "main"
+            }
         }
     }
 }
