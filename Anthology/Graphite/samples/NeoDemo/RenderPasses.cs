@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     [Flags]
     public enum RenderPasses : int

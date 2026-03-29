@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Numerics;
-using Veldrid;
+using NeoVeldrid;
 
 namespace SampleBase
 {

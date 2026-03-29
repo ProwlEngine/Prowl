@@ -1,6 +1,6 @@
 ﻿using System;
 using System.IO;
-using Veldrid;
+using NeoVeldrid;
 
 namespace AssetPrimitives
 {

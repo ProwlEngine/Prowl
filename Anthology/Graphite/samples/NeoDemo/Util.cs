@@ -3,9 +3,9 @@ using System;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using Veldrid.Utilities;
+using NeoVeldrid.Utilities;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     internal static class Util
     {

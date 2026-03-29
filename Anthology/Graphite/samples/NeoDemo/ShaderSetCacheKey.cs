@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public struct ShaderSetCacheKey : IEquatable<ShaderSetCacheKey>
     {

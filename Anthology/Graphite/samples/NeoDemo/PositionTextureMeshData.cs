@@ -1,9 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using Veldrid.Utilities;
+using NeoVeldrid.Utilities;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public static partial class PrimitiveShapes
     {

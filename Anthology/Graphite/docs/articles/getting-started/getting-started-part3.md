@@ -24,13 +24,13 @@ The first thing we need to do is call Begin() on our CommandList. Before command
 _commandList.Begin();
 ```
 
-Before we can issue a Draw command, we need to set a [Framebuffer](xref:Veldrid.Framebuffer).
+Before we can issue a Draw command, we need to set a [Framebuffer](xref:NeoVeldrid.Framebuffer).
 
 ```C#
 _commandList.SetFramebuffer(_graphicsDevice.SwapchainFramebuffer);
 ```
 
-A Framebuffer is a device resource which controls where the rendered outputs go. The [SwapchainFramebuffer](xref:Veldrid.GraphicsDevice#Veldrid_GraphicsDevice_SwapchainFramebuffer) is the application's main Framebuffer. It can be used to draw directly into the application's view.
+A Framebuffer is a device resource which controls where the rendered outputs go. The [SwapchainFramebuffer](xref:NeoVeldrid.GraphicsDevice#NeoVeldrid_GraphicsDevice_SwapchainFramebuffer) is the application's main Framebuffer. It can be used to draw directly into the application's view.
 
 At the beginning of every frame, we clear the screen to black. In a static scene, this is not really necessary, but I will do it anyway for demonstration.
 
@@ -52,7 +52,7 @@ _commandList.DrawIndexed(
     instanceStart: 0);
 ```
 
-The vertex buffer is bound to slot 0. In our case, we only have one slot, but it is possible for multiple slots and multiple vertex buffers to be used. When we bind our index buffer, we need to communicate the format of data inside of it. Ours contains 16-bit unsigned integers ([IndexFormat.UInt16](xref:Veldrid.IndexFormat)). We issue a DrawIndexed command with four indices, one instance, and no offsets.
+The vertex buffer is bound to slot 0. In our case, we only have one slot, but it is possible for multiple slots and multiple vertex buffers to be used. When we bind our index buffer, we need to communicate the format of data inside of it. Ours contains 16-bit unsigned integers ([IndexFormat.UInt16](xref:NeoVeldrid.IndexFormat)). We issue a DrawIndexed command with four indices, one instance, and no offsets.
 
 We are almost ready to see our colored quad. All that remains is to execute our commands, and swap the buffers of the main swapchain.
 
@@ -97,9 +97,9 @@ private static void DisposeResources()
 
 ## Wrapping Up
 
-The completed project of this tutorial is available [here](https://github.com/mellinoe/veldrid-samples/blob/master/src/GettingStarted/Program.cs). This is a simple example intended to demonstrate some of the core concepts in Veldrid. More advanced rendering techniques are possible using these and other features available in the library.
+The completed project of this tutorial is available [here](https://github.com/mellinoe/veldrid-samples/blob/master/src/GettingStarted/Program.cs). This is a simple example intended to demonstrate some of the core concepts in NeoVeldrid. More advanced rendering techniques are possible using these and other features available in the library.
 
-See the [NeoDemo] project in the Veldrid repository for a more complex application built on Veldrid. It uses the following techniques:
+See the [NeoDemo] project in the NeoVeldrid repository for a more complex application built on NeoVeldrid. It uses the following techniques:
 
 * Real-time dynamic shadows with three cascades
 * Real-time reflections.

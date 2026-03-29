@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public struct RenderOrderKey : IComparable<RenderOrderKey>, IComparable
     {

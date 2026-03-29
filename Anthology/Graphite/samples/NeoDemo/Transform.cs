@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Numerics;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public class Transform
     {

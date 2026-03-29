@@ -28,15 +28,15 @@ jobs:
       - name: Setup native library path (Linux)
         if: runner.os == 'Linux'
         run: |
-          dotnet restore VeldridSilk.slnx
+          dotnet restore NeoVeldrid.slnx
           NATIVE_PATHS=$(find ~/.nuget/packages -path "*/runtimes/linux-x64/native" -type d 2>/dev/null | tr '\n' ':')
           echo "LD_LIBRARY_PATH=${NATIVE_PATHS}${LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
       - name: Build
-        run: dotnet build VeldridSilk.slnx -c Release
+        run: dotnet build NeoVeldrid.slnx -c Release
 
       - name: Run SPIRV tests
-        run: dotnet test tests/Veldrid.SPIRV.Tests/Veldrid.SPIRV.Tests.csproj -c Release
+        run: dotnet test tests/NeoVeldrid.SPIRV.Tests/NeoVeldrid.SPIRV.Tests.csproj -c Release
 
       - name: Run non-GPU tests
-        run: dotnet test tests/Veldrid.Tests/Veldrid.Tests.csproj -c Release -p:ExcludeGPU=true
+        run: dotnet test tests/NeoVeldrid.Tests/NeoVeldrid.Tests.csproj -c Release -p:ExcludeGPU=true

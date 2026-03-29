@@ -6,7 +6,7 @@ namespace AnimatedMesh
     {
         public static void Main(string[] args)
         {
-            VeldridStartupWindow window = new VeldridStartupWindow("Animated Mesh");
+            NeoVeldridStartupWindow window = new NeoVeldridStartupWindow("Animated Mesh");
             AnimatedMesh animatedMesh = new AnimatedMesh(window);
             window.Run();
         }

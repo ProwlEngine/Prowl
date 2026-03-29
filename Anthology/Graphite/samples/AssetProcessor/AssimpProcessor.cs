@@ -7,10 +7,10 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using Veldrid;
+using NeoVeldrid;
 
 using Mesh = Silk.NET.Assimp.Mesh;
-using Texture = Veldrid.Texture;
+using Texture = NeoVeldrid.Texture;
 
 namespace AssetProcessor
 {

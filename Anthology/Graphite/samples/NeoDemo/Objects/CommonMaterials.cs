@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
-using Veldrid;
+using NeoVeldrid;
 
-namespace Veldrid.NeoDemo.Objects
+namespace NeoVeldrid.NeoDemo.Objects
 {
     public static class CommonMaterials
     {

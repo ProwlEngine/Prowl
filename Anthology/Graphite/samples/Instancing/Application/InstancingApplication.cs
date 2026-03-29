@@ -1,5 +1,5 @@
 using System.Numerics;
-using Veldrid;
+using NeoVeldrid;
 using SampleBase;
 using System.Runtime.CompilerServices;
 using System.IO;
@@ -8,7 +8,7 @@ using Common;
 using System.Runtime.InteropServices;
 using AssetPrimitives;
 using System.Diagnostics;
-using Veldrid.SPIRV;
+using NeoVeldrid.SPIRV;
 
 // This example has been adapted from Sascha Willem's "instancing" example from https://github.com/SaschaWillems/Vulkan.
 

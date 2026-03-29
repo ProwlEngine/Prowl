@@ -1,8 +1,8 @@
-# Veldrid-Silk
+# NeoVeldrid
 
-A fork of [Veldrid](https://github.com/mellinoe/veldrid) that replaces all native graphics bindings with [Silk.NET](https://github.com/dotnet/Silk.NET) equivalents.
+A maintained fork of [Veldrid](https://github.com/mellinoe/veldrid) that replaces all native graphics bindings with [Silk.NET](https://github.com/dotnet/Silk.NET) equivalents.
 
-Veldrid is a cross-platform, graphics API-agnostic rendering and compute library for .NET. It provides a powerful, unified interface to a system's GPU. Veldrid's public API surface remains unchanged in this fork: only the internal backend implementations are swapped. Any app built on Veldrid should work identically after switching to veldrid-silk.
+Veldrid is a cross-platform, graphics API-agnostic rendering and compute library for .NET. It provides a powerful, unified interface to a system's GPU. NeoVeldrid preserves Veldrid's public API surface unchanged - only the internal backend implementations are swapped. Any app built on Veldrid should work after switching to NeoVeldrid (see [Migration Guide](docs/articles/migration.md)).
 
 ![NeoDemo - Sponza Atrium](art/sponza.jpeg)
 
@@ -26,11 +26,11 @@ GPU test suite: 1634 passed, 0 failed, 163 skipped (platform limitations, not bu
 |----------|--------|
 | Windows | All backends working. All samples validated. Full test suite passing (1634 GPU + 82 SPIRV). |
 | macOS | Vulkan via MoltenVK: all samples working. OpenGL 4.1: intermittent freeze (pre-existing upstream bug). |
-| Linux | Vulkan: all samples working, full test suite passing. OpenGL: all samples working. Tested on WSL2. |
+| Linux | Vulkan: all samples working, full test suite passing. OpenGL: all samples working. |
 
 ## What Changed
 
-| Area | Upstream Veldrid | veldrid-silk |
+| Area | Upstream Veldrid | NeoVeldrid |
 |------|-----------------|-------------|
 | Vulkan bindings | `Vk` 1.0.25 | `Silk.NET.Vulkan` 2.23.0 |
 | D3D11 bindings | `Vortice.Direct3D11` 2.4.2 | `Silk.NET.Direct3D11` 2.23.0 |
@@ -46,7 +46,7 @@ Six different binding libraries replaced by a single ecosystem. Zero hand-writte
 ## Building
 
 ```bash
-dotnet build VeldridSilk.slnx
+dotnet build NeoVeldrid.slnx
 ```
 
 Requires .NET 10 SDK.
@@ -64,10 +64,10 @@ dotnet run --project samples/TexturedCube/Desktop/TexturedCube.Desktop.csproj
 dotnet run --project samples/NeoDemo/NeoDemo.csproj
 ```
 
-Set `VELDRID_BACKEND` to select a backend: `d3d11`, `vulkan`, `opengl`.
+Set `NEOVELDRID_BACKEND` to select a backend: `d3d11`, `vulkan`, `opengl`.
 
 ```bash
-VELDRID_BACKEND=vulkan dotnet run --project samples/GettingStarted/GettingStarted.csproj
+NEOVELDRID_BACKEND=vulkan dotnet run --project samples/GettingStarted/GettingStarted.csproj
 ```
 
 On Windows, samples default to D3D11. On other platforms, they default to Vulkan. See the [samples directory](samples/) for the full list.

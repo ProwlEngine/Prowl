@@ -1,6 +1,6 @@
 # API-specific rendering differences
 
-Veldrid does everything it can to eliminate differences between different rendering API's, and to provide a unified interface to the GPU. In some cases, there are fundamental differences between graphics API's that cannot be easily or efficiently reconciled. This document describes these differences and how they can be dealt with in your code.
+NeoVeldrid does everything it can to eliminate differences between different rendering API's, and to provide a unified interface to the GPU. In some cases, there are fundamental differences between graphics API's that cannot be easily or efficiently reconciled. This document describes these differences and how they can be dealt with in your code.
 
 ## Clip Space Coordinates
 
@@ -44,10 +44,10 @@ OpenGL, unlike other graphics API's, has its texture coordinate origin in the bo
 
 When creating your GraphicsDevice, there are two flags that can be enabled to force all backends to use the same clip space range.
 
-* [GraphicsDeviceOptions.PreferDepthRangeZeroToOne](xref:Veldrid.GraphicsDeviceOptions#Veldrid_GraphicsDeviceOptions_PreferDepthRangeZeroToOne): Attempts to force the device to use a [0, 1] clip space Z range.
-* [GraphicsDeviceoptions.PreferStandardClipSpaceYDirection](xref:Veldrid.GraphicsDeviceOptions#Veldrid_GraphicsDeviceOptions_PreferStandardClipSpaceYDirection): Attempts to force the depth to use a standard bottom-to-top increasing clip space Y range.
+* [GraphicsDeviceOptions.PreferDepthRangeZeroToOne](xref:NeoVeldrid.GraphicsDeviceOptions#NeoVeldrid_GraphicsDeviceOptions_PreferDepthRangeZeroToOne): Attempts to force the device to use a [0, 1] clip space Z range.
+* [GraphicsDeviceoptions.PreferStandardClipSpaceYDirection](xref:NeoVeldrid.GraphicsDeviceOptions#NeoVeldrid_GraphicsDeviceOptions_PreferStandardClipSpaceYDirection): Attempts to force the depth to use a standard bottom-to-top increasing clip space Y range.
 
 Not all systems support these options. Even if you have requested a certain clip space range, the created GraphicsDevice may not support it. You can use the following properties to query the actual expected clip range of a created GraphicsDevice:
 
-* [GraphicsDevice.IsDepthRangeZeroToOne](xref:Veldrid.GraphicsDevice#Veldrid_GraphicsDevice_IsDepthRangeZeroToOne)
-* [GraphicsDevice.IsClipSpaceYInverted](xref:Veldrid.GraphicsDevice#Veldrid_GraphicsDevice_IsClipSpaceYInverted)
+* [GraphicsDevice.IsDepthRangeZeroToOne](xref:NeoVeldrid.GraphicsDevice#NeoVeldrid_GraphicsDevice_IsDepthRangeZeroToOne)
+* [GraphicsDevice.IsClipSpaceYInverted](xref:NeoVeldrid.GraphicsDevice#NeoVeldrid_GraphicsDevice_IsClipSpaceYInverted)

@@ -4,13 +4,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Numerics;
-using Veldrid.ImageSharp;
-using Veldrid.NeoDemo.Objects;
-using Veldrid.Sdl2;
-using Veldrid.StartupUtilities;
-using Veldrid.Utilities;
+using NeoVeldrid.ImageSharp;
+using NeoVeldrid.NeoDemo.Objects;
+using NeoVeldrid.Sdl2;
+using NeoVeldrid.StartupUtilities;
+using NeoVeldrid.Utilities;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public class NeoDemo
     {
@@ -54,24 +54,24 @@ namespace Veldrid.NeoDemo
                 WindowWidth = 960,
                 WindowHeight = 540,
                 WindowInitialState = WindowState.Normal,
-                WindowTitle = "Veldrid NeoDemo"
+                WindowTitle = "NeoVeldrid NeoDemo"
             };
             GraphicsDeviceOptions gdOptions = new GraphicsDeviceOptions(false, null, false, ResourceBindingModel.Improved, true, true, _colorSrgb);
 #if DEBUG
             gdOptions.Debug = true;
 #endif
-            string backendEnv = Environment.GetEnvironmentVariable("VELDRID_BACKEND");
+            string backendEnv = Environment.GetEnvironmentVariable("NEOVELDRID_BACKEND");
             GraphicsBackend backend = string.IsNullOrEmpty(backendEnv)
-                ? VeldridStartup.GetPlatformDefaultBackend()
+                ? NeoVeldridStartup.GetPlatformDefaultBackend()
                 : backendEnv.ToLowerInvariant() switch
                 {
                     "d3d11" or "direct3d11" => GraphicsBackend.Direct3D11,
                     "vulkan" or "vk" => GraphicsBackend.Vulkan,
                     "opengl" or "gl" => GraphicsBackend.OpenGL,
                     "opengles" or "gles" => GraphicsBackend.OpenGLES,
-                    _ => throw new InvalidOperationException($"Unknown VELDRID_BACKEND: '{backendEnv}'")
+                    _ => throw new InvalidOperationException($"Unknown NEOVELDRID_BACKEND: '{backendEnv}'")
                 };
-            VeldridStartup.CreateWindowAndGraphicsDevice(
+            NeoVeldridStartup.CreateWindowAndGraphicsDevice(
                 windowCI,
                 gdOptions,
                 backend,
@@ -603,12 +603,12 @@ namespace Veldrid.NeoDemo
                     WindowWidth = _window.Width,
                     WindowHeight = _window.Height,
                     WindowInitialState = _window.WindowState,
-                    WindowTitle = "Veldrid NeoDemo"
+                    WindowTitle = "NeoVeldrid NeoDemo"
                 };
 
                 _window.Close();
 
-                _window = VeldridStartup.CreateWindow(ref windowCI);
+                _window = NeoVeldridStartup.CreateWindow(ref windowCI);
                 _window.Resized += () => _windowResized = true;
             }
 
@@ -616,7 +616,7 @@ namespace Veldrid.NeoDemo
 #if DEBUG
             gdOptions.Debug = true;
 #endif
-            _gd = VeldridStartup.CreateGraphicsDevice(_window, gdOptions, backend);
+            _gd = NeoVeldridStartup.CreateGraphicsDevice(_window, gdOptions, backend);
 
             _scene.Camera.UpdateBackend(_gd, _window);
 

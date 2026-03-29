@@ -2,10 +2,10 @@ using ImGuiNET;
 using System;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Veldrid.Sdl2;
-using Veldrid.StartupUtilities;
+using NeoVeldrid.Sdl2;
+using NeoVeldrid.StartupUtilities;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public class Camera : IUpdateable
     {

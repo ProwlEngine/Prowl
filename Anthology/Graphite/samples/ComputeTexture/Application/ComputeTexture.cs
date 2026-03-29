@@ -3,8 +3,8 @@ using System;
 using System.IO;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Veldrid;
-using Veldrid.SPIRV;
+using NeoVeldrid;
+using NeoVeldrid.SPIRV;
 
 namespace ComputeTexture
 {

@@ -1,4 +1,4 @@
-﻿namespace Veldrid.NeoDemo
+﻿namespace NeoVeldrid.NeoDemo
 {
     public interface IUpdateable
     {

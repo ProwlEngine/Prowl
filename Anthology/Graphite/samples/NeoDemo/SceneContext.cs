@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using Veldrid;
-using Veldrid.NeoDemo.Objects;
+using NeoVeldrid;
+using NeoVeldrid.NeoDemo.Objects;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public class SceneContext
     {

@@ -1,6 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 
-namespace Veldrid.NeoDemo.Objects
+namespace NeoVeldrid.NeoDemo.Objects
 {
     public class MaterialPropsAndBuffer
     {

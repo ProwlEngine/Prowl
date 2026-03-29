@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
-using Veldrid;
+using NeoVeldrid;
 
 namespace AssetPrimitives
 {

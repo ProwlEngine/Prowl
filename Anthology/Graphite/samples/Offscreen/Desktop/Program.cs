@@ -6,7 +6,7 @@ namespace Offscreen
     {
         public static void Main(string[] args)
         {
-            VeldridStartupWindow window = new VeldridStartupWindow("Offscreen");
+            NeoVeldridStartupWindow window = new NeoVeldridStartupWindow("Offscreen");
             OffscreenApplication offscreen = new OffscreenApplication(window);
             window.Run();
         }

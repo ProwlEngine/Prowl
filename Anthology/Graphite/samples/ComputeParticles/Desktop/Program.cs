@@ -6,7 +6,7 @@ namespace ComputeParticles
     {
         public static void Main(string[] args)
         {
-            VeldridStartupWindow window = new VeldridStartupWindow("Compute Particles");
+            NeoVeldridStartupWindow window = new NeoVeldridStartupWindow("Compute Particles");
             ComputeParticles computeParticles = new ComputeParticles(window);
             window.Run();
         }

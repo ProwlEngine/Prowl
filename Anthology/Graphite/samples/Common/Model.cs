@@ -2,7 +2,7 @@ using Silk.NET.Assimp;
 using System;
 using System.IO;
 using System.Numerics;
-using Veldrid;
+using NeoVeldrid;
 
 namespace Common
 {

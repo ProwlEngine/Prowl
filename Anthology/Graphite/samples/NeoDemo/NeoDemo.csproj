@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <RootNamespace>Veldrid.NeoDemo</RootNamespace>
+    <RootNamespace>NeoVeldrid.NeoDemo</RootNamespace>
     <IsPackable>false</IsPackable>
     <AssetsDir>$(MSBuildThisFileDirectory)Assets</AssetsDir>
   </PropertyGroup>
@@ -29,13 +29,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Veldrid.SPIRV\Veldrid.SPIRV.csproj" />
-    <ProjectReference Include="..\..\src\Veldrid.RenderDoc\Veldrid.RenderDoc.csproj" />
-    <ProjectReference Include="..\..\src\Veldrid\Veldrid.csproj" />
-    <ProjectReference Include="..\..\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj" />
-    <ProjectReference Include="..\..\src\Veldrid.ImageSharp\Veldrid.ImageSharp.csproj" />
-    <ProjectReference Include="..\..\src\Veldrid.Utilities\Veldrid.Utilities.csproj" />
-    <ProjectReference Include="..\..\src\Veldrid.ImGui\Veldrid.ImGui.csproj" />
+    <ProjectReference Include="..\..\src\NeoVeldrid.SPIRV\NeoVeldrid.SPIRV.csproj" />
+    <ProjectReference Include="..\..\src\NeoVeldrid.RenderDoc\NeoVeldrid.RenderDoc.csproj" />
+    <ProjectReference Include="..\..\src\NeoVeldrid\NeoVeldrid.csproj" />
+    <ProjectReference Include="..\..\src\NeoVeldrid.StartupUtilities\NeoVeldrid.StartupUtilities.csproj" />
+    <ProjectReference Include="..\..\src\NeoVeldrid.ImageSharp\NeoVeldrid.ImageSharp.csproj" />
+    <ProjectReference Include="..\..\src\NeoVeldrid.Utilities\NeoVeldrid.Utilities.csproj" />
+    <ProjectReference Include="..\..\src\NeoVeldrid.ImGui\NeoVeldrid.ImGui.csproj" />
   </ItemGroup>
 
 </Project>

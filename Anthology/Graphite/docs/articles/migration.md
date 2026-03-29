@@ -37,7 +37,7 @@ These are the only differences from upstream Veldrid:
 
 1. **Metal backend removed** - `GraphicsBackend.Metal` no longer exists. macOS uses Vulkan via MoltenVK.
 2. **Target framework: net10.0** - netstandard2.0 and netcoreapp are no longer supported.
-3. **ImageSharp 3.x** - If you use `Veldrid.ImageSharp`, note that it now depends on SixLabors.ImageSharp 3.x instead of 1.x.
+3. **ImageSharp 3.x** - If you use `NeoVeldrid.ImageSharp`, note that it now depends on SixLabors.ImageSharp 3.x instead of 1.x.
 4. **Sdl2Native removed** - If you used `Sdl2Native` for direct SDL2 P/Invoke calls, use `Sdl2Window.SdlInstance` instead to access the Silk.NET SDL API.
 
 ## What Improved

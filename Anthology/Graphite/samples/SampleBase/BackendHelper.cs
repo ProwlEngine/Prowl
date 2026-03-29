@@ -1,18 +1,18 @@
 using System;
-using Veldrid;
-using Veldrid.StartupUtilities;
+using NeoVeldrid;
+using NeoVeldrid.StartupUtilities;
 
 namespace SampleBase
 {
     /// <summary>
-    /// Parses the VELDRID_BACKEND environment variable to select a graphics backend for testing.
+    /// Parses the NEOVELDRID_BACKEND environment variable to select a graphics backend for testing.
     /// Accepts: d3d11, vulkan, opengl, opengles. Falls back to the platform default if not set.
     /// </summary>
     public static class BackendHelper
     {
         public static GraphicsBackend GetPreferredBackend()
         {
-            string envBackend = Environment.GetEnvironmentVariable("VELDRID_BACKEND");
+            string envBackend = Environment.GetEnvironmentVariable("NEOVELDRID_BACKEND");
             if (!string.IsNullOrEmpty(envBackend))
             {
                 return envBackend.ToLowerInvariant() switch
@@ -22,10 +22,10 @@ namespace SampleBase
                     "opengl" or "gl" => GraphicsBackend.OpenGL,
                     "opengles" or "gles" => GraphicsBackend.OpenGLES,
                     _ => throw new InvalidOperationException(
-                        $"Unknown VELDRID_BACKEND value: '{envBackend}'. Use: d3d11, vulkan, opengl, opengles")
+                        $"Unknown NEOVELDRID_BACKEND value: '{envBackend}'. Use: d3d11, vulkan, opengl, opengles")
                 };
             }
-            return VeldridStartup.GetPlatformDefaultBackend();
+            return NeoVeldridStartup.GetPlatformDefaultBackend();
         }
     }
 }

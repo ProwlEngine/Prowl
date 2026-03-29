@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>NeoVeldrid</RootNamespace>
+    <!-- NativeLibraryLoader pulls old Newtonsoft.Json; transitive vulnerability, not exploitable here -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NativeLibraryLoader" Version="1.0.13" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <Description>RenderDoc integration for NeoVeldrid. Provides access to RenderDoc's in-application API.</Description>
+    <PackageTags>Debug Profile 3D Graphics Direct3D DirectX Vulkan OpenGL Core Game</PackageTags>
+  </PropertyGroup>
+
+</Project>

@@ -5,7 +5,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
-using Veldrid;
+using NeoVeldrid;
 using AssetPrimitives;
 
 namespace AssetProcessor
@@ -34,7 +34,7 @@ namespace AssetProcessor
             return texData;
         }
 
-        // Taken from Veldrid.ImageSharp
+        // Taken from NeoVeldrid.ImageSharp
 
         private static Image<T>[] GenerateMipmaps<T>(Image<T> baseImage, out int totalSize) where T : unmanaged, IPixel<T>
         {

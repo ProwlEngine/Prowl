@@ -2,8 +2,8 @@
 using SampleBase;
 using System.Numerics;
 using System.Text;
-using Veldrid;
-using Veldrid.SPIRV;
+using NeoVeldrid;
+using NeoVeldrid.SPIRV;
 
 namespace TexturedCube
 {

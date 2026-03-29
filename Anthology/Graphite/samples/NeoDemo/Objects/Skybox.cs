@@ -1,10 +1,10 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using System.Numerics;
-using Veldrid.Utilities;
-using Veldrid.ImageSharp;
+using NeoVeldrid.Utilities;
+using NeoVeldrid.ImageSharp;
 
-namespace Veldrid.NeoDemo.Objects
+namespace NeoVeldrid.NeoDemo.Objects
 {
     public class Skybox : Renderable
     {

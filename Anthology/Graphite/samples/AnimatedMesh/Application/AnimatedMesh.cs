@@ -1,7 +1,7 @@
 using SampleBase;
 using System;
 using System.IO;
-using Veldrid;
+using NeoVeldrid;
 using System.Numerics;
 using Silk.NET.Assimp;
 
@@ -9,7 +9,7 @@ using Camera = SampleBase.Camera;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
-using Veldrid.SPIRV;
+using NeoVeldrid.SPIRV;
 
 namespace AnimatedMesh
 {
@@ -60,7 +60,7 @@ namespace AnimatedMesh
                 new ResourceLayoutElementDescription("SurfaceTex", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
                 new ResourceLayoutElementDescription("SurfaceSampler", ResourceKind.Sampler, ShaderStages.Fragment)));
 
-            Veldrid.Texture texture;
+            NeoVeldrid.Texture texture;
             using (Stream ktxStream = OpenEmbeddedAssetStream("goblin_bc3_unorm.ktx"))
             {
                 texture = KtxFile.LoadTexture(

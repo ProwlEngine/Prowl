@@ -4,12 +4,12 @@ using SixLabors.ImageSharp.PixelFormats;
 using System;
 using System.IO;
 using System.Numerics;
-using Veldrid;
-using Veldrid.Sdl2;
-using Veldrid.ImageSharp;
-using Veldrid.SPIRV;
-using Veldrid.StartupUtilities;
-using Veldrid.Utilities;
+using NeoVeldrid;
+using NeoVeldrid.Sdl2;
+using NeoVeldrid.ImageSharp;
+using NeoVeldrid.SPIRV;
+using NeoVeldrid.StartupUtilities;
+using NeoVeldrid.Utilities;
 
 namespace ImageTint
 {
@@ -37,7 +37,7 @@ namespace ImageTint
 
             // This demo uses WindowState.Hidden to avoid popping up an unnecessary window to the user.
 
-            VeldridStartup.CreateWindowAndGraphicsDevice(
+            NeoVeldridStartup.CreateWindowAndGraphicsDevice(
                 new WindowCreateInfo
                 {
                     WindowInitialState = WindowState.Hidden,

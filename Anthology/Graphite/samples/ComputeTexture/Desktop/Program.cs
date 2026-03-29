@@ -6,7 +6,7 @@ namespace ComputeTexture
     {
         public static void Main(string[] args)
         {
-            VeldridStartupWindow window = new VeldridStartupWindow("Compute Texture");
+            NeoVeldridStartupWindow window = new NeoVeldridStartupWindow("Compute Texture");
             ComputeTexture computeTexture = new ComputeTexture(window);
             window.Run();
         }

@@ -6,12 +6,12 @@ using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
-using Veldrid.NeoDemo.Objects;
-using Veldrid.Sdl2;
-using Veldrid.StartupUtilities;
-using Veldrid.Utilities;
+using NeoVeldrid.NeoDemo.Objects;
+using NeoVeldrid.Sdl2;
+using NeoVeldrid.StartupUtilities;
+using NeoVeldrid.Utilities;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public class Scene
     {

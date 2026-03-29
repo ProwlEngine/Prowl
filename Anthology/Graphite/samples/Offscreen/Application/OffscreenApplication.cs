@@ -4,9 +4,9 @@ using System;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using Veldrid;
-using Veldrid.SPIRV;
-using Veldrid.Utilities;
+using NeoVeldrid;
+using NeoVeldrid.SPIRV;
+using NeoVeldrid.Utilities;
 
 namespace Offscreen
 {

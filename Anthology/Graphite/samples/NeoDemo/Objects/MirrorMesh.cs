@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
-using Veldrid.Utilities;
+using NeoVeldrid.Utilities;
 
-namespace Veldrid.NeoDemo.Objects
+namespace NeoVeldrid.NeoDemo.Objects
 {
     internal class MirrorMesh
     {

@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Numerics;
-using Veldrid.StartupUtilities;
+using NeoVeldrid.StartupUtilities;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public class ImGuiRenderable : Renderable, IUpdateable
     {

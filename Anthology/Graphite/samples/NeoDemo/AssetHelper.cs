@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     internal static class AssetHelper
     {

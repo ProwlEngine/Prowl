@@ -2,10 +2,10 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
-using Veldrid;
-using Veldrid.Utilities;
+using NeoVeldrid;
+using NeoVeldrid.Utilities;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public static partial class PrimitiveShapes
     {

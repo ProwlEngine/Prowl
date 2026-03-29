@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text;
-using Veldrid.Sdl2;
-using Veldrid.StartupUtilities;
+using NeoVeldrid.Sdl2;
+using NeoVeldrid.StartupUtilities;
 
-namespace Veldrid.NeoDemo
+namespace NeoVeldrid.NeoDemo
 {
     public static class InputTracker
     {

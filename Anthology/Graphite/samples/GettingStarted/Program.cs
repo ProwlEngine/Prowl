@@ -1,9 +1,9 @@
 using System;
 using System.Numerics;
-using Veldrid;
-using Veldrid.Sdl2;
-using Veldrid.StartupUtilities;
-using Veldrid.SPIRV;
+using NeoVeldrid;
+using NeoVeldrid.Sdl2;
+using NeoVeldrid.StartupUtilities;
+using NeoVeldrid.SPIRV;
 using System.Text;
 
 namespace GettingStarted
@@ -50,7 +50,7 @@ void main()
                 Y = 100,
                 WindowWidth = 960,
                 WindowHeight = 540,
-                WindowTitle = "Veldrid Tutorial"
+                WindowTitle = "NeoVeldrid Tutorial"
             };
             GraphicsDeviceOptions options = new GraphicsDeviceOptions
             {
@@ -58,18 +58,18 @@ void main()
                 PreferDepthRangeZeroToOne = true
             };
 
-            string backendEnv = Environment.GetEnvironmentVariable("VELDRID_BACKEND");
+            string backendEnv = Environment.GetEnvironmentVariable("NEOVELDRID_BACKEND");
             GraphicsBackend backend = string.IsNullOrEmpty(backendEnv)
-                ? VeldridStartup.GetPlatformDefaultBackend()
+                ? NeoVeldridStartup.GetPlatformDefaultBackend()
                 : backendEnv.ToLowerInvariant() switch
                 {
                     "d3d11" or "direct3d11" => GraphicsBackend.Direct3D11,
                     "vulkan" or "vk" => GraphicsBackend.Vulkan,
                     "opengl" or "gl" => GraphicsBackend.OpenGL,
                     "opengles" or "gles" => GraphicsBackend.OpenGLES,
-                    _ => throw new InvalidOperationException($"Unknown VELDRID_BACKEND: '{backendEnv}'")
+                    _ => throw new InvalidOperationException($"Unknown NEOVELDRID_BACKEND: '{backendEnv}'")
                 };
-            VeldridStartup.CreateWindowAndGraphicsDevice(windowCI, options, backend, out Sdl2Window window, out _graphicsDevice);
+            NeoVeldridStartup.CreateWindowAndGraphicsDevice(windowCI, options, backend, out Sdl2Window window, out _graphicsDevice);
             window.Title = $"{window.Title} ({_graphicsDevice.BackendType})";
 
             CreateResources();

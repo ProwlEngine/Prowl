@@ -6,7 +6,7 @@ uid: getting-started-part2
 
 ## Creating Graphics Resources
 
-It's time to create some Veldrid objects which we will need to render our multi-colored quad. Let's set up some fields in our Program class.
+It's time to create some NeoVeldrid objects which we will need to render our multi-colored quad. Let's set up some fields in our Program class.
 
 ```C#
 private static CommandList _commandList;
@@ -69,16 +69,16 @@ We will render these vertices as a Triangle Strip, so we need four indices as we
 ushort[] quadIndices = { 0, 1, 2, 3 };
 ```
 
-We need somewhere to store this vertex and index data that the GraphicsDevice can use for rendering. This is accomplished with two [DeviceBuffer](xref:Veldrid.DeviceBuffer) objects, which can be used to store many different types of data.
+We need somewhere to store this vertex and index data that the GraphicsDevice can use for rendering. This is accomplished with two [DeviceBuffer](xref:NeoVeldrid.DeviceBuffer) objects, which can be used to store many different types of data.
 
-A DeviceBuffer is created with a [BufferDescription](xref:Veldrid.BufferDescription) object. For each DeviceBuffer, we need to provide the total size that it will contain, as well as how the DeviceBuffer object will be used. In our case, we want to use one as a vertex buffer, and one as an index buffer.
+A DeviceBuffer is created with a [BufferDescription](xref:NeoVeldrid.BufferDescription) object. For each DeviceBuffer, we need to provide the total size that it will contain, as well as how the DeviceBuffer object will be used. In our case, we want to use one as a vertex buffer, and one as an index buffer.
 
 ```C#
 _vertexBuffer = factory.CreateBuffer(new BufferDescription(4 * VertexPositionColor.SizeInBytes, BufferUsage.VertexBuffer));
 _indexBuffer = factory.CreateBuffer(new BufferDescription(4 * sizeof(ushort), BufferUsage.IndexBuffer));
 ```
 
-We've created our DeviceBuffers, but they are empty at the moment. We need to fill them with the data contained in our `quadVertices` and `quadIndices` arrays. DeviceBuffers can be filled with data using the [GraphicsDevice.UpdateBuffer](xref:Veldrid.GraphicsDevice#Veldrid_GraphicsDevice_UpdateBuffer__1_Veldrid_DeviceBuffer_System_UInt32___0___) method:
+We've created our DeviceBuffers, but they are empty at the moment. We need to fill them with the data contained in our `quadVertices` and `quadIndices` arrays. DeviceBuffers can be filled with data using the [GraphicsDevice.UpdateBuffer](xref:NeoVeldrid.GraphicsDevice#NeoVeldrid_GraphicsDevice_UpdateBuffer__1_NeoVeldrid_DeviceBuffer_System_UInt32___0___) method:
 
 ```C#
 _graphicsDevice.UpdateBuffer(_vertexBuffer, 0, quadVertices);
@@ -87,7 +87,7 @@ _graphicsDevice.UpdateBuffer(_indexBuffer, 0, quadIndices);
 
 `_vertexBuffer` and `_indexBuffer` now contain all of the data from our arrays, and are accessible to the GPU.
 
-To create a Pipeline later on, we need to know the layout of the vertex buffer that will be used. Let's create the [VertexLayoutDescription](xref:Veldrid.VertexLayoutDescription) now.
+To create a Pipeline later on, we need to know the layout of the vertex buffer that will be used. Let's create the [VertexLayoutDescription](xref:NeoVeldrid.VertexLayoutDescription) now.
 
 ```C#
 VertexLayoutDescription vertexLayout = new VertexLayoutDescription(
@@ -128,7 +128,7 @@ void main()
 
 Notice that the vertex shader has two "in" variables, a `vec2` and a `vec4`. These correspond to the two `VertexElementDescription` items we defined just before.
 
-The shaders above are written in GLSL, but other shading languages can also be used with Veldrid. When you created your project, you added a reference to the Veldrid.SPIRV package. This is a helper library which allows you to load shaders from text, compiling and translating them into the form needed at runtime. To create the `Shader` instances that we need for our Pipeline, we do the following:
+The shaders above are written in GLSL, but other shading languages can also be used with NeoVeldrid. When you created your project, you added a reference to the NeoVeldrid.SPIRV package. This is a helper library which allows you to load shaders from text, compiling and translating them into the form needed at runtime. To create the `Shader` instances that we need for our Pipeline, we do the following:
 
 ```C#
 ShaderDescription vertexShaderDesc = new ShaderDescription(
@@ -143,11 +143,11 @@ ShaderDescription fragmentShaderDesc = new ShaderDescription(
 _shaders = factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
 ```
 
-`CreateFromSpirv` is an extension method defined in the `Veldrid.SPIRV` namespace, so make sure there is a `using` statement at the top of your file for that namespace.
+`CreateFromSpirv` is an extension method defined in the `NeoVeldrid.SPIRV` namespace, so make sure there is a `using` statement at the top of your file for that namespace.
 
 ### Pipeline
 
-Another object we need is a [Pipeline](xref:Veldrid.Pipeline). There are two types of Pipelines in Veldrid: graphics and compute. In this tutorial, we are going to be creating a graphics Pipeline. This is an object which encapsulates all of the necessary graphics state for drawing primitives, like triangle strips. One piece of information is the set of shaders that will be used -- we have that already. There are several other pieces of information we need.
+Another object we need is a [Pipeline](xref:NeoVeldrid.Pipeline). There are two types of Pipelines in NeoVeldrid: graphics and compute. In this tutorial, we are going to be creating a graphics Pipeline. This is an object which encapsulates all of the necessary graphics state for drawing primitives, like triangle strips. One piece of information is the set of shaders that will be used -- we have that already. There are several other pieces of information we need.
 
 ```C#
 GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription();
@@ -200,7 +200,7 @@ We're passing in our previously-created shader stages and vertex layout here. Th
 pipelineDescription.Outputs = _graphicsDevice.SwapchainFramebuffer.OutputDescription;
 ```
 
-Every `Pipeline` in Veldrid needs to know how many outputs it has, and what the format of each is. Since we are going to be rendering directly to the application's swapchain, we will use the swapchain's [OutputDescription](xref:Veldrid.Framebuffer#Veldrid_Framebuffer_OutputDescription).
+Every `Pipeline` in NeoVeldrid needs to know how many outputs it has, and what the format of each is. Since we are going to be rendering directly to the application's swapchain, we will use the swapchain's [OutputDescription](xref:NeoVeldrid.Framebuffer#NeoVeldrid_Framebuffer_OutputDescription).
 
 Finally, we can create the Pipeline.
 
@@ -210,7 +210,7 @@ _pipeline = factory.CreateGraphicsPipeline(pipelineDescription);
 
 ### CommandList
 
-A [CommandList](xref:Veldrid.CommandList) is a device resource that lets you record and execute graphics commands. You can't do anything interesting in Veldrid without one, and advanced techniques make use of many in parallel. In this program, we will use a single CommandList to issue our rendering commands. Creating a CommandList is simple:
+A [CommandList](xref:NeoVeldrid.CommandList) is a device resource that lets you record and execute graphics commands. You can't do anything interesting in NeoVeldrid without one, and advanced techniques make use of many in parallel. In this program, we will use a single CommandList to issue our rendering commands. Creating a CommandList is simple:
 
 ```C#
 _commandList = factory.CreateCommandList();
@@ -225,10 +225,10 @@ Here is what our application should look like at the end of this section:
 ```C#
 using System.Numerics;
 using System.Text;
-using Veldrid;
-using Veldrid.Sdl2;
-using Veldrid.SPIRV;
-using Veldrid.StartupUtilities;
+using NeoVeldrid;
+using NeoVeldrid.Sdl2;
+using NeoVeldrid.SPIRV;
+using NeoVeldrid.StartupUtilities;
 
 namespace GettingStarted
 {
@@ -274,11 +274,11 @@ void main()
                 Y = 100,
                 WindowWidth = 960,
                 WindowHeight = 540,
-                WindowTitle = "Veldrid Tutorial"
+                WindowTitle = "NeoVeldrid Tutorial"
             };
-            Sdl2Window window = VeldridStartup.CreateWindow(ref windowCI);
+            Sdl2Window window = NeoVeldridStartup.CreateWindow(ref windowCI);
 
-            _graphicsDevice = VeldridStartup.CreateGraphicsDevice(window);
+            _graphicsDevice = NeoVeldridStartup.CreateGraphicsDevice(window);
 
             CreateResources();
 

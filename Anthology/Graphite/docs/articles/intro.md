@@ -15,7 +15,7 @@ NeoVeldrid is a maintained fork of [Veldrid](https://github.com/mellinoe/veldrid
   * Programmable compute shaders
   * Full control over the graphics pipeline: blend state, depth-stencil state, rasterizer state, shaders and shader specialization, resource access, and more
   * Modern buffer features, including vertex, index, uniform, structured, and indirect buffers, read-write shader access, and more
-  * Modern [texture](xref:textures) features, including 3D textures, array textures, multisampling, texture views, multi-output [Framebuffers](xref:framebuffers), read-write shader access, a variety of standard, compressed and packed [pixel formats](xref:Veldrid.PixelFormat), and more
+  * Modern [texture](xref:textures) features, including 3D textures, array textures, multisampling, texture views, multi-output [Framebuffers](xref:framebuffers), read-write shader access, a variety of standard, compressed and packed [pixel formats](xref:NeoVeldrid.PixelFormat), and more
   * Multiple [Swapchains](xref:swapchains), with support for runtime creation and destruction
 * Targets modern graphics APIs, including Vulkan and Direct3D 11.
 * Cross-platform: Windows, macOS (via MoltenVK), Linux.

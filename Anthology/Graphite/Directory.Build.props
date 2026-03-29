@@ -27,8 +27,9 @@
   </PropertyGroup>
 
 
-  <!-- Suppress documentation warnings in Debug -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: Missing XML comment for publicly visible type (enforce in 1.0.1) -->
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 

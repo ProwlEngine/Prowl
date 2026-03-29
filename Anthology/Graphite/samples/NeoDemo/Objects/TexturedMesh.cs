@@ -1,11 +1,11 @@
 ﻿using System.Numerics;
 using System.Runtime.CompilerServices;
 using System;
-using Veldrid.ImageSharp;
-using Veldrid.Utilities;
+using NeoVeldrid.ImageSharp;
+using NeoVeldrid.Utilities;
 using System.Collections.Generic;
 
-namespace Veldrid.NeoDemo.Objects
+namespace NeoVeldrid.NeoDemo.Objects
 {
     public class TexturedMesh : CullRenderable
     {

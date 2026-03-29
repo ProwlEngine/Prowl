@@ -1,5 +1,5 @@
 ﻿using System;
-using Veldrid;
+using NeoVeldrid;
 
 namespace SampleBase
 {

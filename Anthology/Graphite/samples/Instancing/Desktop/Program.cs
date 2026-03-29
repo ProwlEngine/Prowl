@@ -6,7 +6,7 @@ namespace Instancing
     {
         public static void Main(string[] args)
         {
-            VeldridStartupWindow window = new VeldridStartupWindow("Instancing");
+            NeoVeldridStartupWindow window = new NeoVeldridStartupWindow("Instancing");
             InstancingApplication instancing = new InstancingApplication(window);
             window.Run();
         }

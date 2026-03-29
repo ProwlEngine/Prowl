@@ -6,7 +6,7 @@ namespace TexturedCube
     {
         public static void Main(string[] args)
         {
-            VeldridStartupWindow window = new VeldridStartupWindow("Textured Cube");
+            NeoVeldridStartupWindow window = new NeoVeldridStartupWindow("Textured Cube");
             TexturedCube texturedCube = new TexturedCube(window);
             window.Run();
         }

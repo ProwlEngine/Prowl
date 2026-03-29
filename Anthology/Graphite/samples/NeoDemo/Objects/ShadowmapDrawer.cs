@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using Veldrid.Sdl2;
-using Veldrid.StartupUtilities;
-using Veldrid.Utilities;
+using NeoVeldrid.Sdl2;
+using NeoVeldrid.StartupUtilities;
+using NeoVeldrid.Utilities;
 
-namespace Veldrid.NeoDemo.Objects
+namespace NeoVeldrid.NeoDemo.Objects
 {
     public class ShadowmapDrawer : Renderable
     {

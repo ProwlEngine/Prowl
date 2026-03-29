@@ -14,5 +14,8 @@ insert_final_newline = true
 [*.{yml,yaml}]
 indent_size = 2
 
+[*.cs]
+dotnet_diagnostic.CS1574.severity = error
+
 [*.md]
 trim_trailing_whitespace = false
