@@ -6,44 +6,91 @@ uid: migration
 
 NeoVeldrid is designed as a drop-in replacement for Veldrid. The public API is identical. Migrating an existing Veldrid project takes just a few steps.
 
-## Step 1: Replace NuGet packages
+- [Upgrading to NeoVeldrid 1.0 from Veldrid](#from-veldrid-to-neoveldrid-10)
+
+## From Veldrid to NeoVeldrid 1.0
+
+### NuGet Packages
+
+**Likelihood Of Impact: High**
 
 Remove the old Veldrid packages and add the NeoVeldrid equivalents:
 
-| Old Package | New Package |
-|-------------|-------------|
-| `Veldrid` | `NeoVeldrid` |
-| `Veldrid.StartupUtilities` | `NeoVeldrid.StartupUtilities` |
-| `Veldrid.ImageSharp` | `NeoVeldrid.ImageSharp` |
-| `Veldrid.ImGui` | `NeoVeldrid.ImGui` |
-| `Veldrid.SPIRV` | `NeoVeldrid.SPIRV` |
-| `Veldrid.Utilities` | `NeoVeldrid.Utilities` |
+| Old Package | Version | New Package | Version |
+|-------------|---------|-------------|---------|
+| `Veldrid` | 4.9.0 | `NeoVeldrid` | 1.0.0 |
+| `Veldrid.StartupUtilities` | 4.9.0 | `NeoVeldrid.StartupUtilities` | 1.0.0 |
+| `Veldrid.ImageSharp` | 4.9.0 | `NeoVeldrid.ImageSharp` | 1.0.0 |
+| `Veldrid.ImGui` | 4.9.0 | `NeoVeldrid.ImGui` | 1.0.0 |
+| `Veldrid.SPIRV` | 1.0.15 | `NeoVeldrid.SPIRV` | 1.0.0 |
+| `Veldrid.Utilities` | 4.9.0 | `NeoVeldrid.Utilities` | 1.0.0 |
 
-## Step 2: Update namespaces
+### Updated Namespaces
 
-Replace `using Veldrid;` with `using NeoVeldrid;` in your source files. All types, methods, and enums have the same names.
+**Likelihood Of Impact: High**
 
-## Step 3: Remove Metal references
+Replace all `using Veldrid;` with `using NeoVeldrid;` in your source files. A simple find-and-replace of `Veldrid` to `NeoVeldrid` across your codebase handles this. All types, methods, and enums have the same names.
 
-If your code references `GraphicsBackend.Metal`, remove those branches. On macOS, use `GraphicsBackend.Vulkan` instead (NeoVeldrid uses MoltenVK to run Vulkan on Metal).
+```csharp
+// Veldrid
+using Veldrid;
+using Veldrid.Sdl2;
+using Veldrid.StartupUtilities;
+using Veldrid.SPIRV;
 
-## Step 4: Build and run
+// NeoVeldrid
+using NeoVeldrid;
+using NeoVeldrid.Sdl2;
+using NeoVeldrid.StartupUtilities;
+using NeoVeldrid.SPIRV;
+```
 
-That's it. Your project should compile and run identically to before.
+This also renames a few types that carried the `Veldrid` prefix:
 
-## Breaking Changes
+| Old Name | New Name |
+|----------|----------|
+| `Veldrid.VeldridException` | `NeoVeldrid.NeoVeldridException` |
+| `Veldrid.StartupUtilities.VeldridStartup` | `NeoVeldrid.StartupUtilities.NeoVeldridStartup` |
 
-These are the only differences from upstream Veldrid:
+These are all caught by the same find-and-replace.
 
-1. **Metal backend removed** - `GraphicsBackend.Metal` no longer exists. macOS uses Vulkan via MoltenVK.
-2. **Target framework: net10.0** - netstandard2.0 and netcoreapp are no longer supported.
-3. **ImageSharp 3.x** - If you use `NeoVeldrid.ImageSharp`, note that it now depends on SixLabors.ImageSharp 3.x instead of 1.x.
-4. **Sdl2Native removed** - If you used `Sdl2Native` for direct SDL2 P/Invoke calls, use `Sdl2Window.SdlInstance` instead to access the Silk.NET SDL API.
+### Metal Backend Removed
 
-## What Improved
+**Likelihood Of Impact: Medium**
 
-- Works on macOS (upstream Veldrid couldn't run on Apple Silicon)
-- Works on Linux out of the box (native libraries bundled via NuGet)
-- D3D11 mipmap sampling bug fixed (was caused by a Vortice struct layout bug)
-- SPIRV cross-compilation is now pure C# (no native binary dependency)
-- SDL2 mouse input lag fixed (affected mouselook at high frame rates)
+`GraphicsBackend.Metal` has been removed. If your code referenced it (e.g. in a backend selection switch), remove those branches. On macOS, use `GraphicsBackend.Vulkan` instead. NeoVeldrid uses MoltenVK to run Vulkan on Metal automatically, you don't need to do any additional setup.
+
+### Target Framework
+
+**Likelihood Of Impact: Medium**
+
+NeoVeldrid targets `net10.0`. Please update your project's target framework to .NET 10 or later to use NeoVeldrid.
+
+```xml
+<!-- Veldrid supported netstandard2.0 -->
+<TargetFramework>netstandard2.0</TargetFramework>
+
+<!-- NeoVeldrid requires net10.0 -->
+<TargetFramework>net10.0</TargetFramework>
+```
+
+### Sdl2Native Removed
+
+**Likelihood Of Impact: Low**
+
+The `Sdl2Native` static class (custom P/Invoke bindings) has been replaced by Silk.NET.SDL. If you called `Sdl2Native.SDL_*` methods directly, use `Sdl2Window.SdlInstance` instead to access the SDL API. The `Sdl2Window` class name and public API are unchanged.
+
+```csharp
+// Veldrid
+Sdl2Native.SDL_SetWindowTitle(window.SdlWindowHandle, title);
+
+// NeoVeldrid
+window.SdlInstance.SetWindowTitle(window.SdlWindowHandle, title);
+```
+
+### ImageSharp 3.x
+
+**Likelihood Of Impact: Low**
+
+The `NeoVeldrid.ImageSharp` package now uses SixLabors.ImageSharp 3.x (up from 1.x). The NeoVeldrid.ImageSharp API itself is unchanged, but if your own code also calls ImageSharp directly, you may need to update it. See the [ImageSharp 3.0 announcement](https://sixlabors.com/posts/announcing-imagesharp-300/) for breaking changes.
+
