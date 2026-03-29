@@ -886,6 +886,7 @@ namespace Veldrid.OpenGL
             private readonly Action<IntPtr> _makeCurrent;
             private readonly IntPtr _context;
             private bool _terminated;
+            private readonly ManualResetEventSlim _terminatedEvent = new ManualResetEventSlim();
             private readonly List<Exception> _exceptions = new List<Exception>();
             private readonly object _exceptionsLock = new object();
 
@@ -992,18 +993,25 @@ namespace Veldrid.OpenGL
                         break;
                         case WorkItemType.TerminateAction:
                         {
-                            // Check if the OpenGL context has already been destroyed by the OS. If so, just exit out.
-                            uint error = (uint)_gd.GL.GetError();
-                            if (error == (uint)ErrorCode.InvalidOperation)
+                            try
                             {
-                                return;
-                            }
-                            _makeCurrent(_gd._glContext);
+                                // Check if the OpenGL context has already been destroyed by the OS. If so, just exit out.
+                                uint error = (uint)_gd.GL.GetError();
+                                if (error == (uint)ErrorCode.InvalidOperation)
+                                {
+                                    return;
+                                }
+                                _makeCurrent(_gd._glContext);
 
-                            _gd.FlushDisposables();
-                            _gd._deleteContext(_gd._glContext);
-                            _gd.StagingMemoryPool.Dispose();
-                            _terminated = true;
+                                _gd.FlushDisposables();
+                                _gd._deleteContext(_gd._glContext);
+                                _gd.StagingMemoryPool.Dispose();
+                            }
+                            finally
+                            {
+                                _terminated = true;
+                                _terminatedEvent.Set();
+                            }
                         }
                         break;
                         case WorkItemType.SetSyncToVerticalBlank:
@@ -1466,6 +1474,9 @@ namespace Veldrid.OpenGL
                 CheckExceptions();
 
                 _workItems.Add(new ExecutionThreadWorkItem(WorkItemType.TerminateAction));
+                _terminatedEvent.Wait();
+                _terminatedEvent.Dispose();
+                CheckExceptions();
             }
 
             internal void WaitForIdle()
