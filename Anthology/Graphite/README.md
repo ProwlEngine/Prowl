@@ -77,6 +77,10 @@ dotnet test
 
 See [tests/README.md](tests/README.md) for filtering by backend, running individual tests, non GPU tests, and details on skipped tests.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, testing guidelines, and how to submit a PR.
+
 ## Acknowledgments
 
 NeoVeldrid exists thanks to Eric Mellino ([@mellinoe](https://github.com/mellinoe)), who designed and built the original Veldrid. The architecture, public API, and core abstractions are entirely his work. NeoVeldrid only replaces the internal binding layer - the design that makes it all possible is Eric's. His library opened the door to cross-platform graphics programming in .NET for many of us, and we're grateful for that.
