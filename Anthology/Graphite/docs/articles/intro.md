@@ -51,4 +51,4 @@ See [API Concepts](xref:api-concepts) for an overview of the common object types
 
 ## Samples
 
-See the [samples directory](https://github.com/jhm-ciberman/veldrid-silk/tree/main/samples) for demo applications, including NeoDemo (a full scene with shadows, reflections, and ImGui).
+See the [samples directory](https://github.com/jhm-ciberman/neo-veldrid/tree/main/samples) for demo applications, including NeoDemo (a full scene with shadows, reflections, and ImGui).

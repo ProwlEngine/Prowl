@@ -12,4 +12,4 @@ NeoVeldrid is a maintained fork of [Veldrid](https://github.com/mellinoe/veldrid
 
 [__API Documentation__](api/index.md)
 
-[__GitHub__](https://github.com/jhm-ciberman/veldrid-silk)
+[__GitHub__](https://github.com/jhm-ciberman/neo-veldrid)
