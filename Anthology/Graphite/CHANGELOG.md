@@ -31,6 +31,8 @@ First release of NeoVeldrid. Drop-in replacement for [Veldrid](https://github.co
 
 - Metal backend (macOS uses Vulkan via MoltenVK instead)
 - `Sdl2Native` static class (use `Sdl2Window.SdlInstance` for SDL API access)
+- `Veldrid.VirtualReality` project (no hardware available for testing)
+- Android and iOS sample projects
 
 ### Fixed
 
