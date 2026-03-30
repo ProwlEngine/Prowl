@@ -168,7 +168,11 @@ public class DockSpace
     {
         if (node.Tabs == null || node.Tabs.Count == 0) return;
         float tabH = EditorTheme.TabBarHeight;
-        _leafRects[node] = new Rect(new Float2(x, y), new Float2(x + w, y + h));
+
+        // Store rect in global coordinates (offset by floating window position if inside one)
+        float gx = x + (fw?.Position.X ?? 0);
+        float gy = y + (fw?.Position.Y ?? 0);
+        _leafRects[node] = new Rect(new Float2(gx, gy), new Float2(gx + w, gy + h));
 
         DrawTabBar(paper, node, x, y, w, tabH, fw);
 
