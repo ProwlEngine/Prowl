@@ -14,6 +14,7 @@
   <!-- Allow test project to access internal members -->
   <ItemGroup>
     <InternalsVisibleTo Include="Prowl.Runtime.Test" />
+    <InternalsVisibleTo Include="Prowl.Editor" />
   </ItemGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">

@@ -41,6 +41,10 @@ public class GameObject : EngineObject, ISerializable
     [SerializeIgnore]
     private WeakReference<Scene> _scene;
 
+    // Prefab instance data (inert when _prefabAssetId == Guid.Empty)
+    private Guid _prefabAssetId = Guid.Empty;
+    private List<PropertyOverride>? _prefabOverrides;
+
     #endregion
 
     #region Public Fields/Properties
@@ -106,6 +110,23 @@ public class GameObject : EngineObject, ISerializable
     {
         get => _scene != null && _scene.TryGetTarget(out Scene? scene) ? scene : null;
         internal set => _scene = new(value);
+    }
+
+    /// <summary>Is this GameObject a prefab instance?</summary>
+    public bool IsPrefabInstance => _prefabAssetId != Guid.Empty;
+
+    /// <summary>The prefab asset GUID, or Guid.Empty if not a prefab instance.</summary>
+    public Guid PrefabAssetId
+    {
+        get => _prefabAssetId;
+        set => _prefabAssetId = value;
+    }
+
+    /// <summary>Per-instance property overrides for this prefab instance.</summary>
+    public List<PropertyOverride> PrefabOverrides
+    {
+        get => _prefabOverrides ??= new();
+        set => _prefabOverrides = value;
     }
 
     #endregion
@@ -1029,6 +1050,14 @@ public class GameObject : EngineObject, ISerializable
         foreach (GameObject child in Children)
             children.ListAdd(Serializer.Serialize(typeof(GameObject), child, ctx));
         compoundTag.Add("Children", children);
+
+        // Prefab data (only written for prefab instances)
+        if (_prefabAssetId != Guid.Empty)
+        {
+            compoundTag.Add("PrefabAssetId", new EchoObject(_prefabAssetId.ToString()));
+            if (_prefabOverrides is { Count: > 0 })
+                compoundTag.Add("PrefabOverrides", Serializer.Serialize(_prefabOverrides, ctx));
+        }
     }
 
     /// <summary>
@@ -1048,6 +1077,12 @@ public class GameObject : EngineObject, ISerializable
         TagIndex = value["TagIndex"]?.IntValue ?? 0;
         LayerIndex = value["LayerIndex"]?.IntValue ?? 0;
         HideFlags = (HideFlags)(value["HideFlags"]?.IntValue ?? 0);
+
+        // Prefab data
+        if (Guid.TryParse(value.Get("PrefabAssetId")?.StringValue, out Guid prefabId))
+            _prefabAssetId = prefabId;
+        if (value.TryGet("PrefabOverrides", out var overridesTag))
+            _prefabOverrides = Serializer.Deserialize<List<PropertyOverride>>(overridesTag, ctx);
 
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
         _transform.GameObject = this;
