@@ -238,6 +238,19 @@ body[data-layout="landing"] > main > .content > article {
   border-bottom-color: #4f46e5;
 }
 
+.showcase-progress {
+  height: 3px;
+  background: var(--bs-border-color);
+  width: 100%;
+  margin-top: -2px;
+}
+
+.showcase-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #4f46e5;
+}
+
 .showcase-panel {
   display: none;
   grid-template-columns: 1fr 1.5fr;

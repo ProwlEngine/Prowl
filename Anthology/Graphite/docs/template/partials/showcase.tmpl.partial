@@ -21,7 +21,7 @@
 <li>No native SDKs to install</li>
 </ul>
 </div>
-<div class="showcase-code"><pre><code>var window = NeoVeldridStartup.CreateWindow(new WindowCreateInfo
+<div class="showcase-code"><pre><code class="language-csharp">var window = NeoVeldridStartup.CreateWindow(new WindowCreateInfo
 {
     WindowWidth = 960,
     WindowHeight = 540,
@@ -38,7 +38,7 @@ var commandList = factory.CreateCommandList();</code></pre></div>
 <div class="showcase-heading">GPU resources, the .NET way</div>
 <p>Create vertex buffers, index buffers, and uniforms with a clean, typed API. Upload data directly from arrays and structs.</p>
 </div>
-<div class="showcase-code"><pre><code>float[] quadVertices = {
+<div class="showcase-code"><pre><code class="language-csharp">float[] quadVertices = {
 //    X      Y     U     V
     -0.5f,  0.5f, 0.0f, 0.0f, // top-left
      0.5f,  0.5f, 1.0f, 0.0f, // top-right
@@ -64,19 +64,14 @@ device.UpdateBuffer(indexBuffer, 0, quadIndices);</code></pre></div>
 <div class="showcase-heading">Write once, run everywhere</div>
 <p>Write your shaders in GLSL and compile to SPIR-V. NeoVeldrid cross-compiles them to HLSL or GLSL at runtime. One shader source, all backends.</p>
 </div>
-<div class="showcase-code"><pre><code>// shader.vert
-#version 450
-layout(location = 0) in vec2 Position;
-layout(location = 1) in vec2 TexCoord;
-layout(location = 0) out vec2 fsin_TexCoord;
+<div class="showcase-code"><pre>
+<pre><code class="language-csharp" style="margin-top: .5rem;">var vertexCode = File.ReadAllText("my-shader.vert.glsl");
+var fragmentCode = File.ReadAllText("my-shader.frag.glsl");
 
-void main() {
-    fsin_TexCoord = TexCoord;
-    gl_Position = vec4(Position, 0, 1);
-}</code></pre>
-<pre><code>var shaders = factory.CreateFromSpirv(
-    new ShaderDescription(ShaderStages.Vertex, vertexSpirv, "main"),
-    new ShaderDescription(ShaderStages.Fragment, fragmentSpirv, "main"));</code></pre></div>
+var shaders = factory.CreateFromSpirv(
+    new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(vertexCode), "main"),
+    new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(fragmentCode), "main")
+);</code></pre></div>
 </div>
 
 <div class="showcase-panel" data-panel="pipeline">
@@ -84,7 +79,7 @@ void main() {
 <div class="showcase-heading">Full control over the GPU pipeline</div>
 <p>Blend state, depth testing, rasterization, shaders - everything is explicit and declarative. No hidden state machines, no surprises.</p>
 </div>
-<div class="showcase-code"><pre><code>var pipeline = factory.CreateGraphicsPipeline(new GraphicsPipelineDescription
+<div class="showcase-code"><pre><code class="language-csharp">var pipeline = factory.CreateGraphicsPipeline(new GraphicsPipelineDescription
 {
     BlendState = BlendStateDescription.SingleOverrideBlend,
     DepthStencilState = DepthStencilStateDescription.DepthOnlyLessEqual,
@@ -100,7 +95,7 @@ void main() {
 <div class="showcase-heading">Allocation-free rendering</div>
 <p>The core rendering loop allocates zero garbage-collected memory. Record commands, submit, swap. That's it.</p>
 </div>
-<div class="showcase-code"><pre><code>while (window.Exists)
+<div class="showcase-code"><pre><code class="language-csharp">while (window.Exists)
 {
     window.PumpEvents();
 
@@ -123,7 +118,7 @@ void main() {
 <div class="showcase-heading">GPU compute, same API</div>
 <p>Run compute shaders alongside your graphics work. Same command list, same resource model, same submission pipeline.</p>
 </div>
-<div class="showcase-code"><pre><code>var computePipeline = factory.CreateComputePipeline(
+<div class="showcase-code"><pre><code class="language-csharp">var computePipeline = factory.CreateComputePipeline(
     new ComputePipelineDescription(computeShader, resourceLayout, 16, 16, 1)
 );
 
@@ -141,7 +136,7 @@ device.SubmitCommands(commandList);</code></pre></div>
 <div class="showcase-heading">Textures and samplers</div>
 <p>Create 2D textures, upload pixel data, sample them in shaders. Supports compressed formats, mipmaps, array textures, and multisampling.</p>
 </div>
-<div class="showcase-code"><pre><code>var texture = factory.CreateTexture(TextureDescription.Texture2D(
+<div class="showcase-code"><pre><code class="language-csharp">var texture = factory.CreateTexture(TextureDescription.Texture2D(
     width, height, mipLevels: 1, arrayLayers: 1,
     PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled)
 );
@@ -157,12 +152,69 @@ var sampler = factory.CreateSampler(SamplerDescription.Linear);</code></pre></di
 </div>
 
 <script>
-document.querySelectorAll('.showcase-tab').forEach(function(tab) {
-  tab.addEventListener('click', function() {
-    document.querySelectorAll('.showcase-tab').forEach(function(t) { t.classList.remove('active'); });
-    document.querySelectorAll('.showcase-panel').forEach(function(p) { p.classList.remove('active'); });
-    tab.classList.add('active');
-    document.querySelector('[data-panel="' + tab.dataset.tab + '"]').classList.add('active');
+(function() {
+  var tabs = document.querySelectorAll('.showcase-tab');
+  var panels = document.querySelectorAll('.showcase-panel');
+  var autoplay = true;
+  var interval = 6000;
+  var timer = null;
+  var progress = null;
+  var startTime = 0;
+
+  // Create progress bar
+  var bar = document.createElement('div');
+  bar.className = 'showcase-progress';
+  var fill = document.createElement('div');
+  fill.className = 'showcase-progress-fill';
+  bar.appendChild(fill);
+  document.querySelector('.showcase-tabs').appendChild(bar);
+
+  function switchTo(index) {
+    tabs.forEach(function(t) { t.classList.remove('active'); });
+    panels.forEach(function(p) { p.classList.remove('active'); });
+    tabs[index].classList.add('active');
+    panels[index].classList.add('active');
+  }
+
+  function getCurrentIndex() {
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].classList.contains('active')) return i;
+    }
+    return 0;
+  }
+
+  function startAutoplay() {
+    if (!autoplay) return;
+    startTime = Date.now();
+    fill.style.transition = 'none';
+    fill.style.width = '0%';
+    // Force reflow
+    fill.offsetWidth;
+    fill.style.transition = 'width ' + interval + 'ms linear';
+    fill.style.width = '100%';
+
+    timer = setTimeout(function() {
+      var next = (getCurrentIndex() + 1) % tabs.length;
+      switchTo(next);
+      startAutoplay();
+    }, interval);
+  }
+
+  function stopAutoplay() {
+    autoplay = false;
+    clearTimeout(timer);
+    fill.style.transition = 'none';
+    fill.style.width = '0%';
+    fill.style.display = 'none';
+  }
+
+  tabs.forEach(function(tab, i) {
+    tab.addEventListener('click', function() {
+      stopAutoplay();
+      switchTo(i);
+    });
   });
-});
+
+  startAutoplay();
+})();
 </script>
