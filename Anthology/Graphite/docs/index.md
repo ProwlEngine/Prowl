@@ -6,8 +6,8 @@ title: NeoVeldrid
 <div class="landing-hero" style="background-image: url('images/landing/sponza.webp');">
   <div class="hero-overlay"></div>
   <div class="hero-card container-xxl">
-    <div class="hero-title">NeoVeldrid</div>
-    <p class="hero-tagline">A low-level, high-performance graphics library for .NET. Build 2D and 3D games, simulations, and tools with a single portable API across Vulkan, Direct3D 11, OpenGL, and OpenGL ES.</p>
+    <div class="hero-title">One API. Every GPU.</div>
+    <p class="hero-tagline">NeoVeldrid is a low-level, high-performance graphics library for .NET. Build 2D and 3D games, simulations, and tools with a single portable API across Vulkan, Direct3D 11, OpenGL, and OpenGL ES.</p>
     <div class="hero-buttons">
       <a href="articles/getting-started/intro.md" class="btn-primary-landing">Get Started</a>
       <a href="https://github.com/jhm-ciberman/neo-veldrid" class="btn-secondary-hero">GitHub</a>

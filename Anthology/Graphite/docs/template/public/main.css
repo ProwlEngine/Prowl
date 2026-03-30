@@ -47,8 +47,8 @@ body[data-layout="landing"] > main > .content > article {
   background: linear-gradient(
     to right,
     rgba(0, 0, 0, 0.88) 0%,
-    rgba(0, 0, 0, 0.6) 45%,
-    rgba(0, 0, 0, 0.15) 100%
+    rgba(0, 0, 0, 0.5) 40%,
+    rgba(0, 0, 0, 0) 100%
   );
 }
 
