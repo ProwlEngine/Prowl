@@ -13,6 +13,10 @@ article p, article li {
   margin-right: 0.5rem;
 }
 
+.container {
+  max-width: 1400px;
+}
+
 /* Landing page: remove container constraints */
 body[data-layout="landing"] > main {
   max-width: 100%;
