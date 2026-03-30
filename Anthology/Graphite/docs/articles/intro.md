@@ -27,6 +27,16 @@ NeoVeldrid is a maintained fork of [Veldrid](https://github.com/mellinoe/veldrid
 * .NET-friendly: Designed with .NET in mind, integrates cleanly with regular .NET code.
 * Zero native binaries to manage: All native dependencies are handled via Silk.NET NuGet packages.
 
+## Platform Support
+
+|               | Vulkan | D3D11 | OpenGL | OpenGL ES |
+| :------------ | :----: | :---: | :----: | :-------: |
+| Windows       |   ✅   |  ✅   |   ✅   |    ✅     |
+| Linux         |   ✅   |  --   |   ✅   |    ✅     |
+| macOS         | ✅ (1) |  --   |   ❌   |    --     |
+
+(1) Via [MoltenVK](https://github.com/KhronosGroup/MoltenVK), bundled automatically. No setup required.
+
 ## What NeoVeldrid Is and Isn't
 
 NeoVeldrid is a **low-level GPU abstraction**. It gives you direct control over graphics resources (buffers, textures, shaders, pipelines, command lists) through a portable API that works across multiple graphics backends.
