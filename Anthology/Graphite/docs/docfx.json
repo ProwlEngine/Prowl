@@ -57,6 +57,7 @@
         ],
         "globalMetadata": {
             "_appTitle": "NeoVeldrid",
+            "_appName": "NeoVeldrid",
             "_appFooter": "NeoVeldrid - A modern, cross-platform .NET graphics library",
             "_enableSearch": true,
             "_gitContribute": {

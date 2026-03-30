@@ -35,20 +35,6 @@ NeoVeldrid is **not** a game engine, a rendering framework, or a shader library.
 
 If you've worked with Vulkan, Direct3D, or OpenGL directly, NeoVeldrid operates at a similar level of abstraction but with a cleaner, unified .NET API. If you're looking for something higher-level, consider a .NET-friendly game engine like [Stride](https://www.stride3d.net/), [MonoGame](https://monogame.net/), or [Godot with C#](https://godotengine.org/).
 
-## What Changed from Veldrid
-
-NeoVeldrid replaces all of Veldrid's native binding libraries with Silk.NET equivalents. The public API is identical. See the [Migration Guide](xref:migration) for details on switching from Veldrid.
-
-| Area | Veldrid | NeoVeldrid |
-|------|---------|------------|
-| Vulkan | Vk 1.0.25 | Silk.NET.Vulkan |
-| D3D11 | Vortice.Direct3D11 | Silk.NET.Direct3D11 |
-| OpenGL | Custom bindings | Silk.NET.OpenGL |
-| Metal | Custom bindings (101 files) | Removed (use Vulkan via MoltenVK) |
-| Windowing | Custom SDL2 P/Invoke | Silk.NET.SDL |
-| SPIRV | Native C++ shim | Pure C# via Silk.NET |
-| Target | netstandard2.0 | net10.0 |
-
 ## Getting Started
 
 See [Getting Started](xref:getting-started-intro) for a basic startup guide.

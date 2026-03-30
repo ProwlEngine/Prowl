@@ -1,33 +1,10 @@
-- name: Overview
+- name: Prologue
   items:
   - name: Introduction
     href: intro.md
   - name: Migration from Veldrid
     href: migration.md
-  - name: API Concepts
-    href: api-concepts.md
-  - name: Command Lists
-    href: command-lists.md
-  - name: Shaders and Resources
-    href: shaders.md
-  - name: Shader Resource Table
-    href: shader-resource-table.md
-  - name: Compute Shaders
-    href: compute-shaders.md
-  - name: Specialization Constants
-    href: specialization-constants.md
-  - name: Writing Portable Shaders
-    href: portable-shaders.md
-  - name: Textures
-    href: textures.md
-  - name: Framebuffers
-    href: framebuffers.md
-  - name: Swapchains
-    href: swapchains.md
-  - name: Multi-Threading
-    href: multi-threading.md
-  - name: Backend Differences
-    href: backend-differences.md
+
 - name: Getting Started
   items:
   - name: Introduction
@@ -38,9 +15,40 @@
     href: getting-started/getting-started-part2.md
   - name: "Part 3: Drawing and Cleanup"
     href: getting-started/getting-started-part3.md
-- name: Implementation Details
+
+- name: Core Concepts
   items:
-  - name: Overview
+  - name: API Concepts
+    href: api-concepts.md
+  - name: Command Lists
+    href: command-lists.md
+  - name: Textures
+    href: textures.md
+  - name: Framebuffers
+    href: framebuffers.md
+  - name: Swapchains
+    href: swapchains.md
+  - name: Multi-Threading
+    href: multi-threading.md
+
+- name: Shaders
+  items:
+  - name: Shaders and Resources
+    href: shaders.md
+  - name: Shader Resource Table
+    href: shader-resource-table.md
+  - name: Compute Shaders
+    href: compute-shaders.md
+  - name: Specialization Constants
+    href: specialization-constants.md
+  - name: Writing Portable Shaders
+    href: portable-shaders.md
+
+- name: Advanced
+  items:
+  - name: Backend Differences
+    href: backend-differences.md
+  - name: Implementation Overview
     href: implementation/overview.md
   - name: Direct3D 11 Backend
     href: implementation/d3d11.md

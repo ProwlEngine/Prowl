@@ -9,6 +9,10 @@ article p, article li {
   line-height: 1.8;
 }
 
+#logo {
+  margin-right: 0.5rem;
+}
+
 /* Landing page: remove container constraints */
 body[data-layout="landing"] > main {
   max-width: 100%;
