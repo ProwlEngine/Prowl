@@ -1,0 +1,168 @@
+<div class="landing-showcase">
+<div class="container">
+<div class="showcase-tabs">
+<button class="showcase-tab active" data-tab="setup">Setup</button>
+<button class="showcase-tab" data-tab="buffers">Buffers</button>
+<button class="showcase-tab" data-tab="shaders">Shaders</button>
+<button class="showcase-tab" data-tab="pipeline">Pipeline</button>
+<button class="showcase-tab" data-tab="render">Render Loop</button>
+<button class="showcase-tab" data-tab="compute">Compute</button>
+<button class="showcase-tab" data-tab="textures">Textures</button>
+</div>
+<div class="showcase-panels">
+
+<div class="showcase-panel active" data-panel="setup">
+<div class="showcase-text">
+<div class="showcase-heading">Up and running in seconds</div>
+<p>Create a window and a GPU device in two lines. NeoVeldrid picks the best available backend for the platform automatically.</p>
+<ul>
+<li>Vulkan, D3D11, OpenGL, or OpenGL ES</li>
+<li>Windows, Linux, macOS</li>
+<li>No native SDKs to install</li>
+</ul>
+</div>
+<div class="showcase-code"><pre><code>var window = NeoVeldridStartup.CreateWindow(new WindowCreateInfo
+{
+    WindowWidth = 960,
+    WindowHeight = 540,
+    WindowTitle = "My App"
+});
+
+var device = NeoVeldridStartup.CreateGraphicsDevice(window);
+var factory = device.ResourceFactory;
+var commandList = factory.CreateCommandList();</code></pre></div>
+</div>
+
+<div class="showcase-panel" data-panel="buffers">
+<div class="showcase-text">
+<div class="showcase-heading">GPU resources, the .NET way</div>
+<p>Create vertex buffers, index buffers, and uniforms with a clean, typed API. Upload data directly from arrays and structs.</p>
+</div>
+<div class="showcase-code"><pre><code>float[] quadVertices = {
+//    X      Y     U     V
+    -0.5f,  0.5f, 0.0f, 0.0f, // top-left
+     0.5f,  0.5f, 1.0f, 0.0f, // top-right
+     0.5f, -0.5f, 1.0f, 1.0f, // bottom-right
+    -0.5f, -0.5f, 0.0f, 1.0f, // bottom-left
+};
+
+ushort[] quadIndices = { 0, 1, 2, 0, 2, 3 };
+
+var vertexBuffer = factory.CreateBuffer(
+    new BufferDescription(quadVertices.SizeInBytes(), BufferUsage.VertexBuffer)
+);
+var indexBuffer = factory.CreateBuffer(
+    new BufferDescription(quadIndices.SizeInBytes(), BufferUsage.IndexBuffer)
+);
+
+device.UpdateBuffer(vertexBuffer, 0, quadVertices);
+device.UpdateBuffer(indexBuffer, 0, quadIndices);</code></pre></div>
+</div>
+
+<div class="showcase-panel" data-panel="shaders">
+<div class="showcase-text">
+<div class="showcase-heading">Write once, run everywhere</div>
+<p>Write your shaders in GLSL and compile to SPIR-V. NeoVeldrid cross-compiles them to HLSL or GLSL at runtime. One shader source, all backends.</p>
+</div>
+<div class="showcase-code"><pre><code>// shader.vert
+#version 450
+layout(location = 0) in vec2 Position;
+layout(location = 1) in vec2 TexCoord;
+layout(location = 0) out vec2 fsin_TexCoord;
+
+void main() {
+    fsin_TexCoord = TexCoord;
+    gl_Position = vec4(Position, 0, 1);
+}</code></pre>
+<pre><code>var shaders = factory.CreateFromSpirv(
+    new ShaderDescription(ShaderStages.Vertex, vertexSpirv, "main"),
+    new ShaderDescription(ShaderStages.Fragment, fragmentSpirv, "main"));</code></pre></div>
+</div>
+
+<div class="showcase-panel" data-panel="pipeline">
+<div class="showcase-text">
+<div class="showcase-heading">Full control over the GPU pipeline</div>
+<p>Blend state, depth testing, rasterization, shaders - everything is explicit and declarative. No hidden state machines, no surprises.</p>
+</div>
+<div class="showcase-code"><pre><code>var pipeline = factory.CreateGraphicsPipeline(new GraphicsPipelineDescription
+{
+    BlendState = BlendStateDescription.SingleOverrideBlend,
+    DepthStencilState = DepthStencilStateDescription.DepthOnlyLessEqual,
+    RasterizerState = RasterizerStateDescription.Default,
+    PrimitiveTopology = PrimitiveTopology.TriangleList,
+    ShaderSet = new ShaderSetDescription(new[] { vertexLayout }, shaders),
+    Outputs = device.SwapchainFramebuffer.OutputDescription
+});</code></pre></div>
+</div>
+
+<div class="showcase-panel" data-panel="render">
+<div class="showcase-text">
+<div class="showcase-heading">Allocation-free rendering</div>
+<p>The core rendering loop allocates zero garbage-collected memory. Record commands, submit, swap. That's it.</p>
+</div>
+<div class="showcase-code"><pre><code>while (window.Exists)
+{
+    window.PumpEvents();
+
+    commandList.Begin();
+    commandList.SetFramebuffer(device.SwapchainFramebuffer);
+    commandList.ClearColorTarget(0, RgbaFloat.CornflowerBlue);
+    commandList.SetPipeline(pipeline);
+    commandList.SetVertexBuffer(0, vertexBuffer);
+    commandList.SetIndexBuffer(indexBuffer, IndexFormat.UInt16);
+    commandList.DrawIndexed(6);
+    commandList.End();
+
+    device.SubmitCommands(commandList);
+    device.SwapBuffers();
+}</code></pre></div>
+</div>
+
+<div class="showcase-panel" data-panel="compute">
+<div class="showcase-text">
+<div class="showcase-heading">GPU compute, same API</div>
+<p>Run compute shaders alongside your graphics work. Same command list, same resource model, same submission pipeline.</p>
+</div>
+<div class="showcase-code"><pre><code>var computePipeline = factory.CreateComputePipeline(
+    new ComputePipelineDescription(computeShader, resourceLayout, 16, 16, 1)
+);
+
+commandList.Begin();
+commandList.SetPipeline(computePipeline);
+commandList.SetComputeResourceSet(0, resourceSet);
+commandList.Dispatch(groupCountX, groupCountY, 1);
+commandList.End();
+
+device.SubmitCommands(commandList);</code></pre></div>
+</div>
+
+<div class="showcase-panel" data-panel="textures">
+<div class="showcase-text">
+<div class="showcase-heading">Textures and samplers</div>
+<p>Create 2D textures, upload pixel data, sample them in shaders. Supports compressed formats, mipmaps, array textures, and multisampling.</p>
+</div>
+<div class="showcase-code"><pre><code>var texture = factory.CreateTexture(TextureDescription.Texture2D(
+    width, height, mipLevels: 1, arrayLayers: 1,
+    PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled)
+);
+
+device.UpdateTexture(texture, pixelData, 0, 0, 0, width, height, 1, 0, 0);
+
+var textureView = factory.CreateTextureView(texture);
+var sampler = factory.CreateSampler(SamplerDescription.Linear);</code></pre></div>
+</div>
+
+</div>
+</div>
+</div>
+
+<script>
+document.querySelectorAll('.showcase-tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.showcase-tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.showcase-panel').forEach(function(p) { p.classList.remove('active'); });
+    tab.classList.add('active');
+    document.querySelector('[data-panel="' + tab.dataset.tab + '"]').classList.add('active');
+  });
+});
+</script>

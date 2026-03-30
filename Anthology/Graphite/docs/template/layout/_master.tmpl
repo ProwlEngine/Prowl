@@ -67,7 +67,7 @@
     <header class="bg-body border-bottom">
       {{^_disableNavbar}}
       <nav id="autocollapse" class="navbar navbar-expand-md" role="navigation">
-        <div class="container-xxl flex-nowrap">
+        <div class="container flex-nowrap">
           <a class="navbar-brand" href="{{_appLogoUrl}}{{^_appLogoUrl}}{{_rel}}index.html{{/_appLogoUrl}}">
             {{>partials/logo}}
             {{_appName}}
@@ -90,7 +90,7 @@
       {{/_disableNavbar}}
     </header>
 
-    <main class="container-xxl">
+    <main class="container">
       {{^_disableToc}}
       <div class="toc-offcanvas">
         <div class="offcanvas-md offcanvas-start" tabindex="-1" id="tocOffcanvas" aria-labelledby="tocOffcanvasLabel">
@@ -148,12 +148,16 @@
       {{/_disableAffix}}
     </main>
 
+{{#_isLanding}}
+{{>partials/landing}}
+{{/_isLanding}}
+
     {{#_enableSearch}}
-    <div class="container-xxl search-results" id="search-results"></div>
+    <div class="container search-results" id="search-results"></div>
     {{/_enableSearch}}
 
     <footer class="border-top text-secondary">
-      <div class="container-xxl">
+      <div class="container">
         <div class="flex-fill">
           {{{_appFooter}}}{{^_appFooter}}<span>Made with <a href="https://dotnet.github.io/docfx">docfx</a></span>{{/_appFooter}}
         </div>

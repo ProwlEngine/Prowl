@@ -196,6 +196,130 @@ body[data-layout="landing"] > main > .content > article {
   border-left: 3px solid #4f46e5;
 }
 
+/* Code showcase */
+.landing-showcase {
+  padding: 4rem 0;
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.showcase-tabs {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid var(--bs-border-color);
+  padding-bottom: 0;
+}
+
+.showcase-tab {
+  padding: 0.6rem 1.25rem;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--bs-secondary-color);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.showcase-tab:hover {
+  color: var(--bs-body-color);
+}
+
+.showcase-tab.active {
+  color: #4f46e5;
+  border-bottom-color: #4f46e5;
+}
+
+.showcase-panel {
+  display: none;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.showcase-panel.active {
+  display: grid;
+}
+
+.showcase-text {
+  padding-top: 0.5rem;
+}
+
+.showcase-heading {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.showcase-text p {
+  color: var(--bs-secondary-color);
+  line-height: 1.7;
+  margin-bottom: 1rem;
+}
+
+.showcase-text ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.showcase-text li {
+  padding: 0.3rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+  color: var(--bs-secondary-color);
+  font-size: 0.95rem;
+}
+
+.showcase-text li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #4f46e5;
+  font-weight: 700;
+}
+
+.showcase-code {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--bs-border-color);
+  background: var(--bs-tertiary-bg);
+}
+
+.showcase-code pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.showcase-code pre + pre {
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.showcase-code code {
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .showcase-panel.active {
+    grid-template-columns: 1fr;
+  }
+
+  .showcase-tabs {
+    gap: 0;
+  }
+
+  .showcase-tab {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+}
+
 /* Migration callout */
 .landing-migration {
   text-align: center;

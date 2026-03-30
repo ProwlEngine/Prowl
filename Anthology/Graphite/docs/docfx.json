@@ -55,6 +55,11 @@
             "modern",
             "template"
         ],
+        "fileMetadata": {
+            "_isLanding": {
+                "index.md": true
+            }
+        },
         "globalMetadata": {
             "_appTitle": "NeoVeldrid",
             "_appFooter": "NeoVeldrid - A modern, cross-platform .NET graphics library",
