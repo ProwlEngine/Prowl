@@ -61,8 +61,8 @@ device.UpdateBuffer(indexBuffer, 0, quadIndices);</code></pre></div>
 
 <div class="showcase-panel" data-panel="shaders">
 <div class="showcase-text">
-<div class="showcase-heading">Write once, run everywhere</div>
-<p>Write your shaders in GLSL and compile to SPIR-V. NeoVeldrid cross-compiles them to HLSL or GLSL at runtime. One shader source, all backends.</p>
+<div class="showcase-heading">Portable shaders</div>
+<p>Write your shaders in GLSL once. NeoVeldrid.SPIRV handles the rest - compiling to SPIR-V and cross-compiling to whatever the current backend needs. No separate shader files per platform.</p>
 </div>
 <div class="showcase-code"><pre>
 <pre><code class="language-csharp" style="margin-top: .5rem;">var vertexCode = File.ReadAllText("my-shader.vert.glsl");
