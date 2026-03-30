@@ -9,7 +9,7 @@ A maintained fork of [Veldrid](https://github.com/mellinoe/veldrid) that replace
 
 Veldrid is a cross-platform, graphics API-agnostic rendering and compute library for .NET. It provides a powerful, unified interface to a system's GPU. NeoVeldrid preserves Veldrid's public API surface unchanged - only the internal backend implementations are swapped. Any app built on Veldrid should work after switching to NeoVeldrid (see [Migration Guide](docs/articles/migration.md)).
 
-![NeoDemo - Sponza Atrium](art/sponza.jpeg)
+![NeoDemo - Sponza Atrium](art/sponza.webp)
 
 ## Platform Support
 

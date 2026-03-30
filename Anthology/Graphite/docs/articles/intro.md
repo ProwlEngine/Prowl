@@ -27,6 +27,14 @@ NeoVeldrid is a maintained fork of [Veldrid](https://github.com/mellinoe/veldrid
 * .NET-friendly: Designed with .NET in mind, integrates cleanly with regular .NET code.
 * Zero native binaries to manage: All native dependencies are handled via Silk.NET NuGet packages.
 
+## What NeoVeldrid Is and Isn't
+
+NeoVeldrid is a **low-level GPU abstraction**. It gives you direct control over graphics resources (buffers, textures, shaders, pipelines, command lists) through a portable API that works across multiple graphics backends.
+
+NeoVeldrid is **not** a game engine, a rendering framework, or a shader library. There is no built-in scene graph, no PBR materials, no shadow mapping, no post-processing, and no physics. You write your own shaders in GLSL or HLSL and build your own rendering pipeline on top of NeoVeldrid's primitives.
+
+If you've worked with Vulkan, Direct3D, or OpenGL directly, NeoVeldrid operates at a similar level of abstraction but with a cleaner, unified .NET API. If you're looking for something higher-level, consider a .NET-friendly game engine like [Stride](https://www.stride3d.net/), [MonoGame](https://monogame.net/), or [Godot with C#](https://godotengine.org/).
+
 ## What Changed from Veldrid
 
 NeoVeldrid replaces all of Veldrid's native binding libraries with Silk.NET equivalents. The public API is identical. See the [Migration Guide](xref:migration) for details on switching from Veldrid.
