@@ -2506,6 +2506,62 @@ namespace Prowl.Quill
         }
         #endregion
 
+        #region Image
+
+        /// <summary>
+        /// Draws a textured rectangle on the canvas. Respects the current transform, scissor, and global alpha.
+        /// </summary>
+        /// <param name="texture">The texture to draw (backend-specific texture object).</param>
+        /// <param name="x">The x-coordinate of the top-left corner.</param>
+        /// <param name="y">The y-coordinate of the top-left corner.</param>
+        /// <param name="width">The width of the image rectangle.</param>
+        /// <param name="height">The height of the image rectangle.</param>
+        /// <param name="tint">Optional tint color. Defaults to white (no tint).</param>
+        public void DrawImage(object texture, float x, float y, float width, float height, Color32? tint = null)
+        {
+            if (width <= 0 || height <= 0 || texture == null)
+                return;
+
+            var color = tint ?? new Color32(255, 255, 255, 255);
+
+            // Save current brush state
+            var savedBrush = _state.brush;
+
+            // Configure brush to draw the texture mapped to this rectangle
+            _state.brush.Texture = texture;
+            _state.brush.TextureTransform = _state.transform * Transform2D.CreateTranslation(x, y) * Transform2D.CreateScale(width, height);
+            _state.brush.Type = BrushType.None;
+            _state.brush.Shader = null;
+            _state.brush.Uniforms = null;
+            InvalidateDrawState();
+
+            // Draw the rectangle (handles transforms, AA, scissor, etc.)
+            RectFilled(x, y, width, height, color);
+
+            // Restore previous brush state
+            _state.brush = savedBrush;
+            InvalidateDrawState();
+        }
+
+        /// <summary>
+        /// Draws a textured rectangle on the canvas, using the texture's native size.
+        /// Respects the current transform, scissor, and global alpha.
+        /// </summary>
+        /// <param name="texture">The texture to draw (backend-specific texture object).</param>
+        /// <param name="x">The x-coordinate of the top-left corner.</param>
+        /// <param name="y">The y-coordinate of the top-left corner.</param>
+        /// <param name="tint">Optional tint color. Defaults to white (no tint).</param>
+        public void DrawImage(object texture, float x, float y, Color32? tint = null)
+        {
+            if (texture == null)
+                return;
+
+            var size = _renderer.GetTextureSize(texture);
+            DrawImage(texture, x, y, size.X, size.Y, tint);
+        }
+
+        #endregion
+
         #region Text
 
         /// <summary>
