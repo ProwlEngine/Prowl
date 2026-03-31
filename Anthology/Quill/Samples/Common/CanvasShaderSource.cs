@@ -220,19 +220,19 @@ float scissorMask(vec2 p) {
 
 void main()
 {
-    // Slug mode: bandCount > 0 means this is a Slug glyph
-    if (fragSlugGlyph.y > 0.0) {
-        float coverage = SlugRender(fragTexCoord, fragSlugBand, fragSlugGlyph);
-        finalColor = vec4(fragColor.rgb * coverage, coverage * fragColor.a);
-        return;
-    }
-
     float mask = scissorMask(fragPos);
     vec4 color = fragColor;
 
     if (brushType > 0) {
         float factor = calculateBrushFactor();
         color = mix(brushColor1, brushColor2, factor);
+    }
+
+    // Slug mode: bandCount > 0 means this is a Slug glyph
+    if (fragSlugGlyph.y > 0.0) {
+        float coverage = SlugRender(fragTexCoord, fragSlugBand, fragSlugGlyph);
+        finalColor = vec4(color.rgb * coverage, coverage * color.a) * mask;
+        return;
     }
 
     // Text mode: UV >= 2.0
