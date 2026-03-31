@@ -77,6 +77,10 @@ namespace Prowl.PaperUI
         Transform,
         #endregion
 
+        #region Image Properties
+        BackgroundImage,
+        #endregion
+
         #region Text Properties
         TextColor,
 
@@ -673,6 +677,9 @@ namespace Prowl.PaperUI
             _defaultValues[(int)GuiProp.BorderWidth] = 0.0f;
             _defaultValues[(int)GuiProp.Rounded] = new Float4(0, 0, 0, 0);
             _defaultValues[(int)GuiProp.BoxShadow] = BoxShadow.None;
+
+            // Image Properties
+            _defaultValues[(int)GuiProp.BackgroundImage] = (object?)null;
 
             // Core Layout Properties
             _defaultValues[(int)GuiProp.AspectRatio] = -1.0f;

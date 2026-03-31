@@ -225,4 +225,19 @@ namespace Prowl.PaperUI
         /// <summary>Topmost layer rendered last.</summary>
         Topmost = 2
     }
+
+    /// <summary>
+    /// Controls how an image is scaled to fit its element rect.
+    /// </summary>
+    public enum ImageScaleMode
+    {
+        /// <summary>Stretches the image to fill the entire rect, ignoring aspect ratio.</summary>
+        Stretch,
+
+        /// <summary>Scales uniformly to fit inside the rect, preserving aspect ratio. May leave empty space.</summary>
+        Fit,
+
+        /// <summary>Scales uniformly to cover the entire rect, preserving aspect ratio. May crop.</summary>
+        Fill
+    }
 }

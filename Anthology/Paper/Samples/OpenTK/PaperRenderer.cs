@@ -104,7 +104,7 @@ namespace OpenTKSample
 
             // Get location of the projection uniform
             _projectionLocation = GL.GetUniformLocation(_shaderProgram, "projection");
-            _textureSamplerLocation = GL.GetUniformLocation(_shaderProgram, "textureSampler");
+            _textureSamplerLocation = GL.GetUniformLocation(_shaderProgram, "texture0");
             _scissorMatLoc = GL.GetUniformLocation(_shaderProgram, "scissorMat");
             _scissorExtLoc = GL.GetUniformLocation(_shaderProgram, "scissorExt");
 

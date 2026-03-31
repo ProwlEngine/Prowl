@@ -51,6 +51,12 @@ namespace Prowl.PaperUI
         /// <summary>Clears any background gradient on the element.</summary>
         public T ClearBackgroundGradient() => SetStyleProperty(GuiProp.BackgroundGradient, Gradient.None);
 
+        /// <summary>Sets a background image texture on the element. The texture is stretched to fill the element rect.</summary>
+        public T BackgroundImage(object texture) => SetStyleProperty(GuiProp.BackgroundImage, texture);
+
+        /// <summary>Clears the background image from the element.</summary>
+        public T ClearBackgroundImage() => SetStyleProperty(GuiProp.BackgroundImage, (object?)null);
+
         /// <summary>Sets the border color of the element.</summary>
         public T BorderColor(Color color) => SetStyleProperty(GuiProp.BorderColor, color);
 
@@ -997,6 +1003,101 @@ namespace Prowl.PaperUI
         public ElementBuilder Wrap(TextWrapMode mode)
         {
             _handle.Data.WrapMode = mode;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets an image to be drawn inside the element, filling the element's layout rect.
+        /// </summary>
+        /// <param name="texture">The texture object (created via the renderer's CreateTexture).</param>
+        /// <param name="tint">Optional tint color applied to the image. Defaults to white (no tint).</param>
+        /// <param name="rotation">Rotation angle in degrees.</param>
+        /// <param name="pivot">Pivot point for rotation as normalized coordinates (0-1). Defaults to center (0.5, 0.5).</param>
+        /// <param name="scaleMode">How the image fills the element rect.</param>
+        public ElementBuilder Image(object texture, Color32? tint = null, float rotation = 0f, Float2? pivot = null, ImageScaleMode scaleMode = ImageScaleMode.Stretch)
+        {
+            var tex = texture;
+            var color = tint;
+            var rot = rotation;
+            var piv = pivot ?? new Float2(0.5f, 0.5f);
+            var mode = scaleMode;
+            var handle = _handle;
+            var renderer = _paper.Renderer;
+            _paper.AddActionElement(ref handle, (canvas, rect) =>
+            {
+                float x = rect.Min.X;
+                float y = rect.Min.Y;
+                float w = rect.Size.X;
+                float h = rect.Size.Y;
+
+                if (mode != ImageScaleMode.Stretch)
+                {
+                    var texSize = renderer.GetTextureSize(tex);
+                    float texW = texSize.X;
+                    float texH = texSize.Y;
+
+                    if (texW > 0 && texH > 0)
+                    {
+                        float scaleX = w / texW;
+                        float scaleY = h / texH;
+
+                        float scale = mode == ImageScaleMode.Fit
+                            ? Maths.Min(scaleX, scaleY)
+                            : Maths.Max(scaleX, scaleY); // Fill
+
+                        float drawW = texW * scale;
+                        float drawH = texH * scale;
+                        x += (w - drawW) * 0.5f;
+                        y += (h - drawH) * 0.5f;
+                        w = drawW;
+                        h = drawH;
+                    }
+                }
+
+                if (rot != 0f)
+                {
+                    canvas.SaveState();
+                    float pivotX = x + w * piv.X;
+                    float pivotY = y + h * piv.Y;
+                    var transform = Transform2D.CreateTranslation(pivotX, pivotY)
+                        * Transform2D.CreateRotation(rot * (Maths.PI / 180f))
+                        * Transform2D.CreateTranslation(-pivotX, -pivotY);
+                    canvas.TransformBy(transform);
+                    canvas.DrawImage(tex, x, y, w, h, color);
+                    canvas.RestoreState();
+                }
+                else
+                {
+                    canvas.DrawImage(tex, x, y, w, h, color);
+                }
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Applies a custom shader to the element's background rendering.
+        /// The shader replaces the default rendering pipeline for this element's background.
+        /// </summary>
+        /// <param name="shader">The backend-specific shader object.</param>
+        /// <param name="setupUniforms">Optional callback to set shader uniforms each frame.</param>
+        public ElementBuilder CustomShader(object shader, Action<Quill.ShaderUniforms>? setupUniforms = null)
+        {
+            var shaderObj = shader;
+            var setup = setupUniforms;
+            var handle = _handle;
+            _paper.AddActionElement(ref handle, (canvas, rect) =>
+            {
+                canvas.SetCustomShader(shaderObj);
+                if (setup != null)
+                {
+                    var uniforms = new Quill.ShaderUniforms();
+                    setup(uniforms);
+                    foreach (var kvp in uniforms.Values)
+                        canvas.SetShaderUniform(kvp.Key, kvp.Value);
+                }
+                canvas.RectFilled(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, Color.White);
+                canvas.ClearCustomShader();
+            });
             return this;
         }
 

@@ -45,6 +45,7 @@ namespace Prowl.PaperUI
         public Rect ScreenRect => new Rect(0, 0, _width, _height);
         public ElementHandle RootElement => _rootElementHandle;
         public Canvas Canvas => _canvas;
+        public ICanvasRenderer Renderer => _renderer;
 
         /// <summary>
         /// Gets the current parent element in the element hierarchy.
@@ -99,6 +100,17 @@ namespace Prowl.PaperUI
         public void AddFallbackFont(FontFile font) => _canvas.AddFallbackFont(font);
 
         public IEnumerable<FontFile> EnumerateSystemFonts() => _canvas.EnumerateSystemFonts();
+
+        /// <summary>
+        /// Gets or sets the text rendering mode.
+        /// Slug mode evaluates glyph curves directly on the GPU for scale-independent text.
+        /// Falls back to Bitmap if the backend does not support float textures.
+        /// </summary>
+        public TextRenderMode TextMode
+        {
+            get => _canvas.TextMode;
+            set => _canvas.TextMode = value;
+        }
 
         public Float2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0.0f) => _canvas.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
 
@@ -161,8 +173,8 @@ namespace Prowl.PaperUI
             // Render all elements
             // Deferred elements capture the canvas transform at collection time
             // so they render at the correct position even though they draw later.
-            List<(ElementHandle handle, Transform2D transform)> overlayElements = new();
-            List<(ElementHandle handle, Transform2D transform)> modalElements = new();
+            List<(ElementHandle handle, Transform2D transform)> overlayElements = new List<(ElementHandle handle, Transform2D transform)>();
+            List<(ElementHandle handle, Transform2D transform)> modalElements = new List<(ElementHandle handle, Transform2D transform)>();
             RenderElement(_rootElementHandle, Layer.Base, overlayElements, modalElements);
             foreach (var (handle, transform) in overlayElements)
             {
@@ -347,6 +359,13 @@ namespace Prowl.PaperUI
                     else
                         _canvas.RectFilled(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, backgroundColor);
                 }
+            }
+
+            // Draw background image if set (rendered on top of background color/gradient)
+            var bgImage = data._elementStyle.GetValue(GuiProp.BackgroundImage);
+            if (bgImage != null)
+            {
+                _canvas.DrawImage(bgImage, rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
             }
 
             // Draw border if needed
