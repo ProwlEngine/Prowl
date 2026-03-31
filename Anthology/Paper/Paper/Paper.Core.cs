@@ -158,13 +158,25 @@ namespace Prowl.PaperUI
             HandleInteractions();
 
             // Render all elements
-            List<ElementHandle> overlayElements = new List<ElementHandle>();
-            List<ElementHandle> modalElements = new List<ElementHandle>();
+            // Deferred elements capture the canvas transform at collection time
+            // so they render at the correct position even though they draw later.
+            List<(ElementHandle handle, Transform2D transform)> overlayElements = new();
+            List<(ElementHandle handle, Transform2D transform)> modalElements = new();
             RenderElement(_rootElementHandle, Layer.Base, overlayElements, modalElements);
-            foreach (var overlay in overlayElements)
-                RenderElement(overlay, Layer.Overlay, null, modalElements);
-            foreach (var modal in modalElements)
-                RenderElement(modal, Layer.Topmost, null, null);
+            foreach (var (handle, transform) in overlayElements)
+            {
+                _canvas.SaveState();
+                _canvas.CurrentTransform(transform);
+                RenderElement(handle, Layer.Overlay, null, modalElements);
+                _canvas.RestoreState();
+            }
+            foreach (var (handle, transform) in modalElements)
+            {
+                _canvas.SaveState();
+                _canvas.CurrentTransform(transform);
+                RenderElement(handle, Layer.Topmost, null, null);
+                _canvas.RestoreState();
+            }
 
             // Update stats
             CountOfAllElements = (uint)_createdElements.Count;
@@ -212,7 +224,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Renders an element and its children recursively with layering support.
         /// </summary>
-        private void RenderElement(in ElementHandle handle, Layer currentLayer, List<ElementHandle>? overlayElements, List<ElementHandle>? modalElements)
+        private void RenderElement(in ElementHandle handle, Layer currentLayer, List<(ElementHandle, Transform2D)>? overlayElements, List<(ElementHandle, Transform2D)>? modalElements)
         {
             ref var data = ref handle.Data;
 
@@ -223,12 +235,12 @@ namespace Prowl.PaperUI
             {
                 if (data.Layer == Layer.Overlay)
                 {
-                    overlayElements?.Add(handle);
+                    overlayElements?.Add((handle, _canvas.GetTransform()));
                     return;
                 }
                 else if (data.Layer == Layer.Topmost)
                 {
-                    modalElements?.Add(handle);
+                    modalElements?.Add((handle, _canvas.GetTransform()));
                     return;
                 }
             }
@@ -236,7 +248,7 @@ namespace Prowl.PaperUI
             {
                 if (data.Layer == Layer.Topmost)
                 {
-                    modalElements?.Add(handle);
+                    modalElements?.Add((handle, _canvas.GetTransform()));
                     return;
                 }
             }
