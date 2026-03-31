@@ -653,7 +653,7 @@ namespace Prowl.Quill
         /// <summary>
         /// Clears all accumulated geometry, draw calls, and resets the canvas state.
         /// </summary>
-        public void Clear()
+        internal void Clear()
         {
             _drawCalls.Clear();
             _textureStack.Clear();

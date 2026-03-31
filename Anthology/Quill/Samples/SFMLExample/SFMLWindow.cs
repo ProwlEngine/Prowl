@@ -137,7 +137,7 @@ namespace SFMLExample
                 now = DateTime.UtcNow;
 
                 // Clear the canvas for new frame
-                _canvas.Clear();
+                _canvas.BeginFrame(_window.Size.X, _window.Size.Y);
                 
                 // Let demo render to canvas
                 _demos[_currentDemoIndex].RenderFrame(deltaTime, _offset, _zoom, _rotation);

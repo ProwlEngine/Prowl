@@ -129,7 +129,7 @@ namespace SilkExample
             _gl.Clear(ClearBufferMask.ColorBufferBit);
             
             // Clear and prepare canvas
-            _canvas.Clear();
+            _canvas.BeginFrame(_window.Size.X, _window.Size.Y);
             
             // Render demo content
             _demos[_currentDemoIndex].RenderFrame((float)deltaTime, _viewOffset, _zoom, _rotation);

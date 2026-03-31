@@ -310,7 +310,6 @@ namespace Quill.Unity
             }
 
             // Clear and begin new frame
-            _canvas.Clear();
             _canvas.BeginFrame(width, height, 1);
 
             // Let users draw via the OnQuillRender callback or override
@@ -364,7 +363,6 @@ namespace Quill.Unity
             UpdateQuadMesh();
 
             // Clear and begin new frame
-            _canvas.Clear();
             _canvas.BeginFrame(pixelWidth, pixelHeight, 1);
 
             // Let users draw via the OnQuillRender callback or override

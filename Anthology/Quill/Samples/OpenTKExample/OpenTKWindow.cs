@@ -70,7 +70,7 @@ namespace OpenTKExample
             base.OnRenderFrame(args);
 
             // Clear the canvas for new frame
-            _canvas.Clear();
+            _canvas.BeginFrame(ClientSize.X, ClientSize.Y);
 
             // Let demo render to canvas
             _demos[_currentDemoIndex].RenderFrame((float)args.Time, _offset, _zoom, _rotation);

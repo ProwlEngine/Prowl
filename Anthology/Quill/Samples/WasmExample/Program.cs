@@ -149,7 +149,8 @@ public partial class App
         if (_keyQ) _rotation += 10f * deltaTime;
         if (_keyE) _rotation -= 10f * deltaTime;
 
-        _canvas.Clear();
+        var (cw, ch) = _renderer.GetCanvasSize();
+        _canvas.BeginFrame(cw, ch);
         _demos[_currentDemoIndex].RenderFrame(deltaTime, _offset, _zoom, _rotation);
         _canvas.Render();
     }
