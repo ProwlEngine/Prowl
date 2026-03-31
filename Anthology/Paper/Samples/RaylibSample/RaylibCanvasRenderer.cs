@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 using Prowl.Quill;
 using Prowl.Vector;
@@ -12,6 +12,9 @@ namespace RaylibSample;
 
 public class RaylibCanvasRenderer : ICanvasRenderer
 {
+    // Raylib uses its own vertex attribute names (vertexPosition, vertexTexCoord, vertexColor)
+    // and doesn't support custom vertex attributes, so Slug rendering is not available.
+    // The fragment shader is updated to support dpiScale, brushTextureMat, and the text fast-path.
     public const string Stroke_FS = @"
 #version 330
 in vec2 fragTexCoord;
@@ -30,11 +33,17 @@ uniform vec4 brushColor2;    // End color
 uniform vec4 brushParams;    // x,y = start point, z,w = end point (or center+radius for radial)
 uniform vec2 brushParams2;   // x = Box radius, y = Box Feather
 
+uniform mat4 brushTextureMat;     // Texture transform matrix (inverse)
+
+uniform float dpiScale;           // DPI scale factor (pixels / logical units)
+
 float calculateBrushFactor() {
     // No brush
     if (brushType == 0) return 0.0;
-    
-    vec2 transformedPoint = (brushMat * vec4(fragPos, 0.0, 1.0)).xy;
+
+    // Convert fragPos from pixel coordinates to logical coordinates for brush calculations
+    vec2 logicalPos = fragPos / dpiScale;
+    vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
 
     // Linear brush - projects position onto the line between start and end
     if (brushType == 1) {
@@ -42,89 +51,63 @@ float calculateBrushFactor() {
         vec2 endPoint = brushParams.zw;
         vec2 line = endPoint - startPoint;
         float lineLength = length(line);
-        
+
         if (lineLength < 0.001) return 0.0;
-        
+
         vec2 posToStart = transformedPoint - startPoint;
         float projection = dot(posToStart, line) / (lineLength * lineLength);
         return clamp(projection, 0.0, 1.0);
     }
-    
+
     // Radial brush - based on distance from center
     if (brushType == 2) {
         vec2 center = brushParams.xy;
         float innerRadius = brushParams.z;
         float outerRadius = brushParams.w;
-        
+
         if (outerRadius < 0.001) return 0.0;
-        
+
         float distance = smoothstep(innerRadius, outerRadius, length(transformedPoint - center));
         return clamp(distance, 0.0, 1.0);
     }
-    
+
     // Box brush - like radial but uses max distance in x or y direction
     if (brushType == 3) {
         vec2 center = brushParams.xy;
         vec2 halfSize = brushParams.zw;
         float radius = brushParams2.x;
         float feather = brushParams2.y;
-        
+
         if (halfSize.x < 0.001 || halfSize.y < 0.001) return 0.0;
-        
-        // Calculate distance from center (normalized by half-size)
+
         vec2 q = abs(transformedPoint - center) - (halfSize - vec2(radius));
-        
-        // Distance field calculation for rounded rectangle
-        //float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
         float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
-        
+
         return clamp((dist + feather * 0.5) / feather, 0.0, 1.0);
     }
-    
+
     return 0.0;
 }
 
-// Determines whether a point is within the scissor region and returns the appropriate mask value
-// p: The point to test against the scissor region
-// Returns: 1.0 for points fully inside, 0.0 for points fully outside, and a gradient for edge transition
 float scissorMask(vec2 p) {
-    // Early exit if scissoring is disabled (when any scissor dimension is negative)
     if(scissorExt.x < 0.0 || scissorExt.y < 0.0) return 1.0;
-    
-    // Transform point to scissor space
-    vec2 transformedPoint = (scissorMat * vec4(p, 0.0, 1.0)).xy;
-    
-    // Calculate signed distance from scissor edges (negative inside, positive outside)
-    vec2 distanceFromEdges = abs(transformedPoint) - scissorExt;
-    
-    // Apply offset for smooth edge transition (0.5 creates half-pixel anti-aliased edges)
-    vec2 smoothEdges = vec2(0.5, 0.5) - distanceFromEdges;
-    
-    // Clamp each component and multiply to get final mask value
-    // Result is 1.0 inside, 0.0 outside, with smooth transition at edges
+
+    vec2 logicalP = p / dpiScale;
+    vec2 transformedPoint = (scissorMat * vec4(logicalP, 0.0, 1.0)).xy;
+
+    vec2 logicalExt = scissorExt / dpiScale;
+    vec2 distanceFromEdges = abs(transformedPoint) - logicalExt;
+
+    float halfPixelLogical = 0.5 / dpiScale;
+    vec2 smoothEdges = vec2(halfPixelLogical) - distanceFromEdges;
+
     return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
 }
 
-// Can improve text but a bit slower
-//vec4 textureNice( sampler2D sam, vec2 uv )
-//{
-//    float textureResolution = float(textureSize(sam,0).x);
-//    uv = uv*textureResolution + 0.5;
-//    vec2 iuv = floor( uv );
-//    vec2 fuv = fract( uv );
-//    uv = iuv + fuv*fuv*(3.0-2.0*fuv);
-//    uv = (uv - 0.5)/textureResolution;
-//    return texture( sam, uv );
-//}
-
 void main()
 {
-    vec2 pixelSize = fwidth(fragTexCoord);
-    vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
-    float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
-    edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
-    
     float mask = scissorMask(fragPos);
+
     vec4 color = fragColor;
 
     // Apply brush if active
@@ -132,11 +115,22 @@ void main()
         float factor = calculateBrushFactor();
         color = mix(brushColor1, brushColor2, factor);
     }
-    
-    vec4 textureColor = texture(texture0, fragTexCoord);
-    color *= textureColor;
-    color *= edgeAlpha * mask;
-    finalColor = color;
+
+    // Text mode: UV >= 2.0 means text rendering - fast path
+    if (fragTexCoord.x >= 2.0) {
+        finalColor = color * texture(texture0, fragTexCoord - vec2(2.0)) * mask;
+        return;
+    }
+
+    // Edge anti-aliasing based on distance to edges by abusing fwidth and UVs
+    vec2 pixelSize = fwidth(fragTexCoord);
+    vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
+    float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
+    edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
+
+    // Use world position transformed by texture matrix (convert to logical coords first)
+    vec2 logicalPos = fragPos / dpiScale;
+    finalColor = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
 }";
 
     public const string Vertex_VS = @"
@@ -169,6 +163,8 @@ void main()
     int _brushColor2Loc;
     int _brushParamsLoc;
     int _brushParams2Loc;
+    int _brushTextureMatLoc;
+    int _dpiScaleLoc;
 
     public RaylibCanvasRenderer()
     {
@@ -183,14 +179,29 @@ void main()
         _brushColor2Loc = GetShaderLocation(shader, "brushColor2");
         _brushParamsLoc = GetShaderLocation(shader, "brushParams");
         _brushParams2Loc = GetShaderLocation(shader, "brushParams2");
+        _brushTextureMatLoc = GetShaderLocation(shader, "brushTextureMat");
+        _dpiScaleLoc = GetShaderLocation(shader, "dpiScale");
     }
 
     public object CreateTexture(uint width, uint height)
     {
-        var image = GenImageColor((int)width, (int)height, new(0, 0, 0, 0));
-        var texture = LoadTextureFromImage(image);
-        SetTextureFilter(texture, TextureFilter.Point);
-        return texture;
+        unsafe
+        {
+            var data = new byte[width * height * 4];
+            fixed (byte* dataPtr = data)
+            {
+                Image image = new Image {
+                    Data = (void*)dataPtr,
+                    Width = (int)width,
+                    Height = (int)height,
+                    Format = PixelFormat.UncompressedR8G8B8A8,
+                    Mipmaps = 1
+                };
+                var texture = Raylib_cs.Raylib.LoadTextureFromImage(image);
+                Raylib_cs.Raylib.SetTextureFilter(texture, TextureFilter.Bilinear);
+                return texture;
+            }
+        }
     }
 
     public Int2 GetTextureSize(object texture)
@@ -205,10 +216,12 @@ void main()
         // Update the texture data with the provided byte array
         if (texture is not Texture2D tex)
             throw new ArgumentException("Texture must be of type Texture2D");
-        UpdateTextureRec(tex, new(bounds.Min.X, bounds.Min.Y, bounds.Size.X, bounds.Size.Y), data);
+
+        Rectangle updateRect = new Rectangle(bounds.Min.X, bounds.Min.Y, bounds.Size.X, bounds.Size.Y);
+        Raylib_cs.Raylib.UpdateTextureRec(tex, updateRect, data);
     }
 
-    void SetUniforms(Prowl.Quill.DrawCall drawCall)
+    void SetUniforms(Prowl.Quill.DrawCall drawCall, float dpiScale)
     {
         // Bind the texture if available, otherwise use default
         uint textureToUse = 0;
@@ -217,9 +230,11 @@ void main()
 
         Rlgl.SetTexture(textureToUse);
 
+        // Set DPI scale for converting pixel coords to logical coords in shader
+        SetShaderValue(shader, _dpiScaleLoc, dpiScale, ShaderUniformDataType.Float);
+
         // Set scissor rectangle
         drawCall.GetScissor(out var scissor, out var extent);
-        //scissor = Matrix4x4.Transpose(scissor);
 
         SetShaderValueMatrix(shader, scissorMatLoc, (Float4x4)scissor);
         SetShaderValue(shader, scissorExtLoc, [(float)extent.X, (float)extent.Y], ShaderUniformDataType.Vec2);
@@ -228,19 +243,60 @@ void main()
         SetShaderValue(shader, _brushTypeLoc, (int)drawCall.Brush.Type, ShaderUniformDataType.Int);
         if (drawCall.Brush.Type != BrushType.None)
         {
-            //var brushMat = Matrix4x4.Transpose(drawCall.Brush.BrushMatrix);
             SetShaderValueMatrix(shader, _brushMatLoc, (Float4x4)drawCall.Brush.BrushMatrix);
-            SetShaderValue(shader, _brushColor1Loc, ToVec4(drawCall.Brush.Color1), ShaderUniformDataType.Vec4);
-            SetShaderValue(shader, _brushColor2Loc, ToVec4(drawCall.Brush.Color2), ShaderUniformDataType.Vec4);
-            SetShaderValue(shader, _brushParamsLoc, new System.Numerics.Vector4((float)drawCall.Brush.Point1.X, (float)drawCall.Brush.Point1.Y, (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y), ShaderUniformDataType.Vec4);
-            SetShaderValue(shader, _brushParams2Loc, new System.Numerics.Vector2((float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather), ShaderUniformDataType.Vec2);
+            var brcol1 = (Prowl.Vector.Color)drawCall.Brush.Color1;
+            var brcol2 = (Prowl.Vector.Color)drawCall.Brush.Color2;
+            SetShaderValue(shader, _brushColor1Loc, brcol1, ShaderUniformDataType.Vec4);
+            SetShaderValue(shader, _brushColor2Loc, brcol2, ShaderUniformDataType.Vec4);
+            SetShaderValue(shader, _brushParamsLoc, new Float4((float)drawCall.Brush.Point1.X, (float)drawCall.Brush.Point1.Y, (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y), ShaderUniformDataType.Vec4);
+            SetShaderValue(shader, _brushParams2Loc, new Float2((float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather), ShaderUniformDataType.Vec2);
+        }
+
+        // Set texture transform parameters
+        SetShaderValueMatrix(shader, _brushTextureMatLoc, (Float4x4)drawCall.Brush.TextureMatrix);
+    }
+
+    void SetCustomUniforms(Shader customShader, ShaderUniforms uniforms)
+    {
+        foreach (var kvp in uniforms.Values)
+        {
+            int loc = GetShaderLocation(customShader, kvp.Key);
+            if (loc < 0) continue;
+
+            switch (kvp.Value)
+            {
+                case float f:
+                    SetShaderValue(customShader, loc, f, ShaderUniformDataType.Float);
+                    break;
+                case int i:
+                    SetShaderValue(customShader, loc, i, ShaderUniformDataType.Int);
+                    break;
+                case Float2 v2:
+                    SetShaderValue(customShader, loc, v2, ShaderUniformDataType.Vec2);
+                    break;
+                case Prowl.Vector.Float3 v3:
+                    SetShaderValue(customShader, loc, v3, ShaderUniformDataType.Vec3);
+                    break;
+                case Float4 v4:
+                    SetShaderValue(customShader, loc, v4, ShaderUniformDataType.Vec4);
+                    break;
+                case Float4x4 mat:
+                    SetShaderValueMatrix(customShader, loc, mat);
+                    break;
+            }
         }
     }
 
     public void RenderCalls(Canvas canvas, IReadOnlyList<Prowl.Quill.DrawCall> drawCalls)
     {
+        // Set up orthographic projection for pixel coordinates (framebuffer size)
+        Rlgl.MatrixMode(MatrixMode.Projection);
+        Rlgl.LoadIdentity();
+        Rlgl.Ortho(0, GetRenderWidth(), GetRenderHeight(), 0, -1, 1);
+        Rlgl.MatrixMode(MatrixMode.ModelView);
+        Rlgl.LoadIdentity();
+
         BeginBlendMode(BlendMode.AlphaPremultiply);
-        BeginShaderMode(shader);
 
         Rlgl.DrawRenderBatchActive();
 
@@ -248,17 +304,48 @@ void main()
 
         foreach (var drawCall in canvas.DrawCalls)
         {
+            // Determine which shader to use
+            bool useCustomShader = drawCall.Shader is Shader;
+            Shader activeShader = useCustomShader ? (Shader)drawCall.Shader : shader;
+
+            BeginShaderMode(activeShader);
 
             // Draw the vertices for this draw call
             Rlgl.Begin(DrawMode.Triangles);
-            SetUniforms(drawCall);
+
+            // Bind the texture if available, otherwise use default
+            uint textureToUse = 0;
+            if (drawCall.Texture != null)
+                textureToUse = ((Texture2D)drawCall.Texture).Id;
+            Rlgl.SetTexture(textureToUse);
+
+            if (useCustomShader)
+            {
+                // Set user-provided uniforms for custom shader
+                if (drawCall.ShaderUniforms != null)
+                    SetCustomUniforms(activeShader, drawCall.ShaderUniforms);
+            }
+            else
+            {
+                // Set default uniforms (pass DPI scale for coordinate conversion)
+                SetUniforms(drawCall, canvas.Scale);
+            }
 
             for (int i = 0; i < drawCall.ElementCount; i += 3)
             {
                 if (Rlgl.CheckRenderBatchLimit(3))
                 {
                     Rlgl.Begin(DrawMode.Triangles);
-                    SetUniforms(drawCall);
+                    Rlgl.SetTexture(textureToUse);
+                    if (useCustomShader)
+                    {
+                        if (drawCall.ShaderUniforms != null)
+                            SetCustomUniforms(activeShader, drawCall.ShaderUniforms);
+                    }
+                    else
+                    {
+                        SetUniforms(drawCall, canvas.Scale);
+                    }
                 }
 
                 var a = canvas.Vertices[(int)canvas.Indices[index]];
@@ -281,11 +368,9 @@ void main()
             }
             Rlgl.End();
             Rlgl.DrawRenderBatchActive();
+            EndShaderMode();
         }
         Rlgl.SetTexture(0);
-
-        EndShaderMode();
-        EndBlendMode();
     }
 
     static System.Numerics.Vector4 ToVec4(System.Drawing.Color color) => new System.Numerics.Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);

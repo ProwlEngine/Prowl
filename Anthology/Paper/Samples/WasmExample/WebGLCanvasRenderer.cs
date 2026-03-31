@@ -18,6 +18,9 @@ public class WebGLCanvasRenderer : ICanvasRenderer
     private double[] _scissorBuffer = Array.Empty<double>();
     private double[] _brushBuffer = Array.Empty<double>();
 
+    private const int VERTEX_SIZE = 44; // 20 core + 24 slug
+    private const int DC_INFO_STRIDE = 8; // texId, elemCount, slugCurveTex, slugBandTex, cW, cH, bW, bH
+
     public (int w, int h) GetCanvasSize()
     {
         return (WebGLInterop.GetCanvasWidth(), WebGLInterop.GetCanvasHeight());
@@ -28,6 +31,18 @@ public class WebGLCanvasRenderer : ICanvasRenderer
         int texId = _nextTextureId++;
         _textureSizes[texId] = ((int)width, (int)height);
         WebGLInterop.CreateTexture(texId, (int)width, (int)height);
+        return texId;
+    }
+
+    public object? CreateFloatTexture(int width, int height, int components, float[] data)
+    {
+        int texId = _nextTextureId++;
+        _textureSizes[texId] = (width, height);
+        // JS interop needs double[] for numeric arrays
+        double[] doubleData = new double[data.Length];
+        for (int i = 0; i < data.Length; i++)
+            doubleData[i] = data[i];
+        WebGLInterop.CreateFloatTexture(texId, width, height, components, doubleData);
         return texId;
     }
 
@@ -62,19 +77,20 @@ public class WebGLCanvasRenderer : ICanvasRenderer
 
         if (vertexCount == 0 || indexCount == 0) return;
 
-        int vertexBytes = vertexCount * 20;
+        int vertexBytes = vertexCount * VERTEX_SIZE;
         EnsureSize(ref _vertexBuffer, vertexBytes);
         EnsureSize(ref _indexBuffer, indexCount);
 
         int dcCount = drawCalls.Count;
-        EnsureSize(ref _drawCallInfoBuffer, dcCount * 2);
+        EnsureSize(ref _drawCallInfoBuffer, dcCount * DC_INFO_STRIDE);
         EnsureSize(ref _scissorBuffer, dcCount * 18);
         EnsureSize(ref _brushBuffer, dcCount * 47);
 
+        // Convert vertices to raw bytes (44 bytes each)
         for (int i = 0; i < vertexCount; i++)
         {
             var v = vertices[i];
-            int offset = i * 20;
+            int offset = i * VERTEX_SIZE;
             BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset), v.x);
             BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 4), v.y);
             BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 8), v.u);
@@ -83,19 +99,35 @@ public class WebGLCanvasRenderer : ICanvasRenderer
             _vertexBuffer[offset + 17] = v.g;
             _vertexBuffer[offset + 18] = v.b;
             _vertexBuffer[offset + 19] = v.a;
+            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 20), v.slugBandScaleX);
+            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 24), v.slugBandScaleY);
+            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 28), v.slugBandOffsetX);
+            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 32), v.slugBandOffsetY);
+            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 36), v.slugPackedBandLoc);
+            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 40), v.slugBandCount);
         }
 
+        // Convert indices
         for (int i = 0; i < indexCount; i++)
             _indexBuffer[i] = (int)indices[i];
 
         for (int i = 0; i < dcCount; i++)
         {
             var dc = drawCalls[i];
+            int di = i * DC_INFO_STRIDE;
 
+            // Draw call info
             int texId = dc.Texture != null ? (int)dc.Texture : 0;
-            _drawCallInfoBuffer[i * 2] = texId;
-            _drawCallInfoBuffer[i * 2 + 1] = dc.ElementCount;
+            _drawCallInfoBuffer[di] = texId;
+            _drawCallInfoBuffer[di + 1] = dc.ElementCount;
+            _drawCallInfoBuffer[di + 2] = dc.SlugCurveTexture != null ? (int)dc.SlugCurveTexture : 0;
+            _drawCallInfoBuffer[di + 3] = dc.SlugBandTexture != null ? (int)dc.SlugBandTexture : 0;
+            _drawCallInfoBuffer[di + 4] = dc.SlugCurveTexWidth;
+            _drawCallInfoBuffer[di + 5] = dc.SlugCurveTexHeight;
+            _drawCallInfoBuffer[di + 6] = dc.SlugBandTexWidth;
+            _drawCallInfoBuffer[di + 7] = dc.SlugBandTexHeight;
 
+            // Scissor
             dc.GetScissor(out var scissorMat, out var scissorExt);
             int s = i * 18;
             for (int col = 0; col < 4; col++)
@@ -104,6 +136,7 @@ public class WebGLCanvasRenderer : ICanvasRenderer
             _scissorBuffer[s + 16] = scissorExt.X;
             _scissorBuffer[s + 17] = scissorExt.Y;
 
+            // Brush
             int b = i * 47;
             _brushBuffer[b] = (int)dc.Brush.Type;
 
@@ -129,12 +162,10 @@ public class WebGLCanvasRenderer : ICanvasRenderer
             _brushBuffer[b + 29] = dc.Brush.CornerRadii;
             _brushBuffer[b + 30] = dc.Brush.Feather;
 
-            // Identity matrix for texture transform (not available in Quill 0.8.x)
-            for (int j = 31; j < 47; j++) _brushBuffer[b + j] = 0.0;
-            _brushBuffer[b + 31] = 1.0; // [0,0]
-            _brushBuffer[b + 36] = 1.0; // [1,1]
-            _brushBuffer[b + 41] = 1.0; // [2,2]
-            _brushBuffer[b + 46] = 1.0; // [3,3]
+            var tm = dc.Brush.TextureMatrix;
+            for (int col = 0; col < 4; col++)
+                for (int row = 0; row < 4; row++)
+                    _brushBuffer[b + 31 + col * 4 + row] = tm[row, col];
         }
 
         // Pass exact-sized arrays to JS (oversized buffers cause JS to iterate garbage)
@@ -142,8 +173,8 @@ public class WebGLCanvasRenderer : ICanvasRenderer
         Array.Copy(_vertexBuffer, vertexSlice, vertexBytes);
         var indexSlice = new int[indexCount];
         Array.Copy(_indexBuffer, indexSlice, indexCount);
-        var dcInfoSlice = new int[dcCount * 2];
-        Array.Copy(_drawCallInfoBuffer, dcInfoSlice, dcCount * 2);
+        var dcInfoSlice = new int[dcCount * DC_INFO_STRIDE];
+        Array.Copy(_drawCallInfoBuffer, dcInfoSlice, dcCount * DC_INFO_STRIDE);
         var scissorSlice = new double[dcCount * 18];
         Array.Copy(_scissorBuffer, scissorSlice, dcCount * 18);
         var brushSlice = new double[dcCount * 47];

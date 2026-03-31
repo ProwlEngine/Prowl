@@ -18,9 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="shader.frag">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
+    <Compile Include="..\Common\CanvasShaderSource.cs" Link="Common\CanvasShaderSource.cs" />
   </ItemGroup>
 
 </Project>

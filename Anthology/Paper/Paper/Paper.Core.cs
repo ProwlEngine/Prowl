@@ -129,8 +129,9 @@ namespace Prowl.PaperUI
             _IDStack.Push(0);
             _createdElements.Clear();
 
-            // Reset Canvas
-            _canvas.Clear();
+            // Reset Canvas with current dimensions and pixel ratio
+            float pixelRatio = frameBufferScale.HasValue ? (float)frameBufferScale.Value.X : 1.0f;
+            _canvas.BeginFrame(_width, _height, pixelRatio);
 
             StartInputFrame(frameBufferScale ?? new Float2(1, 1));
         }
