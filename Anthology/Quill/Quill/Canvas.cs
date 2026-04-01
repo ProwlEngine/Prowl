@@ -1103,7 +1103,9 @@ namespace Prowl.Quill
             var maxx = Maths.Min(ax + aw, bx + bw);
             var maxy = Maths.Min(ay + ah, by + bh);
 
-            return new Rect(minx, miny, Maths.Max(0.0f, maxx - minx), Maths.Max(0.0f, maxy - miny));
+            // Rect constructor takes (minX, minY, maxX, maxY), not (x, y, w, h)
+            // Clamp so min <= max
+            return new Rect(minx, miny, Maths.Max(minx, maxx), Maths.Max(miny, maxy));
         }
 
         /// <summary>
