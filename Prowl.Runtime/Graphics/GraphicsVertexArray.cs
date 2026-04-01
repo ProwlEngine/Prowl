@@ -57,7 +57,7 @@ public unsafe class GraphicsVertexArray : IDisposable
             int offset = element.Offset;
             unsafe
             {
-                if (element.Type == VertexType.Float)
+                if (element.Type == VertexType.Float || element.Normalized)
                     Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)format.Size, (void*)offset);
                 else
                     Graphics.GL.VertexAttribIPointer(index, element.Count, (GLEnum)element.Type, (uint)format.Size, (void*)offset);

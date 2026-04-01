@@ -21,8 +21,4 @@
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Prowl.Paper" Version="0.7.0" />
-  </ItemGroup>
-
 </Project>
