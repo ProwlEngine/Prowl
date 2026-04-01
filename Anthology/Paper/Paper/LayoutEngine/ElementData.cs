@@ -97,7 +97,7 @@ namespace Prowl.PaperUI.LayoutEngine
         // Content sizing for auto-sized elements
         public Func<float?, float?, (float, float)?> ContentSizer;
 
-        public readonly Rect LayoutRect => new Rect(X, Y, LayoutWidth, LayoutHeight);
+        public readonly Rect LayoutRect => new Rect(X, Y, X + LayoutWidth, Y + LayoutHeight);
 
         public static ElementData Create(int id)
         {
