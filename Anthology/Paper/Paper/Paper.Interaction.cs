@@ -213,6 +213,17 @@ namespace Prowl.PaperUI
         public int ActiveElementId => _activeElementId;
         public int FocusedElementId => _focusedElementId;
 
+        /// <summary>
+        /// Programmatically set focus to an element.
+        /// If no element is specified, focuses the current parent.
+        /// </summary>
+        public void SetFocus(ElementHandle? element = null)
+        {
+            var target = element ?? CurrentParent;
+            if (!target.IsValid) return;
+            _focusedElementId = target.Data.ID;
+        }
+
         public bool WantsCapturePointer => _theHoveredElementId != 0 || _activeElementId != 0;
 
         public bool SkipKeyboardNavigation = false;
