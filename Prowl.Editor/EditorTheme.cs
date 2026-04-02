@@ -50,4 +50,5 @@ public static class EditorTheme
     public const float Spacing = 2f;
     public const float Padding = 4f;
     public const float FontSize = 14f;
+    public const float LabelWidth = 120f;
 }

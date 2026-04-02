@@ -21,7 +21,6 @@ public class PaperRenderer : ICanvasRenderer
     private Texture2D _defaultTexture;
 
     private Float4x4 _projection;
-    private float _dpiScale = 1f;
 
     public void Initialize(int width, int height)
     {
@@ -31,11 +30,11 @@ public class PaperRenderer : ICanvasRenderer
         _elementBuffer = Graphics.CreateBuffer<uint>(BufferType.ElementsBuffer, Array.Empty<uint>(), true);
 
         // Vertex format matches Quill's Vertex struct (44 bytes):
-        //   0: Float2  position      (offset 0)
-        //   1: Float2  UV            (offset 8)
-        //   2: UByte4  color         (offset 16, normalized)
-        //   3: Float4  slug band     (offset 20)
-        //   4: Float2  slug glyph    (offset 36)
+        //   0: Float2     position     (offset 0)
+        //   1: Float2     UV           (offset 8)
+        //   2: UByte4     color        (offset 16, normalized)
+        //   3: Float4     slug band    (offset 20)
+        //   4: Float2     slug glyph   (offset 36)
         var vertexFormat = new VertexFormat(
         [
             new((VertexFormat.VertexSemantic)0, VertexFormat.VertexType.Float, 2, 0),
@@ -78,20 +77,43 @@ public class PaperRenderer : ICanvasRenderer
 
         Rendering.Shaders.ShaderPass pass = shader.GetPass(0);
         if (!pass.TryGetVariantProgram(null, out _shaderProgram))
-        {
             Debug.LogError("Failed to compile UI shader.");
-            return;
-        }
     }
 
-    private Float4 ToVector4(Color32 color)
-    {
-        return new Float4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
-    }
+    private static Float4 ToFloat4(Color32 color)
+        => new(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
 
     public object CreateTexture(uint width, uint height)
+        => new Texture2D(width, height);
+
+    public object? CreateFloatTexture(int width, int height, int components, float[] data)
     {
-        return new Texture2D(width, height);
+        var tex = new Texture2D((uint)width, (uint)height, false, TextureImageFormat.Float4);
+
+        // Set nearest filtering and clamp-to-edge for data textures
+        Graphics.SetTextureFilters(tex.Handle, TextureMin.Nearest, TextureMag.Nearest);
+        Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
+        Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
+
+        // Expand 2-component data to RGBA (Quill slug textures use RG channels)
+        float[] uploadData;
+        if (components == 2)
+        {
+            uploadData = new float[width * height * 4];
+            for (int i = 0; i < width * height; i++)
+            {
+                uploadData[i * 4 + 0] = data[i * 2 + 0];
+                uploadData[i * 4 + 1] = data[i * 2 + 1];
+                // G and A stay 0
+            }
+        }
+        else
+        {
+            uploadData = data;
+        }
+
+        tex.SetData<float>(new Memory<float>(uploadData));
+        return tex;
     }
 
     public Int2 GetTextureSize(object texture)
@@ -110,7 +132,7 @@ public class PaperRenderer : ICanvasRenderer
     {
         if (drawCalls.Count == 0) return;
 
-        _dpiScale = canvas.Scale;
+        float dpiScale = canvas.Scale;
 
         var state = new RasterizerState
         {
@@ -125,11 +147,11 @@ public class PaperRenderer : ICanvasRenderer
         Graphics.SetState(state);
         Graphics.BindProgram(_shaderProgram);
         Graphics.SetUniformMatrix(_shaderProgram, "projection", false, _projection);
-        Graphics.SetUniformF(_shaderProgram, "dpiScale", _dpiScale);
+        Graphics.SetUniformF(_shaderProgram, "dpiScale", dpiScale);
 
         Graphics.BindVertexArray(_vertexArrayObject);
 
-        // Upload raw vertex data (44 bytes per vertex, matching Quill's Vertex struct)
+        // Upload raw Vertex data (44 bytes per vertex)
         if (canvas.Vertices.Count > 0)
         {
             var vertices = canvas.Vertices.ToArray();
@@ -141,9 +163,7 @@ public class PaperRenderer : ICanvasRenderer
         }
 
         if (canvas.Indices.Count > 0)
-        {
             Graphics.SetBuffer(_elementBuffer, canvas.Indices.ToArray(), true);
-        }
 
         int indexOffset = 0;
         foreach (DrawCall drawCall in drawCalls)
@@ -160,8 +180,8 @@ public class PaperRenderer : ICanvasRenderer
             // Brush
             Graphics.SetUniformMatrix(_shaderProgram, "brushMat", false, drawCall.Brush.BrushMatrix);
             Graphics.SetUniformI(_shaderProgram, "brushType", (int)drawCall.Brush.Type);
-            Graphics.SetUniformV4(_shaderProgram, "brushColor1", ToVector4(drawCall.Brush.Color1));
-            Graphics.SetUniformV4(_shaderProgram, "brushColor2", ToVector4(drawCall.Brush.Color2));
+            Graphics.SetUniformV4(_shaderProgram, "brushColor1", ToFloat4(drawCall.Brush.Color1));
+            Graphics.SetUniformV4(_shaderProgram, "brushColor2", ToFloat4(drawCall.Brush.Color2));
             Graphics.SetUniformV4(_shaderProgram, "brushParams", new Float4(
                 drawCall.Brush.Point1.X, drawCall.Brush.Point1.Y,
                 drawCall.Brush.Point2.X, drawCall.Brush.Point2.Y));
@@ -169,19 +189,18 @@ public class PaperRenderer : ICanvasRenderer
                 drawCall.Brush.CornerRadii, drawCall.Brush.Feather));
             Graphics.SetUniformMatrix(_shaderProgram, "brushTextureMat", false, drawCall.Brush.TextureMatrix);
 
-            // Slug textures (for GPU text rendering)
+            // Slug textures (GPU text rendering)
             if (drawCall.IsSlug)
             {
-                if (drawCall.SlugCurveTexture is Texture2D curveTexHandle)
-                {
-                    Graphics.SetUniformTexture(_shaderProgram, "slugCurveTexture", 1, curveTexHandle.Handle);
-                }
-                if (drawCall.SlugBandTexture is Texture2D bandTexHandle)
-                {
-                    Graphics.SetUniformTexture(_shaderProgram, "slugBandTexture", 2, bandTexHandle.Handle);
-                }
-                Graphics.SetUniformV2(_shaderProgram, "slugCurveTexSize", new Float2(drawCall.SlugCurveTexWidth, drawCall.SlugCurveTexHeight));
-                Graphics.SetUniformV2(_shaderProgram, "slugBandTexSize", new Float2(drawCall.SlugBandTexWidth, drawCall.SlugBandTexHeight));
+                if (drawCall.SlugCurveTexture is Texture2D curveTex)
+                    Graphics.SetUniformTexture(_shaderProgram, "slugCurveTexture", 1, curveTex.Handle);
+                if (drawCall.SlugBandTexture is Texture2D bandTex)
+                    Graphics.SetUniformTexture(_shaderProgram, "slugBandTexture", 2, bandTex.Handle);
+
+                Graphics.SetUniformV2(_shaderProgram, "slugCurveTexSize",
+                    new Float2(drawCall.SlugCurveTexWidth, drawCall.SlugCurveTexHeight));
+                Graphics.SetUniformV2(_shaderProgram, "slugBandTexSize",
+                    new Float2(drawCall.SlugBandTexWidth, drawCall.SlugBandTexHeight));
             }
 
             Graphics.DrawIndexed(Topology.Triangles, (uint)drawCall.ElementCount, indexOffset, 0, true);
@@ -191,8 +210,5 @@ public class PaperRenderer : ICanvasRenderer
         Graphics.BindVertexArray(null);
     }
 
-    public void Dispose()
-    {
-        Cleanup();
-    }
+    public void Dispose() => Cleanup();
 }

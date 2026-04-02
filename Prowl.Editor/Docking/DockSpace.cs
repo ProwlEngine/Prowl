@@ -251,6 +251,11 @@ public class DockSpace
     //  FLOATING WINDOWS
     // ================================================================
 
+    private const float ResizeHandleSize = 3f;
+    private const float ResizeCornerSize = 8f;
+    private const float MinWindowWidth = 150f;
+    private const float MinWindowHeight = 80f;
+
     private void DrawFloatingWindow(Paper paper, FloatingWindow fw, int index)
     {
         using (paper.Box($"fw_{index}")
@@ -262,8 +267,82 @@ public class DockSpace
             .OnClick(index, (idx, e) => BringToFront(idx))
             .Enter())
         {
+            // Close button in top-right corner
+            float closeSize = 18f;
+            var closeBtn = paper.Box($"fw_close_{index}")
+                .PositionType(PositionType.SelfDirected)
+                .Position(fw.Size.X - closeSize - 4, 4)
+                .Size(closeSize, closeSize)
+                .Rounded(9)
+                .BackgroundColor(Color.Transparent)
+                .Hovered.BackgroundColor(Color.FromArgb(255, 200, 60, 60)).End()
+                .StopEventPropagation()
+                .OnClick(index, (idx, e) =>
+                {
+                    // Dock the panel back or remove the window
+                    if (idx >= 0 && idx < FloatingWindows.Count)
+                        FloatingWindows.RemoveAt(idx);
+                });
+
+            if (EditorTheme.DefaultFont != null)
+                closeBtn.Text("\u2715", EditorTheme.DefaultFont)
+                    .TextColor(EditorTheme.TextDim).FontSize(10f);
+
             DrawNodeTree(paper, fw.Node, null, 0, 0, fw.Size.X, fw.Size.Y, fw);
+
+            // Resize handles
+            float w = fw.Size.X, h = fw.Size.Y;
+            float s = ResizeHandleSize;
+            float cs = ResizeCornerSize;
+
+            // Edges
+            ResizeHandle(paper, $"fw_r_{index}", fw, w - s, cs, s, h - cs * 2, true, false, false, false);
+            ResizeHandle(paper, $"fw_b_{index}", fw, cs, h - s, w - cs * 2, s, false, true, false, false);
+            ResizeHandle(paper, $"fw_l_{index}", fw, 0, cs, s, h - cs * 2, false, false, true, false);
+            ResizeHandle(paper, $"fw_t_{index}", fw, cs, 0, w - cs * 2, s, false, false, false, true);
+
+            // Corners (slightly larger hit area)
+            ResizeHandle(paper, $"fw_br_{index}", fw, w - cs, h - cs, cs, cs, true, true, false, false);
+            ResizeHandle(paper, $"fw_bl_{index}", fw, 0, h - cs, cs, cs, false, true, true, false);
+            ResizeHandle(paper, $"fw_tr_{index}", fw, w - cs, 0, cs, cs, true, false, false, true);
+            ResizeHandle(paper, $"fw_tl_{index}", fw, 0, 0, cs, cs, false, false, true, true);
         }
+    }
+
+    private void ResizeHandle(Paper paper, string id, FloatingWindow fw,
+                               float x, float y, float w, float h,
+                               bool right, bool bottom, bool left, bool top)
+    {
+        paper.Box(id)
+            .PositionType(PositionType.SelfDirected)
+            .Position(x, y).Size(w, h)
+            .Hovered.BackgroundColor(Color.FromArgb(60, 51, 122, 183)).End()
+            .OnDragging(fw, (captured, e) =>
+            {
+                Float2 delta = e.Delta;
+
+                if (right)
+                    captured.Size = new Float2(Math.Max(MinWindowWidth, captured.Size.X + delta.X), captured.Size.Y);
+
+                if (bottom)
+                    captured.Size = new Float2(captured.Size.X, Math.Max(MinWindowHeight, captured.Size.Y + delta.Y));
+
+                if (left)
+                {
+                    float newW = Math.Max(MinWindowWidth, captured.Size.X - delta.X);
+                    float actualDelta = captured.Size.X - newW;
+                    captured.Position += new Float2(actualDelta, 0);
+                    captured.Size = new Float2(newW, captured.Size.Y);
+                }
+
+                if (top)
+                {
+                    float newH = Math.Max(MinWindowHeight, captured.Size.Y - delta.Y);
+                    float actualDelta = captured.Size.Y - newH;
+                    captured.Position += new Float2(0, actualDelta);
+                    captured.Size = new Float2(captured.Size.X, newH);
+                }
+            });
     }
 
     private void BringToFront(int index)

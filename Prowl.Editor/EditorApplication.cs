@@ -26,6 +26,7 @@ public class EditorApplication : Game
         Application.IsPlaying = false;
 
         EditorTheme.DefaultFont = PaperInstance.EnumerateSystemFonts().FirstOrDefault();
+        PaperInstance.TextMode = Prowl.Quill.TextRenderMode.Bitmap;
 
         _dockSpace = new DockSpace(CreateDefaultLayout());
 
