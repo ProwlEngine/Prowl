@@ -164,6 +164,10 @@ namespace Prowl.PaperUI
             // Post-layout callbacks
             CallPostLayoutRecursive(RootElement);
 
+            // Collect layered elements for independent hit testing
+            _layeredElements.Clear();
+            CollectLayeredElements(_rootElementHandle, Transform2D.Identity);
+
             // Reset rendering state
             _canvas.ResetState();
 

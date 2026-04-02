@@ -104,8 +104,6 @@ namespace Prowl.PaperUI
         /// </summary>
         private bool IsHookedToHoveredParent(int childId)
         {
-            ElementHandle childElement = FindElementByID(childId);
-            if (!childElement.IsValid) return false;
             ElementHandle current = FindElementByID(childId);
             while (current.IsValid)
             {
@@ -130,8 +128,6 @@ namespace Prowl.PaperUI
         /// </summary>
         private bool IsHookedToActiveParent(int childId)
         {
-            ElementHandle childElement = FindElementByID(childId);
-            if (!childElement.IsValid) return false;
             ElementHandle current = FindElementByID(childId);
             while (current.IsValid)
             {
@@ -155,8 +151,6 @@ namespace Prowl.PaperUI
         /// </summary>
         private bool IsHookedToFocusedParent(int childId)
         {
-            ElementHandle childElement = FindElementByID(childId);
-            if (!childElement.IsValid) return false;
             ElementHandle current = FindElementByID(childId);
             while (current.IsValid)
             {
@@ -208,6 +202,11 @@ namespace Prowl.PaperUI
         private Dictionary<int, Float2> _dragStartPos = new Dictionary<int, Float2>();
         private HashSet<int> _elementsInBubblePath = new HashSet<int>();
         private Dictionary<int, bool> _isDragging = new Dictionary<int, bool>();
+
+        // Layered elements collected after layout for independent hit testing.
+        // Each entry stores the element handle and the accumulated parent transform
+        // (including scroll offsets) so hit testing uses the correct coordinates.
+        private List<(ElementHandle handle, Transform2D parentTransform)> _layeredElements = new List<(ElementHandle, Transform2D)>();
 
         // Public access to interaction state
         public int HoveredElementId => _theHoveredElementId;
@@ -277,14 +276,146 @@ namespace Prowl.PaperUI
         #region Element Hit Testing
 
         /// <summary>
-        /// Finds the topmost interactable element under the pointer across all layers.
+        /// Collects elements with non-Base layers. Called after layout, before interaction.
+        /// </summary>
+        private void CollectLayeredElements(ElementHandle handle, Transform2D parentTransform = default)
+        {
+            if (!handle.IsValid) return;
+            ref ElementData data = ref handle.Data;
+
+            if (data.Layer == Layer.Topmost || data.Layer == Layer.Overlay)
+            {
+                // Store the PARENT's accumulated transform (not this element's).
+                // HitTestElementTree will apply this element's own transform when testing.
+                _layeredElements.Add((handle, parentTransform));
+                return;
+            }
+
+            // Accumulate this element's transform for children
+            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
+            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
+            Transform2D combinedTransform = styleTransform * parentTransform;
+
+            Transform2D childTransform = combinedTransform;
+
+            foreach (var childIndex in data.ChildIndices)
+            {
+                var child = new ElementHandle(this, childIndex);
+                CollectLayeredElements(child, childTransform);
+            }
+        }
+
+        /// <summary>
+        /// Finds the topmost interactable element under the pointer.
+        /// First checks layered elements (Topmost, then Overlay) independently from their parents,
+        /// then falls back to the normal Base layer tree walk.
         /// </summary>
         private ElementHandle FindTopmostInteractableElement(ref ElementHandle handle, Transform2D parentTransform)
         {
-            var found = FindTopmostInteractableElementForLayer(ref handle, parentTransform, Layer.Topmost);
-            if(found.IsValid == false) found = FindTopmostInteractableElementForLayer(ref handle, parentTransform, Layer.Overlay);
-            if(found.IsValid == false) found = FindTopmostInteractableElementForLayer(ref handle, parentTransform, Layer.Base);
-            return found;
+            // Check Topmost layered elements first (last added = front, check in reverse)
+            for (int i = _layeredElements.Count - 1; i >= 0; i--)
+            {
+                var (layered, layeredTransform) = _layeredElements[i];
+                if (layered.Data.Layer != Layer.Topmost) continue;
+
+                var found = HitTestElementTree(ref layered, layeredTransform);
+                if (found.IsValid) return found;
+            }
+
+            // Then Overlay
+            for (int i = _layeredElements.Count - 1; i >= 0; i--)
+            {
+                var (layered, layeredTransform) = _layeredElements[i];
+                if (layered.Data.Layer != Layer.Overlay) continue;
+
+                var found = HitTestElementTree(ref layered, layeredTransform);
+                if (found.IsValid) return found;
+            }
+
+            // Finally, Base layer (normal tree walk, skipping layered elements)
+            return HitTestBaseLayer(ref handle, parentTransform);
+        }
+
+        /// <summary>
+        /// Hit tests an element and its children as an independent tree (no parent clipping).
+        /// Used for Topmost/Overlay elements.
+        /// </summary>
+        private ElementHandle HitTestElementTree(ref ElementHandle handle, Transform2D parentTransform, bool isRoot = true)
+        {
+            if (!handle.IsValid) return default;
+            ref ElementData data = ref handle.Data;
+
+            Transform2D combinedTransform = parentTransform;
+            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
+            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
+            combinedTransform = styleTransform * combinedTransform;
+
+            var inverseTransform = combinedTransform.Inverse();
+            var local = inverseTransform.TransformPoint(PointerPos);
+            bool isPointerOver = IsPointOverElementData(data, local.X, local.Y);
+
+            // The layered root itself is not clipped by its original parent,
+            // but children within the layered tree respect their own scissor.
+            bool shouldCheckChildren = isRoot || data._scissorEnabled == false || isPointerOver;
+
+            Transform2D childTransform = combinedTransform;
+
+            if (shouldCheckChildren)
+            {
+                var childIndices = data.ChildIndices;
+                for (int i = childIndices.Count - 1; i >= 0; i--)
+                {
+                    var childHandle = new ElementHandle(handle.Owner, childIndices[i]);
+                    var found = HitTestElementTree(ref childHandle, childTransform, false);
+                    if (found.IsValid) return found;
+                }
+            }
+
+            if (!isPointerOver || data.IsNotInteractable)
+                return default;
+
+            return handle;
+        }
+
+        /// <summary>
+        /// Hit tests the Base layer tree, skipping elements on other layers.
+        /// </summary>
+        private ElementHandle HitTestBaseLayer(ref ElementHandle handle, Transform2D parentTransform)
+        {
+            if (!handle.IsValid) return default;
+            ref ElementData data = ref handle.Data;
+
+            // Skip non-Base elements (they're handled independently)
+            if (data.Layer != Layer.Base) return default;
+
+            Transform2D combinedTransform = parentTransform;
+            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
+            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
+            combinedTransform = styleTransform * combinedTransform;
+
+            var inverseTransform = combinedTransform.Inverse();
+            var local = inverseTransform.TransformPoint(PointerPos);
+            bool isPointerOver = IsPointOverElementData(data, local.X, local.Y);
+
+            bool shouldCheckChildren = data._scissorEnabled == false || isPointerOver;
+
+            Transform2D childTransform = combinedTransform;
+
+            var childIndices = data.ChildIndices;
+            if (shouldCheckChildren && childIndices.Count > 0)
+            {
+                for (int i = childIndices.Count - 1; i >= 0; i--)
+                {
+                    var childHandle = new ElementHandle(handle.Owner, childIndices[i]);
+                    var found = HitTestBaseLayer(ref childHandle, childTransform);
+                    if (found.IsValid) return found;
+                }
+            }
+
+            if (!isPointerOver || data.IsNotInteractable)
+                return default;
+
+            return handle;
         }
 
         /// <summary>
