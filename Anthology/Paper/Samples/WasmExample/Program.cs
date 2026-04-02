@@ -29,8 +29,9 @@ public partial class App
     internal static void OnFrame(double deltaTime)
     {
         float dt = Math.Clamp((float)deltaTime, 0.001f, 0.1f);
+        float dpiScale = (float)WebGLInterop.GetDevicePixelRatio();
 
-        P.BeginFrame(dt);
+        P.BeginFrame(dt, dpiScale);
         Shared.PaperDemo.RenderUI();
         P.EndFrame();
     }

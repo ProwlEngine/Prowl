@@ -49,6 +49,13 @@ namespace Prowl.PaperUI
         public ICanvasRenderer Renderer => _renderer;
 
         /// <summary>
+        /// Gets the current DPI scale factor.
+        /// Host applications should divide raw input coordinates by this value
+        /// before passing them to Paper's input methods.
+        /// </summary>
+        public float DpiScale => _dpiScale;
+
+        /// <summary>
         /// Gets the current parent element in the element hierarchy.
         /// </summary>
         public ElementHandle CurrentParent => _elementStack.Peek();
@@ -123,8 +130,10 @@ namespace Prowl.PaperUI
         /// Begins a new UI frame, resetting the element hierarchy.
         /// </summary>
         /// <param name="deltaTime">Time elapsed since the last frame</param>
-        public void BeginFrame(float deltaTime)
+        /// <param name="dpiScale">Device pixel ratio (1.0 = standard, 2.0 = HiDPI/Retina). Can change per-frame if the window moves between monitors.</param>
+        public void BeginFrame(float deltaTime, float dpiScale = 1.0f)
         {
+            _dpiScale = dpiScale > 0 ? dpiScale : 1.0f;
             _timer.Restart();
             SetTime(deltaTime);
 
@@ -141,7 +150,7 @@ namespace Prowl.PaperUI
             _IDStack.Push(0);
             _createdElements.Clear();
 
-            _canvas.BeginFrame(_width, _height);
+            _canvas.BeginFrame(_width, _height, _dpiScale);
 
             StartInputFrame();
         }

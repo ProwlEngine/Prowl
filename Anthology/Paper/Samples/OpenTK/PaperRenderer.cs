@@ -31,6 +31,7 @@ namespace OpenTKSample
         static int _brushParamsLoc;
         static int _brushParams2Loc;
         static int _brushTextureMatLoc;
+        static int _dpiScaleLoc;
 
         private Matrix4 _projection;
         private TextureTK _defaultTexture;
@@ -114,6 +115,7 @@ namespace OpenTKSample
             _brushParamsLoc = GL.GetUniformLocation(_shaderProgram, "brushParams");
             _brushParams2Loc = GL.GetUniformLocation(_shaderProgram, "brushParams2");
             _brushTextureMatLoc = GL.GetUniformLocation(_shaderProgram, "brushTextureMat");
+            _dpiScaleLoc = GL.GetUniformLocation(_shaderProgram, "dpiScale");
             _slugCurveTexLoc = GL.GetUniformLocation(_shaderProgram, "slugCurveTexture");
             _slugBandTexLoc = GL.GetUniformLocation(_shaderProgram, "slugBandTexture");
             _slugCurveTexSizeLoc = GL.GetUniformLocation(_shaderProgram, "slugCurveTexSize");
@@ -303,6 +305,9 @@ namespace OpenTKSample
                     // Use default shader
                     GL.UseProgram(_shaderProgram);
                     GL.UniformMatrix4(_projectionLocation, false, ref _projection);
+
+                    // Set DPI scale for converting pixel coords to logical coords in shader
+                    GL.Uniform1(_dpiScaleLoc, canvas.Scale);
 
                     // Set scissor rectangle
                     drawCall.GetScissor(out var scissor, out var extent);

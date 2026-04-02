@@ -16,6 +16,9 @@ public static partial class WebGLInterop
     [JSImport("webgl.getCanvasHeight", "main.js")]
     internal static partial int GetCanvasHeight();
 
+    [JSImport("webgl.getDevicePixelRatio", "main.js")]
+    internal static partial double GetDevicePixelRatio();
+
     [JSImport("webgl.createTexture", "main.js")]
     internal static partial void CreateTexture(int texId, int width, int height);
 
@@ -31,5 +34,6 @@ public static partial class WebGLInterop
         int[] indexData,
         int[] drawCallInfo,
         double[] scissorData,
-        double[] brushData);
+        double[] brushData,
+        double canvasScale);
 }

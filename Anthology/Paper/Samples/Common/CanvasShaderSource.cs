@@ -61,6 +61,7 @@ uniform vec4 brushParams;
 uniform vec2 brushParams2;
 
 uniform mat4 brushTextureMat;
+uniform float dpiScale;
 
 // Slug textures
 uniform sampler2D slugCurveTexture;
@@ -182,7 +183,8 @@ float SlugRender(vec2 renderCoord, vec4 bandTransform, vec2 glyphTexInfo) {
 
 float calculateBrushFactor() {
     if (brushType == 0) return 0.0;
-    vec2 transformedPoint = (brushMat * vec4(fragPos, 0.0, 1.0)).xy;
+    vec2 logicalPos = fragPos / dpiScale;
+    vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
 
     if (brushType == 1) {
         vec2 startPoint = brushParams.xy; vec2 endPoint = brushParams.zw;
@@ -207,9 +209,12 @@ float calculateBrushFactor() {
 
 float scissorMask(vec2 p) {
     if(scissorExt.x < 0.0 || scissorExt.y < 0.0) return 1.0;
-    vec2 transformedPoint = (scissorMat * vec4(p, 0.0, 1.0)).xy;
-    vec2 distanceFromEdges = abs(transformedPoint) - scissorExt;
-    vec2 smoothEdges = vec2(0.5) - distanceFromEdges;
+    vec2 logicalP = p / dpiScale;
+    vec2 transformedPoint = (scissorMat * vec4(logicalP, 0.0, 1.0)).xy;
+    vec2 logicalExt = scissorExt / dpiScale;
+    vec2 distanceFromEdges = abs(transformedPoint) - logicalExt;
+    float halfPixelLogical = 0.5 / dpiScale;
+    vec2 smoothEdges = vec2(halfPixelLogical) - distanceFromEdges;
     return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
 }
 
@@ -242,7 +247,8 @@ void main()
     float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
     edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
 
-    finalColor = color * texture(texture0, (brushTextureMat * vec4(fragPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
+    vec2 logicalPos = fragPos / dpiScale;
+    finalColor = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
 }";
     }
 }

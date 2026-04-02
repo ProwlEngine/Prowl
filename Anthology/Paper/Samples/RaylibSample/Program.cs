@@ -49,7 +49,8 @@ internal class Program
             BeginDrawing();
             ClearBackground(Color.RayWhite);
 
-            P.BeginFrame(GetFrameTime());
+            float dpiScale = (float)GetRenderWidth() / GetScreenWidth();
+            P.BeginFrame(GetFrameTime(), dpiScale);
 
             PaperDemo.RenderUI();
 

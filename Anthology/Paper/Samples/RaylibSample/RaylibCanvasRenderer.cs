@@ -34,10 +34,14 @@ uniform vec2 brushParams2;   // x = Box radius, y = Box Feather
 
 uniform mat4 brushTextureMat;     // Texture transform matrix (inverse)
 
+uniform float dpiScale;           // DPI scale factor (pixels / logical units)
+
 float calculateBrushFactor() {
     if (brushType == 0) return 0.0;
 
-    vec2 transformedPoint = (brushMat * vec4(fragPos, 0.0, 1.0)).xy;
+    // Convert fragPos from pixel coordinates to logical coordinates for brush calculations
+    vec2 logicalPos = fragPos / dpiScale;
+    vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
 
     // Linear brush - projects position onto the line between start and end
     if (brushType == 1) {
@@ -86,9 +90,17 @@ float calculateBrushFactor() {
 float scissorMask(vec2 p) {
     if(scissorExt.x < 0.0 || scissorExt.y < 0.0) return 1.0;
 
-    vec2 transformedPoint = (scissorMat * vec4(p, 0.0, 1.0)).xy;
-    vec2 distanceFromEdges = abs(transformedPoint) - scissorExt;
-    vec2 smoothEdges = vec2(0.5) - distanceFromEdges;
+    // Convert from pixel to logical coordinates, then transform to scissor space
+    vec2 logicalP = p / dpiScale;
+    vec2 transformedPoint = (scissorMat * vec4(logicalP, 0.0, 1.0)).xy;
+
+    // Convert scissorExt from pixels to logical units to match transformedPoint
+    vec2 logicalExt = scissorExt / dpiScale;
+
+    vec2 distanceFromEdges = abs(transformedPoint) - logicalExt;
+
+    float halfPixelLogical = 0.5 / dpiScale;
+    vec2 smoothEdges = vec2(halfPixelLogical) - distanceFromEdges;
 
     return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
 }
@@ -117,7 +129,8 @@ void main()
     float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
     edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
 
-    finalColor = color * texture(texture0, (brushTextureMat * vec4(fragPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
+    vec2 logicalPos = fragPos / dpiScale;
+    finalColor = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
 }";
 
     public const string Vertex_VS = @"
@@ -151,6 +164,7 @@ void main()
     int _brushParamsLoc;
     int _brushParams2Loc;
     int _brushTextureMatLoc;
+    int _dpiScaleLoc;
 
     public RaylibCanvasRenderer()
     {
@@ -166,6 +180,7 @@ void main()
         _brushParamsLoc = GetShaderLocation(shader, "brushParams");
         _brushParams2Loc = GetShaderLocation(shader, "brushParams2");
         _brushTextureMatLoc = GetShaderLocation(shader, "brushTextureMat");
+        _dpiScaleLoc = GetShaderLocation(shader, "dpiScale");
     }
 
     public object CreateTexture(uint width, uint height)
@@ -206,7 +221,7 @@ void main()
         Raylib_cs.Raylib.UpdateTextureRec(tex, updateRect, data);
     }
 
-    void SetUniforms(Prowl.Quill.DrawCall drawCall)
+    void SetUniforms(Prowl.Quill.DrawCall drawCall, float dpiScale)
     {
         // Bind the texture if available, otherwise use default
         uint textureToUse = 0;
@@ -214,6 +229,9 @@ void main()
             textureToUse = ((Texture2D)drawCall.Texture).Id;
 
         Rlgl.SetTexture(textureToUse);
+
+        // Set DPI scale for converting pixel coords to logical coords in shader
+        SetShaderValue(shader, _dpiScaleLoc, dpiScale, ShaderUniformDataType.Float);
 
         // Set scissor rectangle
         drawCall.GetScissor(out var scissor, out var extent);
@@ -310,7 +328,7 @@ void main()
             else
             {
                 // Set default uniforms
-                SetUniforms(drawCall);
+                SetUniforms(drawCall, canvas.Scale);
             }
 
             for (int i = 0; i < drawCall.ElementCount; i += 3)
@@ -326,7 +344,7 @@ void main()
                     }
                     else
                     {
-                        SetUniforms(drawCall);
+                        SetUniforms(drawCall, canvas.Scale);
                     }
                 }
 
