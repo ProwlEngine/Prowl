@@ -78,7 +78,7 @@ namespace Prowl.PaperUI
             get => _pointerPos;
             set {
                 _pointerPos = value;
-                OnPointerPosSet?.Invoke(_pointerPos / _frameBufferScale);
+                OnPointerPosSet?.Invoke(_pointerPos);
             }
         }
 
@@ -110,9 +110,6 @@ namespace Prowl.PaperUI
         private float _time = 0f;
         public float DeltaTime => _deltaTime;
         public float Time => _time;
-
-        // Scaling
-        private Float2 _frameBufferScale = Float2.One;
 
         #endregion
 
@@ -229,11 +226,8 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Begins the input processing for a new frame.
         /// </summary>
-        /// <param name="frameBufferScale">The framebuffer scale factor</param>
-        private void StartInputFrame(Float2 frameBufferScale)
+        private void StartInputFrame()
         {
-            _frameBufferScale = frameBufferScale;
-
             // Update key pressed times
             for (var i = 0; i < _keyPressedTime.Length; ++i)
                 if (_keyCurState[i])
@@ -380,8 +374,6 @@ namespace Prowl.PaperUI
         /// <param name="y">Y coordinate</param>
         public void SetPointerPosition(float x, float y)
         {
-            x *= _frameBufferScale.X;
-            y *= _frameBufferScale.Y;
             _pointerPos = new Float2(x, y);
         }
 
@@ -397,9 +389,6 @@ namespace Prowl.PaperUI
         {
             var index = (int)btn;
             LastButtonPressed = btn;
-
-            x *= _frameBufferScale.X;
-            y *= _frameBufferScale.Y;
 
             if (!isPointerMove)
             {

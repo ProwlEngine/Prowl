@@ -31,6 +31,5 @@ public static partial class WebGLInterop
         int[] indexData,
         int[] drawCallInfo,
         double[] scissorData,
-        double[] brushData,
-        double canvasScale);
+        double[] brushData);
 }

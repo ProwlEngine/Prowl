@@ -8,7 +8,7 @@ let ebo = null;
 let textures = new Map();
 let whiteTexture = null;
 
-let uViewportLoc, uTextureLoc, uScissorMatLoc, uScissorExtLoc, uDpiScaleLoc;
+let uViewportLoc, uTextureLoc, uScissorMatLoc, uScissorExtLoc;
 let uBrushMatLoc, uBrushTypeLoc, uBrushColor1Loc, uBrushColor2Loc;
 let uBrushParamsLoc, uBrushParams2Loc, uBrushTextureMatLoc;
 let uSlugCurveTexLoc, uSlugBandTexLoc, uSlugCurveTexSizeLoc, uSlugBandTexSizeLoc;
@@ -52,7 +52,6 @@ flat in vec2 vSlugGlyph;
 uniform sampler2D uTexture;
 uniform mat4 uScissorMat;
 uniform vec2 uScissorExt;
-uniform float uDpiScale;
 uniform mat4 uBrushMat;
 uniform int uBrushType;
 uniform vec4 uBrushColor1;
@@ -179,8 +178,7 @@ float SlugRender(vec2 renderCoord, vec4 bandTransform, vec2 glyphTexInfo) {
 
 float calculateBrushFactor() {
     if (uBrushType == 0) return 0.0;
-    vec2 logicalPos = vPos / uDpiScale;
-    vec2 tp = (uBrushMat * vec4(logicalPos, 0.0, 1.0)).xy;
+    vec2 tp = (uBrushMat * vec4(vPos, 0.0, 1.0)).xy;
     if (uBrushType == 1) {
         vec2 s = uBrushParams.xy, e = uBrushParams.zw;
         vec2 line = e - s;
@@ -207,12 +205,9 @@ float calculateBrushFactor() {
 
 float scissorMask(vec2 p) {
     if (uScissorExt.x < 0.0 || uScissorExt.y < 0.0) return 1.0;
-    vec2 logicalP = p / uDpiScale;
-    vec2 tp = (uScissorMat * vec4(logicalP, 0.0, 1.0)).xy;
-    vec2 logicalExt = uScissorExt / uDpiScale;
-    vec2 d = abs(tp) - logicalExt;
-    float halfPixelLogical = 0.5 / uDpiScale;
-    vec2 se = vec2(halfPixelLogical) - d;
+    vec2 tp = (uScissorMat * vec4(p, 0.0, 1.0)).xy;
+    vec2 d = abs(tp) - uScissorExt;
+    vec2 se = vec2(0.5) - d;
     return clamp(se.x, 0.0, 1.0) * clamp(se.y, 0.0, 1.0);
 }
 
@@ -242,8 +237,7 @@ void main() {
     float ea = smoothstep(0.0, ps.x, ed.x) * smoothstep(0.0, ps.y, ed.y);
     ea = clamp(ea, 0.0, 1.0);
 
-    vec2 logicalPos = vPos / uDpiScale;
-    fragColor = color * texture(uTexture, (uBrushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy) * ea * mask;
+    fragColor = color * texture(uTexture, (uBrushTextureMat * vec4(vPos, 0.0, 1.0)).xy) * ea * mask;
 }
 `;
 
@@ -287,7 +281,6 @@ const webgl = {
         uTextureLoc = gl.getUniformLocation(program, 'uTexture');
         uScissorMatLoc = gl.getUniformLocation(program, 'uScissorMat');
         uScissorExtLoc = gl.getUniformLocation(program, 'uScissorExt');
-        uDpiScaleLoc = gl.getUniformLocation(program, 'uDpiScale');
         uBrushMatLoc = gl.getUniformLocation(program, 'uBrushMat');
         uBrushTypeLoc = gl.getUniformLocation(program, 'uBrushType');
         uBrushColor1Loc = gl.getUniformLocation(program, 'uBrushColor1');
@@ -385,7 +378,7 @@ const webgl = {
         gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(data));
     },
 
-    render(vertexBytes, indexDataI32, drawCallInfoI32, scissorDataF64, brushDataF64, canvasScale) {
+    render(vertexBytes, indexDataI32, drawCallInfoI32, scissorDataF64, brushDataF64) {
         const canvas = gl.canvas;
         const dpr = window.devicePixelRatio || 1;
         const displayW = Math.floor(canvas.clientWidth * dpr);
@@ -403,7 +396,6 @@ const webgl = {
 
         gl.useProgram(program);
         gl.uniform2f(uViewportLoc, canvas.clientWidth, canvas.clientHeight);
-        gl.uniform1f(uDpiScaleLoc, canvasScale || 1.0);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.disable(gl.DEPTH_TEST);

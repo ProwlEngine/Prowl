@@ -180,9 +180,8 @@ public class WebGLCanvasRenderer : ICanvasRenderer
         var brushSlice = new double[dcCount * 47];
         Array.Copy(_brushBuffer, brushSlice, dcCount * 47);
 
-        double scale = canvas.Scale;
         WebGLInterop.Render(vertexSlice, indexSlice, dcInfoSlice,
-            scissorSlice, brushSlice, scale);
+            scissorSlice, brushSlice);
     }
 
     public void Dispose() { }

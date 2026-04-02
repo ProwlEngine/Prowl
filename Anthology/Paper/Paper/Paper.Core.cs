@@ -31,6 +31,7 @@ namespace Prowl.PaperUI
         private ICanvasRenderer _renderer;
         private float _width;
         private float _height;
+        private float _dpiScale = 1.0f;
         private Stopwatch _timer = new Stopwatch();
 
         // Events
@@ -122,8 +123,7 @@ namespace Prowl.PaperUI
         /// Begins a new UI frame, resetting the element hierarchy.
         /// </summary>
         /// <param name="deltaTime">Time elapsed since the last frame</param>
-        /// <param name="frameBufferScale">Optional framebuffer scaling factor</param>
-        public void BeginFrame(float deltaTime, Float2? frameBufferScale = null)
+        public void BeginFrame(float deltaTime)
         {
             _timer.Restart();
             SetTime(deltaTime);
@@ -141,11 +141,9 @@ namespace Prowl.PaperUI
             _IDStack.Push(0);
             _createdElements.Clear();
 
-            // Reset Canvas with current dimensions and pixel ratio
-            float pixelRatio = frameBufferScale.HasValue ? (float)frameBufferScale.Value.X : 1.0f;
-            _canvas.BeginFrame(_width, _height, pixelRatio);
+            _canvas.BeginFrame(_width, _height);
 
-            StartInputFrame(frameBufferScale ?? new Float2(1, 1));
+            StartInputFrame();
         }
 
         /// <summary>
