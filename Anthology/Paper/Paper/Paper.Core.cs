@@ -421,52 +421,11 @@ namespace Prowl.PaperUI
                 }
             }
 
-            // Scrollbars offset the position of children
-            bool hasScrollState = this.HasElementStorage(handle, "ScrollState");
-            ScrollState scrollState = new ScrollState();
-            if (hasScrollState)
-            {
-                _canvas.SaveState();
-                scrollState = this.GetElementStorage<ScrollState>(handle, "ScrollState");
-                var transform = Transform2D.CreateTranslation(-scrollState.Position);
-                _canvas.TransformBy(transform);
-            }
-
             // Draw children
             foreach (var childIndex in data.ChildIndices)
             {
                 var child = new ElementHandle(this, childIndex);
                 RenderElement(child, currentLayer, overlayElements, modalElements);
-            }
-
-            // Draw scrollbars if needed
-            if (hasScrollState)
-            {
-                _canvas.RestoreState();
-
-                Scroll flags = data.ScrollFlags;
-                bool needsHorizontalScroll = scrollState.ContentSize.X > scrollState.ViewportSize.X && (flags & Scroll.ScrollX) != 0;
-                bool needsVerticalScroll = scrollState.ContentSize.Y > scrollState.ViewportSize.Y && (flags & Scroll.ScrollY) != 0;
-                bool shouldShowScrollbars = (flags & Scroll.Hidden) == 0 &&
-                                           (((flags & Scroll.AutoHide) == 0) || needsHorizontalScroll || needsVerticalScroll);
-
-                // Draw scrollbars if needed
-                if (shouldShowScrollbars)
-                {
-                    // Check for custom scrollbar renderer
-                    var customRenderer = data.CustomScrollbarRenderer;
-
-                    if (customRenderer != null)
-                    {
-                        // Use custom renderer
-                        customRenderer(_canvas, rect, scrollState);
-                    }
-                    else
-                    {
-                        // Use default scrollbar rendering
-                        DrawDefaultScrollbars(_canvas, rect, scrollState, flags);
-                    }
-                }
             }
 
             _canvas.RestoreState();
@@ -535,47 +494,6 @@ namespace Prowl.PaperUI
             {
                 var markdownResult = handle.Data._quillMarkdown;
                 canvas.DrawMarkdown(markdownResult ?? new Canvas.QuillMarkdown(), new Float2(x, finalY));
-            }
-        }
-
-        /// <summary>
-        /// Draws the default scrollbars for a scrollable element.
-        /// </summary>
-        private void DrawDefaultScrollbars(Canvas canvas, Rect rect, ScrollState state, Scroll flags)
-        {
-            // Calculate scrollbar positions and sizes
-            bool hasHorizontal = state.ContentSize.X > state.ViewportSize.X && (flags & Scroll.ScrollX) != 0;
-            bool hasVertical = state.ContentSize.Y > state.ViewportSize.Y && (flags & Scroll.ScrollY) != 0;
-
-            if (hasVertical)
-            {
-                var (trackX, trackY, trackWidth, trackHeight, thumbY, thumbHeight) = state.CalculateVerticalScrollbar(rect, flags);
-
-
-                // Draw vertical scrollbar track
-                canvas.RoundedRectFilled(trackX, trackY, trackWidth, trackHeight, 10, 10, 10, 10, Color32.FromArgb(50, 0, 0, 0));
-
-                // Draw vertical scrollbar thumb - highlight if hovered or dragging
-                Color thumbColor = state.IsVerticalScrollbarHovered || state.IsDraggingVertical
-                    ? Color32.FromArgb(220, 130, 130, 130)
-                    : Color32.FromArgb(180, 100, 100, 100);
-
-                canvas.RoundedRectFilled(trackX + ScrollState.ScrollbarPadding, thumbY + ScrollState.ScrollbarPadding, trackWidth - ScrollState.ScrollbarPadding * 2, thumbHeight - ScrollState.ScrollbarPadding * 2, 10, 10, 10, 10, thumbColor);
-            }
-
-            if (hasHorizontal)
-            {
-                var (trackX, trackY, trackWidth, trackHeight, thumbX, thumbWidth) = state.CalculateHorizontalScrollbar(rect, flags);
-
-                // Draw horizontal scrollbar track
-                canvas.RoundedRectFilled(trackX, trackY, trackWidth, trackHeight, 10, 10, 10, 10, Color32.FromArgb(50, 0, 0, 0));
-
-                // Draw horizontal scrollbar thumb - highlight if hovered or dragging
-                Color thumbColor = state.IsHorizontalScrollbarHovered || state.IsDraggingHorizontal
-                    ? Color32.FromArgb(220, 130, 130, 130)
-                    : Color32.FromArgb(180, 100, 100, 100);
-
-                canvas.RoundedRectFilled(thumbX + ScrollState.ScrollbarPadding, trackY + ScrollState.ScrollbarPadding, thumbWidth - ScrollState.ScrollbarPadding * 2, trackHeight - ScrollState.ScrollbarPadding * 2, 10, 10, 10, 10, thumbColor);
             }
         }
 

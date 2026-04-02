@@ -40,8 +40,6 @@ namespace Prowl.PaperUI.LayoutEngine
 
         public Action<ElementHandle, Rect> OnPostLayout;
 
-        public Scroll ScrollFlags;
-        public Action<Canvas, Rect, ScrollState> CustomScrollbarRenderer;
 
         // Hierarchy
         public int ParentIndex;
@@ -128,7 +126,6 @@ namespace Prowl.PaperUI.LayoutEngine
                 _scissorEnabled = false,
                 Layer = Layer.Base,
                 ProcessedText = false,
-                ScrollFlags = Scroll.None
             };
         }
     }

@@ -656,14 +656,9 @@ namespace Shared
                     using (Gui.Row("GridContainer")
                         .Enter())
                     {
-                        // Left column - cards
-                        using (Gui.Column("LeftColumn")
-                            .Width(Gui.Stretch(0.6f))
-                            .SetScroll(Scroll.ScrollY)
-                            .Enter())
+                        // Left column - cards (using ScrollView)
+                        using (ScrollView.Begin(Gui, "LeftColumn", 500, 500, paddingTop: 4, rowSpacing: 2))
                         {
-                            float scrollState = Gui.GetElementStorage<ScrollState>(Gui.CurrentParent, "ScrollState", new ScrollState()).Position.Y;
-
                             for (int i = 0; i < 10; i++)
                             {
                                 // Calculate animations based on time and index
@@ -998,9 +993,7 @@ namespace Shared
 
         private static void RenderSettingsTab()
         {
-            using (Gui.Column("Content")
-                .SetScroll(Scroll.ScrollY)
-                .Enter())
+            using (ScrollView.Begin(Gui, "Content", 800, 600))
             {
                 OrigamiExample.ShowExample(Gui, Fonts.arial);
             }

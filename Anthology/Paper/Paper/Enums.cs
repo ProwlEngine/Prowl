@@ -178,31 +178,6 @@ namespace Prowl.PaperUI
     //}
 
 
-    /// <summary>
-    /// Defines scroll options for elements.
-    /// </summary>
-    [Flags]
-    public enum Scroll
-    {
-        /// <summary>No scrolling enabled.</summary>
-        None = 0,
-
-        /// <summary>Enables horizontal scrolling.</summary>
-        ScrollX = 1 << 0,
-
-        /// <summary>Enables vertical scrolling.</summary>
-        ScrollY = 1 << 1,
-
-        /// <summary>Enables both horizontal and vertical scrolling.</summary>
-        ScrollXY = ScrollX | ScrollY,
-
-        /// <summary>Auto-hides scrollbars when not needed.</summary>
-        AutoHide = 1 << 2,
-
-        /// <summary>Completely hides scrollbars but still allows scrolling.</summary>
-        Hidden = 1 << 3
-    }
-
     public enum GradientType
     {
         None = 0,

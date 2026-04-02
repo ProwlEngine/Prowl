@@ -448,13 +448,6 @@ namespace Prowl.PaperUI
 
             // Scrollbars offset the position of children
             Transform2D childTransform = combinedTransform;
-            if (shouldCheckChildren && this.HasElementStorage(handle, "ScrollState"))
-            {
-                ScrollState scrollState = this.GetElementStorage<ScrollState>(handle, "ScrollState");
-                var transform = Transform2D.CreateTranslation(-scrollState.Position);
-                //childTransform.Premultiply(ref transform);
-                childTransform = transform * childTransform;
-            }
 
             // Check children first (front to back, respecting z-order)
             var childIndices = data.ChildIndices;
