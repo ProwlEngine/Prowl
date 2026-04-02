@@ -49,6 +49,47 @@ namespace Prowl.PaperUI
         public bool IsParentFocused => _focusedElementId == CurrentParent.Data.ID;
 
         /// <summary>
+        /// Checks if the current parent element or any of its descendants has focus.
+        /// Equivalent to CSS :focus-within.
+        /// </summary>
+        public bool IsParentFocusWithin => IsElementFocusWithin(CurrentParent.Data.ID);
+
+        /// <summary>
+        /// Checks if an element or any of its descendants has focus.
+        /// Walks up from the focused element to see if it's a descendant.
+        /// </summary>
+        /// <summary>
+        /// Cached set of ancestor IDs of the focused element, computed at end of each frame.
+        /// Used by IsElementFocusWithin to check if an element contains focus,
+        /// even in immediate-mode where child elements may not exist yet during the draw phase.
+        /// </summary>
+        private HashSet<int> _focusWithinAncestors = new HashSet<int>();
+
+        public bool IsElementFocusWithin(int id)
+        {
+            // Check the cached ancestor set from the previous frame
+            return _focusWithinAncestors.Contains(id);
+        }
+
+        /// <summary>
+        /// Called at end of frame after HandleInteractions to cache the focus ancestor chain.
+        /// </summary>
+        private void UpdateFocusWithinCache()
+        {
+            _focusWithinAncestors.Clear();
+            if (_focusedElementId == 0) return;
+
+            ElementHandle current = FindElementByID(_focusedElementId);
+            int depth = 0;
+            while (current.IsValid && depth < 100)
+            {
+                _focusWithinAncestors.Add(current.Data.ID);
+                current = current.GetParentHandle();
+                depth++;
+            }
+        }
+
+        /// <summary>
         /// Checks if the current parent element is being dragged.
         /// </summary>
         public bool IsParentDragging => IsElementDragging(CurrentParent.Data.ID);
@@ -199,6 +240,9 @@ namespace Prowl.PaperUI
 
             // Process keyboard events for focused element
             HandleKeyboardEvents();
+
+            // Cache the focus ancestor chain for next frame's IsElementFocusWithin checks
+            UpdateFocusWithinCache();
 
             SkipKeyboardNavigation = false; // Reset keyboard navigation skip flag at end of frame
         }
