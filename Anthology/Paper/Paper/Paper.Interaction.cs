@@ -100,53 +100,78 @@ namespace Prowl.PaperUI
 
         /// <summary>
         /// Checks if an element is hooked to its parent's hover state.
+        /// Walks up the parent chain recursively through hooked elements.
         /// </summary>
         private bool IsHookedToHoveredParent(int childId)
         {
             ElementHandle childElement = FindElementByID(childId);
             if (!childElement.IsValid) return false;
+            ElementHandle current = FindElementByID(childId);
+            while (current.IsValid)
+            {
+                ref ElementData data = ref current.Data;
+                if (!data.IsHookedToParent) return false;
 
-            ref ElementData childData = ref childElement.Data;
-            if (!childData.IsHookedToParent) return false;
+                ElementHandle parent = current.GetParentHandle();
+                if (!parent.IsValid) return false;
 
-            ElementHandle parent = childElement.GetParentHandle();
-            if (!parent.IsValid) return false;
+                if (_elementsInBubblePath.Contains(parent.Data.ID))
+                    return true;
 
-            return _elementsInBubblePath.Contains(parent.Data.ID);
+                // Continue walking up if parent is also hooked
+                current = parent;
+            }
+            return false;
         }
 
         /// <summary>
         /// Checks if an element is hooked to its parent's active state.
+        /// Walks up the parent chain recursively through hooked elements.
         /// </summary>
         private bool IsHookedToActiveParent(int childId)
         {
             ElementHandle childElement = FindElementByID(childId);
             if (!childElement.IsValid) return false;
+            ElementHandle current = FindElementByID(childId);
+            while (current.IsValid)
+            {
+                ref ElementData data = ref current.Data;
+                if (!data.IsHookedToParent) return false;
 
-            ref ElementData childData = ref childElement.Data;
-            if (!childData.IsHookedToParent) return false;
+                ElementHandle parent = current.GetParentHandle();
+                if (!parent.IsValid) return false;
 
-            ElementHandle parent = childElement.GetParentHandle();
-            if (!parent.IsValid) return false;
+                if (_activeElementId == parent.Data.ID)
+                    return true;
 
-            return _activeElementId == parent.Data.ID;
+                current = parent;
+            }
+            return false;
         }
 
         /// <summary>
         /// Checks if an element is hooked to its parent's focus state.
+        /// Walks up the parent chain recursively through hooked elements.
         /// </summary>
         private bool IsHookedToFocusedParent(int childId)
         {
             ElementHandle childElement = FindElementByID(childId);
             if (!childElement.IsValid) return false;
+            ElementHandle current = FindElementByID(childId);
+            while (current.IsValid)
+            {
+                ref ElementData data = ref current.Data;
+                if (!data.IsHookedToParent) return false;
 
-            ref ElementData childData = ref childElement.Data;
-            if (!childData.IsHookedToParent) return false;
+                ElementHandle parent = current.GetParentHandle();
+                if (!parent.IsValid) return false;
 
-            ElementHandle parent = childElement.GetParentHandle();
-            if (!parent.IsValid) return false;
+                if (_focusedElementId == parent.Data.ID)
+                    return true;
 
-            return _focusedElementId == parent.Data.ID;
+                current = parent;
+            }
+            return false;
         }
 
         /// <summary>
