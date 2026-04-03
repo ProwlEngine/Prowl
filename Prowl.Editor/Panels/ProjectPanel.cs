@@ -7,6 +7,7 @@ namespace Prowl.Editor.Panels;
 public class ProjectPanel : DockPanel
 {
     public override string Title => "Project";
+    public override string Icon => EditorIcons.Folder;
 
     public override void OnGUI(Paper paper, float width, float height)
     {

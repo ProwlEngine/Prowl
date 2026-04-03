@@ -7,6 +7,7 @@ namespace Prowl.Editor.Panels;
 public class SceneViewPanel : DockPanel
 {
     public override string Title => "Scene";
+    public override string Icon => EditorIcons.Video;
 
     public override void OnGUI(Paper paper, float width, float height)
     {

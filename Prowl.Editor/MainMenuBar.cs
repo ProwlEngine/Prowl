@@ -22,9 +22,8 @@ public static class MainMenuBar
             .Position(0, 0)
             .Size(paper.Percent(100), EditorTheme.MenuBarHeight)
             .BackgroundColor(EditorTheme.MenuBarBackground)
-            .BorderColor(EditorTheme.Border)
-            .BorderBottom(1)
-            .ChildLeft(4)
+            .ChildLeft(10)
+            .RowBetween(10)
             .Enter())
         {
             for (int i = 0; i < items.Count; i++)
@@ -36,18 +35,14 @@ public static class MainMenuBar
                 // covers both the label and the dropdown area
                 using (paper.Box($"menu_{index}")
                     .Height(EditorTheme.MenuBarHeight)
-                    .ChildLeft(8).ChildRight(8)
-                    .Rounded(3)
-                    .BackgroundColor(paper.IsParentHovered ? EditorTheme.ButtonHovered : Color.Transparent)
+                    .Width(UnitValue.Auto)
                     .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                        .Text(item.Label, font)
+                        .TextColor(EditorTheme.Text)
+                        .Alignment(TextAlignment.MiddleCenter)
+                        .FontSize(EditorTheme.FontSize)
                     .Enter())
                 {
-                    if (font != null)
-                        paper.Box($"menu_lbl_{index}")
-                            .Text(item.Label, font)
-                            .TextColor(EditorTheme.Text)
-                            .FontSize(EditorTheme.FontSize);
-
                     if (paper.IsParentHovered && item.HasSubItems)
                     {
                         // Position dropdown flush with the bottom of the menu bar, slight overlap

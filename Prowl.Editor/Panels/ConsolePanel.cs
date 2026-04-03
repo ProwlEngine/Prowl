@@ -7,6 +7,7 @@ namespace Prowl.Editor.Panels;
 public class ConsolePanel : DockPanel
 {
     public override string Title => "Console";
+    public override string Icon => EditorIcons.Terminal;
 
     public override void OnGUI(Paper paper, float width, float height)
     {

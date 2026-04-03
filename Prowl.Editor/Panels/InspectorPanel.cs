@@ -7,6 +7,7 @@ namespace Prowl.Editor.Panels;
 public class InspectorPanel : DockPanel
 {
     public override string Title => "Inspector";
+    public override string Icon => EditorIcons.Sliders;
 
     public override void OnGUI(Paper paper, float width, float height)
     {

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
@@ -9,6 +11,7 @@ namespace Prowl.Editor.Panels;
 public class WidgetPlaygroundPanel : DockPanel
 {
     public override string Title => "Widget Playground";
+    public override string Icon => EditorIcons.Flask;
 
     private bool _toggleA = true;
     private bool _toggleB;
@@ -33,8 +36,114 @@ public class WidgetPlaygroundPanel : DockPanel
     private float _progress = 0.45f;
     private TestEnum _testEnum = TestEnum.Option2;
 
-    private enum TestEnum { Option1, Option2, Option3, SuperLongOptionName }
+    public enum TestEnum { Option1, Option2, Option3, SuperLongOptionName }
     private Prowl.Runtime.AnimationCurve _curve = new();
+    private TestComponent _testObject = new();
+
+    // Test class for property grid — exercises every type the grid supports
+    public class TestComponent
+    {
+        // Primitives
+        public string Name = "Player";
+        public bool IsActive = true;
+        public int Health = 100;
+        public float Speed = 5.5f;
+        public double Precision = 3.14159265358979;
+        public byte Opacity = 200;
+        public long BigNumber = 999999999L;
+        public uint Flags = 42u;
+
+        // Enum
+        public TestEnum Mode = TestEnum.Option2;
+
+        // Math types
+        public Prowl.Vector.Float2 UV = new(0.5f, 0.75f);
+        public Prowl.Vector.Float3 Position = new(1, 2, 3);
+        public Prowl.Vector.Float4 Custom = new(0.1f, 0.2f, 0.3f, 0.4f);
+        public Prowl.Vector.Color Tint = new(0.5f, 0.8f, 1f, 1f);
+        public Prowl.Vector.Quaternion Rotation = Prowl.Vector.Quaternion.Identity;
+
+        // Guid (read-only)
+        public System.Guid Id = System.Guid.NewGuid();
+
+        // AnimationCurve
+        public Prowl.Runtime.AnimationCurve SpeedCurve = new();
+
+        // Collections
+        public List<float> Scores = new() { 10.5f, 20.3f, 30.1f };
+        public List<string> Tags = new() { "Player", "Friendly" };
+        public int[] LevelData = new int[] { 1, 5, 10, 25, 50 };
+        public List<Prowl.Vector.Float3> Waypoints = new()
+        {
+            new(0, 0, 0), new(10, 0, 5), new(20, 0, 0)
+        };
+
+        // Dictionary
+        public Dictionary<string, float> Stats = new()
+        {
+            { "Attack", 15f }, { "Defense", 10f }, { "Speed", 8f }
+        };
+
+        // Nested objects
+        public PhysicsSettings Physics = new();
+        public RenderSettings? Rendering = new();
+        public BaseAbility? Ability = null; // Polymorphism test (null, abstract)
+
+        // Nested list of objects
+        public List<StatusEffect> Effects = new()
+        {
+            new() { Name = "Burn", Duration = 5f, DamagePerSecond = 2.5f },
+            new() { Name = "Slow", Duration = 3f, DamagePerSecond = 0f }
+        };
+    }
+
+    public class PhysicsSettings
+    {
+        public float Gravity = 9.81f;
+        public bool EnablePhysics = true;
+        public float Mass = 1.0f;
+        public float Drag = 0.1f;
+        public Prowl.Vector.Float3 Velocity = new(0, 0, 0);
+    }
+
+    public class RenderSettings
+    {
+        public bool CastShadows = true;
+        public bool ReceiveShadows = true;
+        public float LODBias = 1.0f;
+        public Prowl.Vector.Color EmissionColor = new(0, 0, 0, 1);
+    }
+
+    public abstract class BaseAbility
+    {
+        public string AbilityName = "Unknown";
+        public float Cooldown = 1f;
+    }
+
+    public class FireballAbility : BaseAbility
+    {
+        public float Damage = 50f;
+        public float Range = 10f;
+        public Prowl.Vector.Color FlameColor = new(1f, 0.5f, 0f, 1f);
+
+        public FireballAbility() { AbilityName = "Fireball"; Cooldown = 2.5f; }
+    }
+
+    public class HealAbility : BaseAbility
+    {
+        public float HealAmount = 30f;
+        public bool AffectsAllies = true;
+
+        public HealAbility() { AbilityName = "Heal"; Cooldown = 5f; }
+    }
+
+    public class StatusEffect
+    {
+        public string Name = "";
+        public float Duration = 0f;
+        public float DamagePerSecond = 0f;
+        public bool IsDebuff = true;
+    }
 
     private static readonly string[] Fruits = { "Apple", "Banana", "Cherry", "Date", "Elderberry" };
     private static readonly string[] Modes = { "Constant", "Curve", "Random Between Two" };
@@ -315,6 +424,13 @@ public class WidgetPlaygroundPanel : DockPanel
                 .OnValueChanged(v => _curve = v);
 
             EditorGUI.Separator(paper, "sep14");
+
+            // === Property Grid ===
+            EditorGUI.Header(paper, "h_propgrid", "Property Grid (Reflection)");
+
+            PropertyGrid.Draw(paper, "pg_test", _testObject, changed => _testObject = (TestComponent)changed);
+
+            EditorGUI.Separator(paper, "sep15");
 
             // === Live State ===
             EditorGUI.Header(paper, "h_state", "Current State");

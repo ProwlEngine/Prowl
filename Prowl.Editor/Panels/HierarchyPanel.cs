@@ -7,6 +7,7 @@ namespace Prowl.Editor.Panels;
 public class HierarchyPanel : DockPanel
 {
     public override string Title => "Hierarchy";
+    public override string Icon => EditorIcons.Sitemap;
 
     public override void OnGUI(Paper paper, float width, float height)
     {

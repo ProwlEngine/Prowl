@@ -20,6 +20,24 @@ public static class EditorGUI
     private static float FontSz => EditorTheme.FontSize;
     private static float LabelW => EditorTheme.LabelWidth;
 
+    // Char filters for numeric inputs
+    private static readonly Func<char, string, bool> IntFilter = (c, current) =>
+        char.IsDigit(c) || (c == '-' && current.Length == 0);
+
+    private static readonly Func<char, string, bool> FloatFilter = (c, current) =>
+        char.IsDigit(c) || (c == '-' && current.Length == 0) || (c == '.' && !current.Contains('.'));
+
+    private static ElementBuilder.TextInputSettings MakeNumericSettings(Func<char, string, bool> filter)
+    {
+        var s = ElementBuilder.TextInputSettings.Default;
+        if (Font != null) s.Font = Font;
+        s.TextColor = EditorTheme.Text;
+        s.Placeholder = "0";
+        s.PlaceholderColor = EditorTheme.TextDisabled;
+        s.CharFilter = filter;
+        return s;
+    }
+
     // Shared callback storage: widgets register their callbacks here,
     // Paper's end-of-frame events invoke them.
     // We use a simple list that's drained each frame.
@@ -208,6 +226,7 @@ public static class EditorGUI
                 .TabIndex(0)
                 .Enter())
             {
+                var settings = MakeNumericSettings(FloatFilter);
                 paper.Box($"{id}_tf")
                     .Margin(4, UnitValue.Stretch())
                     .HookToParent()
@@ -215,15 +234,12 @@ public static class EditorGUI
                     .Width(UnitValue.Stretch())
                     .Height(EditorTheme.RowHeight)
                     .FontSize(FontSz)
-                    .TextField(textVal, Font!,
+                    .TextField(textVal, settings,
                         onChange: v =>
                         {
                             if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
                                 userCallback?.Invoke(parsed);
                         },
-                        textColor: EditorTheme.Text,
-                        placeholder: "0",
-                        placeholderColor: EditorTheme.TextDisabled,
                         intID: id.GetHashCode());
             }
         }
@@ -260,6 +276,7 @@ public static class EditorGUI
                 .TabIndex(0)
                 .Enter())
             {
+                var settings = MakeNumericSettings(IntFilter);
                 paper.Box($"{id}_tf")
                     .Margin(4, UnitValue.Stretch())
                     .HookToParent()
@@ -267,15 +284,12 @@ public static class EditorGUI
                     .Width(UnitValue.Stretch())
                     .Height(EditorTheme.RowHeight)
                     .FontSize(FontSz)
-                    .TextField(textVal, Font!,
+                    .TextField(textVal, settings,
                         onChange: v =>
                         {
                             if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed))
                                 userCallback?.Invoke(parsed);
                         },
-                        textColor: EditorTheme.Text,
-                        placeholder: "0",
-                        placeholderColor: EditorTheme.TextDisabled,
                         intID: id.GetHashCode());
             }
         }
