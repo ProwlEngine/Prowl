@@ -374,33 +374,9 @@ public static class EditorGUI
                     canvas.Fill();
                 }));
 
-            // Editable numeric field at the end
-            using (paper.Box($"{id}_input")
-                .Height(EditorTheme.RowHeight)
-                .Width(50)
-                .BackgroundColor(EditorTheme.InputBackground)
-                .Rounded(3)
-                .BorderColor(EditorTheme.Border).BorderWidth(1)
-                .Focused.BorderColor(EditorTheme.Accent).End()
-                .TabIndex(0)
-                .Enter())
-            {
-                var settings = MakeNumericSettings(FloatFilter);
-                paper.Box($"{id}_tf")
-                    .Margin(4, UnitValue.Stretch())
-                    .HookToParent()
-                    .IsNotInteractable()
-                    .Width(UnitValue.Stretch())
-                    .Height(EditorTheme.RowHeight)
-                    .FontSize(FontSz)
-                    .TextField(value.ToString("G", CultureInfo.InvariantCulture), settings,
-                        onChange: v =>
-                        {
-                            if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
-                                userCallback?.Invoke(Math.Clamp(parsed, min, max));
-                        },
-                        intID: $"{id}_tf".GetHashCode());
-            }
+            // replace the manual input box with:
+            FloatField(paper, $"{id}_val", "", value)
+                .OnValueChanged(v => userCallback?.Invoke(Math.Clamp(v, min, max)));
         }
 
         return new WidgetResult<float>(cb => userCallback = cb);
