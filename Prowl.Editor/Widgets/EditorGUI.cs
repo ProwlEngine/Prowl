@@ -353,23 +353,17 @@ public static class EditorGUI
 
                     // ── Track background ──────────────────────────────────
                     canvas.RoundedRectFilled(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
-                        new Prowl.Vector.Color(60 / 255f, 60 / 255f, 65 / 255f, 1f));
+                        EditorTheme.ButtonNormal);
 
                     // ── Track fill ────────────────────────────────────────
                     if (t > 0f)
                     {
                         canvas.RoundedRectFilled(rx, trackY, rw * t, trackH, trackR, trackR, trackR, trackR,
-                            new Prowl.Vector.Color(82 / 255f, 130 / 255f, 255 / 255f, 1f));
+                            EditorTheme.Accent);
                     }
 
-                    // ── Thumb shadow ──────────────────────────────────────
-                    canvas.SetFillColor(Color.FromArgb(50, 0, 0, 0));
-                    canvas.BeginPath();
-                    canvas.Circle(thumbCx + 0.5f, thumbCy + 1.5f, thumbR, 24);
-                    canvas.Fill();
-
                     // ── Thumb body ────────────────────────────────────────
-                    canvas.SetFillColor(Color.FromArgb(255, 225, 232, 255));
+                    canvas.SetFillColor(EditorTheme.Text);
                     canvas.BeginPath();
                     canvas.Circle(thumbCx, thumbCy, thumbR, 24);
                     canvas.Fill();
