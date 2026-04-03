@@ -48,9 +48,14 @@ public abstract class Game
             AudioContext.Initialize(44100, 2, 2048);
             //AudioContext.Initialize(sampleRate, channels, 2048);
 
+            // Renderer projection uses framebuffer (physical) pixels;
+            // Paper resolution uses window (logical) size.
+            var fbSize = Window.InternalWindow.FramebufferSize;
+            var winSize = Window.InternalWindow.Size;
+
             _paperRenderer = new PaperRenderer();
-            _paperRenderer.Initialize(width, height);
-            _paper = new Paper(_paperRenderer, width, height, new Prowl.Quill.FontAtlasSettings());
+            _paperRenderer.Initialize(fbSize.X, fbSize.Y);
+            _paper = new Paper(_paperRenderer, winSize.X, winSize.Y, new Prowl.Quill.FontAtlasSettings());
 
             Initialize();
         };
@@ -134,7 +139,8 @@ public abstract class Game
                 Graphics.UnbindFramebuffer();
                 Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
 
-                _paper.BeginFrame(delta);
+                float dpiScale = (float)Window.InternalWindow.FramebufferSize.X / Window.InternalWindow.Size.X;
+                _paper.BeginFrame(delta, dpiScale);
 
                 BeginGui(_paper);
 
@@ -163,8 +169,12 @@ public abstract class Game
         Window.Resize += (size) =>
         {
             _paper.SetResolution(size.X, size.Y);
-            _paperRenderer.UpdateProjection(size.X, size.Y);
             Resize(size.X, size.Y);
+        };
+
+        Window.FramebufferResize += (size) =>
+        {
+            _paperRenderer.UpdateProjection(size.X, size.Y);
         };
 
         Window.Closing += () =>
