@@ -120,6 +120,28 @@ public static class EditorGUI
         return new WidgetResult<bool>(cb => userCallback = cb);
     }
 
+    public static WidgetResult<bool> ButtonSquare(Paper paper, string id, string label, float width = 0)
+    {
+        Action<bool>? userCallback = null;
+
+        var el = paper.Box(id)
+            .Height(EditorTheme.RowHeight)
+            .Width(EditorTheme.RowHeight)
+            .ChildLeft(12).ChildRight(12)
+            .BackgroundColor(EditorTheme.ButtonNormal)
+            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+            .Active.BackgroundColor(EditorTheme.ButtonActive).End()
+            .Rounded(3)
+            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .OnClick(e => userCallback?.Invoke(true));
+
+        if (width > 0) el.Width(width);
+        if (Font != null) el.Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+
+        return new WidgetResult<bool>(cb => userCallback = cb);
+    }
+
+
     // ================================================================
     //  Toggle
     // ================================================================

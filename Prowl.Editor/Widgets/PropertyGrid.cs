@@ -298,7 +298,7 @@ public static class PropertyGrid
                     }
 
                     // Remove button
-                    EditorGUI.Button(paper, $"{id}_rm_{i}", "\u2715")
+                    EditorGUI.ButtonSquare(paper, $"{id}_rm_{i}", "\u2715")
                         .OnValueChanged(v =>
                         {
                             if (type.IsArray)
@@ -388,7 +388,7 @@ public static class PropertyGrid
                     }
 
                     // Remove
-                    EditorGUI.Button(paper, $"{id}_drm_{i}", "\u2715")
+                    EditorGUI.ButtonSquare(paper, $"{id}_drm_{i}", "\u2715")
                         .OnValueChanged(v =>
                         {
                             dict.Remove(keyObj);
