@@ -36,14 +36,24 @@ public class EditorApplication : Game
 
     public override void BeginGui(Paper paper)
     {
-        int w = Window.InternalWindow.FramebufferSize.X;
-        int h = Window.InternalWindow.FramebufferSize.Y;
+        // Use logical (window) size, not framebuffer (physical) size.
+        // Paper works in logical coordinates; framebuffer size is 2x on Mac Retina.
+        int w = Window.InternalWindow.Size.X;
+        int h = Window.InternalWindow.Size.Y;
 
         MainMenuBar.Draw(paper);
 
         float dockY = EditorTheme.MenuBarHeight;
         float dockH = h - dockY;
         _dockSpace.Draw(paper, 0, dockY, w, dockH);
+    }
+
+    public override void EndGui(Paper paper)
+    {
+        // Systems drawn on top (Overlay/Topmost layers)
+        Widgets.ModalDialog.Draw(paper);
+        Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
+        Widgets.Tooltip.Draw(paper);
     }
 
     // ================================================================

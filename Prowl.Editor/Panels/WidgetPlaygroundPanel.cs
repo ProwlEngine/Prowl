@@ -34,6 +34,7 @@ public class WidgetPlaygroundPanel : DockPanel
     private TestEnum _testEnum = TestEnum.Option2;
 
     private enum TestEnum { Option1, Option2, Option3, SuperLongOptionName }
+    private Prowl.Runtime.AnimationCurve _curve = new();
 
     private static readonly string[] Fruits = { "Apple", "Banana", "Cherry", "Date", "Elderberry" };
     private static readonly string[] Modes = { "Constant", "Curve", "Random Between Two" };
@@ -255,6 +256,65 @@ public class WidgetPlaygroundPanel : DockPanel
             }
 
             EditorGUI.Separator(paper, "sep10");
+
+            // === Modal Dialog ===
+            EditorGUI.Header(paper, "h_modal", "Modal Dialog");
+
+            using (paper.Row("modal_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
+            {
+                EditorGUI.Button(paper, "btn_confirm", "Confirm Dialog")
+                    .OnValueChanged(v => ModalDialog.Confirm("Delete Object",
+                        "Are you sure you want to delete this object?",
+                        () => Toasts.Success("Deleted", "Object was deleted"),
+                        () => Toasts.Info("Cancelled", "Deletion cancelled")));
+
+                EditorGUI.Button(paper, "btn_message", "Message Dialog")
+                    .OnValueChanged(v => ModalDialog.Message("Info", "This is a message dialog."));
+            }
+
+            EditorGUI.Separator(paper, "sep11");
+
+            // === Toasts ===
+            EditorGUI.Header(paper, "h_toast", "Toast Notifications");
+
+            using (paper.Row("toast_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
+            {
+                EditorGUI.Button(paper, "btn_toast_info", "Info")
+                    .OnValueChanged(v => Toasts.Info("Info", "Something happened"));
+                EditorGUI.Button(paper, "btn_toast_ok", "Success")
+                    .OnValueChanged(v => Toasts.Success("Saved", "Scene saved successfully"));
+                EditorGUI.Button(paper, "btn_toast_warn", "Warning")
+                    .OnValueChanged(v => Toasts.Warning("Warning", "Asset may be outdated"));
+                EditorGUI.Button(paper, "btn_toast_err", "Error")
+                    .OnValueChanged(v => Toasts.Error("Error", "Failed to compile shader"));
+            }
+
+            EditorGUI.Separator(paper, "sep12");
+
+            // === Tooltip ===
+            EditorGUI.Header(paper, "h_tooltip", "Tooltip (hover the button)");
+
+            var tooltipBtn = paper.Box("tooltip_demo")
+                .Height(EditorTheme.RowHeight)
+                .Width(200)
+                .BackgroundColor(EditorTheme.ButtonNormal)
+                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Rounded(3)
+                .BorderColor(EditorTheme.Border).BorderWidth(1)
+                .Tooltip("This is a tooltip! It appears after a short hover delay.");
+            if (EditorTheme.DefaultFont != null)
+                tooltipBtn.Text("Hover me for tooltip", EditorTheme.DefaultFont)
+                    .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize);
+
+            EditorGUI.Separator(paper, "sep13");
+
+            // === Animation Curve ===
+            EditorGUI.Header(paper, "h_curve", "Animation Curve");
+
+            CurveEditor.CurveField(paper, "curve_1", "Speed Curve", _curve)
+                .OnValueChanged(v => _curve = v);
+
+            EditorGUI.Separator(paper, "sep14");
 
             // === Live State ===
             EditorGUI.Header(paper, "h_state", "Current State");
