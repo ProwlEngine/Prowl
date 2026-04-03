@@ -30,7 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Prowl.Quill" Version="0.9.5" />
+    <PackageReference Include="Prowl.Quill" Version="1.0.0" />
   </ItemGroup>
 
 </Project>
