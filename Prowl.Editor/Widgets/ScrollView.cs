@@ -20,7 +20,7 @@ public static class ScrollView
 
     public static IDisposable Begin(Paper paper, string id, float width, float height,
         float paddingLeft = 0, float paddingRight = 0, float paddingTop = 0, float paddingBottom = 0,
-        float rowSpacing = 0)
+        float colSpacing = 0)
     {
         // We need the outer handle for storage, but can't capture it before Enter().
         // Declare it here and set it after Enter().
@@ -54,7 +54,7 @@ public static class ScrollView
             .Height(UnitValue.Auto)
             .ChildLeft(paddingLeft).ChildRight(paddingRight)
             .ChildTop(paddingTop).ChildBottom(paddingBottom)
-            .RowBetween(rowSpacing);
+            .ColBetween(colSpacing);
 
         // Track content height after layout
         contentBuilder.OnPostLayout((contentHandle, contentRect) =>

@@ -334,7 +334,7 @@ public static class EditorGUI
                 .OnDragging(e => SetFromEvent(e))
                 .OnPostLayout((handle, rect) =>
                 {
-                    paper.AddActionElement(ref handle, (canvas, r) =>
+                    paper.Draw(ref handle, (canvas, r) =>
                     {
                         if (t > 0)
                         {
@@ -772,7 +772,7 @@ public static class EditorGUI
                 .BorderColor(EditorTheme.Border).BorderWidth(1)
                 .OnPostLayout((handle, rect) =>
                 {
-                    paper.AddActionElement(ref handle, (canvas, r) =>
+                    paper.Draw(ref handle, (canvas, r) =>
                     {
                         if (progress > 0)
                         {

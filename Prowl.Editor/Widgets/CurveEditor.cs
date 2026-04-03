@@ -44,7 +44,7 @@ public static class CurveEditor
 
                 paper.Box($"{id}_prev_line")
                     .Width(UnitValue.Stretch()).Height(40).IsNotInteractable()
-                    .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+                    .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                         DrawCurvePreview(canvas, r, curve)));
 
                 if (isOpen)
@@ -172,7 +172,7 @@ public static class CurveEditor
                     // Deselect when clicking empty space
                     paper.SetElementStorage(el, "sel", -1);
                 })
-                .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                 {
                     DrawGraph(canvas, r, curve, vMinT, vMaxT, vMinV, vMaxV);
 
@@ -204,14 +204,14 @@ public static class CurveEditor
                 .PositionType(PositionType.SelfDirected)
                 .Position(graphX, 0).Size(graphW, RulerSize)
                 .IsNotInteractable()
-                .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                     DrawTimeRuler(canvas, r, vMinT, vMaxT)));
 
             paper.Box($"{id}_rulerV")
                 .PositionType(PositionType.SelfDirected)
                 .Position(0, graphY).Size(RulerSize, graphH)
                 .IsNotInteractable()
-                .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                     DrawValueRuler(canvas, r, vMinV, vMaxV)));
 
             // Keyframe handles + tangent handles

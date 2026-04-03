@@ -209,10 +209,19 @@ public class DockSpace
             paper.Box($"leaf_bg_{node.GetHashCode()}")
                 .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
                 .IsNotInteractable()
-                .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                 {
                     DrawMergedTabShape(canvas, r, tabWidths, activeIdx, tabH);
                 }));
+
+            // Outline drawn via DrawForeground on the leaf container (renders after all children)
+            {
+                var leafParent = paper.CurrentParent;
+                paper.DrawForeground(ref leafParent, (canvas, r) =>
+                {
+                    StrokeMergedTabShape(canvas, r, tabWidths, activeIdx, tabH);
+                });
+            }
 
             // Compute tab X positions
             float[] tabPositions = new float[node.Tabs.Count];
@@ -470,7 +479,77 @@ public class DockSpace
 
         canvas.ClosePath();
         canvas.FillComplexAA();
+    }
+
+    /// <summary>
+    /// Draw the outline of the merged tab+panel shape. Called via DrawForeground so it renders on top of all content.
+    /// </summary>
+    private static void StrokeMergedTabShape(Prowl.Quill.Canvas canvas, Rect r,
+        float[] tabWidths, int activeIdx, float tabH)
+    {
+        float x = (float)r.Min.X, y = (float)r.Min.Y;
+        float w = (float)r.Size.X, h = (float)r.Size.Y;
+        float rad = TabRadius;
+        float ir = TabInsetRadius;
+        float panelTop = y + tabH;
+
+        if (activeIdx < 0 || activeIdx >= tabWidths.Length) return;
+
+        float tabX = x;
+        for (int i = 0; i < activeIdx; i++)
+            tabX += tabWidths[i] + TabGap;
+        float tw = tabWidths[activeIdx];
+
+        bool isFirst = activeIdx == 0;
+        float k = 0.5522847498f;
+        float bottom = y + h;
+        float right = x + w;
+
         canvas.SetStrokeColor(ToC32(EditorTheme.Border));
+        canvas.SetStrokeWidth(1f);
+        canvas.BeginPath();
+
+        if (isFirst)
+        {
+            canvas.MoveTo(x, bottom - rad);
+            canvas.BezierCurveTo(x, bottom - rad * (1 - k), x + rad * (1 - k), bottom, x + rad, bottom);
+        }
+        else
+        {
+            canvas.MoveTo(x, bottom - rad);
+            canvas.BezierCurveTo(x, bottom - rad * (1 - k), x + rad * (1 - k), bottom, x + rad, bottom);
+        }
+
+        canvas.LineTo(right - rad, bottom);
+        canvas.BezierCurveTo(right - rad * (1 - k), bottom, right, bottom - rad * (1 - k), right, bottom - rad);
+        canvas.LineTo(right, panelTop + rad);
+        canvas.BezierCurveTo(right, panelTop + rad * (1 - k), right - rad * (1 - k), panelTop, right - rad, panelTop);
+        canvas.LineTo(tabX + tw + ir, panelTop);
+
+        canvas.BezierCurveTo(tabX + tw + ir * (1 - k), panelTop,
+                              tabX + tw, panelTop - ir * (1 - k),
+                              tabX + tw, panelTop - ir);
+
+        canvas.LineTo(tabX + tw, y + rad);
+        canvas.BezierCurveTo(tabX + tw, y + rad * (1 - k), tabX + tw - rad * (1 - k), y, tabX + tw - rad, y);
+        canvas.LineTo(tabX + rad, y);
+        canvas.BezierCurveTo(tabX + rad * (1 - k), y, tabX, y + rad * (1 - k), tabX, y + rad);
+
+        if (isFirst)
+        {
+            canvas.LineTo(tabX, bottom - rad);
+        }
+        else
+        {
+            canvas.LineTo(tabX, panelTop - ir);
+            canvas.BezierCurveTo(tabX, panelTop - ir * (1 - k),
+                                  tabX - ir * (1 - k), panelTop,
+                                  tabX - ir, panelTop);
+            canvas.LineTo(x, panelTop);
+            canvas.LineTo(x, bottom - rad);
+        }
+
+        canvas.ClosePath();
         canvas.Stroke();
     }
 

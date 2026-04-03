@@ -151,7 +151,7 @@ public class WidgetPlaygroundPanel : DockPanel
     public override void OnGUI(Paper paper, float width, float height)
     {
         using (ScrollView.Begin(paper, "playground_scroll", width, height,
-            paddingLeft: 8, paddingRight: 8, paddingTop: 8, rowSpacing: 4))
+            paddingLeft: 8, paddingRight: 8, paddingTop: 8, colSpacing: 4))
         {
             // === Color Field (at top for testing) ===
             EditorGUI.Header(paper, "h_col_top", "Color Field");

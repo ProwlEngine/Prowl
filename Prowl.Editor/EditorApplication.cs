@@ -97,8 +97,17 @@ public class EditorApplication : Game
             _introClosing = true;
             _launcherWasOpen = false;
             if (Project.Current != null)
+            {
                 Window.InternalWindow.Title = $"Prowl Editor - {Project.Current.Name}";
+
+                // Initialize the asset database for the opened project
+                var db = new EditorAssetDatabase(Project.Current);
+                db.Initialize();
+            }
         }
+
+        // Process file changes each frame (after project is loaded)
+        EditorAssetDatabase.Instance?.ProcessFileChanges();
 
         // Show project launcher or intro close phase
         if (ProjectLauncher.IsOpen || _introClosing)
@@ -134,7 +143,7 @@ public class EditorApplication : Game
         paper.Box("bg_gradients")
             .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
             .IsNotInteractable()
-            .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
                 float cx = (float)r.Size.X / 2f;
                 float cy = (float)r.Size.Y / 2f;
@@ -200,7 +209,7 @@ public class EditorApplication : Game
 
         // Flap content: buttons + project + fps
         int fps = Math.Min(9999, Time.UnscaledDeltaTime > 0 ? (int)(1.0 / Time.UnscaledDeltaTime) : 0);
-        string projectText = "MyProject";
+        string projectText = Project.Current?.Name ?? "No Project";
         string fpsText = $"FPS: {fps}";
 
         // Measure to size the flap
@@ -224,7 +233,7 @@ public class EditorApplication : Game
             .PositionType(PositionType.SelfDirected)
             .Position(flapX, flapY).Size(topW, flapH)
             .IsNotInteractable()
-            .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, lr) =>
+            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, lr) =>
             {
                 float cx = (float)lr.Min.X + topW / 2f;
                 float top = (float)lr.Min.Y;
@@ -385,7 +394,7 @@ public class EditorApplication : Game
         paper.Box("intro_overlay")
             .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
             .IsNotInteractable()
-            .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
                 float cx = w / 2f;
                 float cy = h / 2f;
@@ -564,6 +573,8 @@ public class EditorApplication : Game
         MenuRegistry.Register("File/Save Scene", () => { /* TODO */ });
         MenuRegistry.Register("File/Save Scene As...", () => { /* TODO */ });
         MenuRegistry.RegisterSeparator("File");
+        MenuRegistry.Register("File/Open Project...", () => ReturnToLauncher());
+        MenuRegistry.RegisterSeparator("File");
         MenuRegistry.Register("File/Exit", () => Game.Quit());
 
         // Edit menu
@@ -579,6 +590,30 @@ public class EditorApplication : Game
             MenuRegistry.Register($"Window/{path}", () => OpenPanel(capturedType),
                 isChecked: () => IsPanelOpen(capturedType));
         }
+    }
+
+    // ================================================================
+    //  Project Switching
+    // ================================================================
+
+    public void ReturnToLauncher()
+    {
+        // TODO: Check for unsaved changes and show confirmation dialog
+        // For now, go straight back to launcher
+
+        // Clean up current project
+        EditorAssetDatabase.Instance?.Dispose();
+        Runtime.AssetDatabase.Current = null;
+
+        // Reset state
+        _introTime = double.MaxValue;
+        _introClosing = false;
+        _launcherWasOpen = true;
+
+        // Reopen launcher
+        ProjectLauncher.Initialize();
+
+        Window.InternalWindow.Title = "Prowl Editor";
     }
 
     // ================================================================

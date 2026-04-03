@@ -87,7 +87,7 @@ public static class ColorPicker
         paper.Box(id).Size(SVSize, SVSize).Rounded(3)
             .OnClick(e => { SetSV(paper,el,e,h,a,onChange); })
             .OnDragging(e => { SetSV(paper,el,e,h,a,onChange); })
-            .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
                 float x=(float)r.Min.X, y=(float)r.Min.Y, w=(float)r.Size.X, ht=(float)r.Size.Y;
                 var hc = HSVToColor32(h,1,1);
@@ -120,7 +120,7 @@ public static class ColorPicker
         paper.Box(id).Size(HueBarWidth, SVSize).Rounded(3)
             .OnClick(e => { SetHue(paper,el,e,s,v,a,onChange); })
             .OnDragging(e => { SetHue(paper,el,e,s,v,a,onChange); })
-            .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
                 float x=(float)r.Min.X, y=(float)r.Min.Y, w=(float)r.Size.X, ht=(float)r.Size.Y;
                 int segs=12; float segH=ht/segs;
@@ -150,7 +150,7 @@ public static class ColorPicker
         paper.Box(id).Size(AlphaBarWidth, SVSize).Rounded(3)
             .OnClick(e => { SetAlpha(paper,el,e,h,s,v,onChange); })
             .OnDragging(e => { SetAlpha(paper,el,e,h,s,v,onChange); })
-            .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
                 float x=(float)r.Min.X, y=(float)r.Min.Y, w=(float)r.Size.X, ht=(float)r.Size.Y;
                 var col = HSVToColor32(h,s,v);
@@ -180,7 +180,7 @@ public static class ColorPicker
                 .BackgroundColor(EditorTheme.InputBackground).Rounded(2)
                 .OnClick(e => onChange(Math.Clamp((float)e.NormalizedPosition.X, 0, 1)))
                 .OnDragging(e => onChange(Math.Clamp((float)e.NormalizedPosition.X, 0, 1)))
-                .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                 {
                     float fillW = (float)(r.Size.X * Math.Clamp(value, 0, 1));
                     if (fillW > 0)

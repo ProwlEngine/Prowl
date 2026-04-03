@@ -10,8 +10,9 @@ public static class EditorTheme
     public static FontFile? DefaultBoldFont;
 
     // 4-shade system: Darkest → Dark → Normal → Bright
-    public static Color Darkest = Color.FromArgb(255, 22, 22, 24);   // Menu bar
-    public static Color Dark    = Color.FromArgb(255, 10, 10, 12);   // Background (near black)
+    public static Color Background = Color.FromArgb(255, 10, 10, 12);// Background (near black)
+    public static Color Darkest = Color.FromArgb(255, 20, 20, 22);   // Menu bar
+    public static Color Dark    = Color.FromArgb(255, 28, 28, 30);   // Background (near black)
     public static Color Normal  = Color.FromArgb(255, 37, 37, 40);   // Windows/panels
     public static Color Bright  = Color.FromArgb(255, 65, 65, 70);   // Scrollbar, outline
 

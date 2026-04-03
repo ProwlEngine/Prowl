@@ -54,8 +54,8 @@ public static class ProjectLauncher
         // Full background
         paper.Box("pl_bg")
             .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
-            .BackgroundColor(EditorTheme.Dark)
-            .OnPostLayout((handle, rect) => paper.AddActionElement(ref handle, (canvas, r) =>
+            .BackgroundColor(EditorTheme.Background)
+            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
                 float cx = w / 2f;
                 float cy = h / 2f;
