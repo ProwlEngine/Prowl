@@ -300,17 +300,10 @@ public static class EditorGUI
     // ================================================================
     //  Slider
     // ================================================================
-
     public static WidgetResult<float> Slider(Paper paper, string id, string label, float value, float min, float max)
     {
         Action<float>? userCallback = null;
         float t = (max > min) ? Math.Clamp((value - min) / (max - min), 0, 1) : 0;
-
-        void SetFromEvent(PaperUI.Events.ElementEvent e)
-        {
-            float v = min + Math.Clamp((float)e.NormalizedPosition.X, 0, 1) * (max - min);
-            userCallback?.Invoke(v);
-        }
 
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
@@ -320,39 +313,94 @@ public static class EditorGUI
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .IsNotInteractable()
+                    .Text(label, Font)
+                    .TextColor(EditorTheme.Text).FontSize(FontSz);
 
-            // Track with fill drawn via OnPostLayout
             paper.Box($"{id}_track")
                 .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Stretch())
+                .StopEventPropagation()
+                .OnClick(e =>
+                {
+                    float v = min + Math.Clamp((float)e.NormalizedPosition.X, 0f, 1f) * (max - min);
+                    userCallback?.Invoke(v);
+                })
+                .OnDragStart(e =>
+                {
+                    float v = min + Math.Clamp((float)e.NormalizedPosition.X, 0f, 1f) * (max - min);
+                    userCallback?.Invoke(v);
+                })
+                .OnDragging(e =>
+                {
+                    float v = min + Math.Clamp((float)e.NormalizedPosition.X, 0f, 1f) * (max - min);
+                    userCallback?.Invoke(v);
+                })
+                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                {
+                    float rx = (float)r.Min.X;
+                    float ry = (float)r.Min.Y;
+                    float rw = (float)r.Size.X;
+                    float rh = (float)r.Size.Y;
+
+                    float trackH = 4f;
+                    float trackY = ry + rh * 0.5f - trackH * 0.5f;
+                    float trackR = trackH * 0.5f;
+                    float thumbCx = rx + rw * t;
+                    float thumbCy = ry + rh * 0.5f;
+                    float thumbR = rh * 0.36f;
+
+                    // ── Track background ──────────────────────────────────
+                    canvas.RoundedRectFilled(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
+                        new Prowl.Vector.Color(60 / 255f, 60 / 255f, 65 / 255f, 1f));
+
+                    // ── Track fill ────────────────────────────────────────
+                    if (t > 0f)
+                    {
+                        canvas.RoundedRectFilled(rx, trackY, rw * t, trackH, trackR, trackR, trackR, trackR,
+                            new Prowl.Vector.Color(82 / 255f, 130 / 255f, 255 / 255f, 1f));
+                    }
+
+                    // ── Thumb shadow ──────────────────────────────────────
+                    canvas.SetFillColor(Color.FromArgb(50, 0, 0, 0));
+                    canvas.BeginPath();
+                    canvas.Circle(thumbCx + 0.5f, thumbCy + 1.5f, thumbR, 24);
+                    canvas.Fill();
+
+                    // ── Thumb body ────────────────────────────────────────
+                    canvas.SetFillColor(Color.FromArgb(255, 225, 232, 255));
+                    canvas.BeginPath();
+                    canvas.Circle(thumbCx, thumbCy, thumbR, 24);
+                    canvas.Fill();
+                }));
+
+            // Editable numeric field at the end
+            using (paper.Box($"{id}_input")
+                .Height(EditorTheme.RowHeight)
+                .Width(50)
                 .BackgroundColor(EditorTheme.InputBackground)
                 .Rounded(3)
                 .BorderColor(EditorTheme.Border).BorderWidth(1)
-                .OnClick(e => SetFromEvent(e))
-                .OnDragStart(e => SetFromEvent(e))
-                .OnDragging(e => SetFromEvent(e))
-                .OnPostLayout((handle, rect) =>
-                {
-                    paper.Draw(ref handle, (canvas, r) =>
-                    {
-                        if (t > 0)
+                .Focused.BorderColor(EditorTheme.Accent).End()
+                .TabIndex(0)
+                .Enter())
+            {
+                var settings = MakeNumericSettings(FloatFilter);
+                paper.Box($"{id}_tf")
+                    .Margin(4, UnitValue.Stretch())
+                    .HookToParent()
+                    .IsNotInteractable()
+                    .Width(UnitValue.Stretch())
+                    .Height(EditorTheme.RowHeight)
+                    .FontSize(FontSz)
+                    .TextField(value.ToString("G", CultureInfo.InvariantCulture), settings,
+                        onChange: v =>
                         {
-                            float fillW = (float)(r.Size.X * t);
-                            canvas.RoundedRectFilled(
-                                (float)r.Min.X, (float)r.Min.Y,
-                                fillW, (float)r.Size.Y,
-                                3, 0, 0, 3,
-                                new Prowl.Vector.Color(51/255f, 122/255f, 183/255f, 1f));
-                        }
-                    });
-                });
-
-            if (Font != null)
-                paper.Box($"{id}_val")
-                    .Width(50).Height(EditorTheme.RowHeight)
-                    .Text(value.ToString("F2"), Font)
-                    .TextColor(EditorTheme.Text).FontSize(FontSz);
+                            if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
+                                userCallback?.Invoke(Math.Clamp(parsed, min, max));
+                        },
+                        intID: $"{id}_tf".GetHashCode());
+            }
         }
 
         return new WidgetResult<float>(cb => userCallback = cb);
@@ -781,7 +829,7 @@ public static class EditorGUI
                                 (float)r.Min.X, (float)r.Min.Y,
                                 fillW, (float)r.Size.Y,
                                 3, 0, 0, 3,
-                                new Prowl.Vector.Color(51/255f, 122/255f, 183/255f, 1f));
+                                new Prowl.Vector.Color(51 / 255f, 122 / 255f, 183 / 255f, 1f));
                         }
                     });
                 });
