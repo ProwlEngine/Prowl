@@ -322,7 +322,6 @@ public static class EditorGUI
             paper.Box($"{id}_track")
                 .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Stretch())
-                .StopEventPropagation()
                 .OnClick(e =>
                 {
                     float v = min + Math.Clamp((float)e.NormalizedPosition.X, 0f, 1f) * (max - min);
