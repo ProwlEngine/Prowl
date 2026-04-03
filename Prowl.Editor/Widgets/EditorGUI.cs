@@ -426,6 +426,34 @@ public static class EditorGUI
     }
 
     // ================================================================
+    //  Foldout (self-contained state + content callback)
+    // ================================================================
+
+    public static void SimpleFoldout(Paper paper, string id, string label, Action drawContents, bool defaultValue = true)
+    {
+        // Header button — storage lives on the header element itself
+        var header = paper.Box($"{id}_header")
+            .Height(EditorTheme.RowHeight)
+            .ChildLeft(4)
+            .BackgroundColor(EditorTheme.HeaderBackground)
+            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+            .Rounded(2);
+
+        bool expanded = paper.GetElementStorage(header._handle, "exp", defaultValue);
+
+        header.OnClick(e => paper.SetElementStorage(header._handle, "exp", !expanded));
+
+        if (Font != null)
+        {
+            string arrow = expanded ? "\u25BC " : "\u25B6 ";
+            header.Text(arrow + label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+        }
+
+        if (expanded)
+            drawContents();
+    }
+
+    // ================================================================
     //  Dropdown
     // ================================================================
 

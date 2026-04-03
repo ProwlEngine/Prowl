@@ -173,7 +173,7 @@ public static class PropertyGrid
         }
         if (type == typeof(Prowl.Vector.Color))
         {
-            EditorGUI.ColorField(paper, id, label, (Prowl.Vector.Color)(value ?? new Prowl.Vector.Color(1,1,1,1)))
+            EditorGUI.ColorField(paper, id, label, (Prowl.Vector.Color)(value ?? new Prowl.Vector.Color(1, 1, 1, 1)))
                 .OnValueChanged(v => onChange(v));
             return;
         }
@@ -238,10 +238,6 @@ public static class PropertyGrid
         EditorGUI.Label(paper, id, $"{label}: {value ?? "(null)"}", EditorTheme.TextDim);
     }
 
-    // ================================================================
-    //  Collections (List<T>, T[])
-    // ================================================================
-
     static void DrawCollection(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth)
     {
@@ -249,99 +245,81 @@ public static class PropertyGrid
         IList? list = value as IList;
         int count = list?.Count ?? 0;
 
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({count})", false)
-            .OnValueChanged(v => { });
-
-        // Use element storage for foldout state
-        var foldoutEl = paper.CurrentParent;
-        bool expanded = paper.IsParentFocusWithin || paper.GetElementStorage(foldoutEl, "exp", false);
-
-        // Hacky: re-check via OnClick toggle
-        // Actually use a simpler approach — just check a stored bool
-
-        // For simplicity, just draw if the foldout label was recently expanded
-        // TODO: proper foldout state
-
-        if (list == null)
+        EditorGUI.SimpleFoldout(paper, $"{id}_fold", $"{label} ({count})", () =>
         {
-            // Null collection — offer to create
-            using (paper.Row($"{id}_null").Height(EditorTheme.RowHeight).ChildLeft(16).Enter())
+            if (list == null)
             {
-                EditorGUI.Button(paper, $"{id}_create", $"Create {elementType.Name}[]")
-                    .OnValueChanged(v =>
-                    {
-                        if (type.IsArray)
-                            onChange(Array.CreateInstance(elementType, 0));
-                        else
-                            onChange(Activator.CreateInstance(type));
-                    });
-            }
-            return;
-        }
-
-        // Draw elements
-        using (paper.Column($"{id}_items").Height(UnitValue.Auto).ChildLeft(16).RowBetween(2).Enter())
-        {
-            for (int i = 0; i < list.Count; i++)
-            {
-                int idx = i;
-                using (paper.Row($"{id}_item_{i}").Height(UnitValue.Auto).RowBetween(4).Enter())
+                using (paper.Row($"{id}_null").Height(EditorTheme.RowHeight).ChildLeft(16).Enter())
                 {
-                    using (paper.Column($"{id}_itemval_{i}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).RowBetween(2).Enter())
-                    {
-                        DrawField(paper, $"{id}_el_{i}", $"[{i}]", elementType, list[i],
-                            newVal =>
-                            {
-                                list[idx] = newVal;
-                                onChange(list);
-                            }, depth + 1);
-                    }
-
-                    // Remove button
-                    EditorGUI.ButtonSquare(paper, $"{id}_rm_{i}", "\u2715")
+                    EditorGUI.Button(paper, $"{id}_create", $"Create {elementType.Name}[]")
                         .OnValueChanged(v =>
                         {
                             if (type.IsArray)
-                            {
-                                var newArr = Array.CreateInstance(elementType, list.Count - 1);
-                                for (int j = 0, k = 0; j < list.Count; j++)
-                                    if (j != idx) newArr.SetValue(list[j], k++);
-                                onChange(newArr);
-                            }
+                                onChange(Array.CreateInstance(elementType, 0));
                             else
-                            {
-                                list.RemoveAt(idx);
-                                onChange(list);
-                            }
+                                onChange(Activator.CreateInstance(type));
                         });
                 }
+                return;
             }
 
-            // Add button
-            EditorGUI.Button(paper, $"{id}_add", "+ Add Element")
-                .OnValueChanged(v =>
+            using (paper.Column($"{id}_items").Height(UnitValue.Auto).ChildLeft(16).RowBetween(2).Enter())
+            {
+                for (int i = 0; i < list.Count; i++)
                 {
-                    object? newElement = elementType.IsValueType ? Activator.CreateInstance(elementType) :
-                                          elementType == typeof(string) ? "" : null;
-                    if (type.IsArray)
+                    int idx = i;
+                    using (paper.Row($"{id}_item_{i}").Height(UnitValue.Auto).RowBetween(4).Enter())
                     {
-                        var newArr = Array.CreateInstance(elementType, list.Count + 1);
-                        for (int j = 0; j < list.Count; j++) newArr.SetValue(list[j], j);
-                        newArr.SetValue(newElement, list.Count);
-                        onChange(newArr);
-                    }
-                    else
-                    {
-                        list.Add(newElement);
-                        onChange(list);
-                    }
-                });
-        }
-    }
+                        using (paper.Column($"{id}_itemval_{i}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).RowBetween(2).Enter())
+                        {
+                            DrawField(paper, $"{id}_el_{i}", $"[{i}]", elementType, list[i],
+                                newVal =>
+                                {
+                                    list[idx] = newVal;
+                                    onChange(list);
+                                }, depth + 1);
+                        }
 
-    // ================================================================
-    //  Dictionary<K, V>
-    // ================================================================
+                        EditorGUI.ButtonSquare(paper, $"{id}_rm_{i}", "\u2715")
+                            .OnValueChanged(v =>
+                            {
+                                if (type.IsArray)
+                                {
+                                    var newArr = Array.CreateInstance(elementType, list.Count - 1);
+                                    for (int j = 0, k = 0; j < list.Count; j++)
+                                        if (j != idx) newArr.SetValue(list[j], k++);
+                                    onChange(newArr);
+                                }
+                                else
+                                {
+                                    list.RemoveAt(idx);
+                                    onChange(list);
+                                }
+                            });
+                    }
+                }
+
+                EditorGUI.Button(paper, $"{id}_add", "+ Add Element")
+                    .OnValueChanged(v =>
+                    {
+                        object? newElement = elementType.IsValueType ? Activator.CreateInstance(elementType) :
+                                              elementType == typeof(string) ? "" : null;
+                        if (type.IsArray)
+                        {
+                            var newArr = Array.CreateInstance(elementType, list.Count + 1);
+                            for (int j = 0; j < list.Count; j++) newArr.SetValue(list[j], j);
+                            newArr.SetValue(newElement, list.Count);
+                            onChange(newArr);
+                        }
+                        else
+                        {
+                            list.Add(newElement);
+                            onChange(list);
+                        }
+                    });
+            }
+        });
+    }
 
     static void DrawDictionary(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth)
@@ -351,59 +329,55 @@ public static class PropertyGrid
         IDictionary? dict = value as IDictionary;
         int count = dict?.Count ?? 0;
 
-        EditorGUI.Label(paper, $"{id}_hdr", $"{label} ({count} entries)", EditorTheme.Text);
-
-        if (dict == null)
+        EditorGUI.SimpleFoldout(paper, $"{id}_fold", $"{label} ({count} entries)", () =>
         {
-            EditorGUI.Button(paper, $"{id}_create", "Create Dictionary")
-                .OnValueChanged(v => onChange(Activator.CreateInstance(type)));
-            return;
-        }
-
-        using (paper.Column($"{id}_entries").Height(UnitValue.Auto).ChildLeft(16).RowBetween(2).Enter())
-        {
-            int i = 0;
-            var keys = new List<object>();
-            foreach (var key in dict.Keys) keys.Add(key);
-
-            foreach (var key in keys)
+            if (dict == null)
             {
-                int idx = i;
-                var keyObj = key;
-
-                using (paper.Row($"{id}_entry_{i}").Height(UnitValue.Auto).RowBetween(4).Enter())
-                {
-                    // Key (read-only label for now)
-                    EditorGUI.Label(paper, $"{id}_key_{i}", $"[{key}]");
-
-                    // Value
-                    using (paper.Column($"{id}_val_{i}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).RowBetween(2).Enter())
-                    {
-                        DrawField(paper, $"{id}_v_{i}", "", valType, dict[key],
-                            newVal =>
-                            {
-                                dict[keyObj] = newVal;
-                                onChange(dict);
-                            }, depth + 1);
-                    }
-
-                    // Remove
-                    EditorGUI.ButtonSquare(paper, $"{id}_drm_{i}", "\u2715")
-                        .OnValueChanged(v =>
-                        {
-                            dict.Remove(keyObj);
-                            onChange(dict);
-                        });
-                }
-                i++;
+                EditorGUI.Button(paper, $"{id}_create", "Create Dictionary")
+                    .OnValueChanged(v => onChange(Activator.CreateInstance(type)));
+                return;
             }
-        }
+
+            using (paper.Column($"{id}_entries").Height(UnitValue.Auto).ChildLeft(16).RowBetween(2).Enter())
+            {
+                var keys = new List<object>();
+                foreach (var key in dict.Keys) keys.Add(key);
+
+                for (int i = 0; i < keys.Count; i++)
+                {
+                    int idx = i;
+                    var keyObj = keys[i];
+
+                    using (paper.Row($"{id}_entry_{i}").Height(UnitValue.Auto).RowBetween(4).Enter())
+                    {
+                        EditorGUI.Label(paper, $"{id}_key_{i}", $"[{keyObj}]");
+
+                        using (paper.Column($"{id}_val_{i}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).RowBetween(2).Enter())
+                        {
+                            DrawField(paper, $"{id}_v_{i}", "", valType, dict[keyObj],
+                                newVal =>
+                                {
+                                    dict[keyObj] = newVal;
+                                    onChange(dict);
+                                }, depth + 1);
+                        }
+
+                        EditorGUI.ButtonSquare(paper, $"{id}_drm_{i}", "\u2715")
+                            .OnValueChanged(v =>
+                            {
+                                dict.Remove(keyObj);
+                                onChange(dict);
+                            });
+                    }
+                }
+            }
+        });
     }
+
 
     // ================================================================
     //  Nested Object
     // ================================================================
-
     static void DrawNestedObject(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth)
     {
@@ -420,14 +394,12 @@ public static class PropertyGrid
                 }
                 else
                 {
-                    // Polymorphism — show type picker
                     DrawTypePicker(paper, $"{id}_pick", type, onChange);
                 }
             }
             return;
         }
 
-        // Has serializable fields?
         var fields = GetSerializableFields(type);
         if (fields.Length == 0)
         {
@@ -435,20 +407,19 @@ public static class PropertyGrid
             return;
         }
 
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({type.Name})", true)
-            .OnValueChanged(v => { });
-
-        using (paper.Column($"{id}_nested").Height(UnitValue.Auto).ChildLeft(12).RowBetween(2).Enter())
+        EditorGUI.SimpleFoldout(paper, $"{id}_fold", $"{label} ({type.Name})", () =>
         {
-            Draw(paper, $"{id}_props", value, changed =>
+            using (paper.Column($"{id}_nested").Height(UnitValue.Auto).ChildLeft(12).RowBetween(2).Enter())
             {
-                // For structs, we need to write the modified copy back
-                if (type.IsValueType)
-                    onChange(changed);
-                else
-                    onChange?.Invoke(value);
-            }, depth + 1);
-        }
+                Draw(paper, $"{id}_props", value, changed =>
+                {
+                    if (type.IsValueType)
+                        onChange(changed);
+                    else
+                        onChange?.Invoke(value);
+                }, depth + 1);
+            }
+        });
     }
 
     // ================================================================
