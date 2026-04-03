@@ -2580,6 +2580,19 @@ namespace Prowl.Quill
         public IEnumerable<FontFile> EnumerateSystemFonts() => _scribeRenderer.FontEngine.EnumerateSystemFonts();
 
         /// <summary>
+        /// Scales dimensional fields of TextLayoutSettings from logical units to physical pixels.
+        /// </summary>
+        private TextLayoutSettings ScaleSettings(TextLayoutSettings settings)
+        {
+            settings.PixelSize *= _scale;
+            settings.LetterSpacing *= _scale;
+            settings.WordSpacing *= _scale;
+            if (settings.MaxWidth > 0)
+                settings.MaxWidth *= _scale;
+            return settings;
+        }
+
+        /// <summary>
         /// Measures the size of text when rendered with the specified settings.
         /// </summary>
         /// <param name="text">The text to measure.</param>
@@ -2601,8 +2614,13 @@ namespace Prowl.Quill
         /// </summary>
         /// <param name="text">The text to measure.</param>
         /// <param name="settings">The layout settings to use.</param>
-        /// <returns>The size of the text.</returns>
-        public Float2 MeasureText(string text, TextLayoutSettings settings) => (Float2)_scribeRenderer.FontEngine.MeasureText(text, settings);
+        /// <returns>The size of the text in logical units.</returns>
+        public Float2 MeasureText(string text, TextLayoutSettings settings)
+        {
+            var scaled = ScaleSettings(settings);
+            Float2 pixelResult = (Float2)_scribeRenderer.FontEngine.MeasureText(text, scaled);
+            return pixelResult / _scale;
+        }
 
         /// <summary>
         /// Draws text at the specified position.
@@ -2653,52 +2671,42 @@ namespace Prowl.Quill
 
         /// <summary>
         /// Draws text using custom TextLayoutSettings.
+        /// DPI scaling is applied automatically to all dimensional settings.
         /// </summary>
-        /// <remarks>
-        /// Note: For proper DPI scaling, the font size in TextLayoutSettings should be
-        /// pre-multiplied by the pixel ratio. Use the other DrawText overload for automatic scaling.
-        /// </remarks>
         public void DrawText(string text, float x, float y, Color32 color, TextLayoutSettings settings, Float2? origin = null)
         {
+            var scaled = ScaleSettings(settings);
             Float2 position = new Float2(x, y);
             if (origin.HasValue)
             {
-                var textSize = _scribeRenderer.FontEngine.MeasureText(text, settings);
-                // Settings use pixel units, so convert back to logical for offset
+                var textSize = _scribeRenderer.FontEngine.MeasureText(text, scaled);
                 position.X -= (textSize.X / _scale) * origin.Value.X;
                 position.Y -= (textSize.Y / _scale) * origin.Value.Y;
             }
-            // Scale position to pixel space - DrawQuads will convert back for transform application
             Float2 pixelPosition = position * _scale;
-            _scribeRenderer.FontEngine.DrawText(text, pixelPosition, new FontColor(color.R, color.G, color.B, color.A), settings);
+            _scribeRenderer.FontEngine.DrawText(text, pixelPosition, new FontColor(color.R, color.G, color.B, color.A), scaled);
         }
 
         /// <summary>
         /// Creates a text layout for later rendering.
+        /// DPI scaling is applied automatically. The returned layout is in pixel space;
+        /// use <see cref="PixelToLogical(Float2)"/> to convert cursor positions to logical units.
         /// </summary>
-        /// <remarks>
-        /// Note: For proper DPI scaling, the font size in TextLayoutSettings should be
-        /// pre-multiplied by the pixel ratio.
-        /// </remarks>
-        public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.CreateLayout(text, settings);
+        public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.CreateLayout(text, ScaleSettings(settings));
 
         /// <summary>
         /// Draws a pre-created text layout.
+        /// The layout should have been created via <see cref="CreateLayout"/> which applies DPI scaling automatically.
         /// </summary>
-        /// <remarks>
-        /// Note: The layout should have been created with DPI-scaled font sizes for proper rendering.
-        /// </remarks>
         public void DrawLayout(TextLayout layout, float x, float y, Color32 color, Float2? origin = null)
         {
             Float2 position = new Float2(x, y);
             if (origin.HasValue)
             {
                 var layoutSize = layout.Size;
-                // Layout size is in pixels, convert back to logical for offset
                 position.X -= (layoutSize.X / _scale) * origin.Value.X;
                 position.Y -= (layoutSize.Y / _scale) * origin.Value.Y;
             }
-            // Scale position to pixel space - DrawQuads will convert back for transform application
             Float2 pixelPosition = position * _scale;
             _scribeRenderer.FontEngine.DrawLayout(layout, pixelPosition, new FontColor(color.R, color.G, color.B, color.A));
         }
