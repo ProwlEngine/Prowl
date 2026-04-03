@@ -457,7 +457,7 @@ public static class EditorGUI
                             .Width(UnitValue.Stretch())
                             .IsNotInteractable()
                             .Text(displayText, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
-                            
+
                         paper.Box($"{id}_arr")
                             .Width(EditorTheme.RowHeight) // square area for the arrow
                             .Height(EditorTheme.RowHeight)
@@ -775,7 +775,6 @@ public static class EditorGUI
     // ================================================================
     //  Progress Bar
     // ================================================================
-
     public static void ProgressBar(Paper paper, string id, string label, float progress)
     {
         progress = Math.Clamp(progress, 0, 1);
@@ -788,34 +787,38 @@ public static class EditorGUI
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .IsNotInteractable()
                     .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
 
-            // Track
             paper.Box($"{id}_track")
                 .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Stretch())
-                .BackgroundColor(EditorTheme.InputBackground)
-                .Rounded(3)
-                .BorderColor(EditorTheme.Border).BorderWidth(1)
-                .OnPostLayout((handle, rect) =>
+                .IsNotInteractable()
+                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                 {
-                    paper.Draw(ref handle, (canvas, r) =>
-                    {
-                        if (progress > 0)
-                        {
-                            float fillW = (float)(r.Size.X * progress);
-                            canvas.RoundedRectFilled(
-                                (float)r.Min.X, (float)r.Min.Y,
-                                fillW, (float)r.Size.Y,
-                                3, 0, 0, 3,
-                                new Prowl.Vector.Color(51 / 255f, 122 / 255f, 183 / 255f, 1f));
-                        }
-                    });
-                });
+                    float rx = (float)r.Min.X;
+                    float ry = (float)r.Min.Y;
+                    float rw = (float)r.Size.X;
+                    float rh = (float)r.Size.Y;
+
+                    float trackH = 4f;
+                    float trackY = ry + rh * 0.5f - trackH * 0.5f;
+                    float trackR = trackH * 0.5f;
+
+                    // ── Track background ──────────────────────────────────
+                    canvas.RoundedRectFilled(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
+                        EditorTheme.ButtonNormal);
+
+                    // ── Track fill ────────────────────────────────────────
+                    if (progress > 0f)
+                        canvas.RoundedRectFilled(rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR,
+                            EditorTheme.Accent);
+                }));
 
             if (Font != null)
                 paper.Box($"{id}_pct")
                     .Width(40).Height(EditorTheme.RowHeight)
+                    .IsNotInteractable()
                     .Text($"{(int)(progress * 100)}%", Font)
                     .TextColor(EditorTheme.Text).FontSize(FontSz);
         }
