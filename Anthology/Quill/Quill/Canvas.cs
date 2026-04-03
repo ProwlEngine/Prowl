@@ -120,8 +120,9 @@ namespace Prowl.Quill
             if (scissorExtent.X < -0.5f || scissorExtent.Y < -0.5f)
             {
                 // Invalid scissor - disable it
+                // Extent must be negative so the shader's early-out (scissorExt < 0) triggers
                 matrix = new Float4x4();
-                extent = new Float2(1, 1);
+                extent = new Float2(-1, -1);
             }
             else
             {
