@@ -18,8 +18,12 @@ public class EditorApplication : Game
 
     private DockSpace _dockSpace = null!;
     private double _time;
-    private double _introTime;
-    private const double IntroDuration = 3.0;
+    private double _introTime = double.MaxValue;
+    private const double IntroCloseDuration = 2.0; // bars close over launcher
+    private const double IntroOpenDuration = 3.0;  // bars open revealing editor
+    private const double IntroDuration = 5.0;      // total
+    private bool _introClosing; // true = closing phase (bars sliding in)
+    private bool _launcherWasOpen = true;
 
     // All registered panel types (from [EditorWindow] attribute scan)
     private readonly List<(Type type, string path)> _registeredPanels = new();
@@ -56,6 +60,9 @@ public class EditorApplication : Game
         ScanAndRegisterPanels();
         RegisterMenus();
 
+        // Start with the project launcher
+        ProjectLauncher.Initialize();
+
         // Set Windows title bar to match Darkest theme color
         ApplyDarkTitleBar();
     }
@@ -78,12 +85,50 @@ public class EditorApplication : Game
 
     public override void BeginGui(Paper paper)
     {
-        // Use logical (window) size, not framebuffer (physical) size.
-        // Paper works in logical coordinates; framebuffer size is 2x on Mac Retina.
         int w = Window.InternalWindow.Size.X;
         int h = Window.InternalWindow.Size.Y;
 
         _time += Time.UnscaledDeltaTime;
+
+        // Detect project opened (launcher closed since last frame)
+        if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)
+        {
+            _introTime = 0;
+            _introClosing = true;
+            _launcherWasOpen = false;
+            if (Project.Current != null)
+                Window.InternalWindow.Title = $"Prowl Editor - {Project.Current.Name}";
+        }
+
+        // Show project launcher or intro close phase
+        if (ProjectLauncher.IsOpen || _introClosing)
+        {
+            // Always draw the launcher background during close transition
+            ProjectLauncher.Draw(paper, (float)Time.UnscaledDeltaTime, forceDraw: _introClosing);
+
+            if (ProjectLauncher.IsOpen)
+                _launcherWasOpen = true;
+
+            // Block input during close animation
+            if (_introClosing)
+            {
+                paper.Box("intro_blocker")
+                    .PositionType(PositionType.SelfDirected).Position(0, 0)
+                    .Size(w, h)
+                    .Layer(Layer.Overlay)
+                    .OnClick(0, (_, _) => { }); // absorb all clicks
+
+                // Switch to editor once screen is fully covered (hold phase)
+                if (_introTime >= IntroCloseDuration)
+                    _introClosing = false; // next frame draws editor behind open phase
+                else
+                    return;
+            }
+            else
+            {
+                return; // launcher still active, don't draw editor
+            }
+        }
 
         // Animated background gradients
         paper.Box("bg_gradients")
@@ -325,6 +370,7 @@ public class EditorApplication : Game
         if (_introTime < IntroDuration)
         {
             _introTime += Time.UnscaledDeltaTime;
+            if (_introTime < 0.1) Runtime.Debug.Log($"Intro started! time={_introTime:F3}");
             DrawIntro(paper);
         }
     }
@@ -335,7 +381,6 @@ public class EditorApplication : Game
     {
         int w = Window.InternalWindow.Size.X;
         int h = Window.InternalWindow.Size.Y;
-        float t = (float)(_introTime / IntroDuration); // 0→1
 
         paper.Box("intro_overlay")
             .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
@@ -347,57 +392,76 @@ public class EditorApplication : Game
                 var font = EditorTheme.DefaultBoldFont;
                 var black = Prowl.Vector.Color32.FromArgb(255, 8, 8, 10);
                 float barH = (float)h / BarCount;
+                double time = _introTime;
 
-                // Phase 1: 0.0–0.35 — Black screen, "PROWL" text snaps in
-                // Phase 2: 0.35–0.9 — Horizontal bars slide off alternating left/right, staggered
-                // Phase 3: text fades during phase 2
-
-                if (t < 0.35f)
+                // ── CLOSE PHASE (0 → IntroCloseDuration): Bars slide IN, text fades in ──
+                if (time < IntroCloseDuration)
                 {
-                    // Full black
-                    canvas.RectFilled(0, 0, w, h, black);
+                    float t = (float)(time / IntroCloseDuration); // 0→1
 
-                    float phase = t / 0.35f;
-                    if (font != null && phase > 0.15f)
+                    // Bars slide in from off-screen
+                    for (int i = 0; i < BarCount; i++)
                     {
-                        float textPhase = Math.Min(1f, (phase - 0.15f) / 0.3f);
+                        float delay = i * 0.04f;
+                        float slideDuration = 0.5f;
+                        float barPhase = Math.Clamp((t - delay) / slideDuration, 0f, 1f);
+                        float eased = EaseInOutQuart(barPhase);
+
+                        // Slide from off-screen to on-screen (reverse of open)
+                        float slideX = (i % 2 == 0) ? -(1f - eased) * w : (1f - eased) * w;
+
+                        float barY = i * barH;
+                        canvas.RectFilled(slideX, barY, w, barH + 1, black);
+                    }
+
+                    // Text fades in during second half
+                    if (font != null && t > 0.5f)
+                    {
+                        float textPhase = (t - 0.5f) / 0.5f;
                         float eased = EaseOutQuart(textPhase);
                         byte alpha = (byte)(eased * 255);
                         var textColor = Prowl.Vector.Color32.FromArgb(alpha, 230, 230, 230);
                         canvas.DrawText("PROWL", cx, cy, textColor, 72f, font, 10f,
                             new Prowl.Vector.Float2(0.5f, 0.5f));
-
-                        //float textFade = 1f - (phase * phase);
-                        //alpha = (byte)(EaseOutQuart(textFade) * 255);
-                        //var subColor = Prowl.Vector.Color32.FromArgb(alpha, 160, 160, 160);
-                        //canvas.DrawText("The Open-Source Game Engine", cx, cy + 50, subColor, 24f, font, 3f,
-                        //    new Prowl.Vector.Float2(0.5f, 0.5f));
                     }
                 }
+                // ── HOLD PHASE: brief pause with text visible ──
+                else if (time < IntroCloseDuration + 0.5)
+                {
+                    canvas.RectFilled(0, 0, w, h, black);
+
+                    if (font != null)
+                    {
+                        var textColor = Prowl.Vector.Color32.FromArgb(255, 230, 230, 230);
+                        canvas.DrawText("PROWL", cx, cy, textColor, 72f, font, 10f,
+                            new Prowl.Vector.Float2(0.5f, 0.5f));
+                    }
+                }
+                // ── OPEN PHASE: Bars slide OUT, text fades out ──
                 else
                 {
-                    float phase = (t - 0.35f) / 0.65f; // 0→1
+                    float openStart = (float)(IntroCloseDuration + 0.5);
+                    float openDuration = (float)(IntroDuration - openStart);
+                    float t = Math.Clamp((float)(time - openStart) / openDuration, 0f, 1f);
 
-                    // Draw staggered bars sliding off screen
+                    // Bars slide off screen
                     for (int i = 0; i < BarCount; i++)
                     {
-                        // Each bar has a staggered start, all finish by phase=1
                         float delay = i * 0.05f;
                         float slideDuration = 0.5f;
-                        float barPhase = Math.Clamp((phase - delay) / slideDuration, 0f, 1f);
+                        float barPhase = Math.Clamp((t - delay) / slideDuration, 0f, 1f);
                         float eased = EaseInOutQuart(barPhase);
 
-                        // Alternate slide direction
                         float slideX = (i % 2 == 0) ? -eased * w : eased * w;
 
                         float barY = i * barH;
                         canvas.RectFilled(slideX, barY, w, barH + 1, black);
                     }
 
-                    // Text fades out quickly during bar slide
-                    if (font != null && phase < 0.3f)
+                    // Text fades out quickly
+                    if (font != null && t < 0.3f)
                     {
-                        float textFade = 1f - (phase / 0.3f);
+                        float textFade = 1f - (t / 0.3f);
                         byte alpha = (byte)(EaseOutQuart(textFade) * 255);
                         var textColor = Prowl.Vector.Color32.FromArgb(alpha, 230, 230, 230);
                         canvas.DrawText("PROWL", cx, cy, textColor, 72f, font, 10f,
