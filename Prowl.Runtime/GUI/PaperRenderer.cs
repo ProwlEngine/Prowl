@@ -84,7 +84,15 @@ public class PaperRenderer : ICanvasRenderer
         => new(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
 
     public object CreateTexture(uint width, uint height)
-        => new Texture2D(width, height);
+    {
+        var tex = new Texture2D(width, height);
+
+        Graphics.SetTextureFilters(tex.Handle, TextureMin.Linear, TextureMag.Linear);
+        Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
+        Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
+
+        return tex;
+    }
 
     public object? CreateFloatTexture(int width, int height, int components, float[] data)
     {
