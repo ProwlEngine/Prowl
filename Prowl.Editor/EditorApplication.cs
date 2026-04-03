@@ -38,6 +38,13 @@ public class EditorApplication : Game
             ?? PaperInstance.EnumerateSystemFonts()
             .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Regular)
             ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
+        EditorTheme.DefaultBoldFont = PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Bold)
+            ?? PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Bold)
+            ?? PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Bold)
+            ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
         PaperInstance.TextMode = Prowl.Quill.TextRenderMode.Bitmap;
 
         // Load Font Awesome as fallback fonts for icons
@@ -309,6 +316,7 @@ public class EditorApplication : Game
     public override void EndGui(Paper paper)
     {
         // Systems drawn on top (Overlay/Topmost layers)
+        Widgets.FileDialog.Draw(paper);
         Widgets.ModalDialog.Draw(paper);
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
         Widgets.Tooltip.Draw(paper);
@@ -336,7 +344,7 @@ public class EditorApplication : Game
             {
                 float cx = w / 2f;
                 float cy = h / 2f;
-                var font = EditorTheme.DefaultFont;
+                var font = EditorTheme.DefaultBoldFont;
                 var black = Prowl.Vector.Color32.FromArgb(255, 8, 8, 10);
                 float barH = (float)h / BarCount;
 
@@ -356,12 +364,14 @@ public class EditorApplication : Game
                         float eased = EaseOutQuart(textPhase);
                         byte alpha = (byte)(eased * 255);
                         var textColor = Prowl.Vector.Color32.FromArgb(alpha, 230, 230, 230);
-                        canvas.DrawText("P R O W L", cx, cy - 10, textColor, 52f, font, 10f,
+                        canvas.DrawText("PROWL", cx, cy, textColor, 72f, font, 10f,
                             new Prowl.Vector.Float2(0.5f, 0.5f));
 
-                        var subColor = Prowl.Vector.Color32.FromArgb((byte)(alpha * 0.5f), 160, 160, 160);
-                        canvas.DrawText("Game Engine", cx, cy + 30, subColor, 16f, font, 3f,
-                            new Prowl.Vector.Float2(0.5f, 0.5f));
+                        //float textFade = 1f - (phase * phase);
+                        //alpha = (byte)(EaseOutQuart(textFade) * 255);
+                        //var subColor = Prowl.Vector.Color32.FromArgb(alpha, 160, 160, 160);
+                        //canvas.DrawText("The Open-Source Game Engine", cx, cy + 50, subColor, 24f, font, 3f,
+                        //    new Prowl.Vector.Float2(0.5f, 0.5f));
                     }
                 }
                 else
@@ -390,7 +400,7 @@ public class EditorApplication : Game
                         float textFade = 1f - (phase / 0.3f);
                         byte alpha = (byte)(EaseOutQuart(textFade) * 255);
                         var textColor = Prowl.Vector.Color32.FromArgb(alpha, 230, 230, 230);
-                        canvas.DrawText("P R O W L", cx, cy - 10, textColor, 52f, font, 10f,
+                        canvas.DrawText("PROWL", cx, cy, textColor, 72f, font, 10f,
                             new Prowl.Vector.Float2(0.5f, 0.5f));
                     }
                 }

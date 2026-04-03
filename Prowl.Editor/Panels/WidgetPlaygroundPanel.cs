@@ -453,6 +453,25 @@ public class WidgetPlaygroundPanel : DockPanel
             EditorGUI.Label(paper, "st_col", $"Color: R={_color.R:F2} G={_color.G:F2} B={_color.B:F2}");
             EditorGUI.Label(paper, "st_prog", $"Progress: {_progress:P0}");
 
+            // ── File Dialog ──
+            EditorGUI.Header(paper, "h_filedialog", "File Dialog");
+
+            EditorGUI.Button(paper, "btn_open_file", "Open File...")
+                .OnValueChanged(_ => Widgets.FileDialog.Open(Widgets.FileDialogMode.Open,
+                    path => { if (path != null) Widgets.Toasts.Show("File", $"Selected: {path}"); },
+                    filters: new[] { "*.cs;*.json;*.xml", "*.png;*.jpg", "*.*" },
+                    filterLabels: new[] { "Code (*.cs, *.json, *.xml)", "Images (*.png, *.jpg)", "All Files (*.*)" }));
+
+            EditorGUI.Button(paper, "btn_save_file", "Save File...")
+                .OnValueChanged(_ => Widgets.FileDialog.Open(Widgets.FileDialogMode.Save,
+                    path => { if (path != null) Widgets.Toasts.Show("File", $"Save to: {path}", Widgets.ToastType.Success); }));
+
+            EditorGUI.Button(paper, "btn_select_folder", "Select Folder...")
+                .OnValueChanged(_ => Widgets.FileDialog.Open(Widgets.FileDialogMode.SelectFolder,
+                    path => { if (path != null) Widgets.Toasts.Show("Folder", $"Selected: {path}"); }));
+
+            EditorGUI.Separator(paper, "sep_filedialog");
+
             paper.Box("bottom_pad").Height(20);
         }
     }

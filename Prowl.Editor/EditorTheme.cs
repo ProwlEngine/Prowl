@@ -7,6 +7,7 @@ namespace Prowl.Editor;
 public static class EditorTheme
 {
     public static FontFile? DefaultFont;
+    public static FontFile? DefaultBoldFont;
 
     // 4-shade system: Darkest → Dark → Normal → Bright
     public static Color Darkest = Color.FromArgb(255, 22, 22, 24);   // Menu bar
