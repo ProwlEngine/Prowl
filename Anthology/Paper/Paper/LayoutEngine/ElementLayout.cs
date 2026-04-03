@@ -248,8 +248,10 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 if (contentSize.HasValue)
                 {
-                    computedMain = contentSize.Value.Item1;
-                    computedCross = contentSize.Value.Item2;
+                    if (main.IsAuto)
+                        computedMain = contentSize.Value.Item1;
+                    if (cross.IsAuto)
+                        computedCross = contentSize.Value.Item2;
                 }
             }
 
@@ -264,8 +266,10 @@ namespace Prowl.PaperUI.LayoutEngine
                 var contentSize = GetContentSize(elementHandle, parentLayoutType, pMain, pCross);
                 if (contentSize.HasValue)
                 {
-                    minMain = contentSize.Value.Item1;
-                    minCross = contentSize.Value.Item2;
+                    if (GetMinMain(ref element, parentLayoutType).IsAuto)
+                        minMain = contentSize.Value.Item1;
+                    if (GetMinCross(ref element, parentLayoutType).IsAuto)
+                        minCross = contentSize.Value.Item2;
                 }
             }
 
