@@ -8,7 +8,11 @@ Pass "UI"
 {
     Tags { "RenderOrder" = "Opaque" }
 
-    Blend Alpha
+    Blend {
+        Src One
+        Dst OneMinusSrcAlpha
+        Mode Add
+    }
     ZTest Off
     ZWrite Off
     Cull Off
