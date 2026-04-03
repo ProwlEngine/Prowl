@@ -75,8 +75,7 @@ public static class EditorGUI
         if (Font == null) return;
         paper.Box(id)
             .Height(EditorTheme.RowHeight + 4)
-            .ChildLeft(4)
-            .Margin(0, 10, 0, 2)
+            .Margin(8, 10, 0, 2)
             .Text(text, Font)
             .TextColor(EditorTheme.Text)
             .FontSize(FontSz + 2);
@@ -88,10 +87,13 @@ public static class EditorGUI
 
     public static void Separator(Paper paper, string id)
     {
-        paper.Box(id)
-            .Height(1)
-            .Margin(0, 6, 0, 6)
-            .BackgroundColor(EditorTheme.Border);
+        using (paper.Box(id).Height(12).Enter())
+        {
+            paper.Box(id + "_line")
+                .Height(1)
+                .Margin(0, 6, 0, 6)
+                .BackgroundColor(EditorTheme.Border);
+        }
     }
 
     // ================================================================
@@ -453,14 +455,22 @@ public static class EditorGUI
 
                 if (Font != null)
                 {
-                    paper.Box($"{id}_txt")
+                    using (paper.Row($"{id}_display")
+                        .Height(EditorTheme.RowHeight)
                         .Width(UnitValue.Stretch())
-                        .IsNotInteractable()
-                        .Text(displayText, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
-                    paper.Box($"{id}_arr")
-                        .Width(16)
-                        .IsNotInteractable()
-                        .Text(isOpen ? "\u25B2" : "\u25BC", Font).TextColor(EditorTheme.TextDim).FontSize(10f);
+                        .Enter())
+                    {
+                        paper.Box($"{id}_txt")
+                            .Width(UnitValue.Stretch())
+                            .IsNotInteractable()
+                            .Text(displayText, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                            
+                        paper.Box($"{id}_arr")
+                            .Width(EditorTheme.RowHeight) // square area for the arrow
+                            .Height(EditorTheme.RowHeight)
+                            .IsNotInteractable()
+                            .Text(isOpen ? "\u25B2" : "\u25BC", Font).TextColor(EditorTheme.TextDim).FontSize(10f);
+                    }
                 }
 
                 if (isOpen)
