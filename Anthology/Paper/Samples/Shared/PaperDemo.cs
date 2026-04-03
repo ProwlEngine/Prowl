@@ -424,7 +424,7 @@ namespace Shared
                             .Enter())
                         {
                             // Draw a simple chart with animated data
-                            Gui.AddActionElement((vg, rect) => {
+                            Gui.Draw((vg, rect) => {
 
                                 // Draw grid lines
                                 for (int i = 0; i <= 5; i++)
@@ -891,7 +891,7 @@ namespace Shared
                             .Enter())
                         {
                             // Render contribution graph
-                            Gui.AddActionElement((vg, rect) => {
+                            Gui.Draw((vg, rect) => {
                                 int days = 7;
                                 int weeks = 4;
                                 float cellWidth = rect.Size.X / days;

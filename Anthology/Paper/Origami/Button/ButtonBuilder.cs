@@ -467,7 +467,7 @@ public class ButtonBuilder
             .IsNotInteractable().IsNotFocusable()
             .Size(spinnerSize)
             .OnPostLayout((handle, rect) => {
-                _paper.AddActionElement(ref handle, SpinnerUtil.CreateColoredSpinner(_paper, textColor, _size));
+                _paper.Draw(ref handle, SpinnerUtil.CreateColoredSpinner(_paper, textColor, _size));
             });
     }
 

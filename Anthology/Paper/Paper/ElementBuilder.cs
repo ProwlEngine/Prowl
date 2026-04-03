@@ -1024,7 +1024,7 @@ namespace Prowl.PaperUI
             var mode = scaleMode;
             var handle = _handle;
             var renderer = _paper.Renderer;
-            _paper.AddActionElement(ref handle, (canvas, rect) =>
+            _paper.Draw(ref handle, (canvas, rect) =>
             {
                 float x = rect.Min.X;
                 float y = rect.Min.Y;
@@ -1086,7 +1086,7 @@ namespace Prowl.PaperUI
             var shaderObj = shader;
             var setup = setupUniforms;
             var handle = _handle;
-            _paper.AddActionElement(ref handle, (canvas, rect) =>
+            _paper.Draw(ref handle, (canvas, rect) =>
             {
                 canvas.SetCustomShader(shaderObj);
                 if (setup != null)
@@ -1917,7 +1917,7 @@ namespace Prowl.PaperUI
             // Render cursor and selection
             OnPostLayout((ElementHandle elHandle, Rect rect) =>
             {
-                _paper.AddActionElement(ref elHandle, (canvas, r) =>
+                _paper.Draw(ref elHandle, (canvas, r) =>
                 {
                     var renderState = LoadTextInputState(value, isMultiLine);
                     var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, r.Size.X);

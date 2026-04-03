@@ -73,12 +73,12 @@ public static class SpinnerUtil
     }
 
     /// <summary>
-    /// Adds a spinner animation to an element using AddActionElement.
+    /// Adds a spinner animation to an element using Draw.
     /// The spinner will be centered within the element's bounds.
     /// </summary>
     /// <param name="paper">Paper UI instance</param>
     /// <param name="config">Spinner configuration</param>
-    /// <returns>Action that can be used with AddActionElement</returns>
+    /// <returns>Action that can be used with Draw</returns>
     public static Action<Canvas, Rect> CreateSpinner(Paper paper, SpinnerConfig config)
     {
         return (canvas, rect) => {
@@ -114,7 +114,7 @@ public static class SpinnerUtil
     /// <param name="paper">Paper UI instance</param>
     /// <param name="theme">Origami theme for color consistency</param>
     /// <param name="size">Size variant</param>
-    /// <returns>Action that can be used with AddActionElement</returns>
+    /// <returns>Action that can be used with Draw</returns>
     public static Action<Canvas, Rect> CreateThemedSpinner(Paper paper, OrigamiTheme theme, OrigamiSize size = OrigamiSize.Medium)
     {
         var config = size switch
@@ -136,7 +136,7 @@ public static class SpinnerUtil
     /// <param name="paper">Paper UI instance</param>
     /// <param name="color">Color for the spinner</param>
     /// <param name="size">Size variant</param>
-    /// <returns>Action that can be used with AddActionElement</returns>
+    /// <returns>Action that can be used with Draw</returns>
     public static Action<Canvas, Rect> CreateColoredSpinner(Paper paper, Color color, OrigamiSize size = OrigamiSize.Medium)
     {
         var config = size switch
@@ -155,7 +155,7 @@ public static class SpinnerUtil
     /// </summary>
     /// <param name="paper">Paper UI instance</param>
     /// <param name="config">Spinner configuration</param>
-    /// <returns>Action that can be used with AddActionElement</returns>
+    /// <returns>Action that can be used with Draw</returns>
     public static Action<Canvas, Rect> CreateDotsSpinner(Paper paper, SpinnerConfig config)
     {
         return (canvas, rect) => {
@@ -196,7 +196,7 @@ public static class SpinnerUtil
     /// </summary>
     /// <param name="paper">Paper UI instance</param>
     /// <param name="config">Spinner configuration</param>
-    /// <returns>Action that can be used with AddActionElement</returns>
+    /// <returns>Action that can be used with Draw</returns>
     public static Action<Canvas, Rect> CreatePulseSpinner(Paper paper, SpinnerConfig config)
     {
         return (canvas, rect) => {
@@ -253,7 +253,7 @@ public static class SpinnerUtil
             .Width(config.Size)
             .Height(config.Size)
             .OnPostLayout((handle, rect) => {
-                paper.AddActionElement(ref handle, CreateSpinner(paper, config));
+                paper.Draw(ref handle, CreateSpinner(paper, config));
             });
     }
 
@@ -274,7 +274,7 @@ public static class SpinnerUtil
             .Width(spinnerSize)
             .Height(spinnerSize)
             .OnPostLayout((handle, rect) => {
-                paper.AddActionElement(ref handle, CreateThemedSpinner(paper, theme, size));
+                paper.Draw(ref handle, CreateThemedSpinner(paper, theme, size));
             });
     }
 }

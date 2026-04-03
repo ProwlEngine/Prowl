@@ -435,6 +435,23 @@ namespace Prowl.PaperUI
                 RenderElement(child, currentLayer, overlayElements, modalElements);
             }
 
+            // Process foreground render actions (after children)
+            if (data._foregroundRenderCommands != null)
+            {
+                foreach (var cmd in data._foregroundRenderCommands)
+                {
+                    _elementStack.Push(handle);
+                    try
+                    {
+                        cmd.RenderAction?.Invoke(_canvas, rect);
+                    }
+                    finally
+                    {
+                        _elementStack.Pop();
+                    }
+                }
+            }
+
             _canvas.RestoreState();
         }
 
@@ -590,24 +607,47 @@ namespace Prowl.PaperUI
             CurrentParent.Data.ChildIndices.Add(handle.Index);
         }
 
-        public void AddActionElement(Action<Canvas, Rect> renderAction)
+        public void Draw(Action<Canvas, Rect> renderAction)
         {
             var current = CurrentParent;
-            AddActionElement(ref current, renderAction);
+            Draw(ref current, renderAction);
         }
 
         /// <summary>
-        /// Adds a custom render action to an element.
+        /// Adds a custom render action to an element. Draws before children.
         /// </summary>
-        public void AddActionElement(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
+        public void Draw(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
         {
             if (renderAction == null)
-            {
                 throw new ArgumentException(nameof(renderAction));
-            }
 
             handle.Data._renderCommands ??= new List<ElementRenderCommand>();
             handle.Data._renderCommands.Add(new ElementRenderCommand {
+                Element = handle,
+                RenderAction = renderAction,
+            });
+        }
+
+        /// <summary>
+        /// Adds a foreground render action to the current parent. Draws after children.
+        /// </summary>
+        public void DrawForeground(Action<Canvas, Rect> renderAction)
+        {
+            var current = CurrentParent;
+            DrawForeground(ref current, renderAction);
+        }
+
+        /// <summary>
+        /// Adds a custom render action that draws after all children have been rendered.
+        /// Useful for overlays, borders, and decorations that should appear on top of content.
+        /// </summary>
+        public void DrawForeground(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
+        {
+            if (renderAction == null)
+                throw new ArgumentException(nameof(renderAction));
+
+            handle.Data._foregroundRenderCommands ??= new List<ElementRenderCommand>();
+            handle.Data._foregroundRenderCommands.Add(new ElementRenderCommand {
                 Element = handle,
                 RenderAction = renderAction,
             });

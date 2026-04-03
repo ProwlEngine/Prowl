@@ -412,7 +412,7 @@ namespace Shared
             {
 
                 // Add a simple pie chart visualization
-                PaperDemo.Gui.AddActionElement((vg, rect) =>
+                PaperDemo.Gui.Draw((vg, rect) =>
                 {
                     float centerX = rect.Min.X + rect.Size.X / 2;
                     float centerY = rect.Min.Y + rect.Size.Y / 2;
@@ -492,7 +492,7 @@ namespace Shared
         //     .Enter())
         // {
         //     // Add a simple pie chart visualization
-        //     Gui.AddActionElement((vg, rect) => {
+        //     Gui.Draw((vg, rect) => {
         //         float centerX = rect.x + rect.width / 2;
         //         float centerY = rect.y + rect.height / 2;
         //         float radius = Maths.Min(rect.width, rect.height) * 0.4f;

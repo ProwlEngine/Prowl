@@ -78,6 +78,7 @@ namespace Prowl.PaperUI.LayoutEngine
 
         // Rendering
         internal List<ElementRenderCommand> _renderCommands;
+        internal List<ElementRenderCommand> _foregroundRenderCommands;
         internal ElementStyle _elementStyle;
         internal bool _scissorEnabled;
 
@@ -122,6 +123,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 _quillMarkdown = null,
                 _textLayout = null,
                 _renderCommands = null,
+                _foregroundRenderCommands = null,
                 _elementStyle = new ElementStyle(),
                 _scissorEnabled = false,
                 Layer = Layer.Base,
