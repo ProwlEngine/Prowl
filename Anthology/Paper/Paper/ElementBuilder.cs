@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
@@ -1131,6 +1132,12 @@ namespace Prowl.PaperUI
             /// <summary>Allow text to wrap instead of scrolling (For Multi-Line Only)</summary>
             public bool DoWrap;
 
+            /// <summary>
+            /// Optional filter for character input. Return true to accept the character, false to reject it.
+            /// When null, all non-control characters are accepted.
+            /// </summary>
+            public Func<char, string, bool> CharFilter;
+
             /// <summary>Creates default text input settings</summary>
             public static TextInputSettings Default => new TextInputSettings
             {
@@ -1543,6 +1550,13 @@ namespace Prowl.PaperUI
                             if (!state.IsMultiLine)
                                 clipText = clipText.Replace('\n', ' ').Replace('\r', ' ');
 
+                            // Apply character filter to pasted text
+                            if (settings.CharFilter != null)
+                            {
+                                string currentVal = state.Value;
+                                clipText = new string(clipText.Where(c => settings.CharFilter(c, currentVal)).ToArray());
+                            }
+
                             // Check max length
                             if (settings.MaxLength > 0)
                             {
@@ -1877,6 +1891,10 @@ namespace Prowl.PaperUI
             {
                 var currentState = LoadTextInputState(value, isMultiLine);
                 if (!currentState.IsFocused || char.IsControl(e.Character) || settings.ReadOnly) return;
+
+                // Apply character filter if set
+                if (settings.CharFilter != null && !settings.CharFilter(e.Character, currentState.Value))
+                    return;
 
                 // Check max length
                 if (settings.MaxLength > 0 && currentState.Value.Length >= settings.MaxLength && !currentState.HasSelection)
