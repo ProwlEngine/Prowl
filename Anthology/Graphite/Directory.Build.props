@@ -1,58 +1,59 @@
 <Project>
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <LangVersion>latest</LangVersion>
-    <Nullable>disable</Nullable>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <LangVersion>latest</LangVersion>
+        <Nullable>disable</Nullable>
+    </PropertyGroup>
 
-  <!-- Centralized package versions -->
-  <PropertyGroup>
-    <SilkNetVersion>2.23.0</SilkNetVersion>
-    <ImGuiNetVersion>1.91.6.1</ImGuiNetVersion>
-    <ImageSharpVersion>3.1.12</ImageSharpVersion>
-  </PropertyGroup>
+    <!-- Centralized package versions -->
+    <PropertyGroup>
+        <SilkNetVersion>2.23.0</SilkNetVersion>
+        <ImGuiNetVersion>1.91.6.1</ImGuiNetVersion>
+        <ImageSharpVersion>3.1.12</ImageSharpVersion>
+    </PropertyGroup>
 
-  <!-- Sample assets directory -->
-  <PropertyGroup>
-    <SamplesAssetsDir>$(MSBuildThisFileDirectory)samples\assets</SamplesAssetsDir>
-  </PropertyGroup>
+    <!-- Sample assets directory -->
+    <PropertyGroup>
+        <SamplesAssetsDir>$(MSBuildThisFileDirectory)samples\assets</SamplesAssetsDir>
+    </PropertyGroup>
 
-  <!-- Backend exclusion flags (set to true to exclude a backend from the build) -->
-  <PropertyGroup>
-    <ExcludeVulkan>false</ExcludeVulkan>
-    <ExcludeD3D11>false</ExcludeD3D11>
-    <ExcludeOpenGL>false</ExcludeOpenGL>
-  </PropertyGroup>
+    <!-- Backend exclusion flags (set to true to exclude a backend from the build) -->
+    <PropertyGroup>
+        <ExcludeVulkan>false</ExcludeVulkan>
+        <ExcludeD3D11>false</ExcludeD3D11>
+        <ExcludeOpenGL>false</ExcludeOpenGL>
+    </PropertyGroup>
 
-  <PropertyGroup>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- CS1591: Missing XML comment for publicly visible type (enforce in 1.0.1) -->
-    <NoWarn>$(NoWarn);1591</NoWarn>
-  </PropertyGroup>
+    <PropertyGroup>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <!-- CS1591: Missing XML comment for publicly visible type (enforce in 1.0.1) -->
+        <NoWarn>$(NoWarn);1591</NoWarn>
+    </PropertyGroup>
 
-  <!-- NuGet package metadata -->
-  <PropertyGroup>
-    <Authors>Javier "Ciberman" Mora</Authors>
-    <Copyright>Copyright (c) 2017 Eric Mellino and Veldrid contributors, 2026 Javier Mora and NeoVeldrid contributors</Copyright>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://jhm-ciberman.github.io/neo-veldrid/</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/jhm-ciberman/neo-veldrid.git</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PackageIcon>icon.png</PackageIcon>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-  </PropertyGroup>
+    <!-- NuGet package metadata -->
+    <PropertyGroup>
+        <Authors>Javier "Ciberman" Mora</Authors>
+        <Copyright>Copyright (c) 2017 Eric Mellino and Veldrid contributors, 2026 Javier Mora and
+            NeoVeldrid contributors</Copyright>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://jhm-ciberman.github.io/neo-veldrid/</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/jhm-ciberman/neo-veldrid.git</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
 
-  <!-- Pack icon and README into the package -->
-  <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)art\icon.png" Pack="true" PackagePath="" />
-    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="" />
-  </ItemGroup>
+    <!-- Pack icon and README into the package -->
+    <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)art\icon.png" Pack="true" PackagePath="" />
+        <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
 
-  <!-- Default to not packable. Library projects in src/ override to true. -->
-  <PropertyGroup>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
+    <!-- Default to not packable. Library projects in src/ override to true. -->
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
 
 </Project>

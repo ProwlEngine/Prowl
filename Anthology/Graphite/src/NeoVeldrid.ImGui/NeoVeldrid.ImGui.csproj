@@ -1,51 +1,51 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <RootNamespace>NeoVeldrid</RootNamespace>
-    <IsPackable>true</IsPackable>
-    <Description>ImGui integration for NeoVeldrid. Provides a simple interface for rendering and interacting with ImGui.NET.</Description>
-    <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game ImGui</PackageTags>
-  </PropertyGroup>
+    <PropertyGroup>
+        <RootNamespace>NeoVeldrid</RootNamespace>
+        <IsPackable>true</IsPackable>
+        <Description>ImGui integration for NeoVeldrid. Provides a simple interface for rendering and interacting with ImGui.NET.</Description>
+        <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game ImGui</PackageTags>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="ImGui.NET" Version="$(ImGuiNetVersion)" />
-    <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="ImGui.NET" Version="$(ImGuiNetVersion)" />
+        <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <EmbeddedResource Include="Assets/GLSL/imgui-vertex.glsl">
-      <LogicalName>imgui-vertex.glsl</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets/GLSL/imgui-vertex-legacy.glsl">
-      <LogicalName>imgui-vertex-legacy.glsl</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets/GLSL/imgui-frag.glsl">
-      <LogicalName>imgui-frag.glsl</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets/GLSLES/imgui-vertex.glsles">
-      <LogicalName>imgui-vertex.glsles</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets/GLSLES/imgui-vertex-legacy.glsles">
-      <LogicalName>imgui-vertex-legacy.glsles</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets/GLSLES/imgui-frag.glsles">
-      <LogicalName>imgui-frag.glsles</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets/HLSL/imgui-vertex.hlsl.bytes">
-      <LogicalName>imgui-vertex.hlsl.bytes</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets\HLSL\imgui-vertex-legacy.hlsl.bytes">
-      <LogicalName>imgui-vertex-legacy.hlsl.bytes</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets/HLSL/imgui-frag.hlsl.bytes">
-      <LogicalName>imgui-frag.hlsl.bytes</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets/SPIR-V/imgui-vertex.spv">
-      <LogicalName>imgui-vertex.spv</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets/SPIR-V/imgui-frag.spv">
-      <LogicalName>imgui-frag.spv</LogicalName>
-    </EmbeddedResource>
-  </ItemGroup>
+    <ItemGroup>
+        <EmbeddedResource Include="Assets/GLSL/imgui-vertex.glsl">
+            <LogicalName>imgui-vertex.glsl</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Assets/GLSL/imgui-vertex-legacy.glsl">
+            <LogicalName>imgui-vertex-legacy.glsl</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Assets/GLSL/imgui-frag.glsl">
+            <LogicalName>imgui-frag.glsl</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Assets/GLSLES/imgui-vertex.glsles">
+            <LogicalName>imgui-vertex.glsles</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Assets/GLSLES/imgui-vertex-legacy.glsles">
+            <LogicalName>imgui-vertex-legacy.glsles</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Assets/GLSLES/imgui-frag.glsles">
+            <LogicalName>imgui-frag.glsles</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Assets/HLSL/imgui-vertex.hlsl.bytes">
+            <LogicalName>imgui-vertex.hlsl.bytes</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Assets\HLSL\imgui-vertex-legacy.hlsl.bytes">
+            <LogicalName>imgui-vertex-legacy.hlsl.bytes</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Assets/HLSL/imgui-frag.hlsl.bytes">
+            <LogicalName>imgui-frag.hlsl.bytes</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Assets/SPIR-V/imgui-vertex.spv">
+            <LogicalName>imgui-vertex.spv</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Assets/SPIR-V/imgui-frag.spv">
+            <LogicalName>imgui-frag.spv</LogicalName>
+        </EmbeddedResource>
+    </ItemGroup>
 
 </Project>

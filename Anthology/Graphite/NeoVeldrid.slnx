@@ -1,36 +1,36 @@
 <Solution>
-  <Folder Name="/samples/">
-    <Project Path="samples/AnimatedMesh/Application/AnimatedMesh.csproj" />
-    <Project Path="samples/AnimatedMesh/Desktop/AnimatedMesh.Desktop.csproj" />
-    <Project Path="samples/AssetPrimitives/AssetPrimitives.csproj" />
-    <Project Path="samples/AssetProcessor/AssetProcessor.csproj" />
-    <Project Path="samples/ComputeParticles/Application/ComputeParticles.csproj" />
-    <Project Path="samples/ComputeParticles/Desktop/ComputeParticles.Desktop.csproj" />
-    <Project Path="samples/ComputeTexture/Application/ComputeTexture.csproj" />
-    <Project Path="samples/ComputeTexture/Desktop/ComputeTexture.Desktop.csproj" />
-    <Project Path="samples/GettingStarted/GettingStarted.csproj" />
-    <Project Path="samples/ImageTint/ImageTint.csproj" />
-    <Project Path="samples/Instancing/Application/Instancing.csproj" />
-    <Project Path="samples/Instancing/Desktop/Instancing.Desktop.csproj" />
-    <Project Path="samples/NeoDemo/NeoDemo.csproj" />
-    <Project Path="samples/Offscreen/Application/Offscreen.csproj" />
-    <Project Path="samples/Offscreen/Desktop/Offscreen.Desktop.csproj" />
-    <Project Path="samples/SampleBase/SampleBase.csproj" />
-    <Project Path="samples/TexturedCube/Application/TexturedCube.csproj" />
-    <Project Path="samples/TexturedCube/Desktop/TexturedCube.Desktop.csproj" />
-  </Folder>
-  <Folder Name="/src/">
-    <Project Path="src/NeoVeldrid.ImageSharp/NeoVeldrid.ImageSharp.csproj" />
-    <Project Path="src/NeoVeldrid.ImGui/NeoVeldrid.ImGui.csproj" />
-    <Project Path="src/NeoVeldrid.RenderDoc/NeoVeldrid.RenderDoc.csproj" />
-    <Project Path="src/NeoVeldrid.SDL2/NeoVeldrid.SDL2.csproj" />
-    <Project Path="src/NeoVeldrid.StartupUtilities/NeoVeldrid.StartupUtilities.csproj" />
-    <Project Path="src/NeoVeldrid.Utilities/NeoVeldrid.Utilities.csproj" />
-    <Project Path="src/NeoVeldrid/NeoVeldrid.csproj" />
-    <Project Path="src/NeoVeldrid.SPIRV/NeoVeldrid.SPIRV.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/NeoVeldrid.Tests/NeoVeldrid.Tests.csproj" />
-    <Project Path="tests/NeoVeldrid.SPIRV.Tests/NeoVeldrid.SPIRV.Tests.csproj" />
-  </Folder>
+    <Folder Name="/samples/">
+        <Project Path="samples/AnimatedMesh/Application/AnimatedMesh.csproj" />
+        <Project Path="samples/AnimatedMesh/Desktop/AnimatedMesh.Desktop.csproj" />
+        <Project Path="samples/AssetPrimitives/AssetPrimitives.csproj" />
+        <Project Path="samples/AssetProcessor/AssetProcessor.csproj" />
+        <Project Path="samples/ComputeParticles/Application/ComputeParticles.csproj" />
+        <Project Path="samples/ComputeParticles/Desktop/ComputeParticles.Desktop.csproj" />
+        <Project Path="samples/ComputeTexture/Application/ComputeTexture.csproj" />
+        <Project Path="samples/ComputeTexture/Desktop/ComputeTexture.Desktop.csproj" />
+        <Project Path="samples/GettingStarted/GettingStarted.csproj" />
+        <Project Path="samples/ImageTint/ImageTint.csproj" />
+        <Project Path="samples/Instancing/Application/Instancing.csproj" />
+        <Project Path="samples/Instancing/Desktop/Instancing.Desktop.csproj" />
+        <Project Path="samples/NeoDemo/NeoDemo.csproj" />
+        <Project Path="samples/Offscreen/Application/Offscreen.csproj" />
+        <Project Path="samples/Offscreen/Desktop/Offscreen.Desktop.csproj" />
+        <Project Path="samples/SampleBase/SampleBase.csproj" />
+        <Project Path="samples/TexturedCube/Application/TexturedCube.csproj" />
+        <Project Path="samples/TexturedCube/Desktop/TexturedCube.Desktop.csproj" />
+    </Folder>
+    <Folder Name="/src/">
+        <Project Path="src/NeoVeldrid.ImageSharp/NeoVeldrid.ImageSharp.csproj" />
+        <Project Path="src/NeoVeldrid.ImGui/NeoVeldrid.ImGui.csproj" />
+        <Project Path="src/NeoVeldrid.RenderDoc/NeoVeldrid.RenderDoc.csproj" />
+        <Project Path="src/NeoVeldrid.SDL2/NeoVeldrid.SDL2.csproj" />
+        <Project Path="src/NeoVeldrid.StartupUtilities/NeoVeldrid.StartupUtilities.csproj" />
+        <Project Path="src/NeoVeldrid.Utilities/NeoVeldrid.Utilities.csproj" />
+        <Project Path="src/NeoVeldrid/NeoVeldrid.csproj" />
+        <Project Path="src/NeoVeldrid.SPIRV/NeoVeldrid.SPIRV.csproj" />
+    </Folder>
+    <Folder Name="/tests/">
+        <Project Path="tests/NeoVeldrid.Tests/NeoVeldrid.Tests.csproj" />
+        <Project Path="tests/NeoVeldrid.SPIRV.Tests/NeoVeldrid.SPIRV.Tests.csproj" />
+    </Folder>
 </Solution>

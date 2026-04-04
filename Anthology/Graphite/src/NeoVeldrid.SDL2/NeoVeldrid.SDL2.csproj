@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <IsPackable>true</IsPackable>
-    <Description>SDL2 windowing support for NeoVeldrid via Silk.NET.SDL.</Description>
-    <PackageTags>SDL2 Window Input</PackageTags>
-  </PropertyGroup>
+    <PropertyGroup>
+        <IsPackable>true</IsPackable>
+        <Description>SDL2 windowing support for NeoVeldrid via Silk.NET.SDL.</Description>
+        <PackageTags>SDL2 Window Input</PackageTags>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
-    <PackageReference Include="Silk.NET.SDL" Version="$(SilkNetVersion)" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
+        <PackageReference Include="Silk.NET.SDL" Version="$(SilkNetVersion)" />
+    </ItemGroup>
 
 </Project>

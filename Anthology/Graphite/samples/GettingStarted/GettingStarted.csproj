@@ -1,13 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\NeoVeldrid\NeoVeldrid.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid.StartupUtilities\NeoVeldrid.StartupUtilities.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid.SPIRV\NeoVeldrid.SPIRV.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\NeoVeldrid\NeoVeldrid.csproj" />
+        <ProjectReference
+            Include="..\..\src\NeoVeldrid.StartupUtilities\NeoVeldrid.StartupUtilities.csproj" />
+        <ProjectReference Include="..\..\src\NeoVeldrid.SPIRV\NeoVeldrid.SPIRV.csproj" />
+    </ItemGroup>
 
 </Project>

@@ -1,18 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <IsPackable>true</IsPackable>
-    <Description>SPIR-V cross-compilation for NeoVeldrid using Silk.NET. Compiles GLSL to SPIR-V and cross-compiles SPIR-V to HLSL, GLSL, and ESSL.</Description>
-    <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game SPIRV Shader</PackageTags>
-  </PropertyGroup>
+    <PropertyGroup>
+        <IsPackable>true</IsPackable>
+        <Description>SPIR-V cross-compilation for NeoVeldrid using Silk.NET. Compiles GLSL to SPIR-V and cross-compiles SPIR-V to HLSL, GLSL, and ESSL.</Description>
+        <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game SPIRV Shader</PackageTags>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../NeoVeldrid/NeoVeldrid.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../NeoVeldrid/NeoVeldrid.csproj" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Silk.NET.SPIRV.Cross" Version="$(SilkNetVersion)" />
-    <PackageReference Include="Silk.NET.Shaderc" Version="$(SilkNetVersion)" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Silk.NET.SPIRV.Cross" Version="$(SilkNetVersion)" />
+        <PackageReference Include="Silk.NET.Shaderc" Version="$(SilkNetVersion)" />
+    </ItemGroup>
 
 </Project>

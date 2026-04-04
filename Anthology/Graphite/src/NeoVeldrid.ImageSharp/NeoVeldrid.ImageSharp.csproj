@@ -1,18 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <IsPackable>true</IsPackable>
-    <Description>ImageSharp integration for NeoVeldrid. Provides functionality for loading GPU Textures with ImageSharp.</Description>
-    <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game ImageSharp</PackageTags>
-  </PropertyGroup>
+    <PropertyGroup>
+        <IsPackable>true</IsPackable>
+        <Description>ImageSharp integration for NeoVeldrid. Provides functionality for loading GPU Textures with ImageSharp.</Description>
+        <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game ImageSharp</PackageTags>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="$(ImageSharpVersion)" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
+        <PackageReference Include="SixLabors.ImageSharp" Version="$(ImageSharpVersion)" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <None Include="ImageSharpTexture.cs" />
-  </ItemGroup>
+    <ItemGroup>
+        <None Include="ImageSharpTexture.cs" />
+    </ItemGroup>
 
 </Project>

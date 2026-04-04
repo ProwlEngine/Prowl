@@ -1,12 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\SampleBase\SampleBase.csproj" />
-    <ProjectReference Include="..\Application\ComputeParticles.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\SampleBase\SampleBase.csproj" />
+        <ProjectReference Include="..\Application\ComputeParticles.csproj" />
+    </ItemGroup>
 
 </Project>

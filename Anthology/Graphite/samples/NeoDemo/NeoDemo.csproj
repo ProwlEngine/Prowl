@@ -1,41 +1,42 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <RootNamespace>NeoVeldrid.NeoDemo</RootNamespace>
-    <IsPackable>false</IsPackable>
-    <AssetsDir>$(MSBuildThisFileDirectory)Assets</AssetsDir>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <RootNamespace>NeoVeldrid.NeoDemo</RootNamespace>
+        <IsPackable>false</IsPackable>
+        <AssetsDir>$(MSBuildThisFileDirectory)Assets</AssetsDir>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <Content Include="$(AssetsDir)\Textures\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>Assets\Textures\%(RecursiveDir)\%(FileName)%(Extension)</Link>
-    </Content>
-  </ItemGroup>
+    <ItemGroup>
+        <Content Include="$(AssetsDir)\Textures\**">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <Link>Assets\Textures\%(RecursiveDir)\%(FileName)%(Extension)</Link>
+        </Content>
+    </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="$(AssetsDir)\Models\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>Assets\Models\%(RecursiveDir)\%(FileName)%(Extension)</Link>
-    </Content>
-  </ItemGroup>
+    <ItemGroup>
+        <Content Include="$(AssetsDir)\Models\**">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <Link>Assets\Models\%(RecursiveDir)\%(FileName)%(Extension)</Link>
+        </Content>
+    </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="$(AssetsDir)\Shaders\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>Assets\Shaders\%(RecursiveDir)\%(FileName)%(Extension)</Link>
-    </Content>
-  </ItemGroup>
+    <ItemGroup>
+        <Content Include="$(AssetsDir)\Shaders\**">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <Link>Assets\Shaders\%(RecursiveDir)\%(FileName)%(Extension)</Link>
+        </Content>
+    </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\NeoVeldrid.SPIRV\NeoVeldrid.SPIRV.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid.RenderDoc\NeoVeldrid.RenderDoc.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid\NeoVeldrid.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid.StartupUtilities\NeoVeldrid.StartupUtilities.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid.ImageSharp\NeoVeldrid.ImageSharp.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid.Utilities\NeoVeldrid.Utilities.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid.ImGui\NeoVeldrid.ImGui.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\NeoVeldrid.SPIRV\NeoVeldrid.SPIRV.csproj" />
+        <ProjectReference Include="..\..\src\NeoVeldrid.RenderDoc\NeoVeldrid.RenderDoc.csproj" />
+        <ProjectReference Include="..\..\src\NeoVeldrid\NeoVeldrid.csproj" />
+        <ProjectReference
+            Include="..\..\src\NeoVeldrid.StartupUtilities\NeoVeldrid.StartupUtilities.csproj" />
+        <ProjectReference Include="..\..\src\NeoVeldrid.ImageSharp\NeoVeldrid.ImageSharp.csproj" />
+        <ProjectReference Include="..\..\src\NeoVeldrid.Utilities\NeoVeldrid.Utilities.csproj" />
+        <ProjectReference Include="..\..\src\NeoVeldrid.ImGui\NeoVeldrid.ImGui.csproj" />
+    </ItemGroup>
 
 </Project>

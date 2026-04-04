@@ -1,13 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <IsPackable>true</IsPackable>
-    <Description>Miscellaneous utility functions useful for NeoVeldrid.</Description>
-    <PackageTags>Core Game Graphics</PackageTags>
-  </PropertyGroup>
+    <PropertyGroup>
+        <IsPackable>true</IsPackable>
+        <Description>Miscellaneous utility functions useful for NeoVeldrid.</Description>
+        <PackageTags>Core Game Graphics</PackageTags>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
+    </ItemGroup>
 
 </Project>

@@ -1,45 +1,45 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <IsPackable>true</IsPackable>
-    <Description>A low-level, hardware-accelerated graphics and compute library for .NET, with backends for Vulkan, Direct3D 11, and OpenGL. NeoVeldrid can be used to create high-performance 2D and 3D games, simulations, tools, and other graphical applications.</Description>
-    <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game</PackageTags>
-  </PropertyGroup>
+    <PropertyGroup>
+        <IsPackable>true</IsPackable>
+        <Description>A low-level, hardware-accelerated graphics and compute library for .NET, with backends for Vulkan, Direct3D 11, and OpenGL. NeoVeldrid can be used to create high-performance 2D and 3D games, simulations, tools, and other graphical applications.</Description>
+        <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game</PackageTags>
+    </PropertyGroup>
 
-  <PropertyGroup>
-    <DefineConstants Condition="'$(DisableValidation)' != 'true'">$(DefineConstants);VALIDATE_USAGE</DefineConstants>
-    <DefineConstants Condition="'$(ExcludeD3D11)' == 'true'">$(DefineConstants);EXCLUDE_D3D11_BACKEND</DefineConstants>
-    <DefineConstants Condition="'$(ExcludeVulkan)' == 'true'">$(DefineConstants);EXCLUDE_VULKAN_BACKEND</DefineConstants>
-    <DefineConstants Condition="'$(ExcludeOpenGL)' == 'true'">$(DefineConstants);EXCLUDE_OPENGL_BACKEND</DefineConstants>
-  </PropertyGroup>
+    <PropertyGroup>
+        <DefineConstants Condition="'$(DisableValidation)' != 'true'">$(DefineConstants);VALIDATE_USAGE</DefineConstants>
+        <DefineConstants Condition="'$(ExcludeD3D11)' == 'true'">$(DefineConstants);EXCLUDE_D3D11_BACKEND</DefineConstants>
+        <DefineConstants Condition="'$(ExcludeVulkan)' == 'true'">$(DefineConstants);EXCLUDE_VULKAN_BACKEND</DefineConstants>
+        <DefineConstants Condition="'$(ExcludeOpenGL)' == 'true'">$(DefineConstants);EXCLUDE_OPENGL_BACKEND</DefineConstants>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <!-- Silk.NET Vulkan -->
-    <PackageReference Include="Silk.NET.Vulkan" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
-    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
-    <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
+    <ItemGroup>
+        <!-- Silk.NET Vulkan -->
+        <PackageReference Include="Silk.NET.Vulkan" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
+        <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
+        <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
 
-    <!-- Silk.NET Direct3D 11 -->
-    <PackageReference Include="Silk.NET.Direct3D11" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
-    <PackageReference Include="Silk.NET.DXGI" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
-    <PackageReference Include="Silk.NET.Direct3D.Compilers" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
+        <!-- Silk.NET Direct3D 11 -->
+        <PackageReference Include="Silk.NET.Direct3D11" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
+        <PackageReference Include="Silk.NET.DXGI" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
+        <PackageReference Include="Silk.NET.Direct3D.Compilers" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
 
-    <!-- Silk.NET OpenGL -->
-    <PackageReference Include="Silk.NET.OpenGL" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
-    <PackageReference Include="Silk.NET.OpenGL.Extensions.EXT" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
+        <!-- Silk.NET OpenGL -->
+        <PackageReference Include="Silk.NET.OpenGL" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
+        <PackageReference Include="Silk.NET.OpenGL.Extensions.EXT" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
 
-    <!-- Silk.NET Core (for SilkMarshal, ComPtr, etc.) -->
-    <PackageReference Include="Silk.NET.Core" Version="$(SilkNetVersion)" />
+        <!-- Silk.NET Core (for SilkMarshal, ComPtr, etc.) -->
+        <PackageReference Include="Silk.NET.Core" Version="$(SilkNetVersion)" />
 
-    <!-- MoltenVK for macOS (provides Vulkan on Apple platforms via Metal translation) -->
-    <PackageReference Include="Silk.NET.MoltenVK.Native" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
-  </ItemGroup>
+        <!-- MoltenVK for macOS (provides Vulkan on Apple platforms via Metal translation) -->
+        <PackageReference Include="Silk.NET.MoltenVK.Native" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
+    </ItemGroup>
 
-  <!-- Exclude backends by compile removal -->
-  <ItemGroup>
-    <Compile Remove="D3D11/**/*" Condition="'$(ExcludeD3D11)' == 'true'" />
-    <Compile Remove="Vk/**/*" Condition="'$(ExcludeVulkan)' == 'true'" />
-    <Compile Remove="OpenGL/**/*" Condition="'$(ExcludeOpenGL)' == 'true'" />
-  </ItemGroup>
+    <!-- Exclude backends by compile removal -->
+    <ItemGroup>
+        <Compile Remove="D3D11/**/*" Condition="'$(ExcludeD3D11)' == 'true'" />
+        <Compile Remove="Vk/**/*" Condition="'$(ExcludeVulkan)' == 'true'" />
+        <Compile Remove="OpenGL/**/*" Condition="'$(ExcludeOpenGL)' == 'true'" />
+    </ItemGroup>
 
 </Project>

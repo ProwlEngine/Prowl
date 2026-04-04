@@ -1,20 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <IsPackable>true</IsPackable>
-    <Description>Helper classes for creating and managing application windows and user input.</Description>
-    <PackageTags>Core Game Window Input</PackageTags>
-  </PropertyGroup>
+    <PropertyGroup>
+        <IsPackable>true</IsPackable>
+        <Description>Helper classes for creating and managing application windows and user input.</Description>
+        <PackageTags>Core Game Window Input</PackageTags>
+    </PropertyGroup>
 
-  <PropertyGroup>
-    <DefineConstants Condition="'$(ExcludeD3D11)' == 'true'">$(DefineConstants);EXCLUDE_D3D11_BACKEND</DefineConstants>
-    <DefineConstants Condition="'$(ExcludeVulkan)' == 'true'">$(DefineConstants);EXCLUDE_VULKAN_BACKEND</DefineConstants>
-    <DefineConstants Condition="'$(ExcludeOpenGL)' == 'true'">$(DefineConstants);EXCLUDE_OPENGL_BACKEND</DefineConstants>
-  </PropertyGroup>
+    <PropertyGroup>
+        <DefineConstants Condition="'$(ExcludeD3D11)' == 'true'">$(DefineConstants);EXCLUDE_D3D11_BACKEND</DefineConstants>
+        <DefineConstants Condition="'$(ExcludeVulkan)' == 'true'">$(DefineConstants);EXCLUDE_VULKAN_BACKEND</DefineConstants>
+        <DefineConstants Condition="'$(ExcludeOpenGL)' == 'true'">$(DefineConstants);EXCLUDE_OPENGL_BACKEND</DefineConstants>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
-    <ProjectReference Include="..\NeoVeldrid.SDL2\NeoVeldrid.SDL2.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
+        <ProjectReference Include="..\NeoVeldrid.SDL2\NeoVeldrid.SDL2.csproj" />
+    </ItemGroup>
 
 </Project>

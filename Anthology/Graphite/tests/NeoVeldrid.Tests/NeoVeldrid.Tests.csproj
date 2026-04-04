@@ -1,50 +1,50 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <IsPackable>false</IsPackable>
-    <OutputType>exe</OutputType>
-    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' != 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_D3D11;TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
-    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' == 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
-    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Linux')) and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
-    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('OSX')) and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_OPENGL</DefineConstants>
-    <StartupObject>Program</StartupObject>
-  </PropertyGroup>
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+        <OutputType>exe</OutputType>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' != 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_D3D11;TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' == 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Linux')) and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('OSX')) and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_OPENGL</DefineConstants>
+        <StartupObject>Program</StartupObject>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\NeoVeldrid.SPIRV\NeoVeldrid.SPIRV.csproj" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.4.1" />
-    <PackageReference Include="xunit" Version="2.4.2" />
-    <PackageReference Include="xunit.console" Version="2.4.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5" />
-    <PackageReference Include="Xunit.SkippableFact" Version="1.4.13" />
-    <ProjectReference Include="..\..\src\NeoVeldrid.RenderDoc\NeoVeldrid.RenderDoc.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid.StartupUtilities\NeoVeldrid.StartupUtilities.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid.Utilities\NeoVeldrid.Utilities.csproj" />
-    <ProjectReference Include="..\..\src\NeoVeldrid\NeoVeldrid.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\NeoVeldrid.SPIRV\NeoVeldrid.SPIRV.csproj" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.4.1" />
+        <PackageReference Include="xunit" Version="2.4.2" />
+        <PackageReference Include="xunit.console" Version="2.4.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5" />
+        <PackageReference Include="Xunit.SkippableFact" Version="1.4.13" />
+        <ProjectReference Include="..\..\src\NeoVeldrid.RenderDoc\NeoVeldrid.RenderDoc.csproj" />
+        <ProjectReference Include="..\..\src\NeoVeldrid.StartupUtilities\NeoVeldrid.StartupUtilities.csproj" />
+        <ProjectReference Include="..\..\src\NeoVeldrid.Utilities\NeoVeldrid.Utilities.csproj" />
+        <ProjectReference Include="..\..\src\NeoVeldrid\NeoVeldrid.csproj" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="xunit.runner.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Shaders/*" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
+    <ItemGroup>
+        <Content Include="xunit.runner.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="Shaders/*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <None Remove="Shaders\ComputeCubemapGenerator.comp" />
-    <None Remove="Shaders\ComputeImage2DArrayGenerator.comp" />
-    <None Remove="Shaders\ComputeTextureGenerator.comp" />
-    <None Remove="Shaders\F16VertexAttribs.frag" />
-    <None Remove="Shaders\F16VertexAttribs.vert" />
-    <None Remove="Shaders\FullScreenBlit.frag" />
-    <None Remove="Shaders\FullScreenBlit.vert" />
-    <None Remove="Shaders\FullScreenTriSampleTexture2D.frag" />
-    <None Remove="Shaders\FullScreenTriSampleTexture2D.vert" />
-    <None Remove="Shaders\FullScreenTriSampleTextureArray.vert" />
-    <None Remove="Shaders\FullScreenWriteDepth.frag" />
-    <None Remove="Shaders\FullScreenWriteDepth.vert" />
-    <None Remove="Shaders\VertexLayoutTestShader.frag" />
-    <None Remove="Shaders\VertexLayoutTestShader.vert" />
-  </ItemGroup>
+    <ItemGroup>
+        <None Remove="Shaders\ComputeCubemapGenerator.comp" />
+        <None Remove="Shaders\ComputeImage2DArrayGenerator.comp" />
+        <None Remove="Shaders\ComputeTextureGenerator.comp" />
+        <None Remove="Shaders\F16VertexAttribs.frag" />
+        <None Remove="Shaders\F16VertexAttribs.vert" />
+        <None Remove="Shaders\FullScreenBlit.frag" />
+        <None Remove="Shaders\FullScreenBlit.vert" />
+        <None Remove="Shaders\FullScreenTriSampleTexture2D.frag" />
+        <None Remove="Shaders\FullScreenTriSampleTexture2D.vert" />
+        <None Remove="Shaders\FullScreenTriSampleTextureArray.vert" />
+        <None Remove="Shaders\FullScreenWriteDepth.frag" />
+        <None Remove="Shaders\FullScreenWriteDepth.vert" />
+        <None Remove="Shaders\VertexLayoutTestShader.frag" />
+        <None Remove="Shaders\VertexLayoutTestShader.vert" />
+    </ItemGroup>
 
 </Project>

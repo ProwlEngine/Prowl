@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Application\Instancing.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Application\Instancing.csproj" />
+    </ItemGroup>
 
 </Project>
