@@ -221,9 +221,9 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Numeric Fields ===
             EditorGUI.Header(paper, "h_num", "Numeric Fields");
 
-            EditorGUI.FloatField(paper, "ff_float", "Speed", _floatValue)
+            EditorGUI.FloatField(paper, "ff_float", _floatValue, "Speed")
                 .OnValueChanged(v => _floatValue = v);
-            EditorGUI.IntField(paper, "if_int", "Health", _intValue)
+            EditorGUI.IntField(paper, "if_int", _intValue, "Health")
                 .OnValueChanged(v => _intValue = v);
 
             EditorGUI.Separator(paper, "sep4");
@@ -245,7 +245,7 @@ public class WidgetPlaygroundPanel : DockPanel
             {
                 using (paper.Column("fo_1_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
                 {
-                    EditorGUI.FloatField(paper, "fo_speed", "Speed", _floatValue)
+                    EditorGUI.FloatField(paper, "fo_speed", _floatValue, "Speed")
                         .OnValueChanged(v => _floatValue = v);
                     EditorGUI.Toggle(paper, "fo_tog", "Enabled", _toggleA)
                         .OnValueChanged(v => _toggleA = v);
@@ -258,7 +258,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 {
                     EditorGUI.Toggle(paper, "fo_dbg", "Show Wireframe", _toggleB)
                         .OnValueChanged(v => _toggleB = v);
-                    EditorGUI.IntField(paper, "fo_iter", "Iterations", _intValue)
+                    EditorGUI.IntField(paper, "fo_iter", _intValue, "Iterations")
                         .OnValueChanged(v => _intValue = v);
                 }
             });

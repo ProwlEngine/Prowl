@@ -225,7 +225,7 @@ public static class EditorGUI
     //  FloatField
     // ================================================================
 
-    public static WidgetResult<float> FloatField(Paper paper, string id, string label, float value)
+    public static WidgetResult<float> FloatField(Paper paper, string id, float value, string label = "", Vector.Color? textColor = null)
     {
         Action<float>? userCallback = null;
         string textVal = value.ToString("G", CultureInfo.InvariantCulture);
@@ -237,8 +237,8 @@ public static class EditorGUI
         {
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
-                    .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Width(paper.MeasureText(label, EditorTheme.FontSize, EditorTheme.DefaultFont).X).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Text).FontSize(FontSz);
 
             using (paper.Box($"{id}_input")
                 .Height(EditorTheme.RowHeight)
@@ -275,7 +275,7 @@ public static class EditorGUI
     //  IntField
     // ================================================================
 
-    public static WidgetResult<int> IntField(Paper paper, string id, string label, int value)
+    public static WidgetResult<int> IntField(Paper paper, string id, int value, string label, Vector.Color? textColor = null)
     {
         Action<int>? userCallback = null;
         string textVal = value.ToString(CultureInfo.InvariantCulture);
@@ -287,8 +287,9 @@ public static class EditorGUI
         {
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
-                    .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Width(paper.MeasureText(label, EditorTheme.FontSize, EditorTheme.DefaultFont).X).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Text).FontSize(FontSz);
+
 
             using (paper.Box($"{id}_input")
                 .Height(EditorTheme.RowHeight)
@@ -392,7 +393,7 @@ public static class EditorGUI
                 }));
 
             // replace the manual input box with:
-            FloatField(paper, $"{id}_val", "", value)
+            FloatField(paper, $"{id}_val", value)
                 .OnValueChanged(v => userCallback?.Invoke(Math.Clamp(v, min, max)));
         }
 
@@ -747,19 +748,11 @@ public static class EditorGUI
                     .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
 
             // X
-            if (Font != null)
-                paper.Box($"{id}_xl")
-                    .Width(14).Height(EditorTheme.RowHeight)
-                    .Text("X", Font).TextColor(Color.FromArgb(255, 200, 80, 80)).FontSize(FontSz);
-            FloatField(paper, $"{id}_x", "", (float)current.X)
+            FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
                 .OnValueChanged(v => { current.X = v; userCallback?.Invoke(current); });
 
             // Y
-            if (Font != null)
-                paper.Box($"{id}_yl")
-                    .Width(14).Height(EditorTheme.RowHeight)
-                    .Text("Y", Font).TextColor(Color.FromArgb(255, 80, 200, 80)).FontSize(FontSz);
-            FloatField(paper, $"{id}_y", "", (float)current.Y)
+            FloatField(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
                 .OnValueChanged(v => { current.Y = v; userCallback?.Invoke(current); });
         }
 
@@ -786,31 +779,58 @@ public static class EditorGUI
                     .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
 
             // X
-            if (Font != null)
-                paper.Box($"{id}_xl")
-                    .Width(14).Height(EditorTheme.RowHeight)
-                    .Text("X", Font).TextColor(Color.FromArgb(255, 200, 80, 80)).FontSize(FontSz);
-            FloatField(paper, $"{id}_x", "", (float)current.X)
+            FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
                 .OnValueChanged(v => { current.X = v; userCallback?.Invoke(current); });
 
             // Y
-            if (Font != null)
-                paper.Box($"{id}_yl")
-                    .Width(14).Height(EditorTheme.RowHeight)
-                    .Text("Y", Font).TextColor(Color.FromArgb(255, 80, 200, 80)).FontSize(FontSz);
-            FloatField(paper, $"{id}_y", "", (float)current.Y)
+            FloatField(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
                 .OnValueChanged(v => { current.Y = v; userCallback?.Invoke(current); });
 
             // Z
-            if (Font != null)
-                paper.Box($"{id}_zl")
-                    .Width(14).Height(EditorTheme.RowHeight)
-                    .Text("Z", Font).TextColor(Color.FromArgb(255, 80, 80, 200)).FontSize(FontSz);
-            FloatField(paper, $"{id}_z", "", (float)current.Z)
+            FloatField(paper, $"{id}_z", (float)current.Z, "Z", Color.FromArgb(255, 80, 80, 200))
                 .OnValueChanged(v => { current.Z = v; userCallback?.Invoke(current); });
         }
 
         return new WidgetResult<Prowl.Vector.Float3>(cb => userCallback = cb);
+    }
+
+    // ================================================================
+    //  Vector4 Field
+    // ================================================================
+
+    public static WidgetResult<Prowl.Vector.Float4> Vector4Field(Paper paper, string id, string label, Prowl.Vector.Float4 value)
+    {
+        Action<Prowl.Vector.Float4>? userCallback = null;
+        var current = value;
+
+        using (paper.Row(id)
+            .Height(EditorTheme.RowHeight)
+            .RowBetween(4)
+            .Enter())
+        {
+            if (Font != null && !string.IsNullOrEmpty(label))
+                paper.Box($"{id}_lbl")
+                    .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+
+            // X
+            FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
+                .OnValueChanged(v => { current.X = v; userCallback?.Invoke(current); });
+
+            // Y
+            FloatField(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
+                .OnValueChanged(v => { current.Y = v; userCallback?.Invoke(current); });
+
+            // Z
+            FloatField(paper, $"{id}_z", (float)current.Z, "Z", Color.FromArgb(255, 80, 80, 200))
+                .OnValueChanged(v => { current.Z = v; userCallback?.Invoke(current); });
+
+            // W
+            FloatField(paper, $"{id}_w", (float)current.W, "W")
+                .OnValueChanged(v => { current.W = v; userCallback?.Invoke(current); });
+        }
+
+        return new WidgetResult<Prowl.Vector.Float4>(cb => userCallback = cb);
     }
 
     // ================================================================

@@ -77,19 +77,19 @@ public static class PropertyGrid
         }
         if (type == typeof(int))
         {
-            EditorGUI.IntField(paper, id, label, (int)(value ?? 0))
+            EditorGUI.IntField(paper, id, (int)(value ?? 0), label)
                 .OnValueChanged(v => onChange(v));
             return;
         }
         if (type == typeof(float))
         {
-            EditorGUI.FloatField(paper, id, label, (float)(value ?? 0f))
+            EditorGUI.FloatField(paper, id, (float)(value ?? 0f), label)
                 .OnValueChanged(v => onChange(v));
             return;
         }
         if (type == typeof(double))
         {
-            EditorGUI.FloatField(paper, id, label, (float)(double)(value ?? 0.0))
+            EditorGUI.FloatField(paper, id, (float)(double)(value ?? 0.0), label)
                 .OnValueChanged(v => onChange((double)v));
             return;
         }
@@ -107,37 +107,37 @@ public static class PropertyGrid
         }
         if (type == typeof(short))
         {
-            EditorGUI.IntField(paper, id, label, (int)(short)(value ?? (short)0))
+            EditorGUI.IntField(paper, id, (int)(short)(value ?? (short)0), label)
                 .OnValueChanged(v => onChange((short)Math.Clamp(v, short.MinValue, short.MaxValue)));
             return;
         }
         if (type == typeof(ushort))
         {
-            EditorGUI.IntField(paper, id, label, (int)(ushort)(value ?? (ushort)0))
+            EditorGUI.IntField(paper, id, (int)(ushort)(value ?? (ushort)0), label)
                 .OnValueChanged(v => onChange((ushort)Math.Clamp(v, ushort.MinValue, ushort.MaxValue)));
             return;
         }
         if (type == typeof(sbyte))
         {
-            EditorGUI.IntField(paper, id, label, (int)(sbyte)(value ?? (sbyte)0))
+            EditorGUI.IntField(paper, id, (int)(sbyte)(value ?? (sbyte)0), label)
                 .OnValueChanged(v => onChange((sbyte)Math.Clamp(v, sbyte.MinValue, sbyte.MaxValue)));
             return;
         }
         if (type == typeof(long))
         {
-            EditorGUI.IntField(paper, id, label, (int)Math.Clamp((long)(value ?? 0L), int.MinValue, int.MaxValue))
+            EditorGUI.IntField(paper, id, (int)Math.Clamp((long)(value ?? 0L), int.MinValue, int.MaxValue), label)
                 .OnValueChanged(v => onChange((long)v));
             return;
         }
         if (type == typeof(uint))
         {
-            EditorGUI.IntField(paper, id, label, (int)Math.Min((uint)(value ?? 0u), int.MaxValue))
+            EditorGUI.IntField(paper, id, (int)Math.Min((uint)(value ?? 0u), int.MaxValue), label)
                 .OnValueChanged(v => onChange((uint)Math.Max(v, 0)));
             return;
         }
         if (type == typeof(ulong))
         {
-            EditorGUI.IntField(paper, id, label, (int)Math.Min((ulong)(value ?? 0UL), (ulong)int.MaxValue))
+            EditorGUI.IntField(paper, id, (int)Math.Min((ulong)(value ?? 0UL), (ulong)int.MaxValue), label)
                 .OnValueChanged(v => onChange((ulong)Math.Max(v, 0)));
             return;
         }
@@ -157,18 +157,8 @@ public static class PropertyGrid
         }
         if (type == typeof(Float4))
         {
-            // Draw as 4 floats
-            var val = (Float4)(value ?? Float4.Zero);
-            using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(4).Enter())
-            {
-                if (EditorTheme.DefaultFont != null)
-                    paper.Box($"{id}_lbl").Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4).IsNotInteractable()
-                        .Text(label, EditorTheme.DefaultFont).TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize);
-                EditorGUI.FloatField(paper, $"{id}_x", "X", (float)val.X).OnValueChanged(v => onChange(new Float4(v, val.Y, val.Z, val.W)));
-                EditorGUI.FloatField(paper, $"{id}_y", "Y", (float)val.Y).OnValueChanged(v => onChange(new Float4(val.X, v, val.Z, val.W)));
-                EditorGUI.FloatField(paper, $"{id}_z", "Z", (float)val.Z).OnValueChanged(v => onChange(new Float4(val.X, val.Y, v, val.W)));
-                EditorGUI.FloatField(paper, $"{id}_w", "W", (float)val.W).OnValueChanged(v => onChange(new Float4(val.X, val.Y, val.Z, v)));
-            }
+            EditorGUI.Vector4Field(paper, id, label, (Float4)(value ?? Float4.Zero))
+                .OnValueChanged(v => onChange(v));
             return;
         }
         if (type == typeof(Prowl.Vector.Color))
