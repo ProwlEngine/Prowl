@@ -2,7 +2,15 @@
 
   <PropertyGroup>
     <RootNamespace>NeoVeldrid</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <Description>ImGui integration for NeoVeldrid. Provides a simple interface for rendering and interacting with ImGui.NET.</Description>
+    <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game ImGui</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ImGui.NET" Version="$(ImGuiNetVersion)" />
+    <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Assets/GLSL/imgui-vertex.glsl">
@@ -39,15 +47,5 @@
       <LogicalName>imgui-frag.spv</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="ImGui.NET" Version="$(ImGuiNetVersion)" />
-    <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
-  </ItemGroup>
-
-  <PropertyGroup>
-    <Description>ImGui integration for NeoVeldrid. Provides a simple interface for rendering and interacting with ImGui.NET.</Description>
-    <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game ImGui</PackageTags>
-  </PropertyGroup>
 
 </Project>

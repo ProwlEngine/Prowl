@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <IsPackable>true</IsPackable>
     <Description>SDL2 windowing support for NeoVeldrid via Silk.NET.SDL.</Description>
     <PackageTags>SDL2 Window Input</PackageTags>
   </PropertyGroup>

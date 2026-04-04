@@ -1,6 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>A low-level, hardware-accelerated graphics and compute library for .NET, with backends for Vulkan, Direct3D 11, and OpenGL. NeoVeldrid can be used to create high-performance 2D and 3D games, simulations, tools, and other graphical applications.</Description>
+    <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game</PackageTags>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <DefineConstants Condition="'$(DisableValidation)' != 'true'">$(DefineConstants);VALIDATE_USAGE</DefineConstants>
     <DefineConstants Condition="'$(ExcludeD3D11)' == 'true'">$(DefineConstants);EXCLUDE_D3D11_BACKEND</DefineConstants>
     <DefineConstants Condition="'$(ExcludeVulkan)' == 'true'">$(DefineConstants);EXCLUDE_VULKAN_BACKEND</DefineConstants>
@@ -35,10 +41,5 @@
     <Compile Remove="Vk/**/*" Condition="'$(ExcludeVulkan)' == 'true'" />
     <Compile Remove="OpenGL/**/*" Condition="'$(ExcludeOpenGL)' == 'true'" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <Description>A low-level, hardware-accelerated graphics and compute library for .NET, with backends for Vulkan, Direct3D 11, and OpenGL. NeoVeldrid can be used to create high-performance 2D and 3D games, simulations, tools, and other graphical applications.</Description>
-    <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game</PackageTags>
-  </PropertyGroup>
 
 </Project>
