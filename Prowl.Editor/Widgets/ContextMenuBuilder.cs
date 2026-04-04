@@ -15,9 +15,9 @@ public class ContextMenuBuilder
 
     internal void SetCloseAction(Action onClose) => _onClose = onClose;
 
-    public ContextMenuBuilder Item(string label, Action onClick, bool enabled = true)
+    public ContextMenuBuilder Item(string label, Action onClick, bool enabled = true, string icon = "")
     {
-        _items.Add(new ContextMenuItem { Label = label, OnClick = onClick, IsEnabled = enabled });
+        _items.Add(new ContextMenuItem { Label = label, OnClick = onClick, IsEnabled = enabled, Icon = icon });
         return this;
     }
 
@@ -27,12 +27,12 @@ public class ContextMenuBuilder
         return this;
     }
 
-    public ContextMenuBuilder Submenu(string label, Action<ContextMenuBuilder> build)
+    public ContextMenuBuilder Submenu(string label, Action<ContextMenuBuilder> build, string icon = "")
     {
         var sub = new ContextMenuBuilder();
         sub._onClose = _onClose;
         build(sub);
-        _items.Add(new ContextMenuItem { Label = label, SubMenu = sub, IsEnabled = true });
+        _items.Add(new ContextMenuItem { Label = label, SubMenu = sub, IsEnabled = true, Icon = icon });
         return this;
     }
 
@@ -41,60 +41,85 @@ public class ContextMenuBuilder
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        using (paper.Column(id)
+        using (paper.Box(id)
             .PositionType(PositionType.SelfDirected)
             .Position(x, y)
             .Width(200)
             .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.PanelBackground)
-            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .BackgroundColor(EditorTheme.Purple200)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1.25f)
             .Rounded(4)
-            .ChildTop(2).ChildBottom(2).ChildLeft(2).ChildRight(2)
             .Layer(Layer.Topmost)
             .ClampToScreen()
+            .BoxShadow(0, 0, 40, -25, Color.FromArgb(155, Color.Black))
             .Enter())
         {
-            for (int i = 0; i < _items.Count; i++)
+            using (paper.Column(id)
+                .Margin(4)
+                .Height(UnitValue.Auto)
+                .Enter())
+
             {
-                var item = _items[i];
-
-                if (item.IsSeparator)
+                for (int i = 0; i < _items.Count; i++)
                 {
-                    paper.Box($"{id}_sep_{i}")
-                        .Height(1).Margin(4, 3, 4, 3)
-                        .BackgroundColor(EditorTheme.Border);
-                    continue;
-                }
+                    var item = _items[i];
 
-                var textColor = item.IsEnabled ? EditorTheme.Text : EditorTheme.TextDisabled;
-
-                using (paper.Row($"{id}_i_{i}")
-                    .Height(EditorTheme.RowHeight)
-                    .ChildLeft(8).ChildRight(4)
-                    .BackgroundColor(Color.Transparent)
-                    .Hovered.BackgroundColor(item.IsEnabled ? EditorTheme.Accent : Color.Transparent).End()
-                    .Rounded(3)
-                    .OnClick(item, (captured, e) =>
+                    if (item.IsSeparator)
                     {
-                        if (captured.IsEnabled)
+                        paper.Box($"{id}_sep_{i}")
+                            .Height(1.25f).Margin(10, 5)
+                            .BackgroundColor(EditorTheme.Ink200);
+                        continue;
+                    }
+
+                    var textColor = item.IsEnabled ? EditorTheme.Text : EditorTheme.TextDisabled;
+
+                    using (paper.Row($"{id}_i_{i}")
+                        .Height(EditorTheme.RowHeight)
+                        .Hovered.BackgroundColor(item.IsEnabled ? EditorTheme.Purple400 : Color.Transparent).End()
+                        .Rounded(3)
+                        .OnClick(item, (captured, e) =>
                         {
-                            captured.OnClick?.Invoke();
-                            _onClose?.Invoke();
-                        }
-                    })
-                    .Enter())
-                {
-                    paper.Box($"{id}_l_{i}")
-                        .Width(UnitValue.Stretch()).IsNotInteractable()
-                        .Text(item.Label, font).TextColor(textColor).FontSize(EditorTheme.FontSize);
-
-                    if (item.SubMenu != null)
+                            if (captured.IsEnabled)
+                            {
+                                captured.OnClick?.Invoke();
+                                _onClose?.Invoke();
+                            }
+                        })
+                        .Enter())
                     {
-                        paper.Box($"{id}_a_{i}").Width(16).IsNotInteractable()
-                            .Text("\u25B6", font).TextColor(EditorTheme.TextDim).FontSize(10f);
+                        if (string.IsNullOrWhiteSpace(item.Icon))
+                        {
+                            paper.Box($"{id}_l_{i}")
+                                .Width(UnitValue.Stretch())
+                                .Margin(10, 0, 0, 0)
+                                .Height(EditorTheme.RowHeight)
+                                .Text(item.Label, font).TextColor(textColor).FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+                        }
+                        else
+                        {
+                            paper.Box($"{id}_i_{i}")
+                                .Margin(10, 0, 0, 0)
+                                .Size(EditorTheme.RowHeight)
+                                .Text(item.Icon, font).TextColor(textColor).FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-                        if (paper.IsParentHovered)
-                            item.SubMenu.Render(paper, $"{id}_s_{i}", 195, 0);
+                            paper.Box($"{id}_l_{i}")
+                                .Width(UnitValue.Stretch())
+                                .Margin(5, 0, 0, 0)
+                                .Height(EditorTheme.RowHeight)
+                                .Text(item.Label, font).TextColor(textColor).FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+                        }
+
+
+                        if (item.SubMenu != null)
+                        {
+                            paper.Box($"{id}_a_{i}")
+                                .Size(EditorTheme.RowHeight)
+                                .Text(EditorIcons.ChevronRight, font).TextColor(EditorTheme.Ink400).FontSize(10f).Alignment(TextAlignment.MiddleLeft);
+
+                            if (paper.IsParentHovered)
+                                item.SubMenu.Render(paper, $"{id}_s_{i}", 190, 0);
+                        }
                     }
                 }
             }
@@ -103,6 +128,7 @@ public class ContextMenuBuilder
 
     private struct ContextMenuItem
     {
+        public string Icon;
         public string Label;
         public Action? OnClick;
         public bool IsSeparator;

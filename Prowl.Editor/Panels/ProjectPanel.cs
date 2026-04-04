@@ -72,10 +72,10 @@ public class ProjectPanel : DockPanel
         {
             // Add button with context menu
             using (paper.Box("proj_add")
-                .Width(ToolbarHeight - 6).Height(ToolbarHeight - 6)
+                .Size(ToolbarHeight - 6)
                 .Rounded(4)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Text)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text(EditorIcons.FileCirclePlus, font).TextColor(EditorTheme.Ink400)
                 .FontSize(14f).Alignment(TextAlignment.MiddleCenter)
                 .Enter())
             {
@@ -88,20 +88,20 @@ public class ProjectPanel : DockPanel
             }
 
             // Spacer
-            paper.Box("proj_spacer").Width(UnitValue.Stretch(4f));
+            paper.Box("proj_spacer").Width(UnitValue.Stretch(2f));
 
             // Thumbnail size slider
             paper.Box("proj_list_ico")
-                .Width(16).Height(ToolbarHeight - 6)
-                .Text(EditorIcons.List, font).TextColor(EditorTheme.TextDim)
+                .Size(ToolbarHeight - 6)
+                .Text(EditorIcons.List, font).TextColor(EditorTheme.Ink400)
                 .FontSize(14f).Alignment(TextAlignment.MiddleCenter);
 
             EditorGUI.Slider(paper, "proj_thumb_slider", "", _thumbnailSize, MinThumbSize, MaxThumbSize, false)
                 .OnValueChanged(v => _thumbnailSize = v);
 
             paper.Box("proj_grid_ico")
-                .Width(16).Height(ToolbarHeight - 6)
-                .Text(EditorIcons.TableCellsLarge, font).TextColor(EditorTheme.TextDim)
+                .Size(ToolbarHeight - 6)
+                .Text(EditorIcons.TableCellsLarge, font).TextColor(EditorTheme.Ink400)
                 .FontSize(14f).Alignment(TextAlignment.MiddleCenter);
 
             // Search
@@ -110,12 +110,12 @@ public class ProjectPanel : DockPanel
 
             // Refresh button
             paper.Box("proj_refresh")
-                .Width(ToolbarHeight - 6).Height(ToolbarHeight - 6)
+                .Size(ToolbarHeight - 6)
                 .Rounded(4)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                .Text(EditorIcons.ArrowRotateRight, font).TextColor(EditorTheme.Text)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text(EditorIcons.ArrowRotateRight, font).TextColor(EditorTheme.Ink400)
                 .FontSize(14f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) =>
+                .OnClick((_) =>
                 {
                     // Force full rescan
                     if (EditorAssetDatabase.Instance != null)
@@ -138,6 +138,12 @@ public class ProjectPanel : DockPanel
         {
             DrawFolderTree(paper, font, height);
             DrawContent(paper, font, width - FolderTreeWidth, height);
+
+            paper.DrawForeground((canvas, r) =>
+            {
+                canvas.SetLinearBrush(r.Min.X, r.Min.Y, r.Min.X, r.Min.Y + 5, Color.FromArgb(25, Color.Black), Color.Transparent);
+                canvas.RectFilled(r.Min.X, r.Min.Y, r.Size.X, 5, Color.White);
+            });
         }
     }
 
@@ -149,10 +155,10 @@ public class ProjectPanel : DockPanel
     {
         using (paper.Box("proj_tree_bg")
             .Size(FolderTreeWidth, height)
-            .BackgroundColor(EditorTheme.Darkest)
+            .BackgroundColor(EditorTheme.Neutral300)
             .Enter())
         {
-            using (ScrollView.Begin(paper, "proj_tree", FolderTreeWidth, height))
+            using (ScrollView.Begin(paper, "proj_tree", FolderTreeWidth, height, 4, 4, 4, 4))
             {
                 // Root "Assets" node
                 using (paper.Column("proj_tree_inner")
@@ -163,6 +169,12 @@ public class ProjectPanel : DockPanel
                     DrawFolderNode(paper, font, Project.Current!.AssetsPath, "Assets", 0);
                 }
             }
+
+            paper.DrawForeground((canvas, r) =>
+            {
+                canvas.SetLinearBrush(r.Max.X, r.Min.Y, r.Max.X - 4, r.Min.Y, Color.FromArgb(50, Color.Black), Color.Transparent);
+                canvas.RectFilled(r.Max.X - 4, r.Min.Y, 4, r.Size.Y, Color.White);
+            });
         }
     }
 
@@ -313,6 +325,12 @@ public class ProjectPanel : DockPanel
                     }
                 }
             }
+
+            paper.DrawForeground((canvas, r) =>
+            {
+                canvas.SetLinearBrush(r.Min.X, r.Min.Y, r.Min.X + 4, r.Min.Y, Color.FromArgb(5, Color.White), Color.Transparent);
+                canvas.RectFilled(r.Min.X, r.Min.Y, 4, r.Size.Y, Color.White);
+            });
         }
     }
 
@@ -452,46 +470,46 @@ public class ProjectPanel : DockPanel
 
             if (!item.IsFolder)
             {
-                builder.Item($"{EditorIcons.FolderOpen}  Open", () => OpenWithSystem(item));
+                builder.Item($"Open", () => OpenWithSystem(item), icon: EditorIcons.FolderOpen);
                 builder.Separator();
             }
 
-            builder.Submenu($"{EditorIcons.Plus}  Create", sub => AssetCreateMenu.Build(sub, folder, OnCreated));
+            builder.Submenu($"Create", sub => AssetCreateMenu.Build(sub, folder, OnCreated), icon: EditorIcons.FileCirclePlus);
 
             builder.Separator();
 
-            builder.Item($"{EditorIcons.FolderOpen}  Show in Explorer", () => ShowInExplorer(item));
+            builder.Item($"Show in Explorer", () => ShowInExplorer(item), icon: EditorIcons.FolderOpen);
 
             if (!item.IsFolder)
             {
-                builder.Item($"{EditorIcons.ArrowsRotate}  Reimport", () =>
+                builder.Item($"Reimport", () =>
                 {
                     var db = EditorAssetDatabase.Instance;
                     if (db == null) return;
                     foreach (var sel in Selection.GetSelected<ContentItem>())
                         if (sel.Guid != Guid.Empty) db.Reimport(sel.Guid);
-                });
+                }, icon: EditorIcons.ArrowsRotate);
             }
 
-            builder.Item($"{EditorIcons.Copy}  Copy Path", () =>
+            builder.Item($"Copy Path", () =>
             {
                 Runtime.Debug.Log($"Path: {item.RelativePath}");
-            });
+            }, icon: EditorIcons.Copy);
 
             if (!item.IsFolder && item.Guid != Guid.Empty)
             {
-                builder.Item($"{EditorIcons.Fingerprint}  Copy GUID", () =>
+                builder.Item($"Copy GUID", () =>
                 {
                     Runtime.Debug.Log($"GUID: {item.Guid}");
-                });
+                }, icon: EditorIcons.Fingerprint);
             }
 
             builder.Separator();
 
             bool isRoot = string.IsNullOrEmpty(item.RelativePath);
-            builder.Item($"{EditorIcons.PenToSquare}  Rename", () => StartRename(item, inTree), enabled: !isMulti && !isRoot);
+            builder.Item($"Rename", () => StartRename(item, inTree), enabled: !isMulti && !isRoot, icon: EditorIcons.PenToSquare);
 
-            builder.Item($"{EditorIcons.Trash}  Delete", () =>
+            builder.Item($"Delete", () =>
             {
                 var db = EditorAssetDatabase.Instance;
                 if (db == null) return;
@@ -516,7 +534,7 @@ public class ProjectPanel : DockPanel
                     }
                 }
                 Selection.Clear();
-            }, enabled: !isRoot);
+            }, enabled: !isRoot, icon: EditorIcons.Trash);
         });
     }
 
@@ -659,17 +677,17 @@ public class ProjectPanel : DockPanel
                             if (it.IsFolder)
                                 _currentFolder = it.RelativePath;
                         })
+                        .Tooltip(item.Name)
                         .Enter())
                     {
                         // Thumbnail area
                         paper.Box($"proj_gt_{idx}")
                             .Width(cellSize - 4).Height(cellSize - 4)
                             .Margin(2, 2, 2, 0)
-                            .BackgroundColor(Color.FromArgb(30, 0, 0, 0))
                             .Rounded(4)
                             .Text(item.Icon, font)
                             .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : EditorTheme.TextDim)
-                            .FontSize(_thumbnailSize * 0.4f)
+                            .FontSize(_thumbnailSize * 0.6f)
                             .Alignment(TextAlignment.MiddleCenter);
 
                         // Label (inline rename or text)
@@ -688,9 +706,7 @@ public class ProjectPanel : DockPanel
                                 .Width(cellSize).Height(labelH)
                                 .Clip()
                                 .Text(item.Name, font)
-                                .TextColor(EditorTheme.Text)
-                                .FontSize(EditorTheme.FontSize - 4)
-                                .Alignment(TextAlignment.MiddleCenter);
+                                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
                         }
 
                         // Right-click context menu

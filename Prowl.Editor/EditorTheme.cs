@@ -66,253 +66,266 @@ public static class EditorTheme
 
     #endregion
 
-    // Static palette for the application theme.
+    // Static color palette for the application theme.
     // Built from 8 base colors: #101116, #16151A, #18191D, #1D1E22,
     // #563784, #82AAC6, #271D36, #CB594F.
     //
-    // Organized into five groups:
-    //   - Backgrounds  : four depth levels from page base to elevated surface
-    //   - Purple Accent: primary brand / interactive color ramp
-    //   - Blue Accent  : secondary / informational color ramp
-    //   - Danger       : error, destructive action, alert ramp
-    //   - Text &amp; Borders: hierarchy from primary text down to default border
+    // Colors are organized into ramps using a 100-based numeric scale.
+    // Lower numbers are darker (background tints), higher numbers are lighter
+    // (text, highlights). The ★ marker denotes the primary stop of each ramp.
+    //
+    // Interactive state convention (applies to all ramps):
+    //   Normal  = ★ primary stop
+    //   Hovered = +100  (one step lighter — lifts)
+    //   Pressed = -100  (one step darker  — sinks)
+    //
+    // Ramps:
+    //   Neutral  100–500  Background depth stack (page → surface)
+    //   Purple   100–700  Primary brand / interactive
+    //   Blue     100–700  Secondary / informational
+    //   Red      100–700  Danger / error / destructive
+    //   Ink      100–500  Text and border hierarchy
 
     // ─────────────────────────────────────────────────────────────
-    //  BACKGROUNDS
-    //  Four dark neutrals that form a natural depth stack.
-    //  Use them in order from the deepest layer upward.
+    //  NEUTRAL — Background depth stack
+    //  Use in ascending order from the deepest layer upward.
+    //  100 = page base (behind everything), 400 = elevated surface.
     // ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Void — #101116
-    /// Role: Deepest background / page base.
-    /// The lowest layer of the UI; sits behind everything else.
+    /// Neutral100 — #101116  "Void"
+    /// Deepest background. The lowest layer of the UI; sits behind everything else.
     /// </summary>
-    public static readonly Color BgPage = ColorTranslator.FromHtml("#101116");
+    public static readonly Color Neutral100 = ColorTranslator.FromHtml("#101116");
 
     /// <summary>
-    /// Abyss — #16151A
-    /// Role: App background.
-    /// The main application shell background, one step above the page base.
+    /// Neutral200 — #16151A  "Abyss"
+    /// App background. The main application shell; one step above the page base.
     /// </summary>
-    public static readonly Color BgApp = ColorTranslator.FromHtml("#16151A");
+    public static readonly Color Neutral200 = ColorTranslator.FromHtml("#16151A");
 
     /// <summary>
-    /// Obsidian — #18191D
-    /// Role: Sidebar / panels.
-    /// Used for sidebars, drawers, and secondary panels.
+    /// Neutral300 — #18191D  "Obsidian"
+    /// Sidebar / panels. Used for sidebars, drawers, and secondary panels.
     /// </summary>
-    public static readonly Color BgPanel = ColorTranslator.FromHtml("#18191D");
+    public static readonly Color Neutral300 = ColorTranslator.FromHtml("#18191D");
 
     /// <summary>
-    /// Slate — #1D1E22
-    /// Role: Cards / surfaces / elevated elements.
+    /// Neutral400 — #1D1E22  "Slate"  ★
+    /// Cards / surfaces / elevated elements.
     /// The topmost background layer; use for cards, modals, and raised containers.
     /// </summary>
-    public static readonly Color BgSurface = ColorTranslator.FromHtml("#1D1E22");
-
-
-    // ─────────────────────────────────────────────────────────────
-    //  PURPLE ACCENT RAMP
-    //  Anchored on #563784 (Amethyst) as the primary brand color.
-    //  Ranges from a subtle tinted surface through to a pale highlight.
-    //  This is the dominant interactive color family:
-    //  buttons, links, focus rings, selection states.
-    // ─────────────────────────────────────────────────────────────
+    public static readonly Color Neutral400 = ColorTranslator.FromHtml("#1D1E22");
 
     /// <summary>
-    /// Dusk — #271D36
-    /// Role: Accent-subtle. Tinted surface / hover states.
-    /// Lightest purple-tinted background; use for hover fills on rows or list items.
-    /// </summary>
-    public static readonly Color AccentSubtle = ColorTranslator.FromHtml("#271D36");
-
-    /// <summary>
-    /// Twilight — #3D2660
-    /// Role: Accent-muted. Active states / selection background.
-    /// Slightly stronger tint; use as a selected or active item background.
-    /// </summary>
-    public static readonly Color AccentMuted = ColorTranslator.FromHtml("#3D2660");
-
-    /// <summary>
-    /// Amethyst — #563784  ★ PRIMARY BRAND COLOR
-    /// Role: Accent-primary. Primary buttons / interactive links.
-    /// The core brand purple. Default fill for buttons, focus rings, and key UI actions.
-    /// </summary>
-    public static readonly Color AccentPrimary = ColorTranslator.FromHtml("#563784");
-
-    /// <summary>
-    /// Lavender — #7252AA
-    /// Role: Accent-hover. Button hover state / focus ring.
-    /// One step lighter than Amethyst; use as a hover or pressed variant of AccentPrimary.
-    /// </summary>
-    public static readonly Color AccentHover = ColorTranslator.FromHtml("#7252AA");
-
-    /// <summary>
-    /// Wisteria — #A886D8
-    /// Role: Accent-light. Highlighted text / badges / chips.
-    /// A mid-tone purple for text labels, badge text, and icon fills on dark backgrounds.
-    /// </summary>
-    public static readonly Color AccentLight = ColorTranslator.FromHtml("#A886D8");
-
-    /// <summary>
-    /// Lilac — #D4B8F4
-    /// Role: Accent-pale. Lightest purple highlight / disabled text on accent bg.
-    /// Use for very soft highlights or placeholder text that sits on a purple surface.
-    /// </summary>
-    public static readonly Color AccentPale = ColorTranslator.FromHtml("#D4B8F4");
-
-
-    // ─────────────────────────────────────────────────────────────
-    //  BLUE ACCENT RAMP  (Secondary / Informational)
-    //  Anchored on #82AAC6 (Glacier). Used for informational states,
-    //  secondary actions, and data-link text.
-    // ─────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Deep Ocean — #0D1A24
-    /// Role: Info-base. Darkest informational tint.
-    /// Background for deeply nested info surfaces.
-    /// </summary>
-    public static readonly Color InfoBase = ColorTranslator.FromHtml("#0D1A24");
-
-    /// <summary>
-    /// Midnight Blue — #1D3044
-    /// Role: Info-subtle. Info callout / tooltip background.
-    /// Use as the background of informational banners or tooltip panels.
-    /// </summary>
-    public static readonly Color InfoSubtle = ColorTranslator.FromHtml("#1D3044");
-
-    /// <summary>
-    /// Harbor — #2E5470
-    /// Role: Info-muted. Secondary button border / info icon background.
-    /// Mid-dark blue for outlines on secondary actions or bordered info tags.
-    /// </summary>
-    public static readonly Color InfoMuted = ColorTranslator.FromHtml("#2E5470");
-
-    /// <summary>
-    /// Glacier — #82AAC6  ★ SECONDARY BRAND / INFO COLOR
-    /// Role: Info-primary. Links / informational text / icons.
-    /// The core info blue. Use for hyperlinks, info-state icons, and secondary CTAs.
-    /// </summary>
-    public static readonly Color InfoPrimary = ColorTranslator.FromHtml("#82AAC6");
-
-    /// <summary>
-    /// Mist — #AECADD
-    /// Role: Info-light. Info callout body text.
-    /// Lighter blue text that remains readable on dark info-tinted backgrounds.
-    /// </summary>
-    public static readonly Color InfoLight = ColorTranslator.FromHtml("#AECADD");
-
-    /// <summary>
-    /// Powder — #CDDEED
-    /// Role: Info-pale. Very soft informational highlight.
-    /// Use for subtle info-state underlines or chart fill areas.
-    /// </summary>
-    public static readonly Color InfoPale = ColorTranslator.FromHtml("#CDDEED");
-
-    /// <summary>
-    /// Frost — #E8F2F9
-    /// Role: Info-faint. Faintest informational background tint.
-    /// Barely-there blue wash for alternating rows or disabled info areas.
-    /// </summary>
-    public static readonly Color InfoFaint = ColorTranslator.FromHtml("#E8F2F9");
-
-
-    // ─────────────────────────────────────────────────────────────
-    //  DANGER RAMP  (Error / Destructive / Alert)
-    //  Anchored on #CB594F (Cinnabar). Used for errors, destructive
-    //  buttons, validation messages, and critical alerts.
-    // ─────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Char — #1C0E0E
-    /// Role: Danger-base. Darkest error tint.
-    /// Deep background for critical error surfaces or severe alert panels.
-    /// </summary>
-    public static readonly Color DangerBase = ColorTranslator.FromHtml("#1C0E0E");
-
-    /// <summary>
-    /// Ember — #361818
-    /// Role: Danger-subtle. Error background / inline validation tint.
-    /// Use as the background of error toast notifications or invalid input fields.
-    /// </summary>
-    public static readonly Color DangerSubtle = ColorTranslator.FromHtml("#361818");
-
-    /// <summary>
-    /// Garnet — #7A3030
-    /// Role: Danger-muted. Danger border / icon fill.
-    /// Use for the border of error inputs and the fill of warning/error icon circles.
-    /// </summary>
-    public static readonly Color DangerMuted = ColorTranslator.FromHtml("#7A3030");
-
-    /// <summary>
-    /// Cinnabar — #CB594F  ★ PRIMARY DANGER / ERROR COLOR
-    /// Role: Danger-primary. Destructive buttons / error alerts / critical badges.
-    /// The core danger red. Use for delete buttons, error banners, and alert icons.
-    /// </summary>
-    public static readonly Color DangerPrimary = ColorTranslator.FromHtml("#CB594F");
-
-    /// <summary>
-    /// Blush — #E68880
-    /// Role: Danger-light. Error message body text.
-    /// Lighter red text readable on dark danger-tinted backgrounds.
-    /// </summary>
-    public static readonly Color DangerLight = ColorTranslator.FromHtml("#E68880");
-
-    /// <summary>
-    /// Rose — #F2B0AB
-    /// Role: Danger-pale. Soft danger highlight / disabled error state.
-    /// Very light red for muted error indications or secondary alert text.
-    /// </summary>
-    public static readonly Color DangerPale = ColorTranslator.FromHtml("#F2B0AB");
-
-    /// <summary>
-    /// Petal — #FDE0DE
-    /// Role: Danger-faint. Faintest danger wash.
-    /// Barely perceptible red tint for error state backgrounds in light regions.
-    /// </summary>
-    public static readonly Color DangerFaint = ColorTranslator.FromHtml("#FDE0DE");
-
-
-    // ─────────────────────────────────────────────────────────────
-    //  TEXT &amp; BORDERS
-    //  Four stops from near-white down to a near-invisible border.
-    //  Use in order to create a clear typographic and structural hierarchy.
-    // ─────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Starlight — #F0EEF8
-    /// Role: Primary text.
-    /// Headings, body copy, and any high-priority label. Near-white with a purple cast.
-    /// </summary>
-    public static readonly Color TextPrimary = ColorTranslator.FromHtml("#F0EEF8");
-
-    /// <summary>
-    /// Ash — #B0ADBE
-    /// Role: Secondary text.
-    /// Subtitles, metadata, and secondary labels. Visually recedes behind primary text.
-    /// </summary>
-    public static readonly Color TextSecondary = ColorTranslator.FromHtml("#B0ADBE");
-
-    /// <summary>
-    /// Pewter — #6C6A7A
-    /// Role: Placeholder / hint text.
-    /// Input placeholders, disabled labels, and lowest-priority hints.
-    /// </summary>
-    public static readonly Color TextHint = ColorTranslator.FromHtml("#6C6A7A");
-
-    /// <summary>
-    /// Graphite — #2E2D35
-    /// Role: Default border / separator.
+    /// Neutral500 — #2E2D35  "Graphite"
+    /// Default border / separator.
     /// Dividers, input outlines, card edges, and table row lines.
     /// </summary>
-    public static readonly Color BorderDefault = ColorTranslator.FromHtml("#2E2D35");
+    public static readonly Color Neutral500 = ColorTranslator.FromHtml("#2E2D35");
+
+
+    // ─────────────────────────────────────────────────────────────
+    //  PURPLE — Primary brand / interactive ramp
+    //  ★ Primary = Purple400 (#563784)
+    //
+    //  Button states:
+    //    Normal  = Purple400
+    //    Hovered = Purple500
+    //    Pressed = Purple300
+    // ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Iron — #3E3D47
-    /// Role: Emphasis border.
-    /// Slightly lighter border used on hover states or to distinguish nested containers.
+    /// Purple100 — #1D1010  "Char"
+    /// Darkest purple tint. Deep background for critical or heavily tinted surfaces.
     /// </summary>
-    public static readonly Color BorderEmphasis = ColorTranslator.FromHtml("#3E3D47");
+    public static readonly Color Purple100 = ColorTranslator.FromHtml("#1D1010");
+
+    /// <summary>
+    /// Purple200 — #271D36  "Dusk"
+    /// Subtle tinted surface. Use for hover fills on rows or list items.
+    /// </summary>
+    public static readonly Color Purple200 = ColorTranslator.FromHtml("#271D36");
+
+    /// <summary>
+    /// Purple300 — #3D2660  "Twilight"
+    /// Active / pressed state background. Also used for selected item backgrounds.
+    /// </summary>
+    public static readonly Color Purple300 = ColorTranslator.FromHtml("#3D2660");
+
+    /// <summary>
+    /// Purple400 — #563784  "Amethyst"  ★
+    /// PRIMARY BRAND COLOR. Default fill for buttons, focus rings, and key UI actions.
+    /// </summary>
+    public static readonly Color Purple400 = ColorTranslator.FromHtml("#563784");
+
+    /// <summary>
+    /// Purple500 — #7252AA  "Lavender"
+    /// Hover state. One step lighter than Amethyst; use as the hovered variant of Purple400.
+    /// </summary>
+    public static readonly Color Purple500 = ColorTranslator.FromHtml("#7252AA");
+
+    /// <summary>
+    /// Purple600 — #A886D8  "Wisteria"
+    /// Highlighted text / badges / chips.
+    /// Mid-tone purple for text labels, badge text, and icon fills on dark backgrounds.
+    /// </summary>
+    public static readonly Color Purple600 = ColorTranslator.FromHtml("#A886D8");
+
+    /// <summary>
+    /// Purple700 — #D4B8F4  "Lilac"
+    /// Lightest purple highlight. Use for very soft highlights or placeholder text
+    /// that sits on a purple-tinted surface.
+    /// </summary>
+    public static readonly Color Purple700 = ColorTranslator.FromHtml("#D4B8F4");
+
+
+    // ─────────────────────────────────────────────────────────────
+    //  BLUE — Secondary / informational ramp
+    //  ★ Primary = Blue400 (#82AAC6)
+    //
+    //  Button / link states:
+    //    Normal  = Blue400
+    //    Hovered = Blue500
+    //    Pressed = Blue300
+    // ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Blue100 — #0D1A24  "Deep Ocean"
+    /// Darkest informational tint. Background for deeply nested info surfaces.
+    /// </summary>
+    public static readonly Color Blue100 = ColorTranslator.FromHtml("#0D1A24");
+
+    /// <summary>
+    /// Blue200 — #1D3044  "Midnight"
+    /// Info callout / tooltip background.
+    /// Use as the background of informational banners or tooltip panels.
+    /// </summary>
+    public static readonly Color Blue200 = ColorTranslator.FromHtml("#1D3044");
+
+    /// <summary>
+    /// Blue300 — #2E5470  "Harbor"
+    /// Pressed state. Also used for borders on secondary actions or bordered info tags.
+    /// </summary>
+    public static readonly Color Blue300 = ColorTranslator.FromHtml("#2E5470");
+
+    /// <summary>
+    /// Blue400 — #82AAC6  "Glacier"  ★
+    /// SECONDARY / INFO COLOR. Use for hyperlinks, info-state icons, and secondary CTAs.
+    /// </summary>
+    public static readonly Color Blue400 = ColorTranslator.FromHtml("#82AAC6");
+
+    /// <summary>
+    /// Blue500 — #AECADD  "Mist"
+    /// Hover state. Lighter blue text; also readable on dark info-tinted backgrounds.
+    /// </summary>
+    public static readonly Color Blue500 = ColorTranslator.FromHtml("#AECADD");
+
+    /// <summary>
+    /// Blue600 — #CDDEED  "Powder"
+    /// Soft informational highlight. Use for subtle info-state underlines or chart fill areas.
+    /// </summary>
+    public static readonly Color Blue600 = ColorTranslator.FromHtml("#CDDEED");
+
+    /// <summary>
+    /// Blue700 — #E8F2F9  "Frost"
+    /// Faintest informational background tint.
+    /// Barely-there blue wash for alternating rows or disabled info areas.
+    /// </summary>
+    public static readonly Color Blue700 = ColorTranslator.FromHtml("#E8F2F9");
+
+
+    // ─────────────────────────────────────────────────────────────
+    //  RED — Danger / error / destructive ramp
+    //  ★ Primary = Red400 (#CB594F)
+    //
+    //  Button states:
+    //    Normal  = Red400
+    //    Hovered = Red500
+    //    Pressed = Red300
+    // ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Red100 — #1C0E0E  "Char"
+    /// Darkest error tint. Background for critical error surfaces or severe alert panels.
+    /// </summary>
+    public static readonly Color Red100 = ColorTranslator.FromHtml("#1C0E0E");
+
+    /// <summary>
+    /// Red200 — #361818  "Ember"
+    /// Error background. Use as the background of error toasts or invalid input fields.
+    /// </summary>
+    public static readonly Color Red200 = ColorTranslator.FromHtml("#361818");
+
+    /// <summary>
+    /// Red300 — #7A3030  "Garnet"
+    /// Pressed state. Also used for borders on error inputs and error icon backgrounds.
+    /// </summary>
+    public static readonly Color Red300 = ColorTranslator.FromHtml("#7A3030");
+
+    /// <summary>
+    /// Red400 — #CB594F  "Cinnabar"  ★
+    /// PRIMARY DANGER COLOR. Use for delete buttons, error banners, and alert icons.
+    /// </summary>
+    public static readonly Color Red400 = ColorTranslator.FromHtml("#CB594F");
+
+    /// <summary>
+    /// Red500 — #E68880  "Blush"
+    /// Hover state. Lighter red; also readable as error message text on dark backgrounds.
+    /// </summary>
+    public static readonly Color Red500 = ColorTranslator.FromHtml("#E68880");
+
+    /// <summary>
+    /// Red600 — #F2B0AB  "Rose"
+    /// Soft danger highlight. Use for muted error indications or secondary alert text.
+    /// </summary>
+    public static readonly Color Red600 = ColorTranslator.FromHtml("#F2B0AB");
+
+    /// <summary>
+    /// Red700 — #FDE0DE  "Petal"
+    /// Faintest danger wash. Barely-perceptible red tint for error state backgrounds.
+    /// </summary>
+    public static readonly Color Red700 = ColorTranslator.FromHtml("#FDE0DE");
+
+
+    // ─────────────────────────────────────────────────────────────
+    //  INK — Text and border hierarchy
+    //  Use in ascending order: 100 = borders, 500 = primary readable text.
+    //  Never use pure black or white — these stops keep the purple-dark theme cast.
+    // ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Ink100 — #2E2D35  "Graphite"
+    /// Default border / separator.
+    /// Dividers, input outlines, card edges, and table row lines.
+    /// </summary>
+    public static readonly Color Ink100 = ColorTranslator.FromHtml("#2E2D35");
+
+    /// <summary>
+    /// Ink200 — #3E3D47  "Iron"
+    /// Emphasis border.
+    /// Slightly lighter border for hover states or to distinguish nested containers.
+    /// </summary>
+    public static readonly Color Ink200 = ColorTranslator.FromHtml("#3E3D47");
+
+    /// <summary>
+    /// Ink300 — #6C6A7A  "Pewter"
+    /// Placeholder / hint text.
+    /// Input placeholders, disabled labels, and lowest-priority hints.
+    /// </summary>
+    public static readonly Color Ink300 = ColorTranslator.FromHtml("#6C6A7A");
+
+    /// <summary>
+    /// Ink400 — #B0ADBE  "Ash"
+    /// Secondary text.
+    /// Subtitles, metadata, and secondary labels. Recedes behind primary text.
+    /// </summary>
+    public static readonly Color Ink400 = ColorTranslator.FromHtml("#B0ADBE");
+
+    /// <summary>
+    /// Ink500 — #F0EEF8  "Starlight"
+    /// Primary text.
+    /// Headings, body copy, and all high-priority labels. Near-white with a purple cast.
+    /// </summary>
+    public static readonly Color Ink500 = ColorTranslator.FromHtml("#F0EEF8");
 }

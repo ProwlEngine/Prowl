@@ -135,9 +135,8 @@ public class DockSpace
         bool active = _splitterDragNode == node;
         paper.Box($"spl_{node.GetHashCode()}")
             .PositionType(PositionType.SelfDirected).Position(x, y).Size(w, h)
-            .BackgroundColor(Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.SplitterHovered).End()
-            .Active.BackgroundColor(EditorTheme.SplitterHovered).End()
+            .Hovered.BackgroundColor(EditorTheme.Purple500).End()
+            .Active.BackgroundColor(EditorTheme.Purple400).End()
             .OnDragStart(node, (n, e) => _splitterDragNode = n)
             .OnDragging(node, (n, e) =>
             {
@@ -252,9 +251,7 @@ public class DockSpace
                 var tabEl = paper.Box($"t_{node.GetHashCode()}_{i}")
                     .PositionType(PositionType.SelfDirected)
                     .Position(tx, inactiveOffset).Size(tw, inactiveH)
-                    .BackgroundColor(Color.Transparent)
                     .RoundedTop(TabRadius)
-                    .Hovered.BackgroundColor(isActive ? Color.Transparent : Color.FromArgb(30, 255, 255, 255)).End()
                     .StopEventPropagation()
                     .OnClick(ci, (idx, e) => { if (!_isDragging) node.ActiveTabIndex = idx; })
                     .OnDragStart((node, ci, fw), (cap, e) =>
@@ -300,7 +297,7 @@ public class DockSpace
                         .Position(contentX, inactiveOffset).Size(iconW, inactiveH)
                         .IsNotInteractable()
                         .Text(tab.Icon, font)
-                        .TextColor(isActive ? EditorTheme.Accent : EditorTheme.TextDim)
+                        .TextColor(isActive ? EditorTheme.Blue400 : EditorTheme.Ink300)
                         .FontSize((EditorTheme.FontSize - 1) * 0.75f)
                         .Alignment(TextAlignment.MiddleCenter);
                     contentX += iconW;
@@ -316,7 +313,7 @@ public class DockSpace
                         .Width(tw - TabPadding * 2 - TabCloseSize - (hasIcon ? iconW : 0) + 4)
                         .IsNotInteractable()
                         .Text(tab.Title, font)
-                        .TextColor(isActive ? EditorTheme.Text : EditorTheme.TextDim)
+                        .TextColor(isActive ? EditorTheme.Ink500 : EditorTheme.Ink300)
                         .FontSize(EditorTheme.FontSize)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
@@ -327,14 +324,13 @@ public class DockSpace
                     .Position(tx + tw - TabCloseSize - TabPadding + 2, inactiveOffset + (inactiveH - TabCloseSize) / 2)
                     .Size(TabCloseSize, TabCloseSize)
                     .Rounded(TabCloseSize / 2)
-                    .Hovered.BackgroundColor(Color.FromArgb(255, 180, 60, 60)).End()
                     .StopEventPropagation()
                     .OnClick((node, ci, fw), (cap, e) =>
                     {
                         cap.Item1.RemoveTab(cap.Item2);
                     })
                     .Text(EditorIcons.Xmark, EditorTheme.DefaultFont)
-                    .TextColor(EditorTheme.TextDim)
+                    .TextColor(isActive ? EditorTheme.Ink400 : EditorTheme.Ink300)
                     .FontSize(15f)
                     .Alignment(TextAlignment.MiddleCenter);
             }
@@ -354,14 +350,6 @@ public class DockSpace
         }
     }
 
-    /// <summary>
-    /// Draw the merged tab + panel shape via Quill.
-    /// The active tab has rounded top corners and merges into the panel body below.
-    /// Inactive tabs have a subtle separator.
-    /// </summary>
-    private static Prowl.Vector.Color32 ToC32(Color c)
-        => Prowl.Vector.Color32.FromArgb(c.A, c.R, c.G, c.B);
-
     private static void DrawMergedTabShape(Prowl.Quill.Canvas canvas, Rect r,
         float[] tabWidths, int activeIdx, float tabH)
     {
@@ -370,7 +358,7 @@ public class DockSpace
         float rad = TabRadius;
         float ir = TabInsetRadius;
 
-        var panelColor = ToC32(EditorTheme.PanelBackground);
+        var panelColor = EditorTheme.Neutral400;
         float panelTop = y + tabH;
 
         if (activeIdx < 0 || activeIdx >= tabWidths.Length)
@@ -381,7 +369,6 @@ public class DockSpace
         }
 
         // Draw inactive tab backgrounds FIRST (behind the active tab shape)
-        var inactiveColor = ToC32(EditorTheme.Normal);
         float inactiveOffset = 6f;
         float itx = x;
         for (int i = 0; i < tabWidths.Length; i++)
@@ -389,7 +376,7 @@ public class DockSpace
             if (i != activeIdx)
             {
                 canvas.RoundedRectFilled(itx, y + inactiveOffset, tabWidths[i], tabH - inactiveOffset,
-                    rad, rad, 0, 0, inactiveColor);
+                    rad, rad, 0, 0, EditorTheme.Neutral300);
             }
             itx += tabWidths[i] + TabGap;
         }
@@ -505,7 +492,7 @@ public class DockSpace
         float bottom = y + h;
         float right = x + w;
 
-        canvas.SetStrokeColor(ToC32(EditorTheme.Border));
+        canvas.SetStrokeColor(EditorTheme.Ink200);
         canvas.SetStrokeWidth(1f);
         canvas.BeginPath();
 
@@ -568,32 +555,9 @@ public class DockSpace
             .PositionType(PositionType.SelfDirected)
             .Position(fw.Position.X, fw.Position.Y)
             .Size(fw.Size.X, fw.Size.Y)
-            .BackgroundColor(EditorTheme.WindowBackground)
-            .BorderColor(EditorTheme.Border).BorderWidth(1).Rounded(4)
             .OnClick(index, (idx, e) => BringToFront(idx))
             .Enter())
         {
-            // Close button in top-right corner
-            float closeSize = 18f;
-            var closeBtn = paper.Box($"fw_close_{index}")
-                .PositionType(PositionType.SelfDirected)
-                .Position(fw.Size.X - closeSize - 4, 4)
-                .Size(closeSize, closeSize)
-                .Rounded(9)
-                .BackgroundColor(Color.Transparent)
-                .Hovered.BackgroundColor(Color.FromArgb(255, 200, 60, 60)).End()
-                .StopEventPropagation()
-                .OnClick(index, (idx, e) =>
-                {
-                    // Dock the panel back or remove the window
-                    if (idx >= 0 && idx < FloatingWindows.Count)
-                        FloatingWindows.RemoveAt(idx);
-                });
-
-            if (EditorTheme.DefaultFont != null)
-                closeBtn.Text("\u2715", EditorTheme.DefaultFont)
-                    .TextColor(EditorTheme.TextDim).FontSize(10f);
-
             DrawNodeTree(paper, fw.Node, null, 0, 0, fw.Size.X, fw.Size.Y, fw);
 
             // Resize handles
@@ -709,9 +673,9 @@ public class DockSpace
         float cx = rect.Min.X + rect.Size.X / 2, cy = rect.Min.Y + rect.Size.Y / 2;
         float s = IndicatorSize, g = IndicatorGap, hs = s / 2;
 
-        var bg = Color.FromArgb(200, 50, 50, 55);
-        var hi = EditorTheme.Accent;
-        var bd = Color.FromArgb(255, 80, 80, 85);
+        var bg = Color.FromArgb(85, EditorTheme.Blue400);
+        var hi = Color.FromArgb(85, EditorTheme.Blue500);
+        var bd = Color.FromArgb(85, EditorTheme.Blue600);
 
         if (_hoveredZone != DockZone.None) DrawDropPreview(paper);
 

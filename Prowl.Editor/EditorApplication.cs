@@ -34,8 +34,10 @@ public class EditorApplication : Game
         Application.IsEditor = true;
         Application.IsPlaying = false;
 
-        // Pick a good system font — prefer Segoe UI (Windows), then Arial, then any Regular font
+        // Pick a good system font — prefer Bahnschrift then, Segoe UI (Windows), then Arial, then any Regular font
         EditorTheme.DefaultFont = PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == "bahnschrift" && f.Style == Prowl.Scribe.FontStyle.Regular)
+            ?? PaperInstance.EnumerateSystemFonts()
             .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Regular)
             ?? PaperInstance.EnumerateSystemFonts()
             .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Regular)
@@ -43,6 +45,8 @@ public class EditorApplication : Game
             .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Regular)
             ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
         EditorTheme.DefaultBoldFont = PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == "bahnschrift" && f.Style == Prowl.Scribe.FontStyle.Bold)
+            ?? PaperInstance.EnumerateSystemFonts()
             .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Bold)
             ?? PaperInstance.EnumerateSystemFonts()
             .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Bold)
