@@ -1,6 +1,6 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
-        <_AssetProcessorPath>$(MSBuildThisFileDirectory)AssetProcessor\bin\$(Configuration)\net10.0\AssetProcessor.dll</_AssetProcessorPath>
+        <_AssetProcessorPath>$(MSBuildThisFileDirectory)..\artifacts\bin\AssetProcessor\$(Configuration.ToLowerInvariant())\AssetProcessor.dll</_AssetProcessorPath>
     </PropertyGroup>
     <Target Name="ProcessAssets" AfterTargets="AssignTargetPaths" Condition="'@(Asset)' != ''">
         <PropertyGroup>

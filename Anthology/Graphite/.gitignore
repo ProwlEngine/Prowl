@@ -23,6 +23,7 @@ x86/
 bld/
 [Bb]in/
 [Oo]bj/
+artifacts/
 msbuild.log
 
 # Visual Studio 2015
