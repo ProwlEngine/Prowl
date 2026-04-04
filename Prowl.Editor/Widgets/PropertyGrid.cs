@@ -1,11 +1,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Reflection;
 
 using Prowl.Echo;
+using Prowl.Editor.Inspector;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -14,434 +14,137 @@ using Prowl.Vector;
 namespace Prowl.Editor.Widgets;
 
 /// <summary>
-/// Draws a property grid for any object using reflection.
-/// Discovers serializable fields (matching Echo's rules) and draws appropriate editors.
+/// Reflection-based property grid. Discovers serializable fields and delegates
+/// all drawing to PropertyEditor subclasses. Supports attributes like [Range],
+/// [Header], [Space], [ShowIf], [ReadOnly], [Button], [Tooltip].
 /// </summary>
 public static class PropertyGrid
 {
-    private static readonly Dictionary<Type, Func<Paper, string, string, object, Action<object>, object>> _customDrawers = new();
-
     /// <summary>
-    /// Register a custom drawer for a specific type.
-    /// </summary>
-    public static void RegisterDrawer<T>(Func<Paper, string, string, object, Action<object>, object> drawer)
-        => _customDrawers[typeof(T)] = drawer;
-
-    /// <summary>
-    /// Draw the property grid for an object. Returns true if any value changed.
+    /// Draw the property grid for an object.
     /// </summary>
     public static void Draw(Paper paper, string id, object target, Action<object>? onChanged = null, int depth = 0)
     {
         if (target == null) return;
         if (depth > 10) { EditorGUI.Label(paper, $"{id}_deep", "(max depth)", EditorTheme.TextDim); return; }
 
-        var fields = GetSerializableFields(target.GetType());
+        var type = target.GetType();
+        var fields = GetSerializableFields(type);
 
         for (int i = 0; i < fields.Length; i++)
         {
             var field = fields[i];
             string fieldId = $"{id}_{field.Name}_{i}";
+
+            // [ShowIf]
+            var showIf = field.GetCustomAttribute<ShowIfAttribute>();
+            if (showIf != null && !EvaluateCondition(target, showIf.ConditionMember))
+                continue;
+
+            // [Space]
+            var space = field.GetCustomAttribute<SpaceAttribute>();
+            if (space != null)
+                paper.Box($"{fieldId}_space").Height(space.Height);
+
+            // [Header]
+            var header = field.GetCustomAttribute<HeaderAttribute>();
+            if (header != null)
+                EditorGUI.Header(paper, $"{fieldId}_header", header.Text);
+
             string label = NicifyName(field.Name);
             object? value = field.GetValue(target);
             Type fieldType = field.FieldType;
 
+            // [ReadOnly]
+            if (field.GetCustomAttribute<ReadOnlyAttribute>() != null)
+            {
+                EditorGUI.Label(paper, fieldId, $"{label}: {value ?? "(null)"}");
+                continue;
+            }
+
+            // [Range] override for numeric types
+            var range = field.GetCustomAttribute<RangeAttribute>();
+            if (range != null && (fieldType == typeof(float) || fieldType == typeof(int)))
+            {
+                if (fieldType == typeof(float))
+                    EditorGUI.Slider(paper, fieldId, label, (float)(value ?? 0f), range.Min, range.Max)
+                        .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
+                else
+                    EditorGUI.IntSlider(paper, fieldId, label, (int)(value ?? 0), (int)range.Min, (int)range.Max)
+                        .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
+                continue;
+            }
+
+            // Default: dispatch to DrawField
             DrawField(paper, fieldId, label, fieldType, value, newVal =>
             {
                 field.SetValue(target, newVal);
                 onChanged?.Invoke(target);
             }, depth);
         }
+
+        // [Button] methods
+        DrawButtonMethods(paper, $"{id}_btns", target);
     }
 
     /// <summary>
-    /// Draw a single field with the appropriate editor.
+    /// Draw a single field. Routes to PropertyEditor registry, then enums, then nested objects.
     /// </summary>
     public static void DrawField(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth = 0)
     {
-        // Check custom drawers first
-        if (_customDrawers.TryGetValue(type, out var customDrawer))
+        // 1. PropertyEditor registry (primitives, math types, EngineObject, collections, etc.)
+        var editor = PropertyEditorRegistry.GetEditor(type);
+        if (editor != null)
         {
-            customDrawer(paper, id, label, value!, v => onChange(v));
+            editor.OnGUI(paper, id, label, value, onChange, depth);
             return;
         }
 
-        // Primitives
-        if (type == typeof(bool))
-        {
-            EditorGUI.Toggle(paper, id, label, (bool)(value ?? false))
-                .OnValueChanged(v => onChange(v));
-            return;
-        }
-        if (type == typeof(int))
-        {
-            EditorGUI.IntField(paper, id, (int)(value ?? 0), label)
-                .OnValueChanged(v => onChange(v));
-            return;
-        }
-        if (type == typeof(float))
-        {
-            EditorGUI.FloatField(paper, id, (float)(value ?? 0f), label)
-                .OnValueChanged(v => onChange(v));
-            return;
-        }
-        if (type == typeof(double))
-        {
-            EditorGUI.FloatField(paper, id, (float)(double)(value ?? 0.0), label)
-                .OnValueChanged(v => onChange((double)v));
-            return;
-        }
-        if (type == typeof(string))
-        {
-            EditorGUI.TextField(paper, id, label, (string)(value ?? ""))
-                .OnValueChanged(v => onChange(v));
-            return;
-        }
-        if (type == typeof(byte))
-        {
-            EditorGUI.IntSlider(paper, id, label, (int)(byte)(value ?? (byte)0), 0, 255)
-                .OnValueChanged(v => onChange((byte)v));
-            return;
-        }
-        if (type == typeof(short))
-        {
-            EditorGUI.IntField(paper, id, (int)(short)(value ?? (short)0), label)
-                .OnValueChanged(v => onChange((short)Math.Clamp(v, short.MinValue, short.MaxValue)));
-            return;
-        }
-        if (type == typeof(ushort))
-        {
-            EditorGUI.IntField(paper, id, (int)(ushort)(value ?? (ushort)0), label)
-                .OnValueChanged(v => onChange((ushort)Math.Clamp(v, ushort.MinValue, ushort.MaxValue)));
-            return;
-        }
-        if (type == typeof(sbyte))
-        {
-            EditorGUI.IntField(paper, id, (int)(sbyte)(value ?? (sbyte)0), label)
-                .OnValueChanged(v => onChange((sbyte)Math.Clamp(v, sbyte.MinValue, sbyte.MaxValue)));
-            return;
-        }
-        if (type == typeof(long))
-        {
-            EditorGUI.IntField(paper, id, (int)Math.Clamp((long)(value ?? 0L), int.MinValue, int.MaxValue), label)
-                .OnValueChanged(v => onChange((long)v));
-            return;
-        }
-        if (type == typeof(uint))
-        {
-            EditorGUI.IntField(paper, id, (int)Math.Min((uint)(value ?? 0u), int.MaxValue), label)
-                .OnValueChanged(v => onChange((uint)Math.Max(v, 0)));
-            return;
-        }
-        if (type == typeof(ulong))
-        {
-            EditorGUI.IntField(paper, id, (int)Math.Min((ulong)(value ?? 0UL), (ulong)int.MaxValue), label)
-                .OnValueChanged(v => onChange((ulong)Math.Max(v, 0)));
-            return;
-        }
-
-        // Math types
-        if (type == typeof(Float2))
-        {
-            EditorGUI.Vector2Field(paper, id, label, (Float2)(value ?? Float2.Zero))
-                .OnValueChanged(v => onChange(v));
-            return;
-        }
-        if (type == typeof(Float3))
-        {
-            EditorGUI.Vector3Field(paper, id, label, (Float3)(value ?? Float3.Zero))
-                .OnValueChanged(v => onChange(v));
-            return;
-        }
-        if (type == typeof(Float4))
-        {
-            EditorGUI.Vector4Field(paper, id, label, (Float4)(value ?? Float4.Zero))
-                .OnValueChanged(v => onChange(v));
-            return;
-        }
-        if (type == typeof(Prowl.Vector.Color))
-        {
-            EditorGUI.ColorField(paper, id, label, (Prowl.Vector.Color)(value ?? new Prowl.Vector.Color(1, 1, 1, 1)))
-                .OnValueChanged(v => onChange(v));
-            return;
-        }
-        if (type == typeof(Quaternion))
-        {
-            var q = (Quaternion)(value ?? Quaternion.Identity);
-            var euler = q.EulerAngles;
-            EditorGUI.Vector3Field(paper, id, label, euler)
-                .OnValueChanged(v => onChange(Quaternion.FromEuler(v)));
-            return;
-        }
-
-        // AnimationCurve
-        if (type == typeof(AnimationCurve))
-        {
-            CurveEditor.CurveField(paper, id, label, (AnimationCurve)(value ?? new AnimationCurve()))
-                .OnValueChanged(v => onChange(v));
-            return;
-        }
-
-        // Enums
+        // 2. Enums
         if (type.IsEnum)
         {
             var names = Enum.GetNames(type);
             var values = Enum.GetValues(type);
             int selectedIdx = value != null ? Array.IndexOf(values, value) : 0;
-
             EditorGUI.Dropdown(paper, id, label, selectedIdx, names)
                 .OnValueChanged(idx => { if (idx >= 0 && idx < values.Length) onChange(values.GetValue(idx)); });
             return;
         }
 
-        // Guid (read-only)
-        if (type == typeof(Guid))
-        {
-            EditorGUI.Label(paper, id, $"{label}: {value}");
-            return;
-        }
-
-        // Lists and arrays
+        // 3. Collections (List<T>, T[])
         if (type.IsArray || (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>)))
         {
-            DrawCollection(paper, id, label, type, value, onChange, depth);
+            new CollectionPropertyEditor().OnGUI(paper, id, label, value, onChange, depth);
             return;
         }
 
-        // Dictionary
+        // 4. Dictionary<K,V>
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Dictionary<,>))
         {
-            DrawDictionary(paper, id, label, type, value, onChange, depth);
+            new DictionaryPropertyEditor().OnGUI(paper, id, label, value, onChange, depth);
             return;
         }
 
-        // Nested object (class or struct with serializable fields)
+        // 5. EngineObject (fallback if not caught by registry — handles inheritance)
+        if (typeof(EngineObject).IsAssignableFrom(type))
+        {
+            EngineObjectPropertyEditor.SetFieldType(type);
+            new EngineObjectPropertyEditor().OnGUI(paper, id, label, value, onChange, depth);
+            return;
+        }
+
+        // 6. Nested object (class or struct with serializable fields)
         if ((type.IsClass || type.IsValueType) && !type.IsPrimitive)
         {
             DrawNestedObject(paper, id, label, type, value, onChange, depth);
             return;
         }
 
-        // Fallback
+        // 7. Fallback
         EditorGUI.Label(paper, id, $"{label}: {value ?? "(null)"}", EditorTheme.TextDim);
     }
 
-
-    // ================================================================
-    //  Collections (List<T>, T[])
-    // ================================================================
-    static void DrawCollection(Paper paper, string id, string label, Type type, object? value,
-        Action<object?> onChange, int depth)
-    {
-        Type elementType = type.IsArray ? type.GetElementType()! : type.GetGenericArguments()[0];
-        IList? list = value as IList;
-        int count = list?.Count ?? 0;
-
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({count})", () =>
-        {
-            if (list == null)
-            {
-                using (paper.Row($"{id}_null").Height(EditorTheme.RowHeight).ChildLeft(16).Enter())
-                {
-                    EditorGUI.Button(paper, $"{id}_create", $"Create {elementType.Name}[]")
-                        .OnValueChanged(v =>
-                        {
-                            onChange(type.IsArray
-                                ? Array.CreateInstance(elementType, 0)
-                                : Activator.CreateInstance(type));
-                        });
-                }
-                return;
-            }
-
-            // ── Stable ID list ────────────────────────────────────────────
-            // Retrieve or create a list of stable string keys, one per element.
-            // This list is stored on the foldout's column container so it
-            // survives re-renders. When items are added/removed we add/remove
-            // the corresponding stable key so order is always in sync.
-            var colEl = paper.CurrentParent;
-            var stableIds = paper.GetElementStorage<List<string>>(colEl, "stableIds", null!)
-                            ?? new List<string>();
-
-            // Grow if elements were added externally
-            while (stableIds.Count < list.Count)
-                stableIds.Add(Guid.NewGuid().ToString("N"));
-
-            // Shrink if elements were removed externally
-            while (stableIds.Count > list.Count)
-                stableIds.RemoveAt(stableIds.Count - 1);
-
-            paper.SetElementStorage(colEl, "stableIds", stableIds);
-
-            // ── Elements ──────────────────────────────────────────────────
-            using (paper.Column($"{id}_items").Height(UnitValue.Auto).ChildLeft(16).ColBetween(6).Enter())
-            {
-                for (int i = 0; i < list.Count; i++)
-                {
-                    int idx = i;
-                    string stableKey = stableIds[i]; // identity follows the data, not the slot
-
-                    using (paper.Row($"{id}_item_{stableKey}").Height(UnitValue.Auto).RowBetween(4).Enter())
-                    {
-                        using (paper.Column($"{id}_itemval_{stableKey}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).RowBetween(2).Enter())
-                        {
-                            DrawField(paper, $"{id}_el_{stableKey}", $"[{idx}]", elementType, list[i],
-                                newVal =>
-                                {
-                                    list[idx] = newVal;
-                                    onChange(list);
-                                }, depth + 1);
-                        }
-
-                        EditorGUI.ButtonSquare(paper, $"{id}_rm_{stableKey}", EditorIcons.Xmark)
-                            .OnValueChanged(v =>
-                            {
-                                // Remove the stable key at the same position
-                                stableIds.RemoveAt(idx);
-                                paper.SetElementStorage(colEl, "stableIds", stableIds);
-
-                                if (type.IsArray)
-                                {
-                                    var newArr = Array.CreateInstance(elementType, list.Count - 1);
-                                    for (int j = 0, k = 0; j < list.Count; j++)
-                                        if (j != idx) newArr.SetValue(list[j], k++);
-                                    onChange(newArr);
-                                }
-                                else
-                                {
-                                    var newList = (IList)Activator.CreateInstance(list.GetType())!;
-                                    for (int j = 0; j < list.Count; j++)
-                                        if (j != idx) newList.Add(list[j]);
-                                    onChange(newList);
-                                }
-                            });
-                    }
-                }
-
-                EditorGUI.Button(paper, $"{id}_add", "+ Add Element")
-                    .OnValueChanged(v =>
-                    {
-                        object? newElement = elementType.IsValueType
-                            ? Activator.CreateInstance(elementType)
-                            : elementType == typeof(string) ? "" : null;
-
-                        // Assign a stable key for the new element immediately
-                        stableIds.Add(Guid.NewGuid().ToString("N"));
-                        paper.SetElementStorage(colEl, "stableIds", stableIds);
-
-                        if (type.IsArray)
-                        {
-                            var newArr = Array.CreateInstance(elementType, list.Count + 1);
-                            for (int j = 0; j < list.Count; j++) newArr.SetValue(list[j], j);
-                            newArr.SetValue(newElement, list.Count);
-                            onChange(newArr);
-                        }
-                        else
-                        {
-                            var newList = (IList)Activator.CreateInstance(list.GetType())!;
-                            for (int j = 0; j < list.Count; j++) newList.Add(list[j]);
-                            newList.Add(newElement);
-                            onChange(newList);
-                        }
-                    });
-            }
-        });
-    }
-
-    // ================================================================
-    //  Dictionary<K, V>
-    // ================================================================
-
-    static void DrawDictionary(Paper paper, string id, string label, Type type, object? value,
-        Action<object?> onChange, int depth)
-    {
-        var args = type.GetGenericArguments();
-        Type keyType = args[0], valType = args[1];
-        IDictionary? dict = value as IDictionary;
-        int count = dict?.Count ?? 0;
-
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({count} entries)", () =>
-        {
-            if (dict == null)
-            {
-                EditorGUI.Button(paper, $"{id}_create", "Create Dictionary")
-                    .OnValueChanged(v => onChange(Activator.CreateInstance(type)));
-                return;
-            }
-
-            using (paper.Column($"{id}_entries").Height(UnitValue.Auto).ChildLeft(16).ColBetween(6).Enter())
-            {
-                // Existing entries
-                var keys = new List<object>();
-                foreach (var key in dict.Keys) keys.Add(key);
-
-                for (int i = 0; i < keys.Count; i++)
-                {
-                    int idx = i;
-                    var keyObj = keys[i];
-
-                    using (paper.Row($"{id}_entry_{i}").Height(UnitValue.Auto).RowBetween(4).Enter())
-                    {
-                        EditorGUI.Label(paper, $"{id}_key_{i}", $"[{keyObj}]");
-
-                        using (paper.Column($"{id}_val_{i}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).RowBetween(2).Enter())
-                        {
-                            DrawField(paper, $"{id}_v_{i}", "", valType, dict[keyObj],
-                                newVal =>
-                                {
-                                    dict[keyObj] = newVal;
-                                    onChange(dict);
-                                }, depth + 1);
-                        }
-
-                        EditorGUI.ButtonSquare(paper, $"{id}_drm_{i}", EditorIcons.Xmark)
-                            .OnValueChanged(v =>
-                            {
-                                dict.Remove(keyObj);
-                                onChange(dict);
-                            });
-                    }
-                }
-
-                EditorGUI.Separator(paper, $"{id}_sep");
-
-                // Add new entry row — store pending key string in element storage
-                using (paper.Row($"{id}_addrow").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
-                {
-                    var addRowEl = paper.CurrentParent;
-                    string pendingKey = paper.GetElementStorage(addRowEl, "pendingKey", "");
-
-                    EditorGUI.TextField(paper, $"{id}_newkey", "Key", pendingKey)
-                        .OnValueChanged(v => paper.SetElementStorage(addRowEl, "pendingKey", v));
-
-                    EditorGUI.Button(paper, $"{id}_addentry", "+ Add")
-                        .OnValueChanged(v =>
-                        {
-                            string pk = paper.GetElementStorage(addRowEl, "pendingKey", "");
-                            if (string.IsNullOrWhiteSpace(pk)) return;
-
-                            try
-                            {
-                                object? typedKey = keyType == typeof(string)
-                                    ? pk
-                                    : Convert.ChangeType(pk, keyType, CultureInfo.InvariantCulture);
-
-                                if (dict.Contains(typedKey!)) return;
-
-                                object? newVal = valType.IsValueType
-                                    ? Activator.CreateInstance(valType)
-                                    : valType == typeof(string) ? "" : null;
-
-                                dict.Add(typedKey!, newVal);
-                                onChange(dict);
-                                paper.SetElementStorage(addRowEl, "pendingKey", "");
-                            }
-                            catch { /* invalid key type conversion — silently ignore */ }
-                        });
-                }
-            }
-        });
-    }
     // ================================================================
     //  Nested Object
     // ================================================================
@@ -454,23 +157,16 @@ public static class PropertyGrid
             using (paper.Row($"{id}_null").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
             {
                 EditorGUI.Label(paper, $"{id}_lbl", $"{label}: (null)");
-
                 if (!type.IsAbstract && !type.IsInterface)
-                {
-                    EditorGUI.Button(paper, $"{id}_create", EditorIcons.Plus + " Create Instance")
+                    EditorGUI.Button(paper, $"{id}_create", EditorIcons.Plus + " Create")
                         .OnValueChanged(v => onChange(Activator.CreateInstance(type)));
-                }
                 else
-                {
                     DrawTypePicker(paper, $"{id}_pick", type, null, onChange);
-                }
             }
             return;
         }
 
-        // Use the actual runtime type, not the declared base type
         Type actualType = value.GetType();
-
         var fields = GetSerializableFields(actualType);
         if (fields.Length == 0)
         {
@@ -480,8 +176,6 @@ public static class PropertyGrid
 
         EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({actualType.Name})", () =>
         {
-            // For polymorphic fields, show a type picker inside the foldout
-            // so the user can swap the concrete type even after creation
             if (type.IsAbstract || type.IsInterface)
             {
                 DrawTypePicker(paper, $"{id}_pick", type, value, onChange);
@@ -492,10 +186,7 @@ public static class PropertyGrid
             {
                 Draw(paper, $"{id}_props", value, changed =>
                 {
-                    if (actualType.IsValueType)
-                        onChange(changed);
-                    else
-                        onChange?.Invoke(value);
+                    if (actualType.IsValueType) onChange(changed); else onChange?.Invoke(value);
                 }, depth + 1);
             }
         });
@@ -510,38 +201,59 @@ public static class PropertyGrid
         var types = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })
             .Where(t => baseType.IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
-            .Take(20)
-            .ToArray();
+            .Take(20).ToArray();
 
         if (types.Length == 0)
         {
-            EditorGUI.Label(paper, $"{id}_none", "(no implementations found)", EditorTheme.TextDim);
+            EditorGUI.Label(paper, $"{id}_none", "(no implementations)", EditorTheme.TextDim);
             return;
         }
 
-        // Index 0 = null, indices 1..N = concrete types
         Type? currentType = currentValue?.GetType();
-        int selectedIndex = currentType != null
-            ? Array.IndexOf(types, currentType) + 1  // offset by 1 for null slot
-            : 0;                                      // null is selected
-
+        int selectedIndex = currentType != null ? Array.IndexOf(types, currentType) + 1 : 0;
         var names = types.Select(t => t.Name).Prepend("(null)").ToArray();
 
         EditorGUI.Dropdown(paper, $"{id}_dd", "Type", selectedIndex, names)
             .OnValueChanged(idx =>
             {
-                if (idx == 0)
-                    onChange(null);
-                else if (idx >= 1 && idx <= types.Length)
-                    onChange(Activator.CreateInstance(types[idx - 1]));
+                if (idx == 0) onChange(null);
+                else if (idx >= 1 && idx <= types.Length) onChange(Activator.CreateInstance(types[idx - 1]));
             });
     }
 
     // ================================================================
-    //  Reflection Helpers
+    //  [Button] Methods
     // ================================================================
 
-    static FieldInfo[] GetSerializableFields(Type type)
+    static void DrawButtonMethods(Paper paper, string id, object target)
+    {
+        var methods = target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        int idx = 0;
+        foreach (var method in methods)
+        {
+            var attr = method.GetCustomAttribute<ButtonAttribute>();
+            if (attr == null || method.GetParameters().Length > 0) continue;
+            string label = attr.Label ?? NicifyName(method.Name);
+            EditorGUI.Button(paper, $"{id}_{idx++}", label)
+                .OnValueChanged(_ => method.Invoke(target, null));
+        }
+    }
+
+    // ================================================================
+    //  Helpers
+    // ================================================================
+
+    static bool EvaluateCondition(object target, string memberName)
+    {
+        var type = target.GetType();
+        var field = type.GetField(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (field != null) return field.GetValue(target) is true;
+        var prop = type.GetProperty(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (prop != null) return prop.GetValue(target) is true;
+        return true;
+    }
+
+    public static FieldInfo[] GetSerializableFields(Type type)
     {
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly;
         var fields = new List<FieldInfo>();
@@ -564,13 +276,11 @@ public static class PropertyGrid
         return fields.ToArray();
     }
 
-    static string NicifyName(string name)
+    public static string NicifyName(string name)
     {
-        // Remove common prefixes
-        if (name.StartsWith("_")) name = name.Substring(1);
-        if (name.StartsWith("m_")) name = name.Substring(2);
+        if (name.StartsWith("_")) name = name[1..];
+        if (name.StartsWith("m_")) name = name[2..];
 
-        // Insert spaces before capitals (camelCase → Camel Case)
         var result = new System.Text.StringBuilder();
         for (int i = 0; i < name.Length; i++)
         {

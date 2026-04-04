@@ -64,6 +64,10 @@ public class EditorApplication : Game
         ScanAndRegisterPanels();
         RegisterMenus();
 
+        // Initialize editor registries
+        Inspector.PropertyEditorRegistry.Initialize();
+        Inspector.ComponentEditorRegistry.Initialize();
+
         // Start with the project launcher
         ProjectLauncher.Initialize();
 
@@ -375,6 +379,7 @@ public class EditorApplication : Game
     {
         // Systems drawn on top (Overlay/Topmost layers)
         Widgets.FileDialog.Draw(paper);
+        Inspector.EngineObjectPropertyEditor.DrawSelectorModal(paper);
         Widgets.ModalDialog.Draw(paper);
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
         Widgets.Tooltip.Draw(paper);

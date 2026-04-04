@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Editor.Docking;
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -38,18 +39,23 @@ public class InspectorPanel : DockPanel
                 return;
             }
 
-            // Header: what's selected
-            DrawSelectionHeader(paper, font, active);
-
-            EditorGUI.Separator(paper, "insp_sep_header");
-
-            // Draw based on type
-            if (active is ContentItem contentItem)
-                DrawAssetInspector(paper, font, contentItem);
-            else if (active is EngineObject engineObj)
-                DrawEngineObjectInspector(paper, font, engineObj);
+            // Draw based on type — GameObject has its own header
+            if (active is GameObject gameObject)
+            {
+                GameObjectInspector.Draw(paper, font, gameObject);
+            }
             else
-                DrawGenericInspector(paper, font, active);
+            {
+                DrawSelectionHeader(paper, font, active);
+                EditorGUI.Separator(paper, "insp_sep_header");
+
+                if (active is ContentItem contentItem)
+                    DrawAssetInspector(paper, font, contentItem);
+                else if (active is EngineObject engineObj)
+                    DrawEngineObjectInspector(paper, font, engineObj);
+                else
+                    DrawGenericInspector(paper, font, active);
+            }
 
             // Multi-selection summary
             if (Selection.Count > 1)

@@ -1,0 +1,218 @@
+using System;
+using System.IO;
+using System.Linq;
+
+using Prowl.Editor.Widgets;
+using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.Runtime;
+
+using Color = System.Drawing.Color;
+
+namespace Prowl.Editor.Inspector;
+
+/// <summary>
+/// PropertyEditor for all EngineObject-derived types (Mesh, Material, Shader, Texture2D, etc).
+/// Shows an object reference field with name, icon, and asset selector modal.
+/// </summary>
+[CustomPropertyEditor(typeof(EngineObject))]
+public class EngineObjectPropertyEditor : PropertyEditor
+{
+    // Static state for the asset selector modal
+    private static bool _selectorOpen;
+    private static Type? _selectorType;
+    private static Action<object?>? _selectorCallback;
+
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+
+        var eo = value as EngineObject;
+        // Use the declared field type for the selector
+        Type fieldType = _lastFieldType ?? typeof(EngineObject);
+        _lastFieldType = null; // consume it
+
+        bool isAsset = eo != null && eo.AssetID != Guid.Empty;
+        string suffix = eo != null ? (isAsset ? eo.GetType().Name : "Instance") : fieldType.Name;
+        string displayName = eo != null ? $"{eo.Name} ({suffix})" : $"None ({fieldType.Name})";
+        string icon = eo != null ? EditorIcons.Cube : EditorIcons.Circle;
+
+        using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+        {
+            // Label
+            if (!string.IsNullOrEmpty(label))
+                paper.Box($"{id}_lbl")
+                    .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Text(label, font).TextColor(EditorTheme.Text)
+                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+            // Object field row
+            using (paper.Row($"{id}_field")
+                .Height(EditorTheme.RowHeight)
+                .BackgroundColor(EditorTheme.InputBackground)
+                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
+                .BorderColor(EditorTheme.Border).BorderWidth(1)
+                .OnDoubleClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2))
+                .Enter())
+            {
+                // Icon
+                paper.Box($"{id}_ico")
+                    .Width(16).Height(EditorTheme.RowHeight)
+                    .IsNotInteractable()
+                    .Text(icon, font)
+                    .TextColor(eo != null ? EditorTheme.Accent : EditorTheme.TextDisabled)
+                    .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
+
+                // Name
+                paper.Box($"{id}_name")
+                    .Height(EditorTheme.RowHeight).Clip()
+                    .IsNotInteractable()
+                    .Text(displayName, font)
+                    .TextColor(eo != null ? EditorTheme.Text : EditorTheme.TextDisabled)
+                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+
+                // Picker circle button
+                paper.Box($"{id}_pick")
+                    .Width(20).Height(EditorTheme.RowHeight)
+                    .Text(EditorIcons.CircleDot, font).TextColor(EditorTheme.TextDim)
+                    .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
+                    .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                    .Rounded(3)
+                    .OnClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stores the declared field type so we search for the right asset type.
+    /// Called by PropertyGrid before OnGUI.
+    /// </summary>
+    [ThreadStatic] private static Type? _lastFieldType;
+    public static void SetFieldType(Type type) => _lastFieldType = type;
+
+    private static void OpenSelector(Type type, Action<object?> onChange)
+    {
+        _selectorOpen = true;
+        _selectorType = type;
+        _selectorCallback = onChange;
+    }
+
+    /// <summary>
+    /// Draw the asset selector modal. Call from EditorApplication.EndGui or similar overlay location.
+    /// </summary>
+    public static void DrawSelectorModal(Paper paper)
+    {
+        if (!_selectorOpen || _selectorType == null) return;
+
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+
+        var db = EditorAssetDatabase.Instance;
+        var matchingEntries = db?.FindAssetsOfType(_selectorType).Take(100).ToList()
+            ?? new System.Collections.Generic.List<AssetEntry>();
+
+        // Fullscreen blocker
+        paper.Box("eo_sel_overlay")
+            .PositionType(PositionType.SelfDirected).Position(0, 0)
+            .Size(UnitValue.Stretch(), UnitValue.Stretch())
+            .BackgroundColor(Color.FromArgb(120, 0, 0, 0))
+            .Layer(Layer.Overlay)
+            .OnClick(0, (_, _) => _selectorOpen = false); // Click outside to close
+
+        // Modal window
+        using (paper.Column("eo_sel_modal")
+            .Size(350, 400)
+            .Margin(UnitValue.StretchOne)
+            .BackgroundColor(EditorTheme.Normal)
+            .BorderColor(EditorTheme.Bright).BorderWidth(1).Rounded(8)
+            .Layer(Layer.Overlay)
+            .Enter())
+        {
+            // Header
+            using (paper.Row("eo_sel_header")
+                .Height(32).ChildLeft(12).ChildRight(8).RowBetween(8)
+                .BackgroundColor(EditorTheme.Darkest)
+                .Enter())
+            {
+                paper.Box("eo_sel_title").Height(32)
+                    .Text($"Select {_selectorType.Name}", font)
+                    .TextColor(EditorTheme.Text)
+                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+                paper.Box("eo_sel_spacer");
+
+                paper.Box("eo_sel_close")
+                    .Width(24).Height(24).Rounded(4)
+                    .Hovered.BackgroundColor(Color.FromArgb(255, 180, 60, 60)).End()
+                    .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.TextDim)
+                    .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
+                    .OnClick(0, (_, _) => _selectorOpen = false);
+            }
+
+            // List
+            using (ScrollView.Begin(paper, "eo_sel_scroll", 350, 360, paddingLeft: 4, paddingRight: 4, paddingTop: 4))
+            {
+                // None option
+                paper.Box("eo_sel_none")
+                    .Height(EditorTheme.RowHeight).ChildLeft(8)
+                    .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                    .Rounded(3)
+                    .Text("None", font)
+                    .TextColor(EditorTheme.TextDim)
+                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft)
+                    .OnClick(0, (_, _) =>
+                    {
+                        _selectorCallback?.Invoke(null);
+                        _selectorOpen = false;
+                    });
+
+                if (matchingEntries.Count > 0)
+                    paper.Box("eo_sel_sep").Height(1).Margin(4, 2, 4, 2).BackgroundColor(EditorTheme.Border);
+
+                for (int i = 0; i < matchingEntries.Count; i++)
+                {
+                    var entry = matchingEntries[i];
+                    string assetName = Path.GetFileNameWithoutExtension(entry.Path);
+
+                    using (paper.Row($"eo_sel_item_{i}")
+                        .Height(EditorTheme.RowHeight).ChildLeft(6).RowBetween(4)
+                        .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                        .Rounded(3)
+                        .OnClick(entry.Guid, (guid, _) =>
+                        {
+                            var asset = Runtime.AssetDatabase.Get(guid);
+                            if (asset != null) _selectorCallback?.Invoke(asset);
+                            _selectorOpen = false;
+                        })
+                        .Enter())
+                    {
+                        paper.Box($"eo_sel_ico_{i}")
+                            .Width(14).Height(EditorTheme.RowHeight)
+                            .Text(EditorIcons.Cube, font).TextColor(EditorTheme.TextDim)
+                            .FontSize(9f).Alignment(TextAlignment.MiddleCenter);
+
+                        paper.Box($"eo_sel_name_{i}")
+                            .Height(EditorTheme.RowHeight).Clip()
+                            .Text(assetName, font).TextColor(EditorTheme.Text)
+                            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+                        paper.Box($"eo_sel_path_{i}")
+                            .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildRight(4)
+                            .Text(entry.Path, font).TextColor(EditorTheme.TextDisabled)
+                            .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleRight);
+                    }
+                }
+
+                if (matchingEntries.Count == 0)
+                {
+                    paper.Box("eo_sel_empty").Height(40)
+                        .Text("No assets of this type found", font)
+                        .TextColor(EditorTheme.TextDisabled)
+                        .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                }
+            }
+        }
+    }
+}
