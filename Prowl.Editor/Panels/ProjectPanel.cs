@@ -452,7 +452,7 @@ public class ProjectPanel : DockPanel
 
             if (!item.IsFolder)
             {
-                builder.Item($"{EditorIcons.FolderOpen}  Open with System", () => OpenWithSystem(item));
+                builder.Item($"{EditorIcons.FolderOpen}  Open", () => OpenWithSystem(item));
                 builder.Separator();
             }
 
