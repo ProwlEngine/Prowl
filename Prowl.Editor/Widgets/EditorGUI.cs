@@ -3,6 +3,7 @@ using System.Globalization;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Runtime.Utils;
 using Prowl.Scribe;
 
 using Color = System.Drawing.Color;
@@ -325,7 +326,7 @@ public static class EditorGUI
     // ================================================================
     //  Slider
     // ================================================================
-    public static WidgetResult<float> Slider(Paper paper, string id, string label, float value, float min, float max)
+    public static WidgetResult<float> Slider(Paper paper, string id, string label, float value, float min, float max, bool showField = true)
     {
         Action<float>? userCallback = null;
         float t = (max > min) ? Math.Clamp((value - min) / (max - min), 0, 1) : 0;
@@ -344,7 +345,7 @@ public static class EditorGUI
 
             paper.Box($"{id}_track")
                 .Height(EditorTheme.RowHeight)
-                .Width(UnitValue.Stretch())
+                .Width(UnitValue.Stretch(4f))
                 .OnClick(e =>
                 {
                     float v = min + Math.Clamp((float)e.NormalizedPosition.X, 0f, 1f) * (max - min);
@@ -392,9 +393,11 @@ public static class EditorGUI
                     canvas.Fill();
                 }));
 
-            // replace the manual input box with:
-            FloatField(paper, $"{id}_val", value)
-                .OnValueChanged(v => userCallback?.Invoke(Math.Clamp(v, min, max)));
+            if (showField)
+            {
+                FloatField(paper, $"{id}_val", "", value)
+                    .OnValueChanged(v => userCallback?.Invoke(Math.Clamp(v, min, max)));
+            }
         }
 
         return new WidgetResult<float>(cb => userCallback = cb);
@@ -586,6 +589,7 @@ public static class EditorGUI
                         .ChildTop(2).ChildBottom(2).ChildLeft(2).ChildRight(2)
                         .HookToParent()
                         .Layer(Layer.Topmost)
+                        .ClampToScreen()
                         .Enter())
                     {
                         for (int i = 0; i < options.Length; i++)
@@ -671,7 +675,7 @@ public static class EditorGUI
                 .HookToParent()
                 .IsNotInteractable()
                 .FontSize(FontSz)
-                .TextField(value, Font!,
+                .TextField(value, Font,
                     onChange: v => userCallback?.Invoke(v),
                     textColor: EditorTheme.Text,
                     placeholder: placeholder,
@@ -681,12 +685,11 @@ public static class EditorGUI
             if (!string.IsNullOrEmpty(value))
             {
                 var clearBtn = paper.Box($"{id}_clear")
-                    .Size(16, 16).Rounded(8)
+                    .Rounded(8)
+                    .Size(16).Margin(2, UnitValue.StretchOne)
                     .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                    .Text(EditorIcons.Xmark, Font).TextColor(EditorTheme.TextDim).FontSize(14).Alignment(PaperUI.TextAlignment.MiddleCenter)
                     .OnClick(e => userCallback?.Invoke(""));
-
-                if (Font != null)
-                    clearBtn.Text("\u2715", Font).TextColor(EditorTheme.TextDim).FontSize(10f);
             }
         }
 

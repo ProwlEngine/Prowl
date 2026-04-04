@@ -103,6 +103,7 @@ public static class CurveEditor
             .BackgroundColor(EditorTheme.PanelBackground)
             .BorderColor(EditorTheme.Border).BorderWidth(1).Rounded(6)
             .Layer(Layer.Topmost)
+            .ClampToScreen()
             .Enter())
         {
             var el = paper.CurrentParent;

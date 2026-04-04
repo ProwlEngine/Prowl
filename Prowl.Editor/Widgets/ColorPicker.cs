@@ -31,6 +31,7 @@ public static class ColorPicker
             .ChildLeft(8).ChildRight(8).ChildTop(8).ChildBottom(8)
             .RowBetween(6)
             .Layer(Layer.Topmost)
+            .ClampToScreen()
             .Enter())
         {
             var el = paper.CurrentParent;
