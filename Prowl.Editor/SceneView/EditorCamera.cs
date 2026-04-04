@@ -22,7 +22,6 @@ public class EditorCamera
     private float _yaw = 0f;
     private float _pitch = 15f;
     private float _moveSpeed = 5f;
-    private bool _debugOnce = true;
 
     // Grid
     public bool ShowGrid { get; set; } = true;
@@ -93,13 +92,6 @@ public class EditorCamera
 
         // Render
         var pipeline = _camera.Pipeline ?? DefaultRenderPipeline.Default;
-        if (_debugOnce)
-        {
-            _debugOnce = false;
-            Runtime.Debug.Log($"EditorCamera: pos={_position}, pitch={_pitch}, yaw={_yaw}");
-            Runtime.Debug.Log($"EditorCamera: scene has {scene.RenderableCount} renderables, {scene.Lights.Count} lights");
-            Runtime.Debug.Log($"EditorCamera: RT={_renderTarget?.Width}x{_renderTarget?.Height}, cam.Scene={_camera.Scene?.Name}");
-        }
         pipeline.Render(_camera, renderData);
 
         // Remove from scene if we added it

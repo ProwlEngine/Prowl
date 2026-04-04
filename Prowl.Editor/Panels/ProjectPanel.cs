@@ -26,6 +26,7 @@ public class ProjectPanel : DockPanel
     private string _renameText = "";
     private bool _renameInTree; // true = renaming in folder tree, false = in content view
     private int _lastSelectionCount; // track selection changes to cancel rename
+    private static readonly HashSet<Guid> _expandedAssets = new(); // files with sub-assets expanded
     private const float MinThumbSize = 20f;  // Below this = list mode
     private const float MaxThumbSize = 128f;
     private const float ListThreshold = 32f; // Below this = list view
@@ -410,13 +411,57 @@ public class ProjectPanel : DockPanel
                     if (it.IsFolder)
                         _currentFolder = it.RelativePath;
                 })
+                .OnDragStart(item, (it, _) =>
+                {
+                    if (!it.IsFolder && it.Guid != Guid.Empty)
+                    {
+                        Type? assetType = null;
+                        if (it.IsSubAsset)
+                        {
+                            // Find sub-asset type from parent entry
+                            var db = EditorAssetDatabase.Instance;
+                            if (db != null)
+                            {
+                                var subs = db.GetSubAssets(it.ParentGuid);
+                                var sub = subs.FirstOrDefault(s => s.Guid == it.Guid);
+                                assetType = sub?.Type;
+                            }
+                        }
+                        else
+                        {
+                            var entry = EditorAssetDatabase.Instance?.GetEntry(it.RelativePath);
+                            assetType = entry?.MainAssetType;
+                        }
+                        DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, assetType));
+                    }
+                })
                 .Enter())
             {
+                // Sub-asset indent
+                if (item.IsSubAsset)
+                    paper.Box($"proj_li_indent_{i}").Width(16).Height(22);
+
+                // Expand arrow for items with sub-assets
+                if (item.HasSubAssets)
+                {
+                    bool expanded = _expandedAssets.Contains(item.Guid);
+                    paper.Box($"proj_li_arrow_{i}")
+                        .Width(14).Height(22)
+                        .Text(expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
+                        .TextColor(EditorTheme.TextDim)
+                        .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
+                        .OnClick(item.Guid, (guid, _) =>
+                        {
+                            if (_expandedAssets.Contains(guid)) _expandedAssets.Remove(guid);
+                            else _expandedAssets.Add(guid);
+                        });
+                }
+
                 // Icon
                 paper.Box($"proj_li_ico_{i}")
                     .Width(18).Height(22)
                     .Text(item.Icon, font)
-                    .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : EditorTheme.TextDim)
+                    .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : (item.IsSubAsset ? EditorTheme.Accent : EditorTheme.TextDim))
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
 
                 // Name (inline rename or label)
@@ -677,6 +722,14 @@ public class ProjectPanel : DockPanel
                             if (it.IsFolder)
                                 _currentFolder = it.RelativePath;
                         })
+                        .OnDragStart(item, (it, _) =>
+                        {
+                            if (!it.IsFolder && it.Guid != Guid.Empty)
+                            {
+                                var entry = EditorAssetDatabase.Instance?.GetEntry(it.RelativePath);
+                                DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, entry?.MainAssetType));
+                            }
+                        })
                         .Tooltip(item.Name)
                         .Enter())
                     {
@@ -764,6 +817,8 @@ public class ProjectPanel : DockPanel
                 string ext = Path.GetExtension(fileName).ToLowerInvariant();
                 var entry = db.GetEntry(relPath);
 
+                bool hasSubAssets = entry?.SubAssets != null && entry.SubAssets.Length > 0;
+
                 items.Add(new ContentItem
                 {
                     Name = fileName,
@@ -771,8 +826,28 @@ public class ProjectPanel : DockPanel
                     IsFolder = false,
                     Icon = GetFileIcon(ext),
                     TypeLabel = entry?.MainAssetType?.Name ?? ext.TrimStart('.').ToUpperInvariant(),
-                    Guid = entry?.Guid ?? Guid.Empty
+                    Guid = entry?.Guid ?? Guid.Empty,
+                    HasSubAssets = hasSubAssets
                 });
+
+                // Insert sub-assets if expanded
+                if (hasSubAssets && entry != null && _expandedAssets.Contains(entry.Guid))
+                {
+                    foreach (var sub in entry.SubAssets)
+                    {
+                        items.Add(new ContentItem
+                        {
+                            Name = sub.Name,
+                            RelativePath = $"{relPath}#{sub.Name}",
+                            IsFolder = false,
+                            IsSubAsset = true,
+                            Icon = GetSubAssetIcon(sub.Type),
+                            TypeLabel = sub.Type?.Name ?? "Unknown",
+                            Guid = sub.Guid,
+                            ParentGuid = entry.Guid
+                        });
+                    }
+                }
             }
         }
         catch { }
@@ -802,6 +877,16 @@ public class ProjectPanel : DockPanel
             _ => EditorIcons.File,
         };
     }
+
+    private static string GetSubAssetIcon(Type? type)
+    {
+        if (type == null) return EditorIcons.File;
+        if (typeof(Prowl.Runtime.Resources.Mesh).IsAssignableFrom(type)) return EditorIcons.VectorSquare;
+        if (typeof(Prowl.Runtime.Resources.Material).IsAssignableFrom(type)) return EditorIcons.Palette;
+        if (typeof(Prowl.Runtime.AnimationClip).IsAssignableFrom(type)) return EditorIcons.Film;
+        if (typeof(Prowl.Runtime.Resources.Texture2D).IsAssignableFrom(type)) return EditorIcons.FileImage;
+        return EditorIcons.File;
+    }
 }
 
 /// <summary>
@@ -812,10 +897,13 @@ public class ContentItem
     public string Name = "";
     public string RelativePath = "";
     public bool IsFolder;
+    public bool IsSubAsset;
     public string Icon = "";
     public string TypeLabel = "";
     public Guid Guid;
+    public Guid ParentGuid; // For sub-assets: the parent file's GUID
+    public bool HasSubAssets; // True if this file has expandable sub-assets
 
-    public override bool Equals(object? obj) => obj is ContentItem c && c.RelativePath == RelativePath;
-    public override int GetHashCode() => RelativePath.GetHashCode();
+    public override bool Equals(object? obj) => obj is ContentItem c && c.Guid == Guid && c.RelativePath == RelativePath;
+    public override int GetHashCode() => Guid != Guid.Empty ? Guid.GetHashCode() : RelativePath.GetHashCode();
 }

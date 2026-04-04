@@ -94,7 +94,11 @@ public static class PropertyGrid
         Action<object?> onChange, int depth = 0)
     {
         // 1. PropertyEditor registry (primitives, math types, EngineObject, collections, etc.)
-        var editor = PropertyEditorRegistry.GetEditor(type);
+        // For EngineObject types, always pass the declared field type to the editor
+        if (typeof(EngineObject).IsAssignableFrom(type))
+            Inspector.EngineObjectPropertyEditor.SetFieldType(type);
+
+        var editor = Inspector.PropertyEditorRegistry.GetEditor(type);
         if (editor != null)
         {
             editor.OnGUI(paper, id, label, value, onChange, depth);

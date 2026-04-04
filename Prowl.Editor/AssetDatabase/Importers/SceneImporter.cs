@@ -23,14 +23,14 @@ public class SceneImporter : AssetImporter
             string text = File.ReadAllText(absolutePath);
             var echo = EchoObject.ReadFromString(text);
 
-            var ctx = new SerializationContext();
-            AssetDatabase.ConfigureContext(ctx);
+            var ctx = ImportHelper.CreateTrackingContext(out var dependencies);
 
             var scene = Serializer.Deserialize<Scene>(echo, ctx);
             if (scene != null)
             {
                 scene.Name = Path.GetFileNameWithoutExtension(absolutePath);
                 result.MainAsset = scene;
+                result.Dependencies = dependencies;
             }
         }
         catch (Exception ex)

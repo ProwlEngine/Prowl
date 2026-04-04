@@ -21,6 +21,8 @@ public class EditorAssetDatabase : IAssetDatabase
     private readonly Dictionary<Guid, AssetEntry> _guidToEntry = new();
     private readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<Guid, EngineObject> _loadedAssets = new();
+    private readonly Dictionary<Guid, (Guid parentGuid, int index)> _subAssetIndex = new();
+    private readonly HashSet<Guid> _currentlyLoading = new(); // re-entrancy guard
     private readonly DependencyGraph _dependencies = new();
     private AssetWatcher? _watcher;
 
@@ -54,6 +56,9 @@ public class EditorAssetDatabase : IAssetDatabase
             Runtime.Debug.Log($"Loaded {cached.Count} entries from metadata cache.");
         }
 
+        // Rebuild sub-asset index
+        RebuildSubAssetIndex();
+
         // Scan and reconcile with actual files
         ScanAssets();
 
@@ -82,12 +87,54 @@ public class EditorAssetDatabase : IAssetDatabase
     {
         if (assetId == Guid.Empty) return null;
 
-        // Check in-memory cache
+        // Check in-memory cache (covers both main assets and sub-assets)
         if (_loadedAssets.TryGetValue(assetId, out var loaded))
             return loaded;
 
-        // Try loading from disk cache
+        // Re-entrancy guard — prevents infinite recursion when deserializing
+        // assets that reference each other or their own sub-assets
+        if (!_currentlyLoading.Add(assetId))
+            return null; // Already loading this asset higher up the call stack
+
+        try
+        {
+            return GetInternal(assetId);
+        }
+        finally
+        {
+            _currentlyLoading.Remove(assetId);
+        }
+    }
+
+    private EngineObject? GetInternal(Guid assetId)
+    {
+        // Check if this is a sub-asset
+        if (_subAssetIndex.TryGetValue(assetId, out var subInfo))
+        {
+            // Load the parent first — this will also cache all sub-assets
+            var parent = Get(subInfo.parentGuid);
+            // After loading parent, sub-asset should be cached now
+            return _loadedAssets.GetValueOrDefault(assetId);
+        }
+
+        // Try loading main asset from disk cache
         string cachePath = GetCachePath(assetId);
+        var entry = GetEntry(assetId);
+
+        // Validate cache — check importer version matches current importer
+        if (entry != null && !string.IsNullOrEmpty(entry.ImporterType))
+        {
+            var importer = Importers.ImporterRegistry.CreateByTypeName(entry.ImporterType);
+            if (importer != null && importer.Version != entry.ImporterVersion)
+            {
+                // Cache is stale — importer was updated since last import
+                Runtime.Debug.Log($"Cache stale for '{entry.Path}': importer v{entry.ImporterVersion} → v{importer.Version}. Reimporting.");
+                entry.NeedsReimport = true;
+                RunImport(entry);
+                return _loadedAssets.GetValueOrDefault(assetId);
+            }
+        }
+
         if (File.Exists(cachePath))
         {
             try
@@ -96,8 +143,6 @@ public class EditorAssetDatabase : IAssetDatabase
                 var ctx = new SerializationContext();
                 Runtime.AssetDatabase.ConfigureContext(ctx);
 
-                // Get the target type from the entry
-                var entry = GetEntry(assetId);
                 var targetType = entry?.MainAssetType ?? typeof(EngineObject);
 
                 var obj = Serializer.Deserialize(echo, targetType, ctx) as EngineObject;
@@ -106,6 +151,11 @@ public class EditorAssetDatabase : IAssetDatabase
                     obj.AssetID = assetId;
                     if (entry != null) obj.AssetPath = entry.Path;
                     _loadedAssets[assetId] = obj;
+
+                    // Also load and cache sub-assets
+                    if (entry?.SubAssets != null)
+                        LoadSubAssetsIntoCache(entry);
+
                     return obj;
                 }
             }
@@ -123,6 +173,44 @@ public class EditorAssetDatabase : IAssetDatabase
         }
 
         return null;
+    }
+
+    private void LoadSubAssetsIntoCache(AssetEntry parentEntry)
+    {
+        foreach (var sub in parentEntry.SubAssets)
+        {
+            if (_loadedAssets.ContainsKey(sub.Guid)) continue;
+
+            string subCachePath = GetCachePath(sub.Guid);
+            if (!File.Exists(subCachePath))
+            {
+                Runtime.Debug.LogWarning($"Sub-asset cache missing for '{sub.Name}' in '{parentEntry.Path}'. Reimport the parent asset.");
+                continue;
+            }
+
+            try
+            {
+                var echo = EchoObject.ReadFromBinary(new FileInfo(subCachePath));
+                var ctx = new SerializationContext();
+                Runtime.AssetDatabase.ConfigureContext(ctx);
+                var subType = sub.Type ?? typeof(EngineObject);
+                var obj = Serializer.Deserialize(echo, subType, ctx) as EngineObject;
+                if (obj != null)
+                {
+                    obj.AssetID = sub.Guid;
+                    obj.AssetPath = $"{parentEntry.Path}#{sub.Name}";
+                    _loadedAssets[sub.Guid] = obj;
+                }
+                else
+                {
+                    Runtime.Debug.LogWarning($"Failed to deserialize sub-asset '{sub.Name}' from '{parentEntry.Path}' (type: {sub.TypeName}).");
+                }
+            }
+            catch (Exception ex)
+            {
+                Runtime.Debug.LogWarning($"Error loading sub-asset '{sub.Name}' from '{parentEntry.Path}': {ex.Message}");
+            }
+        }
     }
 
     // ================================================================
@@ -144,7 +232,7 @@ public class EditorAssetDatabase : IAssetDatabase
             string fileName = Path.GetFileName(file);
             if (fileName.StartsWith('.')) continue;
 
-            string relativePath = Path.GetRelativePath(assetsPath, file).Replace('\\', '/');
+            string relativePath = NormalizePath(Path.GetRelativePath(assetsPath, file));
             foundPaths.Add(relativePath);
 
             // Determine importer
@@ -166,9 +254,29 @@ public class EditorAssetDatabase : IAssetDatabase
                 // Update GUID if meta was regenerated with different GUID
                 if (meta.Guid != existingGuid)
                 {
+                    // Clean up old GUID references
                     _guidToEntry.Remove(existingGuid);
                     _pathToGuid.Remove(relativePath);
+                    _loadedAssets.Remove(existingGuid);
+                    _dependencies.RemoveAsset(existingGuid);
+
+                    // Remove old sub-asset index entries
+                    if (entry.SubAssets != null)
+                    {
+                        foreach (var sub in entry.SubAssets)
+                        {
+                            _subAssetIndex.Remove(sub.Guid);
+                            _loadedAssets.Remove(sub.Guid);
+                        }
+                    }
+
+                    // Delete old cache file
+                    string oldCachePath = GetCachePath(existingGuid);
+                    if (File.Exists(oldCachePath))
+                        try { File.Delete(oldCachePath); } catch { }
+
                     entry.Guid = meta.Guid;
+                    entry.SubAssets = Array.Empty<SubAssetEntry>();
                     _guidToEntry[meta.Guid] = entry;
                     _pathToGuid[relativePath] = meta.Guid;
                     entry.NeedsReimport = true;
@@ -301,6 +409,45 @@ public class EditorAssetDatabase : IAssetDatabase
                 entry.Dependencies = result.Dependencies.ToArray();
             }
 
+            // Process sub-assets
+            if (result.SubAssets != null && result.SubAssets.Length > 0)
+            {
+                var subEntries = new List<SubAssetEntry>();
+                for (int i = 0; i < result.SubAssets.Length; i++)
+                {
+                    var sub = result.SubAssets[i];
+                    if (sub == null) continue;
+
+                    string subName = !string.IsNullOrEmpty(sub.Name) ? sub.Name : $"SubAsset_{i}";
+                    Guid subGuid = AssetEntry.DeriveSubAssetGuid(entry.Guid, subName);
+
+                    sub.AssetID = subGuid;
+                    sub.AssetPath = $"{entry.Path}#{subName}";
+
+                    // Cache sub-asset to disk
+                    SerializeToCache(subGuid, sub);
+
+                    // Cache in memory
+                    _loadedAssets[subGuid] = sub;
+
+                    // Build sub-asset entry
+                    subEntries.Add(new SubAssetEntry
+                    {
+                        Guid = subGuid,
+                        Name = subName,
+                        Type = sub.GetType()
+                    });
+
+                    // Index the sub-asset
+                    _subAssetIndex[subGuid] = (entry.Guid, i);
+                }
+                entry.SubAssets = subEntries.ToArray();
+            }
+            else
+            {
+                entry.SubAssets = Array.Empty<SubAssetEntry>();
+            }
+
             // Update timestamps
             entry.LastModifiedTicks = File.GetLastWriteTimeUtc(absolutePath).Ticks;
             entry.ImporterVersion = importer.Version;
@@ -314,7 +461,9 @@ public class EditorAssetDatabase : IAssetDatabase
         catch (Exception ex)
         {
             Runtime.Debug.LogError($"Import failed for '{entry.Path}': {ex.Message}");
-            entry.NeedsReimport = false; // Don't keep retrying
+            // Keep NeedsReimport true so file changes will trigger a retry.
+            // Only clear the timestamp so next scan detects the file as changed.
+            entry.LastModifiedTicks = 0;
             return false;
         }
     }
@@ -358,10 +507,44 @@ public class EditorAssetDatabase : IAssetDatabase
     public IEnumerable<AssetEntry> GetAllEntries() => _guidToEntry.Values;
 
     public IEnumerable<AssetEntry> FindAssetsOfType<T>() where T : EngineObject
-        => _guidToEntry.Values.Where(e => e.MainAssetType != null && typeof(T).IsAssignableFrom(e.MainAssetType));
+        => FindAssetsOfType(typeof(T));
 
+    /// <summary>
+    /// Find all assets (main + sub) matching the given type via inheritance.
+    /// Returns (Guid, Name, ParentPath) tuples for display.
+    /// </summary>
     public IEnumerable<AssetEntry> FindAssetsOfType(Type type)
         => _guidToEntry.Values.Where(e => e.MainAssetType != null && type.IsAssignableFrom(e.MainAssetType));
+
+    /// <summary>
+    /// Find all assets AND sub-assets matching the given type.
+    /// Returns tuples of (guid, displayName, parentPath, type).
+    /// </summary>
+    public IEnumerable<(Guid guid, string name, string parentPath, Type assetType)> FindAllOfType(Type type)
+    {
+        // Main assets
+        foreach (var entry in _guidToEntry.Values)
+        {
+            if (entry.MainAssetType != null && type.IsAssignableFrom(entry.MainAssetType))
+                yield return (entry.Guid, Path.GetFileNameWithoutExtension(entry.Path), entry.Path, entry.MainAssetType);
+        }
+
+        // Sub-assets
+        foreach (var entry in _guidToEntry.Values)
+        {
+            if (entry.SubAssets == null) continue;
+            foreach (var sub in entry.SubAssets)
+            {
+                var subType = sub.Type;
+                if (subType != null && type.IsAssignableFrom(subType))
+                    yield return (sub.Guid, sub.Name, entry.Path, subType);
+            }
+        }
+    }
+
+    /// <summary>Get sub-assets of a parent asset.</summary>
+    public SubAssetEntry[] GetSubAssets(Guid parentGuid)
+        => _guidToEntry.TryGetValue(parentGuid, out var entry) ? entry.SubAssets : Array.Empty<SubAssetEntry>();
 
     public string[] GetAllAssetPaths()
         => _pathToGuid.Keys.ToArray();
@@ -473,13 +656,31 @@ public class EditorAssetDatabase : IAssetDatabase
         if (!File.Exists(oldAbsolute)) return;
 
         Directory.CreateDirectory(Path.GetDirectoryName(newAbsolute)!);
-        File.Move(oldAbsolute, newAbsolute);
 
-        // Move .meta
+        // Move asset file + .meta atomically (with rollback on failure)
         string oldMeta = MetaFile.GetMetaPath(oldAbsolute);
         string newMeta = MetaFile.GetMetaPath(newAbsolute);
-        if (File.Exists(oldMeta))
-            File.Move(oldMeta, newMeta);
+        bool assetMoved = false;
+
+        try
+        {
+            File.Move(oldAbsolute, newAbsolute);
+            assetMoved = true;
+
+            if (File.Exists(oldMeta))
+                File.Move(oldMeta, newMeta);
+        }
+        catch (Exception ex)
+        {
+            // Rollback: if asset moved but meta didn't, move asset back
+            if (assetMoved && File.Exists(newAbsolute) && !File.Exists(oldAbsolute))
+            {
+                try { File.Move(newAbsolute, oldAbsolute); }
+                catch { /* best effort rollback */ }
+            }
+            Runtime.Debug.LogError($"Failed to move asset '{oldRelativePath}' → '{newRelativePath}': {ex.Message}");
+            return;
+        }
 
         // Update index
         if (_pathToGuid.TryGetValue(oldRelativePath, out var guid))
@@ -527,7 +728,7 @@ public class EditorAssetDatabase : IAssetDatabase
 
         foreach (var evt in events)
         {
-            string relativePath = Path.GetRelativePath(_project.AssetsPath, evt.Path).Replace('\\', '/');
+            string relativePath = ToRelativePath(evt.Path);
 
             // Skip .meta files — we manage them
             if (relativePath.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) continue;
@@ -586,7 +787,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 {
                     if (evt.OldPath != null)
                     {
-                        string oldRelative = Path.GetRelativePath(_project.AssetsPath, evt.OldPath).Replace('\\', '/');
+                        string oldRelative = ToRelativePath(evt.OldPath);
                         if (_pathToGuid.TryGetValue(oldRelative, out var guid))
                         {
                             _pathToGuid.Remove(oldRelative);
@@ -624,6 +825,25 @@ public class EditorAssetDatabase : IAssetDatabase
 
     private string GetCachePath(Guid guid)
         => Path.Combine(_project.CachePath, $"{guid}.asset");
+
+    private void RebuildSubAssetIndex()
+    {
+        _subAssetIndex.Clear();
+        foreach (var entry in _guidToEntry.Values)
+        {
+            if (entry.SubAssets == null) continue;
+            for (int i = 0; i < entry.SubAssets.Length; i++)
+                _subAssetIndex[entry.SubAssets[i].Guid] = (entry.Guid, i);
+        }
+    }
+
+    /// <summary>Normalize a path to use forward slashes, relative to Assets/.</summary>
+    public static string NormalizePath(string path)
+        => path.Replace('\\', '/');
+
+    /// <summary>Get a relative path from an absolute path, normalized.</summary>
+    public string ToRelativePath(string absolutePath)
+        => NormalizePath(Path.GetRelativePath(_project.AssetsPath, absolutePath));
 
     public void Dispose()
     {

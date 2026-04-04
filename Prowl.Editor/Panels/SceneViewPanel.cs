@@ -161,6 +161,34 @@ public class SceneViewPanel : DockPanel
                 paper.PointerPos,
                 Float2.Zero,
                 new Float2(width, height));
+
+            // Accept asset drops — raycast to find drop position
+            if (isHovered && DragDrop.IsDraggingType<AssetDragPayload>())
+            {
+                // Show drop indicator
+                paper.Box("sv_drop_indicator")
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(0, height - 24).Size(width, 24)
+                    .BackgroundColor(Color.FromArgb(150, 30, 30, 35))
+                    .IsNotInteractable()
+                    .Text($"{EditorIcons.ArrowDown}  Drop to spawn in scene", font)
+                    .TextColor(EditorTheme.Accent)
+                    .FontSize(EditorTheme.FontSize - 2)
+                    .Alignment(TextAlignment.MiddleCenter);
+            }
+
+            if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload sceneDrop)
+            {
+                // Raycast to find drop position
+                Float2 mouseLocal = paper.PointerPos - new Float2(
+                    paper.CurrentParent.Data.X,
+                    paper.CurrentParent.Data.Y);
+                Float2 panelSize = new Float2(width, height);
+                Float3 dropPos = GetDropPosition(scene, mouseLocal, panelSize);
+
+                HierarchyPanel.SpawnAssetInScene(sceneDrop, null, dropPos);
+                DragDrop.EndDrag();
+            }
         }
     }
 
@@ -260,6 +288,61 @@ public class SceneViewPanel : DockPanel
 
         Scene.Load(scene);
         Runtime.Debug.Log("Created default scene.");
+    }
+
+    /// <summary>
+    /// Raycast into the scene to find a drop position. Falls back to the XZ plane at Y=0.
+    /// </summary>
+    private Float3 GetDropPosition(Scene scene, Float2 screenPos, Float2 panelSize)
+    {
+        if (_editorCamera == null) return Float3.Zero;
+
+        var ray = _editorCamera.ScreenPointToRay(screenPos, panelSize);
+
+        // Try raycasting against scene objects first
+        float bestDist = float.MaxValue;
+        Float3 bestPos = Float3.Zero;
+        bool hit = false;
+
+        foreach (var go in scene.ActiveObjects)
+        {
+            if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
+
+            var meshRenderer = go.GetComponent<MeshRenderer>();
+            if (meshRenderer != null && meshRenderer.Raycast(ray, out float dist))
+            {
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    bestPos = ray.Origin + ray.Direction * dist;
+                    hit = true;
+                }
+            }
+
+            var modelRenderer = go.GetComponent<ModelRenderer>();
+            if (modelRenderer != null && modelRenderer.Raycast(ray, out dist))
+            {
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    bestPos = ray.Origin + ray.Direction * dist;
+                    hit = true;
+                }
+            }
+        }
+
+        if (hit) return bestPos;
+
+        // Fallback: intersect with XZ plane at Y=0
+        if (MathF.Abs(ray.Direction.Y) > 0.0001f)
+        {
+            float t = -ray.Origin.Y / ray.Direction.Y;
+            if (t > 0)
+                return ray.Origin + ray.Direction * t;
+        }
+
+        // Last resort: place 10 units in front of camera
+        return ray.Origin + ray.Direction * 10f;
     }
 
     private void DrawSelectionGizmos()

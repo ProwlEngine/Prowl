@@ -1,9 +1,28 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 using Prowl.Echo;
 
 namespace Prowl.Editor;
+
+/// <summary>
+/// Represents a sub-asset inside a parent asset (e.g. a Mesh inside a Model file).
+/// </summary>
+[Serializable]
+public class SubAssetEntry
+{
+    [SerializeField] public Guid Guid;
+    [SerializeField] public string Name = "";
+    [SerializeField] public string TypeName = "";  // Assembly-qualified type name
+
+    public Type? Type
+    {
+        get => !string.IsNullOrEmpty(TypeName) ? System.Type.GetType(TypeName) : null;
+        set => TypeName = value?.AssemblyQualifiedName ?? "";
+    }
+}
 
 /// <summary>
 /// In-memory representation of a tracked asset in the database.
@@ -20,6 +39,7 @@ public class AssetEntry
     [SerializeField] public string? MainAssetTypeName;  // Assembly-qualified type name of main asset
     [SerializeField] public Guid[] Dependencies = Array.Empty<Guid>();
     [SerializeField] public string[] Labels = Array.Empty<string>();
+    [SerializeField] public SubAssetEntry[] SubAssets = Array.Empty<SubAssetEntry>();
 
     [SerializeIgnore] public bool NeedsReimport;
 
@@ -27,5 +47,20 @@ public class AssetEntry
     {
         get => MainAssetTypeName != null ? Type.GetType(MainAssetTypeName) : null;
         set => MainAssetTypeName = value?.AssemblyQualifiedName;
+    }
+
+    /// <summary>
+    /// Generate a deterministic GUID for a sub-asset based on parent GUID + name.
+    /// Stable across reimports as long as parent GUID and sub-asset name don't change.
+    /// </summary>
+    public static Guid DeriveSubAssetGuid(Guid parentGuid, string subAssetName)
+    {
+        byte[] parentBytes = parentGuid.ToByteArray();
+        byte[] nameBytes = Encoding.UTF8.GetBytes(subAssetName);
+        byte[] combined = new byte[parentBytes.Length + nameBytes.Length];
+        parentBytes.CopyTo(combined, 0);
+        nameBytes.CopyTo(combined, parentBytes.Length);
+        byte[] hash = SHA256.HashData(combined);
+        return new Guid(hash.AsSpan(0, 16));
     }
 }

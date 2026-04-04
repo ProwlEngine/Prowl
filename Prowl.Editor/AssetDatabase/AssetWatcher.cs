@@ -34,8 +34,9 @@ public class AssetWatcher : IDisposable
         {
             IncludeSubdirectories = true,
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
-                         | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
-            EnableRaisingEvents = true
+                         | NotifyFilters.LastWrite | NotifyFilters.CreationTime
+                         | NotifyFilters.Size,
+            InternalBufferSize = 64 * 1024, // 64KB buffer to reduce overflow risk
         };
 
         _watcher.Created += (_, e) => QueueEvent(FileEventType.Created, e.FullPath);
@@ -44,14 +45,21 @@ public class AssetWatcher : IDisposable
         _watcher.Renamed += (_, e) => QueueEvent(FileEventType.Renamed, e.FullPath, e.OldFullPath);
         _watcher.Error += (_, e) =>
         {
-            Runtime.Debug.LogWarning($"AssetWatcher error: {e.GetException().Message}");
+            Runtime.Debug.LogError($"AssetWatcher buffer overflow — some file changes may have been missed. Consider reimporting. Error: {e.GetException().Message}");
         };
+
+        // Enable after all handlers attached
+        _watcher.EnableRaisingEvents = true;
     }
 
     public void Stop()
     {
-        _watcher?.Dispose();
-        _watcher = null;
+        if (_watcher != null)
+        {
+            _watcher.EnableRaisingEvents = false;
+            _watcher.Dispose();
+            _watcher = null;
+        }
     }
 
     private void QueueEvent(FileEventType type, string path, string? oldPath = null)
@@ -76,25 +84,51 @@ public class AssetWatcher : IDisposable
             if ((DateTime.UtcNow - _lastEventTime).TotalMilliseconds < DebounceMs)
                 return new List<FileEvent>();
 
-            // Coalesce events on the same path
+            // Coalesce: for each path, determine the net effect.
+            // Renames are special — they track OldPath.
+            // For everything else, we just care about the final state:
+            //   - If a Delete was the last event, it's deleted.
+            //   - If Created or Modified was last, it needs import/reimport.
+            //   - Created+Deleted cancels out.
             var coalesced = new Dictionary<string, FileEvent>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var evt in _pendingEvents)
             {
+                // Renames always win — they're the most specific
+                if (evt.Type == FileEventType.Renamed)
+                {
+                    // Remove any pending event on the old path
+                    if (evt.OldPath != null)
+                        coalesced.Remove(evt.OldPath);
+                    coalesced[evt.Path] = evt;
+                    continue;
+                }
+
                 if (coalesced.TryGetValue(evt.Path, out var existing))
                 {
-                    // Created + Deleted = cancel out
+                    // Created + Deleted = cancel out entirely
                     if (existing.Type == FileEventType.Created && evt.Type == FileEventType.Deleted)
                     {
                         coalesced.Remove(evt.Path);
                         continue;
                     }
-                    // Created + Modified = just Created
+
+                    // Any event followed by Delete = Delete
+                    if (evt.Type == FileEventType.Deleted)
+                    {
+                        coalesced[evt.Path] = evt;
+                        continue;
+                    }
+
+                    // Created + Modified = still Created (creation includes the content)
                     if (existing.Type == FileEventType.Created && evt.Type == FileEventType.Modified)
                         continue;
-                    // Modified + Modified = just Modified
+
+                    // Multiple Modified = single Modified
                     if (existing.Type == FileEventType.Modified && evt.Type == FileEventType.Modified)
                         continue;
-                    // Otherwise, latest event wins
+
+                    // Everything else: latest wins
                     coalesced[evt.Path] = evt;
                 }
                 else

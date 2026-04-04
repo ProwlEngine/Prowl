@@ -96,6 +96,25 @@ public class HierarchyPanel : DockPanel
                 {
                     BuildCreateMenu(builder, null);
                 });
+
+                // Accept asset drops — spawn at root
+                if (DragDrop.IsDraggingType<AssetDragPayload>() && paper.IsParentHovered)
+                {
+                    // Highlight drop zone
+                    paper.Box("hier_drop_zone").Height(24)
+                        .BackgroundColor(Color.FromArgb(40, EditorTheme.Accent))
+                        .Rounded(3)
+                        .Text("Drop to spawn here", font)
+                        .TextColor(EditorTheme.Accent)
+                        .FontSize(EditorTheme.FontSize - 2)
+                        .Alignment(TextAlignment.MiddleCenter);
+                }
+
+                if (!DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop && paper.IsParentHovered)
+                {
+                    SpawnAssetInScene(assetDrop, null, Float3.Zero);
+                    DragDrop.EndDrag();
+                }
             }
         }
     }
@@ -387,5 +406,45 @@ public class HierarchyPanel : DockPanel
         if (go.GetComponent<MeshRenderer>() != null) return EditorIcons.Cube;
         if (go.GetComponent<ModelRenderer>() != null) return EditorIcons.Cubes;
         return EditorIcons.Circle;
+    }
+
+    // ================================================================
+    //  Asset Drop → Spawn in Scene
+    // ================================================================
+
+    public static void SpawnAssetInScene(AssetDragPayload payload, GameObject? parent, Float3 position)
+    {
+        var scene = Scene.Current;
+        if (scene == null) return;
+
+        var asset = Runtime.AssetDatabase.Get(payload.AssetGuid);
+        if (asset == null) return;
+
+        string name = System.IO.Path.GetFileNameWithoutExtension(payload.AssetName);
+        var go = new GameObject(name);
+        go.Transform.Position = position;
+
+        if (asset is Model model)
+        {
+            var renderer = go.AddComponent<ModelRenderer>();
+            renderer.Model = model;
+        }
+        else if (asset is Mesh mesh)
+        {
+            var renderer = go.AddComponent<MeshRenderer>();
+            renderer.Mesh = mesh;
+            renderer.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        }
+        else
+        {
+            // Generic asset — just create an empty GO with the name
+            Runtime.Debug.Log($"Spawned empty GameObject for asset type: {asset.GetType().Name}");
+        }
+
+        scene.Add(go);
+        if (parent != null)
+            go.SetParent(parent);
+
+        Selection.Select(go);
     }
 }

@@ -12,6 +12,8 @@ namespace Prowl.Editor;
 /// </summary>
 public static class MetadataCache
 {
+    private const int CurrentVersion = 2; // Bump when format changes
+
     public static Dictionary<Guid, AssetEntry> Load(string metadataDbPath)
     {
         var result = new Dictionary<Guid, AssetEntry>();
@@ -21,6 +23,17 @@ public static class MetadataCache
         {
             string text = File.ReadAllText(metadataDbPath);
             var root = EchoObject.ReadFromString(text);
+
+            // Version check — reject incompatible cache
+            int version = 0;
+            if (root.TryGet("version", out var versionTag))
+                version = versionTag.IntValue;
+
+            if (version != CurrentVersion)
+            {
+                Runtime.Debug.Log($"Metadata cache version mismatch (found v{version}, expected v{CurrentVersion}). Rebuilding.");
+                return result; // Return empty — caller will do a full scan
+            }
 
             if (root.TryGet("entries", out var entriesTag) && entriesTag.TagType == EchoType.List)
             {
@@ -34,7 +47,7 @@ public static class MetadataCache
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogWarning($"Failed to load metadata cache: {ex.Message}");
+            Runtime.Debug.LogWarning($"Failed to load metadata cache (will rebuild): {ex.Message}");
         }
 
         return result;
@@ -45,7 +58,7 @@ public static class MetadataCache
         try
         {
             var root = EchoObject.NewCompound();
-            root["version"] = new EchoObject(1);
+            root["version"] = new EchoObject(CurrentVersion);
             root["lastScanTime"] = new EchoObject(DateTime.UtcNow.ToString("o"));
 
             var list = EchoObject.NewList();

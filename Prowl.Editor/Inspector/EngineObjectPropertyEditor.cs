@@ -47,16 +47,40 @@ public class EngineObjectPropertyEditor : PropertyEditor
                     .Text(label, font).TextColor(EditorTheme.Text)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
+            // Check if a compatible asset is being dragged over this field
+            bool isDragTarget = DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload adp
+                && adp.AssetType != null && fieldType.IsAssignableFrom(adp.AssetType);
+
             // Object field row
-            using (paper.Row($"{id}_field")
+            var fieldEl = paper.Row($"{id}_field")
                 .Height(EditorTheme.RowHeight)
-                .BackgroundColor(EditorTheme.InputBackground)
+                .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Accent) : EditorTheme.InputBackground)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
-                .BorderColor(EditorTheme.Border).BorderWidth(1)
-                .OnDoubleClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2))
-                .Enter())
+                .BorderColor(isDragTarget ? EditorTheme.Accent : EditorTheme.Border).BorderWidth(1)
+                .OnDoubleClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2));
+
+            using (fieldEl.Enter())
             {
+                // Accept drop
+                if (isDragTarget && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload dropPayload)
+                {
+                    var droppedAsset = Runtime.AssetDatabase.Get(dropPayload.AssetGuid);
+                    if (droppedAsset != null && fieldType.IsAssignableFrom(droppedAsset.GetType()))
+                        onChange(droppedAsset);
+                    DragDrop.EndDrag();
+                }
+                else if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is AssetDragPayload hoveredDrop)
+                {
+                    if (hoveredDrop.AssetType != null && fieldType.IsAssignableFrom(hoveredDrop.AssetType))
+                    {
+                        var droppedAsset = Runtime.AssetDatabase.Get(hoveredDrop.AssetGuid);
+                        if (droppedAsset != null)
+                            onChange(droppedAsset);
+                        DragDrop.EndDrag();
+                    }
+                }
+
                 // Icon
                 paper.Box($"{id}_ico")
                     .Width(16).Height(EditorTheme.RowHeight)
@@ -110,8 +134,8 @@ public class EngineObjectPropertyEditor : PropertyEditor
         if (font == null) return;
 
         var db = EditorAssetDatabase.Instance;
-        var matchingEntries = db?.FindAssetsOfType(_selectorType).Take(100).ToList()
-            ?? new System.Collections.Generic.List<AssetEntry>();
+        var matchingItems = db?.FindAllOfType(_selectorType).Take(100).ToList()
+            ?? new System.Collections.Generic.List<(Guid guid, string name, string parentPath, Type assetType)>();
 
         // Fullscreen blocker
         paper.Box("eo_sel_overlay")
@@ -168,21 +192,21 @@ public class EngineObjectPropertyEditor : PropertyEditor
                         _selectorOpen = false;
                     });
 
-                if (matchingEntries.Count > 0)
+                if (matchingItems.Count > 0)
                     paper.Box("eo_sel_sep").Height(1).Margin(4, 2, 4, 2).BackgroundColor(EditorTheme.Border);
 
-                for (int i = 0; i < matchingEntries.Count; i++)
+                for (int i = 0; i < matchingItems.Count; i++)
                 {
-                    var entry = matchingEntries[i];
-                    string assetName = Path.GetFileNameWithoutExtension(entry.Path);
+                    var (guid, name, parentPath, assetType) = matchingItems[i];
+                    string displayPath = Path.GetFileName(parentPath);
 
                     using (paper.Row($"eo_sel_item_{i}")
                         .Height(EditorTheme.RowHeight).ChildLeft(6).RowBetween(4)
                         .Hovered.BackgroundColor(EditorTheme.Accent).End()
                         .Rounded(3)
-                        .OnClick(entry.Guid, (guid, _) =>
+                        .OnClick(guid, (g, _) =>
                         {
-                            var asset = Runtime.AssetDatabase.Get(guid);
+                            var asset = Runtime.AssetDatabase.Get(g);
                             if (asset != null) _selectorCallback?.Invoke(asset);
                             _selectorOpen = false;
                         })
@@ -195,17 +219,17 @@ public class EngineObjectPropertyEditor : PropertyEditor
 
                         paper.Box($"eo_sel_name_{i}")
                             .Height(EditorTheme.RowHeight).Clip()
-                            .Text(assetName, font).TextColor(EditorTheme.Text)
+                            .Text(name, font).TextColor(EditorTheme.Text)
                             .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                         paper.Box($"eo_sel_path_{i}")
                             .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildRight(4)
-                            .Text(entry.Path, font).TextColor(EditorTheme.TextDisabled)
+                            .Text($"({displayPath})", font).TextColor(EditorTheme.TextDisabled)
                             .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleRight);
                     }
                 }
 
-                if (matchingEntries.Count == 0)
+                if (matchingItems.Count == 0)
                 {
                     paper.Box("eo_sel_empty").Height(40)
                         .Text("No assets of this type found", font)

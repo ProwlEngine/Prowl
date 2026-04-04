@@ -73,10 +73,41 @@ public class ModelRenderer : MonoBehaviour
 
     public override void OnRenderCollect()
     {
-        // Render the model via skeleton
-        if (Model.IsValid() && Model.Skeleton.IsValid())
+        if (!Model.IsValid()) return;
+
+        // Check if skeleton actually has mesh assignments
+        bool skeletonHasMeshes = Model.Skeleton.IsValid()
+            && Model.Skeleton.Bones.Any(b => b.MeshIndices.Count > 0);
+
+        if (skeletonHasMeshes)
         {
+            // Render via skeleton (handles bones + skinning)
             RenderSkeleton(Transform.LocalToWorldMatrix);
+        }
+        else
+        {
+            // No skeleton or no mesh assignments — render meshes directly
+            RenderMeshesDirect(Transform.LocalToWorldMatrix);
+        }
+    }
+
+    private void RenderMeshesDirect(Float4x4 worldTransform)
+    {
+        for (int i = 0; i < Model.Meshes.Count; i++)
+        {
+            var modelMesh = Model.Meshes[i];
+            if (!modelMesh.Mesh.IsValid() || !modelMesh.Material.IsValid()) continue;
+
+            PropertyState properties = new();
+            properties.SetInt("_ObjectID", InstanceID);
+            properties.SetColor("_MainColor", MainColor);
+
+            GameObject.Scene.PushRenderable(new MeshRenderable(
+                modelMesh.Mesh,
+                modelMesh.Material,
+                worldTransform,
+                GameObject.LayerIndex,
+                properties));
         }
     }
 

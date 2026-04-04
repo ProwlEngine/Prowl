@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
@@ -41,8 +42,40 @@ public class EditorModelImporter : AssetImporter
             model.Name = Path.GetFileNameWithoutExtension(absolutePath);
             result.MainAsset = model;
 
-            // Sub-assets: meshes from the model
-            // (Materials and animations are part of the Model object itself)
+            // Extract sub-assets: individual meshes, materials, animations
+            var subAssets = new List<EngineObject>();
+
+            for (int i = 0; i < model.Meshes.Count; i++)
+            {
+                var modelMesh = model.Meshes[i];
+                if (modelMesh.Mesh != null)
+                {
+                    modelMesh.Mesh.Name = !string.IsNullOrEmpty(modelMesh.Name) ? modelMesh.Name : $"Mesh_{i}";
+                    subAssets.Add(modelMesh.Mesh);
+                }
+            }
+
+            for (int i = 0; i < model.Materials.Count; i++)
+            {
+                var mat = model.Materials[i];
+                if (mat != null)
+                {
+                    if (string.IsNullOrEmpty(mat.Name)) mat.Name = $"Material_{i}";
+                    subAssets.Add(mat);
+                }
+            }
+
+            for (int i = 0; i < model.Animations.Count; i++)
+            {
+                var clip = model.Animations[i];
+                if (clip != null)
+                {
+                    if (string.IsNullOrEmpty(clip.Name)) clip.Name = $"Animation_{i}";
+                    subAssets.Add(clip);
+                }
+            }
+
+            result.SubAssets = subAssets.ToArray();
         }
         catch (Exception ex)
         {

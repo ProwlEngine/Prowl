@@ -377,6 +377,10 @@ public class EditorApplication : Game
 
     public override void EndGui(Paper paper)
     {
+        // Drag & drop update + visual
+        DragDrop.UpdateDrag();
+        DragDrop.DrawVisual(paper);
+
         // Systems drawn on top (Overlay/Topmost layers)
         Widgets.FileDialog.Draw(paper);
         Inspector.EngineObjectPropertyEditor.DrawSelectorModal(paper);
