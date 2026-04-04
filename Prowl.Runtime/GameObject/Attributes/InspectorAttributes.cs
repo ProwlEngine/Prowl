@@ -2,6 +2,10 @@ using System;
 
 namespace Prowl.Runtime;
 
+/// <summary>Hides a field from the inspector but keeps it serialized.</summary>
+[AttributeUsage(AttributeTargets.Field)]
+public class HideInInspectorAttribute : Attribute { }
+
 /// <summary>Draws a float/int field as a slider with min/max range.</summary>
 [AttributeUsage(AttributeTargets.Field)]
 public class RangeAttribute : Attribute

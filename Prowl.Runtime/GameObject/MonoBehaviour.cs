@@ -18,12 +18,12 @@ namespace Prowl.Runtime;
 /// </summary>
 public abstract class MonoBehaviour : EngineObject
 {
-    [SerializeField]
+    [SerializeField, HideInInspector]
     private Guid _identifier = Guid.NewGuid();
 
-    [SerializeField]
+    [SerializeField, HideInInspector]
     protected internal bool _enabled = true;
-    [SerializeField]
+    [SerializeField, HideInInspector]
     protected internal bool _enabledInHierarchy = true;
 
     private GameObject _go;

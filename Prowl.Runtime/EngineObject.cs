@@ -17,15 +17,15 @@ public abstract class EngineObject : IDisposable
     public int InstanceID => _instanceID;
 
     // Asset path if we have one
-    public string AssetPath = string.Empty;
+    [HideInInspector] public string AssetPath = string.Empty;
 
     /// <summary>
     /// A unique asset identifier. When set, serialization will store only a reference
     /// and deserialization will resolve the object from the <see cref="AssetDatabase"/>.
     /// </summary>
-    public Guid AssetID = Guid.Empty;
+    [HideInInspector] public Guid AssetID = Guid.Empty;
 
-    public string Name;
+    [HideInInspector] public string Name;
 
     public bool IsDisposed { get; private set; }
 

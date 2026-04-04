@@ -266,7 +266,8 @@ public static class PropertyGrid
                 bool shouldSerialize = field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null;
                 if (!shouldSerialize) continue;
                 bool shouldIgnore = field.GetCustomAttribute<SerializeIgnoreAttribute>() != null ||
-                                    field.GetCustomAttribute<NonSerializedAttribute>() != null;
+                                    field.GetCustomAttribute<NonSerializedAttribute>() != null ||
+                                    field.GetCustomAttribute<HideInInspectorAttribute>() != null;
                 if (shouldIgnore) continue;
                 fields.Add(field);
             }
