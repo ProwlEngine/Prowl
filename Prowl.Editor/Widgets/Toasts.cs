@@ -101,7 +101,7 @@ public static class Toasts
                 paper.Box($"toast_accent_{i}")
                     .Width(4).Height(UnitValue.Stretch())
                     .BackgroundColor(accentColor)
-                    .Rounded(2);
+                    .RoundedLeft(6);
 
                 // Text content
                 if (font != null)
