@@ -444,10 +444,10 @@ public static class PropertyGrid
             }
         });
     }
-
     // ================================================================
     //  Nested Object
     // ================================================================
+
     static void DrawNestedObject(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth)
     {
@@ -459,31 +459,42 @@ public static class PropertyGrid
 
                 if (!type.IsAbstract && !type.IsInterface)
                 {
-                    EditorGUI.Button(paper, $"{id}_create", "Create")
+                    EditorGUI.Button(paper, $"{id}_create", EditorIcons.Plus + " Create Instance")
                         .OnValueChanged(v => onChange(Activator.CreateInstance(type)));
                 }
                 else
                 {
-                    DrawTypePicker(paper, $"{id}_pick", type, onChange);
+                    DrawTypePicker(paper, $"{id}_pick", type, null, onChange);
                 }
             }
             return;
         }
 
-        var fields = GetSerializableFields(type);
+        // Use the actual runtime type, not the declared base type
+        Type actualType = value.GetType();
+
+        var fields = GetSerializableFields(actualType);
         if (fields.Length == 0)
         {
             EditorGUI.Label(paper, id, $"{label}: {value}");
             return;
         }
 
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({type.Name})", () =>
+        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({actualType.Name})", () =>
         {
+            // For polymorphic fields, show a type picker inside the foldout
+            // so the user can swap the concrete type even after creation
+            if (type.IsAbstract || type.IsInterface)
+            {
+                DrawTypePicker(paper, $"{id}_pick", type, value, onChange);
+                EditorGUI.Separator(paper, $"{id}_tpsep");
+            }
+
             using (paper.Column($"{id}_nested").Height(UnitValue.Auto).ChildLeft(12).ColBetween(6).Margin(0, 0, 6, 0).Enter())
             {
                 Draw(paper, $"{id}_props", value, changed =>
                 {
-                    if (type.IsValueType)
+                    if (actualType.IsValueType)
                         onChange(changed);
                     else
                         onChange?.Invoke(value);
@@ -496,13 +507,12 @@ public static class PropertyGrid
     //  Type Picker (for polymorphism)
     // ================================================================
 
-    static void DrawTypePicker(Paper paper, string id, Type baseType, Action<object?> onChange)
+    static void DrawTypePicker(Paper paper, string id, Type baseType, object? currentValue, Action<object?> onChange)
     {
-        // Find all concrete types that derive from baseType
         var types = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })
             .Where(t => baseType.IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
-            .Take(20) // Limit for performance
+            .Take(20)
             .ToArray();
 
         if (types.Length == 0)
@@ -511,8 +521,12 @@ public static class PropertyGrid
             return;
         }
 
+        // Find which index matches the current value's runtime type, default to -1 (no selection)
+        Type? currentType = currentValue?.GetType();
+        int selectedIndex = currentType != null ? Array.IndexOf(types, currentType) : -1;
+
         var names = types.Select(t => t.Name).ToArray();
-        EditorGUI.Dropdown(paper, $"{id}_dd", "Type", 0, names)
+        EditorGUI.Dropdown(paper, $"{id}_dd", "Type", selectedIndex, names)
             .OnValueChanged(idx =>
             {
                 if (idx >= 0 && idx < types.Length)
