@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Package metadata -->
+    <PackageId>Prowl.Rosetta</PackageId>
+    <Title>Prowl.Rosetta</Title>
+    <Version>1.0.0</Version>
+    <Authors>Wulferis</Authors>
+    <Description>A lightweight, backend-agnostic localization library for .NET. Static API, named interpolation, CLDR pluralization, gender variants, and pluggable providers.</Description>
+    <PackageTags>localization;i18n;l10n;translation;gamedev;game-engine;prowl;dotnet;csharp;pluralization;cldr</PackageTags>
+
+    <!-- Build -->
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <NeutralLanguage>en-AU</NeutralLanguage>
+
+    <!-- Links -->
+    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Rosetta</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Rosetta</PackageProjectUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE" Pack="True" PackagePath="\" Condition="Exists('..\LICENSE')" />
+    <None Include="..\README.md" Pack="True" PackagePath="\" Condition="Exists('..\README.md')" />
+  </ItemGroup>
+
+</Project>
