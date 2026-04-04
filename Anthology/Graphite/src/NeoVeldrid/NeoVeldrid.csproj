@@ -18,9 +18,6 @@
     <PackageReference Include="Silk.NET.DXGI" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
     <PackageReference Include="Silk.NET.Direct3D.Compilers" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
 
-    <!-- DXVK for non-Windows D3D11 (translates D3D11 to Vulkan) -->
-    <PackageReference Include="Silk.NET.DXVK.Native" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
-
     <!-- Silk.NET OpenGL -->
     <PackageReference Include="Silk.NET.OpenGL" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
     <PackageReference Include="Silk.NET.OpenGL.Extensions.EXT" Version="$(SilkNetVersion)" Condition="'$(ExcludeOpenGL)' != 'true'" />
