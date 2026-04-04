@@ -71,7 +71,7 @@ public class ProjectPanel : DockPanel
                 .Text(EditorIcons.List, font).TextColor(EditorTheme.TextDim)
                 .FontSize(14f).Alignment(TextAlignment.MiddleCenter);
 
-            EditorGUI.Slider(paper, "proj_thumb_slider", "", _thumbnailSize, MinThumbSize, MaxThumbSize)
+            EditorGUI.Slider(paper, "proj_thumb_slider", "", _thumbnailSize, MinThumbSize, MaxThumbSize, false)
                 .OnValueChanged(v => _thumbnailSize = v);
 
             paper.Box("proj_grid_ico")
@@ -80,7 +80,7 @@ public class ProjectPanel : DockPanel
                 .FontSize(14f).Alignment(TextAlignment.MiddleCenter);
 
             // Search
-            EditorGUI.TextField(paper, "proj_search", "", _searchText)
+            EditorGUI.SearchBar(paper, "proj_search", _searchText, "Search...")
                 .OnValueChanged(v => _searchText = v);
 
             // Refresh button
