@@ -44,13 +44,14 @@ public class ContextMenuBuilder
         using (paper.Column(id)
             .PositionType(PositionType.SelfDirected)
             .Position(x, y)
-            .Width(180)
+            .Width(200)
             .Height(UnitValue.Auto)
             .BackgroundColor(EditorTheme.PanelBackground)
             .BorderColor(EditorTheme.Border).BorderWidth(1)
             .Rounded(4)
             .ChildTop(2).ChildBottom(2).ChildLeft(2).ChildRight(2)
             .Layer(Layer.Topmost)
+            .ClampToScreen()
             .Enter())
         {
             for (int i = 0; i < _items.Count; i++)
@@ -93,7 +94,7 @@ public class ContextMenuBuilder
                             .Text("\u25B6", font).TextColor(EditorTheme.TextDim).FontSize(10f);
 
                         if (paper.IsParentHovered)
-                            item.SubMenu.Render(paper, $"{id}_s_{i}", 175, 0);
+                            item.SubMenu.Render(paper, $"{id}_s_{i}", 195, 0);
                     }
                 }
             }

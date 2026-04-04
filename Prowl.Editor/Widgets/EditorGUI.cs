@@ -532,6 +532,7 @@ public static class EditorGUI
                         .ChildTop(2).ChildBottom(2).ChildLeft(2).ChildRight(2)
                         .HookToParent()
                         .Layer(Layer.Topmost)
+                        .ClampToScreen()
                         .Enter())
                     {
                         for (int i = 0; i < options.Length; i++)
@@ -626,7 +627,7 @@ public static class EditorGUI
             {
                 var clearBtn = paper.Box($"{id}_clear")
                     .Rounded(8)
-                    .Size(16).Margin(2asd, UnitValue.StretchOne)
+                    .Size(16).Margin(2, UnitValue.StretchOne)
                     .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                     .Text(EditorIcons.Xmark, Font).TextColor(EditorTheme.TextDim).FontSize(14).Alignment(PaperUI.TextAlignment.MiddleCenter)
                     .OnClick(e => userCallback?.Invoke(""));

@@ -583,6 +583,9 @@ public class EditorApplication : Game
         MenuRegistry.RegisterSeparator("Edit");
         MenuRegistry.Register("Edit/Preferences...", () => { /* TODO */ });
 
+        // Assets menu
+        AssetCreateMenu.RegisterMenus();
+
         // Window menu — auto-populated from [EditorWindow] attributes
         foreach (var (type, path) in _registeredPanels)
         {

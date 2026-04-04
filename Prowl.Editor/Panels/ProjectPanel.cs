@@ -54,13 +54,22 @@ public class ProjectPanel : DockPanel
             .ChildTop(3).ChildBottom(3)
             .Enter())
         {
-            // Add dropdown placeholder
-            paper.Box("proj_add")
+            // Add button with context menu
+            using (paper.Box("proj_add")
                 .Width(ToolbarHeight - 6).Height(ToolbarHeight - 6)
                 .Rounded(4)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                .Text(EditorIcons.File, font).TextColor(EditorTheme.Text)
-                .FontSize(14f).Alignment(TextAlignment.MiddleCenter);
+                .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Text)
+                .FontSize(14f).Alignment(TextAlignment.MiddleCenter)
+                .Enter())
+            {
+                if (paper.IsParentHovered)
+                {
+                    var addBuilder = new ContextMenuBuilder();
+                    AssetCreateMenu.Build(addBuilder, _currentFolder);
+                    addBuilder.Render(paper, "proj_add_menu", 0, ToolbarHeight - 6);
+                }
+            }
 
             // Spacer
             paper.Box("proj_spacer");
@@ -248,10 +257,24 @@ public class ProjectPanel : DockPanel
 
             using (ScrollView.Begin(paper, "proj_content", width, height))
             {
-                using (paper.Column("proj_content_bg")
+                using (paper.Column("proj_content_inner")
                     .Height(UnitValue.Auto)
                     .Enter())
                 {
+                    // Right-click on empty space = create menu
+                    ContextMenuHelper.RightClickMenu(paper, "proj_ctx_bg", builder =>
+                    {
+                        AssetCreateMenu.Build(builder, _currentFolder);
+                        builder.Separator();
+                        builder.Item($"{EditorIcons.ArrowsRotate}  Refresh", () =>
+                        {
+                            if (Project.Current != null)
+                            {
+                                var newDb = new EditorAssetDatabase(Project.Current);
+                                newDb.Initialize();
+                            }
+                        });
+                    });
 
                     if (entries.Count == 0)
                     {
@@ -377,8 +400,57 @@ public class ProjectPanel : DockPanel
                         .FontSize(EditorTheme.FontSize - 4)
                         .Alignment(TextAlignment.MiddleRight);
                 }
+
+                // Right-click context menu
+                BuildItemContextMenu(paper, $"proj_li_ctx_{i}", item);
             }
         }
+    }
+
+    private void BuildItemContextMenu(Paper paper, string id, ContentItem item)
+    {
+        ContextMenuHelper.RightClickMenu(paper, id, builder =>
+        {
+            if (item.IsFolder)
+            {
+                builder.Item($"{EditorIcons.FolderOpen}  Open", () => _currentFolder = item.RelativePath);
+                builder.Separator();
+                builder.Submenu($"{EditorIcons.Plus}  Create", sub => AssetCreateMenu.Build(sub, item.RelativePath));
+            }
+            else
+            {
+                builder.Item($"{EditorIcons.ArrowsRotate}  Reimport", () =>
+                {
+                    var db = EditorAssetDatabase.Instance;
+                    if (db != null && item.Guid != Guid.Empty)
+                        db.Reimport(item.Guid);
+                });
+            }
+
+            builder.Separator();
+            builder.Item($"{EditorIcons.Copy}  Copy Path", () =>
+            {
+                // TODO: clipboard
+                Runtime.Debug.Log($"Path: {item.RelativePath}");
+            });
+            if (!item.IsFolder && item.Guid != Guid.Empty)
+            {
+                builder.Item($"{EditorIcons.Fingerprint}  Copy GUID", () =>
+                {
+                    Runtime.Debug.Log($"GUID: {item.Guid}");
+                });
+            }
+            builder.Separator();
+            builder.Item($"{EditorIcons.PenToSquare}  Rename", () =>
+            {
+                // TODO: inline rename
+                Runtime.Debug.Log($"Rename: {item.Name}");
+            });
+            builder.Item($"{EditorIcons.Trash}  Delete", () =>
+            {
+                EditorAssetDatabase.Instance?.DeleteAsset(item.RelativePath);
+            });
+        });
     }
 
     // ================================================================
@@ -443,6 +515,9 @@ public class ProjectPanel : DockPanel
                             .TextColor(EditorTheme.Text)
                             .FontSize(EditorTheme.FontSize - 4)
                             .Alignment(TextAlignment.MiddleCenter);
+
+                        // Right-click context menu
+                        BuildItemContextMenu(paper, $"proj_gc_ctx_{idx}", item);
                     }
                 }
             }
