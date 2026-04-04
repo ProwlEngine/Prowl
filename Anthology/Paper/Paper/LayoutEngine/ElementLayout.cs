@@ -1350,6 +1350,26 @@ namespace Prowl.PaperUI.LayoutEngine
             element.X = parentX + element.RelativeX;
             element.Y = parentY + element.RelativeY;
 
+            // Clamp to screen bounds if requested
+            if (element._clampToScreen)
+            {
+                float screenW = gui.RootElement.Data.LayoutWidth;
+                float screenH = gui.RootElement.Data.LayoutHeight;
+                float margin = 4f;
+
+                float maxX = screenW - element.LayoutWidth - margin;
+                float maxY = screenH - element.LayoutHeight - margin;
+
+                float clampedX = Maths.Max(margin, Maths.Min(maxX, element.X));
+                float clampedY = Maths.Max(margin, Maths.Min(maxY, element.Y));
+
+                // Update RelativeX/Y so children compute from the clamped position
+                element.RelativeX += clampedX - element.X;
+                element.RelativeY += clampedY - element.Y;
+                element.X = clampedX;
+                element.Y = clampedY;
+            }
+
             // Recursively set absolute positions for all children
             foreach (int childIndex in element.ChildIndices)
             {

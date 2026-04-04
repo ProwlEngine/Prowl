@@ -81,6 +81,7 @@ namespace Prowl.PaperUI.LayoutEngine
         internal List<ElementRenderCommand> _foregroundRenderCommands;
         internal ElementStyle _elementStyle;
         internal bool _scissorEnabled;
+        internal bool _clampToScreen;
 
         public Layer Layer;
 
@@ -126,6 +127,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 _foregroundRenderCommands = null,
                 _elementStyle = new ElementStyle(),
                 _scissorEnabled = false,
+                _clampToScreen = false,
                 Layer = Layer.Base,
                 ProcessedText = false,
             };

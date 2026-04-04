@@ -953,6 +953,17 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>
+        /// Clamps this element's position so it stays fully within the screen bounds.
+        /// Applied after layout, before rendering. Works with both SelfDirected and ParentDirected elements.
+        /// Children are moved with the parent automatically.
+        /// </summary>
+        public ElementBuilder ClampToScreen()
+        {
+            _handle.Data._clampToScreen = true;
+            return this;
+        }
+
         /// <summary>Places the element on a specific rendering layer.</summary>
         /// <param name="layer">Layer on which the element should be rendered.</param>
         public ElementBuilder Layer(Layer layer)
