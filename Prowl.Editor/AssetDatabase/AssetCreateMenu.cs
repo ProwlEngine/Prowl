@@ -17,15 +17,15 @@ public static class AssetCreateMenu
     /// <summary>
     /// Populates a context menu builder with asset creation options.
     /// </summary>
-    public static void Build(ContextMenuBuilder builder, string currentFolder)
+    public static void Build(ContextMenuBuilder builder, string currentFolder, Action<string>? onCreated = null)
     {
-        builder.Item($"{EditorIcons.Folder}  Folder", () => CreateFolder(currentFolder));
+        builder.Item($"{EditorIcons.Folder}  Folder", () => { var p = CreateFolder(currentFolder); if (p != null) onCreated?.Invoke(p); });
         builder.Separator();
-        builder.Item($"{EditorIcons.Cubes}  Scene", () => CreateScene(currentFolder));
-        builder.Item($"{EditorIcons.Palette}  Material", () => CreateMaterial(currentFolder));
-        builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => CreateShader(currentFolder));
+        builder.Item($"{EditorIcons.Cubes}  Scene", () => { var p = CreateScene(currentFolder); if (p != null) onCreated?.Invoke(p); });
+        builder.Item($"{EditorIcons.Palette}  Material", () => { var p = CreateMaterial(currentFolder); if (p != null) onCreated?.Invoke(p); });
+        builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => { var p = CreateShader(currentFolder); if (p != null) onCreated?.Invoke(p); });
         builder.Separator();
-        builder.Item($"{EditorIcons.FileCode}  C# Script", () => CreateScript(currentFolder));
+        builder.Item($"{EditorIcons.FileCode}  C# Script", () => { var p = CreateScript(currentFolder); if (p != null) onCreated?.Invoke(p); });
     }
 
     /// <summary>
@@ -82,27 +82,28 @@ public static class AssetCreateMenu
         return baseName + ext;
     }
 
-    public static void CreateFolder(string relativeFolder)
+    public static string? CreateFolder(string relativeFolder)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return;
+        if (!Directory.Exists(absFolder)) return null;
 
         string name = FindUniqueName(absFolder, "New Folder", "");
         string newPath = Path.Combine(absFolder, name);
         Directory.CreateDirectory(newPath);
         MetaFile.EnsureMeta(newPath, "DefaultImporter");
         Debug.Log($"Created folder: {name}");
+        string relPath = string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+        return relPath;
     }
 
-    public static void CreateScene(string relativeFolder)
+    public static string? CreateScene(string relativeFolder)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return;
+        if (!Directory.Exists(absFolder)) return null;
 
         string name = FindUniqueName(absFolder, "New Scene", ".scene");
         string filePath = Path.Combine(absFolder, name);
 
-        // Create an empty scene
         var scene = new Runtime.Resources.Scene();
         var ctx = new SerializationContext();
         Runtime.AssetDatabase.ConfigureContext(ctx);
@@ -111,28 +112,29 @@ public static class AssetCreateMenu
             File.WriteAllText(filePath, echo.WriteToString());
 
         Debug.Log($"Created scene: {name}");
+        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
-    public static void CreateMaterial(string relativeFolder)
+    public static string? CreateMaterial(string relativeFolder)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return;
+        if (!Directory.Exists(absFolder)) return null;
 
         string name = FindUniqueName(absFolder, "New Material", ".mat");
         string filePath = Path.Combine(absFolder, name);
 
-        // Create a minimal material file (Echo format)
         var echo = EchoObject.NewCompound();
         echo["$type"] = new EchoObject(typeof(Runtime.Resources.Material).AssemblyQualifiedName);
         File.WriteAllText(filePath, echo.WriteToString());
 
         Debug.Log($"Created material: {name}");
+        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
-    public static void CreateShader(string relativeFolder)
+    public static string? CreateShader(string relativeFolder)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return;
+        if (!Directory.Exists(absFolder)) return null;
 
         string name = FindUniqueName(absFolder, "New Shader", ".shader");
         string filePath = Path.Combine(absFolder, name);
@@ -187,12 +189,13 @@ public static class AssetCreateMenu
 ");
 
         Debug.Log($"Created shader: {name}");
+        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
-    public static void CreateScript(string relativeFolder)
+    public static string? CreateScript(string relativeFolder)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return;
+        if (!Directory.Exists(absFolder)) return null;
 
         string name = FindUniqueName(absFolder, "NewScript", ".cs");
         string className = Path.GetFileNameWithoutExtension(name);
@@ -213,5 +216,6 @@ public class {className} : MonoBehaviour
 ");
 
         Debug.Log($"Created script: {name}");
+        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 }

@@ -22,6 +22,10 @@ public class ProjectPanel : DockPanel
     private string _searchText = "";
     private float _thumbnailSize = 64f;
     private Paper? _paper; // Cached for modifier key checks in callbacks
+    private string? _renamingPath; // Relative path of item being renamed, null if not renaming
+    private string _renameText = "";
+    private bool _renameInTree; // true = renaming in folder tree, false = in content view
+    private int _lastSelectionCount; // track selection changes to cancel rename
     private const float MinThumbSize = 20f;  // Below this = list mode
     private const float MaxThumbSize = 128f;
     private const float ListThreshold = 32f; // Below this = list view
@@ -34,6 +38,18 @@ public class ProjectPanel : DockPanel
         _paper = paper;
         var font = EditorTheme.DefaultFont;
         if (font == null || Project.Current == null) return;
+
+        // Cancel rename if selection changed
+        if (_renamingPath != null)
+        {
+            int currentCount = Selection.Count;
+            var active = Selection.ActiveObject;
+            bool selChanged = currentCount != _lastSelectionCount
+                || (active is ContentItem ci && ci.RelativePath != _renamingPath)
+                || (active is not ContentItem && active != null);
+            if (selChanged) _renamingPath = null;
+        }
+        _lastSelectionCount = Selection.Count;
 
         using (paper.Column("proj_root").Size(width, height).Enter())
         {
@@ -66,13 +82,13 @@ public class ProjectPanel : DockPanel
                 if (paper.IsParentHovered)
                 {
                     var addBuilder = new ContextMenuBuilder();
-                    AssetCreateMenu.Build(addBuilder, _currentFolder);
+                    AssetCreateMenu.Build(addBuilder, _currentFolder, OnCreated);
                     addBuilder.Render(paper, "proj_add_menu", 0, ToolbarHeight - 6);
                 }
             }
 
             // Spacer
-            paper.Box("proj_spacer");
+            paper.Box("proj_spacer").Width(UnitValue.Stretch(4f));
 
             // Thumbnail size slider
             paper.Box("proj_list_ico")
@@ -212,14 +228,32 @@ public class ProjectPanel : DockPanel
                 .TextColor(Color.FromArgb(255, 220, 180, 80))
                 .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
 
-            // Name
-            paper.Box($"proj_fl_{relativePath.GetHashCode()}")
-                .Height(22)
-                .Margin(4, 0, 0, 0)
-                .Text(displayName, font)
-                .TextColor(EditorTheme.Text)
-                .FontSize(EditorTheme.FontSize)
-                .Alignment(TextAlignment.MiddleLeft);
+            // Name (inline rename in tree or label)
+            if (_renamingPath == relativePath && _renameInTree)
+            {
+                EditorGUI.TextField(paper, $"proj_ft_rename_{relativePath.GetHashCode()}", "", _renameText)
+                    .OnValueChanged(v => _renameText = v);
+                if (_paper?.IsKeyDown(PaperKey.Enter) == true || _paper?.IsKeyDown(PaperKey.KeypadEnter) == true)
+                {
+                    var renameItem = new ContentItem { Name = displayName, RelativePath = relativePath, IsFolder = true };
+                    CommitRename(renameItem);
+                }
+                else if (_paper?.IsKeyDown(PaperKey.Escape) == true)
+                    _renamingPath = null;
+            }
+            else
+            {
+                paper.Box($"proj_fl_{relativePath.GetHashCode()}")
+                    .Height(22)
+                    .Margin(4, 0, 0, 0)
+                    .Text(displayName, font)
+                    .TextColor(EditorTheme.Text)
+                    .FontSize(EditorTheme.FontSize)
+                    .Alignment(TextAlignment.MiddleLeft);
+            }
+
+            // Right-click context menu on folder tree
+            BuildFolderTreeContextMenu(paper, $"proj_ft_ctx_{relativePath.GetHashCode()}", relativePath);
         }
 
         // Children
@@ -253,29 +287,14 @@ public class ProjectPanel : DockPanel
             .Enter())
         {
             // Breadcrumb
-            DrawBreadcrumb(paper, font, width);
+            DrawBreadcrumb(paper, font, width, 20);
 
-            using (ScrollView.Begin(paper, "proj_content", width, height))
+            using (ScrollView.Begin(paper, "proj_content", width, height - 20))
             {
                 using (paper.Column("proj_content_inner")
                     .Height(UnitValue.Auto)
                     .Enter())
                 {
-                    // Right-click on empty space = create menu
-                    ContextMenuHelper.RightClickMenu(paper, "proj_ctx_bg", builder =>
-                    {
-                        AssetCreateMenu.Build(builder, _currentFolder);
-                        builder.Separator();
-                        builder.Item($"{EditorIcons.ArrowsRotate}  Refresh", () =>
-                        {
-                            if (Project.Current != null)
-                            {
-                                var newDb = new EditorAssetDatabase(Project.Current);
-                                newDb.Initialize();
-                            }
-                        });
-                    });
-
                     if (entries.Count == 0)
                     {
                         paper.Box("proj_empty").Height(60)
@@ -297,10 +316,10 @@ public class ProjectPanel : DockPanel
         }
     }
 
-    private void DrawBreadcrumb(Paper paper, Prowl.Scribe.FontFile font, float width)
+    private void DrawBreadcrumb(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
     {
         using (paper.Row("proj_breadcrumb")
-            .Height(20).ChildLeft(4).RowBetween(2)
+            .Height(height).ChildLeft(4).RowBetween(2)
             .Enter())
         {
             // Split current folder into parts
@@ -382,13 +401,26 @@ public class ProjectPanel : DockPanel
                     .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : EditorTheme.TextDim)
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
 
-                // Name
-                paper.Box($"proj_li_name_{i}")
-                    .Height(22)
-                    .Text(item.Name, font)
-                    .TextColor(EditorTheme.Text)
-                    .FontSize(EditorTheme.FontSize - 3)
-                    .Alignment(TextAlignment.MiddleLeft);
+                // Name (inline rename or label)
+                if (_renamingPath == item.RelativePath && !_renameInTree)
+                {
+                    EditorGUI.TextField(paper, $"proj_li_rename_{i}", "", _renameText)
+                        .OnValueChanged(v => _renameText = v);
+                    // Enter to confirm, Escape to cancel
+                    if (_paper?.IsKeyDown(PaperKey.Enter) == true || _paper?.IsKeyDown(PaperKey.KeypadEnter) == true)
+                        CommitRename(item);
+                    else if (_paper?.IsKeyDown(PaperKey.Escape) == true)
+                        _renamingPath = null;
+                }
+                else
+                {
+                    paper.Box($"proj_li_name_{i}")
+                        .Height(22)
+                        .Text(item.Name, font)
+                        .TextColor(EditorTheme.Text)
+                        .FontSize(EditorTheme.FontSize - 3)
+                        .Alignment(TextAlignment.MiddleLeft);
+                }
 
                 // Type
                 if (!item.IsFolder)
@@ -407,32 +439,45 @@ public class ProjectPanel : DockPanel
         }
     }
 
-    private void BuildItemContextMenu(Paper paper, string id, ContentItem item)
+    private void BuildItemContextMenu(Paper paper, string id, ContentItem item, bool inTree = false)
     {
         ContextMenuHelper.RightClickMenu(paper, id, builder =>
         {
-            if (item.IsFolder)
+            // Right-click should select the item if not already selected
+            if (!Selection.IsSelected(item))
+                Selection.Select(item);
+
+            bool isMulti = Selection.Count > 1;
+            string folder = item.IsFolder ? item.RelativePath : _currentFolder;
+
+            if (!item.IsFolder)
             {
-                builder.Item($"{EditorIcons.FolderOpen}  Open", () => _currentFolder = item.RelativePath);
+                builder.Item($"{EditorIcons.FolderOpen}  Open with System", () => OpenWithSystem(item));
                 builder.Separator();
-                builder.Submenu($"{EditorIcons.Plus}  Create", sub => AssetCreateMenu.Build(sub, item.RelativePath));
             }
-            else
+
+            builder.Submenu($"{EditorIcons.Plus}  Create", sub => AssetCreateMenu.Build(sub, folder, OnCreated));
+
+            builder.Separator();
+
+            builder.Item($"{EditorIcons.FolderOpen}  Show in Explorer", () => ShowInExplorer(item));
+
+            if (!item.IsFolder)
             {
                 builder.Item($"{EditorIcons.ArrowsRotate}  Reimport", () =>
                 {
                     var db = EditorAssetDatabase.Instance;
-                    if (db != null && item.Guid != Guid.Empty)
-                        db.Reimport(item.Guid);
+                    if (db == null) return;
+                    foreach (var sel in Selection.GetSelected<ContentItem>())
+                        if (sel.Guid != Guid.Empty) db.Reimport(sel.Guid);
                 });
             }
 
-            builder.Separator();
             builder.Item($"{EditorIcons.Copy}  Copy Path", () =>
             {
-                // TODO: clipboard
                 Runtime.Debug.Log($"Path: {item.RelativePath}");
             });
+
             if (!item.IsFolder && item.Guid != Guid.Empty)
             {
                 builder.Item($"{EditorIcons.Fingerprint}  Copy GUID", () =>
@@ -440,17 +485,136 @@ public class ProjectPanel : DockPanel
                     Runtime.Debug.Log($"GUID: {item.Guid}");
                 });
             }
+
             builder.Separator();
-            builder.Item($"{EditorIcons.PenToSquare}  Rename", () =>
-            {
-                // TODO: inline rename
-                Runtime.Debug.Log($"Rename: {item.Name}");
-            });
+
+            bool isRoot = string.IsNullOrEmpty(item.RelativePath);
+            builder.Item($"{EditorIcons.PenToSquare}  Rename", () => StartRename(item, inTree), enabled: !isMulti && !isRoot);
+
             builder.Item($"{EditorIcons.Trash}  Delete", () =>
             {
-                EditorAssetDatabase.Instance?.DeleteAsset(item.RelativePath);
-            });
+                var db = EditorAssetDatabase.Instance;
+                if (db == null) return;
+                foreach (var sel in Selection.GetSelected<ContentItem>().ToList())
+                {
+                    if (string.IsNullOrEmpty(sel.RelativePath)) continue; // Can't delete root
+                    if (sel.IsFolder)
+                    {
+                        string absPath = Path.Combine(Project.Current!.AssetsPath, sel.RelativePath);
+                        if (Directory.Exists(absPath))
+                        {
+                            Directory.Delete(absPath, true);
+                            string metaPath = MetaFile.GetMetaPath(absPath);
+                            if (File.Exists(metaPath)) File.Delete(metaPath);
+                        }
+                        if (_currentFolder == sel.RelativePath || _currentFolder.StartsWith(sel.RelativePath + "/"))
+                            _currentFolder = "";
+                    }
+                    else
+                    {
+                        db.DeleteAsset(sel.RelativePath);
+                    }
+                }
+                Selection.Clear();
+            }, enabled: !isRoot);
         });
+    }
+
+    private void BuildFolderTreeContextMenu(Paper paper, string id, string relativePath)
+    {
+        var item = new ContentItem
+        {
+            Name = string.IsNullOrEmpty(relativePath) ? "Assets" : Path.GetFileName(relativePath),
+            RelativePath = relativePath,
+            IsFolder = true,
+            Icon = EditorIcons.Folder,
+            TypeLabel = "Folder"
+        };
+        BuildItemContextMenu(paper, id, item, inTree: true);
+    }
+
+    private void OnCreated(string relativePath)
+    {
+        // Select the newly created item and enter rename
+        var newItem = new ContentItem
+        {
+            Name = Path.GetFileName(relativePath),
+            RelativePath = relativePath,
+            IsFolder = Directory.Exists(Path.Combine(Project.Current!.AssetsPath, relativePath)),
+            Icon = EditorIcons.File
+        };
+        Selection.Select(newItem);
+        StartRename(newItem);
+    }
+
+    private void StartRename(ContentItem item, bool inTree = false)
+    {
+        _renamingPath = item.RelativePath;
+        _renameText = item.IsFolder ? item.Name : Path.GetFileNameWithoutExtension(item.Name);
+        _renameInTree = inTree;
+    }
+
+    private void CommitRename(ContentItem item)
+    {
+        if (_renamingPath == null) return;
+        string ext = item.IsFolder ? "" : Path.GetExtension(item.Name);
+        string newName = _renameText + ext;
+        if (newName == item.Name || string.IsNullOrWhiteSpace(_renameText))
+        {
+            _renamingPath = null;
+            return;
+        }
+
+        string parentFolder = Path.GetDirectoryName(item.RelativePath)?.Replace('\\', '/') ?? "";
+        string newRelPath = string.IsNullOrEmpty(parentFolder) ? newName : parentFolder + "/" + newName;
+
+        if (item.IsFolder)
+        {
+            string oldAbs = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
+            string newAbs = Path.Combine(Project.Current.AssetsPath, newRelPath);
+            if (Directory.Exists(oldAbs) && !Directory.Exists(newAbs))
+            {
+                Directory.Move(oldAbs, newAbs);
+                string oldMeta = MetaFile.GetMetaPath(oldAbs);
+                string newMeta = MetaFile.GetMetaPath(newAbs);
+                if (File.Exists(oldMeta)) File.Move(oldMeta, newMeta);
+                if (_currentFolder == item.RelativePath)
+                    _currentFolder = newRelPath;
+            }
+        }
+        else
+        {
+            EditorAssetDatabase.Instance?.MoveAsset(item.RelativePath, newRelPath);
+        }
+        _renamingPath = null;
+    }
+
+    private static void OpenWithSystem(ContentItem item)
+    {
+        string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(absPath) { UseShellExecute = true });
+        }
+        catch { }
+    }
+
+    private static void ShowInExplorer(ContentItem item)
+    {
+        string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
+        ShowInExplorerPath(absPath);
+    }
+
+    private static void ShowInExplorerPath(string absPath)
+    {
+        try
+        {
+            if (Directory.Exists(absPath))
+                System.Diagnostics.Process.Start("explorer.exe", absPath);
+            else if (File.Exists(absPath))
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{absPath}\"");
+        }
+        catch { }
     }
 
     // ================================================================
@@ -508,13 +672,26 @@ public class ProjectPanel : DockPanel
                             .FontSize(_thumbnailSize * 0.4f)
                             .Alignment(TextAlignment.MiddleCenter);
 
-                        // Label
-                        paper.Box($"proj_gl_{idx}")
-                            .Width(cellSize).Height(labelH)
-                            .Text(item.Name, font)
-                            .TextColor(EditorTheme.Text)
-                            .FontSize(EditorTheme.FontSize - 4)
-                            .Alignment(TextAlignment.MiddleCenter);
+                        // Label (inline rename or text)
+                        if (_renamingPath == item.RelativePath && !_renameInTree)
+                        {
+                            EditorGUI.TextField(paper, $"proj_gl_rename_{idx}", "", _renameText)
+                                .OnValueChanged(v => _renameText = v);
+                            if (_paper?.IsKeyDown(PaperKey.Enter) == true || _paper?.IsKeyDown(PaperKey.KeypadEnter) == true)
+                                CommitRename(item);
+                            else if (_paper?.IsKeyDown(PaperKey.Escape) == true)
+                                _renamingPath = null;
+                        }
+                        else
+                        {
+                            paper.Box($"proj_gl_{idx}")
+                                .Width(cellSize).Height(labelH)
+                                .Clip()
+                                .Text(item.Name, font)
+                                .TextColor(EditorTheme.Text)
+                                .FontSize(EditorTheme.FontSize - 4)
+                                .Alignment(TextAlignment.MiddleCenter);
+                        }
 
                         // Right-click context menu
                         BuildItemContextMenu(paper, $"proj_gc_ctx_{idx}", item);
