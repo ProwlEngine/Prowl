@@ -432,7 +432,8 @@ public static class EditorGUI
     public static void Foldout(Paper paper, string id, string label, Action drawContents, bool defaultValue = true)
     {
         // Header button — storage lives on the header element itself
-        var header = paper.Box($"{id}_header")
+        var header = paper
+            .Row($"{id}_header")
             .Height(EditorTheme.RowHeight)
             .ChildLeft(4)
             .BackgroundColor(EditorTheme.HeaderBackground)
@@ -445,8 +446,40 @@ public static class EditorGUI
 
         if (Font != null)
         {
-            string arrow = expanded ? "\u25BC " : "\u25B6 ";
-            header.Text(arrow + label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+            using (header.Enter())
+            {
+                if (expanded)
+                {
+                    paper.Box("{id}_arrow")
+                        .Margin(EditorTheme.RowHeight / 4, 0, EditorTheme.RowHeight / 8, 0)
+                        .Width(16)
+                        .MaxWidth(16)
+                        // .Text("\u25BC", Font)
+                        .Text(EditorIcons.ChevronDown, Font)
+                        .TextColor(EditorTheme.TextDim)
+                        .FontSize(FontSz * 0.7f);
+                }
+                else
+                {
+                    paper.Box("{id}_arrow")
+                        .Margin(EditorTheme.RowHeight / 3, (EditorTheme.RowHeight / 4) - (EditorTheme.RowHeight / 3), EditorTheme.RowHeight / 8, 0)
+                        .Width(16)
+                        .MaxWidth(16)
+                        // .Text("\u25B6", Font)
+                        .Text(EditorIcons.ChevronRight, Font)
+                        .TextColor(EditorTheme.TextDim)
+                        .FontSize(FontSz * 0.7f);
+                }
+                paper.Box($"{id}_header_lbl")
+                    .Text(label, Font)
+                    .TextColor(EditorTheme.Text)
+                    .FontSize(FontSz);
+            }
+            // string arrow = expanded ? "\u25BC " : "\u25B6 ";
+            // header
+            //     .Text(arrow + label, Font)
+            //     .TextColor(EditorTheme.Text)
+            //     .FontSize(FontSz);
         }
 
         if (expanded)
@@ -507,12 +540,35 @@ public static class EditorGUI
                             .Width(UnitValue.Stretch())
                             .IsNotInteractable()
                             .Text(displayText, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
-
-                        paper.Box($"{id}_arr")
-                            .Width(EditorTheme.RowHeight) // square area for the arrow
-                            .Height(EditorTheme.RowHeight)
-                            .IsNotInteractable()
-                            .Text(isOpen ? "\u25B2" : "\u25BC", Font).TextColor(EditorTheme.TextDim).FontSize(10f);
+                        
+                        // chevron down if open, right if closed
+                        if (isOpen)
+                        {
+                            paper.Box("{id}_arrow")
+                                .Margin(EditorTheme.RowHeight / 4, 0, EditorTheme.RowHeight / 8, 0)
+                                .Width(16)
+                                .MaxWidth(16)
+                                // .Text("\u25BC", Font)
+                                .Text(EditorIcons.ChevronUp, Font)
+                                .TextColor(EditorTheme.TextDim)
+                                .FontSize(FontSz * 0.7f);
+                        }
+                        else
+                        {
+                            paper.Box("{id}_arrow")
+                                .Margin(EditorTheme.RowHeight / 3, (EditorTheme.RowHeight / 4) - (EditorTheme.RowHeight / 3), EditorTheme.RowHeight / 8, 0)
+                                .Width(16)
+                                .MaxWidth(16)
+                                // .Text("\u25B6", Font)
+                                .Text(EditorIcons.ChevronDown, Font)
+                                .TextColor(EditorTheme.TextDim)
+                                .FontSize(FontSz * 0.7f);
+                        }
+                        // paper.Box($"{id}_arr")
+                        //     .Width(EditorTheme.RowHeight) // square area for the arrow
+                        //     .Height(EditorTheme.RowHeight)
+                        //     .IsNotInteractable()
+                        //     .Text(isOpen ? "\u25B2" : "\u25BC", Font).TextColor(EditorTheme.TextDim).FontSize(10f);
                     }
                 }
 
@@ -605,7 +661,8 @@ public static class EditorGUI
             if (Font != null)
                 paper.Box($"{id}_icon")
                     .Width(16)
-                    .Text("\u2315", Font).TextColor(EditorTheme.TextDim).FontSize(FontSz);
+                    .Margin(EditorTheme.RowHeight / 4, 0, EditorTheme.RowHeight / 8, 0)
+                    .Text(EditorIcons.MagnifyingGlass, Font).TextColor(EditorTheme.TextDim).FontSize(FontSz * 0.7f);
 
             paper.Box($"{id}_tf")
                 .Height(EditorTheme.RowHeight)
