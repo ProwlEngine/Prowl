@@ -276,7 +276,7 @@ public static class PropertyGrid
             paper.SetElementStorage(colEl, "stableIds", stableIds);
 
             // ── Elements ──────────────────────────────────────────────────
-            using (paper.Column($"{id}_items").Height(UnitValue.Auto).ChildLeft(16).RowBetween(2).Enter())
+            using (paper.Column($"{id}_items").Height(UnitValue.Auto).ChildLeft(16).ColBetween(6).Enter())
             {
                 for (int i = 0; i < list.Count; i++)
                 {
@@ -371,7 +371,7 @@ public static class PropertyGrid
                 return;
             }
 
-            using (paper.Column($"{id}_entries").Height(UnitValue.Auto).ChildLeft(16).RowBetween(2).Enter())
+            using (paper.Column($"{id}_entries").Height(UnitValue.Auto).ChildLeft(16).ColBetween(6).Enter())
             {
                 // Existing entries
                 var keys = new List<object>();
@@ -445,7 +445,6 @@ public static class PropertyGrid
         });
     }
 
-
     // ================================================================
     //  Nested Object
     // ================================================================
@@ -480,7 +479,7 @@ public static class PropertyGrid
 
         EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({type.Name})", () =>
         {
-            using (paper.Column($"{id}_nested").Height(UnitValue.Auto).ChildLeft(12).RowBetween(2).Enter())
+            using (paper.Column($"{id}_nested").Height(UnitValue.Auto).ChildLeft(12).ColBetween(6).Margin(0, 0, 6, 0).Enter())
             {
                 Draw(paper, $"{id}_props", value, changed =>
                 {
