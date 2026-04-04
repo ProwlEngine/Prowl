@@ -403,33 +403,33 @@ public static class EditorGUI
     //  Foldout (header only — content is drawn by the caller after this)
     // ================================================================
 
-    public static WidgetResult<bool> Foldout(Paper paper, string id, string label, bool expanded)
-    {
-        Action<bool>? userCallback = null;
+    // public static WidgetResult<bool> Foldout(Paper paper, string id, string label, bool expanded)
+    // {
+    //     Action<bool>? userCallback = null;
 
-        // Just the clickable header bar — fixed height
-        var el = paper.Box($"{id}_header")
-            .Height(EditorTheme.RowHeight)
-            .ChildLeft(4)
-            .BackgroundColor(EditorTheme.HeaderBackground)
-            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-            .Rounded(2)
-            .OnClick(e => userCallback?.Invoke(!expanded));
+    //     // Just the clickable header bar — fixed height
+    //     var el = paper.Box($"{id}_header")
+    //         .Height(EditorTheme.RowHeight)
+    //         .ChildLeft(4)
+    //         .BackgroundColor(EditorTheme.HeaderBackground)
+    //         .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+    //         .Rounded(2)
+    //         .OnClick(e => userCallback?.Invoke(!expanded));
 
-        if (Font != null)
-        {
-            string arrow = expanded ? "\u25BC " : "\u25B6 ";
-            el.Text(arrow + label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
-        }
+    //     if (Font != null)
+    //     {
+    //         string arrow = expanded ? "\u25BC " : "\u25B6 ";
+    //         el.Text(arrow + label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+    //     }
 
-        return new WidgetResult<bool>(cb => userCallback = cb);
-    }
+    //     return new WidgetResult<bool>(cb => userCallback = cb);
+    // }
 
     // ================================================================
     //  Foldout (self-contained state + content callback)
     // ================================================================
 
-    public static void SimpleFoldout(Paper paper, string id, string label, Action drawContents, bool defaultValue = true)
+    public static void Foldout(Paper paper, string id, string label, Action drawContents, bool defaultValue = true)
     {
         // Header button — storage lives on the header element itself
         var header = paper.Box($"{id}_header")

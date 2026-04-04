@@ -24,8 +24,6 @@ public class WidgetPlaygroundPanel : DockPanel
     private float _sliderValue = 0.5f;
     private float _sliderRange = 75f;
     private int _intSlider = 5;
-    private bool _foldoutOpen = true;
-    private bool _foldout2Open;
     private int _dropdownIndex;
     private int _dropdown2Index = 2;
     private string _searchText = "";
@@ -243,9 +241,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Foldouts ===
             EditorGUI.Header(paper, "h_fold", "Foldouts");
 
-            EditorGUI.Foldout(paper, "fo_1", "Advanced Settings", _foldoutOpen)
-                .OnValueChanged(v => _foldoutOpen = v);
-            if (_foldoutOpen)
+            EditorGUI.Foldout(paper, "fo_1", "Advanced Settings", () =>
             {
                 using (paper.Column("fo_1_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
                 {
@@ -254,11 +250,9 @@ public class WidgetPlaygroundPanel : DockPanel
                     EditorGUI.Toggle(paper, "fo_tog", "Enabled", _toggleA)
                         .OnValueChanged(v => _toggleA = v);
                 }
-            }
+            });
 
-            EditorGUI.Foldout(paper, "fo_2", "Debug Options", _foldout2Open)
-                .OnValueChanged(v => _foldout2Open = v);
-            if (_foldout2Open)
+            EditorGUI.Foldout(paper, "fo_2", "Debug Options", () =>
             {
                 using (paper.Column("fo_2_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
                 {
@@ -267,7 +261,7 @@ public class WidgetPlaygroundPanel : DockPanel
                     EditorGUI.IntField(paper, "fo_iter", "Iterations", _intValue)
                         .OnValueChanged(v => _intValue = v);
                 }
-            }
+            });
 
             EditorGUI.Separator(paper, "sep6");
 
@@ -488,8 +482,6 @@ public class WidgetPlaygroundPanel : DockPanel
         _intValue = 42;
         _sliderValue = 0.5f;
         _sliderRange = 75f;
-        _foldoutOpen = true;
-        _foldout2Open = false;
         _dropdownIndex = 0;
         _dropdown2Index = 2;
         _searchText = "";

@@ -245,7 +245,7 @@ public static class PropertyGrid
         IList? list = value as IList;
         int count = list?.Count ?? 0;
 
-        EditorGUI.SimpleFoldout(paper, $"{id}_fold", $"{label} ({count})", () =>
+        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({count})", () =>
         {
             if (list == null)
             {
@@ -329,7 +329,7 @@ public static class PropertyGrid
         IDictionary? dict = value as IDictionary;
         int count = dict?.Count ?? 0;
 
-        EditorGUI.SimpleFoldout(paper, $"{id}_fold", $"{label} ({count} entries)", () =>
+        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({count} entries)", () =>
         {
             if (dict == null)
             {
@@ -407,7 +407,7 @@ public static class PropertyGrid
             return;
         }
 
-        EditorGUI.SimpleFoldout(paper, $"{id}_fold", $"{label} ({type.Name})", () =>
+        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({type.Name})", () =>
         {
             using (paper.Column($"{id}_nested").Height(UnitValue.Auto).ChildLeft(12).RowBetween(2).Enter())
             {
