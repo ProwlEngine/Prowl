@@ -521,19 +521,24 @@ public static class PropertyGrid
             return;
         }
 
-        // Find which index matches the current value's runtime type, default to -1 (no selection)
+        // Index 0 = null, indices 1..N = concrete types
         Type? currentType = currentValue?.GetType();
-        int selectedIndex = currentType != null ? Array.IndexOf(types, currentType) : -1;
+        int selectedIndex = currentType != null
+            ? Array.IndexOf(types, currentType) + 1  // offset by 1 for null slot
+            : 0;                                      // null is selected
 
-        var names = types.Select(t => t.Name).ToArray();
+        var names = types.Select(t => t.Name).Prepend("(null)").ToArray();
+
         EditorGUI.Dropdown(paper, $"{id}_dd", "Type", selectedIndex, names)
             .OnValueChanged(idx =>
             {
-                if (idx >= 0 && idx < types.Length)
-                    onChange(Activator.CreateInstance(types[idx]));
+                if (idx == 0)
+                    onChange(null);
+                else if (idx >= 1 && idx <= types.Length)
+                    onChange(Activator.CreateInstance(types[idx - 1]));
             });
     }
-
+    
     // ================================================================
     //  Reflection Helpers
     // ================================================================
