@@ -3,7 +3,6 @@ using System.Globalization;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Runtime.Utils;
 using Prowl.Scribe;
 
 using Color = System.Drawing.Color;
@@ -121,23 +120,30 @@ public static class EditorGUI
         return new WidgetResult<bool>(cb => userCallback = cb);
     }
 
-    public static WidgetResult<bool> ButtonSquare(Paper paper, string id, string label, float width = 0)
+    public static WidgetResult<bool> ButtonSquare(Paper paper, string id, string icon)
     {
         Action<bool>? userCallback = null;
 
-        var el = paper.Box(id)
+        using (paper.Box(id)
             .Height(EditorTheme.RowHeight)
             .Width(EditorTheme.RowHeight)
-            .ChildLeft(12).ChildRight(12)
             .BackgroundColor(EditorTheme.ButtonNormal)
             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
             .BorderColor(EditorTheme.Border).BorderWidth(1)
-            .OnClick(e => userCallback?.Invoke(true));
-
-        if (width > 0) el.Width(width);
-        if (Font != null) el.Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+            .OnClick(e => userCallback?.Invoke(true)).Enter())
+        {
+            if (Font != null)
+            { 
+                var iconSize = paper.MeasureText(icon, FontSz, Font);
+                paper.Box($"{id}_icon")
+                    .Text(icon, Font)
+                    .TextColor(EditorTheme.Text)
+                    .FontSize(FontSz)
+                    .Margin((EditorTheme.RowHeight - iconSize.X) * 0.5f, (EditorTheme.RowHeight - iconSize.Y) * 0.5f);
+            }
+        }
 
         return new WidgetResult<bool>(cb => userCallback = cb);
     }
@@ -226,7 +232,7 @@ public static class EditorGUI
     //  FloatField
     // ================================================================
 
-    public static WidgetResult<float> FloatField(Paper paper, string id, string label, float value)
+    public static WidgetResult<float> FloatField(Paper paper, string id, float value, string label = "", Vector.Color? textColor = null)
     {
         Action<float>? userCallback = null;
         string textVal = value.ToString("G", CultureInfo.InvariantCulture);
@@ -238,8 +244,8 @@ public static class EditorGUI
         {
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
-                    .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Width(paper.MeasureText(label, EditorTheme.FontSize, EditorTheme.DefaultFont).X).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Text).FontSize(FontSz);
 
             using (paper.Box($"{id}_input")
                 .Height(EditorTheme.RowHeight)
@@ -276,7 +282,7 @@ public static class EditorGUI
     //  IntField
     // ================================================================
 
-    public static WidgetResult<int> IntField(Paper paper, string id, string label, int value)
+    public static WidgetResult<int> IntField(Paper paper, string id, int value, string label, Vector.Color? textColor = null)
     {
         Action<int>? userCallback = null;
         string textVal = value.ToString(CultureInfo.InvariantCulture);
@@ -288,8 +294,9 @@ public static class EditorGUI
         {
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
-                    .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Width(paper.MeasureText(label, EditorTheme.FontSize, EditorTheme.DefaultFont).X).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Text).FontSize(FontSz);
+
 
             using (paper.Box($"{id}_input")
                 .Height(EditorTheme.RowHeight)
@@ -394,7 +401,7 @@ public static class EditorGUI
 
             if (showField)
             {
-                FloatField(paper, $"{id}_val", "", value)
+                FloatField(paper, $"{id}_val", value)
                     .OnValueChanged(v => userCallback?.Invoke(Math.Clamp(v, min, max)));
             }
         }
@@ -403,39 +410,14 @@ public static class EditorGUI
     }
 
     // ================================================================
-    //  Foldout (header only — content is drawn by the caller after this)
-    // ================================================================
-
-    public static WidgetResult<bool> Foldout(Paper paper, string id, string label, bool expanded)
-    {
-        Action<bool>? userCallback = null;
-
-        // Just the clickable header bar — fixed height
-        var el = paper.Box($"{id}_header")
-            .Height(EditorTheme.RowHeight)
-            .ChildLeft(4)
-            .BackgroundColor(EditorTheme.HeaderBackground)
-            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-            .Rounded(2)
-            .OnClick(e => userCallback?.Invoke(!expanded));
-
-        if (Font != null)
-        {
-            string arrow = expanded ? "\u25BC " : "\u25B6 ";
-            el.Text(arrow + label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
-        }
-
-        return new WidgetResult<bool>(cb => userCallback = cb);
-    }
-
-    // ================================================================
     //  Foldout (self-contained state + content callback)
     // ================================================================
 
-    public static void SimpleFoldout(Paper paper, string id, string label, Action drawContents, bool defaultValue = true)
+    public static void Foldout(Paper paper, string id, string label, Action drawContents, bool defaultValue = true)
     {
         // Header button — storage lives on the header element itself
-        var header = paper.Box($"{id}_header")
+        var header = paper
+            .Row($"{id}_header")
             .Height(EditorTheme.RowHeight)
             .ChildLeft(4)
             .BackgroundColor(EditorTheme.HeaderBackground)
@@ -448,12 +430,43 @@ public static class EditorGUI
 
         if (Font != null)
         {
-            string arrow = expanded ? "\u25BC " : "\u25B6 ";
-            header.Text(arrow + label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+            using (header.Enter())
+            {
+                if (expanded)
+                {
+                    paper.Box("{id}_arrow")
+                        .Margin(EditorTheme.RowHeight / 4, 0, EditorTheme.RowHeight / 8, 0)
+                        .Width(16)
+                        .MaxWidth(16)
+                        // .Text("\u25BC", Font)
+                        .Text(EditorIcons.ChevronDown, Font)
+                        .TextColor(EditorTheme.TextDim)
+                        .FontSize(FontSz * 0.7f);
+                }
+                else
+                {
+                    paper.Box("{id}_arrow")
+                        .Margin(EditorTheme.RowHeight / 3, (EditorTheme.RowHeight / 4) - (EditorTheme.RowHeight / 3), EditorTheme.RowHeight / 8, 0)
+                        .Width(16)
+                        .MaxWidth(16)
+                        .Text(EditorIcons.ChevronRight, Font)
+                        .TextColor(EditorTheme.TextDim)
+                        .FontSize(FontSz * 0.7f);
+                }
+                paper.Box($"{id}_header_lbl")
+                    .Text(label, Font)
+                    .TextColor(EditorTheme.Text)
+                    .FontSize(FontSz);
+            }
         }
 
         if (expanded)
-            drawContents();
+        {
+            using (paper.Column($"{id}_content").Height(UnitValue.Auto).Enter())
+            {
+                drawContents();
+            }
+        }
     }
 
     // ================================================================
@@ -510,12 +523,30 @@ public static class EditorGUI
                             .Width(UnitValue.Stretch())
                             .IsNotInteractable()
                             .Text(displayText, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
-
-                        paper.Box($"{id}_arr")
-                            .Width(EditorTheme.RowHeight) // square area for the arrow
-                            .Height(EditorTheme.RowHeight)
-                            .IsNotInteractable()
-                            .Text(isOpen ? "\u25B2" : "\u25BC", Font).TextColor(EditorTheme.TextDim).FontSize(10f);
+                        
+                        // chevron down if open, right if closed
+                        if (isOpen)
+                        {
+                            paper.Box("{id}_arrow")
+                                .Margin(EditorTheme.RowHeight / 4, 0, EditorTheme.RowHeight / 8, 0)
+                                .Width(16)
+                                .MaxWidth(16)
+                                // .Text("\u25BC", Font)
+                                .Text(EditorIcons.ChevronUp, Font)
+                                .TextColor(EditorTheme.TextDim)
+                                .FontSize(FontSz * 0.7f);
+                        }
+                        else
+                        {
+                            paper.Box("{id}_arrow")
+                                .Margin(EditorTheme.RowHeight / 3, (EditorTheme.RowHeight / 4) - (EditorTheme.RowHeight / 3), EditorTheme.RowHeight / 8, 0)
+                                .Width(16)
+                                .MaxWidth(16)
+                                // .Text("\u25B6", Font)
+                                .Text(EditorIcons.ChevronDown, Font)
+                                .TextColor(EditorTheme.TextDim)
+                                .FontSize(FontSz * 0.7f);
+                        }
                     }
                 }
 
@@ -606,9 +637,11 @@ public static class EditorGUI
             .TabIndex(0)
             .Enter())
         {
-            paper.Box($"{id}_icon")
-                .Width(16)
-                .Text(EditorIcons.MagnifyingGlass, Font).TextColor(EditorTheme.TextDim).FontSize(14).Alignment(PaperUI.TextAlignment.MiddleCenter);
+            if (Font != null)
+                paper.Box($"{id}_icon")
+                    .Width(16)
+                    .Margin(EditorTheme.RowHeight / 4, 0, EditorTheme.RowHeight / 8, 0)
+                    .Text(EditorIcons.MagnifyingGlass, Font).TextColor(EditorTheme.TextDim).FontSize(FontSz * 0.7f);
 
             paper.Box($"{id}_tf")
                 .Height(EditorTheme.RowHeight)
@@ -692,19 +725,11 @@ public static class EditorGUI
                     .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
 
             // X
-            if (Font != null)
-                paper.Box($"{id}_xl")
-                    .Width(14).Height(EditorTheme.RowHeight)
-                    .Text("X", Font).TextColor(Color.FromArgb(255, 200, 80, 80)).FontSize(FontSz);
-            FloatField(paper, $"{id}_x", "", (float)current.X)
+            FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
                 .OnValueChanged(v => { current.X = v; userCallback?.Invoke(current); });
 
             // Y
-            if (Font != null)
-                paper.Box($"{id}_yl")
-                    .Width(14).Height(EditorTheme.RowHeight)
-                    .Text("Y", Font).TextColor(Color.FromArgb(255, 80, 200, 80)).FontSize(FontSz);
-            FloatField(paper, $"{id}_y", "", (float)current.Y)
+            FloatField(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
                 .OnValueChanged(v => { current.Y = v; userCallback?.Invoke(current); });
         }
 
@@ -731,31 +756,58 @@ public static class EditorGUI
                     .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
 
             // X
-            if (Font != null)
-                paper.Box($"{id}_xl")
-                    .Width(14).Height(EditorTheme.RowHeight)
-                    .Text("X", Font).TextColor(Color.FromArgb(255, 200, 80, 80)).FontSize(FontSz);
-            FloatField(paper, $"{id}_x", "", (float)current.X)
+            FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
                 .OnValueChanged(v => { current.X = v; userCallback?.Invoke(current); });
 
             // Y
-            if (Font != null)
-                paper.Box($"{id}_yl")
-                    .Width(14).Height(EditorTheme.RowHeight)
-                    .Text("Y", Font).TextColor(Color.FromArgb(255, 80, 200, 80)).FontSize(FontSz);
-            FloatField(paper, $"{id}_y", "", (float)current.Y)
+            FloatField(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
                 .OnValueChanged(v => { current.Y = v; userCallback?.Invoke(current); });
 
             // Z
-            if (Font != null)
-                paper.Box($"{id}_zl")
-                    .Width(14).Height(EditorTheme.RowHeight)
-                    .Text("Z", Font).TextColor(Color.FromArgb(255, 80, 80, 200)).FontSize(FontSz);
-            FloatField(paper, $"{id}_z", "", (float)current.Z)
+            FloatField(paper, $"{id}_z", (float)current.Z, "Z", Color.FromArgb(255, 80, 80, 200))
                 .OnValueChanged(v => { current.Z = v; userCallback?.Invoke(current); });
         }
 
         return new WidgetResult<Prowl.Vector.Float3>(cb => userCallback = cb);
+    }
+
+    // ================================================================
+    //  Vector4 Field
+    // ================================================================
+
+    public static WidgetResult<Prowl.Vector.Float4> Vector4Field(Paper paper, string id, string label, Prowl.Vector.Float4 value)
+    {
+        Action<Prowl.Vector.Float4>? userCallback = null;
+        var current = value;
+
+        using (paper.Row(id)
+            .Height(EditorTheme.RowHeight)
+            .RowBetween(4)
+            .Enter())
+        {
+            if (Font != null && !string.IsNullOrEmpty(label))
+                paper.Box($"{id}_lbl")
+                    .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+
+            // X
+            FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
+                .OnValueChanged(v => { current.X = v; userCallback?.Invoke(current); });
+
+            // Y
+            FloatField(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
+                .OnValueChanged(v => { current.Y = v; userCallback?.Invoke(current); });
+
+            // Z
+            FloatField(paper, $"{id}_z", (float)current.Z, "Z", Color.FromArgb(255, 80, 80, 200))
+                .OnValueChanged(v => { current.Z = v; userCallback?.Invoke(current); });
+
+            // W
+            FloatField(paper, $"{id}_w", (float)current.W, "W")
+                .OnValueChanged(v => { current.W = v; userCallback?.Invoke(current); });
+        }
+
+        return new WidgetResult<Prowl.Vector.Float4>(cb => userCallback = cb);
     }
 
     // ================================================================

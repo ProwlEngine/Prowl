@@ -11,8 +11,6 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Vector;
 
-using Color = System.Drawing.Color;
-
 namespace Prowl.Editor.Widgets;
 
 /// <summary>
@@ -77,19 +75,19 @@ public static class PropertyGrid
         }
         if (type == typeof(int))
         {
-            EditorGUI.IntField(paper, id, label, (int)(value ?? 0))
+            EditorGUI.IntField(paper, id, (int)(value ?? 0), label)
                 .OnValueChanged(v => onChange(v));
             return;
         }
         if (type == typeof(float))
         {
-            EditorGUI.FloatField(paper, id, label, (float)(value ?? 0f))
+            EditorGUI.FloatField(paper, id, (float)(value ?? 0f), label)
                 .OnValueChanged(v => onChange(v));
             return;
         }
         if (type == typeof(double))
         {
-            EditorGUI.FloatField(paper, id, label, (float)(double)(value ?? 0.0))
+            EditorGUI.FloatField(paper, id, (float)(double)(value ?? 0.0), label)
                 .OnValueChanged(v => onChange((double)v));
             return;
         }
@@ -107,37 +105,37 @@ public static class PropertyGrid
         }
         if (type == typeof(short))
         {
-            EditorGUI.IntField(paper, id, label, (int)(short)(value ?? (short)0))
+            EditorGUI.IntField(paper, id, (int)(short)(value ?? (short)0), label)
                 .OnValueChanged(v => onChange((short)Math.Clamp(v, short.MinValue, short.MaxValue)));
             return;
         }
         if (type == typeof(ushort))
         {
-            EditorGUI.IntField(paper, id, label, (int)(ushort)(value ?? (ushort)0))
+            EditorGUI.IntField(paper, id, (int)(ushort)(value ?? (ushort)0), label)
                 .OnValueChanged(v => onChange((ushort)Math.Clamp(v, ushort.MinValue, ushort.MaxValue)));
             return;
         }
         if (type == typeof(sbyte))
         {
-            EditorGUI.IntField(paper, id, label, (int)(sbyte)(value ?? (sbyte)0))
+            EditorGUI.IntField(paper, id, (int)(sbyte)(value ?? (sbyte)0), label)
                 .OnValueChanged(v => onChange((sbyte)Math.Clamp(v, sbyte.MinValue, sbyte.MaxValue)));
             return;
         }
         if (type == typeof(long))
         {
-            EditorGUI.IntField(paper, id, label, (int)Math.Clamp((long)(value ?? 0L), int.MinValue, int.MaxValue))
+            EditorGUI.IntField(paper, id, (int)Math.Clamp((long)(value ?? 0L), int.MinValue, int.MaxValue), label)
                 .OnValueChanged(v => onChange((long)v));
             return;
         }
         if (type == typeof(uint))
         {
-            EditorGUI.IntField(paper, id, label, (int)Math.Min((uint)(value ?? 0u), int.MaxValue))
+            EditorGUI.IntField(paper, id, (int)Math.Min((uint)(value ?? 0u), int.MaxValue), label)
                 .OnValueChanged(v => onChange((uint)Math.Max(v, 0)));
             return;
         }
         if (type == typeof(ulong))
         {
-            EditorGUI.IntField(paper, id, label, (int)Math.Min((ulong)(value ?? 0UL), (ulong)int.MaxValue))
+            EditorGUI.IntField(paper, id, (int)Math.Min((ulong)(value ?? 0UL), (ulong)int.MaxValue), label)
                 .OnValueChanged(v => onChange((ulong)Math.Max(v, 0)));
             return;
         }
@@ -157,18 +155,8 @@ public static class PropertyGrid
         }
         if (type == typeof(Float4))
         {
-            // Draw as 4 floats
-            var val = (Float4)(value ?? Float4.Zero);
-            using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(4).Enter())
-            {
-                if (EditorTheme.DefaultFont != null)
-                    paper.Box($"{id}_lbl").Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4).IsNotInteractable()
-                        .Text(label, EditorTheme.DefaultFont).TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize);
-                EditorGUI.FloatField(paper, $"{id}_x", "X", (float)val.X).OnValueChanged(v => onChange(new Float4(v, val.Y, val.Z, val.W)));
-                EditorGUI.FloatField(paper, $"{id}_y", "Y", (float)val.Y).OnValueChanged(v => onChange(new Float4(val.X, v, val.Z, val.W)));
-                EditorGUI.FloatField(paper, $"{id}_z", "Z", (float)val.Z).OnValueChanged(v => onChange(new Float4(val.X, val.Y, v, val.W)));
-                EditorGUI.FloatField(paper, $"{id}_w", "W", (float)val.W).OnValueChanged(v => onChange(new Float4(val.X, val.Y, val.Z, v)));
-            }
+            EditorGUI.Vector4Field(paper, id, label, (Float4)(value ?? Float4.Zero))
+                .OnValueChanged(v => onChange(v));
             return;
         }
         if (type == typeof(Prowl.Vector.Color))
@@ -238,6 +226,10 @@ public static class PropertyGrid
         EditorGUI.Label(paper, id, $"{label}: {value ?? "(null)"}", EditorTheme.TextDim);
     }
 
+
+    // ================================================================
+    //  Collections (List<T>, T[])
+    // ================================================================
     static void DrawCollection(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth)
     {
@@ -245,7 +237,7 @@ public static class PropertyGrid
         IList? list = value as IList;
         int count = list?.Count ?? 0;
 
-        EditorGUI.SimpleFoldout(paper, $"{id}_fold", $"{label} ({count})", () =>
+        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({count})", () =>
         {
             if (list == null)
             {
@@ -254,25 +246,46 @@ public static class PropertyGrid
                     EditorGUI.Button(paper, $"{id}_create", $"Create {elementType.Name}[]")
                         .OnValueChanged(v =>
                         {
-                            if (type.IsArray)
-                                onChange(Array.CreateInstance(elementType, 0));
-                            else
-                                onChange(Activator.CreateInstance(type));
+                            onChange(type.IsArray
+                                ? Array.CreateInstance(elementType, 0)
+                                : Activator.CreateInstance(type));
                         });
                 }
                 return;
             }
 
-            using (paper.Column($"{id}_items").Height(UnitValue.Auto).ChildLeft(16).RowBetween(2).Enter())
+            // ── Stable ID list ────────────────────────────────────────────
+            // Retrieve or create a list of stable string keys, one per element.
+            // This list is stored on the foldout's column container so it
+            // survives re-renders. When items are added/removed we add/remove
+            // the corresponding stable key so order is always in sync.
+            var colEl = paper.CurrentParent;
+            var stableIds = paper.GetElementStorage<List<string>>(colEl, "stableIds", null!)
+                            ?? new List<string>();
+
+            // Grow if elements were added externally
+            while (stableIds.Count < list.Count)
+                stableIds.Add(Guid.NewGuid().ToString("N"));
+
+            // Shrink if elements were removed externally
+            while (stableIds.Count > list.Count)
+                stableIds.RemoveAt(stableIds.Count - 1);
+
+            paper.SetElementStorage(colEl, "stableIds", stableIds);
+
+            // ── Elements ──────────────────────────────────────────────────
+            using (paper.Column($"{id}_items").Height(UnitValue.Auto).ChildLeft(16).ColBetween(6).Enter())
             {
                 for (int i = 0; i < list.Count; i++)
                 {
                     int idx = i;
-                    using (paper.Row($"{id}_item_{i}").Height(UnitValue.Auto).RowBetween(4).Enter())
+                    string stableKey = stableIds[i]; // identity follows the data, not the slot
+
+                    using (paper.Row($"{id}_item_{stableKey}").Height(UnitValue.Auto).RowBetween(4).Enter())
                     {
-                        using (paper.Column($"{id}_itemval_{i}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).RowBetween(2).Enter())
+                        using (paper.Column($"{id}_itemval_{stableKey}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).RowBetween(2).Enter())
                         {
-                            DrawField(paper, $"{id}_el_{i}", $"[{i}]", elementType, list[i],
+                            DrawField(paper, $"{id}_el_{stableKey}", $"[{idx}]", elementType, list[i],
                                 newVal =>
                                 {
                                     list[idx] = newVal;
@@ -280,9 +293,13 @@ public static class PropertyGrid
                                 }, depth + 1);
                         }
 
-                        EditorGUI.ButtonSquare(paper, $"{id}_rm_{i}", "\u2715")
+                        EditorGUI.ButtonSquare(paper, $"{id}_rm_{stableKey}", EditorIcons.Xmark)
                             .OnValueChanged(v =>
                             {
+                                // Remove the stable key at the same position
+                                stableIds.RemoveAt(idx);
+                                paper.SetElementStorage(colEl, "stableIds", stableIds);
+
                                 if (type.IsArray)
                                 {
                                     var newArr = Array.CreateInstance(elementType, list.Count - 1);
@@ -292,8 +309,10 @@ public static class PropertyGrid
                                 }
                                 else
                                 {
-                                    list.RemoveAt(idx);
-                                    onChange(list);
+                                    var newList = (IList)Activator.CreateInstance(list.GetType())!;
+                                    for (int j = 0; j < list.Count; j++)
+                                        if (j != idx) newList.Add(list[j]);
+                                    onChange(newList);
                                 }
                             });
                     }
@@ -302,8 +321,14 @@ public static class PropertyGrid
                 EditorGUI.Button(paper, $"{id}_add", "+ Add Element")
                     .OnValueChanged(v =>
                     {
-                        object? newElement = elementType.IsValueType ? Activator.CreateInstance(elementType) :
-                                              elementType == typeof(string) ? "" : null;
+                        object? newElement = elementType.IsValueType
+                            ? Activator.CreateInstance(elementType)
+                            : elementType == typeof(string) ? "" : null;
+
+                        // Assign a stable key for the new element immediately
+                        stableIds.Add(Guid.NewGuid().ToString("N"));
+                        paper.SetElementStorage(colEl, "stableIds", stableIds);
+
                         if (type.IsArray)
                         {
                             var newArr = Array.CreateInstance(elementType, list.Count + 1);
@@ -313,13 +338,19 @@ public static class PropertyGrid
                         }
                         else
                         {
-                            list.Add(newElement);
-                            onChange(list);
+                            var newList = (IList)Activator.CreateInstance(list.GetType())!;
+                            for (int j = 0; j < list.Count; j++) newList.Add(list[j]);
+                            newList.Add(newElement);
+                            onChange(newList);
                         }
                     });
             }
         });
     }
+
+    // ================================================================
+    //  Dictionary<K, V>
+    // ================================================================
 
     static void DrawDictionary(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth)
@@ -329,7 +360,7 @@ public static class PropertyGrid
         IDictionary? dict = value as IDictionary;
         int count = dict?.Count ?? 0;
 
-        EditorGUI.SimpleFoldout(paper, $"{id}_fold", $"{label} ({count} entries)", () =>
+        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({count} entries)", () =>
         {
             if (dict == null)
             {
@@ -338,8 +369,9 @@ public static class PropertyGrid
                 return;
             }
 
-            using (paper.Column($"{id}_entries").Height(UnitValue.Auto).ChildLeft(16).RowBetween(2).Enter())
+            using (paper.Column($"{id}_entries").Height(UnitValue.Auto).ChildLeft(16).ColBetween(6).Enter())
             {
+                // Existing entries
                 var keys = new List<object>();
                 foreach (var key in dict.Keys) keys.Add(key);
 
@@ -362,7 +394,7 @@ public static class PropertyGrid
                                 }, depth + 1);
                         }
 
-                        EditorGUI.ButtonSquare(paper, $"{id}_drm_{i}", "\u2715")
+                        EditorGUI.ButtonSquare(paper, $"{id}_drm_{i}", EditorIcons.Xmark)
                             .OnValueChanged(v =>
                             {
                                 dict.Remove(keyObj);
@@ -370,14 +402,50 @@ public static class PropertyGrid
                             });
                     }
                 }
+
+                EditorGUI.Separator(paper, $"{id}_sep");
+
+                // Add new entry row — store pending key string in element storage
+                using (paper.Row($"{id}_addrow").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+                {
+                    var addRowEl = paper.CurrentParent;
+                    string pendingKey = paper.GetElementStorage(addRowEl, "pendingKey", "");
+
+                    EditorGUI.TextField(paper, $"{id}_newkey", "Key", pendingKey)
+                        .OnValueChanged(v => paper.SetElementStorage(addRowEl, "pendingKey", v));
+
+                    EditorGUI.Button(paper, $"{id}_addentry", "+ Add")
+                        .OnValueChanged(v =>
+                        {
+                            string pk = paper.GetElementStorage(addRowEl, "pendingKey", "");
+                            if (string.IsNullOrWhiteSpace(pk)) return;
+
+                            try
+                            {
+                                object? typedKey = keyType == typeof(string)
+                                    ? pk
+                                    : Convert.ChangeType(pk, keyType, CultureInfo.InvariantCulture);
+
+                                if (dict.Contains(typedKey!)) return;
+
+                                object? newVal = valType.IsValueType
+                                    ? Activator.CreateInstance(valType)
+                                    : valType == typeof(string) ? "" : null;
+
+                                dict.Add(typedKey!, newVal);
+                                onChange(dict);
+                                paper.SetElementStorage(addRowEl, "pendingKey", "");
+                            }
+                            catch { /* invalid key type conversion — silently ignore */ }
+                        });
+                }
             }
         });
     }
-
-
     // ================================================================
     //  Nested Object
     // ================================================================
+
     static void DrawNestedObject(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth)
     {
@@ -389,31 +457,42 @@ public static class PropertyGrid
 
                 if (!type.IsAbstract && !type.IsInterface)
                 {
-                    EditorGUI.Button(paper, $"{id}_create", "Create")
+                    EditorGUI.Button(paper, $"{id}_create", EditorIcons.Plus + " Create Instance")
                         .OnValueChanged(v => onChange(Activator.CreateInstance(type)));
                 }
                 else
                 {
-                    DrawTypePicker(paper, $"{id}_pick", type, onChange);
+                    DrawTypePicker(paper, $"{id}_pick", type, null, onChange);
                 }
             }
             return;
         }
 
-        var fields = GetSerializableFields(type);
+        // Use the actual runtime type, not the declared base type
+        Type actualType = value.GetType();
+
+        var fields = GetSerializableFields(actualType);
         if (fields.Length == 0)
         {
             EditorGUI.Label(paper, id, $"{label}: {value}");
             return;
         }
 
-        EditorGUI.SimpleFoldout(paper, $"{id}_fold", $"{label} ({type.Name})", () =>
+        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({actualType.Name})", () =>
         {
-            using (paper.Column($"{id}_nested").Height(UnitValue.Auto).ChildLeft(12).RowBetween(2).Enter())
+            // For polymorphic fields, show a type picker inside the foldout
+            // so the user can swap the concrete type even after creation
+            if (type.IsAbstract || type.IsInterface)
+            {
+                DrawTypePicker(paper, $"{id}_pick", type, value, onChange);
+                EditorGUI.Separator(paper, $"{id}_tpsep");
+            }
+
+            using (paper.Column($"{id}_nested").Height(UnitValue.Auto).ChildLeft(12).ColBetween(6).Margin(0, 0, 6, 0).Enter())
             {
                 Draw(paper, $"{id}_props", value, changed =>
                 {
-                    if (type.IsValueType)
+                    if (actualType.IsValueType)
                         onChange(changed);
                     else
                         onChange?.Invoke(value);
@@ -426,13 +505,12 @@ public static class PropertyGrid
     //  Type Picker (for polymorphism)
     // ================================================================
 
-    static void DrawTypePicker(Paper paper, string id, Type baseType, Action<object?> onChange)
+    static void DrawTypePicker(Paper paper, string id, Type baseType, object? currentValue, Action<object?> onChange)
     {
-        // Find all concrete types that derive from baseType
         var types = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })
             .Where(t => baseType.IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
-            .Take(20) // Limit for performance
+            .Take(20)
             .ToArray();
 
         if (types.Length == 0)
@@ -441,12 +519,21 @@ public static class PropertyGrid
             return;
         }
 
-        var names = types.Select(t => t.Name).ToArray();
-        EditorGUI.Dropdown(paper, $"{id}_dd", "Type", 0, names)
+        // Index 0 = null, indices 1..N = concrete types
+        Type? currentType = currentValue?.GetType();
+        int selectedIndex = currentType != null
+            ? Array.IndexOf(types, currentType) + 1  // offset by 1 for null slot
+            : 0;                                      // null is selected
+
+        var names = types.Select(t => t.Name).Prepend("(null)").ToArray();
+
+        EditorGUI.Dropdown(paper, $"{id}_dd", "Type", selectedIndex, names)
             .OnValueChanged(idx =>
             {
-                if (idx >= 0 && idx < types.Length)
-                    onChange(Activator.CreateInstance(types[idx]));
+                if (idx == 0)
+                    onChange(null);
+                else if (idx >= 1 && idx <= types.Length)
+                    onChange(Activator.CreateInstance(types[idx - 1]));
             });
     }
 
