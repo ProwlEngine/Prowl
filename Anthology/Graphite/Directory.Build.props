@@ -35,8 +35,7 @@
     <!-- NuGet package metadata -->
     <PropertyGroup>
         <Authors>Javier "Ciberman" Mora</Authors>
-        <Copyright>Copyright (c) 2017 Eric Mellino and Veldrid contributors, 2026 Javier Mora and
-            NeoVeldrid contributors</Copyright>
+        <Copyright>Copyright (c) 2017 Eric Mellino and Veldrid contributors, 2026 Javier Mora and NeoVeldrid contributors</Copyright>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageProjectUrl>https://jhm-ciberman.github.io/neo-veldrid/</PackageProjectUrl>
         <RepositoryUrl>https://github.com/jhm-ciberman/neo-veldrid.git</RepositoryUrl>
@@ -55,5 +54,17 @@
     <PropertyGroup>
         <IsPackable>false</IsPackable>
     </PropertyGroup>
+
+    <!-- SourceLink: enables stepping into NeoVeldrid source from NuGet packages -->
+    <PropertyGroup>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    </ItemGroup>
 
 </Project>
