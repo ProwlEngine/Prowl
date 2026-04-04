@@ -31,7 +31,7 @@ public class PointLight : Light
     private Float4x4[] _shadowMatrices = new Float4x4[6]; // View-projection for each face
     private bool _shadowsValid = false;
 
-    public override void Update()
+    public override void OnRenderCollect()
     {
         GameObject.Scene.PushLight(this);
     }

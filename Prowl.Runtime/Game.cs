@@ -87,12 +87,7 @@ public abstract class Game
                     fixedTimeAccumulator -= Time.FixedDeltaTime;
                 }
 
-                currentScene?.Update();
-
-                if (DrawGizmos)
-                {
-                    currentScene?.DrawGizmos();
-                }
+                OnUpdate(currentScene);
 
                 EndUpdate();
 
@@ -132,7 +127,7 @@ public abstract class Game
 
                 BeginRender();
 
-                currentScene?.Render();
+                OnRender(currentScene);
 
                 EndRender();
 
@@ -144,7 +139,7 @@ public abstract class Game
 
                 BeginGui(_paper);
 
-                currentScene?.OnGui(_paper);
+                OnGui(currentScene, _paper);
 
                 EndGui(_paper);
 
@@ -202,6 +197,26 @@ public abstract class Game
     public virtual void EndRender() { }
     public virtual void BeginGui(Paper paper) { }
     public virtual void EndGui(Paper paper) { }
+
+    /// <summary>Called during update. Override to control scene update/gizmo behavior.</summary>
+    public virtual void OnUpdate(Scene? scene)
+    {
+        scene?.Update();
+        if (DrawGizmos)
+            scene?.DrawGizmos();
+    }
+
+    /// <summary>Called during render. Override to control scene rendering.</summary>
+    public virtual void OnRender(Scene? scene)
+    {
+        scene?.Render();
+    }
+
+    /// <summary>Called during GUI phase. Override to control scene GUI rendering.</summary>
+    public virtual void OnGui(Scene? scene, Paper paper)
+    {
+        scene?.OnGui(paper);
+    }
 
     public virtual void Resize(int width, int height) { }
     public virtual void Closing() { }

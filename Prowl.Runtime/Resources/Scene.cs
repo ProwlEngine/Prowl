@@ -454,9 +454,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void Update()
     {
-        // Clear render tracking at the start of each update
-        ClearRenderTracking();
-
         List<GameObject> activeGOs = [.. ActiveObjects];
         foreach (GameObject go in activeGOs)
             go.PreUpdate();
@@ -480,6 +477,21 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         ForeachComponent(activeGOs, (x) => x.FixedUpdate());
 
         Flush();
+    }
+
+    /// <summary>
+    /// Collects render data (renderables, lights) from all active components.
+    /// Always called before rendering, regardless of play mode.
+    /// Clears previous render tracking and calls OnRenderCollect() on all active components.
+    /// </summary>
+    public void RenderCollect()
+    {
+        ClearRenderTracking();
+        List<GameObject> activeGOs = [.. ActiveObjects];
+        ForeachComponent(activeGOs, (x) =>
+        {
+            x.OnRenderCollect();
+        });
     }
 
     /// <summary>
@@ -518,6 +530,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <returns>True if any cameras were rendered, false otherwise</returns>
     public bool Render(RenderTexture? target = null)
     {
+        // Collect renderables and lights from all active components
+        RenderCollect();
+
         var Cameras = ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
 
         Cameras.Sort((a, b) => a.Depth.CompareTo(b.Depth));

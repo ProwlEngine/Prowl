@@ -40,7 +40,7 @@ public class DirectionalLight : Light
     private Float4[] _cascadeAtlasParams = new Float4[4]; // xy = atlas pos, z = atlas size, w = split distance
     private int _activeCascades = 0;
 
-    public override void Update()
+    public override void OnRenderCollect()
     {
         GameObject.Scene.PushLight(this);
     }

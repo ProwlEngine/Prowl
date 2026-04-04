@@ -99,6 +99,10 @@ public class WorldCanvas : MonoBehaviour, IRenderable
         // Render the UI to the texture
         RenderUI();
 
+    }
+
+    public override void OnRenderCollect()
+    {
         // Push this canvas as a renderable
         if (_renderTexture.IsValid() && Material.IsValid() && _quadMesh.IsValid())
         {

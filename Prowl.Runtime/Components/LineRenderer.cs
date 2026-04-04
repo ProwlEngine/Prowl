@@ -79,9 +79,13 @@ public class LineRenderer : MonoBehaviour, IRenderable
                 CalculateBounds();
             }
 
-            // Always push the renderable (IRenderable interface handles actual rendering)
-            GameObject.Scene.PushRenderable(this);
         }
+    }
+
+    public override void OnRenderCollect()
+    {
+        if (Material.IsValid() && Points != null && Points.Count >= 2)
+            GameObject.Scene.PushRenderable(this);
     }
 
     private bool PointsEqual(List<Float3> a, List<Float3> b)

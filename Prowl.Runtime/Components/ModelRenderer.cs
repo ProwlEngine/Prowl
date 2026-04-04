@@ -69,7 +69,10 @@ public class ModelRenderer : MonoBehaviour
             // Get the current pose from the animation
             _currentPose = CurrentAnimation.GetPose(_animationTime);
         }
+    }
 
+    public override void OnRenderCollect()
+    {
         // Render the model via skeleton
         if (Model.IsValid() && Model.Skeleton.IsValid())
         {

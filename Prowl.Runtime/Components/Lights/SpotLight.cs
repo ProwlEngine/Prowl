@@ -30,7 +30,7 @@ public class SpotLight : Light
     private Float4x4 _shadowMatrix;
     private Float4 _shadowAtlasParams; // xy = atlas pos, z = atlas size, w = 1.0
 
-    public override void Update()
+    public override void OnRenderCollect()
     {
         GameObject.Scene.PushLight(this);
     }

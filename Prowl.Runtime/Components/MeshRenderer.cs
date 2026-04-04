@@ -15,7 +15,7 @@ public class MeshRenderer : MonoBehaviour, IRenderable
 
     private PropertyState _properties = new();
 
-    public override void Update()
+    public override void OnRenderCollect()
     {
         if (Mesh.IsValid() && Material.IsValid())
         {
@@ -43,5 +43,26 @@ public class MeshRenderer : MonoBehaviour, IRenderable
         isRenderable = true;
         //bounds = Bounds.CreateFromMinMax(new Vector3(999999), new Vector3(999999));
         bounds = Mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
+    }
+
+    /// <summary>
+    /// Raycast against this renderer's mesh in world space.
+    /// </summary>
+    public bool Raycast(Ray worldRay, out float distance)
+    {
+        distance = float.MaxValue;
+        if (!Mesh.IsValid()) return false;
+
+        // Transform ray to local space
+        Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
+        Float3 localOrigin = Float4x4.TransformPoint(worldRay.Origin, worldToLocal);
+        Float3 localDir = Float3.Normalize(Float4x4.TransformNormal(worldRay.Direction, worldToLocal));
+        var localRay = new Ray(localOrigin, localDir);
+
+        // First check AABB
+        if (!localRay.Intersects(Mesh.bounds, out _, out _))
+            return false;
+
+        return Mesh.Raycast(localRay, out distance);
     }
 }

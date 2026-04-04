@@ -25,7 +25,7 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public ShadowQuality ShadowQuality = ShadowQuality.Hard;
 
 
-    public override void Update()
+    public override void OnRenderCollect()
     {
         GameObject.Scene.PushLight(this);
     }

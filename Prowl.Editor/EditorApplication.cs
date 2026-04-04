@@ -624,6 +624,44 @@ public class EditorApplication : Game
     }
 
     // ================================================================
+    //  Scene Control — Editor overrides Game's default scene lifecycle
+    // ================================================================
+
+    /// <summary>
+    /// Editor does NOT auto-update the scene. SceneView handles it.
+    /// </summary>
+    public override void OnUpdate(Runtime.Resources.Scene? scene)
+    {
+        // In editor mode, we don't run scene Update/FixedUpdate/DrawGizmos automatically.
+        // The SceneView panel drives scene rendering and gizmo drawing.
+        // When play mode is active, we'll call scene.Update() here.
+        if (Application.IsPlaying)
+        {
+            scene?.Update();
+        }
+
+        // Always allow gizmos in editor
+        if (scene != null)
+            scene.DrawGizmos();
+    }
+
+    /// <summary>
+    /// Editor does NOT auto-render the scene. SceneView handles it via EditorCamera.
+    /// </summary>
+    public override void OnRender(Runtime.Resources.Scene? scene)
+    {
+        // Don't render — SceneView panel renders the editor camera to its own RT.
+    }
+
+    /// <summary>
+    /// Editor does NOT call scene OnGui. Paper UI is driven by editor panels.
+    /// </summary>
+    public override void OnGui(Runtime.Resources.Scene? scene, PaperUI.Paper paper)
+    {
+        // Don't call scene.OnGui — editor controls all UI.
+    }
+
+    // ================================================================
     //  Default Layout
     // ================================================================
 

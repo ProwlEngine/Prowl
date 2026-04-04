@@ -285,6 +285,12 @@ public abstract class MonoBehaviour : EngineObject
     public virtual void LateUpdate() { }
 
     /// <summary>
+    /// Called every frame to collect render data (push renderables, lights, etc).
+    /// Always called regardless of play mode — use this instead of Update() for rendering registration.
+    /// </summary>
+    public virtual void OnRenderCollect() { }
+
+    /// <summary>
     /// Called for rendering and handling GUI gizmos.
     /// </summary>
     public virtual void DrawGizmos() { }
